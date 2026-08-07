@@ -1,0 +1,19 @@
+<!--
+  Ogami Driver mark — the floor-palette variant.
+
+  The driver and factory PWAs render under [data-theme="floor"], so their
+  home-screen icon and splash use the floor canvas (#0d0b08) and the
+  safety-orange accent (#ff8a4c) rather than the office paper/clay. An icon in
+  office colours would flash a warm-paper splash before a near-black app.
+
+  Geometry is identical to mark.svg — see that file for how the glyph outline
+  was extracted and how the transform is derived.
+
+  Regenerate rasters with: node scripts/build-brand-assets.mjs
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Ogami Driver">
+  <rect width="512" height="512" fill="#0d0b08"/>
+  <g transform="translate(118.3,439.85) scale(0.51,-0.51)">
+    <path fill="#ff8a4c" d="M270 -9Q222 -9 180.0 19.5Q138 48 106.5 98.0Q75 148 57.5 215.5Q40 283 40 361Q40 439 57.5 506.0Q75 573 106.5 623.5Q138 674 180.0 702.0Q222 730 270 730Q318 730 359.5 702.0Q401 674 433.0 623.5Q465 573 482.5 506.0Q500 439 500 361Q500 283 482.5 215.5Q465 148 433.0 98.0Q401 48 359.5 19.5Q318 -9 270 -9ZM270 18Q341 18 381.0 103.0Q421 188 421 361Q421 534 381.0 618.5Q341 703 270 703Q200 703 159.5 618.5Q119 534 119 361Q119 188 159.5 103.0Q200 18 270 18Z"/>
+  </g>
+</svg>

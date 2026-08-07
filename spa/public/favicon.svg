@@ -1,4 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
-  <rect width="24" height="24" rx="4" fill="#0A0A0A"/>
-  <text x="12" y="17" text-anchor="middle" font-family="Geist, system-ui, sans-serif" font-size="14" font-weight="500" fill="#FFFFFF">O</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Ogami">
+  <rect width="64" height="64" rx="14" fill="#fdfcfa"/>
+  <!-- Instrument Serif "O" — outline extracted from @fontsource/instrument-serif
+       (latin 400 normal, unitsPerEm 1000) and inlined as a path, so the mark
+       never depends on a font being available to the renderer.
+       Glyph box x 40..500, y -9..730. scale 0.0655 → ~48px cap; centred by hand. -->
+  <g transform="translate(14.3,55.6) scale(0.0655,-0.0655)">
+    <path fill="#b4542a" d="M270 -9Q222 -9 180.0 19.5Q138 48 106.5 98.0Q75 148 57.5 215.5Q40 283 40 361Q40 439 57.5 506.0Q75 573 106.5 623.5Q138 674 180.0 702.0Q222 730 270 730Q318 730 359.5 702.0Q401 674 433.0 623.5Q465 573 482.5 506.0Q500 439 500 361Q500 283 482.5 215.5Q465 148 433.0 98.0Q401 48 359.5 19.5Q318 -9 270 -9ZM270 18Q341 18 381.0 103.0Q421 188 421 361Q421 534 381.0 618.5Q341 703 270 703Q200 703 159.5 618.5Q119 534 119 361Q119 188 159.5 103.0Q200 18 270 18Z"/>
+  </g>
 </svg>

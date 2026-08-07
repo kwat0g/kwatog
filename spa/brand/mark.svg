@@ -1,0 +1,30 @@
+<!--
+  Ogami mark — the Atelier "O".
+
+  The glyph is the letter O from Instrument Serif (latin 400 normal,
+  unitsPerEm 1000), extracted from @fontsource/instrument-serif with
+  fontTools and inlined as a path. Inlining matters: a <text> element would
+  fall back to whatever serif the renderer happens to have, and neither
+  browsers rasterising a favicon nor ImageMagick load webfonts.
+
+  Glyph box: x 40..500, y -9..730. The font's y axis points up, so the
+  group flips it with scale(s,-s).
+
+  This file is the SINGLE SOURCE for every brand raster. Regenerate with:
+      node scripts/build-brand-assets.mjs
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Ogami">
+  <rect width="512" height="512" fill="#b4542a"/>
+  <!--
+    scale 0.51 → glyph 234.6 x 376.9 (46% x 74% of the canvas).
+    Centred by solving for the translate, not by eye:
+      tx = (512 - 460*0.51)/2 - 0.51*40  = 118.3
+      ty = (512 - 739*0.51)/2 + 0.51*730 = 439.85
+    Furthest ink from centre is then 188px, inside the 205px maskable safe
+    radius (the centre-80% circle Android crops to), so one asset serves
+    both "any" and "maskable" purposes.
+  -->
+  <g transform="translate(118.3,439.85) scale(0.51,-0.51)">
+    <path fill="#fdfcfa" d="M270 -9Q222 -9 180.0 19.5Q138 48 106.5 98.0Q75 148 57.5 215.5Q40 283 40 361Q40 439 57.5 506.0Q75 573 106.5 623.5Q138 674 180.0 702.0Q222 730 270 730Q318 730 359.5 702.0Q401 674 433.0 623.5Q465 573 482.5 506.0Q500 439 500 361Q500 283 482.5 215.5Q465 148 433.0 98.0Q401 48 359.5 19.5Q318 -9 270 -9ZM270 18Q341 18 381.0 103.0Q421 188 421 361Q421 534 381.0 618.5Q341 703 270 703Q200 703 159.5 618.5Q119 534 119 361Q119 188 159.5 103.0Q200 18 270 18Z"/>
+  </g>
+</svg>
