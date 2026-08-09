@@ -18,10 +18,10 @@ export interface ProgressBarProps {
 
 const variantFill = {
  accent: 'bg-accent',
- success: 'bg-success',
- info: 'bg-info',
- warning: 'bg-warning',
- danger: 'bg-danger',
+ success: 'bg-success-bg',
+ info: 'bg-info-bg',
+ warning: 'bg-warning-bg',
+ danger: 'bg-danger-bg',
 } as const;
 
 const heights = { 1: 'h-1', 2: 'h-2' } as const;

@@ -42,6 +42,15 @@ class InvoiceResource extends JsonResource
             'customer'       => $this->whenLoaded('customer', fn () => $this->customer ? [
                 'id' => $this->customer->hash_id, 'name' => $this->customer->name,
             ] : null),
+            // 2026-08-08 — compact O2C stepper: the upstream SO + delivery.
+            'sales_order'    => $this->whenLoaded('salesOrder', fn () => $this->salesOrder ? [
+                'id'        => $this->salesOrder->hash_id,
+                'so_number' => $this->salesOrder->so_number,
+            ] : null),
+            'delivery'       => $this->whenLoaded('delivery', fn () => $this->delivery ? [
+                'id'              => $this->delivery->hash_id,
+                'delivery_number' => $this->delivery->delivery_number,
+            ] : null),
             'items'          => InvoiceItemResource::collection($this->whenLoaded('items')),
             'collections'    => CollectionResource::collection($this->whenLoaded('collections')),
             'journal_entry'  => $this->whenLoaded('journalEntry', fn () => $this->journalEntry ? [

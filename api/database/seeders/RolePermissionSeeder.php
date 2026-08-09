@@ -31,6 +31,12 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'admin.scheduled_exports.view', 'name' => 'View Scheduled Exports'],
                 // Series F — Task F7: company-wide activity feed.
                 ['slug' => 'admin.activity.view',          'name' => 'View System Activity Feed'],
+                // Routed against these slugs but never seeded, so every
+                // non-system_admin role hit a permanent 403 — a role cannot be
+                // granted a permission row that does not exist.
+                ['slug' => 'admin.import.manage',            'name' => 'Run CSV Imports'],
+                ['slug' => 'admin.print.bulk',               'name' => 'Bulk Print Documents'],
+                ['slug' => 'admin.users.manage_permissions', 'name' => 'Manage Per-User Permission Overrides'],
             ],
 
             // HR
@@ -168,6 +174,12 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'accounting.statements.export',    'name' => 'Export Statements (CSV/PDF)'],
                 // REC-05 — go-live opening balances (GL + stock). Finance-only
                 // via module('accounting'); a migration-time capability.
+                // Fiscal-period close/reopen. The routes are commented out
+                // (scope cut 2026-08-08) but CloseAccountingPeriodRequest /
+                // ReopenAccountingPeriodRequest still authorize against this
+                // slug, so it is seeded to keep the catalog and the code in
+                // sync if the routes are ever re-enabled.
+                ['slug' => 'accounting.periods.manage',      'name' => 'Close / Reopen Accounting Periods'],
             ],
 
             // Inventory
@@ -200,6 +212,12 @@ class RolePermissionSeeder extends Seeder
                 // Series F — Task F4: supplier performance dashboard.
                 ['slug' => 'purchasing.suppliers.performance.view',     'name' => 'View Supplier Performance'],
                 ['slug' => 'purchasing.suppliers.performance.recompute', 'name' => 'Recompute Supplier Performance Snapshots'],
+                // Undelete tier. The /restore routes were gated on these slugs
+                // but they were never seeded, so restore was 403 for everyone
+                // except system_admin (wildcard).
+                ['slug' => 'purchasing.pr.manage',        'name' => 'Restore Deleted Purchase Requests'],
+                ['slug' => 'purchasing.po.manage',        'name' => 'Restore Deleted Purchase Orders'],
+                ['slug' => 'purchasing.suppliers.manage', 'name' => 'Restore Deleted Approved Suppliers'],
             ],
 
             // Supply Chain
@@ -289,6 +307,14 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'quality.specs.manage',         'name' => 'Manage Inspection Specs'],
                 ['slug' => 'quality.ncr.view',   'name' => 'View NCRs'],
                 ['slug' => 'quality.ncr.manage',           'name' => 'Manage NCRs'],
+                // OGAMI-016 — IATF calibration register + PPAP submissions.
+                // Both features were fully routed but their permission
+                // namespaces were never seeded, so every route 403'd for all
+                // roles except system_admin (wildcard).
+                ['slug' => 'quality.calibration.view',     'name' => 'View Calibration Register'],
+                ['slug' => 'quality.calibration.manage',   'name' => 'Record / Manage Calibrations'],
+                ['slug' => 'quality.ppap.view',            'name' => 'View PPAP Submissions'],
+                ['slug' => 'quality.ppap.manage',          'name' => 'Manage PPAP Submissions'],
             ],
 
             // Maintenance

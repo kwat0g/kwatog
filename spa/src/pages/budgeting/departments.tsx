@@ -44,9 +44,9 @@ export default function DepartmentBudgetDetailPage() {
  const utilizationPct = totalAllocated > 0 ? (totalSpent / totalAllocated * 100) : 0;
 
  const getBarColor = (pct: number) => {
- if (pct >= (budgetOptions?.critical_ratio_pct ?? Number.POSITIVE_INFINITY)) return 'bg-danger';
- if (pct >= (budgetOptions?.warning_ratio_pct ?? Number.POSITIVE_INFINITY)) return 'bg-warning';
- return 'bg-success';
+ if (pct >= (budgetOptions?.critical_ratio_pct ?? Number.POSITIVE_INFINITY)) return 'bg-danger-bg';
+ if (pct >= (budgetOptions?.warning_ratio_pct ?? Number.POSITIVE_INFINITY)) return 'bg-warning-bg';
+ return 'bg-success-bg';
  };
 
  return (

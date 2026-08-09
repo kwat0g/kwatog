@@ -22,6 +22,7 @@ export interface StockAdjustmentListParams extends Omit<ListParams, 'direction'>
 }
 
 export const stockAdjustmentsApi = {
+ options: () => client.get<{ data: { statuses: Array<{ value: string; label: string }>; directions: Array<{ value: string; label: string }> } }>('/inventory/stock-adjustments/options').then((r) => r.data.data),
  list: (params?: StockAdjustmentListParams) =>
  client.get<PaginatedResponse<StockAdjustment>>('/inventory/stock-adjustments', { params }).then((r) => r.data),
  create: (data: { item_id: string; location_id: string; direction: 'in' | 'out'; quantity: string; unit_cost?: string; reason: string }) =>

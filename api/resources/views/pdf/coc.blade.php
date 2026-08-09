@@ -12,7 +12,9 @@
         <div class="info-row"><span class="lbl">Certificate No:</span> <span class="val mono" style="font-weight:700;">{{ $coc_number }}</span></div>
         <div class="info-row"><span class="lbl">Issued Date:</span> <span class="val mono">{{ $issued_at }}</span></div>
         <div class="info-row"><span class="lbl">Inspection No:</span> <span class="val mono">{{ $inspection_number }}</span></div>
-        <div class="info-row"><span class="lbl">Quality Standard:</span> <span class="val font-semibold" style="color:#1E1B4B;">{{ $quality_standard ?? 'IATF 16949:2016' }}</span></div>
+        @if (!empty($quality_standard))
+          <div class="info-row"><span class="lbl">Quality Standard:</span> <span class="val font-semibold" style="color:#1E1B4B;">{{ $quality_standard }}</span></div>
+        @endif
       </div>
     </td>
     <td>
@@ -46,7 +48,7 @@
       <td>
         <div style="font-weight:700; color:#0F172A;">{{ ucfirst(str_replace('_', ' ', $stage)) }} Inspection</div>
         <div style="font-size:7.5pt; color:#64748B;">
-          Sampling per ANSI/ASQ Z1.4 General Level {{ $aql_level ?? 'II' }}
+          @if (!empty($aql_level)) Sampling per ANSI/ASQ Z1.4 General Level {{ $aql_level }} @endif
         </div>
       </td>
       <td class="r mono font-semibold">{{ number_format($batch_quantity) }}</td>
@@ -55,7 +57,7 @@
       <td class="c">
         @php($__pass = !empty($inspection_passed))
         <span class="chip {{ $__pass ? 'chip-success' : 'chip-danger' }}">
-          {{ $inspection_result ?? ($__pass ? 'PASSED (AQL 0.65)' : 'REJECTED') }}
+          {{ ($inspection_result ?? '') ?: '—' }}
         </span>
       </td>
     </tr>
@@ -75,7 +77,7 @@
           </div>
           @foreach ($material_lot_references as $ref)
             <div style="font-size:8pt; font-family:'DejaVu Sans Mono', monospace; color:#334155; margin-bottom:2px;">
-              &bull; {{ $ref['item_code'] ?? 'Resin' }}
+              &bull; {{ $ref['item_code'] ?? '—' }}
               @if (!empty($ref['grn_number'])) &middot; GRN: {{ $ref['grn_number'] }} @endif
               @if (!empty($ref['material_lot_number'])) &middot; Resin Lot: {{ $ref['material_lot_number'] }} @endif
               @if (!empty($ref['supplier_lot_reference'])) &middot; Supplier Lot: {{ $ref['supplier_lot_reference'] }} @endif
@@ -125,7 +127,9 @@
 @endif
 
 <div style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:4px; padding:10px 12px; margin-top:16px; font-size:8pt; color:#475569; line-height:1.4;">
-  <strong>Quality Certification Statement:</strong> This certifies that the plastic injection molded components listed above have been manufactured, sampled, and tested in accordance with Philippine Ogami Corporation's IATF 16949 quality management system and approved customer engineering drawings.
+  @if (!empty($quality_statement))
+    <strong>{{ ($quality_certification ?? '') ?: 'Quality Certification Statement' }}:</strong> {{ $quality_statement }}
+  @endif
 </div>
 
 <table class="signatures" style="margin-top:28px;">
@@ -133,15 +137,15 @@
     <td style="width: 33%;">
       <div class="sig-card">
         <div class="sig-title">QC Inspector</div>
-        <div class="sig-line">{{ $inspector_name ?? 'Rosa V. (Certified Inspector)' }}</div>
-        <div class="sig-meta">Quality Assurance Dept</div>
+        <div class="sig-line">{{ $inspector_name ?: '—' }}</div>
+        <div class="sig-meta">Quality Assurance</div>
       </div>
     </td>
     <td style="width: 33%;">
       <div class="sig-card">
         <div class="sig-title">Quality Manager</div>
-        <div class="sig-line">Kenji Sato / Head of QA</div>
-        <div class="sig-meta">IATF Management Rep</div>
+        <div class="sig-line">{{ $quality_manager_name ?: '—' }}</div>
+        <div class="sig-meta">{{ $quality_manager_role ?: 'Quality Management' }}</div>
       </div>
     </td>
     <td style="width: 34%;">

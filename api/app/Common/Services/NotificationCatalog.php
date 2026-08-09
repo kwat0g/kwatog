@@ -126,15 +126,18 @@ final class NotificationCatalog
                 ['key' => 'quality.inspection_failed', 'label' => 'QC inspection failed', 'description' => 'A quality inspection failed. An NCR may be required.'],
                 ['key' => 'chain.delivery_drafted', 'label' => 'Delivery drafted', 'description' => 'Outgoing QC passed and a delivery draft is ready to pick and dispatch.'],
                 ['key' => 'chain.delivery_confirmed', 'label' => 'Delivery confirmed', 'description' => 'A delivery has been confirmed and an invoice draft was created.'],
+                ['key' => 'return.restocked', 'label' => 'Returned goods restocked', 'description' => 'Customer-returned goods were moved back into sellable stock. Warehouse should shelf and verify them.'],
             ]],
             ['title' => 'Chain 2 · Procure to Pay', 'hint' => 'Requests, purchase orders, and goods receipts', 'types' => [
                 ['key' => 'inventory.grn_received', 'label' => 'Goods receipt created', 'description' => 'Goods have been received against a purchase order.'],
                 ['key' => 'chain.incoming_qc_required', 'label' => 'Incoming QC required', 'description' => 'A goods receipt needs incoming inspection before stock is accepted.'],
                 ['key' => 'inventory.low_stock', 'label' => 'Low stock alert', 'description' => 'An item fell below reorder point and an auto-PR was created.'],
                 ['key' => 'chain.pr_approved', 'label' => 'Purchase request approved', 'description' => 'A purchase request has been fully approved.'],
+                ['key' => 'chain.pr_auto_convert_skipped', 'label' => 'PR auto-conversion skipped', 'description' => 'An approved PR could not be auto-converted to a PO (missing supplier or price) and needs manual conversion.'],
                 ['key' => 'chain.po_approved', 'label' => 'Purchase order approved', 'description' => 'A purchase order has been fully approved and is ready to send.'],
                 ['key' => 'auto_po_pending', 'label' => 'Auto-PO awaiting approval', 'description' => 'A critical stock level raised a purchase order automatically. It needs approval.'],
                 ['key' => 'purchasing.supplier_deterioration', 'label' => 'Supplier performance dropped', 'description' => 'A supplier’s rating fell sharply against its recent baseline.'],
+                ['key' => 'return.shipped_to_vendor', 'label' => 'Returned goods shipped to vendor', 'description' => 'Supplier-returned goods were shipped back to the vendor. Purchasing should track the shipment and follow up on the credit.'],
             ]],
             ['title' => 'Chain 3 · Hire to Retire', 'hint' => 'Leave, overtime, loans, and payroll', 'types' => [
                 ['key' => 'leave.submitted', 'label' => 'Leave request submitted', 'description' => 'An employee has submitted a leave request for your approval.'],

@@ -36,6 +36,12 @@
         <env name="COMPANY_TIN" value="000-000-000-000"/>
         <env name="COMPANY_VAT_STATUS" value="VAT Registered"/>
         <env name="COMPANY_PUBLIC_URL" value="https://ogami.test"/>
+        <!-- TAX_PH_VAT_RATE: SettingsSeeder seeds tax.ph.vat_rate from this env;
+             an empty value now fails TaxPolicyService::requiredVatRate() (the
+             strict rate validation added 2026-08-08), so every invoice/bill/
+             credit-note test would throw. 0.12 is the legal PH VAT rate and the
+             same default migration 0287 seeds. -->
+        <env name="TAX_PH_VAT_RATE" value="0.12"/>
         <env name="PDF_FOOTER_DISCLAIMER" value="System-generated document."/>
         <env name="BROADCAST_CONNECTION" value="null"/>
         <env name="CACHE_STORE" value="array"/>

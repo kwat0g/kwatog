@@ -7,12 +7,14 @@ namespace App\Modules\MRP\Models;
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\MRP\Enums\MachineStatus;
+use App\Modules\Production\Models\WorkOrder;
 use Database\Factories\MachineFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Machine extends Model
@@ -45,6 +47,11 @@ class Machine extends Model
     public function compatibleMolds(): BelongsToMany
     {
         return $this->belongsToMany(Mold::class, 'mold_machine_compatibility');
+    }
+
+    public function currentWorkOrder(): BelongsTo
+    {
+        return $this->belongsTo(WorkOrder::class, 'current_work_order_id');
     }
 
     public function scopeAvailable(Builder $q): Builder

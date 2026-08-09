@@ -147,7 +147,7 @@ export default function StockOutProjectionPage() {
  <Td className="text-2xs text-muted">{sourceLabels.get(r.demand_source) ?? r.demand_source}</Td>
  <Td align="right" mono>
  {r.days_until_stockout === null ? '—' : (
- <span className={r.days_until_stockout <= r.lead_time_days ? 'text-danger font-medium' : ''}>
+ <span className={r.days_until_stockout <= r.lead_time_days ? 'text-danger-fg font-medium' : ''}>
  {r.days_until_stockout}d
  </span>
  )}

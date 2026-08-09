@@ -15,15 +15,15 @@ const UNIT_SUFFIX: Record<string, string> = {
 };
 
 const STATUS_DOT: Record<string, string> = {
- on_target: 'bg-success',
- warning: 'bg-warning',
- off_target: 'bg-danger',
+ on_target: 'bg-success-bg',
+ warning: 'bg-warning-bg',
+ off_target: 'bg-danger-bg',
 };
 
 const TREND_COLORS: Record<string, Record<string, string>> = {
- on_target: { up: 'text-success', down: 'text-success', flat: 'text-muted' },
- warning: { up: 'text-warning', down: 'text-warning', flat: 'text-muted' },
- off_target: { up: 'text-danger', down: 'text-danger', flat: 'text-muted' },
+ on_target: { up: 'text-success-fg', down: 'text-success-fg', flat: 'text-muted' },
+ warning: { up: 'text-warning-fg', down: 'text-warning-fg', flat: 'text-muted' },
+ off_target: { up: 'text-danger-fg', down: 'text-danger-fg', flat: 'text-muted' },
 };
 
 const TrendIcon = ({ trend, status }: { trend: string; status: string }) => {
@@ -36,9 +36,11 @@ const TrendIcon = ({ trend, status }: { trend: string; status: string }) => {
 interface KpiStripProps {
  codes: string[];
  className?: string;
+ /** Per-code drill-down overrides. Any code missing from this map links to the KPI Scorecard. */
+ linkByCode?: Record<string, string>;
 }
 
-export function KpiStrip({ codes, className }: KpiStripProps) {
+export function KpiStrip({ codes, className, linkByCode }: KpiStripProps) {
  const now = new Date();
  const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
  const year = prevMonth.getFullYear();
@@ -74,12 +76,10 @@ export function KpiStrip({ codes, className }: KpiStripProps) {
  {filtered.map((item) => {
  const snap = item.snapshot;
  const val = snap ? `${parseFloat(snap.actual_value).toLocaleString()}${UNIT_SUFFIX[item.definition.unit] ?? ''}` : '—';
- const target = item.definition.target_value ? `Target: ${parseFloat(item.definition.target_value).toLocaleString()}${UNIT_SUFFIX[item.definition.unit] ?? ''}` : undefined;
-
- return (
- <Link
- key={item.definition.code}
- to="/dashboard/scorecard"
+ const target = item.definition.target_value ? `Target: ${parseFloat(item.definition.target_value).toLocaleString()}${UNIT_SUFFIX[item.definition.unit] ?? ''}` : undefined;  return (
+    <Link
+      key={item.definition.code}
+      to={linkByCode?.[item.definition.code] ?? '/dashboard/scorecard'}
  className="p-3 bg-surface border border-default rounded-md hover:bg-elevated transition-colors duration-fast flex items-start justify-between gap-2"
  >
  <div className="min-w-0">

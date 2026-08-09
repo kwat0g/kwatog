@@ -30,9 +30,9 @@ function coverageColor(pct: number, successPct?: number, warningPct?: number): s
 
 function coverageTextColor(pct: number, successPct?: number, warningPct?: number): string {
  if (successPct === undefined || warningPct === undefined) return 'text-muted';
- if (pct > successPct) return 'text-success';
- if (pct >= warningPct) return 'text-warning';
- return 'text-danger';
+ if (pct > successPct) return 'text-success-fg';
+ if (pct >= warningPct) return 'text-warning-fg';
+ return 'text-danger-fg';
 }
 
 export default function LeaveCalendarPage() {
@@ -203,12 +203,12 @@ export default function LeaveCalendarPage() {
  )}
  </div>
  {cell.approved_count > 0 && (
- <div className="text-2xs text-success font-mono tabular-nums mt-0.5">
+ <div className="text-2xs text-success-fg font-mono tabular-nums mt-0.5">
  {cell.approved_count} approved
  </div>
  )}
  {cell.pending_count > 0 && (
- <div className="text-2xs text-warning font-mono tabular-nums">
+ <div className="text-2xs text-warning-fg font-mono tabular-nums">
  {cell.pending_count} pending
  </div>
  )}
@@ -255,8 +255,8 @@ export default function LeaveCalendarPage() {
  <span className={cn(
  'text-2xs font-medium px-1.5 py-0.5 rounded',
  emp.status === 'approved'
- ? 'bg-success-bg text-success'
- : 'bg-warning-bg text-warning',
+ ? 'bg-success-bg text-success-fg'
+ : 'bg-warning-bg text-warning-fg',
  )}>
  {emp.status_label ?? emp.status.replace(/_/g, ' ')}
  </span>

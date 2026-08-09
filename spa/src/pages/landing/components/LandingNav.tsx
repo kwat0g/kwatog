@@ -30,14 +30,6 @@ export interface LandingNavProps {
   onOpenChange: (open: boolean) => void;
 }
 
-const DEFAULT_NAV_LINKS = [
-  { label: 'Capabilities', href: '#capabilities' },
-  { label: 'Parts', href: '#parts-3d' },
-  { label: 'Process', href: '#process' },
-  { label: 'Quality', href: '#quality' },
-  { label: 'Contact', href: '#contact' },
-];
-
 export function LandingNav({ open, onOpenChange }: LandingNavProps) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -45,11 +37,11 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
   const { data: contact } = useQuery({ queryKey: ['landing', 'contact'], queryFn: landingApi.contact, staleTime: 300_000 });
   const { data: content } = useQuery({ queryKey: ['landing', 'content'], queryFn: landingApi.content, staleTime: 300_000 });
   const navLinks = useMemo(
-    () => (content?.section_copy?.nav_links?.length ? content.section_copy.nav_links : DEFAULT_NAV_LINKS),
+    () => content?.section_copy?.nav_links ?? [],
     [content?.section_copy?.nav_links],
   );
-  const legalName = contact?.legal_name || 'Philippine Ogami Corporation';
-  const locationCountry = contact?.address?.split(',').at(-1)?.trim() || 'Philippines';
+  const legalName = contact?.legal_name ?? '';
+  const locationCountry = contact?.address?.split(',').at(-1)?.trim() ?? '';
   const [scrolled, setScrolled] = useState(false);
   const [activeHref, setActiveHref] = useState<string>('');
   const toggleRef = useRef<HTMLButtonElement>(null);
@@ -176,7 +168,7 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
               {legalName}
             </span>
             <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted whitespace-nowrap">
-              Ogami ERP · {locationCountry}
+              {locationCountry}
             </span>
           </div>
         </a>

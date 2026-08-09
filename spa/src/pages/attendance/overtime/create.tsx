@@ -44,7 +44,7 @@ export default function OvertimeCreatePage() {
  const qc = useQueryClient();
  const user = useAuthStore((s) => s.user);
 
- const { data: options, isLoading: optionsLoading } = useQuery({
+ const { data: options, isLoading: optionsLoading, isError: optionsError } = useQuery({
  queryKey: ['attendance', 'overtime', 'options'],
  queryFn: overtimeApi.options,
  staleTime: 5 * 60_000,
@@ -56,25 +56,29 @@ export default function OvertimeCreatePage() {
  });
  const employees = employeesResp?.data ?? [];
 
- // Schema is derived from server settings so the form always agrees with the
- // backend (admin_max_hours, request window) — never a hardcoded ceiling.
+ // Policy validation is derived from the server response. Until the settings
+ // arrive, only field-shape validation runs; the form remains disabled so a
+ // missing response can never silently turn into a local default policy.
  const schema = useMemo(() => {
- const max = options?.maximum_hours ?? 8;
- const min = options?.request_min_hours ?? 0.5;
- // Mirrors StoreOvertimeRequestRequest: after_or_equal(today - past) and
- // before_or_equal(today + future). With pastDays = 0, past dates are
- // still rejected — matching the backend exactly.
- const dateMin = addDaysIso(todayIso(), -(options?.request_past_days ?? 0));
- const dateMax = addDaysIso(todayIso(), options?.request_future_days ?? 0);
- return z.object({
+ const base = z.object({
  employee_id: z.string().min(1, 'Employee is required'),
- date: z.string().min(1, 'Date is required')
+ date: z.string().min(1, 'Date is required'),
+ hours_requested: z.coerce.number({ invalid_type_error: 'Enter a number' }),
+ reason: z.string().trim().min(5, 'Provide at least 5 characters').max(2000),
+ });
+ if (!options) return base;
+
+ // Mirrors StoreOvertimeRequestRequest: after_or_equal(today - past) and
+ // before_or_equal(today + future), using only values returned by the API.
+ const dateMin = addDaysIso(todayIso(), -options.request_past_days);
+ const dateMax = addDaysIso(todayIso(), options.request_future_days);
+ return base.extend({
+ date: base.shape.date
  .refine((v) => v >= dateMin, 'Date is outside the configured request window.')
  .refine((v) => v <= dateMax, 'Date is outside the configured request window.'),
- hours_requested: z.coerce.number({ invalid_type_error: 'Enter a number' })
- .min(min, `Minimum ${min} hours`)
- .max(max, `Maximum ${max} hours per day`),
- reason: z.string().trim().min(5, 'Provide at least 5 characters').max(2000),
+ hours_requested: base.shape.hours_requested
+ .min(options.request_min_hours, `Minimum ${options.request_min_hours} hours`)
+ .max(options.maximum_hours, `Maximum ${options.maximum_hours} hours per day`),
  });
  }, [options]);
 
@@ -111,8 +115,8 @@ export default function OvertimeCreatePage() {
  },
  });
 
- const dateMin = options ? addDaysIso(todayIso(), -(options.request_past_days ?? 0)) : undefined;
- const dateMax = options ? addDaysIso(todayIso(), options.request_future_days ?? 0) : undefined;
+ const dateMin = options ? addDaysIso(todayIso(), -options.request_past_days) : undefined;
+ const dateMax = options ? addDaysIso(todayIso(), options.request_future_days) : undefined;
 
  return (
  <div>
@@ -142,12 +146,12 @@ export default function OvertimeCreatePage() {
  <Input
  label="Hours requested"
  type="number"
- step="0.5"
+ step="any"
  required
  {...register('hours_requested')}
  error={errors.hours_requested?.message}
- min={options?.request_min_hours ?? 0.5}
- max={options?.maximum_hours ?? 8}
+ min={options?.request_min_hours}
+ max={options?.maximum_hours}
  className="font-mono"
  />
  </div>
@@ -163,7 +167,7 @@ export default function OvertimeCreatePage() {
  )}
  <div className="flex justify-end gap-2 pt-4">
  <Button type="button" variant="secondary" onClick={() => navigate('/hr/attendance/overtime')}>Cancel</Button>
- <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending || optionsLoading} loading={mutation.isPending}>
+ <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending || optionsLoading || optionsError || !options} loading={mutation.isPending}>
  {mutation.isPending ? 'Submitting…' : 'Submit request'}
  </Button>
  </div>

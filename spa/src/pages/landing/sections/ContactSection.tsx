@@ -20,7 +20,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ArrowRight, Mail, Phone, CheckCircle } from 'lucide-react';
 import { AxiosError } from 'axios';
-import { DatumMark } from '../components/DatumMark';
+import { DatumMark } from '@/components/brand/DatumMark';
 import { ScrambleText } from '../components/ScrambleText';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -39,23 +39,32 @@ const inquirySchema = z.object({
   company: z.string().optional(),
   email: z.string().min(1, 'Email is required').email('Invalid email'),
   phone: z.string().optional(),
-  message: z.string().min(1, 'Message is required').max(2000, 'Message is too long (2000 characters max)'),
+  message: z
+    .string()
+    .min(1, 'Message is required')
+    .max(2000, 'Message is too long (2000 characters max)'),
 });
 
 type InquiryForm = z.infer<typeof inquirySchema>;
 
 export function ContactSection() {
-  const { data: contact } = useQuery({ queryKey: ['landing', 'contact'], queryFn: landingApi.contact, staleTime: 300_000 });
-  const { data: content } = useQuery({ queryKey: ['landing', 'content'], queryFn: landingApi.content, staleTime: 300_000 });
-  const salesEmail = contact?.sales_email || 'sales@ogami.ph';
-  const phone = contact?.phone || '+63 (046) 402-1234';
-  const address = contact?.address || 'FCIE Dasmariñas, Cavite, Philippines';
+  const { data: contact } = useQuery({
+    queryKey: ['landing', 'contact'],
+    queryFn: landingApi.contact,
+    staleTime: 300_000,
+  });
+  const { data: content } = useQuery({
+    queryKey: ['landing', 'content'],
+    queryFn: landingApi.content,
+    staleTime: 300_000,
+  });
+  const salesEmail = contact?.sales_email ?? '';
+  const phone = contact?.phone ?? '';
+  const address = contact?.address ?? '';
   const sectionCopy = content?.section_copy;
-  const ctaLabel = sectionCopy?.hero_cta?.quote_label || 'Send message';
-  const contactTitle = sectionCopy?.contact_title || 'Talk to us.';
-  const contactIntro =
-    sectionCopy?.contact_intro ||
-    'Questions about our capabilities, an existing order, or working with us — send a message and the right person will come back to you.';
+  const ctaLabel = sectionCopy?.hero_cta?.quote_label ?? '—';
+  const contactTitle = sectionCopy?.contact_title ?? '—';
+  const contactIntro = sectionCopy?.contact_intro ?? '—';
   const [submitted, setSubmitted] = useState(false);
   const submitRef = useMagnetic<HTMLButtonElement>({ strength: 0.22, duration: 0.55 });
 
@@ -153,15 +162,15 @@ export function ContactSection() {
                 className="mt-12 flex flex-col gap-4 border-t border-default pt-8 sm:flex-row sm:gap-10"
               >
                 <a
-                  href={`mailto:${salesEmail}`}
+                  href={salesEmail ? `mailto:${salesEmail}` : undefined}
                   className="flex items-center gap-2.5 font-mono text-sm text-secondary transition-colors hover:text-accent"
                 >
                   <Mail size={15} className="text-accent" />
-                  {salesEmail}
+                  {salesEmail || '—'}
                 </a>
                 <span className="flex items-center gap-2.5 font-mono text-sm text-secondary">
                   <Phone size={15} className="text-accent" />
-                  {phone}
+                  {phone || '—'}
                 </span>
                 <span className="font-mono text-sm text-text-subtle">{address}</span>
               </div>
@@ -177,13 +186,17 @@ export function ContactSection() {
                 <div className="py-5 text-center">
                   <CheckCircle size={40} className="mx-auto text-success" strokeWidth={1.5} />
                   <h3 className="mt-4 font-display text-xl text-primary">
-                    {sectionCopy?.contact_success_title || 'Message sent'}
+                    {sectionCopy?.contact_success_title ?? '—'}
                   </h3>
                   <p className="mt-2 text-base text-secondary">
-                    {sectionCopy?.contact_success_body ||
-                      'Thank you for reaching out. We will get back to you shortly.'}
+                    {sectionCopy?.contact_success_body ?? '—'}
                   </p>
-                  <Button type="button" variant="secondary" className="mt-5" onClick={() => setSubmitted(false)}>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="mt-5"
+                    onClick={() => setSubmitted(false)}
+                  >
                     Send another message
                   </Button>
                 </div>

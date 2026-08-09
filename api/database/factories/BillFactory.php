@@ -40,9 +40,9 @@ class BillFactory extends Factory
             'journal_entry_id'  => null,
             'created_by'        => User::factory(),
             'remarks'           => null,
-            'has_variances'             => null,
+            'has_variances'             => false,
             'three_way_match_snapshot'  => null,
-            'three_way_overridden'      => null,
+            'three_way_overridden'      => false,
         ];
     }
 }

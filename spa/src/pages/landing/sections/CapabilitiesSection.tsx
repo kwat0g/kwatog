@@ -48,9 +48,9 @@ export function CapabilitiesSection() {
     <section id="capabilities" className={section('canvas')}>
       <div className={container}>
         <SectionHeading
-          eyebrow={content?.section_copy?.capabilities_eyebrow || 'Capabilities'}
-          title={content?.section_copy?.capabilities_title || 'Precision Manufacturing & Engineering'}
-          intro={content?.section_copy?.capabilities_intro || 'End-to-end injection molding, precision tooling, cleanroom assembly, and metrology inspection for demanding automotive specs.'}
+          eyebrow={content?.section_copy?.capabilities_eyebrow ?? '—'}
+          title={content?.section_copy?.capabilities_title ?? '—'}
+          intro={content?.section_copy?.capabilities_intro ?? '—'}
         />
 
         <div className={cn(headingGap, 'grid', cardGap, 'md:grid-cols-2')}>

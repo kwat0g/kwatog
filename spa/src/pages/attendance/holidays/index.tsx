@@ -15,7 +15,7 @@ import { Chip } from '@/components/ui/Chip';
 import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
-import { Modal } from '@/components/ui/Modal';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Select } from '@/components/ui/Select';
 import { Switch } from '@/components/ui/Switch';
@@ -82,8 +82,6 @@ export default function HolidaysPage() {
  <PageHeader
  title="Holidays"
  subtitle={`${holidays.length} for ${year}`}
- backTo="/hr/attendance"
- backLabel="Attendance"
  actions={
  <>
  <Button variant="ghost" size="sm" onClick={() => setYear((y) => y - 1)} icon={<ChevronLeft size={12} />} aria-label="Previous year" />
@@ -230,14 +228,14 @@ function ListView({
  <div>{selected.is_recurring ? 'Annually' : 'One-off'}</div>
  </div>
  {canManage && (
- <div className="flex gap-2 pt-3 border-t border-default">
+ <ModalFooter className="justify-start">
  <Button variant="secondary" size="sm" onClick={() => onEdit(selected)} icon={<Pencil size={12} />}>Edit</Button>
  {showRestore ? (
  <Button variant="secondary" size="sm" onClick={() => onRestore(selected)} icon={<ArchiveRestore size={12} />}>Restore</Button>
  ) : (
  <Button variant="danger" size="sm" onClick={() => onDelete(selected)} icon={<Trash2 size={12} />}>Archive</Button>
  )}
- </div>
+ </ModalFooter>
  )}
  </div>
  )}
@@ -358,12 +356,12 @@ function HolidayFormModal({
  <div className="pt-1">
  <Switch label="Recurs annually" {...register('is_recurring')} />
  </div>
- <div className="flex justify-end gap-2 pt-3 border-t border-default">
+ <ModalFooter>
  <Button type="button" variant="secondary" onClick={onClose} disabled={isSubmitting || mutation.isPending}>Cancel</Button>
  <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending} loading={mutation.isPending}>
  {mutation.isPending ? 'Saving…' : isEdit ? 'Save changes' : 'Create holiday'}
  </Button>
- </div>
+ </ModalFooter>
  </form>
  </Modal>
  );

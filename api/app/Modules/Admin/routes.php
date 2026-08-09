@@ -199,6 +199,8 @@ Route::middleware([
         Route::get('{scheduledExport}', [ScheduledExportController::class, 'show']);
         Route::put('{scheduledExport}', [ScheduledExportController::class, 'update']);
         Route::delete('{scheduledExport}', [ScheduledExportController::class, 'destroy']);
+        Route::patch('{scheduledExport}/restore', [ScheduledExportController::class, 'restore'])
+            ->withTrashed();
     });
 
 /*

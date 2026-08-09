@@ -14,16 +14,17 @@
  */
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate} from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
- CartesianGrid,
- Line,
- LineChart,
- ReferenceLine,
- ResponsiveContainer,
- Tooltip as RTooltip,
- XAxis,
- YAxis } from 'recharts';
+  CartesianGrid,
+  Line,
+  LineChart,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip as RTooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -44,318 +45,374 @@ import { cn } from '@/lib/cn';
 type Preset = 'today' | 'week' | 'month' | 'custom';
 
 interface Window {
- from: string;
- to: string;
+  from: string;
+  to: string;
 }
 
 function todayIso(): string {
- return new Date().toISOString().slice(0, 10);
+  return new Date().toISOString().slice(0, 10);
 }
 
 function isoOffset(days: number): string {
- const d = new Date();
- d.setDate(d.getDate() - days);
- return d.toISOString().slice(0, 10);
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString().slice(0, 10);
 }
 
 function startOfMonthIso(): string {
- const d = new Date();
- return new Date(Date.UTC(d.getFullYear(), d.getMonth(), 1)).toISOString().slice(0, 10);
+  const d = new Date();
+  return new Date(Date.UTC(d.getFullYear(), d.getMonth(), 1)).toISOString().slice(0, 10);
 }
 
 function presetWindow(p: Preset): Window {
- switch (p) {
- case 'today':
- return { from: todayIso(), to: todayIso() };
- case 'week':
- return { from: isoOffset(6), to: todayIso() };
- case 'month':
- default:
- return { from: startOfMonthIso(), to: todayIso() };
- }
+  switch (p) {
+    case 'today':
+      return { from: todayIso(), to: todayIso() };
+    case 'week':
+      return { from: isoOffset(6), to: todayIso() };
+    case 'month':
+    default:
+      return { from: startOfMonthIso(), to: todayIso() };
+  }
 }
 
 const DOWNTIME_COLORS: Record<string, string> = {
- breakdown: 'bg-danger',
- changeover: 'bg-warning',
- material_shortage: 'bg-warning',
- no_order: 'bg-strong',
- planned_maintenance: 'bg-info' };
+  breakdown: 'bg-danger-bg',
+  changeover: 'bg-warning-bg',
+  material_shortage: 'bg-warning-bg',
+  no_order: 'bg-strong',
+  planned_maintenance: 'bg-info-bg',
+};
 
-function pct(v: number): string {
- return `${(v * 100).toFixed(1)}%`;
+function pct(v: number | null): string {
+  return v == null ? '—' : `${(v * 100).toFixed(1)}%`;
 }
 
 function fmtMinutes(min: number): string {
- if (min < 60) return `${min}m`;
- const h = Math.floor(min / 60);
- const m = min % 60;
- return m === 0 ? `${h}h` : `${h}h ${m}m`;
+  if (min < 60) return `${min}m`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
 }
 
-const machineStatusVariant = (status: string): 'success' | 'info' | 'warning' | 'danger' | 'neutral' => {
- switch (status) {
- case 'running':
- return 'info';
- case 'idle':
- return 'neutral';
- case 'breakdown':
- return 'danger';
- case 'maintenance':
- return 'warning';
- case 'setup':
- return 'warning';
- default:
- return 'neutral';
- }
+const machineStatusVariant = (
+  status: string,
+): 'success' | 'info' | 'warning' | 'danger' | 'neutral' => {
+  switch (status) {
+    case 'running':
+      return 'info';
+    case 'idle':
+      return 'neutral';
+    case 'breakdown':
+      return 'danger';
+    case 'maintenance':
+      return 'warning';
+    case 'setup':
+      return 'warning';
+    default:
+      return 'neutral';
+  }
 };
 
 export default function OeeReportPage() {
- const navigate = useNavigate();
- const [preset, setPreset] = useState<Preset>('month');
- const [custom, setCustom] = useState<Window>(() => presetWindow('month'));
+  const navigate = useNavigate();
+  const [preset, setPreset] = useState<Preset>('month');
+  const [custom, setCustom] = useState<Window>(() => presetWindow('month'));
 
- const window: Window = preset === 'custom' ? custom : presetWindow(preset);
+  const window: Window = preset === 'custom' ? custom : presetWindow(preset);
 
- const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['production', 'oee', 'report', window],
- queryFn: () => oeeApi.report(window),
- placeholderData: (prev) => prev });
- const { data: downtimeCategories = [] } = useQuery({
- queryKey: ['production', 'downtime-categories'],
- queryFn: oeeApi.downtimeCategories,
- staleTime: 5 * 60 * 1000 });
- const downtimeLabels = new Map(downtimeCategories.map((category) => [category.value, category.label]));
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['production', 'oee', 'report', window],
+    queryFn: () => oeeApi.report(window),
+    placeholderData: (prev) => prev,
+  });
+  const { data: downtimeCategories = [] } = useQuery({
+    queryKey: ['production', 'downtime-categories'],
+    queryFn: oeeApi.downtimeCategories,
+    staleTime: 5 * 60 * 1000,
+  });
+  const downtimeLabels = new Map(
+    downtimeCategories.map((category) => [category.value, category.label]),
+  );
 
- return (
- <div>
- <PageHeader
- title="OEE Report"
- subtitle={
- data
- ? `${formatDate(data.range.from)} → ${formatDate(data.range.to)} · ${data.machines.length} machine${data.machines.length === 1 ? '' : 's'}`
- : 'Overall Equipment Effectiveness'
- }
- />
+  return (
+    <div>
+      <PageHeader
+        title="OEE Report"
+        subtitle={
+          data
+            ? `${formatDate(data.range.from)} → ${formatDate(data.range.to)} · ${data.machines.length} machine${data.machines.length === 1 ? '' : 's'}`
+            : 'Overall Equipment Effectiveness'
+        }
+      />
 
- {/* ─── Date range presets ─── */}
- <div className="px-5 py-3 border-b border-default flex items-center gap-3 flex-wrap">
- <SegmentedControl
- size="sm"
- label="Date range"
- value={preset}
- onChange={setPreset}
- options={[
- { value: 'today', label: 'Today' },
- { value: 'week', label: 'Last 7 days' },
- { value: 'month', label: 'This month' },
- { value: 'custom', label: 'Custom' },
- ]}
- />
- {preset === 'custom' && (
- <div className="flex items-center gap-2 text-xs">
- <Input
- fieldSize="sm"
- type="date"
- aria-label="From date"
- value={custom.from}
- onChange={(e) => setCustom((c) => ({ ...c, from: e.target.value }))}
- className="font-mono"
- />
- <span className="text-muted">→</span>
- <Input
- fieldSize="sm"
- type="date"
- aria-label="To date"
- value={custom.to}
- onChange={(e) => setCustom((c) => ({ ...c, to: e.target.value }))}
- className="font-mono"
- />
- </div>
- )}
- </div>
+      {/* ─── Date range presets ─── */}
+      <div className="px-5 py-3 border-b border-default flex items-center gap-3 flex-wrap">
+        <SegmentedControl
+          size="sm"
+          label="Date range"
+          value={preset}
+          onChange={setPreset}
+          options={[
+            { value: 'today', label: 'Today' },
+            { value: 'week', label: 'Last 7 days' },
+            { value: 'month', label: 'This month' },
+            { value: 'custom', label: 'Custom' },
+          ]}
+        />
+        {preset === 'custom' && (
+          <div className="flex items-center gap-2 text-xs">
+            <Input
+              fieldSize="sm"
+              type="date"
+              aria-label="From date"
+              value={custom.from}
+              onChange={(e) => setCustom((c) => ({ ...c, from: e.target.value }))}
+              className="font-mono"
+            />
+            <span className="text-muted">→</span>
+            <Input
+              fieldSize="sm"
+              type="date"
+              aria-label="To date"
+              value={custom.to}
+              onChange={(e) => setCustom((c) => ({ ...c, to: e.target.value }))}
+              className="font-mono"
+            />
+          </div>
+        )}
+      </div>
 
- {/* ─── Loading ─── */}
- {isLoading && !data && (
- <div className="px-5 py-4 space-y-4">
- <div className="grid grid-cols-4 gap-3">
- {[1, 2, 3, 4].map((i) => <SkeletonBlock key={i} className="h-20" />)}
- </div>
- <SkeletonBlock className="h-72" />
- <SkeletonBlock className="h-48" />
- </div>
- )}
+      {/* ─── Loading ─── */}
+      {isLoading && !data && (
+        <div className="px-5 py-4 space-y-4">
+          <div className="grid grid-cols-4 gap-3">
+            {[1, 2, 3, 4].map((i) => (
+              <SkeletonBlock key={i} className="h-20" />
+            ))}
+          </div>
+          <SkeletonBlock className="h-72" />
+          <SkeletonBlock className="h-48" />
+        </div>
+      )}
 
- {/* ─── Error ─── */}
- {isError && !data && (
- <div className="px-5 py-4">
- <EmptyState
- icon="alert-circle"
- title="Failed to load OEE report"
- action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
- />
- </div>
- )}
+      {/* ─── Error ─── */}
+      {isError && !data && (
+        <div className="px-5 py-4">
+          <EmptyState
+            icon="alert-circle"
+            title="Failed to load OEE report"
+            action={
+              <Button variant="secondary" onClick={() => refetch()}>
+                Retry
+              </Button>
+            }
+          />
+        </div>
+      )}
 
- {/* ─── Data ─── */}
- {data && (
- <div className="px-5 py-4 space-y-4">
- {/* KPI cards + OEE gauge */}
- <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
- <div className="lg:col-span-3 grid grid-cols-2 md:grid-cols-4 gap-3">
- <StatCard
- label="Overall OEE"
- value={pct(data.overall.oee)}
- helper={data.display_policy && data.overall.oee >= data.display_policy.world_class_ratio ? 'World-class' : data.display_policy && data.overall.oee >= data.display_policy.on_track_ratio ? 'On track' : 'Below benchmark'}
- />
- <StatCard label="Availability" value={pct(data.overall.availability)} />
- <StatCard label="Performance" value={pct(data.overall.performance)} />
- <StatCard label="Quality" value={pct(data.overall.quality)} />
- </div>
- <Panel className="flex items-center justify-center py-4">
- <OeeGaugeChart
- oee={data.overall.oee}
- availability={data.overall.availability}
- performance={data.overall.performance}
- quality={data.overall.quality}
- displayPolicy={data.display_policy}
- />
- </Panel>
- </div>
+      {/* ─── Data ─── */}
+      {data && (
+        <div className="px-5 py-4 space-y-4">
+          {/* KPI cards + OEE gauge */}
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
+            <div className="lg:col-span-3 grid grid-cols-2 md:grid-cols-4 gap-3">
+              <StatCard
+                label="Overall OEE"
+                value={pct(data.overall.oee)}
+                helper={
+                  data.overall.oee == null
+                    ? 'No production data'
+                    : data.display_policy &&
+                        data.overall.oee >= data.display_policy.world_class_ratio
+                      ? 'World-class'
+                      : data.display_policy &&
+                          data.overall.oee >= data.display_policy.on_track_ratio
+                        ? 'On track'
+                        : 'Below benchmark'
+                }
+              />
+              <StatCard label="Availability" value={pct(data.overall.availability)} />
+              <StatCard label="Performance" value={pct(data.overall.performance)} />
+              <StatCard label="Quality" value={pct(data.overall.quality)} />
+            </div>
+            <Panel className="flex items-center justify-center py-4">
+              <OeeGaugeChart
+                oee={data.overall.oee}
+                availability={data.overall.availability}
+                performance={data.overall.performance}
+                quality={data.overall.quality}
+                displayPolicy={data.display_policy}
+              />
+            </Panel>
+          </div>
 
- {/* Trend + downtime */}
- <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
- {/* Trend chart */}
- <div className="lg:col-span-2">
- <Panel title="OEE trend" meta={data.benchmark_pct != null ? `benchmark ${data.benchmark_pct}%` : undefined}>
- {data.trend.length === 0 ? (
- <p className="text-sm text-muted">Window too large — trend down-sampling not yet implemented for &gt; 92 days.</p>
- ) : (
- <div className="h-64">
- <ResponsiveContainer width="100%" height="100%">
- <LineChart data={data.trend.map((t) => ({ date: t.date, oee: t.oee == null ? null : t.oee * 100 }))}
- margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
- <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
- <XAxis
- dataKey="date"
- tick={{ fontSize: 10, fill: 'var(--text-muted)' }}
- tickFormatter={(v: string) => v.slice(5)}
- />
- <YAxis
- domain={[0, 100]}
- tick={{ fontSize: 10, fill: 'var(--text-muted)' }}
- tickFormatter={(v: number) => `${v}%`}
- />
- <RTooltip
- contentStyle={{
- background: 'var(--bg-elevated)',
- border: '1px solid var(--border-default)',
- borderRadius: 6,
- fontSize: 12 }}
- formatter={(v: number) => [`${v.toFixed(1)}%`, 'OEE']}
- />
- {data.benchmark_pct != null && <ReferenceLine y={data.benchmark_pct} stroke="var(--success)" strokeDasharray="4 4" />}
- <Line
- type="monotone"
- dataKey="oee"
- stroke="var(--accent)"
- strokeWidth={2}
- dot={false}
- activeDot={{ r: 4 }}
- />
- </LineChart>
- </ResponsiveContainer>
- </div>
- )}
- </Panel>
- </div>
+          {/* Trend + downtime */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Trend chart */}
+            <div className="lg:col-span-2">
+              <Panel
+                title="OEE trend"
+                meta={data.benchmark_pct != null ? `benchmark ${data.benchmark_pct}%` : undefined}
+              >
+                {data.trend.length === 0 ? (
+                  <p className="text-sm text-muted">
+                    Window too large — trend down-sampling not yet implemented for &gt; 92 days.
+                  </p>
+                ) : (
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart
+                        data={data.trend.map((t) => ({
+                          date: t.date,
+                          oee: t.oee == null ? null : t.oee * 100,
+                        }))}
+                        margin={{ top: 8, right: 16, bottom: 8, left: 0 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
+                        <XAxis
+                          dataKey="date"
+                          tick={{ fontSize: 10, fill: 'var(--text-muted)' }}
+                          tickFormatter={(v: string) => v.slice(5)}
+                        />
+                        <YAxis
+                          domain={[0, 100]}
+                          tick={{ fontSize: 10, fill: 'var(--text-muted)' }}
+                          tickFormatter={(v: number) => `${v}%`}
+                        />
+                        <RTooltip
+                          contentStyle={{
+                            background: 'var(--bg-elevated)',
+                            border: '1px solid var(--border-default)',
+                            borderRadius: 6,
+                            fontSize: 12,
+                          }}
+                          formatter={(v: number) => [`${v.toFixed(1)}%`, 'OEE']}
+                        />
+                        {data.benchmark_pct != null && (
+                          <ReferenceLine
+                            y={data.benchmark_pct}
+                            stroke="var(--success)"
+                            strokeDasharray="4 4"
+                          />
+                        )}
+                        <Line
+                          type="monotone"
+                          dataKey="oee"
+                          stroke="var(--accent)"
+                          strokeWidth={2}
+                          dot={false}
+                          activeDot={{ r: 4 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </Panel>
+            </div>
 
- {/* Downtime breakdown */}
- <Panel title="Downtime by category">
- {data.downtime_breakdown.length === 0 ? (
- <p className="text-sm text-muted">No downtime recorded in this window.</p>
- ) : (
- <ul className="space-y-2.5">
- {(() => {
- const total = data.downtime_breakdown.reduce((a, x) => a + x.minutes, 0);
- return data.downtime_breakdown.map((d) => {
- const pctOfTotal = total === 0 ? 0 : (d.minutes / total) * 100;
- return (
- <li key={d.category}>
- <div className="flex items-center justify-between text-sm mb-1">
- <span>{downtimeLabels.get(d.category) ?? d.category}</span>
- <span className="font-mono tabular-nums text-muted">{fmtMinutes(d.minutes)}</span>
- </div>
- <div className="h-1 bg-subtle rounded-full overflow-hidden">
- <div
- className={`h-full rounded-full ${DOWNTIME_COLORS[d.category] ?? 'bg-strong'}`}
- style={{ width: `${pctOfTotal}%` }}
- aria-hidden
- />
- </div>
- </li>
- );
- });
- })()}
- </ul>
- )}
- </Panel>
- </div>
+            {/* Downtime breakdown */}
+            <Panel title="Downtime by category">
+              {data.downtime_breakdown.length === 0 ? (
+                <p className="text-sm text-muted">No downtime recorded in this window.</p>
+              ) : (
+                <ul className="space-y-2.5">
+                  {(() => {
+                    const total = data.downtime_breakdown.reduce((a, x) => a + x.minutes, 0);
+                    return data.downtime_breakdown.map((d) => {
+                      const pctOfTotal = total === 0 ? 0 : (d.minutes / total) * 100;
+                      return (
+                        <li key={d.category}>
+                          <div className="flex items-center justify-between text-sm mb-1">
+                            <span>{downtimeLabels.get(d.category) ?? d.category}</span>
+                            <span className="font-mono tabular-nums text-muted">
+                              {fmtMinutes(d.minutes)}
+                            </span>
+                          </div>
+                          <div className="h-1 bg-subtle rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${DOWNTIME_COLORS[d.category] ?? 'bg-strong'}`}
+                              style={{ width: `${pctOfTotal}%` }}
+                              aria-hidden
+                            />
+                          </div>
+                        </li>
+                      );
+                    });
+                  })()}
+                </ul>
+              )}
+            </Panel>
+          </div>
 
- {/* Per-machine table */}
- <Panel
- title="Per machine"
- meta={`${data.machines.length} ${data.machines.length === 1 ? 'machine' : 'machines'}`}
- noPadding
- >
- {data.machines.length === 0 ? (
- <p className="px-4 py-4 text-sm text-muted">No machines configured.</p>
- ) : (
- <table className={tableCls}>
- <thead>
- <tr className={theadTrCls}>
- <Th>Code</Th>
- <Th>Name</Th>
- <Th>Status</Th>
- <Th>OEE</Th>
- <Th align="right">Run time</Th>
- <Th align="right">Downtime</Th>
- </tr>
- </thead>
- <tbody>
- {data.machines.map((m: MachineOeeRow) => (
- <tr key={m.machine_id} className={cn(cn(trCls, 'align-top'), "cursor-pointer")} onClick={() => navigate(`/mrp/machines/${m.machine_id}`)}>
- <Td mono>
- 
- {m.machine_code}
- 
- </Td>
- <Td>
- <div>{m.name}</div>
- {m.tonnage != null && (
- <div className="text-2xs text-muted font-mono tabular-nums">{m.tonnage}t</div>
- )}
- </Td>
- <Td>
- <Chip variant={machineStatusVariant(m.status)}>{m.status_label ?? m.status}</Chip>
- </Td>
- <Td className="min-w-[280px]">
- <OeeGauge result={m} displayPolicy={data.display_policy} compact />
- </Td>
- <Td align="right" mono>
- {fmtMinutes(m.diagnostics.run_time)}
- </Td>
- <Td align="right" mono>
- {fmtMinutes(m.diagnostics.planned_downtime + m.diagnostics.unplanned_downtime)}
- </Td>
- </tr>
- ))}
- </tbody>
- </table>
- )}
- </Panel>
- </div>
- )}
- </div>
- );
+          {/* Per-machine table */}
+          <Panel
+            title="Per machine"
+            meta={`${data.machines.length} ${data.machines.length === 1 ? 'machine' : 'machines'}`}
+            noPadding
+          >
+            {data.machines.length === 0 ? (
+              <p className="px-4 py-4 text-sm text-muted">No machines configured.</p>
+            ) : (
+              <table className={tableCls}>
+                <thead>
+                  <tr className={theadTrCls}>
+                    <Th>Code</Th>
+                    <Th>Name</Th>
+                    <Th>Status</Th>
+                    <Th>OEE</Th>
+                    <Th align="right">Run time</Th>
+                    <Th align="right">Downtime</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.machines.map((m: MachineOeeRow) => (
+                    <tr
+                      key={m.machine_id}
+                      className={cn(cn(trCls, 'align-top'), 'cursor-pointer')}
+                      onClick={() => navigate(`/mrp/machines/${m.machine_id}`)}
+                    >
+                      <Td mono>
+                        <Link
+                          to={`/mrp/machines/${m.machine_id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-accent hover:underline"
+                        >
+                          {m.machine_code}
+                        </Link>
+                      </Td>
+                      <Td>
+                        <div>{m.name}</div>
+                        {m.tonnage != null && (
+                          <div className="text-2xs text-muted font-mono tabular-nums">
+                            {m.tonnage}t
+                          </div>
+                        )}
+                      </Td>
+                      <Td>
+                        <Chip variant={machineStatusVariant(m.status)}>
+                          {m.status_label ?? m.status}
+                        </Chip>
+                      </Td>
+                      <Td className="min-w-[280px]">
+                        <OeeGauge result={m} displayPolicy={data.display_policy} compact />
+                      </Td>
+                      <Td align="right" mono>
+                        {fmtMinutes(m.diagnostics.run_time)}
+                      </Td>
+                      <Td align="right" mono>
+                        {fmtMinutes(
+                          m.diagnostics.planned_downtime + m.diagnostics.unplanned_downtime,
+                        )}
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </Panel>
+        </div>
+      )}
+    </div>
+  );
 }

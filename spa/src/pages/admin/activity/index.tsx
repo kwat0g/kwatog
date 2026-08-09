@@ -65,8 +65,6 @@ export default function AdminActivityFeedPage() {
  <PageHeader
  title="System activity"
  subtitle={data ? `${formatInt(data.meta.total)} events` : undefined}
- backTo="/admin/audit-logs"
- backLabel="Audit Logs"
  breadcrumbs={[
  { label: 'Admin', href: '/admin/audit-logs' },
  { label: 'Activity' },

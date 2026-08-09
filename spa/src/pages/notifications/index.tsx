@@ -301,7 +301,7 @@ export default function NotificationsListPage() {
  event.stopPropagation();
  dismiss.mutate(n.id);
  }}
- className="text-muted hover:text-danger"
+ className="text-muted hover:text-danger-fg"
  />
  </span>
  </div>

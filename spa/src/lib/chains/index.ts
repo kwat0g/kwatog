@@ -17,3 +17,5 @@ export { buildNcrChain } from './ncr';
 export { buildGrnChain } from './grn';
 export { buildDeliveryChain } from './delivery';
 export { buildPurchaseOrderChain } from './purchase-order';
+export { buildP2pChain } from './p2p';
+export { buildO2cChain } from './o2c';

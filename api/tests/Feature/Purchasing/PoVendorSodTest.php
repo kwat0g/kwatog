@@ -9,6 +9,8 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
+use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
+use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Services\PurchaseOrderService;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\WorkflowSeeder;
@@ -51,11 +53,15 @@ class PoVendorSodTest extends TestCase
     private function makePo(PurchaseOrderService $svc, User $by, Vendor $vendor)
     {
         $item = Item::factory()->create();
+        // POs must originate from an approved PR (PR → approved → PO).
+        $pr = PurchaseRequest::factory()->create();
+        $pr->forceFill(['status' => PurchaseRequestStatus::Approved->value])->save();
         return $svc->create([
-            'vendor_id'  => $vendor->hash_id,
-            'date'       => '2026-06-01',
-            'is_vatable' => true,
-            'items'      => [[
+            'vendor_id'           => $vendor->hash_id,
+            'purchase_request_id' => $pr->id,
+            'date'                => '2026-06-01',
+            'is_vatable'          => true,
+            'items'               => [[
                 'item_id'     => $item->hash_id,
                 'description' => 'SoD test line',
                 'quantity'    => '2',

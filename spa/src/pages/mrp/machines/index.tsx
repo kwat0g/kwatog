@@ -95,7 +95,7 @@ export default function MachinesListPage() {
  <PageHeader title="Machines"
  subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'machine' : 'machines'}` : undefined}
  actions={canManage ? (
- <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/mrp/machines/create')}>
+ <Button variant="primary" size="xs" icon={<Plus size={14} />} onClick={() => navigate('/mrp/machines/create')}>
  New machine
  </Button>
  ) : null} />

@@ -12,9 +12,7 @@ const CreatePurchaseOrderPage = lazy(() => import('@/pages/purchasing/purchase-o
 const PurchaseOrderDetailPage = lazy(() => import('@/pages/purchasing/purchase-orders/detail'));
 const ApprovedSuppliersPage = lazy(() => import('@/pages/purchasing/approved-suppliers'));
 
-// ADV6 — PR Templates
-const PrTemplatesListPage = lazy(() => import('@/pages/purchasing/pr-templates'));
-const PrTemplateFormPage = lazy(() => import('@/pages/purchasing/pr-templates/create'));
+// ADV6 — PR Templates (pages hidden 2026-08-08, scope cut — files kept)
 
 // ADV5 — Procurement Chain overview
 const ProcurementChainPage = lazy(() => import('@/pages/purchasing/chain'));
@@ -44,14 +42,6 @@ export const purchasingRoutes = (
 
  <Route path="/purchasing/approved-suppliers"
  element={<PermissionGuard permission="purchasing.view"><ApprovedSuppliersPage /></PermissionGuard>} />
-
- {/* ADV6 — PR Templates */}
- <Route path="/purchasing/pr-templates"
- element={<PermissionGuard permission="purchasing.view"><PrTemplatesListPage /></PermissionGuard>} />
- <Route path="/purchasing/pr-templates/create"
- element={<PermissionGuard permission="purchasing.pr.create"><PrTemplateFormPage /></PermissionGuard>} />
- <Route path="/purchasing/pr-templates/:id/edit"
- element={<PermissionGuard permission="purchasing.pr.create"><PrTemplateFormPage /></PermissionGuard>} />
 
  {/* ADV5 — Procurement Chain overview */}
  <Route path="/purchasing/chain"

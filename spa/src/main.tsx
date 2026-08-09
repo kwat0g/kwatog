@@ -12,6 +12,7 @@ import '@fontsource/instrument-serif/400.css';
 import '@fontsource/instrument-serif/400-italic.css';
 import '@fontsource-variable/public-sans';
 import '@fontsource-variable/spline-sans-mono';
+import { CheckCircle2, AlertTriangle, Info } from 'lucide-react';
 import './styles/globals.css';
 
 // Initialize theme before first paint (system preference until auth supplies a saved choice).
@@ -73,15 +74,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
  aria-live={t.type === 'error' ? 'assertive' : 'polite'}
  >
  <div className="flex-1 flex items-center gap-3 pr-8">
- {t.type === 'error' ? (
- <svg className="w-5 h-5 text-danger shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
- <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
- </svg>
- ) : t.type === 'success' ? (
- <svg className="w-5 h-5 text-success shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
- <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
- </svg>
- ) : null}
+ <div className="shrink-0 flex items-center justify-center">
+ {t.type === 'success' ? <CheckCircle2 className="text-success-fg" size={16} /> :
+ t.type === 'error' ? <AlertTriangle className="text-danger-fg" size={16} /> :
+ <Info className="text-accent" size={16} />}
+ </div>
  <div>{resolveValue(t.message, t)}</div>
  </div>
  <button

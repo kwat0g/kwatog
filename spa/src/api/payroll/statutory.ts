@@ -22,4 +22,8 @@ export const statutoryApi = {
  downloadAuthenticatedFile(`/api/v1/payroll/statutory/1604cf?year=${year}`, {
  errorMessage: 'Failed to download BIR 1604-CF.',
  }),
+ bir2316Alphalist: (year: number): Promise<boolean> =>
+ downloadAuthenticatedFile(`/api/v1/payroll/bir-alphalist?year=${year}`, {
+ errorMessage: 'Failed to download BIR 2316 alphalist.',
+ }),
 };

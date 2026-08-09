@@ -38,6 +38,9 @@ class AssetTransferTest extends TestCase
 
     public function test_can_create_asset_transfer(): void
     {
+        // Service-level since the HTTP surface was hidden (scope cut 2026-08-08).
+        // actingAs() is required: AssetTransferService::create() resolves the
+        // requester from Auth::id().
         $deptA = Department::factory()->create();
         $deptB = Department::factory()->create();
         $asset = Asset::create([
@@ -47,7 +50,8 @@ class AssetTransferTest extends TestCase
             'status' => AssetStatus::Active->value, 'department_id' => $deptA->id,
         ]);
 
-        $response = $this->actingAs($this->admin)->postJson('/api/v1/asset-transfers', [
+        $this->actingAs($this->admin);
+        $transfer = app(AssetTransferService::class)->create([
             'asset_id'           => $asset->id,
             'from_department_id' => $deptA->id,
             'to_department_id'   => $deptB->id,
@@ -55,8 +59,7 @@ class AssetTransferTest extends TestCase
             'transfer_date'      => '2026-07-01',
         ]);
 
-        $response->assertStatus(201);
-        $response->assertJsonPath('data.status', 'pending');
+        $this->assertEquals('pending', $transfer->status->value);
         $this->assertDatabaseHas('asset_transfers', ['asset_id' => $asset->id, 'status' => 'pending']);
     }
 

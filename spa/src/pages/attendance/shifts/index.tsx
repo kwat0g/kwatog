@@ -16,7 +16,7 @@ import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar } from '@/components/ui/FilterBar';
 import { Input } from '@/components/ui/Input';
-import { Modal } from '@/components/ui/Modal';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Panel } from '@/components/ui/Panel';
 import { Switch } from '@/components/ui/Switch';
@@ -106,8 +106,6 @@ export default function ShiftsPage() {
  <PageHeader
  title="Shifts"
  subtitle={data ? `${data.meta.total} shifts` : undefined}
- backTo="/hr/attendance"
- backLabel="Attendance"
  actions={
  <>
  {can('attendance.shifts.manage') && (
@@ -185,14 +183,14 @@ export default function ShiftsPage() {
  </Chip>
  </div>
  {can('attendance.shifts.manage') && (
- <div className="flex gap-2 pt-3 border-t border-default">
+ <ModalFooter className="justify-start">
  <Button variant="secondary" size="sm" onClick={() => { setEditing(selected); setModalOpen(true); }} icon={<Pencil size={12} />}>Edit</Button>
  {scope === 'only' ? (
  <Button variant="secondary" size="sm" onClick={() => setPendingRestore(selected)} icon={<ArchiveRestore size={12} />}>Restore</Button>
  ) : (
  <Button variant="danger" size="sm" onClick={() => setPendingDelete(selected)} icon={<Trash2 size={12} />}>Archive</Button>
  )}
- </div>
+ </ModalFooter>
  )}
  </div>
  )}
@@ -311,12 +309,12 @@ function ShiftFormModal({ editing, onClose, onSaved }: { editing: Shift | null; 
  <div className="pt-1">
  <Switch label="Active" {...register('is_active')} />
  </div>
- <div className="flex justify-end gap-2 pt-3 border-t border-default">
+ <ModalFooter>
  <Button type="button" variant="secondary" onClick={onClose} disabled={isSubmitting || mutation.isPending}>Cancel</Button>
  <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending} loading={mutation.isPending}>
  {mutation.isPending ? 'Saving…' : isEdit ? 'Save changes' : 'Create shift'}
  </Button>
- </div>
+ </ModalFooter>
  </form>
  </Modal>
  );

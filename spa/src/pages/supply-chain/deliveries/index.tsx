@@ -16,7 +16,7 @@ import { deliveryStatusVariant } from '@/lib/statusVariants';
 import type { Delivery } from '@/types/supplyChain';
 
 const DEFAULT_FILTERS: DeliveryListParams = {
- page: 1, per_page: 25,
+ page: 1, per_page: 25, status: 'scheduled',
 };
 
 export default function DeliveriesListPage() {

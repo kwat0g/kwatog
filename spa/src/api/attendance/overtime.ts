@@ -37,8 +37,6 @@ export const overtimeApi = {
   client.delete<ApiSuccess<OvertimeRequest>>(`/attendance/overtime-requests/${id}`, {
   data: reason ? { reason } : undefined,
   }).then((r) => r.data.data),
-  restore: (id: string) =>
-  client.patch<ApiSuccess<OvertimeRequest>>(`/attendance/overtime-requests/${id}/restore`).then((r) => r.data.data),
  /** L-23 — bulk approve up to 100 pending requests. Server reports partial successes. */
  bulkApprove: (ids: string[], remarks?: string) =>
  client.post<{

@@ -18,6 +18,21 @@ class DeMinimisController
 {
     public function __construct(private readonly DeMinimisService $service) {}
 
+    /**
+     * Enumerated benefit types are exposed by the API so client forms cannot
+     * drift from the statutory values accepted by StoreDeMinimisBenefitRequest.
+     */
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => array_map(
+            static fn (DeMinimisBenefitType $type): array => [
+                'value' => $type->value,
+                'label' => $type->label(),
+            ],
+            DeMinimisBenefitType::cases(),
+        )]);
+    }
+
     public function index(Request $request): AnonymousResourceCollection
     {
         $query = DeMinimisBenefit::query()->with('employee');

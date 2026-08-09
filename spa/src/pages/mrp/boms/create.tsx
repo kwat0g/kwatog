@@ -198,7 +198,7 @@ export default function CreateBomPage() {
  aria-label="Remove line"
  onClick={() => remove(i)}
  disabled={fields.length === 1}
- className="text-muted hover:text-danger"
+ className="text-muted hover:text-danger-fg"
  />
  </Td>
  </tr>
@@ -219,7 +219,7 @@ export default function CreateBomPage() {
  </Button>
  </div>
 
- {errors.items?.message && <p className="mt-2 text-xs text-danger">{errors.items.message as string}</p>}
+ {errors.items?.message && <p className="mt-2 text-xs text-danger-fg">{errors.items.message as string}</p>}
  </fieldset>
 
  <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">

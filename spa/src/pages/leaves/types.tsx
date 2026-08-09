@@ -3,17 +3,16 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Pencil, Trash2, ArchiveRestore } from 'lucide-react';
+import { Pencil, Trash2, ArchiveRestore, Plus } from 'lucide-react';
 import { leaveTypesApi } from '@/api/leave';
 import { ArchiveFilter } from '@/components/ui/ArchiveFilter';
 import { archiveToTrashed, type ArchiveScope } from '@/lib/archiveScope';
 import { DataTable } from '@/components/ui/DataTable';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
-import { Modal } from '@/components/ui/Modal';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Switch } from '@/components/ui/Switch';
-import { PageHeader } from '@/components/layout/PageHeader';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { usePermission } from '@/hooks/usePermission';
@@ -46,7 +45,13 @@ const toPayload = (d: FormValues) => ({
  conversion_rate: d.conversion_rate === '' ? undefined : d.conversion_rate,
 });
 
-export default function LeaveTypesPage() {
+/**
+ * Leave-type catalog manager — rendered inside the "Manage Types" modal on the
+ * Leave page (PASS 6 consolidation, 2026-08-08). Compact toolbar instead of a
+ * PageHeader because it lives inside a dialog; the page file doubles as the
+ * modal body. Re-added after a git reset wiped the original change.
+ */
+export function LeaveTypesManager() {
  const { can } = usePermission();
  const qc = useQueryClient();
  const [editTarget, setEditTarget] = useState<LeaveType | null>(null);
@@ -114,11 +119,11 @@ export default function LeaveTypesPage() {
  key: 'actions', header: '',
  cell: (r: LeaveType) => can('leave.types.manage') ? (
  <div className="flex gap-1">
- <Button variant="ghost" size="sm" icon={<Pencil size={12} />} onClick={(e) => { e.stopPropagation(); openEdit(r); }} />
+ <Button variant="ghost" size="xs" icon={<Pencil size={12} />} onClick={(e) => { e.stopPropagation(); openEdit(r); }} />
  {scope === 'only' ? (
- <Button variant="ghost" size="sm" icon={<ArchiveRestore size={12} />} onClick={(e) => { e.stopPropagation(); restoreMutation.mutate(r.id); }} />
+ <Button variant="ghost" size="xs" icon={<ArchiveRestore size={12} />} onClick={(e) => { e.stopPropagation(); restoreMutation.mutate(r.id); }} />
  ) : (
- <Button variant="ghost" size="sm" icon={<Trash2 size={12} />} onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(r.id); }} />
+ <Button variant="ghost" size="xs" icon={<Trash2 size={12} />} onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(r.id); }} />
  )}
  </div>
  ) : null,
@@ -127,13 +132,17 @@ export default function LeaveTypesPage() {
 
  return (
  <div>
- <PageHeader title="Leave Types" subtitle={`${items.length} types`}
- actions={can('leave.types.manage') && (
- <Button variant="primary" size="sm" onClick={() => { reset({ is_paid: true, is_active: true }); setShowCreate(true); }}>Add Type</Button>
- )}
- />
- <div className="flex justify-end px-5 pt-3">
+ <div className="flex items-center justify-between gap-3 px-5 pt-3">
+ <div className="text-sm text-muted">{items.length} types</div>
+ <div className="flex items-center gap-2">
  <ArchiveFilter value={scope} onChange={setScope} />
+ {can('leave.types.manage') && (
+ <Button variant="primary" size="xs" icon={<Plus size={14} />}
+ onClick={() => { reset({ is_paid: true, is_active: true }); setShowCreate(true); }}>
+ Add Type
+ </Button>
+ )}
+ </div>
  </div>
  {isLoading && <SkeletonTable columns={5} rows={6} />}
  {isError && <EmptyState icon="alert-circle" title="Failed to load leave types" />}
@@ -165,10 +174,10 @@ export default function LeaveTypesPage() {
  <Switch label="Active" {...register('is_active')} />
  </div>
  <Input label="Conversion rate" type="number" step="0.01" min="0" max="9.99" {...register('conversion_rate')} error={errors.conversion_rate?.message} />
- <div className="flex justify-end gap-2 pt-3 border-t border-default">
+ <ModalFooter>
  <Button variant="secondary" onClick={() => { setShowCreate(false); setEditTarget(null); }}>Cancel</Button>
  <Button type="submit" variant="primary" loading={createMutation.isPending || updateMutation.isPending}>Save</Button>
- </div>
+ </ModalFooter>
  </form>
  </Modal>
  )}

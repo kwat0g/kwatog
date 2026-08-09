@@ -60,11 +60,11 @@ export function SpecToleranceBar({
 
  const statusColor =
  status === 'out-of-spec'
- ? 'bg-danger text-danger border-danger'
+ ? 'bg-danger-bg text-danger-fg border-danger'
  : status === 'near-limit'
- ? 'bg-warning text-warning border-warning'
+ ? 'bg-warning-bg text-warning-fg border-warning'
  : status === 'in-spec'
- ? 'bg-success text-success border-success'
+ ? 'bg-success-bg text-success-fg border-success'
  : 'bg-subtle text-muted border-strong';
 
  return (
@@ -99,9 +99,9 @@ export function SpecToleranceBar({
  <span
  className={cn(
  'font-medium text-[10px]',
- status === 'out-of-spec' && 'text-danger font-medium',
- status === 'near-limit' && 'text-warning font-medium',
- status === 'in-spec' && 'text-success',
+ status === 'out-of-spec' && 'text-danger-fg font-medium',
+ status === 'near-limit' && 'text-warning-fg font-medium',
+ status === 'in-spec' && 'text-success-fg',
  )}
  >
  {numValue}{unit}

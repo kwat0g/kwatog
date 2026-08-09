@@ -137,6 +137,14 @@ class SupplierPortalService
             $purchaseOrder->sent_to_supplier_at = now();
             $purchaseOrder->save();
 
+            // 2026-08-08 — stage the expected GRN (draft) once the supplier
+            // confirms the PO, mirroring PurchaseOrderService::markAsSent().
+            // The listener is idempotent, so a PO acknowledged twice never
+            // stacks draft GRNs.
+            DB::afterCommit(fn () =>
+                event(new \App\Modules\Purchasing\Events\PurchaseOrderSent($purchaseOrder->fresh()))
+            );
+
             return $purchaseOrder;
         });
     }

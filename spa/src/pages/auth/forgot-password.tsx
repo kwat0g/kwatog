@@ -59,7 +59,7 @@ export default function ForgotPasswordPage() {
  <Mail size={12} className="text-accent" />
  Reset password
  </p>
- <h1 className="mt-3 font-display text-2xl font-medium tracking-tight text-primary">
+ <h1 className="mt-3 font-display text-2xl tracking-tight text-primary">
  Forgot your password?
  </h1>
  <p className="mt-1.5 text-[13px] text-muted">
@@ -70,10 +70,10 @@ export default function ForgotPasswordPage() {
  {submitted ? (
  <div
  role="status"
- className="rounded-md border border-success/30 bg-success/10 p-5 text-center"
+ className="rounded-md border border-success/30 bg-success-bg/10 p-5 text-center"
  >
- <CheckCircle size={32} className="mx-auto text-success" strokeWidth={1.5} />
- <h2 className="mt-3 font-display text-lg font-medium text-primary">
+ <CheckCircle size={32} className="mx-auto text-success-fg" strokeWidth={1.5} />
+ <h2 className="mt-3 font-display text-lg text-primary">
  Check your inbox
  </h2>
  <p className="mt-1 text-[13px] text-secondary">

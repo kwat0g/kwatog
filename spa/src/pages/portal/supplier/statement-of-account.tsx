@@ -10,11 +10,11 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const bucketColors: Record<string, string> = {
- current: 'text-success',
- d1_30: 'text-warning',
- d31_60: 'text-warning',
- d61_90: 'text-danger',
- d91_plus: 'text-danger',
+ current: 'text-success-fg',
+ d1_30: 'text-warning-fg',
+ d31_60: 'text-warning-fg',
+ d61_90: 'text-danger-fg',
+ d91_plus: 'text-danger-fg',
 };
 
 export default function SupplierStatementOfAccountPage() {

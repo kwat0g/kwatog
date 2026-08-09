@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
-import { Modal } from '@/components/ui/Modal';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { Textarea } from '@/components/ui/Textarea';
 import { Input } from '@/components/ui/Input';
 import { SkeletonTable } from '@/components/ui/Skeleton';
@@ -66,7 +66,7 @@ function requestColumns(onCancel?: (id: string) => void): Column<SelfServiceOver
  <div className="max-w-[320px]">
  <span className="text-muted block truncate">{r.reason || '—'}</span>
  {r.status === 'rejected' && r.rejection_reason && (
- <span className="text-xs text-danger block truncate">
+ <span className="text-xs text-danger-fg block truncate">
  Rejected: {r.rejection_reason}
  </span>
  )}
@@ -98,7 +98,7 @@ function requestColumns(onCancel?: (id: string) => void): Column<SelfServiceOver
  <Button
  variant="ghost"
  size="sm"
- className="text-danger hover:bg-danger-bg"
+ className="text-danger-fg hover:bg-danger-bg"
  onClick={() => onCancel(r.id)}
  aria-label="Cancel this overtime request"
  >
@@ -358,7 +358,7 @@ function ApplyOvertimeModal({
  </p>
  </div>
 
- <div className="flex justify-end gap-2 pt-2 border-t border-default">
+ <ModalFooter>
  <Button variant="secondary" onClick={onClose} disabled={mutation.isPending}>
  Cancel
  </Button>
@@ -370,7 +370,7 @@ function ApplyOvertimeModal({
  >
  {mutation.isPending ? 'Submitting…' : 'Submit for approval'}
  </Button>
- </div>
+ </ModalFooter>
  </div>
  </Modal>
  );

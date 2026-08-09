@@ -22,6 +22,23 @@ class StockAdjustmentController
 {
     public function __construct(private readonly StockAdjustmentService $service) {}
 
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'statuses' => array_map(
+                static fn (StockAdjustmentStatus $status): array => [
+                    'value' => $status->value,
+                    'label' => $status->label(),
+                ],
+                StockAdjustmentStatus::cases(),
+            ),
+            'directions' => [
+                ['value' => 'in', 'label' => 'In'],
+                ['value' => 'out', 'label' => 'Out'],
+            ],
+        ]]);
+    }
+
     public function index(Request $request): AnonymousResourceCollection
     {
         $filters = $request->validate([

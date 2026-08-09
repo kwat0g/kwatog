@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, Calendar as CalIcon } from 'lucide-react';
@@ -6,7 +6,7 @@ import { calendarApi } from '@/api/calendar';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Modal } from '@/components/ui/Modal';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { ToggleChip } from '@/components/ui/SegmentedControl';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { cn } from '@/lib/cn';
@@ -16,15 +16,6 @@ import type {
  CalendarLayer,
  CalendarEventVariant,
 } from '@/types/calendar';
-
-const ALL_LAYERS: { key: CalendarLayer; label: string; variant: CalendarEventVariant }[] = [
- { key: 'holiday', label: 'Holidays', variant: 'info' },
- { key: 'leave', label: 'Leaves', variant: 'neutral' },
- { key: 'delivery', label: 'Deliveries', variant: 'info' },
- { key: 'maintenance', label: 'Maintenance', variant: 'warning' },
- { key: 'payroll', label: 'Payroll', variant: 'success' },
- { key: 'wo_due', label: 'WO due', variant: 'warning' },
-];
 
 function startOfMonth(d: Date): Date { return new Date(d.getFullYear(), d.getMonth(), 1); }
 function fmtDate(d: Date): string {
@@ -67,10 +58,21 @@ const VARIANT_CLASS: Record<CalendarEventVariant, string> = {
 export default function CalendarPage() {
  const navigate = useNavigate();
  const [cursor, setCursor] = useState<Date>(() => startOfMonth(new Date()));
- const [activeLayers, setActiveLayers] = useState<CalendarLayer[]>(
- ALL_LAYERS.map((l) => l.key),
- );
+ const [activeLayers, setActiveLayers] = useState<CalendarLayer[]>([]);
+ const initializedLayers = useRef(false);
  const [selected, setSelected] = useState<CalendarEvent | null>(null);
+
+ const { data: layerOptions } = useQuery({
+ queryKey: ['calendar', 'options'],
+ queryFn: calendarApi.options,
+ staleTime: 5 * 60_000,
+ });
+ useEffect(() => {
+ if (!initializedLayers.current && layerOptions?.layers.length) {
+ initializedLayers.current = true;
+ setActiveLayers(layerOptions.layers.map((layer) => layer.value));
+ }
+ }, [layerOptions]);
 
  const monthStart = startOfMonth(cursor);
  const grid = useMemo(() => buildGrid(monthStart), [monthStart]);
@@ -78,7 +80,7 @@ export default function CalendarPage() {
  const toStr = fmtDate(grid[5][6]);
 
  const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['calendar', 'events', fromStr, toStr, activeLayers.sort().join(',')],
+ queryKey: ['calendar', 'events', fromStr, toStr, [...activeLayers].sort().join(',')],
  queryFn: () => calendarApi.events({ from: fromStr, to: toStr, layers: activeLayers }),
  placeholderData: (prev) => prev,
  });
@@ -146,15 +148,15 @@ export default function CalendarPage() {
 
  {/* Layer toggles */}
  <div className="px-5 py-3 border-b border-default flex flex-wrap items-center gap-2">
- {ALL_LAYERS.map((l) => {
- const active = activeLayers.includes(l.key);
+ {(layerOptions?.layers ?? []).map((layer) => {
+ const active = activeLayers.includes(layer.value);
  return (
- <ToggleChip key={l.key} active={active} onClick={() => toggleLayer(l.key)}>
+ <ToggleChip key={layer.value} active={active} onClick={() => toggleLayer(layer.value)}>
  <span
- className={cn('inline-block w-2 h-2 rounded-full', VARIANT_CLASS[l.variant])}
+ className={cn('inline-block w-2 h-2 rounded-full', VARIANT_CLASS[layer.variant])}
  aria-hidden
  />
- {l.label}
+ {layer.label}
  </ToggleChip>
  );
  })}
@@ -271,7 +273,7 @@ export default function CalendarPage() {
  ))}
  </dl>
  )}
- <div className="flex justify-end gap-2 pt-3 border-t border-default">
+ <ModalFooter>
  <Button variant="secondary" size="sm" onClick={() => setSelected(null)}>
  Close
  </Button>
@@ -286,7 +288,7 @@ export default function CalendarPage() {
  >
  Open record
  </Button>
- </div>
+ </ModalFooter>
  </div>
  )}
  </Modal>

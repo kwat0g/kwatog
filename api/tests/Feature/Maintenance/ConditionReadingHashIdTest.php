@@ -7,6 +7,7 @@ namespace Tests\Feature\Maintenance;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Maintenance\Models\MachineConditionReading;
+use App\Modules\Maintenance\Services\PredictiveMaintenanceService;
 use App\Modules\MRP\Models\Machine;
 use Database\Seeders\MachineSeeder;
 use Database\Seeders\RolePermissionSeeder;
@@ -15,15 +16,14 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * Regression: condition-reading endpoints must accept hash_ids.
+ * Regression: condition-reading logic must accept hash_ids.
  *
  * The SPA sends `machine_id` as a hash_id (per the ID-obfuscation rule — see
  * spa/src/api/maintenance/conditionReadings.ts, whose param type is `string`).
- * These endpoints validated `machine_id` as `integer`, so every call from the
- * Machine Health page and the mobile condition-reading page 422'd.
- *
- * The pre-existing tests all passed raw integer ids, which is why the break was
- * invisible: they exercised a payload the frontend never sends.
+ * The HTTP surface that used to decode it (controller + request) is HIDDEN
+ * 2026-08-08 (scope cut — no direct machine connection), so the kept path is
+ * PredictiveMaintenanceService fed a decoded integer. These asserts pin the
+ * contract that survives: hash_id → decodeHash() → service → persisted row.
  */
 class ConditionReadingHashIdTest extends TestCase
 {
@@ -46,80 +46,54 @@ class ConditionReadingHashIdTest extends TestCase
         $this->machine = Machine::query()->firstOrFail();
     }
 
-    private function seedReading(string $metric = 'vibration', float $value = 1.5): void
+    /** A hash_id must decode to the same machine a raw id names. */
+    public function test_hash_id_decodes_to_same_machine(): void
+    {
+        $this->assertSame($this->machine->id, Machine::decodeHash($this->machine->hash_id));
+    }
+
+    /** The kept service accepts the decoded integer id and persists the row. */
+    public function test_service_accepts_decoded_hash_id(): void
+    {
+        $result = app(PredictiveMaintenanceService::class)->recordAndEvaluate([
+            'machine_id' => Machine::decodeHash($this->machine->hash_id),
+            'metric' => 'temperature',
+            'value' => 42.0,
+            'source' => 'manual',
+        ], $this->admin);
+
+        $this->assertFalse($result['triggered']);
+        $this->assertDatabaseHas('machine_condition_readings', [
+            'machine_id' => $this->machine->id,
+            'metric' => 'temperature',
+            'value' => 42.0,
+        ]);
+    }
+
+    /** Raw integer ids must keep working — internal callers use them. */
+    public function test_raw_integer_id_still_accepted(): void
     {
         MachineConditionReading::create([
             'machine_id' => $this->machine->id,
-            'metric' => $metric,
-            'value' => $value,
+            'metric' => 'vibration',
+            'value' => 1.5,
             'unit' => 'mm/s',
             'source' => 'manual',
             'recorded_at' => now(),
         ]);
-    }
 
-    public function test_index_accepts_hash_id(): void
-    {
-        $this->seedReading();
+        $result = app(PredictiveMaintenanceService::class)->recordAndEvaluate([
+            'machine_id' => $this->machine->id,
+            'metric' => 'vibration',
+            'value' => 1.6,
+            'source' => 'manual',
+        ], $this->admin);
 
-        $this->actingAs($this->admin)
-            ->getJson('/api/v1/maintenance/condition-readings?machine_id='.$this->machine->hash_id)
-            ->assertOk()
-            ->assertJsonCount(1, 'data');
-    }
-
-    public function test_trend_accepts_hash_id(): void
-    {
-        $this->seedReading();
-
-        $this->actingAs($this->admin)
-            ->getJson('/api/v1/maintenance/condition-readings/trend'
-                .'?machine_id='.$this->machine->hash_id.'&metric=vibration')
-            ->assertOk();
-    }
-
-    public function test_health_snapshot_accepts_hash_id(): void
-    {
-        $this->seedReading();
-
-        $this->actingAs($this->admin)
-            ->getJson('/api/v1/maintenance/condition-readings/health-snapshot'
-                .'?machine_id='.$this->machine->hash_id)
-            ->assertOk();
-    }
-
-    public function test_store_accepts_hash_id(): void
-    {
-        $this->actingAs($this->admin)
-            ->postJson('/api/v1/maintenance/condition-readings', [
-                'machine_id' => $this->machine->hash_id,
-                'metric' => 'temperature',
-                'value' => 42.0,
-                'source' => 'manual',
-            ])
-            ->assertCreated();
-
+        $this->assertFalse($result['triggered']);
         $this->assertDatabaseHas('machine_condition_readings', [
             'machine_id' => $this->machine->id,
-            'metric' => 'temperature',
+            'metric' => 'vibration',
+            'value' => 1.6,
         ]);
-    }
-
-    /** Raw integer ids must keep working — existing tests and internal callers use them. */
-    public function test_raw_integer_id_still_accepted(): void
-    {
-        $this->seedReading();
-
-        $this->actingAs($this->admin)
-            ->getJson('/api/v1/maintenance/condition-readings?machine_id='.$this->machine->id)
-            ->assertOk();
-    }
-
-    /** An undecodable id must fail validation cleanly, never 500. */
-    public function test_garbage_id_fails_validation_not_fatally(): void
-    {
-        $this->actingAs($this->admin)
-            ->getJson('/api/v1/maintenance/condition-readings?machine_id=not-a-real-id')
-            ->assertStatus(422);
     }
 }

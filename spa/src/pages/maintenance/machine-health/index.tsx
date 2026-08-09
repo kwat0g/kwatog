@@ -45,7 +45,7 @@ function HealthGauge({ metric, snapshot, metricLabels, metricUnits }: { metric: 
  <div className="mt-2 h-2 overflow-hidden rounded bg-elevated">
  <div
  className={`h-full rounded transition-all duration-500 ${
- status === 'critical' ? 'bg-danger' : status === 'warning' ? 'bg-warning' : 'bg-success'
+ status === 'critical' ? 'bg-danger-bg' : status === 'warning' ? 'bg-warning-bg' : 'bg-success-bg'
  }`}
  style={{ width: `${pct}%` }}
  />
@@ -80,7 +80,7 @@ function TrendChart({ points, metric, snapshot, metricUnits }: { points: Conditi
  <div
  className={`w-full rounded-t transition-all ${
  ((snapshot?.max_threshold != null && p.value > snapshot.max_threshold) || (snapshot?.min_threshold != null && p.value < snapshot.min_threshold))
- ? 'bg-danger/60' : 'bg-primary/60'
+ ? 'bg-danger-bg/60' : 'bg-primary/60'
  }`}
  style={{ height: `${Math.max(h, 2)}%` }}
  />

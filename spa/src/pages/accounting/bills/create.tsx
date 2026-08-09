@@ -72,6 +72,8 @@ export default function CreateBillPage() {
  });
  const { data: policies } = useQuery({ queryKey: ['business-policies'], queryFn: businessPoliciesApi.get });
  const { data: uoms = [] } = useQuery({ queryKey: ['inventory', 'uoms'], queryFn: uomsApi.list, staleTime: 300_000 });
+ const vatConfigured = policies?.vat_status === 'VAT Registered' && policies.vat_rate !== null;
+ const vatRateLabel = vatConfigured ? `${(Number(policies.vat_rate) * 100).toLocaleString()}%` : '—';
  const vendors = useMemo(() => vendorsResp?.data ?? [], [vendorsResp]);
  const accounts = accountsResp?.data ?? [];
  const pos = useMemo(
@@ -89,8 +91,8 @@ export default function CreateBillPage() {
  },
  });
  useEffect(() => {
- if (policies) setValue('is_vatable', policies.vat_status === 'VAT Registered');
- }, [policies, setValue]);
+ if (policies) setValue('is_vatable', vatConfigured);
+ }, [policies, setValue, vatConfigured]);
  const { fields, append, remove, replace } = useFieldArray({ control, name: 'items' });
  const items = watch('items');
  const isVatable = watch('is_vatable');
@@ -145,9 +147,9 @@ export default function CreateBillPage() {
  const totals = useMemo(() => {
  let subtotal = 0;
  for (const it of items) subtotal += (Number(it.quantity) || 0) * (Number(it.unit_price) || 0);
- const vat = isVatable ? subtotal * Number(policies?.vat_rate ?? 0) : 0;
+ const vat = isVatable && vatConfigured ? subtotal * Number(policies.vat_rate) : 0;
  return { subtotal: subtotal.toFixed(2), vat: vat.toFixed(2), total: (subtotal + vat).toFixed(2) };
- }, [items, isVatable, policies?.vat_rate]);
+ }, [items, isVatable, policies, vatConfigured]);
 
  const mutation = useMutation({
  mutationFn: (d: FormValues) => billsApi.create({
@@ -214,7 +216,7 @@ export default function CreateBillPage() {
  <Input label="Date" type="date" required {...register('date')} error={errors.date?.message} />
  <Input label="Due date" type="date" {...register('due_date')} error={errors.due_date?.message} />
  <div className="flex items-end">
- <Switch label={`VAT-able (${(Number(policies?.vat_rate ?? 0) * 100).toLocaleString()}%)`} {...register('is_vatable')} />
+ <Switch label={`VAT-able (${vatRateLabel})`} disabled={!vatConfigured} {...register('is_vatable')} />
  </div>
  {purchaseOrderId && (
  <div className="col-span-3">
@@ -231,7 +233,7 @@ export default function CreateBillPage() {
 
  <Panel title="Line items">
  <div className="border border-default rounded-md overflow-hidden">
- <div className="grid grid-cols-12 gap-2 h-8 px-2.5 bg-subtle text-2xs uppercase tracking-wider text-muted font-medium border-b border-default items-center">
+ <div className="grid grid-cols-12 gap-2 h-row px-2.5 bg-subtle text-2xs uppercase tracking-wider text-muted font-medium border-b border-default items-center">
  <div className="col-span-3">Description</div>
  <div className="col-span-3">Expense account</div>
  <div className="col-span-1 text-right">Qty</div>
@@ -266,7 +268,7 @@ export default function CreateBillPage() {
  <div className="col-span-1 flex justify-end pt-1.5">
  {fields.length > 1 && (
  <Button type="button" variant="ghost" size="sm" iconOnly icon={<Trash2 size={14} />}
- aria-label="Remove line" onClick={() => remove(idx)} className="text-muted hover:text-danger" />
+ aria-label="Remove line" onClick={() => remove(idx)} className="text-muted hover:text-danger-fg" />
  )}
  </div>
  </div>

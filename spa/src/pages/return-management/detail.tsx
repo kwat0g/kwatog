@@ -15,6 +15,8 @@ import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { returnManagementApi } from '@/api/returnManagement';
+import { creditNotesApi } from '@/api/accounting/credit-notes';
+import { FileText, PackageCheck } from 'lucide-react';
 import { warehouseApi } from '@/api/inventory/warehouse';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
@@ -38,11 +40,11 @@ const STATUS_VARIANT: Record<string, ChipVariant> = {
 /** Design-token dot class for each timeline event. */
 const TIMELINE_DOT: Record<string, string> = {
  created: 'bg-strong',
- approved: 'bg-info',
+ approved: 'bg-info-bg',
  received: 'bg-accent',
- inspected: 'bg-purple',
- completed: 'bg-success',
- rejected: 'bg-danger',
+ inspected: 'bg-purple-bg',
+ completed: 'bg-success-bg',
+ rejected: 'bg-danger-bg',
  cancelled: 'bg-strong',
 };
 
@@ -57,6 +59,7 @@ export default function ReturnRequestDetailPage() {
  const [confirm, setConfirm] = useState<'submit' | 'approve' | 'receive' | 'inspect' | 'complete' | 'cancel' | null>(null);
  const [rejectOpen, setRejectOpen] = useState(false);
  const [locationId, setLocationId] = useState('');
+ const [finalizeCnId, setFinalizeCnId] = useState<string | null>(null);
  const [receivedQty, setReceivedQty] = useState<Record<string, string>>({});
  const [showDispose, setShowDispose] = useState(false);
 
@@ -142,6 +145,18 @@ export default function ReturnRequestDetailPage() {
  onError: (e) => toast.error(errMsg(e, 'Failed to cancel RMA.')),
  });
 
+ // 2026-08-08 — finalize the draft credit note staged from the returned lines.
+ const finalizeCn = useMutation({
+ mutationFn: (cnId: string) => creditNotesApi.finalize(cnId),
+ onSuccess: () => {
+ toast.success('Credit note finalized and posted to the GL.');
+ setFinalizeCnId(null);
+ invalidate();
+ queryClient.invalidateQueries({ queryKey: ['accounting', 'credit-notes'] });
+ },
+ onError: (e) => toast.error(errMsg(e, 'Failed to finalize credit note.')),
+ });
+
  const availableActions = (status?: string): Array<{ key: string; label: string; variant?: 'primary' | 'danger' | 'default' }> => {
  if (!status) return [];
  switch (status) {
@@ -225,12 +240,18 @@ export default function ReturnRequestDetailPage() {
 
  // Approve / reject sit behind their own permission — the approval chain
  // routes them to department heads and managers, who deliberately do not
- // hold `manage`. Gating every action on `manage` hid the approve button
- // from the only people allowed to press it.
+ // hold `manage`. Gating every action on `manage` hid the approve button // from the only people allowed to press it.
  const canManage = can('return_management.manage');
  const canApprove = can('return_management.approve');
  const actions = availableActions(rma.status).filter((action) =>
- action.key === 'approve' || action.key === 'reject' ? canApprove : canManage,
+  action.key === 'approve' || action.key === 'reject' ? canApprove : canManage,
+ );
+
+ // 2026-08-08 — a supplier line still needs a location at completion only when
+ // it wasn't shipped at dispose (legacy RMA disposed before the change, or an
+ // all-scrap supplier return where nothing ever moved).
+ const pendingSupplierShip = rma.type === 'supplier_return' && (rma.items ?? []).some(
+  (i) => i.disposition === 'return_to_supplier' && !(Number(i.moved_quantity) > 0),
  );
 
  // Build timeline entries from timestamp fields
@@ -247,27 +268,21 @@ export default function ReturnRequestDetailPage() {
  return (
  <div>
  <PageHeader
- title={<span className="font-mono">{rma.rma_number}</span>}
- subtitle={
- <div className="flex items-center gap-2">
- <Chip variant={STATUS_VARIANT[rma.status] ?? 'neutral'}>
- {rma.status_label}
- </Chip>
- <span className="text-muted">|</span>
- <span>{rma.type_label}</span>
+ title={
+ <div className="flex items-center gap-3">
+ <span className="font-mono">{rma.rma_number}</span>
+ <Chip variant={STATUS_VARIANT[rma.status] ?? 'neutral'}>{rma.status_label}</Chip>
  </div>
  }
+ subtitle={rma.type_label}
  backTo="/return-management"
- breadcrumbs={[{ label: 'Returns', href: '/return-management' }, { label: rma.rma_number }]}
- />
-
- <div className="px-4 space-y-4">
- {/* Workflow Actions */}
- {actions.length > 0 && (
- <div className="flex gap-2 flex-wrap">
+ backLabel="Return Management"
+ actions={
+ <div className="flex gap-1.5">
  {actions.map((action) => (
  <Button
  key={action.key}
+ size="sm"
  variant={action.variant === 'danger' ? 'danger' : 'primary'}
  onClick={() => handleAction(action.key)}
  >
@@ -275,8 +290,12 @@ export default function ReturnRequestDetailPage() {
  </Button>
  ))}
  </div>
- )}
+ }
+ />
 
+ <div className="px-5 py-4 space-y-4">
+ <div className="grid gap-4 lg:grid-cols-3">
+ <div className="lg:col-span-2 space-y-4">
  {/* Details Panel */}
  <Panel title="RMA Details">
  <dl className="grid grid-cols-3 gap-y-3 gap-x-6 text-sm mt-2">
@@ -357,6 +376,58 @@ export default function ReturnRequestDetailPage() {
  )}
  </Panel>
 
+ {/* Items */}
+ <Panel title={`Items (${rma.items?.length ?? 0})`}>
+ {!rma.items || rma.items.length === 0 ? (
+ <div className="text-muted text-sm py-2">No items.</div>
+ ) : (
+ <table className={cn(tableCls, 'mt-2')}>
+ <thead>
+ <tr className={theadTrCls}>
+ <Th>Product</Th>
+ <Th align="right">Qty</Th>
+ <Th align="right">Returned</Th>
+ <Th align="right">Unit Price</Th>   <Th>Condition</Th>
+   <Th>Reason</Th>
+   <Th>Disposition</Th>
+   <Th>{rma.type === 'supplier_return' ? 'Return' : 'Restock'}</Th>
+   </tr>
+   </thead>
+   <tbody>
+   {rma.items.map((item) => (
+    <tr key={item.id} className={trCls}>
+    <Td mono>
+     {item.product
+     ? `${item.product.part_number} — ${item.product.name}`
+     : item.item
+     ? `${item.item.code} — ${item.item.name}`
+     : '—'}
+    </Td>
+    <Td align="right" mono>{formatInt(item.quantity)}</Td>
+    <Td align="right" mono>{formatInt(item.returned_quantity)}</Td>
+    <Td align="right" mono>{formatPeso(item.unit_price)}</Td>
+    <Td>{conditionLabel.get(item.condition ?? '') || item.condition || '—'}</Td>
+    <Td>{item.reason || '—'}</Td>
+    <Td>
+     {item.disposition
+     ? <Chip variant={item.disposition === 'restock' ? 'success' : item.disposition === 'scrap' ? 'danger' : 'warning'}>{item.disposition_label ?? dispositionLabel.get(item.disposition) ?? item.disposition}</Chip>
+     : '—'}
+    </Td>
+    <Td>
+     {item.moved_quantity && Number(item.moved_quantity) > 0
+     ? rma.type === 'supplier_return'
+      ? <Chip variant="danger">{formatInt(item.moved_quantity)} out</Chip>
+      : <Chip variant="success">✓ {formatInt(item.moved_quantity)}</Chip>
+     : '—'}
+    </Td>
+    </tr>
+   ))}
+   </tbody>
+ </table>
+ )}
+ </Panel>
+ </div>
+ <div className="space-y-4">
  {/* Timeline */}
  <Panel title="Timeline">
  <div className="space-y-2 text-sm mt-2">
@@ -377,6 +448,52 @@ export default function ReturnRequestDetailPage() {
      the API but never rendered, so there was no way to tell from the UI
      whether a customer had actually been credited. */}
  {(rma.credit_note || rma.replacement_purchase_order || rma.inspection || rma.disposition_status) && (
+ <>
+ {/* 2026-08-08 — auto-credit chain: dispose() stages a draft customer credit
+  note from the returned lines; review and finalize it here (mirrors the
+  auto-bill / auto-invoice review-then-post pattern). */}
+ {rma.credit_note && rma.credit_note.status === 'draft' && (
+ <div className="flex items-center gap-3 rounded-md border border-success/40 bg-success-bg/10 px-4 py-3 text-sm">
+ <FileText size={16} className="shrink-0 text-success-fg" />
+ <div className="flex-1">
+ <div className="font-medium">Credit note auto-created</div>
+ <div className="text-muted">
+ A draft customer credit was staged from the returned lines —{' '}
+ <Link to={`/accounting/credit-notes/${rma.credit_note.id}`} className="font-mono text-accent hover:underline">
+ {rma.credit_note.credit_note_number ?? '(draft)'}
+ </Link>
+ {' '}· {formatPeso(rma.credit_note.total_amount)}. Review and finalize to post the AR credit to the GL.
+ </div>
+ </div> {can('accounting.credit_notes.manage') && (
+   <Button variant="secondary" size="sm" icon={<FileText size={14} />}
+    onClick={() => setFinalizeCnId(rma.credit_note!.id)} loading={finalizeCn.isPending}>Finalize</Button>
+  )}
+  </div>
+  )}
+
+  {/* 2026-08-08 — dispose-time movement: customer restock lines come back into
+      stock, supplier return_to_supplier lines ship out. Show exactly how many
+      units moved and where, so the physical flow is as visible as the credit. */}
+  {rma.moved_quantity && Number(rma.moved_quantity) > 0 && (
+   <div className="flex items-center gap-3 rounded-md border border-success/40 bg-success-bg/10 px-4 py-3 text-sm">
+    <PackageCheck size={16} className="shrink-0 text-success-fg" />
+    <div className="flex-1">
+     <div className="font-medium">
+      {rma.type === 'supplier_return' ? 'Goods shipped back to supplier' : 'Goods restocked into inventory'}
+     </div>
+     <div className="text-muted">
+      {rma.type === 'supplier_return'
+       ? `${formatInt(rma.moved_quantity)} units left stock${rma.stock_movement?.from_location ? ` at ${rma.stock_movement.from_location.code}` : ''} when the disposition was recorded.`
+       : `${formatInt(rma.moved_quantity)} units received back into stock${rma.stock_movement?.to_location ? ` at ${rma.stock_movement.to_location.code}` : ''} when the disposition was recorded.`}
+      {' '}
+      <Link to="/inventory/stock-levels?view=movements" className="text-accent hover:underline">
+       View stock movements
+      </Link>
+     </div>
+    </div>
+   </div>
+  )}
+
  <Panel title="Outcome">
  <dl className="grid grid-cols-3 gap-y-3 gap-x-6 text-sm mt-2">
  <div>
@@ -419,51 +536,13 @@ export default function ReturnRequestDetailPage() {
  </div>
  </dl>
  </Panel>
+ </>
  )}
 
- {/* Items */}
- <Panel title={`Items (${rma.items?.length ?? 0})`}>
- {!rma.items || rma.items.length === 0 ? (
- <div className="text-muted text-sm py-2">No items.</div>
- ) : (
- <table className={cn(tableCls, 'mt-2')}>
- <thead>
- <tr className={theadTrCls}>
- <Th>Product</Th>
- <Th align="right">Qty</Th>
- <Th align="right">Returned</Th>
- <Th align="right">Unit Price</Th>
- <Th>Condition</Th>
- <Th>Reason</Th>
- <Th>Disposition</Th>
- </tr>
- </thead>
- <tbody>
- {rma.items.map((item) => (
- <tr key={item.id} className={trCls}>
- <Td mono>
- {item.product
- ? `${item.product.part_number} — ${item.product.name}`
- : item.item
- ? `${item.item.code} — ${item.item.name}`
- : '—'}
- </Td>
- <Td align="right" mono>{formatInt(item.quantity)}</Td>
- <Td align="right" mono>{formatInt(item.returned_quantity)}</Td>
- <Td align="right" mono>{formatPeso(item.unit_price)}</Td>
- <Td>{conditionLabel.get(item.condition ?? '') || item.condition || '—'}</Td>
- <Td>{item.reason || '—'}</Td>
- <Td>
- {item.disposition
- ? <Chip variant={item.disposition === 'restock' ? 'success' : item.disposition === 'scrap' ? 'danger' : 'warning'}>{item.disposition_label ?? dispositionLabel.get(item.disposition) ?? item.disposition}</Chip>
- : '—'}
- </Td>
- </tr>
- ))}
- </tbody>
- </table>
- )}
- </Panel>
+
+ </div>
+
+ </div>
  </div>
 
  {/* Confirm dialogs for simple actions (submit, approve, inspect, cancel).
@@ -480,6 +559,17 @@ export default function ReturnRequestDetailPage() {
  pending={confirmPending}
  />
  )}
+
+ {/* 2026-08-08 — finalize the draft credit note from the return page. */}
+ <ConfirmDialog
+ isOpen={!!finalizeCnId}
+ onClose={() => setFinalizeCnId(null)}
+ onConfirm={() => { if (finalizeCnId) finalizeCn.mutate(finalizeCnId); }}
+ title="Finalize draft credit note?"
+ description="Finalizing assigns the credit note number and posts the VAT-reversing journal entry (DR sales revenue + VAT output, CR AR). Review the auto-created lines before posting."
+ confirmLabel="Finalize credit note"
+ pending={finalizeCn.isPending}
+ />
 
  {/* Reject dialog (requires reason) */}
  <ReasonDialog
@@ -501,39 +591,47 @@ export default function ReturnRequestDetailPage() {
  isOpen={confirm === 'complete'}
  onClose={() => setConfirm(null)}
  title="Complete RMA"
- >
- <div className="space-y-3">
- <p className="text-sm text-muted">
- Select the warehouse location for the stock movement. Lines disposed as
- scrap or returned to the supplier are not restocked.
- </p>
- {/* Was a free-text "Location ID (optional)" box against a required
-     backend field — nothing in the UI exposed a valid value. */}
- <Select
- label="Warehouse location"
- required
- value={locationId}
- onChange={(e) => setLocationId(e.target.value)}
- >
- <option value="">— Select location —</option>
- {locations.map((l) => (
- <option key={l.id} value={l.id}>
- {l.label} · {l.sub}
- </option>
- ))}
- </Select>
- <div className="flex justify-end gap-2">
- <Button variant="secondary" onClick={() => setConfirm(null)}>Cancel</Button>
- <Button
- variant="primary"
- loading={completeMut.isPending}
- disabled={!locationId || completeMut.isPending}
- onClick={() => completeMut.mutate(locationId)}
- >
- Confirm Complete
- </Button>
- </div>
- </div>
+ >   <div className="space-y-3">
+   {pendingSupplierShip ? (
+    <>
+     <p className="text-sm text-muted">
+      Select the warehouse location the returned goods ship out from.
+     </p>
+     {/* Was a free-text "Location ID (optional)" box against a required
+         backend field — nothing in the UI exposed a valid value. */}
+     <Select
+      label="Warehouse location"
+      required
+      value={locationId}
+      onChange={(e) => setLocationId(e.target.value)}
+     >
+      <option value="">— Select location —</option>
+      {locations.map((l) => (
+       <option key={l.id} value={l.id}>
+        {l.label} · {l.sub}
+       </option>
+      ))}
+     </Select>
+    </>
+   ) : (
+    <p className="text-sm text-muted">
+     {rma.type === 'supplier_return'
+      ? 'Returned lines were already shipped back when the disposition was recorded. Completing closes the RMA.'
+      : 'Restock and rework lines were already received back into stock when the disposition was recorded. Completing closes the RMA.'}
+    </p>
+   )}
+   <div className="flex justify-end gap-2">
+    <Button variant="secondary" onClick={() => setConfirm(null)}>Cancel</Button>
+    <Button
+     variant="primary"
+     loading={completeMut.isPending}
+     disabled={completeMut.isPending || (pendingSupplierShip && !locationId)}
+     onClick={() => completeMut.mutate(locationId)}
+    >
+     Confirm Complete
+    </Button>
+   </div>
+   </div>
  </Modal>
 
  {/* Receive with per-line quantities */}

@@ -9,7 +9,9 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { DataTable, type Column } from '@/components/ui/DataTable';
+import { FilterBar } from '@/components/ui/FilterBar';
 import { Panel } from '@/components/ui/Panel';
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { DowntimeParetoChart, buildParetoData } from '@/components/charts/DowntimeParetoChart';
 import type { TopMachineDowntime, MachineDowntimeSummary } from '@/types/maintenance';
 
@@ -54,13 +56,13 @@ function StatCard({ label, value, icon: Icon, trend }: { label: string; value: s
  <div className="mt-2 flex items-center gap-1 text-2xs">
  {trend === 'up' ? (
  <>
- <TrendingUp size={12} className="text-danger" />
- <span className="text-danger">Higher than avg</span>
+ <TrendingUp size={12} className="text-danger-fg" />
+ <span className="text-danger-fg">Higher than avg</span>
  </>
  ) : trend === 'down' ? (
  <>
- <TrendingDown size={12} className="text-success" />
- <span className="text-success">Better than avg</span>
+ <TrendingDown size={12} className="text-success-fg" />
+ <span className="text-success-fg">Better than avg</span>
  </>
  ) : null}
  </div>
@@ -71,6 +73,7 @@ function StatCard({ label, value, icon: Icon, trend }: { label: string; value: s
 
 export default function DowntimeAnalyticsPage() {
  const [days, setDays] = useState<number | undefined>(undefined);
+ const [filters, setFilters] = useUrlFilters({ search: '' });
  const policyQ = useQuery({
  queryKey: ['downtime-analytics', 'policy'],
  queryFn: () => downtimeAnalyticsApi.policy(),
@@ -80,23 +83,23 @@ export default function DowntimeAnalyticsPage() {
  }, [days, policyQ.data]);
 
  const { data: summary, isLoading: summaryLoading, isError: summaryError, refetch: summaryRefetch } = useQuery({
- queryKey: ['downtime-analytics', 'summary', days],
+ queryKey: ['downtime-analytics', 'summary', days, filters.search],
  queryFn: () => downtimeAnalyticsApi.summary({ days }),
  placeholderData: (prev) => prev,
  });
 
  const { data: trend, isLoading: trendLoading } = useQuery({
- queryKey: ['downtime-analytics', 'daily-trend', days],
+ queryKey: ['downtime-analytics', 'daily-trend', days, filters.search],
  queryFn: () => downtimeAnalyticsApi.dailyTrend({ days }),
  });
 
  const { data: topMachines, isLoading: topLoading } = useQuery({
- queryKey: ['downtime-analytics', 'top-machines', days],
+ queryKey: ['downtime-analytics', 'top-machines', days, filters.search],
  queryFn: () => downtimeAnalyticsApi.topMachines({ days, limit: 10 }),
  });
 
  const { data: allMachines, isLoading: allLoading } = useQuery({
- queryKey: ['downtime-analytics', 'all-machines', days],
+ queryKey: ['downtime-analytics', 'all-machines', days, filters.search],
  queryFn: () => downtimeAnalyticsApi.allMachines({ days }),
  });
 
@@ -143,6 +146,7 @@ export default function DowntimeAnalyticsPage() {
  align: 'right',
  cell: (r) => {
  const pct = r.summary.availability_pct;
+ if (pct == null) return <span className="text-muted">—</span>;
  return (
  <Chip variant={policyQ.data?.availability_good_pct != null && pct >= policyQ.data.availability_good_pct ? 'success' : policyQ.data?.availability_warning_pct != null && pct >= policyQ.data.availability_warning_pct ? 'warning' : 'danger'}>
  {pct.toFixed(1)}%
@@ -205,6 +209,7 @@ export default function DowntimeAnalyticsPage() {
  </div>
  }
  />
+ <FilterBar onSearch={(search) => setFilters({ search })} searchPlaceholder="Search machine..." />
 
  {summaryError && (
  <div className="px-5 py-4">
@@ -238,9 +243,9 @@ export default function DowntimeAnalyticsPage() {
  />
  <StatCard
  label="Availability"
- value={`${summary.availability_pct.toFixed(1)}%`}
+ value={summary.availability_pct == null ? '—' : `${summary.availability_pct.toFixed(1)}%`}
  icon={BarChart3}
- trend={policyQ.data?.availability_good_pct != null && summary.availability_pct >= policyQ.data.availability_good_pct ? 'down' : 'up'}
+ trend={summary.availability_pct != null && policyQ.data?.availability_good_pct != null && summary.availability_pct >= policyQ.data.availability_good_pct ? 'down' : 'up'}
  />
  </>
  ) : null}
@@ -270,7 +275,7 @@ export default function DowntimeAnalyticsPage() {
  </div>
  <div className="mt-2 flex items-center gap-4 text-2xs text-muted">
  <span className="inline-block h-2 w-2 rounded bg-primary/60" /> Total downtime
- <span className="inline-block h-2 w-2 rounded bg-danger" /> Breakdown
+ <span className="inline-block h-2 w-2 rounded bg-danger-bg" /> Breakdown
  </div>
  </div>
  ) : (

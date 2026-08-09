@@ -20,8 +20,12 @@ class NewsletterController
     {
         $this->service->subscribe($request->validated('email'), $request);
 
-        $company = (string) $this->settings->get('company.legal_name', 'PHILIPPINE OGAMI CORPORATION');
+        $company = trim((string) $this->settings->get('company.legal_name', ''));
+        $message = 'You are subscribed.';
+        if ($company !== '') {
+            $message .= " Thanks for your interest in {$company}.";
+        }
 
-        return response()->json(['message' => "You are subscribed. Thanks for your interest in {$company}."]);
+        return response()->json(['message' => $message]);
     }
 }

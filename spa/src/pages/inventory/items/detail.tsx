@@ -83,7 +83,7 @@ export default function ItemDetailPage() {
  <div className="flex flex-wrap gap-2">
  <Link to={`/inventory/stock-levels?item_id=${data.id}`} className="text-sm text-accent hover:underline">View stock levels</Link>
  <span className="text-muted">·</span>
- <Link to={`/inventory/movements?item_id=${data.id}`} className="text-sm text-accent hover:underline">View movements</Link>
+ <Link to={`/inventory/stock-levels?view=movements&item_id=${data.id}`} className="text-sm text-accent hover:underline">View movements</Link>
  <span className="text-muted">·</span>
  <Link to={`/inventory/items/${data.id}/quality-plans`} className="text-sm text-accent hover:underline inline-flex items-center gap-1"><ShieldCheck size={12} /> Quality plans</Link>
  </div>

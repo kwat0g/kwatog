@@ -38,7 +38,9 @@ const [deleteId, setDeleteId] = useState<string | null>(null);
  const [scope, setScope] = useState<ArchiveScope>('active');
 
  const { data, isLoading, isError, refetch } = useQuery({
-  queryKey: ['quality', 'ncr-templates', scope],
+  // Keep the list cache separate from the active-template picker cache used
+  // by the NCR create page. Both routes can be soft-navigated in one session.
+  queryKey: ['quality', 'ncr-templates', 'list', scope],
   queryFn: () => ncrTemplatesApi.list({ per_page: 100, trashed: archiveToTrashed(scope) }),
   placeholderData: (prev) => prev,
  });

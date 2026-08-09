@@ -21,7 +21,7 @@ export { FilterBar, type FilterConfig, type FilterOption } from './FilterBar';
 export { Input, type InputProps } from './Input';
 export { LinkButton } from './LinkButton';
 export { MaskedInput, type MaskedInputProps } from './MaskedInput';
-export { Modal } from './Modal';
+export { Modal, ModalFooter } from './Modal';
 export { Panel } from './Panel';
 export { Radio } from './Radio';
 export { Select, type SelectProps, type FieldSize } from './Select';

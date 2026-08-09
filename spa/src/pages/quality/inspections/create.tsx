@@ -1,10 +1,10 @@
 /**
  * Sprint 7 — Task 60 — Open a new inspection.
  *
- * Picks product + stage + batch quantity. For outgoing batches the AQL
- * Level II 0.65 sample plan is shown live as the user types the batch
- * size. On submit, the backend seeds (sample × spec_item) measurement
- * rows and the user is redirected to the detail page to record values.
+ * Picks product + stage + batch quantity. For outgoing batches the
+ * configured sample plan is shown live as the user types the batch size.
+ * On submit, the backend seeds (sample × spec_item) measurement rows and
+ * the user is redirected to the detail page to record values.
  */
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -42,7 +42,6 @@ export default function CreateInspectionPage() {
  queryFn: () => inspectionsApi.options(),
  });
  const stages = inspectionOptions.data?.stages ?? [];
- const samplingMethod = inspectionOptions.data?.sampling_methods?.find((method) => method.stage === stage);
 
  const {
  register, handleSubmit, watch, formState: { errors },
@@ -54,6 +53,7 @@ export default function CreateInspectionPage() {
 
  const stage = watch('stage');
  const batchQty = watch('batch_quantity');
+ const samplingMethod = inspectionOptions.data?.sampling_methods?.find((method) => method.stage === stage);
 
  // Live preview AQL sample plan only for outgoing.
  useQuery({

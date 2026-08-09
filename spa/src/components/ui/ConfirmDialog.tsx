@@ -52,9 +52,9 @@ export function ConfirmDialog({
 
  const iconClass =
  variant === 'danger'
- ? 'text-danger'
+ ? 'text-danger-fg'
  : variant === 'warning'
- ? 'text-warning'
+ ? 'text-warning-fg'
  : 'text-accent';
 
  const buttonVariant = variant === 'danger' || variant === 'warning' ? 'danger' : 'primary';

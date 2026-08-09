@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, KeyRound } from 'lucide-react';
+import { Plus, KeyRound, Coins } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { employeesApi, type EmployeeListParams } from '@/api/hr/employees';
 import { departmentsApi } from '@/api/hr/departments';
@@ -12,16 +12,18 @@ import { DataTable, NumCell, StackedCell, type Column } from '@/components/ui/Da
 import { EmptyState } from '@/components/ui/EmptyState';
 import { formatInt } from '@/lib/formatNumber';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
-import { Modal } from '@/components/ui/Modal';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import { StatCard } from '@/components/ui/StatCard';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { formatDate } from '@/lib/formatDate';
+import { SalaryAdjustmentsTab } from '@/pages/hr/salary-adjustments';
 import type { Employee, BulkProvisionResponse } from '@/types/hr';
 
 const DEFAULT_FILTERS: EmployeeListParams = {
- page: 1, per_page: 25, sort: 'employee_no', direction: 'desc',
+ page: 1, per_page: 25, sort: 'employee_no', direction: 'desc', status: 'active',
 };
 
 export default function EmployeesListPage() {
@@ -30,6 +32,14 @@ export default function EmployeesListPage() {
  const queryClient = useQueryClient();
  const [bulkResult, setBulkResult] = useState<BulkProvisionResponse | null>(null);
  const canViewDepartments = can('hr.departments.view');
+ const canViewEmployees = can('hr.employees.view');
+ const canViewAdjustments = can('hr.salary_adjustments.view');
+ // Scope cut: salary adjustments folded into this page. A checker like
+ // production_manager has hr.salary_adjustments.view WITHOUT hr.employees.view,
+ // so the adjustments queue must be their landing view, not the employee list.
+ const [view, setView] = useState<'employees' | 'adjustments'>(
+ canViewEmployees ? 'employees' : 'adjustments',
+ );
 
   // Bound to the URL so dashboard drill-downs (?status=active, ?status=on_leave)
   // arrive pre-filtered and the browser back button restores the previous view.
@@ -154,17 +164,30 @@ export default function EmployeesListPage() {
  return (
  <div>
  <PageHeader
- title="Employees"
- subtitle={data ? `${formatInt(data.meta.total)} employees` : undefined}
+ title={view === 'adjustments' ? 'Salary Adjustments' : 'Employees'}
+ subtitle={view === 'adjustments'
+ ? 'Maker-checker queue · pending changes await approval'
+ : (data ? `${formatInt(data.meta.total)} employees` : undefined)}
  actions={
- can('hr.employees.create') && (
+ <>
+ {canViewEmployees && canViewAdjustments && (
+ <Button variant="secondary" size="sm" icon={<Coins size={14} />} onClick={() => setView(view === 'employees' ? 'adjustments' : 'employees')}>
+ {view === 'employees' ? 'Salary Adjustments' : 'Employee List'}
+ </Button>
+ )}
+ {view === 'employees' && can('hr.employees.create') && (
  <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/hr/employees/create')}>
  Add employee
  </Button>
- )
+ )}
+ </>
  }
  />
 
+ {view === 'adjustments' ? (
+ <SalaryAdjustmentsTab />
+ ) : (
+ <>
  <FilterBar
  filters={filterConfig}
  values={filters}
@@ -184,7 +207,39 @@ export default function EmployeesListPage() {
  />
  )}
 
- {data && data.data.length === 0 && (
+ {data && (
+  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 px-5 py-4 border-b border-default bg-canvas">
+  <StatCard
+    label="Active"
+    value={data.data.filter(i => i.status === 'active').length}
+    helper="in current view"
+    linkTo="?status=active"
+    className="border-success/30 bg-success-bg/20"
+  />
+  <StatCard
+    label="On Leave"
+    value={data.data.filter(i => i.status === 'on_leave').length}
+    helper="in current view"
+    linkTo="?status=on_leave"
+    className="border-warning/30 bg-warning-bg/20"
+  />
+  <StatCard
+    label="Resigned"
+    value={data.data.filter(i => i.status === 'resigned').length}
+    helper="in current view"
+    linkTo="?status=resigned"
+  />
+  <StatCard
+    label="Terminated"
+    value={data.data.filter(i => i.status === 'terminated').length}
+    helper="in current view"
+    linkTo="?status=terminated"
+    className="border-danger/30 bg-danger-bg/20"
+  />
+  </div>
+ )}
+
+{data && data.data.length === 0 && (
  <EmptyState
  icon="users"
  title="No employees found"
@@ -194,6 +249,8 @@ export default function EmployeesListPage() {
  ) : undefined}
  />
  )}
+
+
 
  {data && data.data.length > 0 && (
   <div className="px-5 py-4"><DataTable
@@ -222,6 +279,9 @@ export default function EmployeesListPage() {
  /></div>
  )}
 
+ </>
+ )}
+
  {/* Bulk-provision result modal */}
  <Modal
  isOpen={!!bulkResult}
@@ -233,9 +293,9 @@ export default function EmployeesListPage() {
  <div className="space-y-3 text-sm">
  <div className="text-muted">
  Total: <span className="font-mono tabular-nums text-primary">{bulkResult.summary.total}</span> ·
- {' '}<span className="text-success">{bulkResult.summary.success} success</span> ·
- {' '}<span className="text-warning">{bulkResult.summary.skipped} skipped</span> ·
- {' '}<span className="text-danger">{bulkResult.summary.failed} failed</span>
+ {' '}<span className="text-success-fg">{bulkResult.summary.success} success</span> ·
+ {' '}<span className="text-warning-fg">{bulkResult.summary.skipped} skipped</span> ·
+ {' '}<span className="text-danger-fg">{bulkResult.summary.failed} failed</span>
  </div>
  <ul className="border border-default rounded-md max-h-64 overflow-auto divide-y divide-subtle">
  {bulkResult.results.map((row) => (
@@ -256,9 +316,9 @@ export default function EmployeesListPage() {
  </li>
  ))}
  </ul>
- <div className="flex justify-end pt-2 border-t border-default">
+ <ModalFooter>
  <Button variant="primary" onClick={() => setBulkResult(null)}>Done</Button>
- </div>
+ </ModalFooter>
  </div>
  )}
  </Modal>

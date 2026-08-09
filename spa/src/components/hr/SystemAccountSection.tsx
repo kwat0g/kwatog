@@ -128,7 +128,7 @@ export function SystemAccountSection({ employeeId, suggestedEmail }: Props) {
  <span>{data.role?.name ?? '—'}</span>
  </div>
  {data.must_change_password && (
- <div className="text-xs text-warning">
+ <div className="text-xs text-warning-fg">
  Force-change password is enabled — user will reset on next login.
  </div>
  )}

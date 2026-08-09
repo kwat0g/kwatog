@@ -8,7 +8,7 @@ import { attendancesApi } from '@/api/attendance/attendances';
 import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Modal } from '@/components/ui/Modal';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { Panel } from '@/components/ui/Panel';
 import { Textarea } from '@/components/ui/Textarea';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -102,8 +102,8 @@ export default function OvertimeDetailPage() {
  <>
  {canApprove && (
  <>
- <Button variant="primary" size="sm" icon={<Check size={12} />} disabled={approveMut.isPending} loading={approveMut.isPending} onClick={() => setConfirmApprove(true)}>Approve</Button>
- <Button variant="danger" size="sm" icon={<X size={12} />} onClick={() => setReject(true)}>Reject</Button>
+ <Button variant="primary" size="xs" icon={<Check size={12} />} disabled={approveMut.isPending} loading={approveMut.isPending} onClick={() => setConfirmApprove(true)}>Approve</Button>
+ <Button variant="danger" size="xs" icon={<X size={12} />} onClick={() => setReject(true)}>Reject</Button>
  </>
  )}
  {canCancel && (
@@ -182,12 +182,12 @@ export default function OvertimeDetailPage() {
  {reject && (
  <Modal isOpen onClose={() => { setReject(false); setReason(''); }} size="sm" title="Reject overtime request">
  <Textarea label="Reason for rejection" required value={reason} onChange={(e) => setReason(e.target.value)} rows={3} />
- <div className="flex justify-end gap-2 pt-3 mt-3 border-t border-default">
+ <ModalFooter>
  <Button variant="secondary" onClick={() => { setReject(false); setReason(''); }}>Cancel</Button>
  <Button variant="danger" disabled={!reason.trim() || rejectMut.isPending} loading={rejectMut.isPending} onClick={() => rejectMut.mutate()}>
  {rejectMut.isPending ? 'Rejecting…' : 'Confirm reject'}
  </Button>
- </div>
+ </ModalFooter>
  </Modal>
  )}
 

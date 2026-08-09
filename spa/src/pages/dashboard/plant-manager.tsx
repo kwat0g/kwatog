@@ -32,7 +32,7 @@ import type { ApiSuccess } from '@/types';
  */
 
 interface PlantManagerData {
- kpis: Array<{ label: string; value: string; unit: string }>;
+ kpis: Array<{ label: string; value: string | null; unit: string }>;
  panels: {
  chain_stages: Array<{ key: string; label: string; color: string; count: number; percent: number }>;
  alerts: Array<{ kind: string; severity: string; label: string; ref: string | null; ref_id: string | null }>;
@@ -111,14 +111,17 @@ export default function PlantManagerDashboard() {
  <StatCard
  key={kpi.label}
  label={kpi.label}
- value={`${kpi.value}${kpi.unit === 'pct' ? '%' : ''}`}
+ value={kpi.value == null ? '—' : `${kpi.value}${kpi.unit === 'pct' ? '%' : ''}`}
  helper={/^[A-Z]{3}$/.test(kpi.unit) ? kpi.unit : kpi.unit === 'pct' ? 'yield' : kpi.unit}
  />
  ))}
  </KpiGrid>
 
- {/* KPI Scorecard strip */}
- <KpiStrip codes={['oee', 'dppm', 'first_pass_yield', 'on_time_delivery']} />
+ {/* KPI Scorecard strip — the OEE card drills into the full OEE report; the rest go to the scorecard. */}
+ <KpiStrip
+ codes={['oee', 'dppm', 'first_pass_yield', 'on_time_delivery']}
+ linkByCode={{ oee: '/production/oee' }}
+ />
 
  {/* Row 2 — Chain stage breakdown */}
  <Panel title="Order-to-Cash Chain" actions={<Link className="text-xs text-link hover:underline" to="/approvals">View board →</Link>}>
@@ -191,10 +194,10 @@ function StageBar({ stages }: { stages: PlantManagerData['panels']['chain_stages
  );
  }
  const colorMap: Record<string, string> = {
- success: 'bg-success',
- info: 'bg-info',
- warning: 'bg-warning',
- danger: 'bg-danger',
+ success: 'bg-success-bg',
+ info: 'bg-info-bg',
+ warning: 'bg-warning-bg',
+ danger: 'bg-danger-bg',
  };
  return (
  <div className="space-y-2">
@@ -270,7 +273,7 @@ function DefectParetoPanel({ defects }: { defects: PlantManagerData['panels']['d
  <span className="w-20 truncate text-muted" title={d.name}>{d.code}</span>
  <div className="flex-1 h-2.5 bg-elevated rounded-full overflow-hidden">
  <div
- className="h-full bg-danger rounded-full transition-all duration-500"
+ className="h-full bg-danger-bg rounded-full transition-all duration-500"
  style={{ width: `${(d.count / maxCount) * 100}%` }}
  role="progressbar"
  aria-valuenow={d.count}
@@ -289,9 +292,9 @@ function DefectParetoPanel({ defects }: { defects: PlantManagerData['panels']['d
 
 function AlertsPanel({ alerts }: { alerts: PlantManagerData['panels']['alerts'] }) {
  const sevDot: Record<string, string> = {
- danger: 'bg-danger',
- warning: 'bg-warning',
- success: 'bg-success',
+ danger: 'bg-danger-bg',
+ warning: 'bg-warning-bg',
+ success: 'bg-success-bg',
  neutral: 'bg-strong',
  };
  return (

@@ -7,7 +7,7 @@ import { leaveRequestsApi, leaveBalancesApi } from '@/api/leave';
 import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Modal } from '@/components/ui/Modal';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { Panel } from '@/components/ui/Panel';
 import { Textarea } from '@/components/ui/Textarea';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -19,8 +19,6 @@ import { fromLeaveRequest } from '@/lib/approvals';
 import { CanDo } from '@/components/guards/CanDo';
 import { useAuthStore } from '@/stores/authStore';
 import { formatDate } from '@/lib/formatDate';
-
-const HALF_DAY_LABEL: Record<string, string> = { am: 'AM', pm: 'PM' };
 
 export default function LeaveDetailPage() {
  const { id = '' } = useParams<{ id: string }>();
@@ -86,6 +84,7 @@ export default function LeaveDetailPage() {
  const isOwner = user?.employee?.id === req.employee?.id;
  const canCancel = isOwner && ['pending_dept', 'pending_hr', 'approved'].includes(req.status);
  const statusLabel = new Map((leaveOptions?.statuses ?? []).map((option) => [option.value, option.label]));
+ const halfDayLabels = new Map((leaveOptions?.half_day_periods ?? []).map((option) => [option.value, option.label]));
 
  return (
  <div>
@@ -109,14 +108,14 @@ export default function LeaveDetailPage() {
  {/* Series R/R3 — declarative permission gating via <CanDo>. */}
  {req.status === 'pending_dept' && (
  <CanDo permission="leave.approve_dept">
- <Button variant="primary" size="sm" icon={<Check size={12} />} disabled={approveDept.isPending} loading={approveDept.isPending} onClick={() => setConfirmApproveDept(true)}>Approve</Button>
- <Button variant="danger" size="sm" icon={<X size={12} />} onClick={() => setReject(true)}>Reject</Button>
+ <Button variant="primary" size="xs" icon={<Check size={12} />} disabled={approveDept.isPending} loading={approveDept.isPending} onClick={() => setConfirmApproveDept(true)}>Approve</Button>
+ <Button variant="danger" size="xs" icon={<X size={12} />} onClick={() => setReject(true)}>Reject</Button>
  </CanDo>
  )}
  {req.status === 'pending_hr' && (
  <CanDo permission="leave.approve_hr">
- <Button variant="primary" size="sm" icon={<Check size={12} />} disabled={approveHR.isPending} loading={approveHR.isPending} onClick={() => setConfirmApproveHR(true)}>Approve</Button>
- <Button variant="danger" size="sm" icon={<X size={12} />} onClick={() => setReject(true)}>Reject</Button>
+ <Button variant="primary" size="xs" icon={<Check size={12} />} disabled={approveHR.isPending} loading={approveHR.isPending} onClick={() => setConfirmApproveHR(true)}>Approve</Button>
+ <Button variant="danger" size="xs" icon={<X size={12} />} onClick={() => setReject(true)}>Reject</Button>
  </CanDo>
  )}
  {canCancel && (
@@ -134,7 +133,7 @@ export default function LeaveDetailPage() {
  <Item label="Employee" value={req.employee?.full_name} sub={req.employee?.employee_no} />
  <Item label="Department" value={req.employee?.department ?? '—'} />
  <Item label="Leave type" value={`${req.leave_type?.code} — ${req.leave_type?.name}`} />
- <Item label="Days" value={req.half_day_period ? `${req.days} · ${HALF_DAY_LABEL[req.half_day_period] ?? req.half_day_period}` : req.days} mono />
+ <Item label="Days" value={req.half_day_period ? `${req.days} · ${halfDayLabels.get(req.half_day_period) ?? req.half_day_period}` : req.days} mono />
  <Item label="Start date" value={formatDate(req.start_date)} mono />
  <Item label="End date" value={formatDate(req.end_date)} mono />
  </dl>
@@ -193,12 +192,12 @@ export default function LeaveDetailPage() {
  {reject && (
  <Modal isOpen onClose={() => { setReject(false); setReason(''); }} size="sm" title="Reject leave request">
  <Textarea label="Reason for rejection" required value={reason} onChange={(e) => setReason(e.target.value)} rows={3} />
- <div className="flex justify-end gap-2 pt-3 mt-3 border-t border-default">
+ <ModalFooter>
  <Button variant="secondary" onClick={() => { setReject(false); setReason(''); }}>Cancel</Button>
  <Button variant="danger" disabled={!reason.trim() || rejectMut.isPending} loading={rejectMut.isPending} onClick={() => rejectMut.mutate()}>
  {rejectMut.isPending ? 'Rejecting…' : 'Confirm reject'}
  </Button>
- </div>
+ </ModalFooter>
  </Modal>
  )}
 
@@ -247,4 +246,3 @@ function Item({ label, value, sub, mono }: { label: string; value: React.ReactNo
  </div>
  );
 }
-

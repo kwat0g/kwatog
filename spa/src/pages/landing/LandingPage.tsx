@@ -17,7 +17,6 @@ import { LandingNav } from './components/LandingNav';
 import { LandingFooter } from './components/LandingFooter';
 import { CookieBanner } from './components/CookieBanner';
 import { BackToTop } from './components/BackToTop';
-import { CrosshairCursor } from './components/CrosshairCursor';
 import { ScrollProgress } from './components/ScrollProgress';
 import { HeroSection } from './sections/HeroSection';
 import { MarqueeSection } from './sections/MarqueeSection';
@@ -50,9 +49,10 @@ export default function LandingPage() {
 
   useEffect(() => {
     const prev = document.title;
-    const company = contact?.legal_name || 'Philippine Ogami Corporation';
-    const suffix = content?.section_copy?.page_title_suffix || 'Precision Injection Molding & ERP';
-    document.title = `${company} — ${suffix}`;
+    const company = contact?.legal_name ?? '';
+    const suffix = content?.section_copy?.page_title_suffix ?? '';
+    const title = [company, suffix].filter(Boolean).join(' — ');
+    if (title) document.title = title;
     return () => {
       document.title = prev;
     };
@@ -62,13 +62,12 @@ export default function LandingPage() {
     const meta = document.querySelector<HTMLMetaElement>('meta[name="description"]');
     if (!meta) return;
     const previous = meta.content;
-    const company = contact?.legal_name || 'Philippine Ogami Corporation';
-    const partners = content?.oem_partners?.length ? content.oem_partners.join(', ') : 'Toyota, Nissan, Honda, Yamaha';
-    const standard = content?.quality_policy?.standard || 'IATF 16949';
-    const address = contact?.address || 'FCIE Dasmariñas, Cavite, Philippines';
-    const defaultDesc = '{{company}} delivers IATF 16949 certified plastic injection molding, precision mold making, and automated assembly for Tier-1 automotive partners.';
+    const company = contact?.legal_name ?? '';
+    const partners = content?.oem_partners?.join(', ') ?? '';
+    const standard = content?.quality_policy?.standard ?? '';
+    const address = contact?.address ?? '';
 
-    const description = (content?.section_copy?.hero_description || defaultDesc)
+    const description = (content?.section_copy?.hero_description ?? '')
       ?.replaceAll('{{company}}', company)
       ?.replaceAll('{{partners}}', partners)
       ?.replaceAll('{{standard}}', standard)
@@ -82,11 +81,9 @@ export default function LandingPage() {
   return (
     <div
       ref={rootRef}
-      data-crosshair-scope
       className="min-h-screen bg-canvas font-sans text-primary antialiased"
     >
       <ScrollProgress />
-      <CrosshairCursor scopeRef={rootRef} />
       <a
         href={content?.section_copy?.nav_links?.[0]?.href ?? '#'}
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[60] focus:rounded-md focus:bg-accent focus:px-4 focus:py-2 focus:font-sans focus:text-sm focus:font-medium focus:text-accent-fg"

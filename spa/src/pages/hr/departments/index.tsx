@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
-import { Modal } from '@/components/ui/Modal';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Panel } from '@/components/ui/Panel';
 import { Select } from '@/components/ui/Select';
@@ -227,7 +227,7 @@ export default function DepartmentsPage() {
  </div>
  )}
  {can('hr.departments.manage') && (
-  <div className="flex gap-2 pt-3 border-t border-default">
+  <ModalFooter className="justify-start">
   <Button variant="secondary" size="sm" onClick={() => openEdit(selected.id)} icon={<Pencil size={12} />}>
   Edit
   </Button>
@@ -240,7 +240,7 @@ export default function DepartmentsPage() {
   Delete
   </Button>
   )}
-  </div>
+  </ModalFooter>
  )}
  </div>
  )}
@@ -404,14 +404,14 @@ function DepartmentFormModal({
  <div className="pt-1">
  <Switch label="Active" {...register('is_active')} />
  </div>
- <div className="flex justify-end gap-2 pt-3 border-t border-default">
+ <ModalFooter>
  <Button type="button" variant="secondary" onClick={onClose} disabled={isSubmitting || mutation.isPending}>
  Cancel
  </Button>
  <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending} loading={mutation.isPending}>
  {mutation.isPending ? 'Saving…' : isEdit ? 'Save changes' : 'Create department'}
  </Button>
- </div>
+ </ModalFooter>
  </form>
  </Modal>
  );

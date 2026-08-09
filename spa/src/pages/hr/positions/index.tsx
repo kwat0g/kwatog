@@ -17,7 +17,7 @@ import {
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { Input } from '@/components/ui/Input';
-import { Modal } from '@/components/ui/Modal';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Panel } from '@/components/ui/Panel';
 import { Select } from '@/components/ui/Select';
@@ -205,7 +205,7 @@ export default function PositionsPage() {
  <DetailRow label="Salary grade" value={selected.salary_grade || '—'} mono />
  <DetailRow label="Employees" value={String(selected.employees_count ?? 0)} mono />
  {can('hr.positions.manage') && (
-  <div className="flex gap-2 pt-3 border-t border-default">
+  <ModalFooter className="justify-start">
   <Button variant="secondary" size="sm" onClick={() => { setEditing(selected); setModalOpen(true); }} icon={<Pencil size={12} />}>
   Edit
   </Button>
@@ -218,7 +218,7 @@ export default function PositionsPage() {
   Delete
   </Button>
   )}
-  </div>
+  </ModalFooter>
  )}
  </div>
  )}
@@ -331,12 +331,12 @@ function PositionFormModal({
  {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
  </Select>
  <Input label="Salary grade" {...register('salary_grade')} error={errors.salary_grade?.message} placeholder="Optional" />
- <div className="flex justify-end gap-2 pt-3 border-t border-default">
+ <ModalFooter>
  <Button type="button" variant="secondary" onClick={onClose} disabled={isSubmitting || mutation.isPending}>Cancel</Button>
  <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending} loading={mutation.isPending}>
  {mutation.isPending ? 'Saving…' : isEdit ? 'Save changes' : 'Create position'}
  </Button>
- </div>
+ </ModalFooter>
  </form>
  </Modal>
  );

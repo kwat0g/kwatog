@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { Plus, ListChecks, RotateCcw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { leaveRequestsApi, type LeaveListParams } from '@/api/leave';
 import { Button } from '@/components/ui/Button';
@@ -9,7 +9,7 @@ import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { DataTable, NumCell, StackedCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
-import { Modal } from '@/components/ui/Modal';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { Panel } from '@/components/ui/Panel';
 import { Textarea } from '@/components/ui/Textarea';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -19,18 +19,20 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { formatDate } from '@/lib/formatDate';
+import { LeaveTypesManager } from './types';
+import { YearEndLeaveModal } from './year-end';
 import type { LeaveRequest } from '@/types/leave';
 
-const HALF_DAY_LABEL: Record<string, string> = { am: 'AM', pm: 'PM' };
-
 const DEFAULT_FILTERS: LeaveListParams = {
- page: 1, per_page: 100, sort: 'created_at', direction: 'desc',
+ page: 1, per_page: 100, sort: 'created_at', direction: 'desc', status: 'pending',
 };
 
 export default function LeavesPage() {
  const { can } = usePermission();
  const navigate = useNavigate();
  const qc = useQueryClient();
+ const [showTypes, setShowTypes] = useState(false);
+ const [showYearEnd, setShowYearEnd] = useState(false);
  const [view, setView] = useState<'list' | 'kanban'>('list');
  // Bound to the URL so dashboard drill-downs (?status=pending_hr) arrive
  // pre-filtered and the browser back button restores the previous view.
@@ -52,6 +54,8 @@ export default function LeavesPage() {
  staleTime: 5 * 60 * 1000,
  });
  const statusLabels = new Map((leaveOptions?.statuses ?? []).map((option) => [option.value, option.label]));
+ const halfDayLabels = new Map((leaveOptions?.half_day_periods ?? []).map((option) => [option.value, option.label]));
+ const statusLabel = (value: string) => statusLabels.get(value) ?? value.replaceAll('_', ' ');
 
  const approveDept = useMutation({
  mutationFn: (id: string) => leaveRequestsApi.approveDept(id),
@@ -100,7 +104,7 @@ export default function LeavesPage() {
  <NumCell>
  {r.days}
  {r.half_day_period && (
- <span className="ml-1 text-2xs font-medium text-muted">· {HALF_DAY_LABEL[r.half_day_period] ?? r.half_day_period}</span>
+ <span className="ml-1 text-2xs font-medium text-muted">· {halfDayLabels.get(r.half_day_period) ?? r.half_day_period}</span>
  )}
  </NumCell>
  ) },
@@ -113,14 +117,14 @@ export default function LeavesPage() {
  <div className="flex items-center justify-end gap-1">
  {r.status === 'pending_dept' && can('leave.approve_dept') && (
  <>
- <Button variant="primary" size="sm" disabled={approveDept.isPending} onClick={() => { setConfirmApproveDept(r.id); }}>Approve</Button>
- <Button variant="danger" size="sm" onClick={() => { setActionTarget({ req: r, mode: 'reject' }); }}>Reject</Button>
+ <Button variant="primary" size="xs" disabled={approveDept.isPending} onClick={() => { setConfirmApproveDept(r.id); }}>Approve</Button>
+ <Button variant="danger" size="xs" onClick={() => { setActionTarget({ req: r, mode: 'reject' }); }}>Reject</Button>
  </>
  )}
  {r.status === 'pending_hr' && can('leave.approve_hr') && (
  <>
- <Button variant="primary" size="sm" disabled={approveHR.isPending} onClick={() => { setConfirmApproveHR(r.id); }}>Approve</Button>
- <Button variant="danger" size="sm" onClick={() => { setActionTarget({ req: r, mode: 'reject' }); }}>Reject</Button>
+ <Button variant="primary" size="xs" disabled={approveHR.isPending} onClick={() => { setConfirmApproveHR(r.id); }}>Approve</Button>
+ <Button variant="danger" size="xs" onClick={() => { setActionTarget({ req: r, mode: 'reject' }); }}>Reject</Button>
  </>
  )}
  </div>
@@ -143,15 +147,23 @@ export default function LeavesPage() {
  <PageHeader
  title="Leave requests"
  subtitle={data ? `${data.meta.total} total · ${counts.pending_dept + counts.pending_hr} awaiting approval` : undefined}
- backTo="/hr/leaves"
- backLabel="Leave"
  actions={
  <>
- <Button variant="secondary" size="sm" onClick={() => setView(view === 'list' ? 'kanban' : 'list')}>
+ <Button variant="secondary" size="xs" onClick={() => setView(view === 'list' ? 'kanban' : 'list')}>
  {view === 'list' ? 'Kanban view' : 'List view'}
  </Button>
+ {can('leave.types.manage') && (
+ <>
+ <Button variant="secondary" size="xs" icon={<ListChecks size={14} />} onClick={() => setShowTypes(true)}>
+ Manage Types
+ </Button>
+ <Button variant="secondary" size="xs" icon={<RotateCcw size={14} />} onClick={() => setShowYearEnd(true)}>
+ Year-End Leave
+ </Button>
+ </>
+ )}
  {can('leave.create') && (
- <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/hr/leaves/create')}>
+ <Button variant="primary" size="xs" icon={<Plus size={14} />} onClick={() => navigate('/hr/leaves/create')}>
  Request leave
  </Button>
  )}
@@ -170,10 +182,10 @@ export default function LeavesPage() {
 
  {data && all.length > 0 && (
  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 px-5 py-4 border-b border-default">
- <StatCard label="Pending dept" value={counts.pending_dept} helper="in current view" linkTo="/hr/leaves?status=pending_dept" />
- <StatCard label="Pending HR" value={counts.pending_hr} helper="in current view" linkTo="/hr/leaves?status=pending_hr" />
- <StatCard label="Approved" value={counts.approved} helper="in current view" linkTo="/hr/leaves?status=approved" />
- <StatCard label="Rejected / Cancelled" value={counts.rejected} helper="in current view" linkTo="/hr/leaves?status=rejected" />
+ <StatCard label={statusLabel('pending_dept')} value={counts.pending_dept} helper="in current view" linkTo="/hr/leaves?status=pending_dept" />
+ <StatCard label={statusLabel('pending_hr')} value={counts.pending_hr} helper="in current view" linkTo="/hr/leaves?status=pending_hr" />
+ <StatCard label={statusLabel('approved')} value={counts.approved} helper="in current view" linkTo="/hr/leaves?status=approved" />
+ <StatCard label={`${statusLabel('rejected')} / ${statusLabel('cancelled')}`} value={counts.rejected} helper="in current view" linkTo="/hr/leaves?status=rejected" />
  </div>
  )}
 
@@ -198,10 +210,10 @@ export default function LeavesPage() {
 
  {data && all.length > 0 && view === 'kanban' && (
  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 px-5 py-4">
- <KanbanCol title="Pending dept" variant="warning" items={grouped.pending_dept} />
- <KanbanCol title="Pending HR" variant="info" items={grouped.pending_hr} />
- <KanbanCol title="Approved" variant="success" items={grouped.approved} />
- <KanbanCol title="Rejected / Cancelled" variant="neutral" items={grouped.rejected} />
+ <KanbanCol title={statusLabel('pending_dept')} variant="warning" items={grouped.pending_dept} />
+ <KanbanCol title={statusLabel('pending_hr')} variant="info" items={grouped.pending_hr} />
+ <KanbanCol title={statusLabel('approved')} variant="success" items={grouped.approved} />
+ <KanbanCol title={`${statusLabel('rejected')} / ${statusLabel('cancelled')}`} variant="neutral" items={grouped.rejected} />
  </div>
  )}
 
@@ -211,7 +223,7 @@ export default function LeavesPage() {
  Reject <span className="font-mono">{actionTarget.req.leave_request_no}</span>?
  </p>
  <Textarea label="Reason for rejection" required value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} rows={3} />
- <div className="flex justify-end gap-2 pt-3 mt-3 border-t border-default">
+ <ModalFooter>
  <Button variant="secondary" onClick={() => { setActionTarget(null); setRejectReason(''); }}>Cancel</Button>
  <Button
  variant="danger"
@@ -221,7 +233,7 @@ export default function LeavesPage() {
  >
  {rejectMut.isPending ? 'Rejecting…' : 'Confirm reject'}
  </Button>
- </div>
+ </ModalFooter>
  </Modal>
  )}
 
@@ -245,6 +257,18 @@ export default function LeavesPage() {
  confirmLabel="Approve"
  variant="warning"
  pending={approveHR.isPending}
+ />
+
+ {/* Manage Types — PASS 6 consolidation: leave types moved from a standalone page into this modal */}
+ <Modal isOpen={showTypes} onClose={() => setShowTypes(false)} size="xl" title="Leave Types">
+ <LeaveTypesManager />
+ </Modal>
+
+ {/* Year-End Leave — scope cut: standalone page folded into a modal on the Leave page */}
+ <YearEndLeaveModal
+ open={showYearEnd}
+ onClose={() => setShowYearEnd(false)}
+ onSuccess={() => qc.invalidateQueries({ queryKey: ['leaves'] })}
  />
  </div>
  );

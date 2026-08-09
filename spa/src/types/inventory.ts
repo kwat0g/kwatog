@@ -9,7 +9,7 @@ export type StockMovementType =
  | 'grn_receipt' | 'material_issue' | 'production_receipt' | 'delivery'
  | 'transfer' | 'adjustment_in' | 'adjustment_out' | 'scrap'
  | 'return_to_vendor' | 'cycle_count';
-export type GrnStatus = 'pending_qc' | 'accepted' | 'partial_accepted' | 'rejected';
+export type GrnStatus = 'draft' | 'pending_qc' | 'accepted' | 'partial_accepted' | 'rejected';
 export type MaterialIssueStatus = 'draft' | 'issued' | 'cancelled';
 
 export interface ItemCategory {
@@ -174,8 +174,8 @@ export interface StockAdjustment {
 }
 
 export interface GrnItem {
- id: number;
- purchase_order_item_id: number;
+ id: string;
+ purchase_order_item_id: string;
  item?: { id: string; code: string; name: string; unit_of_measure: string; quality_plan_ready: boolean };
  location?: { id: string; code: string; full_code: string };
  quantity_received: string;
@@ -187,18 +187,34 @@ export interface GrnItem {
 export interface GoodsReceiptNote {
  id: string;
  grn_number: string;
- received_date: string;
+ received_date: string | null;
  status: GrnStatus;
  status_label?: string;
  rejected_reason: string | null;
  remarks: string | null;
  accepted_at: string | null;
  vendor: { id: string; name: string } | null;
- purchase_order: { id: string; po_number: string } | null;
+ purchase_order: {
+  id: string;
+  po_number: string;
+  /** 2026-08-08 — P2P stepper: the PR behind this PO. */
+  purchase_request?: { id: string; pr_number: string } | null;
+ } | null;
  receiver: { id: string; name: string } | null;
  acceptor: { id: string; name: string } | null;
  items?: GrnItem[];
  created_at: string;
+ /** 2026-08-08 — draft supplier bill auto-created from this accepted GRN. */
+ bill?: { id: string; bill_number: string; status: string; status_label?: string; total_amount: string } | null;
+}
+
+export interface FinalizeGrnData {
+ items: Array<{
+ purchase_order_item_id: string;
+ location_id: string;
+ quantity_received: string;
+ remarks?: string;
+ }>;
 }
 
 export interface CreateGrnData {

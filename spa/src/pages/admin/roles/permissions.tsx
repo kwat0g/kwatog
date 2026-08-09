@@ -375,7 +375,7 @@ export default function RolePermissionsPage() {
  {isSystem && (
  <Panel
  title={
- <span className="flex items-center gap-2 text-warning">
+ <span className="flex items-center gap-2 text-warning-fg">
  <Lock size={14} /> System role — read-only
  </span>
  }
@@ -405,7 +405,7 @@ export default function RolePermissionsPage() {
  <Panel
  title={
  <div className="flex items-center justify-between">
- <span className="flex items-center gap-2 text-warning">
+ <span className="flex items-center gap-2 text-warning-fg">
  <SlidersHorizontal size={15} /> Unsaved Permission Changes Summary ({diff.total})
  </span>
  <button
@@ -417,12 +417,12 @@ export default function RolePermissionsPage() {
  </button>
  </div>
  }
- className="mb-4 border-warning/30 bg-warning/5"
+ className="mb-4 border-warning/30 bg-warning-bg/5"
  >
  <div className="grid gap-4 md:grid-cols-2">
  {diff.added.length > 0 && (
  <div>
- <h4 className="flex items-center gap-1.5 font-mono text-xs font-medium text-success uppercase tracking-wider mb-2">
+ <h4 className="flex items-center gap-1.5 font-mono text-xs font-medium text-success-fg uppercase tracking-wider mb-2">
  <PlusCircle size={14} /> Adding Permissions ({diff.added.length})
  </h4>
  <ul className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
@@ -440,7 +440,7 @@ export default function RolePermissionsPage() {
  )}
  {diff.removed.length > 0 && (
  <div>
- <h4 className="flex items-center gap-1.5 font-mono text-xs font-medium text-danger uppercase tracking-wider mb-2">
+ <h4 className="flex items-center gap-1.5 font-mono text-xs font-medium text-danger-fg uppercase tracking-wider mb-2">
  <MinusCircle size={14} /> Removing Permissions ({diff.removed.length})
  </h4>
  <ul className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
@@ -464,7 +464,7 @@ export default function RolePermissionsPage() {
  title={
  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between w-full">
  <div className="flex items-center gap-3">
- <span className="font-display font-medium text-base text-primary">
+ <span className=" text-base text-primary">
  {selected.size} of {totalPermissions} granted
  </span>
  <div className="hidden sm:block h-3 w-px bg-border-default" />
@@ -650,7 +650,7 @@ export default function RolePermissionsPage() {
  className={cn('flex items-center gap-2 text-left font-medium text-sm text-primary cursor-pointer hover:text-accent', focusRingInset)}
  >
  {isCollapsed ? <ChevronRight size={16} className="text-muted" /> : <ChevronDown size={16} className="text-muted" />}
- <span className="font-display font-medium uppercase tracking-wider text-xs">
+ <span className=" uppercase tracking-wider text-xs">
  {module}
  </span>
  <span className="text-2xs font-mono text-muted font-normal">
@@ -727,7 +727,7 @@ export default function RolePermissionsPage() {
  ? (isGranted ? 'bg-[var(--bg-row-hover)]/40 hover:bg-[var(--bg-row-hover)]' : 'bg-[var(--bg-zebra-even)] hover:bg-[var(--bg-row-hover)]')
  : (isGranted ? 'bg-[var(--bg-zebra-odd)] hover:bg-[var(--bg-row-hover)]' : 'bg-[var(--bg-surface)] hover:bg-[var(--bg-zebra-even)]'),
  isGranted && 'outline outline-2 outline-accent -outline-offset-2 z-10 ',
- isModified && 'bg-warning/15 outline outline-2 outline-warning -outline-offset-2 z-10',
+ isModified && 'bg-warning-bg/15 outline outline-2 outline-warning -outline-offset-2 z-10',
  )}
  >
  <div className="flex items-start gap-3 min-w-0 pr-4">
@@ -746,7 +746,7 @@ export default function RolePermissionsPage() {
  {p.slug}
  </span>
  {isModified && (
- <span className="font-mono text-[9px] uppercase tracking-wider text-warning font-medium">
+ <span className="font-mono text-[9px] uppercase tracking-wider text-warning-fg font-medium">
  {isGranted ? '+ Added' : '− Removed'}
  </span>
  )}
@@ -762,7 +762,7 @@ export default function RolePermissionsPage() {
 
  <div className="shrink-0 flex items-center gap-2">
  {isGranted ? (
- <span className="hidden sm:inline-flex items-center gap-1 font-mono text-[10px] uppercase text-success font-medium mr-2">
+ <span className="hidden sm:inline-flex items-center gap-1 font-mono text-[10px] uppercase text-success-fg font-medium mr-2">
  <Check size={12} /> Granted
  </span>
  ) : (

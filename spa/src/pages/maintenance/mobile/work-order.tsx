@@ -395,7 +395,7 @@ export default function MobileWorkOrderDetail() {
  setPartLocationId('');
  setPartQty('');
  }}
- className="text-muted hover:text-danger"
+ className="text-muted hover:text-danger-fg"
  />
  </div>
 

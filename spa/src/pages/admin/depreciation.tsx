@@ -19,7 +19,7 @@ export default function DepreciationRunsPage() {
  // eslint-disable-next-line @typescript-eslint/no-explicit-any
  onSuccess: (res: any) => {
  const d = res.data ?? res;
- toast.success(`Posted ${d.posted_count ?? 0} entries totalling ${formatPeso(d.total_amount ?? 0)}.`);
+ toast.success(`Posted ${d.posted_count ?? '—'} entries totalling ${formatPeso(d.total_amount)}.`);
  },
  onError: () => toast.error('Failed to run depreciation.'),
  });

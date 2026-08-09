@@ -26,6 +26,12 @@ export default function InquiryListPage() {
  queryKey: ['crm', 'inquiries', filters],
  queryFn: () => inquiriesApi.list(filters),
  placeholderData: (prev) => prev });
+ const { data: inquiryOptions } = useQuery({
+  queryKey: ['crm', 'inquiries', 'options'],
+  queryFn: inquiriesApi.options,
+  staleTime: 300_000,
+ });
+ const statusLabels = new Map((inquiryOptions?.statuses ?? []).map((option) => [option.value, option.label]));
 
  const columns: Column<ContactInquiry>[] = [
  { key: 'no', header: 'Inquiry #', cell: (r) => <span className="font-mono">{r.inquiry_no}</span> },
@@ -41,15 +47,12 @@ export default function InquiryListPage() {
  { key: 'received', header: 'Received', cell: (r) => (
  <span className="font-mono tabular-nums text-xs">{formatDate(r.created_at)}</span>
  ) },
- { key: 'status', header: 'Status', cell: (r) => <Chip variant={variant[r.status]}>{r.status_label}</Chip> },
+ { key: 'status', header: 'Status', cell: (r) => <Chip variant={variant[r.status]}>{r.status_label ?? statusLabels.get(r.status) ?? r.status}</Chip> },
  ];
 
  const filterConfig: FilterConfig[] = [
  { key: 'status', label: 'Status', type: 'select', options: [
- { value: '', label: 'All' },
- { value: 'new', label: 'New' },
- { value: 'in_progress', label: 'In progress' },
- { value: 'closed', label: 'Closed' },
+ { value: '', label: 'All' }, ...(inquiryOptions?.statuses ?? []),
  ]},
  ];
 

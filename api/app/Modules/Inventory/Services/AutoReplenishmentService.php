@@ -6,7 +6,7 @@ namespace App\Modules\Inventory\Services;
 
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\SettingsService;
-use App\Modules\Auth\Models\User;
+use App\Common\Services\SystemActorService;
 use App\Modules\Inventory\Enums\ReorderMethod;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Events\LowStockPrCreated;
@@ -27,6 +27,7 @@ class AutoReplenishmentService
     public function __construct(
         private readonly DocumentSequenceService $sequences,
         private readonly SettingsService $settings,
+        private readonly SystemActorService $actors,
     ) {}
 
     public function checkAndReplenish(int $itemId): ?PurchaseRequest
@@ -73,8 +74,9 @@ class AutoReplenishmentService
         // Auto-PRs are system-initiated; attribute only to a configured
         // automation actor. If no eligible user exists, skip rather than hit the
         // non-null requested_by FK with a bogus id.
-        $systemUserId = $this->systemUserId();
-        if ($systemUserId === null) return null;
+        $systemUser = $this->actors->resolve();
+        if ($systemUser === null) return null;
+        $systemUserId = $systemUser->id;
 
         $orderQty = $this->computeOrderQuantity($item);
         if ($orderQty === null || (float) $item->standard_cost <= 0) {
@@ -111,21 +113,6 @@ class AutoReplenishmentService
         event(new LowStockPrCreated($item, $pr));
 
         return $pr;
-    }
-
-    /**
-     * Resolve the configured automation actor. Null when no configured role or
-     * eligible user exists, so automated records are never attributed randomly.
-     */
-    private function systemUserId(): ?int
-    {
-        $roles = array_values(array_filter((array) $this->settings->get('system.automation.actor_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
-        if ($roles === []) return null;
-        $adminId = User::query()
-            ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
-            ->min('id');
-
-        return $adminId !== null ? (int) $adminId : null;
     }
 
     private function computeOrderQuantity(Item $item): ?string

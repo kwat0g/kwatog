@@ -28,7 +28,7 @@ class DowntimeAnalyticsService
      *   breakdown_count: int,
      *   mtbf_hours: float|null,
      *   mttr_minutes: float|null,
-     *   availability_pct: float,
+     *   availability_pct: float|null,
      *   category_breakdown: array<int, array{category: string, minutes: int, count: int}>,
      * }
      */
@@ -65,7 +65,7 @@ class DowntimeAnalyticsService
         $windowMinutes = $to->diffInMinutes($from);
         $availabilityPct = $windowMinutes > 0
             ? round(max(0, $windowMinutes - $totalMinutes) / $windowMinutes * 100, 2)
-            : 100.0;
+            : null;
 
         // Category breakdown
         $categoryBreakdown = $base->clone()

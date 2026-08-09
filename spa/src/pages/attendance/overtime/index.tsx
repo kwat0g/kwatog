@@ -10,7 +10,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { DataTable, NumCell, StackedCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
-import { Modal } from '@/components/ui/Modal';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { Textarea } from '@/components/ui/Textarea';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonTable } from '@/components/ui/Skeleton';
@@ -22,7 +22,7 @@ import { formatDate } from '@/lib/formatDate';
 import type { OvertimeRequest } from '@/types/attendance';
 
 const DEFAULT_FILTERS: OvertimeListParams = {
- page: 1, per_page: 100, sort: 'date', direction: 'desc',
+ page: 1, per_page: 100, sort: 'date', direction: 'desc', status: 'pending',
 };
 
 export default function OvertimeListPage() {
@@ -43,6 +43,13 @@ export default function OvertimeListPage() {
  queryFn: () => overtimeApi.list(filters),
  placeholderData: (prev) => prev,
  });
+ const { data: overtimeOptions } = useQuery({
+  queryKey: ['attendance', 'overtime', 'options'],
+  queryFn: overtimeApi.options,
+  staleTime: 300_000,
+ });
+ const statusLabels = new Map((overtimeOptions?.statuses ?? []).map((option) => [option.value, option.label]));
+ const statusLabel = (value: string) => statusLabels.get(value) ?? value.replaceAll('_', ' ');
 
  const approveMutation = useMutation({
  mutationFn: (id: string) => overtimeApi.approve(id),
@@ -108,8 +115,8 @@ export default function OvertimeListPage() {
  align: 'right' as const,
  cell: (r: OvertimeRequest) => r.status !== 'pending' ? null : (
  <div className="flex items-center justify-end gap-1">
- <Button variant="primary" size="sm" onClick={() => { setConfirmApprove(r.id); }} disabled={approveMutation.isPending}>Approve</Button>
- <Button variant="danger" size="sm" onClick={() => { setReject(r); }}>Reject</Button>
+ <Button variant="primary" size="xs" onClick={() => { setConfirmApprove(r.id); }} disabled={approveMutation.isPending}>Approve</Button>
+ <Button variant="danger" size="xs" onClick={() => { setReject(r); }}>Reject</Button>
  </div>
  ),
  }] : []),
@@ -120,11 +127,7 @@ export default function OvertimeListPage() {
  key: 'status',
  label: 'Status',
  type: 'select',
- options: [
- { value: 'pending', label: 'Pending' },
- { value: 'approved', label: 'Approved' },
- { value: 'rejected', label: 'Rejected' },
- ],
+ options: [{ value: '', label: 'All' }, ...(overtimeOptions?.statuses ?? [])],
  },
  ];
 
@@ -133,8 +136,6 @@ export default function OvertimeListPage() {
  <PageHeader
  title="Overtime requests"
  subtitle={data ? `${data.meta.total} total · ${counts.pending} pending` : undefined}
- backTo="/hr/attendance"
- backLabel="Attendance"
  actions={
  <>
  {can('attendance.ot.approve') && counts.pending > 0 && (
@@ -147,10 +148,10 @@ export default function OvertimeListPage() {
  Bulk approve ({Math.min(counts.pending, 100)})
  </Button>
  )}
- <Button variant="secondary" size="sm" onClick={() => setView(view === 'list' ? 'kanban' : 'list')}>
+ <Button variant="secondary" size="xs" onClick={() => setView(view === 'list' ? 'kanban' : 'list')}>
  {view === 'list' ? 'Kanban view' : 'List view'}
  </Button>
- <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/hr/attendance/overtime/create')}>
+ <Button variant="primary" size="xs" icon={<Plus size={14} />} onClick={() => navigate('/hr/attendance/overtime/create')}>
  New OT request
  </Button>
  </>
@@ -169,19 +170,19 @@ export default function OvertimeListPage() {
  {data && all.length > 0 && (
  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 px-5 py-4 border-b border-default">
  <StatCard
- label="Pending"
+ label={statusLabel('pending')}
  value={counts.pending}
  helper="in current view"
  linkTo="/hr/attendance/overtime?status=pending"
  />
  <StatCard
- label="Approved"
+ label={statusLabel('approved')}
  value={counts.approved}
  helper="in current view"
  linkTo="/hr/attendance/overtime?status=approved"
  />
  <StatCard
- label="Rejected"
+ label={statusLabel('rejected')}
  value={counts.rejected}
  helper="in current view"
  linkTo="/hr/attendance/overtime?status=rejected"
@@ -213,9 +214,9 @@ export default function OvertimeListPage() {
 
  {data && all.length > 0 && view === 'kanban' && (
  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 px-5 py-4">
- <KanbanColumn title="Pending" variant="warning" items={grouped.pending} onApprove={(id) => setConfirmApprove(id)} onReject={setReject} canApprove={can('attendance.ot.approve')} approving={approveMutation.isPending} onOpen={(r) => navigate(`/hr/attendance/overtime/${r.id}`)} />
- <KanbanColumn title="Approved" variant="success" items={grouped.approved} onOpen={(r) => navigate(`/hr/attendance/overtime/${r.id}`)} />
- <KanbanColumn title="Rejected" variant="danger" items={grouped.rejected} onOpen={(r) => navigate(`/hr/attendance/overtime/${r.id}`)} />
+ <KanbanColumn title={statusLabel('pending')} variant="warning" items={grouped.pending} onApprove={(id) => setConfirmApprove(id)} onReject={setReject} canApprove={can('attendance.ot.approve')} approving={approveMutation.isPending} onOpen={(r) => navigate(`/hr/attendance/overtime/${r.id}`)} />
+ <KanbanColumn title={statusLabel('approved')} variant="success" items={grouped.approved} onOpen={(r) => navigate(`/hr/attendance/overtime/${r.id}`)} />
+ <KanbanColumn title={statusLabel('rejected')} variant="danger" items={grouped.rejected} onOpen={(r) => navigate(`/hr/attendance/overtime/${r.id}`)} />
  </div>
  )}
 
@@ -249,7 +250,7 @@ export default function OvertimeListPage() {
  Reject overtime for <span className="font-medium">{reject.employee?.full_name}</span> on {formatDate(reject.date)}?
  </p>
  <Textarea label="Reason for rejection" required value={reason} onChange={(e) => setReason(e.target.value)} rows={3} />
- <div className="flex justify-end gap-2 pt-3 mt-3 border-t border-default">
+ <ModalFooter>
  <Button variant="secondary" onClick={() => { setReject(null); setReason(''); }}>Cancel</Button>
  <Button
  variant="danger"
@@ -259,7 +260,7 @@ export default function OvertimeListPage() {
  >
  {rejectMutation.isPending ? 'Rejecting…' : 'Confirm reject'}
  </Button>
- </div>
+ </ModalFooter>
  </Modal>
  )}
  </div>
@@ -311,8 +312,8 @@ function KanbanColumn({
  </div>
  {canApprove && o.status === 'pending' && (
  <div className="flex gap-1 mt-2" onClick={(e) => e.stopPropagation()}>
- <Button variant="primary" size="sm" disabled={approving} onClick={() => onApprove?.(o.id)}>Approve</Button>
- <Button variant="danger" size="sm" onClick={() => onReject?.(o)}>Reject</Button>
+ <Button variant="primary" size="xs" disabled={approving} onClick={() => onApprove?.(o.id)}>Approve</Button>
+ <Button variant="danger" size="xs" onClick={() => onReject?.(o)}>Reject</Button>
  </div>
  )}
  </li>

@@ -14,10 +14,8 @@ import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { formatDate } from '@/lib/formatDate';
 import type { ListParams } from '@/types';
-import type { GoodsReceiptNote, GrnStatus } from '@/types/inventory';
-
-const variant: Record<GrnStatus, 'warning' | 'success' | 'info' | 'danger'> = {
-  pending_qc: 'warning', accepted: 'success', partial_accepted: 'info', rejected: 'danger' };
+import type { GoodsReceiptNote, GrnStatus } from '@/types/inventory';const variant: Record<GrnStatus, 'neutral' | 'warning' | 'success' | 'info' | 'danger'> = {
+ draft: 'neutral', pending_qc: 'warning', accepted: 'success', partial_accepted: 'info', rejected: 'danger' };
 
 interface GrnListParams extends ListParams {
   status?: string;
@@ -28,7 +26,7 @@ interface GrnListParams extends ListParams {
 }
 
 const DEFAULT_FILTERS: GrnListParams = {
-  page: 1, per_page: 25,
+  page: 1, per_page: 25, status: 'pending_qc',
 };
 
 export default function GrnListPage() {

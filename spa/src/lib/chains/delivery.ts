@@ -4,10 +4,10 @@
  * Order-to-Cash chain (Delivery scope):
  * Scheduled → Loading → In Transit → Delivered → Confirmed
  *
- * The page-level "Order-to-Cash" extended chain (Order → MRP → WO → QC →
- * Delivered → Invoiced → Collected) is built by `buildDeliveryO2cChain`,
- * which derives prior steps as already-done because a Delivery cannot exist
- * without an upstream confirmed/produced Sales Order.
+ * @deprecated 2026-08-08 — superseded on the Delivery detail page by the
+ * compact cross-document `buildO2cChain` (SO → Delivery → Invoice → Payment).
+ * Kept as dead code per the keep-code policy; re-enable if a lifecycle-detail
+ * stepper is wanted again.
  */
 import type { ChainStep } from '@/types/chain';
 import type { Delivery, DeliveryStatus } from '@/types/supplyChain';

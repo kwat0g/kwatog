@@ -268,7 +268,7 @@ export default function CreateGrnPage() {
  icon={<Trash2 size={12} />}
  onClick={() => setItems(items.filter((_, k) => k !== i))}
  aria-label="Remove line"
- className="text-muted hover:text-danger"
+ className="text-muted hover:text-danger-fg"
  />
  </Td>
  </tr>

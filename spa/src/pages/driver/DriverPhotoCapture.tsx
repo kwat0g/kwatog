@@ -115,7 +115,7 @@ export default function DriverPhotoCapture() {
  )}
 
  {hint && (
- <div className="text-sm text-warning" role="status">
+ <div className="text-sm text-warning-fg" role="status">
  {hint}
  </div>
  )}

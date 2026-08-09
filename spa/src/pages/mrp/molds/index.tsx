@@ -62,8 +62,8 @@ export default function MoldsListPage() {
  <div className="w-full h-1 bg-elevated rounded-full overflow-hidden">
  <div
  className={`h-1 rounded-full ${
- r.shot_percentage >= 100 ? 'bg-danger' :
- r.nearing_limit ? 'bg-warning' : 'bg-success'
+ r.shot_percentage >= 100 ? 'bg-danger-bg' :
+ r.nearing_limit ? 'bg-warning-bg' : 'bg-success-bg'
  }`}
  style={{ width: `${Math.min(100, r.shot_percentage)}%` }}
  aria-hidden

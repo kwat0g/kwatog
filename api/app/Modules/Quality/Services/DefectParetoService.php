@@ -25,7 +25,7 @@ class DefectParetoService
         return now()->subDays($this->settings->requiredInt('quality.dashboard.defect_history_days', 1))->startOfDay();
     }
 
-    /** @return array{from:string,to:string,passed:int,failed:int,total:int,pass_rate:float} */
+    /** @return array{from:string,to:string,passed:int,failed:int,total:int,pass_rate:float|null} */
     public function inspectionSummary(array $filters): array
     {
         $from = isset($filters['from']) ? Carbon::parse($filters['from'])->startOfDay() : $this->defaultFrom();
@@ -49,7 +49,8 @@ class DefectParetoService
         return [
             'from' => $from->toDateString(), 'to' => $to->toDateString(),
             'passed' => $passed, 'failed' => $failed, 'total' => $total,
-            'pass_rate' => $total > 0 ? round($passed / $total * 100, 2) : 0.0,
+            // No inspections is an absence of evidence, not a failed rate.
+            'pass_rate' => $total > 0 ? round($passed / $total * 100, 2) : null,
         ];
     }
 

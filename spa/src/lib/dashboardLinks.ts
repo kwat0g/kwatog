@@ -102,7 +102,9 @@ export function kpiLink(label: string): string | undefined {
  case 'Low Stock Items':
  return `/inventory/items?below_reorder=1`;
  case 'Pending Transfers':
- return `/inventory/stock-movements?type=transfer&pending=1`;
+ // Fixed 2026-08-08: the old path /inventory/stock-movements was never a
+ // registered route (movements folded into Stock Levels as a view toggle).
+ return `/inventory/stock-levels?view=movements&type=transfer&pending=1`;
 
  // ─── Quality (D8) ──────────────────────────────────────
  case 'Pending Inspections':

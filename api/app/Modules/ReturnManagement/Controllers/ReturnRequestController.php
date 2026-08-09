@@ -121,6 +121,8 @@ class ReturnRequestController extends Controller
             'creditNote',
             'replacementPurchaseOrder',
             'creditMemo',
+            'stockMovement.toLocation',
+            'stockMovement.fromLocation',
             'creator:id,name',
             'approver:id,name',
             'completer:id,name',
@@ -194,6 +196,7 @@ class ReturnRequestController extends Controller
                 $request->validated()['dispositions'],
                 $request->user(),
                 (bool) ($request->validated()['create_replacement_po'] ?? false),
+                isset($request->validated()['location_id']) ? (int) $request->validated()['location_id'] : null,
             )
         );
     }
@@ -203,8 +206,11 @@ class ReturnRequestController extends Controller
      */
     public function complete(CompleteReturnRequest $request, ReturnRequest $returnRequest): ReturnRequestResource
     {
-        $rma = $this->service->complete($returnRequest, $request->user(), (int) $request->validated()['location_id']);
-        return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor', 'stockMovement']));
+        $locationId = isset($request->validated()['location_id'])
+            ? (int) $request->validated()['location_id']
+            : null;
+        $rma = $this->service->complete($returnRequest, $request->user(), $locationId);
+        return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor', 'stockMovement.toLocation', 'stockMovement.fromLocation']));
     }
 
     /**

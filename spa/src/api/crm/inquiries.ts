@@ -7,6 +7,7 @@ export interface InquiryListParams extends ListParams {
 }
 
 export const inquiriesApi = {
+ options: () => client.get<{ data: { statuses: Array<{ value: string; label: string }> } }>('/crm/inquiries/options').then((r) => r.data.data),
  list: (params?: InquiryListParams) =>
  client.get<PaginatedResponse<ContactInquiry>>('/crm/inquiries', { params }).then((r) => r.data),
  show: (id: string) =>

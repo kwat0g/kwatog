@@ -262,7 +262,7 @@ export default function EditSalesOrderPage() {
  aria-label="Remove line"
  onClick={() => remove(i)}
  disabled={fields.length === 1}
- className="text-muted hover:text-danger"
+ className="text-muted hover:text-danger-fg"
  />
  </Td>
  </tr>
@@ -283,7 +283,7 @@ export default function EditSalesOrderPage() {
  </Button>
  </div>
 
- {errors.items?.message && <p className="mt-2 text-xs text-danger">{errors.items.message as string}</p>}
+ {errors.items?.message && <p className="mt-2 text-xs text-danger-fg">{errors.items.message as string}</p>}
  </fieldset>
 
  <fieldset className="mb-8">

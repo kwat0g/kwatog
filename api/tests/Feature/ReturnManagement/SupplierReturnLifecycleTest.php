@@ -225,6 +225,8 @@ class SupplierReturnLifecycleTest extends TestCase
             ->assertJsonPath('data.status', 'inspected');
 
         // ── Dispose: back to the supplier, with a replacement PO ───────────
+        // 2026-08-08 — the ReturnToVendor movement happens HERE (goods leave
+        // stock the moment the disposition is recorded), not at complete().
         $this->actingAs($admin)
             ->postJson("/api/v1/return-management/return-requests/{$rmaId}/dispose", [
                 'dispositions' => [[
@@ -233,6 +235,7 @@ class SupplierReturnLifecycleTest extends TestCase
                     'notes'       => 'Moisture out of spec.',
                 ]],
                 'create_replacement_po' => true,
+                'location_id'   => $ctx['location']->hash_id,
             ])
             ->assertOk();
 
@@ -255,21 +258,30 @@ class SupplierReturnLifecycleTest extends TestCase
         // And the replacement PO the checkbox asked for.
         $this->assertNotNull($rma->replacement_purchase_order_id);
 
-        // ── Complete: stock leaves the building ───────────────────────────
-        $this->actingAs($admin)
-            ->postJson("/api/v1/return-management/return-requests/{$rmaId}/complete", [
-                'location_id' => $ctx['location']->hash_id,
-            ])
-            ->assertOk()
-            ->assertJsonPath('data.status', 'completed');
-
+        // The goods left the shelf at dispose time — no waiting for complete.
         $movement = StockMovement::query()
             ->where('reference_type', 'return_request')
             ->where('reference_id', $rma->id)
             ->firstOrFail();
-
         $this->assertSame(StockMovementType::ReturnToVendor, $movement->movement_type);
         $this->assertSame('18.000', (string) $movement->quantity, 'Only the returned quantity leaves stock.');
+        $this->assertSame('82.000', (string) \App\Modules\Inventory\Models\StockLevel::where('item_id', $ctx['item']->id)
+            ->where('location_id', $ctx['location']->id)->firstOrFail()->quantity, '100 on shelf − 18 shipped back');
+
+        // ── Complete: closes the RMA; nothing left to move, no location asked ─
+        $this->actingAs($admin)
+            ->postJson("/api/v1/return-management/return-requests/{$rmaId}/complete", [])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'completed');
+
+        $this->assertSame(
+            1,
+            StockMovement::query()
+                ->where('reference_type', 'return_request')
+                ->where('reference_id', $rma->id)
+                ->count(),
+            'Complete must not create a second movement for already-shipped lines.',
+        );
     }
 
     public function test_supplier_return_without_source_lineage_is_refused_cleanly(): void
@@ -297,14 +309,16 @@ class SupplierReturnLifecycleTest extends TestCase
         $rma = ReturnRequest::query()->firstOrFail();
         $rma->forceFill(['status' => ReturnRequestStatus::Inspected->value])->save();
 
-        // 422 with a readable message, not a 500 — the supplier portal and the
-        // internal UI both surface `message` directly.
+        // A location is included so the request passes the location rule and
+        // actually reaches the service — otherwise the 422 would come from the
+        // missing location, not from the lineage guard this test is about.
         $this->actingAs($admin)
             ->postJson("/api/v1/return-management/return-requests/{$created['id']}/dispose", [
                 'dispositions' => [[
                     'item_id'     => $rma->items()->firstOrFail()->hash_id,
                     'disposition' => 'return_to_supplier',
                 ]],
+                'location_id'  => $ctx['location']->hash_id,
             ])
             ->assertStatus(422);
 

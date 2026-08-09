@@ -30,25 +30,14 @@ const footerLinkCls = cn(
 export function LandingFooter() {
   const { data: contact } = useQuery({ queryKey: ['landing', 'contact'], queryFn: landingApi.contact, staleTime: 300_000 });
   const { data: content } = useQuery({ queryKey: ['landing', 'content'], queryFn: landingApi.content, staleTime: 300_000 });
-  const navLinks = content?.section_copy?.nav_links?.length ? content.section_copy.nav_links : [
-    { label: 'Capabilities', href: '#capabilities' },
-    { label: 'Parts', href: '#parts-3d' },
-    { label: 'Process', href: '#process' },
-    { label: 'Quality', href: '#quality' },
-    { label: 'Contact', href: '#contact' },
-  ];
-  const companyLinks = content?.section_copy?.footer_company_links?.length ? content.section_copy.footer_company_links : [
-    { label: 'Careers', href: '/careers' },
-    { label: 'Portal', href: '/portal' },
-  ];
-  const legalName = contact?.legal_name || 'Philippine Ogami Corporation';
-  const locationCountry = contact?.address?.split(',').at(-1)?.trim() || 'Philippines';
-  const salesEmail = contact?.sales_email || 'sales@ogami.ph';
-  const phone = contact?.phone || '+63 (046) 402-1234';
-  const addressLines = contact?.address ? contact.address.split(', ') : ['FCIE Dasmariñas', 'Cavite', 'Philippines'];
-  const footerDesc = content?.section_copy?.footer_description
-    ? content.section_copy.footer_description.replace('{{company}}', legalName)
-    : `${legalName} — IATF 16949 certified plastic injection molding & precision tooling for Tier-1 automotive and electronics manufacturers.`;
+  const navLinks = content?.section_copy?.nav_links ?? [];
+  const companyLinks = content?.section_copy?.footer_company_links ?? [];
+  const legalName = contact?.legal_name ?? '';
+  const locationCountry = contact?.address?.split(',').at(-1)?.trim() ?? '';
+  const salesEmail = contact?.sales_email ?? '';
+  const phone = contact?.phone ?? '';
+  const addressLines = contact?.address ? contact.address.split(', ') : [];
+  const footerDesc = (content?.section_copy?.footer_description ?? '').replace('{{company}}', legalName);
 
   const year = new Date().getFullYear();
   const [email, setEmail] = useState('');
@@ -80,7 +69,7 @@ export function LandingFooter() {
                   {legalName}
                 </span>
                 <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted">
-                  Ogami ERP · IATF 16949
+                  {content?.quality_policy?.standard ?? ''}
                 </span>
               </div>
             </div>
@@ -214,14 +203,14 @@ export function LandingFooter() {
             <ul className="mt-4 space-y-2.5">
               <li>
                 <a
-                  href={`mailto:${salesEmail}`}
+                  href={salesEmail ? `mailto:${salesEmail}` : undefined}
                   className={cn(footerLinkCls, 'text-[13px]')}
                 >
-                  {salesEmail}
+                  {salesEmail || '—'}
                 </a>
               </li>
               <li className="font-sans text-[13px] text-secondary">
-                {phone}
+                {phone || '—'}
               </li>
               <li className="pt-2">
                 <Link
@@ -237,11 +226,11 @@ export function LandingFooter() {
 
         <div className="mt-14 flex flex-col items-start justify-between gap-4 border-t border-default pt-6 sm:flex-row sm:items-center">
           <p className="font-mono text-[11px] text-text-subtle">
-            © {year} {legalName}. All rights reserved.
+            © {year}{legalName ? ` ${legalName}.` : ''} {legalName ? 'All rights reserved.' : ''}
           </p>
           <p className="flex items-center gap-2.5 font-mono text-[11px] uppercase tracking-[0.16em] text-text-subtle">
             <span className="h-1 w-1 rounded-full bg-accent" />
-            Made in {locationCountry}
+            {locationCountry ? `Made in ${locationCountry}` : '—'}
           </p>
         </div>
       </div>

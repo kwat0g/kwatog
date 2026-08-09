@@ -30,7 +30,8 @@ const ApprovalsBoardPage = lazy(() => import('@/pages/approvals'));
 const ChainTrackerPage = lazy(() => import('@/pages/chains'));
 const NotificationsListPage = lazy(() => import('@/pages/notifications'));
 const ActionCenterPage = lazy(() => import('@/pages/action-center'));
-const ExceptionWorkbenchPage = lazy(() => import('@/pages/exceptions'));
+// /exceptions page file kept (scope-cut 2026-08-08) — reachable as the
+// 'Exceptions' scope toggle on /action-center (?scope=exceptions).
 const OperationsHealthPage = lazy(() => import('@/pages/admin/operations-health'));
 
 const AdminUsersRolesHubPage = lazy(() => import('@/pages/admin/users-roles'));
@@ -102,7 +103,8 @@ export const dashboardRoutes = (
  {/* Notifications page (Sprint 8 — Task 77) */}
  <Route path="/notifications" element={<PermissionGuard permission="notifications.view"><Suspense fallback={<SkeletonTable columns={4} rows={8} />}><NotificationsListPage /></Suspense></PermissionGuard>} />
  <Route path="/action-center" element={<PermissionGuard permission="dashboard.action_center.view"><Suspense fallback={<SkeletonDashboard />}><ActionCenterPage /></Suspense></PermissionGuard>} />
- <Route path="/exceptions" element={<PermissionGuard permission="dashboard.exceptions.view"><Suspense fallback={<SkeletonTable columns={5} rows={8} />}><ExceptionWorkbenchPage /></Suspense></PermissionGuard>} />
+ {/* /exceptions removed 2026-08-08 (scope cut — same queue as /action-center,
+ only with the approval category filtered out; now a scope toggle there). */}
  <Route path="/admin/operations-health"
  element={<PermissionGuard permission="dashboard.admin.view"><Suspense fallback={<SkeletonDashboard />}><OperationsHealthPage /></Suspense></PermissionGuard>} />
  </>

@@ -43,9 +43,9 @@ function PillarCell({ pillar, index }: { pillar: PillarData; index: number }) {
 
 export function QualitySection() {
   const { data: content } = useQuery({ queryKey: ['landing', 'content'], queryFn: landingApi.content, staleTime: 300_000 });
-  const qualityMethods = content?.quality_methods?.length ? content.quality_methods : ['IATF 16949', 'CMM Inspection', 'SPC Tracking', 'PPAP Level 3', 'CoC Certified'];
+  const qualityMethods = content?.quality_methods ?? [];
   const qualityPolicy = content?.quality_policy;
-  const qualityStandard = qualityPolicy?.standard ?? qualityMethods[0];
+  const qualityStandard = qualityPolicy?.standard ?? qualityMethods[0] ?? '—';
   const qualityPillars: PillarData[] = (content?.quality_pillars ?? []).map((pillar) => ({ ...pillar, icon: QUALITY_PILLAR_ICONS[pillar.icon] ?? QUALITY_PILLAR_ICONS.ruler }));
 
   return (
@@ -54,8 +54,8 @@ export function QualitySection() {
         <div className="flex flex-col gap-10 lg:flex-row lg:items-end lg:justify-between">
           <SectionHeading
             eyebrow={`Quality · ${qualityStandard}`}
-            title={content?.section_copy?.quality_title || 'Zero-Defect Quality Assurance'}
-            intro={content?.section_copy?.quality_intro || 'Every production lot is measured against tight metrology tolerances with CMM inspection, SPC process tracking, and Certificate of Conformance.'}
+            title={content?.section_copy?.quality_title ?? '—'}
+            intro={content?.section_copy?.quality_intro ?? '—'}
           />
 
           <div className="flex flex-wrap gap-2 lg:max-w-xs lg:justify-end">
@@ -88,10 +88,10 @@ export function QualitySection() {
             </div>
             <div className="mt-5">
               <h3 className="font-display text-2xl font-semibold tracking-[-0.02em] text-primary">
-                {qualityPolicy?.certification_title || 'IATF 16949 & ISO 9001:2015 Certified'}
+                {qualityPolicy?.certification_title ?? '—'}
               </h3>
               <p className="mt-3 font-sans text-base font-light leading-relaxed text-secondary">
-                {qualityPolicy?.certification_body || 'Audited and certified for automotive quality management and injection molded component production.'}
+                {qualityPolicy?.certification_body ?? '—'}
               </p>
               <button
                 type="button"
@@ -128,9 +128,9 @@ export function QualitySection() {
             <ShieldCheck size={26} className="mt-0.5 shrink-0 text-accent" strokeWidth={2} />
             <p className="font-sans text-base font-light leading-relaxed text-secondary">
                 <span className="font-medium text-primary">
-                  {qualityPolicy?.conformance_title || '100% Quality & Traceability Guarantee:'}
+                  {qualityPolicy?.conformance_title ?? '—'}
                 </span>{' '}
-                {qualityPolicy?.conformance_body || 'Full dimensional inspection, material melt-flow verification, and lot barcode tracking delivered with every shipment.'}
+                {qualityPolicy?.conformance_body ?? '—'}
             </p>
           </div>
         </div>

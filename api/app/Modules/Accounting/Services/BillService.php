@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Accounting\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\ChainBroadcaster;
 use App\Common\Services\TaxPolicyService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
@@ -18,6 +19,7 @@ use App\Modules\Accounting\Models\BillPayment;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
+use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Exceptions\ThreeWayMatchException;
@@ -39,6 +41,8 @@ class BillService
         private readonly BudgetEnforcementService $budget,
         private readonly TaxPolicyService $taxPolicy,
         private readonly AccountingAccountPolicyService $accounts,
+        private readonly \App\Common\Services\DocumentSequenceService $sequences,
+        private readonly \App\Common\Services\SettingsService $settings,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -87,7 +91,14 @@ class BillService
             'creator:id,name,role_id',
             // REC-02 — surface the linked PO so the detail page can render the
             // 3-way-match link row (BillResource exposes purchase_order when loaded).
-            'purchaseOrder:id,po_number',
+            // 2026-08-08 — compact P2P stepper: also pull the PR behind the PO.
+            // Column list is constrained; purchase_request_id keeps the nested
+            // eager load resolvable without selecting the full PO row.
+            'purchaseOrder:id,po_number,purchase_request_id',
+            'purchaseOrder.purchaseRequest:id,pr_number',
+            // 2026-08-08 — source receipt for auto-created draft bills (status
+            // feeds the P2P stepper's GRN step).
+            'goodsReceiptNote:id,grn_number,status',
         ]);
     }
 
@@ -107,7 +118,7 @@ class BillService
 
             // Build items + totals.
             [$items, $subtotal] = $this->normalizeItems($data['items'] ?? []);
-            $vat = $isVatable ? Money::mul($subtotal, $this->taxPolicy->vatRate()) : Money::zero();
+            $vat = $isVatable ? Money::mul($subtotal, $this->taxPolicy->requiredVatRate()) : Money::zero();
             $total = Money::add($subtotal, $vat);
 
             // Vendor uniqueness on bill_number.
@@ -211,44 +222,148 @@ class BillService
                 BillItem::create(array_merge($row, ['bill_id' => $bill->id]));
             }
 
-            // Build JE: DR each expense_account_id; DR VAT Input if vatable; CR AP.
-            $apId = $this->accountId($this->accounts->ap());
-            $vatInputId = $this->accountId($this->accounts->vatInput());
+            $this->postBillToGl($bill, $vendor, $items, $isVatable, $vat, $total, $by);
 
-            $lines = [];
-            foreach ($items as $row) {
-                $lines[] = [
-                    'account_id' => $row['expense_account_id'],
-                    'debit' => $row['total'],
-                    'credit' => '0.00',
-                    'description' => $row['description'],
-                ];
+            return $this->show($bill->fresh());
+        });
+    }
+
+    /**
+     * 2026-08-08 — Auto-bill chain. When a GRN is accepted, the listener calls
+     * this to pre-create the supplier bill in DRAFT state. Lines come from the
+     * GRN (accepted quantities × unit cost), the default expense account is
+     * resolved like the B2B portal's invoice submission, and the due date
+     * follows the vendor payment terms. NOTHING is posted — the bill sits in
+     * draft until accounting reviews it and calls postDraft().
+     */
+    public function createDraftForGrn(GoodsReceiptNote $grn, User $by): ?Bill
+    {
+        return DB::transaction(function () use ($grn, $by) {
+            if ($grn->status !== \App\Modules\Inventory\Enums\GrnStatus::Accepted) {
+                return null; // only fully-accepted receipts stage a bill
             }
-            if ($isVatable && Money::gt($vat, '0')) {
-                $lines[] = [
-                    'account_id' => $vatInputId,
-                    'debit' => $vat,
-                    'credit' => '0.00',
-                    'description' => 'VAT Input',
-                ];
+            if (Bill::query()->where('goods_receipt_note_id', $grn->id)->exists()) {
+                return null; // idempotent — one draft per GRN
             }
-            $lines[] = [
-                'account_id' => $apId,
-                'debit' => '0.00',
-                'credit' => $total,
-                'description' => "AP — {$vendor->name} · {$data['bill_number']}",
-            ];
 
-            $je = $this->journals->create([
-                'date' => (string) $bill->date->toDateString(),
-                'description' => "Bill {$bill->bill_number} from {$vendor->name}",
-                'reference_type' => 'bill',
-                'reference_id' => $bill->id,
-                'lines' => $lines,
-            ], $by);
-            $je = $this->journals->post($je, $by);
+            $grn->loadMissing(['vendor', 'purchaseOrder', 'items.item', 'items.purchaseOrderItem']);
+            $vendor = $grn->vendor;
+            $po = $grn->purchaseOrder;
+            if (! $vendor || ! $po) {
+                return null;
+            }
+            $billDate = $grn->accepted_at?->toDateString() ?? now()->toDateString();
 
-            $bill->update(['journal_entry_id' => $je->id]);
+            $expenseAccountId = $this->defaultExpenseAccountId();
+            if (! $expenseAccountId) {
+                throw new BusinessRuleException('No default expense account configured. Please contact the administrator.');
+            }
+
+            // Vatability follows the source document (the PO), not the
+            // company-wide registration flag — a VAT-exempt PO must not
+            // spawn a draft bill with VAT, and vice versa.
+            $isVatable = (bool) $po->is_vatable;
+            $rows = [];
+            $subtotal = Money::zero();
+            foreach ($grn->items as $line) {
+                $qty = Money::round2((string) $line->quantity_accepted);
+                if (Money::lte($qty, '0')) {
+                    continue; // rejected lines are not billed
+                }
+                $unitPrice = Money::round2((string) $line->unit_cost);
+                $total = Money::round2(bcmul($qty, $unitPrice, 4));
+                $description = $line->item?->name
+                    ?? $line->purchaseOrderItem?->description
+                    ?? "Line {$line->id}";
+                $unit = $line->item?->unit_of_measure ?? $line->purchaseOrderItem?->unit;
+                $rows[] = [
+                    'expense_account_id' => $expenseAccountId,
+                    'item_id' => $line->item_id,
+                    'description' => (string) $description,
+                    'quantity' => $qty,
+                    'unit' => $unit,
+                    'unit_price' => $unitPrice,
+                    'total' => $total,
+                ];
+                $subtotal = Money::add($subtotal, $total);
+            }
+            if ($rows === []) {
+                return null; // nothing accepted → nothing to bill
+            }
+
+            $vat = $isVatable ? Money::mul($subtotal, $this->taxPolicy->requiredVatRate()) : Money::zero();
+            $total = Money::add($subtotal, $vat);
+
+            $bill = Bill::create([
+                'bill_number' => $this->sequences->generate('bill'),
+                'vendor_id' => $vendor->id,
+                'purchase_order_id' => $po->id,
+                'goods_receipt_note_id' => $grn->id,
+                'date' => $billDate,
+                'due_date' => Carbon::parse($billDate)->addDays($vendor->payment_terms_days)->toDateString(),
+                'is_vatable' => $isVatable,
+                'subtotal' => $subtotal,
+                'vat_amount' => $vat,
+                'total_amount' => $total,
+                'amount_paid' => Money::zero(),
+                'balance' => $total,
+                'status' => BillStatus::Draft,
+                'created_by' => $by->id,
+                'remarks' => "Auto-created from GRN {$grn->grn_number}. Review and post to record the payable.",
+            ]);
+
+            foreach ($rows as $row) {
+                BillItem::create(array_merge($row, ['bill_id' => $bill->id]));
+            }
+
+            return $this->show($bill->fresh());
+        });
+    }
+
+    /**
+     * 2026-08-08 — Post a draft bill: builds + posts the AP/expense JE and
+     * flips the bill to Unpaid. The point of the draft state: nothing touches
+     * the ledger until a human reviews the auto-created amounts.
+     */
+    public function postDraft(Bill $bill, User $by): Bill
+    {
+        if ($bill->status !== BillStatus::Draft) {
+            throw new BusinessRuleException('Only draft bills can be posted.');
+        }
+
+        return DB::transaction(function () use ($bill, $by) {
+            $this->periods->assertPostingAllowed($bill->date);
+
+            $vendor = $bill->vendor;
+            $items = $bill->items->map(fn (BillItem $item) => [
+                'expense_account_id' => $item->expense_account_id,
+                'item_id' => $item->item_id,
+                'description' => $item->description,
+                'quantity' => (string) $item->quantity,
+                'unit' => $item->unit,
+                'unit_price' => (string) $item->unit_price,
+                'total' => (string) $item->total,
+            ])->all();
+
+            $this->postBillToGl(
+                $bill,
+                $vendor,
+                $items,
+                (bool) $bill->is_vatable,
+                (string) $bill->vat_amount,
+                (string) $bill->total_amount,
+                $by,
+            );
+
+            $bill->update(['status' => BillStatus::Unpaid]);
+
+            // 2026-08-08 — final P2P link: posting a draft bill advances the
+            // chain to the 'posted' step in real time (draft → posted → paid).
+            $fresh = $bill->fresh();
+            DB::afterCommit(function () use ($fresh, $by): void {
+                app(ChainBroadcaster::class)
+                    ->broadcastFor($fresh, (string) $fresh->status?->value, $by);
+            });
 
             return $this->show($bill->fresh());
         });
@@ -341,6 +456,17 @@ class BillService
                 'balance' => $newBalance,
                 'status' => $newStatus,
             ]);
+
+            // 2026-08-08 — final P2P link: broadcast the chain step so the
+            // bill detail page (and any chain view) advances in real time.
+            // Partial payments move the chain to 'partial'; the settling
+            // payment completes it ('paid'). Fires after commit so the
+            // updated row is visible to the channel consumer.
+            $fresh = $bill->fresh();
+            DB::afterCommit(function () use ($fresh, $by): void {
+                app(ChainBroadcaster::class)
+                    ->broadcastFor($fresh, (string) $fresh->status?->value, $by);
+            });
 
             return $payment->fresh(['cashAccount']);
         });
@@ -441,6 +567,69 @@ class BillService
         }
 
         return [$rows, $subtotal];
+    }
+
+    /**
+     * Build + post the bill JE (DR expense lines, DR VAT Input, CR AP) and
+     * link it. Shared by the manual create() path and the draft post path so
+     * the ledger logic can never drift between them.
+     *
+     * @param  array<int, array{expense_account_id:int, item_id:?int, description:string, quantity:string, unit:?string, unit_price:string, total:string}>  $items
+     */
+    private function postBillToGl(Bill $bill, Vendor $vendor, array $items, bool $isVatable, string $vat, string $total, User $by): void
+    {
+        $apId = $this->accountId($this->accounts->ap());
+        $vatInputId = $this->accountId($this->accounts->vatInput());
+
+        $lines = [];
+        foreach ($items as $row) {
+            $lines[] = [
+                'account_id' => $row['expense_account_id'],
+                'debit' => $row['total'],
+                'credit' => '0.00',
+                'description' => $row['description'],
+            ];
+        }
+        if ($isVatable && Money::gt($vat, '0')) {
+            $lines[] = [
+                'account_id' => $vatInputId,
+                'debit' => $vat,
+                'credit' => '0.00',
+                'description' => 'VAT Input',
+            ];
+        }
+        $lines[] = [
+            'account_id' => $apId,
+            'debit' => '0.00',
+            'credit' => $total,
+            'description' => "AP — {$vendor->name} · {$bill->bill_number}",
+        ];
+
+        $je = $this->journals->create([
+            'date' => (string) $bill->date->toDateString(),
+            'description' => "Bill {$bill->bill_number} from {$vendor->name}",
+            'reference_type' => 'bill',
+            'reference_id' => $bill->id,
+            'lines' => $lines,
+        ], $by);
+        $je = $this->journals->post($je, $by);
+
+        $bill->update(['journal_entry_id' => $je->id]);
+    }
+
+    /**
+     * Resolve the default expense account (int id) for auto-created bill lines
+     * — same setting the B2B portal's submitInvoice uses.
+     */
+    private function defaultExpenseAccountId(): ?int
+    {
+        $code = (string) $this->settings->get('accounting.default_expense_account_code');
+        if ($code === '') {
+            return null;
+        }
+        $id = Account::query()->where('code', $code)->value('id');
+
+        return $id ? (int) $id : null;
     }
 
     private function accountId(string $code): int

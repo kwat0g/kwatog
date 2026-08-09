@@ -14,7 +14,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
-import { Modal } from '@/components/ui/Modal';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
@@ -118,6 +118,12 @@ export default function SelfServiceLeavePage() {
  const { data: types } = useQuery({
  queryKey: ['leave-types-self'],
  queryFn: () => selfServiceApi.leaveTypes(),
+ staleTime: 5 * 60_000,
+ });
+
+ const { data: leaveOptions } = useQuery({
+ queryKey: ['leave-request-options'],
+ queryFn: leaveRequestsApi.options,
  staleTime: 5 * 60_000,
  });
 
@@ -305,9 +311,9 @@ export default function SelfServiceLeavePage() {
  {...register('half_day_period')}
  error={errors.half_day_period?.message}
  >
- <option value="none">Full day</option>
- <option value="am">Morning (AM)</option>
- <option value="pm">Afternoon (PM)</option>
+ {(leaveOptions?.half_day_periods ?? []).map((period) => (
+ <option key={period.value} value={period.value}>{period.label}</option>
+ ))}
  </Select>
  {estimatedDays > 0 && (
  <div className="flex items-center justify-between text-xs">
@@ -323,7 +329,7 @@ export default function SelfServiceLeavePage() {
  {...register('reason')}
  error={errors.reason?.message}
  />
- <div className="flex justify-end gap-2 pt-2 border-t border-default">
+ <ModalFooter>
  <Button
  type="button"
  variant="secondary"
@@ -340,7 +346,7 @@ export default function SelfServiceLeavePage() {
  >
  {file.isPending ? 'Submitting…' : 'Submit request'}
  </Button>
- </div>
+ </ModalFooter>
  </form>
  </Modal>
  </div>

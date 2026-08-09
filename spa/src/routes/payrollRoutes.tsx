@@ -10,18 +10,14 @@ const PayrollPeriodDetailPage = lazy(() => import('@/pages/payroll/periods/detai
 const PayrollEmployeeDetailPage = lazy(() => import('@/pages/payroll/periods/employee-detail'));
 const PayrollAdjustmentsPage = lazy(() => import('@/pages/payroll/adjustments'));
 const CreatePayrollAdjustmentPage = lazy(() => import('@/pages/payroll/adjustments/create'));
-const PayrollPipelinePage = lazy(() => import('@/pages/payroll/pipeline'));
+// /payroll/pipeline removed 2026-08-08 (scope cut — page file kept)
+// /payroll/de-minimis removed 2026-08-08 (scope cut — now a modal on /payroll/periods)
 const StatutoryExportsPage = lazy(() => import('@/pages/payroll/statutory'));
-const DeMinimisPage = lazy(() => import('@/pages/payroll/de-minimis'));
 
 export const payrollRoutes = (
  <>
  {/* Payroll module */}
  <Route element={<ModuleGuard module="payroll" />}>
- <Route
- path="/payroll/pipeline"
- element={<PermissionGuard permission="payroll.periods.view"><PayrollPipelinePage /></PermissionGuard>}
- />
  <Route
  path="/payroll/periods"
  element={<PermissionGuard permission="payroll.periods.view"><PayrollPeriodsPage /></PermissionGuard>}
@@ -49,10 +45,6 @@ export const payrollRoutes = (
 <Route
         path="/payroll/statutory"
         element={<PermissionGuard permission="payroll.statutory.export"><StatutoryExportsPage /></PermissionGuard>}
-      />
-      <Route
-        path="/payroll/de-minimis"
-        element={<PermissionGuard permission="payroll.adjustments.create"><DeMinimisPage /></PermissionGuard>}
       />
  </Route>
  </>

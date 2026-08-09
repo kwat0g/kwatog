@@ -98,6 +98,7 @@ export interface OvertimeRequest {
 }
 
 export interface OvertimeOptions {
+ statuses: Array<{ value: string; label: string }>;
  /** Minimum approved OT minutes, in hours (e.g. 0.5). */
  minimum_hours: number;
  /** Admin/HR create form daily ceiling (settings attendance.ot.admin_max_hours). */

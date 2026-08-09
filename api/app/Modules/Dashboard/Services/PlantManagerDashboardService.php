@@ -120,27 +120,27 @@ class PlantManagerDashboardService
             ->sum('good_count');
     }
 
-    private function oeeToday(): string
+    private function oeeToday(): ?string
     {
-        if (! Schema::hasTable('work_order_outputs')) return '0.0';
+        if (! Schema::hasTable('work_order_outputs')) return null;
         $good = (int) DB::table('work_order_outputs')
             ->whereDate('recorded_at', today())->sum('good_count');
         $rej  = (int) DB::table('work_order_outputs')
             ->whereDate('recorded_at', today())->sum('reject_count');
-        if ($good + $rej === 0) return '0.0';
+        if ($good + $rej === 0) return null;
         return number_format(($good * 100.0) / max(1, $good + $rej), 1, '.', '');
     }
 
-    private function otdRate(): string
+    private function otdRate(): ?string
     {
-        if (! Schema::hasTable('deliveries')) return '0.0';
+        if (! Schema::hasTable('deliveries')) return null;
         $base = fn () => DB::table('deliveries')
             ->whereIn('status', ['delivered', 'confirmed'])
             ->whereNotNull('delivered_at')
             ->whereBetween('delivered_at', [now()->subMonth(), now()]);
 
         $total = (int) $base()->count();
-        if ($total === 0) return '0.0';
+        if ($total === 0) return null;
 
         $onTime = (int) $base()
             ->whereRaw('DATE(delivered_at) <= scheduled_date')

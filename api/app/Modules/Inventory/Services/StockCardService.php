@@ -80,8 +80,8 @@ class StockCardService
             $rows[] = [
                 'id'             => $m->hash_id,
                 'date'           => $m->created_at?->toIso8601String(),
-                'movement_type'  => (string) $m->movement_type,
-                'movement_type_label' => Str::headline((string) $m->movement_type),
+                'movement_type'  => $m->movement_type?->value ?? '',
+                'movement_type_label' => Str::headline($m->movement_type?->value ?? ''),
                 'reference_type' => (string) ($m->reference_type ?? ''),
                 'reference_id'   => $m->reference_id !== null
                     ? app('hashids')->encode((int) $m->reference_id)

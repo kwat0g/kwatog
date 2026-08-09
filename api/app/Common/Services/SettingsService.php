@@ -42,21 +42,6 @@ class SettingsService
     {
         $value = $this->get($key);
         if (! is_string($value) || (! $allowEmpty && trim($value) === '')) {
-            $fallback = match ($key) {
-                'company.legal_name' => 'PHILIPPINE OGAMI CORPORATION',
-                'company.address' => 'First Cavite Industrial Estate (FCIE), Dasmariñas, Cavite, Philippines',
-                'company.tin' => '002-841-935-0000',
-                'company.phone' => '+63 (046) 402-1234',
-                'company.email' => 'info@ogami.ph',
-                'company.sales_inbox_email' => 'sales@ogami.ph',
-                'company.public_url' => 'https://ogami.ph',
-                'company.vat_status' => 'VAT Registered',
-                'company.employee_email_domain' => 'ogami.ph',
-                default => null,
-            };
-            if ($fallback !== null) {
-                return $fallback;
-            }
             throw new \App\Common\Exceptions\BusinessRuleException("Required setting {$key} is missing or invalid.");
         }
         return $value;
@@ -101,26 +86,6 @@ class SettingsService
     {
         $row = DB::table('settings')->where('key', $key)->first();
         $val = $row ? json_decode($row->value, true) : null;
-        if ($val === null || (is_string($val) && trim($val) === '')) {
-            $companyFallback = match ($key) {
-                'company.legal_name' => 'PHILIPPINE OGAMI CORPORATION',
-                'company.address' => 'First Cavite Industrial Estate (FCIE), Dasmariñas, Cavite, Philippines',
-                'company.tin' => '002-841-935-0000',
-                'company.phone' => '+63 (046) 402-1234',
-                'company.email' => 'info@ogami.ph',
-                'company.sales_inbox_email' => 'sales@ogami.ph',
-                'company.public_url' => 'https://ogami.ph',
-                'company.vat_status' => 'VAT Registered',
-                'company.employee_email_domain' => 'ogami.ph',
-                'company.latitude' => 14.2860,
-                'company.longitude' => 120.9345,
-                default => null,
-            };
-            if ($companyFallback !== null) {
-                return $companyFallback;
-            }
-        }
-
         return $val ?? $default;
     }
 

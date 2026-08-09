@@ -7,7 +7,7 @@ import { workOrdersApi } from '@/api/maintenance/workOrders';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { Modal } from '@/components/ui/Modal';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -203,12 +203,12 @@ export default function MaintenanceWorkOrderDetailPage() {
  className="font-mono tabular-nums"
  />
  </div>
- <div className="flex justify-end gap-2 pt-3 border-t border-default">
+ <ModalFooter>
  <Button variant="secondary" onClick={() => setCompleteOpen(false)}>Cancel</Button>
  <Button variant="primary" onClick={() => completeMutation.mutate()} loading={completeMutation.isPending}>
  {completeMutation.isPending ? 'Completing…' : 'Confirm complete'}
  </Button>
- </div>
+ </ModalFooter>
  </Modal>
 
  <ConfirmDialog

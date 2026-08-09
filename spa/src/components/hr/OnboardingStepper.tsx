@@ -32,7 +32,7 @@ export function OnboardingStepper({ employeeId, bare = false }: Props) {
  )}
 
  {isError && (
- <div className="text-xs text-danger">Failed to load onboarding status.</div>
+ <div className="text-xs text-danger-fg">Failed to load onboarding status.</div>
  )}
 
  {data && Array.isArray(data.steps) && (

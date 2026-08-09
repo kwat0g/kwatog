@@ -61,14 +61,39 @@ class PurchaseRequestResource extends JsonResource
                 'is_overdue'    => (bool) $r->is_overdue,
                 'overdue_hours' => $r->is_overdue ? (int) $r->overdue_hours : null,
             ])->all()),
-            'purchase_orders'         => $this->whenLoaded('purchaseOrders', fn () => $this->purchaseOrders->map(fn ($po) => [
-                'id'        => $po->hash_id,
-                'po_number' => $po->po_number,
-                'status'    => (string) $po->status?->value,
-                'status_label' => $po->status?->label(),
-                'vendor'    => $po->vendor ? ['id' => $po->vendor->hash_id, 'name' => $po->vendor->name] : null,
-                'total_amount' => (string) $po->total_amount,
-            ])->all()),
+            'purchase_orders'         => $this->whenLoaded('purchaseOrders', fn () => $this->purchaseOrders->map(function ($po): array {
+                $bill = $po->relationLoaded('bills') ? $po->bills->first() : null;
+                $grns = $po->relationLoaded('goodsReceiptNotes')
+                    ? $po->goodsReceiptNotes->map(fn ($g) => [
+                        'id'         => $g->hash_id,
+                        'grn_number' => $g->grn_number,
+                        'status'     => (string) $g->status?->value,
+                    ])->values()->all()
+                    : [];
+
+                return [
+                    'id'                => $po->hash_id,
+                    'po_number'         => $po->po_number,
+                    'status'            => (string) $po->status?->value,
+                    'status_label'      => $po->status?->label(),
+                    'vendor'            => $po->vendor ? ['id' => $po->vendor->hash_id, 'name' => $po->vendor->name] : null,
+                    'total_amount'      => (string) $po->total_amount,
+                    'is_auto_generated' => (bool) $po->is_auto_generated,
+                    // 2026-08-08 — auto-bill chain visibility from the PR: expose
+                    // the first bill staged for this PO so the PR page can show
+                    // the draft supplier bill + Post action (PR → PO → GRN → Bill).
+                    'bill'              => $bill ? [
+                        'id'           => $bill->hash_id,
+                        'bill_number'  => $bill->bill_number,
+                        'status'       => (string) $bill->status?->value,
+                        'status_label' => $bill->status?->label() ?? (string) $bill->status,
+                        'total_amount' => (string) $bill->total_amount,
+                    ] : null,
+                    // 2026-08-08 — full-chain stepper: GRNs on this PO so the
+                    // PR page can render the compact PR → PO → GRN → Bill → Paid chain.
+                    'grns'              => $grns,
+                ];
+            })->all()),
             'created_at'              => optional($this->created_at)->toIso8601String(),
             'updated_at'              => optional($this->updated_at)->toIso8601String(),
             'deleted_at'              => optional($this->deleted_at)?->toIso8601String(),

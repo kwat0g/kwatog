@@ -109,6 +109,42 @@ final class ChainDefinitions
         'cancelled'  => 'confirmed',
     ];
 
+    /** @var array<int,string> Supplier Bill (Chain 2 finale). */
+    private const STEPS_BILL = [
+        'draft',
+        'posted',
+        'partial',
+        'paid',
+        'closed',
+    ];
+
+    private const STATUS_MAP_BILL = [
+        'draft'     => 'draft',
+        'unpaid'    => 'posted',
+        'partial'   => 'partial',
+        'paid'      => 'paid',
+        'cancelled' => 'closed',
+        'closed'    => 'closed',
+    ];
+
+    /** @var array<int,string> Customer Invoice (Chain 1 finale). */
+    private const STEPS_INVOICE = [
+        'draft',
+        'finalized',
+        'partial',
+        'paid',
+        'closed',
+    ];
+
+    private const STATUS_MAP_INVOICE = [
+        'draft'     => 'draft',
+        'finalized' => 'finalized',
+        'partial'   => 'partial',
+        'paid'      => 'paid',
+        'cancelled' => 'closed',
+        'closed'    => 'closed',
+    ];
+
     /** @var array<int,string> Goods Receipt Note (Chain 2). */
     private const STEPS_GRN = [
         'draft',
@@ -137,6 +173,8 @@ final class ChainDefinitions
             'purchase_order' => ['steps' => self::STEPS_PURCHASE_ORDER, 'status_map' => self::STATUS_MAP_PURCHASE_ORDER],
             'delivery' => ['steps' => self::STEPS_DELIVERY, 'status_map' => self::STATUS_MAP_DELIVERY],
             'grn' => ['steps' => self::STEPS_GRN, 'status_map' => self::STATUS_MAP_GRN],
+            'bill' => ['steps' => self::STEPS_BILL, 'status_map' => self::STATUS_MAP_BILL],
+            'invoice' => ['steps' => self::STEPS_INVOICE, 'status_map' => self::STATUS_MAP_INVOICE],
         ];
     }
 
@@ -155,7 +193,12 @@ final class ChainDefinitions
                 $valid[$type] = ['steps' => $steps, 'status_map' => $statusMap];
             }
         }
-        return $valid !== [] ? $valid : self::defaults();
+
+        // Code is the source of truth for chain definitions: any chain added
+        // in defaults() must resolve even when a pre-existing settings row
+        // (seeded before the chain existed) is stale. Admin overrides for
+        // known types still win because they come first in the merge.
+        return array_merge(self::defaults(), $valid);
     }
 
     /**
@@ -189,6 +232,8 @@ final class ChainDefinitions
             'purchase_order' => 'purchasing.view',
             'delivery'       => 'supply_chain.view',
             'grn'            => 'inventory.view',
+            'bill'           => 'accounting.bills.view',
+            'invoice'        => 'accounting.invoices.view',
             default          => 'dashboard.view_bottlenecks', // fallback (unused; defensive)
         };
     }

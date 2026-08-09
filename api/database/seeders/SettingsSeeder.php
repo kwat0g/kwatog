@@ -17,51 +17,59 @@ class SettingsSeeder extends Seeder
         // Company identity is deployment data, not application source code.
         // Keep bootstrap settings empty unless the operator supplies them via
         // environment/import/admin settings.
+        $envString = static fn (string $key): string => trim((string) env($key));
+        $envFloat = static function (string $key): ?float {
+            $value = env($key);
+            return is_numeric($value) ? (float) $value : null;
+        };
         $company = [
-            'legal_name' => trim((string) env('COMPANY_LEGAL_NAME', 'PHILIPPINE OGAMI CORPORATION')),
-            'address' => trim((string) env('COMPANY_ADDRESS', 'First Cavite Industrial Estate (FCIE), Dasmariñas, Cavite, Philippines')),
-            'tin' => trim((string) env('COMPANY_TIN', '002-841-935-0000')),
-            'phone' => trim((string) env('COMPANY_PHONE', '+63 (046) 402-1234')),
-            'email' => trim((string) env('COMPANY_EMAIL', 'info@ogami.ph')),
-            'sales_inbox_email' => trim((string) env('COMPANY_SALES_INBOX_EMAIL', 'sales@ogami.ph')),
-            'public_url' => trim((string) env('COMPANY_PUBLIC_URL', 'https://ogami.ph')),
-            'vat_status' => trim((string) env('COMPANY_VAT_STATUS', 'VAT Registered')),
-            'latitude' => (float) env('COMPANY_LATITUDE', 14.3000),
-            'longitude' => (float) env('COMPANY_LONGITUDE', 120.9500),
+            'legal_name' => $envString('COMPANY_LEGAL_NAME'),
+            'address' => $envString('COMPANY_ADDRESS'),
+            'tin' => $envString('COMPANY_TIN'),
+            'phone' => $envString('COMPANY_PHONE'),
+            'email' => $envString('COMPANY_EMAIL'),
+            'sales_inbox_email' => $envString('COMPANY_SALES_INBOX_EMAIL'),
+            'vat_status' => $envString('COMPANY_VAT_STATUS'),
+            'logo_path' => $envString('COMPANY_LOGO_PATH'),
+            'certification' => $envString('COMPANY_CERTIFICATION'),
+            'public_url' => $envString('COMPANY_PUBLIC_URL'),
+            'latitude' => $envFloat('COMPANY_LATITUDE'),
+            'longitude' => $envFloat('COMPANY_LONGITUDE'),
         ];
 
         $rows = [
             // ── Company ──────────────────────────────────────
             [
                 'key'         => 'company.legal_name',
-                'value'       => $company['legal_name'] !== '' ? $company['legal_name'] : 'PHILIPPINE OGAMI CORPORATION',
+                'value'       => $company['legal_name'],
                 'group'       => 'company',
                 'label'       => 'Company Name',
                 'description' => 'Legal entity name shown on invoices, reports, and official documents.',
             ],
             [
                 'key'         => 'company.address',
-                'value'       => $company['address'] !== '' ? $company['address'] : 'First Cavite Industrial Estate (FCIE), Dasmariñas, Cavite, Philippines',
+                'value'       => $company['address'],
                 'group'       => 'company',
                 'label'       => 'Company Address',
                 'description' => 'Registered office address printed on official documents.',
             ],
             [
                 'key'         => 'company.tin',
-                'value'       => $company['tin'] !== '' ? $company['tin'] : '002-841-935-0000',
+                'value'       => $company['tin'],
                 'group'       => 'company',
                 'label'       => 'Tax Identification Number',
                 'description' => 'TIN used on BIR forms, invoices, and withholding certificates.',
             ],
-            ['key' => 'company.phone', 'value' => $company['phone'] !== '' ? $company['phone'] : '+63 (046) 402-1234', 'group' => 'company', 'label' => 'Company Phone', 'description' => 'Company telephone shown on official documents.'],
-            ['key' => 'company.email', 'value' => $company['email'] !== '' ? $company['email'] : 'info@ogami.ph', 'group' => 'company', 'label' => 'Company Email', 'description' => 'Company email shown on official documents.'],
-            ['key' => 'company.sales_inbox_email', 'value' => $company['sales_inbox_email'] !== '' ? $company['sales_inbox_email'] : 'sales@ogami.ph', 'group' => 'company', 'label' => 'Sales Inbox Email', 'description' => 'Target email address for RFQ quotes and sales inquiries.'],
-            ['key' => 'company.vat_status', 'value' => $company['vat_status'] !== '' ? $company['vat_status'] : 'VAT Registered', 'group' => 'company', 'label' => 'VAT Status', 'description' => 'Tax registration status shown on official documents.'],
-            ['key' => 'company.logo_path', 'value' => '/assets/brand-logo.png', 'group' => 'company', 'label' => 'Company Logo Path', 'description' => 'Stored logo path used by generated documents.'],
-            ['key' => 'company.public_url', 'value' => $company['public_url'] !== '' ? $company['public_url'] : 'https://ogami.ph', 'group' => 'company', 'label' => 'Company Public URL', 'description' => 'Public website URL shown on official documents.'],
+            ['key' => 'company.phone', 'value' => $company['phone'], 'group' => 'company', 'label' => 'Company Phone', 'description' => 'Company telephone shown on official documents.'],
+            ['key' => 'company.email', 'value' => $company['email'], 'group' => 'company', 'label' => 'Company Email', 'description' => 'Company email shown on official documents.'],
+            ['key' => 'company.sales_inbox_email', 'value' => $company['sales_inbox_email'], 'group' => 'company', 'label' => 'Sales Inbox Email', 'description' => 'Target email address for RFQ quotes and sales inquiries.'],
+            ['key' => 'company.vat_status', 'value' => $company['vat_status'], 'group' => 'company', 'label' => 'VAT Status', 'description' => 'Tax registration status shown on official documents.'],
+            ['key' => 'company.logo_path', 'value' => $company['logo_path'], 'group' => 'company', 'label' => 'Company Logo Path', 'description' => 'Stored logo path used by generated documents.'],
+            ['key' => 'company.certification', 'value' => $company['certification'], 'group' => 'company', 'label' => 'Company Certification', 'description' => 'Certification label shown on official documents when configured.'],
+            ['key' => 'company.public_url', 'value' => $company['public_url'], 'group' => 'company', 'label' => 'Company Public URL', 'description' => 'Public website URL shown on official documents.'],
             ['key' => 'company.latitude', 'value' => $company['latitude'], 'group' => 'company', 'label' => 'Facility Latitude', 'description' => 'GPS latitude coordinate of the primary manufacturing plant.'],
             ['key' => 'company.longitude', 'value' => $company['longitude'], 'group' => 'company', 'label' => 'Facility Longitude', 'description' => 'GPS longitude coordinate of the primary manufacturing plant.'],
-            ['key' => 'pdf.footer_disclaimer', 'value' => trim((string) env('PDF_FOOTER_DISCLAIMER', 'PHILIPPINE OGAMI CORPORATION · IATF 16949 Certified · First Cavite Industrial Estate, Dasmariñas, Cavite, Philippines')), 'group' => 'company', 'label' => 'PDF Footer Disclaimer', 'description' => 'Footer disclaimer shown on generated PDF documents.'],
+            ['key' => 'pdf.footer_disclaimer', 'value' => $envString('PDF_FOOTER_DISCLAIMER'), 'group' => 'company', 'label' => 'PDF Footer Disclaimer', 'description' => 'Footer disclaimer shown on generated PDF documents.'],
 
             // ── Fiscal ───────────────────────────────────────
             [
@@ -391,11 +399,30 @@ class SettingsSeeder extends Seeder
             ['key' => 'quality.ncr.replacement_work_order_lead_days', 'value' => 7, 'group' => 'quality', 'label' => 'NCR Replacement Work Order Lead Days', 'description' => 'Planned duration for replacement work orders created from scrap NCRs.'],
             ['key' => 'quality.ncr.replacement_work_order_priority', 'value' => 5, 'group' => 'quality', 'label' => 'NCR Replacement Work Order Priority', 'description' => 'Priority assigned to replacement work orders created from scrap NCRs.'],
             ['key' => 'quality.ppap_gate_enabled', 'value' => false, 'group' => 'quality', 'label' => 'PPAP Gate Enabled', 'description' => 'Block purchase-order approval when required supplier PPAP is not approved.'],
-            ['key' => 'company.employee_email_domain', 'value' => trim((string) env('COMPANY_EMPLOYEE_EMAIL_DOMAIN', 'ogami.ph')) ?: 'ogami.ph', 'group' => 'company', 'label' => 'Employee Account Email Domain', 'description' => 'Domain used when provisioning an email for an employee without one.'],
+            ['key' => 'quality.coc.manager_name', 'value' => $envString('QUALITY_COC_MANAGER_NAME'), 'group' => 'quality', 'label' => 'CoC Quality Manager', 'description' => 'Named quality manager printed on certificates of conformance when configured.'],
+            ['key' => 'quality.coc.manager_role', 'value' => $envString('QUALITY_COC_MANAGER_ROLE'), 'group' => 'quality', 'label' => 'CoC Quality Manager Role', 'description' => 'Role label printed below the quality manager signature on certificates of conformance.'],
+            ['key' => 'company.employee_email_domain', 'value' => $envString('COMPANY_EMPLOYEE_EMAIL_DOMAIN'), 'group' => 'company', 'label' => 'Employee Account Email Domain', 'description' => 'Domain used when provisioning an email for an employee without one.'],
             ['key' => 'accounting.functional_currency_code', 'value' => strtoupper(trim((string) env('ACCOUNTING_FUNCTIONAL_CURRENCY_CODE', ''))), 'group' => 'accounting', 'label' => 'Functional Currency Code', 'description' => 'Currency code used by the general ledger and statements.'],
         ];
 
+        $deploymentKeys = [
+            'company.legal_name', 'company.address', 'company.tin', 'company.phone',
+            'company.email', 'company.sales_inbox_email', 'company.vat_status',
+            'company.logo_path', 'company.certification', 'company.public_url',
+            'company.latitude', 'company.longitude', 'company.employee_email_domain',
+            'pdf.footer_disclaimer', 'quality.coc.manager_name', 'quality.coc.manager_role',
+            'accounting.functional_currency_code',
+        ];
+
         foreach ($rows as $row) {
+            // A blank environment value means "leave deployment data alone" on
+            // repeat seeds. Operators can clear a setting explicitly through
+            // the admin settings endpoint.
+            if (in_array($row['key'], $deploymentKeys, true)
+                && ($row['value'] === null || $row['value'] === '')
+                && $settings->get($row['key'], null) !== null) {
+                continue;
+            }
             $settings->set(
                 $row['key'],
                 $row['value'],

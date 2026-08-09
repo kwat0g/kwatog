@@ -114,7 +114,7 @@ export default function CareersPage() {
  </span>
  )}
  {posting.closes_at && (
- <span className="flex items-center gap-1.5 text-warning">
+ <span className="flex items-center gap-1.5 text-warning-fg">
  <Clock size={14} />
  Closes {formatDate(posting.closes_at)}
  </span>

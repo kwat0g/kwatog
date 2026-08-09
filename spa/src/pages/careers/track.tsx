@@ -74,7 +74,7 @@ export default function ApplicationTrackPage() {
  </form>
 
  {notFound && (
- <p className="mt-4 text-sm text-danger">
+ <p className="mt-4 text-sm text-danger-fg">
  No application found with that tracking code. Please double-check and try again.
  </p>
  )}
@@ -106,7 +106,7 @@ export default function ApplicationTrackPage() {
  <div
  className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium ${
  isDone
- ? 'bg-success text-white'
+ ? 'bg-success-bg text-white'
  : isActive
  ? 'bg-primary text-canvas'
  : 'bg-elevated text-muted'
@@ -115,7 +115,7 @@ export default function ApplicationTrackPage() {
  {isDone ? <CheckCircle size={14} /> : idx + 1}
  </div>
  {idx < info.stage_steps.length - 1 && (
- <div className={`h-6 w-0.5 ${isDone ? 'bg-success' : 'bg-elevated'}`} />
+ <div className={`h-6 w-0.5 ${isDone ? 'bg-success-bg' : 'bg-elevated'}`} />
  )}
  </div>
  <span

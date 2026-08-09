@@ -60,7 +60,8 @@ export interface EmployeeOptions {
  pay_types: Array<{ value: string; label: string }>;
  genders: Array<{ value: string; label: string }>;
  civil_statuses: Array<{ value: string; label: string }>;
- separation_reasons: Array<{ value: string; label: string }>;
+  separation_reasons: Array<{ value: string; label: string }>;
+  skill_levels: Array<{ value: string; label: string }>;
 }
 
 export const employeesApi = {

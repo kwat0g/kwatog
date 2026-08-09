@@ -15,6 +15,7 @@ use App\Modules\CRM\Models\Product;
 use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Enums\ItemType;
 use App\Modules\Inventory\Enums\StockMovementType;
+use App\Modules\Inventory\Events\GoodsReceiptNoteAccepted;
 use App\Modules\Inventory\Events\GoodsReceiptNoteCreated;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\GrnItem;
@@ -79,12 +80,15 @@ class GrnService
     public function show(GoodsReceiptNote $grn): GoodsReceiptNote
     {
         return $grn->load([
-            'vendor', 'purchaseOrder',
+            'vendor',
+            // 2026-08-08 — compact P2P stepper: PR → PO → GRN → Bill → Paid.
+            'purchaseOrder.purchaseRequest:id,pr_number',
             'items.item' => fn ($item) => $item->select('id', 'code', 'name', 'unit_of_measure')
                 ->withExists(['qualityPlans as has_active_quality_plan' => fn ($plan) => $plan->effective()]),
             'items.location.zone.warehouse',
             'items.purchaseOrderItem',
             'receiver:id,name,role_id', 'acceptor:id,name,role_id',
+            'bills:id,bill_number,status,total_amount',
         ]);
     }
 
@@ -220,6 +224,147 @@ class GrnService
         });
     }
 
+    /**
+     * 2026-08-08 — Create a draft (expected) GRN for a PO that has been sent
+     * to the supplier. Pre-fills one line per PO line at quantity_received = 0;
+     * no location, no stock movement, no QC, no PO-line totals — the goods
+     * have not arrived. The warehouse completes it via finalizeDraft().
+     *
+     * Idempotent: returns the existing draft GRN when one is already open for
+     * this PO (a second send / stale event must not duplicate expectations).
+     * Returns null when the PO already has a non-draft GRN (already received).
+     */
+    public function createDraftForPo(PurchaseOrder $po, ?User $by = null): ?GoodsReceiptNote
+    {
+        $existingDraft = GoodsReceiptNote::query()
+            ->where('purchase_order_id', $po->id)
+            ->where('status', GrnStatus::Draft->value)
+            ->first();
+        if ($existingDraft) {
+            return $existingDraft;
+        }
+        if (GoodsReceiptNote::query()
+            ->where('purchase_order_id', $po->id)
+            ->where('status', '!=', GrnStatus::Draft->value)
+            ->exists()) {
+            return null; // already received — no expectation needed
+        }
+
+        return DB::transaction(function () use ($po, $by) {
+            $grn = GoodsReceiptNote::create([
+                'grn_number'         => $this->sequences->generate('grn'),
+                'purchase_order_id'  => $po->id,
+                'vendor_id'          => $po->vendor_id,
+                'received_date'      => null,
+                'received_by'        => $by?->id,
+                'status'             => GrnStatus::Draft,
+                'remarks'            => 'Expected receipt — auto-created when the PO was sent to the supplier.',
+            ]);
+
+            $po->loadMissing('items');
+            foreach ($po->items as $line) {
+                GrnItem::create([
+                    'goods_receipt_note_id'  => $grn->id,
+                    'purchase_order_item_id' => $line->id,
+                    'item_id'                => $line->item_id,
+                    'location_id'            => null,
+                    'quantity_received'      => '0',
+                    'quantity_accepted'      => '0',
+                    'unit_cost'              => (string) $line->unit_price,
+                ]);
+            }
+
+            return $this->show($grn->fresh());
+        });
+    }
+
+    /**
+     * 2026-08-08 — The warehouse completes a draft (expected) GRN: assigns a
+     * bin + actual received quantity per line, then the GRN flips to
+     * pending_qc and the normal flow takes over (incoming QC, stock on
+     * accept). PO-line received totals and status are updated exactly like
+     * create().
+     *
+     * @param  array<int, array{purchase_order_item_id:int|string, location_id:int|string, quantity_received:string, remarks?:string|null}>  $items
+     */
+    public function finalizeDraft(GoodsReceiptNote $grn, array $items, User $by): GoodsReceiptNote
+    {
+        if ($grn->status !== GrnStatus::Draft) {
+            throw new BusinessRuleException('Only draft GRNs can be finalized.');
+        }
+
+        return DB::transaction(function () use ($grn, $items, $by) {
+            $po = $grn->purchaseOrder;
+            $grn->loadMissing('items');
+            $draftLineById = $grn->items->keyBy('purchase_order_item_id');
+
+            foreach ($items as $row) {
+                $poiId = HashIdFilter::decode($row['purchase_order_item_id'], PurchaseOrderItem::class)
+                    ?? (is_int($row['purchase_order_item_id']) ? $row['purchase_order_item_id'] : null);
+                $poi = PurchaseOrderItem::query()->whereKey($poiId)->lockForUpdate()->firstOrFail();
+                if ($poi->purchase_order_id !== $po->id) {
+                    throw new BusinessRuleException("PO line {$poi->id} does not belong to PO {$po->id}.");
+                }
+                $draftLine = $draftLineById->get($poi->id);
+                if (! $draftLine) {
+                    throw new BusinessRuleException("PO line {$poi->id} has no draft GRN line.");
+                }
+
+                $locationId = HashIdFilter::decode($row['location_id'], WarehouseLocation::class)
+                    ?? (int) $row['location_id'];
+                $qtyReceived = (string) $row['quantity_received'];
+
+                // Same over-receipt guard as create(): what was already
+                // received (from earlier GRNs) caps what this line may take.
+                $remaining = bcsub((string) $poi->quantity, (string) $poi->quantity_received, 3);
+                if (bccomp($qtyReceived, $remaining, 3) > 0) {
+                    $tolerancePct = (string) $this->settings->requiredFloat('inventory.over_receipt_tolerance_pct', 0);
+                    $allowance = bcmul((string) $poi->quantity, bcdiv($tolerancePct, '100', 6), 3);
+                    $maxReceivable = bcadd($remaining, $allowance, 3);
+                    if (bccomp($qtyReceived, $maxReceivable, 3) > 0) {
+                        throw new BusinessRuleException(
+                            "Cannot receive {$qtyReceived} for PO line {$poi->id}: only {$remaining} remaining"
+                            .($tolerancePct !== '0' ? " (tolerance {$tolerancePct}% → max {$maxReceivable})" : '').'.'
+                        );
+                    }
+                }
+
+                $draftLine->update([
+                    'location_id'       => $locationId,
+                    'quantity_received' => $qtyReceived,
+                    'quantity_accepted' => '0',
+                    'remarks'           => $row['remarks'] ?? null,
+                ]);
+
+                $poi->quantity_received = bcadd((string) $poi->quantity_received, $qtyReceived, 3);
+                $poi->save();
+            }
+
+            $this->refreshPoStatus($po);
+
+            $grn->update([
+                'status'        => GrnStatus::PendingQc,
+                'received_date' => now()->toDateString(),
+                'received_by'   => $by->id,
+            ]);
+            $fresh = $grn->fresh();
+
+            // Same chain wiring as create(): incoming QC synchronously, then
+            // the async event for retry/idempotent listeners.
+            try {
+                app(TriggerIncomingQC::class)->handle(new GoodsReceiptNoteCreated($fresh));
+            } catch (\Throwable $e) {
+                Log::warning('Synchronous incoming-QC trigger failed on GRN finalize', [
+                    'grn_id' => $grn->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+            DB::afterCommit(fn () => event(new GoodsReceiptNoteCreated($fresh)));
+
+            return $this->show($fresh);
+        });
+    }
+
     /** Accept the entire GRN — moves stock for every line at full quantity_received. */
     public function accept(GoodsReceiptNote $grn, User $by): GoodsReceiptNote
     {
@@ -265,10 +410,13 @@ class GrnService
             $fresh = $fresh->fresh();
 
             // Series C — Task C4. Real-time chain progress for the GRN
-            // detail page on the SPA.
-            DB::afterCommit(fn () => app(ChainBroadcaster::class)
-                ->broadcastFor($fresh, GrnStatus::Accepted->value, $by)
-            );
+            // detail page on the SPA, plus the auto-bill chain (draft
+            // supplier bill pre-created for the payables team).
+            DB::afterCommit(function () use ($fresh, $by): void {
+                app(ChainBroadcaster::class)
+                    ->broadcastFor($fresh, GrnStatus::Accepted->value, $by);
+                event(new GoodsReceiptNoteAccepted($fresh));
+            });
 
             return $fresh;
         });
@@ -293,7 +441,7 @@ class GrnService
             throw new BusinessRuleException('At least one line must have a non-zero accepted quantity.');
         }
 
-        return DB::transaction(function () use ($grn, $itemAcceptedMap, $by) {
+        $result = DB::transaction(function () use ($grn, $itemAcceptedMap, $by) {
             $allFull = true;
             foreach ($grn->items as $row) {
                 $accepted = (string) ($itemAcceptedMap[$row->id] ?? '0');
@@ -337,6 +485,19 @@ class GrnService
 
             return $fresh;
         });
+
+        // A partial accept that ends up covering every line transitions to
+        // Accepted — fire the same chain event as accept() so the auto-bill
+        // listener stages the draft supplier bill.
+        if ($result->status === GrnStatus::Accepted) {
+            DB::afterCommit(function () use ($result, $by): void {
+                app(ChainBroadcaster::class)
+                    ->broadcastFor($result, GrnStatus::Accepted->value, $by);
+                event(new GoodsReceiptNoteAccepted($result));
+            });
+        }
+
+        return $result;
     }
 
     public function reject(GoodsReceiptNote $grn, string $reason, User $by): GoodsReceiptNote
@@ -631,9 +792,11 @@ class GrnService
         // invariant as the standalone accept endpoint.
         $this->gl->post($fresh);
         $fresh = $fresh->fresh();
-        DB::afterCommit(fn () => app(ChainBroadcaster::class)
-            ->broadcastFor($fresh, GrnStatus::Accepted->value, $by)
-        );
+        DB::afterCommit(function () use ($fresh, $by): void {
+            app(ChainBroadcaster::class)
+                ->broadcastFor($fresh, GrnStatus::Accepted->value, $by);
+            event(new GoodsReceiptNoteAccepted($fresh));
+        });
 
         return $fresh;
     }

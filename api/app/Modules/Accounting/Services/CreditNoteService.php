@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Accounting\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\ChainBroadcaster;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\TaxPolicyService;
 use App\Common\Support\HashIdFilter;
@@ -121,7 +122,7 @@ class CreditNoteService
                 $resolvedLines[] = ['account_id' => $accountId, 'description' => $l['description'] ?? '', 'amount' => $amount];
             }
 
-            $vat = $isVatable ? Money::round2(Money::mul($subtotal, $this->taxPolicy->vatRate())) : Money::zero();
+            $vat = $isVatable ? Money::round2(Money::mul($subtotal, $this->taxPolicy->requiredVatRate())) : Money::zero();
             $total = Money::add($subtotal, $vat);
 
             $cn = new CreditNote();
@@ -265,6 +266,16 @@ class CreditNoteService
                 $cn->status = CreditNoteStatus::Applied;
             }
             $cn->save();
+
+            // 2026-08-08 — final P2P link: a supplier credit settling a bill
+            // advances the bill's chain step just like a cash payment does.
+            if (isset($bill) && $bill->wasChanged('status')) {
+                $fresh = $bill->fresh();
+                DB::afterCommit(function () use ($fresh): void {
+                    app(ChainBroadcaster::class)
+                        ->broadcastFor($fresh, (string) $fresh->status?->value);
+                });
+            }
 
             return $application->fresh();
         });

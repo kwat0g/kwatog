@@ -42,14 +42,14 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
 
  const counterEnabled = showCounter && typeof maxLength === 'number' && maxLength > 0;
  const ratio = counterEnabled ? length / (maxLength as number) : 0;
- const counterColor = ratio >= 1 ? 'text-danger' : ratio >= 0.9 ? 'text-warning' : 'text-muted';
+ const counterColor = ratio >= 1 ? 'text-danger-fg' : ratio >= 0.9 ? 'text-warning-fg' : 'text-muted';
 
  return (
  <div className={cn('flex flex-col gap-1', containerClassName)}>
  {label && (
  <label htmlFor={taId} className="text-xs text-muted font-medium">
  {label}
- {required && <span className="text-danger ml-0.5">*</span>}
+ {required && <span className="text-danger-fg ml-0.5">*</span>}
  </label>
  )}
  <textarea
@@ -75,7 +75,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
  />
  <div className="flex items-center justify-between">
  {error ? (
- <span id={`${taId}-error`} className="text-xs text-danger">{error}</span>
+ <span id={`${taId}-error`} className="text-xs text-danger-fg">{error}</span>
  ) : helper ? (
  <span id={`${taId}-helper`} className="text-xs text-muted">{helper}</span>
  ) : (

@@ -9,6 +9,7 @@ import { DataTable, NumCell, type BulkAction, type Column } from '@/components/u
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import { StatCard } from '@/components/ui/StatCard';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
@@ -17,7 +18,7 @@ import { formatDate } from '@/lib/formatDate';
 import type { Invoice } from '@/types/accounting';
 
 const DEFAULT_FILTERS: InvoiceListParams = {
- page: 1, per_page: 25,
+ page: 1, per_page: 25, status: 'unpaid',
 };
 
 export default function InvoicesPage() {
@@ -40,6 +41,10 @@ export default function InvoicesPage() {
  queryFn: invoicesApi.options,
  staleTime: 5 * 60 * 1000 });
  const statusLabels = new Map((invoiceOptions?.statuses ?? []).map((option) => [option.value, option.label]));
+ const statusLabel = (value: string) => statusLabels.get(value) ?? value.replaceAll('_', ' ');
+ const outstandingBalance = data?.data.some((invoice) => invoice.balance != null)
+  ? formatPeso(data.data.reduce((sum, invoice) => sum + Number(invoice.balance ?? 0), 0))
+  : '—';
 
  const columns: Column<Invoice>[] = [
  { key: 'invoice_number', header: 'Invoice no',
@@ -80,11 +85,43 @@ export default function InvoicesPage() {
  />
  {isLoading && !data && <SkeletonTable columns={7} rows={6} />}
  {isError && <EmptyState icon="alert-circle" title="Failed to load invoices" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />}
- {data && data.data.length === 0 && (
+ {data && (
+  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 px-5 py-4 border-b border-default bg-canvas">
+  <StatCard
+    label={statusLabel('draft')}
+    value={data.data.filter(i => i.display_status === 'draft').length}
+    helper="in current view"
+    linkTo="?status=draft"
+  />
+  <StatCard
+    label={statusLabel('unpaid')}
+    value={data.data.filter(i => i.display_status === 'unpaid').length}
+    helper="in current view"
+    linkTo="?status=unpaid"
+  />
+  <StatCard
+    label={statusLabel('overdue')}
+    value={data.data.filter(i => i.is_overdue).length}
+    helper="in current view"
+    linkTo="?overdue=1"
+    className="border-danger/30 bg-danger-bg/20"
+  />
+  <StatCard
+    label="Outstanding Balance"
+    value={outstandingBalance}
+    helper="in current view"
+  />
+  </div>
+  )}
+
+{data && data.data.length === 0 && (
  <EmptyState icon="inbox" title="No invoices yet"
  description={can('accounting.invoices.create') ? 'Issue invoices to track receivables.' : 'Nothing here yet.'}
  action={can('accounting.invoices.create') ? <Button variant="primary" onClick={() => navigate('/accounting/invoices/create')}>New invoice</Button> : undefined} />
  )}
+
+
+
  {data && data.data.length > 0 && (
  <div className="px-5 py-4">
   <DataTable

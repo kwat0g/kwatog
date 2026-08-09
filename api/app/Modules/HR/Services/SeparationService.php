@@ -121,7 +121,7 @@ class SeparationService
     {
         $items = $this->settings->get('hr.separation.clearance_checklist');
         if (! is_array($items) || $items === []) {
-            $items = self::defaultChecklist();
+            throw new BusinessRuleException('Separation clearance checklist is not configured. Configure hr.separation.clearance_checklist before initiating a separation.');
         }
         foreach ($items as $item) {
             if (! is_array($item) || ! isset($item['department'], $item['item_key'], $item['label'])) {

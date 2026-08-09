@@ -14,9 +14,9 @@ function scorePassword(password: string): { score: number; label: string; color:
  if (/[^A-Za-z0-9]/.test(password)) score += 1;
 
  if (password.length === 0) return { score: 0, label: '', color: 'bg-transparent' };
- if (score <= 2) return { score, label: 'Weak', color: 'bg-danger' };
- if (score <= 4) return { score, label: 'Fair', color: 'bg-warning' };
- return { score, label: 'Strong', color: 'bg-success' };
+ if (score <= 2) return { score, label: 'Weak', color: 'bg-danger-bg' };
+ if (score <= 4) return { score, label: 'Fair', color: 'bg-warning-bg' };
+ return { score, label: 'Strong', color: 'bg-success-bg' };
 }
 
 export function PasswordStrength({ password, className }: PasswordStrengthProps) {

@@ -146,7 +146,7 @@ export default function ApplicationDetailPage() {
  >
  {nextStage ? `Move to ${stageLabel.get(nextStage) ?? nextStage}` : 'Advance'}
  </Button>
- <Button variant="danger" size="sm" icon={<XCircle size={12} />} onClick={() => setShowRejectDialog(true)}>
+ <Button variant="danger" size="xs" icon={<XCircle size={12} />} onClick={() => setShowRejectDialog(true)}>
  Reject
  </Button>
  </>
@@ -179,7 +179,7 @@ export default function ApplicationDetailPage() {
 
  {/* Reject dialog */}
  {showRejectDialog && (
- <div className="mx-5 mb-4 rounded-md border border-danger/30 bg-danger/5 p-4">
+ <div className="mx-5 mb-4 rounded-md border border-danger/30 bg-danger-bg/5 p-4">
  <p className="text-sm font-medium">Rejection reason:</p>
  <Textarea
  className="mt-2"
@@ -192,7 +192,7 @@ export default function ApplicationDetailPage() {
  <Button variant="danger" size="sm" onClick={() => rejectMutation.mutate(rejectionReason)} disabled={rejectMutation.isPending} loading={rejectMutation.isPending}>
  Confirm Reject
  </Button>
- <Button variant="ghost" size="sm" onClick={() => setShowRejectDialog(false)}>Cancel</Button>
+ <Button variant="ghost" size="xs" onClick={() => setShowRejectDialog(false)}>Cancel</Button>
  </div>
  </div>
  )}
@@ -417,15 +417,15 @@ export default function ApplicationDetailPage() {
  </dl>
 
  {application.rejection_reason && (
- <div className="mt-3 rounded-md bg-danger/5 p-3 border border-danger/20">
- <span className="text-2xs uppercase tracking-wider text-danger font-medium">Rejection reason</span>
+ <div className="mt-3 rounded-md bg-danger-bg/5 p-3 border border-danger/20">
+ <span className="text-2xs uppercase tracking-wider text-danger-fg font-medium">Rejection reason</span>
  <p className="mt-1 text-xs">{application.rejection_reason}</p>
  </div>
  )}
 
  {application.converted_employee && (
- <div className="mt-3 rounded-md bg-success/5 p-3 border border-success/20">
- <span className="text-2xs uppercase tracking-wider text-success font-medium">Converted to employee</span>
+ <div className="mt-3 rounded-md bg-success-bg/5 p-3 border border-success/20">
+ <span className="text-2xs uppercase tracking-wider text-success-fg font-medium">Converted to employee</span>
  <p className="mt-1 text-xs font-mono">{application.converted_employee.employee_no}</p>
  </div>
  )}

@@ -80,7 +80,7 @@ function HistogramTooltip({ active, payload }: { active?: boolean; payload?: Arr
  {bar.binStart.toFixed(4)} to {bar.binEnd.toFixed(4)}
  </div>
  <div className="mt-1">Count: <span className="font-medium">{bar.count}</span></div>
- {bar.outsideSpec && <div className="text-danger mt-0.5">Outside spec limits</div>}
+ {bar.outsideSpec && <div className="text-danger-fg mt-0.5">Outside spec limits</div>}
  </div>
  );
 }

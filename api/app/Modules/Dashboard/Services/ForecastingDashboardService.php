@@ -190,7 +190,7 @@ class ForecastingDashboardService
             'kpi' => [
                 'label' => "Projected Revenue ({$forecastMonths}mo)",
                 'value' => number_format($avgForecast, 2, '.', ''),
-                'unit' => $this->settings->requiredString('accounting.functional_currency_code'),
+                'unit' => $this->functionalCurrency(),
                 'trend' => $trend,
             ],
         ];
@@ -242,7 +242,13 @@ class ForecastingDashboardService
 
             $totalSampled = (int) ($rows->total_sampled ?? 0);
             $defects = (int) ($rows->defects ?? 0);
-            $rate = $totalSampled > 0 ? round(($defects * 100.0) / $totalSampled, 2) : 0.0;
+            // A month with no completed inspections has no defect-rate
+            // observation. Do not turn that absence into a perfect 0% month;
+            // omit it from the evidence series instead.
+            if ($totalSampled === 0) {
+                continue;
+            }
+            $rate = round(($defects * 100.0) / $totalSampled, 2);
 
             $historical[] = [
                 'year' => $m['year'],
@@ -251,6 +257,10 @@ class ForecastingDashboardService
                 'total' => $totalSampled,
                 'defects' => $defects,
             ];
+        }
+
+        if ($historical === []) {
+            return $this->emptyResponse();
         }
 
         $values = array_map(fn ($r) => $r['value'], $historical);
@@ -398,6 +408,12 @@ class ForecastingDashboardService
         return $this->settings->requiredInt('forecasting.default_horizon_months', 1, 12);
     }
 
+    private function functionalCurrency(): string
+    {
+        $value = $this->settings->get('accounting.functional_currency_code');
+        return is_string($value) && trim($value) !== '' ? strtoupper(trim($value)) : '';
+    }
+
     /**
      * Empty response used when the schema is missing a required table.
      */
@@ -410,7 +426,7 @@ class ForecastingDashboardService
             'kpi' => [
                 'label' => 'Forecast',
                 'value' => '—',
-                'unit' => '—',
+                'unit' => '',
                 'trend' => 'stable',
             ],
         ];

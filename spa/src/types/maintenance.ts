@@ -160,7 +160,7 @@ export interface DowntimeSummary {
  breakdown_count: number;
  mtbf_hours: number | null;
  mttr_minutes: number | null;
- availability_pct: number;
+  availability_pct: number | null;
  category_breakdown: DowntimeCategoryBreakdown[];
 }
 

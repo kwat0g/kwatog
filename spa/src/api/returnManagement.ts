@@ -29,13 +29,13 @@ export const returnManagementApi = {
  client.post(`/return-management/return-requests/${id}/receive`, { received_quantities: receivedQuantities }).then((r) => r.data.data as ReturnRequest),
 
  inspect: (id: string, internalNotes?: string) =>
- client.post(`/return-management/return-requests/${id}/inspect`, { internal_notes: internalNotes }).then((r) => r.data.data as ReturnRequest),
-
- dispose: (id: string, dispositions: DispositionPayload[], createReplacementPo?: boolean) =>
- client.post<{ data: ReturnRequest }>(`/return-management/return-requests/${id}/dispose`, { dispositions, create_replacement_po: createReplacementPo }).then((r) => r.data.data),
-
- complete: (id: string, locationId: string) =>
- client.post(`/return-management/return-requests/${id}/complete`, { location_id: locationId }).then((r) => r.data.data as ReturnRequest),
+ client.post(`/return-management/return-requests/${id}/inspect`, { internal_notes: internalNotes }).then((r) => r.data.data as ReturnRequest), // 2026-08-08 — restock lines are received back into stock at dispose time,
+ // so customer-return disposals carry the destination warehouse location.
+ dispose: (id: string, dispositions: DispositionPayload[], createReplacementPo?: boolean, locationId?: string) =>
+  client.post<{ data: ReturnRequest }>(`/return-management/return-requests/${id}/dispose`, { dispositions, create_replacement_po: createReplacementPo, location_id: locationId }).then((r) => r.data.data), // Customer-return restock lines already moved at dispose — complete() only
+ // needs a location when a line still has to move (supplier returns).
+ complete: (id: string, locationId?: string) =>
+  client.post(`/return-management/return-requests/${id}/complete`, locationId ? { location_id: locationId } : {}).then((r) => r.data.data as ReturnRequest),
 
  reject: (id: string, reason?: string) =>
  client.post(`/return-management/return-requests/${id}/reject`, { reason }).then((r) => r.data.data as ReturnRequest),

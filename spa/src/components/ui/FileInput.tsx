@@ -24,7 +24,7 @@ export const FileInput = forwardRef<HTMLInputElement, FileInputProps>(
  {label && (
  <label htmlFor={fileId} className="text-xs text-muted font-medium">
  {label}
- {required && <span className="text-danger ml-0.5">*</span>}
+ {required && <span className="text-danger-fg ml-0.5">*</span>}
  </label>
  )}
  <input
@@ -45,7 +45,7 @@ export const FileInput = forwardRef<HTMLInputElement, FileInputProps>(
  {...rest}
  />
  {error && (
- <span id={`${fileId}-error`} className="text-xs text-danger">{error}</span>
+ <span id={`${fileId}-error`} className="text-xs text-danger-fg">{error}</span>
  )}
  {helper && !error ? (
  <span id={`${fileId}-helper`} className="text-xs text-muted">{helper}</span>

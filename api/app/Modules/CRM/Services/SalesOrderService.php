@@ -215,7 +215,7 @@ class SalesOrderService
             }
 
             $isVatable = $this->taxPolicy->isVatRegistered();
-            $vat   = $isVatable ? round($subtotal * (float) $this->taxPolicy->vatRate(), 2) : 0.0;
+            $vat   = $isVatable ? round($subtotal * (float) $this->taxPolicy->requiredVatRate(), 2) : 0.0;
             $total = round($subtotal + $vat, 2);
 
             $so = SalesOrder::create([
@@ -279,7 +279,7 @@ class SalesOrderService
                 $subtotal += $lineTotal;
             }
             $isVatable = $this->taxPolicy->isVatRegistered();
-            $vat   = $isVatable ? round($subtotal * (float) $this->taxPolicy->vatRate(), 2) : 0.0;
+            $vat   = $isVatable ? round($subtotal * (float) $this->taxPolicy->requiredVatRate(), 2) : 0.0;
             $total = round($subtotal + $vat, 2);
 
             $so->update([

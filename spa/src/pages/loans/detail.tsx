@@ -7,7 +7,7 @@ import { loansApi } from '@/api/loans';
 import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Modal } from '@/components/ui/Modal';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { Panel } from '@/components/ui/Panel';
 import { Textarea } from '@/components/ui/Textarea';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -84,8 +84,8 @@ export default function LoanDetailPage() {
  <>
  {isPending && can('loans.approve') && (
  <>
- <Button variant="primary" size="sm" icon={<Check size={12} />} disabled={approve.isPending} loading={approve.isPending} onClick={() => setConfirmApprove(true)}>Approve</Button>
- <Button variant="danger" size="sm" icon={<X size={12} />} onClick={() => setReject(true)}>Reject</Button>
+ <Button variant="primary" size="xs" icon={<Check size={12} />} disabled={approve.isPending} loading={approve.isPending} onClick={() => setConfirmApprove(true)}>Approve</Button>
+ <Button variant="danger" size="xs" icon={<X size={12} />} onClick={() => setReject(true)}>Reject</Button>
  </>
  )}
  {(isPending || loan.status === 'active') && can('loans.approve') && (
@@ -115,7 +115,7 @@ export default function LoanDetailPage() {
  <span className="font-mono tabular-nums">{remainingPercent.toFixed(1)}%</span>
  </div>
  <div className="h-1.5 bg-elevated rounded-sm overflow-hidden">
- <div className="h-full bg-success" style={{ width: `${remainingPercent}%` }} />
+ <div className="h-full bg-success-bg" style={{ width: `${remainingPercent}%` }} />
  </div>
  </div>
  <div className="grid grid-cols-2 gap-4 mt-4 text-sm">
@@ -192,12 +192,12 @@ export default function LoanDetailPage() {
  {reject && (
  <Modal isOpen onClose={() => { setReject(false); setReason(''); }} size="sm" title="Reject loan request">
  <Textarea label="Reason for rejection" required value={reason} onChange={(e) => setReason(e.target.value)} rows={3} />
- <div className="flex justify-end gap-2 pt-3 mt-3 border-t border-default">
+ <ModalFooter>
  <Button variant="secondary" onClick={() => { setReject(false); setReason(''); }}>Cancel</Button>
  <Button variant="danger" disabled={!reason.trim() || rejectMut.isPending} loading={rejectMut.isPending} onClick={() => rejectMut.mutate()}>
  {rejectMut.isPending ? 'Rejecting…' : 'Confirm reject'}
  </Button>
- </div>
+ </ModalFooter>
  </Modal>
  )}
 

@@ -45,16 +45,14 @@ class BusinessPolicyService
         return (float) $value;
     }
 
-    public function functionalCurrencyCode(): string
+    public function functionalCurrencyCode(): ?string
     {
-        $code = (string) $this->settings->get('accounting.functional_currency_code', 'PHP');
-        return strtoupper(trim($code) !== '' ? $code : 'PHP');
+        return $this->optionalCode('accounting.functional_currency_code');
     }
 
-    public function reportingCurrencyCode(): string
+    public function reportingCurrencyCode(): ?string
     {
-        $code = (string) $this->settings->get('accounting.reporting_currency_code', 'PHP');
-        return strtoupper(trim($code) !== '' ? $code : 'PHP');
+        return $this->optionalCode('accounting.reporting_currency_code');
     }
 
     public function translationAdjustmentAccountCode(): string
@@ -62,7 +60,7 @@ class BusinessPolicyService
         return $this->settings->requiredString('accounting.statements.translation_adjustment_code');
     }
 
-    /** @return array<string, int|float|string> */
+    /** @return array<string, int|float|string|null> */
     public function defaults(): array
     {
         return [
@@ -96,5 +94,15 @@ class BusinessPolicyService
         }
 
         return $value;
+    }
+
+    private function optionalCode(string $key): ?string
+    {
+        $value = $this->settings->get($key);
+        if (! is_string($value) || trim($value) === '') {
+            return null;
+        }
+
+        return strtoupper(trim($value));
     }
 }

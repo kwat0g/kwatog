@@ -87,7 +87,8 @@ export default function CreatePurchaseRequestPage() {
     0,
   );
 
-  // Unit of measure is copied from the selected item — editable only for ad-hoc lines.
+  // Catalog lines inherit description / unit / est. price from the selected
+  // Item record — all locked. Only ad-hoc lines (no item) are free-form.
   const itemById = useMemo(
     () => new Map((items.data?.data ?? []).map((it) => [it.id, it])),
     [items.data],
@@ -95,7 +96,13 @@ export default function CreatePurchaseRequestPage() {
   const onLineItemChange = (index: number, itemId: string) => {
     setValue(`items.${index}.item_id`, itemId);
     const item = itemById.get(itemId);
-    setValue(`items.${index}.unit`, item?.unit_of_measure ?? '');
+    if (item) {
+      setValue(`items.${index}.description`, item.description || item.name);
+      setValue(`items.${index}.unit`, item.unit_of_measure);
+      setValue(`items.${index}.estimated_unit_price`, item.standard_cost);
+    } else {
+      setValue(`items.${index}.unit`, '');
+    }
   };
 
   const create = useMutation({
@@ -232,7 +239,7 @@ export default function CreatePurchaseRequestPage() {
                       <option value="">— ad hoc —</option>
                       {items.data?.data.map((it) => (
                         <option key={it.id} value={it.id}>
-                          {it.code}
+                          {it.code} — {it.name}
                         </option>
                       ))}
                     </Select>
@@ -242,6 +249,12 @@ export default function CreatePurchaseRequestPage() {
                       fieldSize="sm"
                       aria-label="Description"
                       {...register(`items.${i}.description` as const)}
+                      readOnly={!!watched[i]?.item_id}
+                      title={
+                        watched[i]?.item_id
+                          ? 'Description is copied from the selected item'
+                          : 'Editable for ad-hoc lines only'
+                      }
                       error={errors.items?.[i]?.description?.message}
                     />
                   </Td>
@@ -279,6 +292,12 @@ export default function CreatePurchaseRequestPage() {
                       aria-label="Estimated unit price"
                       {...numberInputProps()}
                       {...register(`items.${i}.estimated_unit_price` as const)}
+                      readOnly={!!watched[i]?.item_id}
+                      title={
+                        watched[i]?.item_id
+                          ? 'Est. price is copied from the item standard cost'
+                          : 'Editable for ad-hoc lines only'
+                      }
                     />
                   </Td>
                   <Td align="right" mono>
@@ -297,7 +316,7 @@ export default function CreatePurchaseRequestPage() {
                         icon={<Trash2 size={12} />}
                         onClick={() => remove(i)}
                         aria-label="Remove line"
-                        className="text-muted hover:text-danger"
+                        className="text-muted hover:text-danger-fg"
                       />
                     )}
                   </Td>

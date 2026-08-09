@@ -11,6 +11,7 @@ import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { StatCard } from '@/components/ui/StatCard';
 import { StageBreakdown } from '@/components/ui/StageBreakdown';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { DashboardBody, KpiGrid } from '@/components/dashboard/DashboardShell';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
 import type { JobPosting, JobApplication, ApplicationStage } from '@/types/recruitment';
@@ -48,6 +49,7 @@ export default function RecruitmentDashboard() {
  const applications = applicationsData?.data ?? [];
  const totalApps = applicationsData?.meta?.total ?? 0;
  const stageLabel = new Map((recruitmentOptions?.application_stages ?? []).map((stage) => [stage.value, stage.label]));
+ const postingStatusLabel = new Map((recruitmentOptions?.posting_statuses ?? []).map((status) => [status.value, status.label]));
  const pipelineStages = (recruitmentOptions?.application_stages ?? []).filter((stage) => !stage.is_terminal);
 
  const stageCounts = applications.reduce<Record<string, number>>((acc, app: JobApplication) => {
@@ -91,16 +93,42 @@ export default function RecruitmentDashboard() {
  }
  />
 
+ <DashboardBody>
  {/* KPI Cards Row */}
- <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-5 py-4 border-b border-default">
- <StatCard label="Open Postings" value={openPostings.length} />
+ <KpiGrid count={4}>
+ <StatCard label={`${postingStatusLabel.get('open') ?? '—'} postings`} value={openPostings.length} />
  <StatCard label="Total Applications" value={totalApps} />
- <StatCard label="New Applications" value={stageCounts['new'] ?? 0} />
- <StatCard label="In Interview" value={stageCounts['interview'] ?? 0} />
- </div>
+ <StatCard label={`${stageLabel.get('new') ?? '—'} applications`} value={stageCounts['new'] ?? 0} />
+ <StatCard label={`${stageLabel.get('interview') ?? '—'} applications`} value={stageCounts['interview'] ?? 0} />
+ </KpiGrid>
 
- {/* Two-column: Open Postings + Pipeline */}
- <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 px-5 py-4">
+ <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+ {/* Left Column (2/3) */}
+ <div className="lg:col-span-2 space-y-3">
+ <Panel
+ title="Recent Applications"
+ actions={
+ <Link to="/hr/recruitment/applications" className="inline-flex items-center gap-1 text-xs text-accent hover:underline">
+ View all <ArrowRight size={12} />
+ </Link>
+ }
+ noPadding
+ >
+ {applications.length === 0 ? (
+ <EmptyState
+ icon="inbox"
+ title="No applications yet"
+ description="Applications will appear here as candidates apply."
+ />
+ ) : (
+ <DataTable
+ onRowClick={(row) => navigate(`/hr/recruitment/applications/${row.id}`)}
+ columns={appColumns}
+ data={applications}
+ />
+ )}
+ </Panel>
+
  <Panel
  title="Open Postings"
  actions={
@@ -129,7 +157,10 @@ export default function RecruitmentDashboard() {
  />
  )}
  </Panel>
+ </div>
 
+ {/* Right Column (1/3) */}
+ <div className="space-y-3">
  <StageBreakdown
  title="Application Pipeline"
  stages={pipelineStages.map((stage) => {
@@ -144,33 +175,8 @@ export default function RecruitmentDashboard() {
  })}
  />
  </div>
-
- {/* Recent Applications */}
- <div className="px-5 pb-4">
- <Panel
- title="Recent Applications"
- actions={
- <Link to="/hr/recruitment/applications" className="inline-flex items-center gap-1 text-xs text-accent hover:underline">
- View all <ArrowRight size={12} />
- </Link>
- }
- noPadding
- >
- {applications.length === 0 ? (
- <EmptyState
- icon="inbox"
- title="No applications yet"
- description="Applications will appear here as candidates apply."
- />
- ) : (
- <DataTable
- onRowClick={(row) => navigate(`/hr/recruitment/applications/${row.id}`)}
- columns={appColumns}
- data={applications}
- />
- )}
- </Panel>
  </div>
+ </DashboardBody>
  </div>
  );
 }

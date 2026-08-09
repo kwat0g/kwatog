@@ -15,6 +15,7 @@ use App\Modules\Maintenance\Enums\MaintenanceWorkOrderStatus;
 use App\Modules\Maintenance\Enums\MaintenanceWorkOrderType;
 use App\Modules\Maintenance\Models\MachineConditionReading;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
+use App\Modules\Maintenance\Services\PredictiveMaintenanceService;
 use App\Modules\MRP\Models\Machine;
 use Database\Seeders\MachineSeeder;
 use Database\Seeders\RolePermissionSeeder;
@@ -24,7 +25,9 @@ use Tests\TestCase;
 
 /**
  * Task 9 — Maintenance Mobile view backend tests.
- * Tests the API endpoints used by the mobile maintenance tech PWA.
+ * Tests the API endpoints used by the mobile maintenance tech PWA (work-order
+ * flow) plus the service-level condition-reading automation (kept code — the
+ * condition-reading HTTP surface was hidden 2026-08-08, see SCOPE-CUT-AUDIT).
  */
 class MobileMaintenanceTest extends TestCase
 {
@@ -145,27 +148,31 @@ class MobileMaintenanceTest extends TestCase
         $response->assertJsonPath('data.status', 'in_progress');
     }
 
-    // ─── Condition readings ──────────────────────────────────────────
+    // ─── Condition readings (service-level — routes hidden 2026-08-08) ─
+    //
+    // The condition-reading HTTP surface (desktop page, mobile entry, backend
+    // routes) is hidden per scope cut (no IoT/edge connection to machines).
+    // PredictiveMaintenanceService is kept code, so its breach → auto-corrective
+    // WO automation keeps service-level coverage here.
 
-    public function test_mobile_condition_reading_records_normal_value(): void
+    public function test_condition_reading_records_normal_value(): void
     {
-        $response = $this->actingAs($this->admin)
-            ->postJson('/api/v1/maintenance/condition-readings', [
-                'machine_id' => $this->machine->id,
-                'metric'     => 'temperature',
-                'value'      => 55.0,
-                'source'     => 'manual',
-            ]);
+        $result = app(PredictiveMaintenanceService::class)->recordAndEvaluate([
+            'machine_id' => $this->machine->id,
+            'metric'     => 'temperature',
+            'value'      => 55.0,
+            'source'     => 'manual',
+        ], $this->admin);
 
-        $response->assertCreated();
-        $response->assertJsonPath('triggered', false);
+        $this->assertFalse($result['triggered']);
         $this->assertDatabaseHas('machine_condition_readings', [
             'machine_id' => $this->machine->id,
             'metric'     => 'temperature',
+            'value'      => 55.0,
         ]);
     }
 
-    public function test_mobile_condition_reading_triggers_alert_on_breach(): void
+    public function test_condition_reading_triggers_alert_on_breach(): void
     {
         // Seed 3 consecutive breach readings (BREACH_WINDOW = 3)
         foreach (range(1, 2) as $i) {
@@ -180,22 +187,20 @@ class MobileMaintenanceTest extends TestCase
             ]);
         }
 
-        // Third breach reading via API should trigger WO
-        $response = $this->actingAs($this->admin)
-            ->postJson('/api/v1/maintenance/condition-readings', [
-                'machine_id' => $this->machine->id,
-                'metric'     => 'temperature',
-                'value'      => 92.0,
-                'source'     => 'manual',
-            ]);
+        // Third breach reading should trigger a corrective WO
+        $result = app(PredictiveMaintenanceService::class)->recordAndEvaluate([
+            'machine_id' => $this->machine->id,
+            'metric'     => 'temperature',
+            'value'      => 92.0,
+            'source'     => 'manual',
+        ], $this->admin);
 
-        $response->assertCreated();
-        $response->assertJsonPath('triggered', true);
-        $this->assertNotNull($response->json('work_order'));
-        $this->assertNotNull($response->json('work_order.mwo_number'));
+        $this->assertTrue($result['triggered']);
+        $this->assertNotNull($result['work_order']);
+        $this->assertNotNull($result['work_order']->mwo_number);
     }
 
-    public function test_mobile_health_snapshot_returns_all_metrics(): void
+    public function test_health_snapshot_returns_all_metrics(): void
     {
         // Record one reading so snapshot has data
         MachineConditionReading::create([
@@ -208,11 +213,10 @@ class MobileMaintenanceTest extends TestCase
             'recorded_by' => $this->admin->id,
         ]);
 
-        $response = $this->actingAs($this->admin)
-            ->getJson("/api/v1/maintenance/condition-readings/health-snapshot?machine_id={$this->machine->id}");
-
-        $response->assertOk();
-        $metrics = collect($response->json('data'))->pluck('metric')->toArray();
+        $metrics = collect(app(PredictiveMaintenanceService::class)
+            ->machineHealthSnapshot($this->machine->id))
+            ->pluck('metric')
+            ->toArray();
         $this->assertContains('temperature', $metrics);
         $this->assertContains('vibration', $metrics);
         $this->assertContains('pressure', $metrics);

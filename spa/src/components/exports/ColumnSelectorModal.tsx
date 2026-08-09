@@ -88,7 +88,7 @@ export function ColumnSelectorModal({
  <div className="text-sm text-muted py-4 text-center">Loading columns…</div>
  )}
  {isError && (
- <div className="text-sm text-danger py-4 text-center">
+ <div className="text-sm text-danger-fg py-4 text-center">
  Failed to load column definitions. Please try again.
  </div>
  )}

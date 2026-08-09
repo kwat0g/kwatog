@@ -11,10 +11,10 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const BUCKET_COLORS: Record<string, string> = {
- current: 'text-success',
- d30_days: 'text-warning',
- d60_days: 'text-warning',
- d90_plus: 'text-danger',
+ current: 'text-success-fg',
+ d30_days: 'text-warning-fg',
+ d60_days: 'text-warning-fg',
+ d90_plus: 'text-danger-fg',
 };
 
 export default function StatementOfAccountPage() {

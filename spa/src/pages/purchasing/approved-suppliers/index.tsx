@@ -18,16 +18,17 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
-import { Modal } from '@/components/ui/Modal';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import { Switch } from '@/components/ui/Switch';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { FilterBar } from '@/components/ui/FilterBar';
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { numberInputProps } from '@/lib/numberInput';
 import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
-import type { ListParams } from '@/types';
 import type { ApprovedSupplier } from '@/types/purchasing';
 
 const schema = z.object({
@@ -43,7 +44,7 @@ export default function ApprovedSuppliersPage() {
  const qc = useQueryClient();
  const { can } = usePermission();
  const canManage = can('purchasing.po.create');
- const [filters, setFilters] = useState<ListParams>({ page: 1, per_page: 50 });
+ const [filters, setFilters] = useUrlFilters({ search: '', page: 1, per_page: 50 });
  const [open, setOpen] = useState(false);
  const [confirmDelete, setConfirmDelete] = useState<ApprovedSupplier | null>(null);
  const [confirmRestore, setConfirmRestore] = useState<ApprovedSupplier | null>(null);
@@ -125,7 +126,7 @@ export default function ApprovedSuppliersPage() {
  iconOnly
  aria-label={scope === 'only' ? 'Restore approved supplier' : 'Remove approved supplier'}
  onClick={() => (scope === 'only' ? setConfirmRestore(r) : setConfirmDelete(r))}
- className={scope === 'only' ? 'text-muted hover:text-primary' : 'text-muted hover:text-danger'}
+ className={scope === 'only' ? 'text-muted hover:text-primary' : 'text-muted hover:text-danger-fg'}
  icon={scope === 'only' ? <ArchiveRestore size={14} /> : <Trash2 size={14} />}
  />
  ),
@@ -138,12 +139,13 @@ export default function ApprovedSuppliersPage() {
  title="Approved suppliers"
  subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'link' : 'links'}` : undefined}
  actions={canManage ? (
- <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => setOpen(true)}>
+ <Button variant="primary" size="xs" icon={<Plus size={14} />} onClick={() => setOpen(true)}>
  Link supplier
  </Button>
  ) : null}
  />
- <div className="px-5 py-4 flex justify-end">
+ <div className="px-5 py-4 flex justify-between items-center gap-3">
+ <FilterBar onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))} searchPlaceholder="Search supplier..." />
  <ArchiveFilter value={scope} onChange={setScope} />
  </div>
  {isLoading && !data && <SkeletonTable columns={canManage ? 8 : 7} rows={6} />}
@@ -293,12 +295,12 @@ function ApprovedSupplierForm({ onClose, onSaved }: { onClose: () => void; onSav
  </div>
  <Switch label="Preferred supplier" {...register('is_preferred')} />
  </div>
- <div className="flex justify-end gap-2 pt-3 mt-4 border-t border-default">
+ <ModalFooter>
  <Button type="button" variant="secondary" onClick={onClose} disabled={m.isPending}>Cancel</Button>
  <Button type="submit" variant="primary" loading={m.isPending || policies.isLoading} disabled={m.isPending || isSubmitting || !policies.data}>
  Add
  </Button>
- </div>
+ </ModalFooter>
  </form>
  );
 }

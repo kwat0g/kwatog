@@ -1,6 +1,6 @@
 import { client } from '../client';
 import type { ApiSuccess, PaginatedResponse, ListParams } from '@/types';
-import type { GoodsReceiptNote, CreateGrnData } from '@/types/inventory';
+import type { GoodsReceiptNote, CreateGrnData, FinalizeGrnData } from '@/types/inventory';
 
 export interface ReceiveGoodsData {
  purchase_order_id: string;
@@ -32,6 +32,8 @@ export const grnApi = {
  client.get<ApiSuccess<GoodsReceiptNote>>(`/inventory/grn/${id}`).then((r) => r.data.data),
  create: (data: CreateGrnData) =>
  client.post<ApiSuccess<GoodsReceiptNote>>('/inventory/grn', data).then((r) => r.data.data),
+ finalize: (id: string, data: FinalizeGrnData) =>
+ client.patch<ApiSuccess<GoodsReceiptNote>>(`/inventory/grn/${id}/finalize`, data).then((r) => r.data.data),
  accept: (id: string, item_accepted_map?: Record<number, string>) =>
  client.patch<ApiSuccess<GoodsReceiptNote>>(`/inventory/grn/${id}/accept`, { item_accepted_map }).then((r) => r.data.data),
  reject: (id: string, reason: string) =>

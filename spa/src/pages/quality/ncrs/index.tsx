@@ -11,6 +11,7 @@ import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import { StatCard } from '@/components/ui/StatCard';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
@@ -29,7 +30,7 @@ const SEVERITY_CHIP: Record<NcrSeverity, 'success' | 'danger' | 'warning' | 'neu
   critical: 'danger' };
 
 const DEFAULT_FILTERS: NcrListParams = {
-  page: 1, per_page: 25,
+  page: 1, per_page: 25, status: 'open',
 };
 
 export default function NcrsListPage() {
@@ -177,13 +178,45 @@ export default function NcrsListPage() {
  }
  />
  )}
- {data && data.data.length === 0 && (
+ {data && (
+  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 px-5 py-4 border-b border-default bg-canvas">
+  <StatCard
+    label={labels.get('open') ?? '—'}
+    value={data.data.filter(i => i.status === 'open').length}
+    helper="in current view"
+    linkTo="?status=open"
+  />
+  <StatCard
+    label={labels.get('in_progress') ?? '—'}
+    value={data.data.filter(i => i.status === 'in_progress').length}
+    helper="in current view"
+    linkTo="?status=in_progress"
+  />
+  <StatCard
+    label={`${labels.get('high') ?? '—'} severity`}
+    value={data.data.filter(i => i.severity === 'high').length}
+    helper="in current view"
+    linkTo="?severity=high"
+    className="border-warning/30 bg-warning-bg/20"
+  />
+  <StatCard
+    label={`${labels.get('critical') ?? '—'} severity`}
+    value={data.data.filter(i => i.severity === 'critical').length}
+    helper="in current view"
+    linkTo="?severity=critical"
+    className="border-danger/30 bg-danger-bg/20"
+  />
+  </div>
+ )}
+
+{data && data.data.length === 0 && (
  <EmptyState
  icon="alert-triangle"
  title="No NCRs"
  description="When an inspection fails or a customer complaint is filed, a non-conformance report will appear here."
  />
  )}
+
  {data && data.data.length > 0 && (
  <div className="px-5 py-4">
   <DataTable

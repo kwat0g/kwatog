@@ -347,7 +347,7 @@ export default function InspectionSpecEditorPage() {
  aria-label="Remove parameter"
  onClick={() => remove(i)}
  disabled={fields.length === 1}
- className="text-muted hover:text-danger"
+ className="text-muted hover:text-danger-fg"
  />
  </Td>
  </tr>
@@ -368,7 +368,7 @@ export default function InspectionSpecEditorPage() {
  </Button>
  </div>
 
- {errors.items?.message && <p className="mt-2 text-xs text-danger">{errors.items.message as string}</p>}
+ {errors.items?.message && <p className="mt-2 text-xs text-danger-fg">{errors.items.message as string}</p>}
  </fieldset>
 
  {spcData.data && cpkThresholds && Object.keys(spcData.data.data).length > 0 && (
@@ -391,8 +391,8 @@ export default function InspectionSpecEditorPage() {
  <tbody>
  {Object.entries(spcData.data.data).map(([id, s]) => {
  const item = s as SpcResult;
- const cpColor = item.cp >= cpkThresholds.ongoing ? 'text-success' : item.cp >= cpkThresholds.action ? 'text-warning' : 'text-danger';
- const cpkColor = item.cpk >= cpkThresholds.ongoing ? 'text-success' : item.cpk >= cpkThresholds.action ? 'text-warning' : 'text-danger';
+ const cpColor = item.cp >= cpkThresholds.ongoing ? 'text-success-fg' : item.cp >= cpkThresholds.action ? 'text-warning-fg' : 'text-danger-fg';
+ const cpkColor = item.cpk >= cpkThresholds.ongoing ? 'text-success-fg' : item.cpk >= cpkThresholds.action ? 'text-warning-fg' : 'text-danger-fg';
  return (
  <tr key={id} className={trCls}>
  <Td>

@@ -9,12 +9,28 @@ import { Button } from '@/components/ui/Button';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { ArrowLeftRight } from 'lucide-react';
+import { StockMovementsTab } from '@/pages/inventory/movements';
 import type { StockLevel } from '@/types/inventory';
 
 export default function StockLevelsPage() {
  const navigate = useNavigate();
  const [search] = useSearchParams();
  const itemFilter = search.get('item_id') ?? '';
+ const typeFilter = search.get('type') ?? '';
+ // Scope cut 2026-08-08: Stock Movements folded into this page as a view toggle.
+ // Deep links (item detail "View movements", stock-adjustment back) land on the
+ // movements tab via ?view=movements; ?type=transfer filters the movement list.
+ const [view, setView] = useState<'levels' | 'movements'>(search.get('view') === 'movements' ? 'movements' : 'levels');
+ const toggleView = () => {
+  const next = view === 'levels' ? 'movements' : 'levels';
+  setView(next);
+  // Keep the URL in sync so refresh/back restore the view (useUrlFilters convention).
+  const params = new URLSearchParams(search.toString());
+  if (next === 'movements') params.set('view', 'movements');
+  else params.delete('view');
+  navigate(`?${params.toString()}`, { replace: true });
+ };
  const [filters, setFilters] = useState<Record<string, unknown>>({ page: 1, per_page: 50, item_id: itemFilter || undefined });
 
  const { data, isLoading, isError, refetch } = useQuery({
@@ -50,7 +66,20 @@ export default function StockLevelsPage() {
 
  return (
  <div>
- <PageHeader title="Stock levels" backTo="/inventory/items" backLabel="Items" subtitle={data ? `${data.meta.total} entries` : undefined} />
+ <PageHeader
+ title={view === 'levels' ? 'Stock levels' : 'Stock movements'}
+ subtitle={view === 'levels' ? (data ? `${data.meta.total} entries` : undefined) : undefined}
+ actions={
+ <Button variant="secondary" size="sm" icon={<ArrowLeftRight size={14} />}
+ onClick={toggleView}>
+ {view === 'levels' ? 'Movements' : 'Stock Levels'}
+ </Button>
+ }
+ />
+ {view === 'movements' ? (
+ <StockMovementsTab initialItemId={itemFilter || undefined} initialMovementType={typeFilter || undefined} />
+ ) : (
+ <>
  <FilterBar filters={filterConfig} values={filters}
  onSearch={(s) => setFilters(f => ({ ...f, search: s, page: 1 }))}
  onFilter={(k, v) => setFilters(f => ({ ...f, [k]: v, page: 1 }))}
@@ -63,6 +92,8 @@ export default function StockLevelsPage() {
  <DataTable onRowClick={(r) => navigate(`/inventory/items/${r.item?.id}`)}
  columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters(f => ({ ...f, page }))} />
  </div>
+ )}
+ </>
  )}
  </div>
  );

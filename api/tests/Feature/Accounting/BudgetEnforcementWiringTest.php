@@ -8,6 +8,7 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Budget;
 use App\Modules\Accounting\Models\FiscalYear;
 use App\Modules\HR\Models\Department;
+use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Auth\Models\Role;
@@ -34,6 +35,14 @@ class BudgetEnforcementWiringTest extends TestCase
         ]);
     }
 
+    /** POs must originate from an approved PR (PR → approved → PO). */
+    private function approvedPr(array $attrs = []): PurchaseRequest
+    {
+        $pr = PurchaseRequest::factory()->create($attrs);
+        $pr->forceFill(['status' => PurchaseRequestStatus::Approved->value])->save();
+        return $pr;
+    }
+
     public function test_po_creation_persists_warning_without_blocking_when_budget_exhausted(): void
     {
         app(SettingsService::class)->set('budgeting.enforcement_mode', 'warn');
@@ -49,7 +58,7 @@ class BudgetEnforcementWiringTest extends TestCase
             'status'          => 'approved',
         ]);
         $user = $this->makeAdmin();
-        $pr   = PurchaseRequest::factory()->create(['department_id' => $dept->id]);
+        $pr   = $this->approvedPr(['department_id' => $dept->id]);
 
         $response = $this->actingAs($user)
             ->postJson('/api/v1/purchasing/purchase-orders', [
@@ -86,7 +95,7 @@ class BudgetEnforcementWiringTest extends TestCase
             'status'          => 'approved',
         ]);
         $user = $this->makeAdmin();
-        $pr   = PurchaseRequest::factory()->create(['department_id' => $dept->id]);
+        $pr   = $this->approvedPr(['department_id' => $dept->id]);
 
         $this->actingAs($user)
             ->postJson('/api/v1/purchasing/purchase-orders', [
@@ -114,7 +123,7 @@ class BudgetEnforcementWiringTest extends TestCase
             'status'          => 'approved',
         ]);
         $user = $this->makeAdmin();
-        $pr   = PurchaseRequest::factory()->create(['department_id' => $dept->id]);
+        $pr   = $this->approvedPr(['department_id' => $dept->id]);
 
         $this->actingAs($user)
             ->postJson('/api/v1/purchasing/purchase-orders', [

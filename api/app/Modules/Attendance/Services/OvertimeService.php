@@ -282,9 +282,16 @@ class OvertimeService
     public function options(): array
     {
         return [
-            'minimum_hours'      => (float) $this->settings->requiredInt('attendance.ot.minimum_minutes', 30) / 60,
-            'maximum_hours'      => $this->settings->requiredFloat('attendance.ot.admin_max_hours', 4),
-            'request_min_hours'  => $this->settings->requiredFloat('attendance.ot.request_min_hours', 0.5),
+            'statuses'           => array_map(
+                static fn (OvertimeStatus $status): array => [
+                    'value' => $status->value,
+                    'label' => $status->label(),
+                ],
+                OvertimeStatus::cases(),
+            ),
+            'minimum_hours'      => (float) $this->settings->requiredInt('attendance.ot.minimum_minutes', 0) / 60,
+            'maximum_hours'      => $this->settings->requiredFloat('attendance.ot.admin_max_hours', 0),
+            'request_min_hours'  => $this->settings->requiredFloat('attendance.ot.request_min_hours', 0),
             'request_future_days'=> $this->settings->requiredInt('attendance.ot.request_future_days', 0),
             'request_past_days'  => $this->settings->requiredInt('attendance.ot.request_past_days', 0),
             'premium_multiplier' => $this->settings->requiredFloat('payroll.overtime.ordinary_multiplier', 1),

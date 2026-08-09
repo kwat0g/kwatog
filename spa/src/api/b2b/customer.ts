@@ -15,6 +15,7 @@ import type {
  DeliveryScheduleLine,
 } from '@/types/b2b';
 import type { ChainStep } from '@/types/chain';
+import type { BusinessPolicies } from '@/api/businessPolicies';
 
 const { client: portalClient, setToken } = createPortalClient('ogami_customer_portal_token');
 
@@ -42,6 +43,12 @@ export const customerPortalApi = {
 
  me: async () => {
  const { data } = await portalClient.get<{ data: CustomerPortalUser }>('/b2b/customer/me');
+ return data.data;
+ },
+
+ // Shared read-only policy values, authenticated with the portal bearer token.
+ businessPolicies: async () => {
+ const { data } = await portalClient.get<{ data: BusinessPolicies }>('/business-policies');
  return data.data;
  },
 

@@ -54,6 +54,7 @@ export function chipVariantForStatus(status: string | null | undefined): ChipVar
  case 'delivered':
  case 'confirmed':
  case 'posted':
+ case 'present':
  return 'success';
  case 'in_production':
  case 'in_progress':
@@ -61,6 +62,7 @@ export function chipVariantForStatus(status: string | null | undefined): ChipVar
  case 'scheduled':
  case 'on_leave':
  case 'in_transit':
+ case 'holiday':
  return 'info';
  case 'pending':
  case 'pending_dept':
@@ -72,6 +74,8 @@ export function chipVariantForStatus(status: string | null | undefined): ChipVar
  case 'partial':
  case 'partially_received':
  case 'maintenance':
+ case 'late':
+ case 'halfday':
  return 'warning';
  case 'rejected':
  case 'failed':
@@ -81,12 +85,14 @@ export function chipVariantForStatus(status: string | null | undefined): ChipVar
  case 'material_short':
  case 'terminated':
  case 'unpaid':
+ case 'absent':
  return 'danger';
  case 'cancelled':
  case 'inactive':
  case 'closed':
  case 'resigned':
  case 'retired':
+ case 'rest_day':
  default:
  return 'neutral';
  }

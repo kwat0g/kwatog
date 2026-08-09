@@ -13,7 +13,6 @@ use App\Modules\Inventory\Controllers\StockCardController;
 use App\Modules\Inventory\Controllers\StockCountController;
 use App\Modules\Inventory\Controllers\StockLevelController;
 use App\Modules\Inventory\Controllers\StockMovementController;
-use App\Modules\Inventory\Controllers\StockTransferController;
 use App\Modules\Inventory\Controllers\TransferOrderController;
 use App\Modules\Inventory\Controllers\UomController;
 use App\Modules\Inventory\Controllers\WarehouseController;
@@ -30,11 +29,10 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
     Route::post('/item-categories', [ItemCategoryController::class, 'store'])->middleware('permission:inventory.items.manage');
     Route::put('/item-categories/{itemCategory}', [ItemCategoryController::class, 'update'])->middleware('permission:inventory.items.manage');
     Route::delete('/item-categories/{itemCategory}', [ItemCategoryController::class, 'destroy'])->middleware('permission:inventory.items.manage');
-    Route::patch('/item-categories/{itemCategory}/restore', [ItemCategoryController::class, 'restore'])->middleware('permission:inventory.categories.manage');
+    Route::patch('/item-categories/{itemCategory}/restore', [ItemCategoryController::class, 'restore'])->middleware('permission:inventory.items.manage');
 
     /* ─── Items ─── */
     Route::get('/items/options', [ItemController::class, 'options'])->middleware('permission:inventory.view');
-    Route::post('/items/recompute-abc', [ItemController::class, 'recomputeAbc'])->middleware('permission:inventory.items.manage');
     Route::get('/items', [ItemController::class, 'index'])->middleware('permission:inventory.view');
     Route::get('/items/{item}', [ItemController::class, 'show'])->middleware('permission:inventory.view');
     Route::post('/items', [ItemController::class, 'store'])->middleware('permission:inventory.items.manage');
@@ -74,17 +72,17 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
     Route::post('/warehouses', [WarehouseController::class, 'storeWarehouse'])->middleware('permission:inventory.items.manage');
     Route::put('/warehouses/{warehouse}', [WarehouseController::class, 'updateWarehouse'])->middleware('permission:inventory.items.manage');
     Route::delete('/warehouses/{warehouse}', [WarehouseController::class, 'destroyWarehouse'])->middleware('permission:inventory.items.manage');
-    Route::patch('/warehouses/{warehouse}/restore', [WarehouseController::class, 'restoreWarehouse'])->middleware('permission:inventory.warehouses.manage');
+    Route::patch('/warehouses/{warehouse}/restore', [WarehouseController::class, 'restoreWarehouse'])->middleware('permission:inventory.warehouse.manage');
 
     Route::post('/zones', [WarehouseController::class, 'storeZone'])->middleware('permission:inventory.items.manage');
     Route::put('/zones/{zone}', [WarehouseController::class, 'updateZone'])->middleware('permission:inventory.items.manage');
     Route::delete('/zones/{zone}', [WarehouseController::class, 'destroyZone'])->middleware('permission:inventory.items.manage');
-    Route::patch('/zones/{zone}/restore', [WarehouseController::class, 'restoreZone'])->middleware('permission:inventory.warehouses.manage');
+    Route::patch('/zones/{zone}/restore', [WarehouseController::class, 'restoreZone'])->middleware('permission:inventory.warehouse.manage');
 
     Route::post('/locations', [WarehouseController::class, 'storeLocation'])->middleware('permission:inventory.items.manage');
     Route::put('/locations/{location}', [WarehouseController::class, 'updateLocation'])->middleware('permission:inventory.items.manage');
     Route::delete('/locations/{location}', [WarehouseController::class, 'destroyLocation'])->middleware('permission:inventory.items.manage');
-    Route::patch('/locations/{location}/restore', [WarehouseController::class, 'restoreLocation'])->middleware('permission:inventory.warehouses.manage');
+    Route::patch('/locations/{location}/restore', [WarehouseController::class, 'restoreLocation'])->middleware('permission:inventory.warehouse.manage');
 
     /* ─── Stock ─── */
     Route::get('/stock-levels', [StockLevelController::class, 'index'])->middleware('permission:inventory.view');
@@ -92,10 +90,18 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
     Route::get('/stock-movements', [StockMovementController::class, 'index'])->middleware('permission:inventory.view');
     Route::post('/scan/resolve', [WarehouseScanController::class, 'resolve'])->middleware('permission:inventory.view');
     Route::get('/scan/options', [WarehouseScanController::class, 'options'])->middleware('permission:inventory.view');
+    Route::get('/stock-adjustments/options', [StockAdjustmentController::class, 'options'])->middleware('permission:inventory.view');
     Route::get('/stock-adjustments', [StockAdjustmentController::class, 'index'])->middleware('permission:inventory.view');
     Route::post('/stock-adjustments', [StockAdjustmentController::class, 'store'])->middleware('permission:inventory.adjust');
     Route::patch('/stock-adjustments/{stockAdjustment}/approve', [StockAdjustmentController::class, 'approve'])->middleware('permission:inventory.adjust.approve');
-    Route::post('/stock-transfers', [StockTransferController::class, 'store'])->middleware('permission:inventory.adjust');
+    /*
+     * POST /inventory/stock-transfers — HIDDEN 2026-08-08 (scope cut).
+     * Duplicate of Transfer Orders; the page surface was removed. The service
+     * remains load-bearing (TransferOrderService executes through it).
+     * Re-enable: uncomment below.
+     *
+     * Route::post('/stock-transfers', [StockTransferController::class, 'store'])->middleware('permission:inventory.adjust');
+     */
 
     /* ─── ADV8 — WMS: Warehouse Map ─── */
     Route::get('/warehouse-map', [WarehouseMapController::class, 'index'])->middleware('permission:inventory.view');
@@ -127,6 +133,7 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
     Route::get('/grn', [GoodsReceiptNoteController::class, 'index'])->middleware('permission:inventory.view');
     Route::get('/grn/{grn}', [GoodsReceiptNoteController::class, 'show'])->middleware('permission:inventory.view');
     Route::post('/grn', [GoodsReceiptNoteController::class, 'store'])->middleware('permission:inventory.grn.create');
+    Route::patch('/grn/{grn}/finalize', [GoodsReceiptNoteController::class, 'finalize'])->middleware('permission:inventory.grn.create');
     Route::patch('/grn/{grn}/accept', [GoodsReceiptNoteController::class, 'accept'])->middleware('permission:inventory.grn.create');
     Route::patch('/grn/{grn}/reject', [GoodsReceiptNoteController::class, 'reject'])->middleware('permission:inventory.grn.create');
 

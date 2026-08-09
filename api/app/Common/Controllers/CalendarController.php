@@ -22,6 +22,15 @@ class CalendarController
         private readonly SettingsService $settings,
     ) {}
 
+    public function options(Request $request): JsonResponse
+    {
+        return response()->json([
+            'data' => [
+                'layers' => $this->service->layerOptions($request->user()),
+            ],
+        ]);
+    }
+
     public function index(Request $request): JsonResponse
     {
         $request->validate([

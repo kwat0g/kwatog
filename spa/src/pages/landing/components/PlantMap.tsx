@@ -91,10 +91,10 @@ export function PlantMap({ latitude, longitude, address }: PlantMapProps) {
         <Popup>
           <div className="space-y-0.5">
             <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">
-              Ogami · plant
+              Plant
             </div>
             <div className="font-sans text-[12px] leading-snug text-primary">
-              {address ?? 'First Cavite Industrial Estate, Dasmariñas, Cavite'}
+              {address ?? '—'}
             </div>
             <a
               href={mapsUrl}

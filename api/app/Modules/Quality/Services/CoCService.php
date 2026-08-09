@@ -132,7 +132,11 @@ class CoCService
             'lot_number'              => $lotNumber,
             'material_lot_references' => $materialLotRefs,
             'quality_standard'        => (string) $this->settings->get('landing.quality_policy.standard', ''),
+            'quality_certification'   => (string) $this->settings->get('landing.quality_policy.certification_title', ''),
             'aql_level'               => (string) $this->settings->get('quality.aql.default_level', ''),
+            'quality_statement'       => (string) $this->settings->get('landing.quality_policy.certification_body', ''),
+            'quality_manager_name'    => (string) $this->settings->get('quality.coc.manager_name', ''),
+            'quality_manager_role'    => (string) $this->settings->get('quality.coc.manager_role', ''),
         ];
 
         return [$cocNumber, $payload];
@@ -194,19 +198,26 @@ class CoCService
     private function companyInfo(): array
     {
         return [
-            'name'    => $this->setting('company.legal_name', 'PHILIPPINE OGAMI CORPORATION'),
-            'address' => $this->setting('company.address', 'First Cavite Industrial Estate (FCIE), Dasmariñas, Cavite, Philippines'),
-            'tin'     => $this->setting('company.tin', '000-123-456-0000'),
+            'name'          => $this->setting('company.legal_name'),
+            'address'       => $this->setting('company.address'),
+            'phone'         => $this->setting('company.phone'),
+            'email'         => $this->setting('company.email'),
+            'tin'           => $this->setting('company.tin'),
+            'vat_status'    => $this->setting('company.vat_status'),
+            'logo_path'     => $this->setting('company.logo_path'),
+            'public_url'    => $this->setting('company.public_url'),
+            'certification' => $this->setting('company.certification'),
+            'disclaimer'    => $this->setting('pdf.footer_disclaimer'),
         ];
     }
 
-    private function setting(string $key, string $default): string
+    private function setting(string $key): string
     {
         try {
             $val = $this->settings->get($key);
-            return is_string($val) && trim($val) !== '' ? $val : $default;
+            return is_string($val) && trim($val) !== '' ? $val : '';
         } catch (\Throwable) {
-            return $default;
+            return '';
         }
     }
 }

@@ -19,7 +19,7 @@ interface LinkButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const toneClasses: Record<Tone, string> = {
  accent: 'text-link hover:text-link-hover',
- danger: 'text-danger',
+ danger: 'text-danger-fg',
  muted: 'text-muted hover:text-primary',
 };
 

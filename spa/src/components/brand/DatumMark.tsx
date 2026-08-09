@@ -7,6 +7,10 @@
  * A concentric ring with a crosshair whose lines overshoot the circle (true
  * drafting center-mark convention). Inherits `currentColor`, so it tints to ink
  * or accent wherever placed. Used as the brand glyph and as a quiet motif.
+ *
+ * Lives beside the other brand glyphs rather than under `pages/landing/`: the
+ * app-wide `EmptyState` renders it, so a landing-page home would let any future
+ * dependency of that folder (GSAP, Three.js) leak into every ERP page.
  */
 
 interface DatumMarkProps {

@@ -122,7 +122,7 @@ export default function FinanceDashboardPage() {
  isError={false}
  title="Revenue Forecast (6 months)"
  formatValue={(v) => formatPeso(String(v))}
- unitLabel="PHP"
+ unitLabel={data.revenue_forecast?.kpi?.unit}
  />
 
  {/* Row 6 — Top overdue customers. */}
@@ -278,13 +278,15 @@ function UnpostedJesPanel({
  <div className="flex items-start gap-3">
  <div className="shrink-0 mt-0.5 text-muted"><ClipboardList size={20} /></div>
  <div>
- <div className="text-2xl font-medium font-mono tabular-nums">{data?.count ?? 0}</div>
- {(data?.count ?? 0) === 0 ? (
+ <div className="text-2xl font-medium font-mono tabular-nums">{data?.count ?? '—'}</div>
+ {data?.count === 0 ? (
  <p className="text-xs text-muted mt-1">All journal entries are posted.</p>
- ) : (
+ ) : data ? (
  <p className="text-xs text-muted mt-1">
  Oldest draft: <span className="font-mono">{data?.oldest_date ?? '—'}</span>
  </p>
+ ) : (
+ <p className="text-xs text-muted mt-1">No journal-entry data available.</p>
  )}
  </div>
  </div>
@@ -306,9 +308,9 @@ function ApDueThisWeekPanel({
  <div className="flex items-baseline justify-between mb-2">
  <div className="flex items-center gap-2">
  <CalendarClock size={16} className="text-muted" />
- <span className="text-sm text-muted">{data?.count ?? 0} bills</span>
+ <span className="text-sm text-muted">{data?.count ?? '—'} bills</span>
  </div>
- <div className="font-mono tabular-nums font-medium">{formatPeso(data?.total ?? '0')}</div>
+ <div className="font-mono tabular-nums font-medium">{formatPeso(data?.total)}</div>
  </div>
  {items.length === 0 ? (
  <EmptyState size="compact" icon="check-circle" title="Nothing due" description="No bills due in the next 7 days." />
@@ -335,7 +337,7 @@ function ApDueThisWeekPanel({
 function BudgetVsActualPanel({
  rows,
 }: {
- rows: Array<{ category: string; budget: string; actual: string; variance: string; variance_pct: number }> | null;
+ rows: Array<{ category: string; budget: string | null; actual: string | null; variance: string | null; variance_pct: number | null }> | null;
 }) {
  if (rows === null || rows.length === 0) {
  return (
@@ -365,12 +367,12 @@ function BudgetVsActualPanel({
  <Td align="right" mono>{formatPeso(r.budget)}</Td>
  <Td align="right" mono>{formatPeso(r.actual)}</Td>
  <Td align="right">
- <Chip variant={utilizationTone(r.variance_pct)}>
- {r.variance_pct > 100 && (
- <AlertTriangle size={12} className="mr-1 inline" aria-hidden="true" />
- )}
- {r.variance_pct.toFixed(1)}%
- </Chip>
+       <Chip variant={utilizationTone(r.variance_pct)}>
+       {r.variance_pct != null && r.variance_pct > 100 && (
+         <AlertTriangle size={12} className="mr-1 inline" aria-hidden="true" />
+       )}
+       {r.variance_pct == null ? '—' : `${r.variance_pct.toFixed(1)}%`}
+       </Chip>
  </Td>
  </tr>
  ))}
@@ -414,8 +416,8 @@ function RecentJesPanel({
 
 /* ── Helpers ────────────────────────────────────────────────────────────── */
 
-function utilizationTone(pct: number): 'success' | 'warning' | 'danger' | 'neutral' {
- if (!Number.isFinite(pct) || pct <= 0) return 'neutral';
+function utilizationTone(pct: number | null): 'success' | 'warning' | 'danger' | 'neutral' {
+ if (pct == null || !Number.isFinite(pct) || pct <= 0) return 'neutral';
  if (pct > 100) return 'danger';
  if (pct >= 80) return 'warning';
  return 'success';

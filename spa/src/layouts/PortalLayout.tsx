@@ -4,7 +4,8 @@ import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { focusRingInset } from '@/lib/focus';
 import { cn } from '@/lib/cn';
-import { businessPoliciesApi } from '@/api/businessPolicies';
+import { supplierPortalApi } from '@/api/b2b/supplier';
+import { customerPortalApi } from '@/api/b2b/customer';
 import { setFunctionalCurrency } from '@/lib/runtimeCurrency';
 import {
  LayoutDashboard,
@@ -97,7 +98,7 @@ function PortalSidebar({ type, nav, pathname, onLogout }: {
  <div className="px-2 pb-3 border-t border-default pt-2">
  <button
  onClick={onLogout}
- className={cn('flex items-center gap-2.5 px-3 py-2 rounded-md text-xs font-medium text-muted hover:text-danger hover:bg-danger/5 w-full transition-colors cursor-pointer', focusRingInset)}
+ className={cn('flex items-center gap-2.5 px-3 py-2 rounded-md text-xs font-medium text-muted hover:text-danger-fg hover:bg-danger-bg/5 w-full transition-colors cursor-pointer', focusRingInset)}
  >
  <LogOut size={15} />
  Sign out
@@ -110,7 +111,10 @@ function PortalSidebar({ type, nav, pathname, onLogout }: {
 export default function PortalLayout({ type, user, onLogout, title, subtitle, children }: PortalLayoutProps) {
  const location = useLocation();
  const nav = type === 'supplier' ? SUPPLIER_NAV : CUSTOMER_NAV;
- const { data: businessPolicies } = useQuery({ queryKey: ['business-policies'], queryFn: businessPoliciesApi.get });
+ const { data: businessPolicies } = useQuery({
+ queryKey: ['portal', type, 'business-policies'],
+ queryFn: () => type === 'supplier' ? supplierPortalApi.businessPolicies() : customerPortalApi.businessPolicies(),
+ });
 
  useEffect(() => {
  setFunctionalCurrency(businessPolicies?.functional_currency_code);

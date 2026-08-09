@@ -96,8 +96,6 @@ export default function TransferOrdersPage() {
  <div>
  <PageHeader
  title="Transfer Orders"
- backTo="/inventory/items"
- backLabel="Items"
  subtitle={transfers ? `${transfers.length} transfers` : undefined}
  actions={canManage ? (
  <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => setShowCreateModal(true)}>
@@ -130,7 +128,7 @@ export default function TransferOrdersPage() {
  type="button"
  onClick={() => setActiveId(t.id)}
  className={`w-full text-left px-2 py-1.5 text-xs rounded-md transition-colors cursor-pointer ${focusRingInset} ${
- activeId === t.id ? 'bg-accent/10 text-accent border border-accent/20' : 'text-muted hover:text-primary hover:bg-elevated'
+ activeId === t.id ? 'bg-accent/10 text-accent border border-accent/30 shadow-sm' : 'bg-surface border border-default text-secondary hover:border-subtle hover:text-primary hover:bg-elevated'
  }`}
  >
  <div className="font-mono">{t.transfer_number}</div>

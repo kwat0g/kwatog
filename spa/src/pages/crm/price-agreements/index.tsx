@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { FilterBar } from '@/components/ui/FilterBar';
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Pencil } from 'lucide-react';
@@ -19,7 +20,7 @@ import { formatPeso } from '@/lib/formatNumber';
  */
 export default function PriceAgreementsListPage() {
  const navigate = useNavigate();
- const [filters, setFilters] = useState<PriceAgreementListParams>({ page: 1, per_page: 25 });
+ const [filters, setFilters] = useUrlFilters<PriceAgreementListParams & { search?: string }>({ search: '', page: 1, per_page: 25 });
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['crm', 'price-agreements', filters],
@@ -78,6 +79,7 @@ export default function PriceAgreementsListPage() {
  </Button>
  }
  />
+ <FilterBar onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))} searchPlaceholder="Search agreement..." />
  {isLoading && !data && <SkeletonTable columns={6} rows={8} />}
  {isError && (
  <EmptyState

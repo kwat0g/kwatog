@@ -67,9 +67,9 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
  const showValidIcon = validState === 'valid' && !error;
  const showInvalidIcon = validState === 'invalid' || !!error;
  const validIcon = showInvalidIcon ? (
- <X size={12} className="text-danger" aria-hidden />
+ <X size={12} className="text-danger-fg" aria-hidden />
  ) : showValidIcon ? (
- <Check size={12} className="text-success" aria-hidden />
+ <Check size={12} className="text-success-fg" aria-hidden />
  ) : null;
 
  return (
@@ -77,7 +77,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
  {label && (
  <label htmlFor={inputId} className="text-xs text-muted font-medium">
  {label}
- {required && <span className="text-danger ml-0.5">*</span>}
+ {required && <span className="text-danger-fg ml-0.5">*</span>}
  </label>
  )}
  <div
@@ -119,7 +119,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
  )}
  </div>
  {error ? (
- <span id={`${inputId}-error`} className="text-xs text-danger">
+ <span id={`${inputId}-error`} className="text-xs text-danger-fg">
  {error}
  </span>
  ) : helper ? (

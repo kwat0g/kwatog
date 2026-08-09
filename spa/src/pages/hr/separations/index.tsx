@@ -17,7 +17,7 @@ const STATUS_CHIP: Record<ClearanceStatus, 'success' | 'warning' | 'info' | 'neu
  pending: 'warning', in_progress: 'info', completed: 'info', finalized: 'success', cancelled: 'neutral' };
 
 const DEFAULT_FILTERS: SeparationListParams = {
- page: 1, per_page: 25,
+ page: 1, per_page: 25, status: 'in_progress',
 };
 
 export default function SeparationsListPage() {

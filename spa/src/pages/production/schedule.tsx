@@ -115,7 +115,7 @@ export default function ProductionSchedulePage() {
  {/* Date range */}
  <Input
  type="date"
- value={dateFrom}
+          value={dateFrom ?? ''}
  onChange={(e) => setDateFrom(e.target.value)}
  className="font-mono"
  aria-label="From date"
@@ -123,7 +123,7 @@ export default function ProductionSchedulePage() {
  <span className="text-muted text-xs">→</span>
  <Input
  type="date"
- value={dateTo}
+          value={dateTo ?? ''}
  onChange={(e) => setDateTo(e.target.value)}
  className="font-mono"
  aria-label="To date"
@@ -169,7 +169,7 @@ export default function ProductionSchedulePage() {
  <div className="space-y-2">
  {latestConflicts.map((c) => (
  <div key={c.work_order_id} className="flex items-start gap-2 text-xs">
- <AlertTriangle size={14} className="text-danger mt-0.5" />
+ <AlertTriangle size={14} className="text-danger-fg mt-0.5" />
  <div>
  <span className="font-mono">{c.wo_number}</span>
  <span className="ml-2 text-muted">— {c.reasons.join('; ')}</span>

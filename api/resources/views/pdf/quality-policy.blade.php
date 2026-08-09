@@ -146,8 +146,7 @@
   {{-- ── Header ── --}}
   <div class="header">
     <span class="cert-badge">
-      {{ $qualityStandard }} Certified<br>
-      Automotive Plastic Injection Molder
+      {{ $qualityCertificationTitle ?: $qualityStandard }}
     </span>
     <div class="company-name">{{ $companyName }}</div>
     <div class="company-meta">

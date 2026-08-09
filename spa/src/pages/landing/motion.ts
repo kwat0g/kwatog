@@ -21,6 +21,13 @@ import { useLayoutEffect, type RefObject } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import Lenis from 'lenis';
+import { reduceMotion } from '@/lib/motionPrefs';
+
+// Re-exported for landing-internal callers (`import { reduceMotion } from
+// '../motion'`). The implementation lives in `@/lib/motionPrefs` — a file with
+// no imports — so surfaces outside the landing page can read the preference
+// without pulling GSAP/Lenis into their chunk. Import it from there, not here.
+export { reduceMotion };
 
 let registered = false;
 export function registerScrollTrigger() {
@@ -28,13 +35,6 @@ export function registerScrollTrigger() {
     gsap.registerPlugin(ScrollTrigger);
     registered = true;
   }
-}
-
-export function reduceMotion(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
 }
 
 /**
@@ -98,22 +98,18 @@ export function useLandingMotion(rootRef: RefObject<HTMLElement>) {
         // Clamp the stagger: a deep grid card (i*0.08) could otherwise wait
         // ~0.5s on top of the tween, reading as "late to appear" on fast scroll.
         const delay = Math.min(parseFloat(el.dataset.revealDelay ?? '0') || 0, 0.24);
-        gsap.fromTo(
-          el,
-          from,
-          {
-            autoAlpha: 1,
-            x: 0,
-            y: 0,
-            scale: 1,
-            clipPath: variant === 'clip' ? 'inset(0 0 0% 0)' : undefined,
-            duration: 0.5,
-            ease: 'power2.out',
-            delay,
-            // Fire earlier and let it catch up if scrolled past mid-tween.
-            scrollTrigger: { trigger: el, start: 'top 92%', once: true, fastScrollEnd: true },
-          },
-        );
+        gsap.fromTo(el, from, {
+          autoAlpha: 1,
+          x: 0,
+          y: 0,
+          scale: 1,
+          clipPath: variant === 'clip' ? 'inset(0 0 0% 0)' : undefined,
+          duration: 0.5,
+          ease: 'power2.out',
+          delay,
+          // Fire earlier and let it catch up if scrolled past mid-tween.
+          scrollTrigger: { trigger: el, start: 'top 92%', once: true, fastScrollEnd: true },
+        });
       });
 
       // ── Parallax depth ─────────────────────────────────────────────

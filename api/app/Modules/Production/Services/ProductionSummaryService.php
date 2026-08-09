@@ -45,7 +45,9 @@ class ProductionSummaryService
         $totalGood   = (int) $woRows->sum('good');
         $totalReject = (int) $woRows->sum('reject');
         $totalUnits  = $totalGood + $totalReject;
-        $scrapRate   = $totalUnits > 0 ? round($totalReject / $totalUnits * 100, 2) : 0.0;
+        // A day with no recorded output has no scrap-rate observation. Keep
+        // the summary honest instead of presenting an unmeasured 0% rate.
+        $scrapRate   = $totalUnits > 0 ? round($totalReject / $totalUnits * 100, 2) : null;
 
         $breakdowns = DB::table('machine_downtimes as md')
             ->join('machines as m', 'm.id', '=', 'md.machine_id')

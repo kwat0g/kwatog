@@ -32,29 +32,21 @@ export function HeroSection() {
   const { data: contact } = useQuery({ queryKey: ['landing', 'contact'], queryFn: landingApi.contact, staleTime: 300_000 });
   const { data: content } = useQuery({ queryKey: ['landing', 'content'], queryFn: landingApi.content, staleTime: 300_000 });
 
-  const legalName = contact?.legal_name || 'Philippine Ogami Corporation';
-  const address = contact?.address || 'FCIE Dasmariñas, Cavite, Philippines';
-  const trustPoints = content?.trust_points?.length ? content.trust_points : ['IATF 16949 Certified', 'Zero Defect Quality', 'Rapid Precision Tooling'];
-  const partners = content?.oem_partners?.length ? content.oem_partners : ['Toyota', 'Nissan', 'Honda', 'Yamaha'];
-  const qualityStandard = content?.quality_policy?.standard ?? content?.quality_methods?.[0] ?? 'IATF 16949';
+  const legalName = contact?.legal_name ?? '';
+  const address = contact?.address ?? '';
+  const trustPoints = content?.trust_points ?? [];
+  const partners = content?.oem_partners ?? [];
+  const qualityStandard = content?.quality_policy?.standard ?? content?.quality_methods?.[0] ?? '';
 
-  const defaultDesc = '{{company}} delivers IATF 16949 certified plastic injection molding, precision mold making, and automated assembly for Tier-1 automotive partners including {{partners}}.';
-  const heroDescription = (content?.section_copy?.hero_description || defaultDesc)
+  const heroDescription = (content?.section_copy?.hero_description ?? '')
     .replaceAll('{{company}}', legalName)
     .replaceAll('{{partners}}', partners.join(', '))
     .replaceAll('{{standard}}', qualityStandard)
     .replaceAll('{{address}}', address);
 
-  const heroPart = content?.part_specs?.find((part) => part.id === 'filler-cap') ?? { name: 'Wiper Filler Cap', material: 'POM Grade A', tolerance: '±0.02mm' };
-  const heroCopy = content?.hero_copy ?? { line_one: 'Precision Injection', line_two: 'Molding & Tooling', line_three: 'For OEM Leaders' };
-  const heroCta = content?.section_copy?.hero_cta ?? {
-    quote_label: 'Contact us',
-    quote_href: '#contact',
-    explore_label: 'Explore Parts',
-    explore_href: '#parts-3d',
-    careers_label: 'Careers',
-    careers_href: '/careers',
-  };
+  const heroPart = content?.part_specs?.find((part) => part.id === 'filler-cap');
+  const heroCopy = content?.hero_copy;
+  const heroCta = content?.section_copy?.hero_cta;
 
   // Intro timeline
   useLayoutEffect(() => {
@@ -137,15 +129,19 @@ export function HeroSection() {
             <ScrambleText text={address} trigger="mount" />
           </p>
 
-          <h1 className="mt-8 font-display text-[clamp(3rem,8vw,5.5rem)] font-semibold leading-[0.94] tracking-[-0.04em] text-transparent bg-clip-text bg-gradient-to-br from-primary via-primary to-secondary pb-2">
+          {/* Keep the gradient on the actual text boxes. Applying
+              `background-clip:text` to the parent while the headline is split
+              into block spans leaves the child glyphs transparent in Chromium,
+              which made the entire hero headline look deleted. */}
+          <h1 className="mt-8 font-display text-[clamp(3rem,8vw,5.5rem)] font-semibold leading-[0.94] tracking-[-0.04em] text-primary pb-2">
             <span data-hero-line className="block overflow-hidden">
-              <span className="block">{heroCopy?.line_one ?? '—'}</span>
+              <span className="block bg-gradient-to-br from-primary via-primary to-secondary bg-clip-text text-transparent">{heroCopy?.line_one ?? '—'}</span>
             </span>
             <span data-hero-line className="block overflow-hidden">
-              <span className="block">{heroCopy?.line_two ?? '—'}</span>
+              <span className="block bg-gradient-to-br from-primary via-primary to-secondary bg-clip-text text-transparent">{heroCopy?.line_two ?? '—'}</span>
             </span>
             <span data-hero-line className="block overflow-hidden">
-              <span className="block">{heroCopy?.line_three ?? '—'}</span>
+              <span className="block bg-gradient-to-br from-primary via-primary to-secondary bg-clip-text text-transparent">{heroCopy?.line_three ?? '—'}</span>
             </span>
           </h1>
 

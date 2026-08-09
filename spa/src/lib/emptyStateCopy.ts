@@ -199,9 +199,9 @@ export const EMPTY_STATE_COPY: Record<string, EmptyStateCopy> = {
  '/crm/products': {
  icon: 'box',
  itemNoun: 'products',
- title: 'No products yet',
- description:
- 'Products are the finished goods you sell to customers — wiper bushings, pivot caps, etc. Each links to a Bill of Materials, inspection specs, and price agreements.',
+  title: 'No products yet',
+  description:
+ 'Products are the finished goods you sell to customers. Each links to a Bill of Materials, inspection specs, and price agreements.',
  permission: 'crm.products.manage',
  actionLabel: 'Add First Product',
  actionRoute: '/crm/products/create',

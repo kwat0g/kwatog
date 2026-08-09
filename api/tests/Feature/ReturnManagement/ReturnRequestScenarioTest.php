@@ -227,6 +227,7 @@ class ReturnRequestScenarioTest extends TestCase
         $customer = $this->customer();
         $invoice  = $this->invoice($customer, $admin);
         $rma      = $this->inspectedRma($admin, $customer, $invoice, $this->product());
+        $loc      = WarehouseLocation::factory()->create();
 
         $this->actingAs($admin)
             ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/dispose", [
@@ -234,6 +235,7 @@ class ReturnRequestScenarioTest extends TestCase
                     'item_id'     => $rma->items->first()->hash_id,
                     'disposition' => 'restock',
                 ]],
+                'location_id'  => $loc->hash_id,
             ])
             ->assertOk();
 

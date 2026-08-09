@@ -11,7 +11,6 @@ import {
  SkeletonTable,
  type FilterConfig,
 } from '@/components/ui';
-import { PageHeader } from '@/components/layout/PageHeader';
 import { formatDateTime } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import {
@@ -30,8 +29,11 @@ const STATUS_CHIP: Record<SalaryAdjustmentStatus, 'warning' | 'success' | 'dange
  * REC-03 — salary-adjustment maker-checker queue. HR requests a change; a
  * different checker (production_manager) and approver (VP/admin) sign off before
  * the new pay is applied. Direct employee edits can no longer change pay.
+ *
+ * Scope cut 2026-08-08: folded from a standalone page into a tab on the
+ * Employees page. No PageHeader here — the Employees page header owns it.
  */
-export default function SalaryAdjustmentsPage() {
+export function SalaryAdjustmentsTab() {
  const queryClient = useQueryClient();
  const [status, setStatus] = useState<SalaryAdjustmentStatus>('pending');
  const [confirm, setConfirm] = useState<
@@ -73,11 +75,6 @@ export default function SalaryAdjustmentsPage() {
 
  return (
  <div>
- <PageHeader
- title="Salary Adjustments"
- subtitle={data ? `${data.meta.total} requests · maker-checker gated` : undefined}
- />
-
  <FilterBar
  filters={filterConfig}
  values={{ status }}

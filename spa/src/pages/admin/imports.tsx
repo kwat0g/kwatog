@@ -237,7 +237,7 @@ export default function ImportsPage() {
  tone="muted"
  onClick={() => setRollbackTarget(b)}
  icon={<Undo2 size={13} />}
- className="text-xs hover:text-danger"
+ className="text-xs hover:text-danger-fg"
  >
  Roll back
  </LinkButton>

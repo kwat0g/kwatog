@@ -32,5 +32,4 @@ export const documentsApi = {
 
  destroy: (id: string) => client.delete(`/documents/${id}`),
 
- restore: (id: string) => client.patch(`/documents/${id}/restore`),
 };

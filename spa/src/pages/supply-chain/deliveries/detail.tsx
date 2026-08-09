@@ -2,11 +2,12 @@
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams , useNavigate} from 'react-router-dom';
-import { Truck, Camera, Check, ArrowRight, Tag, Trash2, FileText, Image as ImageIcon, ShieldCheck, ArchiveRestore } from 'lucide-react';
+import { Camera, Check, ArrowRight, Tag, Trash2, FileText, Image as ImageIcon, ShieldCheck, ArchiveRestore } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { AxiosError } from 'axios';
 import { downloadAuthenticatedFile } from '@/api/download';
 import { deliveriesApi, deliveryProofsApi } from '@/api/supply-chain';
+import { invoicesApi } from '@/api/accounting/invoices';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -19,7 +20,7 @@ import { Modal } from '@/components/ui/Modal';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { ChainHeader } from '@/components/chain/ChainHeader';
 import { LinkedRecords } from '@/components/chain/LinkedRecords';
-import { buildDeliveryChain } from '@/lib/chains';
+import { buildO2cChain } from '@/lib/chains';
 import { usePermission } from '@/hooks/usePermission';
 import { useChainProgress } from '@/hooks/useChainProgress';
 import type { DeliveryStatus, DeliveryProofType } from '@/types/supplyChain';
@@ -30,23 +31,6 @@ import { focusRingInset } from '@/lib/focus';
 import { deliveryStatusVariant as STATUS_CHIP } from '@/lib/statusVariants';
 import { cn } from '@/lib/cn';
 
-const NEXT: Record<DeliveryStatus, DeliveryStatus | null> = {
- scheduled: 'loading',
- loading: 'in_transit',
- in_transit: 'delivered',
- delivered: 'confirmed',
- confirmed: null,
- cancelled: null,
-};
-
-const PROOF_TYPE_LABEL: Record<DeliveryProofType, string> = {
- signed_dr: 'Signed DR',
- photo: 'Photo',
- customer_po_confirmation: 'Customer PO confirmation',
- coc: 'Certificate of Conformity',
- other: 'Other',
-};
-
 export default function DeliveryDetailPage() {
  const navigate = useNavigate();
  const { id = '' } = useParams<{ id: string }>();
@@ -55,7 +39,7 @@ export default function DeliveryDetailPage() {
  const fileInput = useRef<HTMLInputElement | null>(null);
 
  // Proof upload form state.
- const [proofType, setProofType] = useState<DeliveryProofType>('signed_dr');
+ const [proofType, setProofType] = useState<DeliveryProofType | null>(null);
  const [proofNotes, setProofNotes] = useState('');
  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
  const [receiverName, setReceiverName] = useState('');
@@ -63,6 +47,7 @@ export default function DeliveryDetailPage() {
  const [confirmRemarks, setConfirmRemarks] = useState('');
  const [deleteProofId, setDeleteProofId] = useState<string | null>(null);
  const [restoreProofId, setRestoreProofId] = useState<string | null>(null);
+ const [finalizeInvoiceId, setFinalizeInvoiceId] = useState<string | null>(null);
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['supply-chain', 'deliveries', id],
@@ -70,6 +55,20 @@ export default function DeliveryDetailPage() {
  enabled: Boolean(id),
  placeholderData: (prev) => prev,
  });
+
+ const { data: proofOptions } = useQuery({
+ queryKey: ['supply-chain', 'deliveries', 'proof-options'],
+ queryFn: deliveryProofsApi.options,
+ staleTime: 5 * 60_000,
+ });
+ const { data: deliveryOptions } = useQuery({
+ queryKey: ['supply-chain', 'deliveries', 'options'],
+ queryFn: deliveriesApi.options,
+ staleTime: 5 * 60_000,
+ });
+ const availableProofTypes = proofOptions?.proof_types ?? [];
+ const selectedProofType = proofType ?? availableProofTypes[0]?.value;
+ const proofTypeLabels = new Map(availableProofTypes.map((option) => [option.value, option.label]));
 
  // Series C — Task C4. Real-time chain progress.
  useChainProgress('delivery', id, ['supply-chain', 'deliveries', id]);
@@ -93,7 +92,10 @@ export default function DeliveryDetailPage() {
  });
 
  const uploadProof = useMutation({
- mutationFn: (file: File) => deliveryProofsApi.upload(id, file, proofType, proofNotes || undefined),
+ mutationFn: (file: File) => {
+ if (!selectedProofType) return Promise.reject(new Error('No delivery proof type is configured.'));
+ return deliveryProofsApi.upload(id, file, selectedProofType, proofNotes || undefined);
+ },
  onSuccess: () => {
  toast.success('Proof uploaded');
  setProofNotes('');
@@ -136,18 +138,31 @@ const removeProof = useMutation({
  onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed to confirm'),
  });
 
+ const finalizeInvoice = useMutation({
+ mutationFn: (invoiceId: string) => invoicesApi.finalize(invoiceId),
+ onSuccess: () => {
+ toast.success('Draft invoice finalized to AR + GL.');
+ setFinalizeInvoiceId(null);
+ qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries', id] });
+ qc.invalidateQueries({ queryKey: ['accounting', 'invoices'] });
+ },
+ onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed to finalize invoice.'),
+ });
+
  if (isLoading && !data) return <SkeletonDetail />;
  if (isError || !data) {
  return <EmptyState icon="alert-circle" title="Failed to load delivery"
  action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />;
  }
 
- const next = NEXT[data.status];
+ const statusOptions = new Map((deliveryOptions?.statuses ?? []).map((option) => [option.value, option]));
+ const next = statusOptions.get(data.status)?.next_status ?? null;
  const proofs = data.proofs ?? [];
  const hasProof = proofs.length > 0;
  const canConfirm = data.status === 'delivered' && can('supply_chain.deliveries.confirm');
  const canEdit = can('supply_chain.deliveries.create');
- const canUploadProofNow = ['in_transit', 'delivered', 'confirmed'].includes(data.status) && canEdit;
+ const canUploadProofNow = ['in_transit', 'delivered', 'confirmed'].includes(data.status)
+ && canEdit && Boolean(selectedProofType);
 
  return (
  <div>
@@ -155,7 +170,7 @@ const removeProof = useMutation({
  title={
  <span>
  {data.delivery_number}
- <Chip variant={STATUS_CHIP[data.status]} className="ml-3">{data.status.replace('_', ' ')}</Chip>
+ <Chip variant={STATUS_CHIP[data.status]} className="ml-3">{statusOptions.get(data.status)?.label ?? data.status.replace('_', ' ')}</Chip>
  {hasProof && (
  <Chip variant="success" className="ml-2">
  <ShieldCheck size={12} className="mr-0.5" />
@@ -170,16 +185,10 @@ const removeProof = useMutation({
  breadcrumbs={[{ label: 'Deliveries', href: '/supply-chain/deliveries' }, { label: data.delivery_number }]}
  actions={
  <div className="flex items-center gap-2">
- {next && data.status !== 'delivered' && canEdit && (
+ {next && canEdit && (
  <Button variant="secondary" size="sm" icon={<ArrowRight size={14} />}
  loading={advance.isPending} onClick={() => advance.mutate(next)}>
- Mark {next.replace('_', ' ')}
- </Button>
- )}
- {data.status === 'in_transit' && canEdit && (
- <Button variant="secondary" size="sm" icon={<Truck size={14} />}
- loading={advance.isPending} onClick={() => advance.mutate('delivered')}>
- Mark delivered
+ {next === 'delivered' ? 'Mark delivered' : `Mark ${statusOptions.get(next)?.label ?? next.replace('_', ' ')}`}
  </Button>
  )}
  {data.status === 'delivered' && canEdit && (
@@ -222,9 +231,17 @@ const removeProof = useMutation({
  }
  />
 
- {/* P1 — Order-to-Cash chain anchored on the Delivery record. */}
+ {/* P1 — Order-to-Cash chain anchored on the Delivery record. 2026-08-08:
+  compact cross-document stepper — SO → Delivery → Invoice → Payment. */}
  <div className="px-5 py-3 border-b border-default">
- <ChainHeader steps={buildDeliveryChain(data)} />
+ <ChainHeader steps={buildO2cChain({
+  so: data.sales_order ? { id: data.sales_order.id, number: data.sales_order.so_number } : null,
+  delivery: { id: data.id, number: data.delivery_number },
+  deliveryStatus: data.status,
+  invoices: data.invoice
+  ? [{ id: data.invoice.id, invoice_number: data.invoice.invoice_number, status: data.invoice.status }]
+  : [],
+ })} />
  </div>
 
  <div className="px-5 grid grid-cols-3 gap-4">
@@ -262,7 +279,7 @@ const removeProof = useMutation({
  <Panel
  title={
  <span className="inline-flex items-center gap-1.5">
- <ShieldCheck size={14} className={hasProof ? 'text-success' : 'text-warning'} />
+ <ShieldCheck size={14} className={hasProof ? 'text-success-fg' : 'text-warning-fg'} />
  Proof of delivery
  </span>
  }
@@ -323,7 +340,7 @@ const removeProof = useMutation({
  <div className="px-2.5 py-2 text-xs">
  <div className="flex items-center justify-between gap-2">
  <span className="font-medium truncate">{p.file_name}</span>
- <Chip variant="neutral">{PROOF_TYPE_LABEL[p.proof_type]}</Chip>
+ <Chip variant="neutral">{proofTypeLabels.get(p.proof_type) ?? p.proof_type}</Chip>
  </div>
  <div className="text-muted mt-0.5">
  {p.uploader?.name ?? '—'} · {p.uploaded_at?.slice(0, 16).replace('T', ' ') ?? '—'}
@@ -359,14 +376,13 @@ const removeProof = useMutation({
  <div className="border-t border-subtle pt-3">
  <div className="grid grid-cols-3 gap-2 mb-2">
  <Select
- value={proofType}
+ value={selectedProofType ?? ''}
  onChange={(e) => setProofType(e.target.value as DeliveryProofType)}
  aria-label="Proof type"
  >
- <option value="signed_dr">Signed delivery receipt</option>
- <option value="photo">Photo</option>
- <option value="customer_po_confirmation">Customer PO confirmation</option>
- <option value="other">Other</option>
+ {availableProofTypes.map((option) => (
+ <option key={option.value} value={option.value}>{option.label}</option>
+ ))}
  </Select>
  <Input
  type="text"
@@ -437,6 +453,25 @@ const removeProof = useMutation({
  <img src={data.receipt_photo_url} alt="Receipt" className="w-full rounded-md border border-default" />
  </button>
  </Panel>
+ )}
+ {/* 2026-08-08 — auto-invoice chain: a confirmed delivery stages a draft AR
+  invoice; review and finalize it here (mirrors the P2P auto-bill banner). */}
+ {data.invoice && data.invoice.status === 'draft' && (
+ <div className="flex items-center gap-3 rounded-md border border-success/40 bg-success-bg/10 px-4 py-3 text-sm">
+ <FileText size={16} className="shrink-0 text-success-fg" />
+ <div className="flex-1">
+ <div className="font-medium">Customer invoice auto-created</div>
+ <div className="text-muted">
+ A draft AR invoice was staged from this confirmed delivery —{' '}
+ <Link to={`/accounting/invoices/${data.invoice.id}`} className="font-mono text-accent hover:underline">{data.invoice.invoice_number ?? '(draft)'}</Link>
+ {' '}· {data.invoice.total_amount} ·{' '}{data.invoice.status_label ?? data.invoice.status}. Review and finalize to post the receivable.
+ </div>
+ </div>
+ {can('accounting.invoices.create') && (
+ <Button variant="secondary" size="sm" icon={<Check size={14} />}
+ onClick={() => setFinalizeInvoiceId(data.invoice!.id)} loading={finalizeInvoice.isPending}>Finalize</Button>
+ )}
+ </div>
  )}
  {data.invoice && (
  <Panel title="Invoice">
@@ -594,9 +629,18 @@ const removeProof = useMutation({
  </Button>
  </div>
  </div>
- </Modal>
+ </Modal>  {/* 2026-08-08 — finalize the auto-created draft invoice from the delivery. */}
+  <ConfirmDialog
+  isOpen={!!finalizeInvoiceId}
+  onClose={() => setFinalizeInvoiceId(null)}
+  onConfirm={() => { if (finalizeInvoiceId) finalizeInvoice.mutate(finalizeInvoiceId); }}
+  title="Finalize draft invoice?"
+  description="Finalizing locks the invoice number, posts the AR/revenue journal entry, and flips the invoice to Finalized (the SO is promoted to Invoiced). Review the auto-created amounts before posting."
+  confirmLabel="Finalize invoice"
+  pending={finalizeInvoice.isPending}
+  />
 
-{/* Archive proof confirmation */}
+  {/* Archive proof confirmation */}
   <ConfirmDialog
   isOpen={!!deleteProofId}
   onClose={() => setDeleteProofId(null)}

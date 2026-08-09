@@ -189,21 +189,21 @@ export default function ProcurementChainPage() {
  <div className="space-y-3">
  <div className="flex items-center justify-between text-sm">
  <span className="flex items-center gap-1.5">
- <CheckCircle size={14} className="text-success" />
+ <CheckCircle size={14} className="text-success-fg" />
  Matched
  </span>
  <span className="font-mono tabular-nums font-medium">{tw.matched}</span>
  </div>
  <div className="flex items-center justify-between text-sm">
  <span className="flex items-center gap-1.5">
- <AlertTriangle size={14} className={tw.has_variances > 0 ? 'text-warning' : 'text-muted'} />
+ <AlertTriangle size={14} className={tw.has_variances > 0 ? 'text-warning-fg' : 'text-muted'} />
  With variances
  </span>
  <span className="font-mono tabular-nums font-medium">{tw.has_variances}</span>
  </div>
  <div className="flex items-center justify-between text-sm">
  <span className="flex items-center gap-1.5">
- <Clock size={14} className={tw.overridden > 0 ? 'text-info' : 'text-muted'} />
+ <Clock size={14} className={tw.overridden > 0 ? 'text-info-fg' : 'text-muted'} />
  Overridden
  </span>
  <span className="font-mono tabular-nums font-medium">{tw.overridden}</span>
@@ -248,9 +248,9 @@ interface StageRowProps {
 function StageRow({ label, count, max, color }: StageRowProps) {
  const pct = max > 0 ? Math.round((count / max) * 100) : 0;
  const barColor = {
- success: 'bg-success',
- info: 'bg-info',
- warning: 'bg-warning',
+ success: 'bg-success-bg',
+ info: 'bg-info-bg',
+ warning: 'bg-warning-bg',
  neutral: 'bg-text-subtle',
  }[color];
  return (

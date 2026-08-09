@@ -81,12 +81,12 @@ export default function AssetTransfersListPage() {
  key: 'actions' as const, header: '',
  cell: (r: AssetTransfer) => r.status === 'pending' ? (
  <div className="flex items-center gap-1">
- <Button variant="primary" size="sm"
+ <Button variant="primary" size="xs"
  disabled={approveMutation.isPending || rejectMutation.isPending}
  onClick={() => { setConfirmApprove(r.id); }}>
  Approve
  </Button>
- <Button variant="danger" size="sm"
+ <Button variant="danger" size="xs"
  disabled={approveMutation.isPending || rejectMutation.isPending}
  onClick={() => { setConfirmReject(r.id); }}>
  Reject
@@ -113,7 +113,7 @@ export default function AssetTransfersListPage() {
  subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'transfer' : 'transfers'}` : undefined}
  actions={
  can('assets.transfer') ? (
- <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/assets/transfers/create')}>
+ <Button variant="primary" size="xs" icon={<Plus size={14} />} onClick={() => navigate('/assets/transfers/create')}>
  New transfer
  </Button>
  ) : undefined

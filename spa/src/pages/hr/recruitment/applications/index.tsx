@@ -96,8 +96,6 @@ export default function ApplicationsListPage() {
  { label: 'Recruitment', href: '/hr/recruitment' },
  { label: 'Applications' },
  ]}
- backTo="/hr/recruitment"
- backLabel="Recruitment"
  />
 
  <Tabs

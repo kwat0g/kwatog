@@ -17,7 +17,6 @@ import { Modal } from '@/components/ui/Modal';
 import { Panel } from '@/components/ui/Panel';
 import { Select } from '@/components/ui/Select';
 import { SkeletonTable } from '@/components/ui/Skeleton';
-import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
 import { numberInputProps } from '@/lib/numberInput';
@@ -47,7 +46,13 @@ const countSchema = z.object({
  notes: z.string().max(500).optional().or(z.literal('')),
 });
 
-export default function StockCountPage() {
+/**
+ * Stock-count workflow manager — rendered inside the Warehouse Map page's
+ * Map | Stock Count toggle (2026-08-08 merge). Compact toolbar instead of a
+ * PageHeader because it lives inside the merged page. Sessions, counting,
+ * variance approval, and completion are unchanged.
+ */
+export function StockCountManager() {
  const qc = useQueryClient();
  const { can } = usePermission();
  const canManage = can('inventory.stock_count.manage');
@@ -141,19 +146,22 @@ export default function StockCountPage() {
 
  return (
  <div>
- <PageHeader
- title="Stock Count"
- backTo="/inventory/items"
- backLabel="Items"
- subtitle={sessions ? `${sessions.length} sessions` : undefined}
- actions={canManage ? (
- <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => setShowCreateModal(true)}>
- New count session
+ {/* Compact toolbar — Stock Count lives inside the Warehouse Map page's
+ Map | Stock Count toggle (2026-08-08 merge). */}
+ <div className="flex items-center justify-between gap-3 pb-3">
+ <div className="text-sm text-muted">
+ {sessions ? `${sessions.length} ${sessions.length === 1 ? 'session' : 'sessions'}` : 'Count sessions'}
+ </div>
+ <div className="flex items-center gap-2">
+ {canManage && (
+ <Button variant="primary" size="xs" icon={<Plus size={14} />} onClick={() => setShowCreateModal(true)}>
+ New session
  </Button>
- ) : null}
- />
+ )}
+ </div>
+ </div>
 
- <div className="px-5 py-4">
+ <div>
  {isLoading && !sessions && <SkeletonTable rows={4} columns={4} />}
  {isError && <EmptyState icon="alert-circle" title="Failed to load" action={<Button onClick={() => refetch()}>Retry</Button>} />}
  {sessions && sessions.length === 0 && (
@@ -177,7 +185,7 @@ export default function StockCountPage() {
  type="button"
  onClick={() => setActiveSessionId(s.id)}
  className={`w-full text-left px-2 py-1.5 text-xs rounded-md transition-colors cursor-pointer ${focusRingInset} ${
- activeSessionId === s.id ? 'bg-accent/10 text-accent border border-accent/20' : 'text-muted hover:text-primary hover:bg-elevated'
+ activeSessionId === s.id ? 'bg-accent/10 text-accent border border-accent/30 shadow-sm' : 'bg-surface border border-default text-secondary hover:border-subtle hover:text-primary hover:bg-elevated'
  }`}
  >
  <div className="font-mono">{s.session_number}</div>
@@ -274,7 +282,7 @@ export default function StockCountPage() {
  <Button size="sm" variant="secondary" onClick={() => setCountModalItem(item)}>Count</Button>
  )}
  {activeSession.status === 'in_progress' && item.status === 'counted' && stockCountOptions?.variance_tolerance_pct != null && Math.abs(Number(item.variance_percent)) > stockCountOptions.variance_tolerance_pct && canManage && (
- <Button size="sm" variant="danger" onClick={() => setApproveTarget(item)}>Approve</Button>
+ <Button size="xs" variant="danger" onClick={() => setApproveTarget(item)}>Approve</Button>
  )}
  {item.status === 'counted' && stockCountOptions?.variance_tolerance_pct != null && Math.abs(Number(item.variance_percent)) <= stockCountOptions.variance_tolerance_pct && (
  <span className="text-2xs text-muted">Auto</span>

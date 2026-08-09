@@ -23,6 +23,14 @@ class SessionTimeout
 
     public function handle(Request $request, Closure $next): Response
     {
+        // Portal clients authenticate with a bearer token and their own
+        // guards. Idle-session bookkeeping is only for the cookie-backed
+        // internal SPA session; applying it to a portal token would reject
+        // an otherwise valid portal request as an internal-user mismatch.
+        if ($request->bearerToken()) {
+            return $next($request);
+        }
+
         // This middleware is also appended to the API group so security policy
         // cannot be accidentally omitted from a new module route. Public,
         // portal, and edge-device routes use different principals/policies.

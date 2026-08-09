@@ -125,16 +125,38 @@ class PurchaseOrderService
         ]);
     }
 
-    /** Create an ad-hoc PO directly. */
-    public function create(array $data, User $by): PurchaseOrder
+    /**
+     * Create a PO sourced from an approved PR. POs must trace back to a PR
+     * (PR → approved → PO). System-generated POs (AutoPurchaseOrderService
+     * critical shortages, supplier-return replacement POs) pass
+     * $systemGenerated = true and are marked is_auto_generated — the same
+     * documented bypass the auto-PO path already uses.
+     */
+    public function create(array $data, User $by, bool $systemGenerated = false): PurchaseOrder
     {
-        return DB::transaction(function () use ($data, $by) {
+        return DB::transaction(function () use ($data, $by, $systemGenerated) {
+            $prId = null;
+            if (! $systemGenerated) {
+                $prId = ! empty($data['purchase_request_id'])
+                    ? (is_int($data['purchase_request_id'])
+                        ? $data['purchase_request_id']
+                        : HashIdFilter::decode($data['purchase_request_id'], PurchaseRequest::class))
+                    : null;
+                if ($prId === null) {
+                    throw new BusinessRuleException('A purchase order must be created from a purchase request (PR).');
+                }
+                $pr = PurchaseRequest::find($prId);
+                if (! $pr || $pr->status !== PurchaseRequestStatus::Approved) {
+                    throw new BusinessRuleException('Only approved purchase requests can be converted to purchase orders.');
+                }
+            }
+
             $vendorId = HashIdFilter::decode($data['vendor_id'], Vendor::class)
                 ?? (int) $data['vendor_id'];
             $isVatable = (bool) ($data['is_vatable'] ?? $this->taxPolicy->isVatRegistered());
 
             [$lines, $subtotal] = $this->normalizeLines($data['items'] ?? []);
-            $vat = $isVatable ? Money::mul($subtotal, $this->taxPolicy->vatRate()) : Money::zero();
+            $vat = $isVatable ? Money::mul($subtotal, $this->taxPolicy->requiredVatRate()) : Money::zero();
             $total = Money::add($subtotal, $vat);
             $threshold = $this->businessPolicy->purchaseOrderVpThreshold();
 
@@ -143,9 +165,8 @@ class PurchaseOrderService
             $po = PurchaseOrder::create([
                 'po_number'            => $this->sequences->generate('purchase_order'),
                 'vendor_id'            => $vendorId,
-                'purchase_request_id'  => isset($data['purchase_request_id']) && is_int($data['purchase_request_id'])
-                    ? $data['purchase_request_id']
-                    : null,
+                'purchase_request_id'  => $prId,
+                'is_auto_generated'    => $systemGenerated,
                 'date'                 => $data['date'] ?? now()->toDateString(),
                 'expected_delivery_date' => $data['expected_delivery_date'] ?? null,
                 'subtotal'             => $subtotal,
@@ -224,7 +245,7 @@ class PurchaseOrderService
         return DB::transaction(function () use ($po, $data) {
             $isVatable = (bool) ($data['is_vatable'] ?? $po->is_vatable);
             [$lines, $subtotal] = $this->normalizeLines($data['items'] ?? []);
-            $vat = $isVatable ? Money::mul($subtotal, $this->taxPolicy->vatRate()) : Money::zero();
+            $vat = $isVatable ? Money::mul($subtotal, $this->taxPolicy->requiredVatRate()) : Money::zero();
             $total = Money::add($subtotal, $vat);
             $threshold = $this->businessPolicy->purchaseOrderVpThreshold();
 
@@ -373,8 +394,11 @@ class PurchaseOrderService
     {
         $result = DB::transaction(function () use ($po, $by, $reason) {
             $this->approvals->reject($po, $by, $reason);
-            $po->update(['status' => PurchaseOrderStatus::Cancelled]);
-            return $po->fresh();
+            // status is non-fillable; service-only.
+            $po->forceFill(['status' => PurchaseOrderStatus::Cancelled])->save();
+            $fresh = $po->fresh();
+            $this->reopenSourcePrIfLastLink($fresh);
+            return $fresh;
         });
         $this->broadcastChain($result, $by);
         return $result;
@@ -387,6 +411,10 @@ class PurchaseOrderService
         }
         $po->forceFill(['status' => PurchaseOrderStatus::Sent, 'sent_to_supplier_at' => now()])->save();
         $fresh = $po->fresh();
+        // 2026-08-08 — stage the expected GRN (draft) when the PO goes out.
+        DB::afterCommit(fn () =>
+            event(new \App\Modules\Purchasing\Events\PurchaseOrderSent($fresh))
+        );
         $this->broadcastChain($fresh, null);
         return $fresh;
     }
@@ -405,6 +433,7 @@ class PurchaseOrderService
             $po->status = PurchaseOrderStatus::Cancelled;
             $po->save();
             $fresh = $po->fresh();
+            $this->reopenSourcePrIfLastLink($fresh);
             DB::afterCommit(fn () =>
                 event(new \App\Modules\Purchasing\Events\PurchaseOrderCancelled($fresh))
             );
@@ -437,7 +466,49 @@ class PurchaseOrderService
         if ($po->status !== PurchaseOrderStatus::Draft) {
             throw new BusinessRuleException('Only draft POs can be deleted.');
         }
-        $po->delete();
+        DB::transaction(function () use ($po) {
+            $prId = $po->purchase_request_id;
+            $po->delete();
+            if ($prId !== null) {
+                $this->reopenSourcePrIfLastLinkFor($prId);
+            }
+        });
+    }
+
+    /**
+     * When the PO being closed out was the LAST live PO sourced from a
+     * `converted` PR, flip the PR back to `approved` so it can be converted
+     * again (e.g. an auto-PO whose draft was cancelled, or a PO rejected in
+     * review). The PR keeps its approval history — only its status returns.
+     */
+    private function reopenSourcePrIfLastLink(PurchaseOrder $po): void
+    {
+        if ($po->purchase_request_id === null) {
+            return;
+        }
+        $this->reopenSourcePrIfLastLinkFor($po->purchase_request_id);
+    }
+
+    private function reopenSourcePrIfLastLinkFor(int $prId): void
+    {
+        $pr = PurchaseRequest::query()->find($prId);
+        if (! $pr || $pr->status !== PurchaseRequestStatus::Converted) {
+            return;
+        }
+
+        // Only re-open when this was the last open PO. A sibling PO that is
+        // still alive (or a trashed one we shouldn't count) keeps the PR
+        // converted.
+        $hasLiveSibling = PurchaseOrder::query()
+            ->where('purchase_request_id', $prId)
+            ->where('status', '!=', PurchaseOrderStatus::Cancelled->value)
+            ->withoutTrashed()
+            ->exists();
+        if ($hasLiveSibling) {
+            return;
+        }
+
+        $pr->forceFill(['status' => PurchaseRequestStatus::Approved])->save();
     }
 
     /**

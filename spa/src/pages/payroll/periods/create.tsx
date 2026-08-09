@@ -168,7 +168,7 @@ export default function CreatePayrollPeriodPage() {
  <p className="text-sm text-muted">Set the period start and end to determine the cycle.</p>
  )}
  {cycle.state === 'invalid' && (
- <p className="text-sm text-danger">{cycle.message}</p>
+ <p className="text-sm text-danger-fg">{cycle.message}</p>
  )}
  {cycle.state === 'ok' && (
  <p className="text-sm">
@@ -285,15 +285,15 @@ export default function CreatePayrollPeriodPage() {
  </div>
 
  {preview.employee_count === 0 && (
- <p className="mt-3 text-xs text-danger">
+ <p className="mt-3 text-xs text-danger-fg">
  This scope matches no active employee hired on or before {periodEnd}. Compute would have
  nothing to do — widen the filters.
  </p>
  )}
 
  {preview.already_paid_count > 0 && (
- <div className="mt-3 rounded border border-danger/40 bg-danger/5 p-3">
- <p className="text-xs text-danger font-medium">
+ <div className="mt-3 rounded border border-danger/40 bg-danger-bg/5 p-3">
+ <p className="text-xs text-danger-fg font-medium">
  {preview.already_paid_count} employee(s) in this scope were already paid for this cutoff.
  </p>
  <ul className="mt-1.5 space-y-0.5">

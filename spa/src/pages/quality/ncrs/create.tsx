@@ -24,7 +24,7 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Panel } from '@/components/ui/Panel';
 import { Chip, type ChipVariant } from '@/components/ui/Chip';
-import { Modal } from '@/components/ui/Modal';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { focusRingInset } from '@/lib/focus';
 import type { CreateNcrData, NcrTemplate, NcrSeverity, NcrSource } from '@/types/quality';
@@ -231,14 +231,14 @@ export default function CreateNcrPage() {
  </div>
  </Modal>
 
- <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+ <ModalFooter>
  <Button variant="secondary" type="button" onClick={() => navigate(-1)}>
  Cancel
  </Button>
  <Button variant="primary" type="submit" loading={submit.isPending}>
  Open NCR
  </Button>
- </div>
+ </ModalFooter>
  </div>
  </form>
  </div>

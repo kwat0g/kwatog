@@ -28,7 +28,7 @@ interface InspectionItem {
  stage_label?: string;
  product: string;
  batch_no: string | null;
- qty: string;
+ qty: string | null;
  waiting_since: string;
 }
 
@@ -64,7 +64,7 @@ interface QualityDashboardData {
  coverage_info_pct: number;
  coverage_warning_pct: number;
  };
- kpis: Array<{ label: string; value: string; unit: string }>;
+ kpis: Array<{ label: string; value: string | null; unit: string }>;
  panels: {
  inspection_queue: InspectionItem[];
  defect_pareto: DefectItem[];
@@ -119,7 +119,7 @@ function InspectionQueuePanel({ items }: { items: InspectionItem[] }) {
  <Chip variant={stageVariant}>{ins.stage_label ?? ins.stage}</Chip>
  </Td>
  <Td className="text-muted text-xs truncate max-w-[120px]">{ins.product}</Td>
- <Td align="right" mono>{ins.qty}</Td>
+ <Td align="right" mono>{ins.qty ?? '—'}</Td>
  <Td align="right" mono className="text-muted">{ins.waiting_since}</Td>
  </tr>
  );
@@ -177,9 +177,9 @@ function DefectParetoPanel({ items, policy }: { items: DefectItem[]; policy?: Qu
 }
 
 function defectBarClass(pct: number, policy?: QualityDashboardData['display_policy']): string {
- if (policy && pct >= policy.defect_danger_pct) return 'h-full bg-danger rounded-full';
- if (policy && pct >= policy.defect_warning_pct) return 'h-full bg-warning rounded-full';
- return 'h-full bg-info rounded-full';
+ if (policy && pct >= policy.defect_danger_pct) return 'h-full bg-danger-bg rounded-full';
+ if (policy && pct >= policy.defect_warning_pct) return 'h-full bg-warning-bg rounded-full';
+ return 'h-full bg-info-bg rounded-full';
 }
 
 function NcrStatusPanel({ items }: { items: NcrItem[] }) {
@@ -282,10 +282,10 @@ function QcChainCoveragePanel({ coverage, policy }: { coverage: QualityDashboard
 }
 
 function coverageBarClass(pct: number, policy?: QualityDashboardData['display_policy']): string {
- if (policy && pct >= policy.coverage_success_pct) return 'h-full bg-success rounded-full';
- if (policy && pct >= policy.coverage_info_pct) return 'h-full bg-info rounded-full';
- if (policy && pct >= policy.coverage_warning_pct) return 'h-full bg-warning rounded-full';
- return 'h-full bg-danger rounded-full';
+ if (policy && pct >= policy.coverage_success_pct) return 'h-full bg-success-bg rounded-full';
+ if (policy && pct >= policy.coverage_info_pct) return 'h-full bg-info-bg rounded-full';
+ if (policy && pct >= policy.coverage_warning_pct) return 'h-full bg-warning-bg rounded-full';
+ return 'h-full bg-danger-bg rounded-full';
 }
 
 /* ───────────────────────── Page component ───────────────────────── */
@@ -328,7 +328,7 @@ export default function QcDashboard() {
  <StatCard
  key={k.label}
  label={k.label}
- value={/^[A-Z]{3}$/.test(k.unit) ? `${k.unit} ${k.value}` : k.value}
+ value={k.value == null ? '—' : /^[A-Z]{3}$/.test(k.unit) ? `${k.unit} ${k.value}` : k.value}
  helper={!/^[A-Z]{3}$/.test(k.unit) && k.unit !== 'count' ? k.unit : undefined}
  linkTo={kpiLink(k.label)}
  />

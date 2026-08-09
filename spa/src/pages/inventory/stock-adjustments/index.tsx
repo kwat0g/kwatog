@@ -23,15 +23,8 @@ const STATUS_VARIANT: Record<string, 'warning' | 'success' | 'neutral'> = {
  approved: 'success',
 };
 
-const FILTERS: FilterConfig[] = [
- { key: 'status', type: 'select', label: 'Status', options: [
- { value: 'pending', label: 'Pending approval' },
- { value: 'approved', label: 'Approved' },
- ] },
-];
-
 const DEFAULT_FILTERS: StockAdjustmentListParams = {
- page: 1, per_page: 50,
+ page: 1, per_page: 50, status: 'pending',
 };
 
 export default function StockAdjustmentsPage() {
@@ -45,6 +38,19 @@ export default function StockAdjustmentsPage() {
  queryFn: () => stockAdjustmentsApi.list(filters),
  placeholderData: (prev) => prev,
  });
+ const { data: options } = useQuery({
+  queryKey: ['inventory', 'stock-adjustments', 'options'],
+  queryFn: stockAdjustmentsApi.options,
+  staleTime: 300_000,
+ });
+ const filterConfig: FilterConfig[] = [{
+  key: 'status', type: 'select', label: 'Status', options: [
+   { value: '', label: 'All' },
+   ...(options?.statuses ?? []),
+  ],
+ }];
+ const directionLabels = new Map((options?.directions ?? []).map((option) => [option.value, option.label]));
+ const statusLabels = new Map((options?.statuses ?? []).map((option) => [option.value, option.label]));
 
  const approve = useMutation({
  mutationFn: (id: string) => stockAdjustmentsApi.approve(id),
@@ -60,7 +66,7 @@ export default function StockAdjustmentsPage() {
  const columns: Column<StockAdjustment>[] = [
  { key: 'created_at', header: 'Requested', cell: (r) => <span className="font-mono">{formatDateTime(r.created_at)}</span> },
  { key: 'direction', header: 'Dir', cell: (r) => (
- <Chip variant={r.direction === 'in' ? 'success' : 'danger'}>{r.direction === 'in' ? 'In' : 'Out'}</Chip>
+ <Chip variant={r.direction === 'in' ? 'success' : 'danger'}>{directionLabels.get(r.direction) ?? r.direction}</Chip>
  ) },
  { key: 'item', header: 'Item', cell: (r) => (
  <div>
@@ -77,12 +83,12 @@ export default function StockAdjustmentsPage() {
  </span>
  ) },
  { key: 'status', header: 'Status', cell: (r) => (
- <Chip variant={STATUS_VARIANT[r.status] ?? 'neutral'}>{r.status_label ?? r.status}</Chip>
+ <Chip variant={STATUS_VARIANT[r.status] ?? 'neutral'}>{r.status_label ?? statusLabels.get(r.status) ?? r.status}</Chip>
  ) },
  ...(can('inventory.adjust.approve')
  ? [{ key: 'actions', header: '', cell: (r: StockAdjustment) =>
  r.status === 'pending' ? (
- <Button size="sm" variant="primary" onClick={() => setApproveTarget(r)}>Approve</Button>
+ <Button size="xs" variant="primary" onClick={() => setApproveTarget(r)}>Approve</Button>
  ) : (
  <span className="text-xs text-muted">{r.approved_by?.name ? `by ${r.approved_by.name}` : ''}</span>
  ),
@@ -95,12 +101,10 @@ export default function StockAdjustmentsPage() {
  <PageHeader
  title="Stock Adjustments"
  subtitle="Manual in/out adjustments with finance approval for high-value entries"
- backTo="/inventory"
- backLabel="Inventory"
- actions={<Link to="/inventory/stock-adjustments/create"><Button size="sm" icon={<Plus size={14} />}>New adjustment</Button></Link>}
+ actions={<Link to="/inventory/stock-adjustments/create"><Button size="xs" icon={<Plus size={14} />}>New adjustment</Button></Link>}
  />
  <FilterBar
- filters={FILTERS}
+ filters={filterConfig}
  values={filters}
  onFilter={(k, v) => setFilters((f) => ({ ...f, [k]: v, page: 1 }))}
  onSearch={(v) => setFilters((f) => ({ ...f, search: v || undefined, page: 1 }))}

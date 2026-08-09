@@ -18,8 +18,8 @@ interface StatCardProps {
 }
 
 const deltaColor = {
- up: 'text-success',
- down: 'text-danger',
+ up: 'text-success-fg',
+ down: 'text-danger-fg',
  neutral: 'text-muted',
 } as const;
 

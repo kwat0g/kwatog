@@ -139,10 +139,14 @@ export function FilterBar({
  onChange={(e) => onFilter?.(f.key, e.target.value || undefined)}
  containerClassName="min-w-[160px]"
  >
- <option value="">{f.placeholder ?? f.label}</option>
+ {f.options.some((o) => String(o.value) === '') ? null : (
+ <option value="">{f.placeholder ?? `${f.label}: All`}</option>
+ )}
  {f.options.map((o) => (
  <option key={o.value} value={o.value}>
- {o.label}
+ {String(o.value) === '' && (o.label === 'All' || o.label === 'Any')
+ ? `${f.label}: ${o.label}`
+ : o.label}
  </option>
  ))}
  </Select>

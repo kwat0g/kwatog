@@ -216,7 +216,7 @@ export default function CreateDeliveryPage() {
  )}
 
  {errors.items?.root?.message && (
- <p className="text-xs text-danger mb-2">{errors.items.root.message}</p>
+ <p className="text-xs text-danger-fg mb-2">{errors.items.root.message}</p>
  )}
 
  <div className="space-y-3">
@@ -275,7 +275,7 @@ export default function CreateDeliveryPage() {
  disabled={fields.length === 1}
  title="Remove line"
  aria-label="Remove line"
- className="hover:text-danger hover:border-danger"
+ className="hover:text-danger-fg hover:border-danger"
  />
  </div>
  ))}

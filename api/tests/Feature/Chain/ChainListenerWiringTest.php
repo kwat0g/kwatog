@@ -12,12 +12,17 @@ use App\Modules\HR\Events\SeparationInitiated;
 use App\Modules\HR\Listeners\DeactivateAccountOnClearanceComplete;
 use App\Modules\HR\Listeners\InitializeLeaveBalances;
 use App\Modules\HR\Listeners\NotifyOnSeparationInitiated;
+use App\Modules\Accounting\Listeners\AutoCreateBillOnGrnAccepted;
+use App\Modules\Inventory\Events\GoodsReceiptNoteAccepted;
 use App\Modules\Inventory\Events\GoodsReceiptNoteCreated;
+use App\Modules\Inventory\Listeners\CreateDraftGrnOnPoSent;
 use App\Modules\Payroll\Events\PayrollPeriodFinalized;
 use App\Modules\Payroll\Listeners\NotifyEmployeesOnPayrollFinalized;
 use App\Modules\Production\Events\WorkOrderCompleted;
 use App\Modules\Purchasing\Events\PurchaseOrderApproved;
+use App\Modules\Purchasing\Events\PurchaseOrderSent;
 use App\Modules\Purchasing\Events\PurchaseRequestApproved;
+use App\Modules\Purchasing\Listeners\ConsolidatePurchaseOrders;
 use App\Modules\Purchasing\Listeners\NotifyOnPurchaseOrderApproved;
 use App\Modules\Purchasing\Listeners\NotifyOnPurchaseRequestApproved;
 use App\Modules\Quality\Events\InspectionFailed;
@@ -50,8 +55,10 @@ class ChainListenerWiringTest extends TestCase
     public function test_c2_p2p_listeners_are_bound(): void
     {
         $this->assertTrue(Event::hasListeners(GoodsReceiptNoteCreated::class));
+        $this->assertTrue(Event::hasListeners(GoodsReceiptNoteAccepted::class));
         $this->assertTrue(Event::hasListeners(PurchaseRequestApproved::class));
         $this->assertTrue(Event::hasListeners(PurchaseOrderApproved::class));
+        $this->assertTrue(Event::hasListeners(PurchaseOrderSent::class));
         $this->assertTrue(Event::hasListeners(InspectionFailed::class));
     }
 
@@ -75,6 +82,9 @@ class ChainListenerWiringTest extends TestCase
             TriggerIncomingQC::class,
             NotifyOnPurchaseRequestApproved::class,
             NotifyOnPurchaseOrderApproved::class,
+            ConsolidatePurchaseOrders::class,
+            CreateDraftGrnOnPoSent::class,
+            AutoCreateBillOnGrnAccepted::class,
             RejectGRNOnQcFail::class,
             InitializeLeaveBalances::class,
             NotifyOnSeparationInitiated::class,

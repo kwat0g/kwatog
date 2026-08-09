@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use App\Modules\Accounting\Controllers\AccountController;
 use App\Modules\Accounting\Controllers\AccountingOptionsController;
-use App\Modules\Accounting\Controllers\AccountingPeriodController;
 use App\Modules\Accounting\Controllers\BillController;
 use App\Modules\Accounting\Controllers\BudgetController;
 use App\Modules\Accounting\Controllers\CreditNoteController;
@@ -30,12 +29,19 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
         Route::delete('/{account}', [AccountController::class, 'deactivate'])->middleware('permission:accounting.coa.deactivate');
     });
 
-    /* ─── Accounting Periods (OGAMI-001 close lock) ──── */
-    Route::prefix('accounting/periods')->group(function () {
-        Route::get('/', [AccountingPeriodController::class, 'index'])->middleware('permission:accounting.periods.view');
-        Route::post('/close', [AccountingPeriodController::class, 'close'])->middleware('permission:accounting.periods.manage');
-        Route::post('/reopen', [AccountingPeriodController::class, 'reopen'])->middleware('permission:accounting.periods.manage');
-    });
+    /*
+     * Accounting Periods close/reopen UI — HIDDEN 2026-08-08 (scope cut).
+     * Permissions were never in the catalog → the routes 403'd for everyone;
+     * page linked from nowhere. AccountingPeriodService kept —
+     * assertPostingAllowed() guards 6 live GL-posting paths.
+     * Re-enable: restore the import + route group below.
+     *
+     * Route::prefix('accounting/periods')->group(function () {
+     *     Route::get('/', [AccountingPeriodController::class, 'index'])->middleware('permission:accounting.periods.view');
+     *     Route::post('/close', [AccountingPeriodController::class, 'close'])->middleware('permission:accounting.periods.manage');
+     *     Route::post('/reopen', [AccountingPeriodController::class, 'reopen'])->middleware('permission:accounting.periods.manage');
+     * });
+     */
 
     /* ─── Journal Entries ────────────────────────────── */
     Route::prefix('journal-entries')->group(function () {
@@ -77,6 +83,8 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
         Route::get('/{bill}', [BillController::class, 'show'])->middleware('permission:accounting.bills.view');
         Route::post('/', [BillController::class, 'store'])->middleware('permission:accounting.bills.create');
         Route::patch('/{bill}/cancel', [BillController::class, 'cancel'])->middleware('permission:accounting.bills.update');
+        // 2026-08-08 — post an auto-created draft bill (AP + GL).
+        Route::post('/{bill}/post', [BillController::class, 'postDraft'])->middleware('permission:accounting.bills.create');
         Route::post('/{bill}/payments', [BillController::class, 'recordPayment'])->middleware('permission:accounting.bills.pay');
         Route::get('/{bill}/pdf', [PdfController::class,  'bill'])->middleware('permission:accounting.bills.view');
     });

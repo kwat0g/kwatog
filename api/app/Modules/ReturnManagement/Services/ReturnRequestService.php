@@ -10,6 +10,7 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\BillItem;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Models\GrnItem;
+use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Support\StockMovementInput;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
@@ -27,6 +28,7 @@ use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\ReturnManagement\Models\ReturnRequestItem;
 use App\Common\Services\ApprovalService;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\NotificationService;
 use App\Common\Services\TaxPolicyService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -42,6 +44,7 @@ class ReturnRequestService
         private readonly PurchaseOrderService $purchaseOrders,
         private readonly \App\Modules\Accounting\Services\AccountingAccountPolicyService $accountPolicies,
         private readonly TaxPolicyService $taxPolicy,
+        private readonly NotificationService $notifications,
     ) {}
 
     /**
@@ -285,15 +288,18 @@ class ReturnRequestService
      *
      * For each item, sets a disposition (scrap/rework/restock/return_to_supplier).
      * Auto-creates NCRs for scrap/rework items with a product. Auto-creates
-     * a credit memo for customer returns with positive item totals.
+     * a credit memo for customer returns with positive item totals. When a
+     * location is supplied, restock/rework (customer) and return_to_supplier
+     * (supplier) lines move in/out of stock immediately (moveAtDispose).
      */
     public function dispose(
         ReturnRequest $rma,
         array $dispositions,
         User $by,
         bool $createReplacementPo = false,
+        ?int $locationId = null,
     ): ReturnRequest {
-        return DB::transaction(function () use ($rma, $dispositions, $by, $createReplacementPo) {
+        return DB::transaction(function () use ($rma, $dispositions, $by, $createReplacementPo, $locationId) {
             $rma = ReturnRequest::query()->lockForUpdate()->findOrFail($rma->id);
             $this->ensureStatus($rma, ReturnRequestStatus::Inspected);
             if ($rma->disposition_status === 'disposed') {
@@ -301,6 +307,28 @@ class ReturnRequestService
             }
 
             $rma->load(['items', 'bill.items', 'purchaseOrder.items']);
+
+            // Fail fast: movement lines (restock/rework for customer,
+            // return_to_supplier for supplier) need a warehouse location BEFORE
+            // the credit-note / replacement-PO work runs — never spend the
+            // effort and roll it all back over a missing location. Evaluated
+            // against the REQUESTED dispositions (stored ones are still null).
+            $requestsMovement = collect($dispositions)->contains(
+                fn (array $row) => $rma->type === ReturnRequestType::SupplierReturn
+                    ? ($row['disposition'] ?? null) === DispositionType::ReturnToSupplier->value
+                    : in_array(
+                        $row['disposition'] ?? null,
+                        [DispositionType::Restock->value, DispositionType::Rework->value],
+                        true,
+                    )
+            );
+            if ($requestsMovement && ! $locationId) {
+                throw new BusinessRuleException(
+                    $rma->type === ReturnRequestType::CustomerReturn
+                        ? 'Select the warehouse location returned restock lines are received back into.'
+                        : 'Select the warehouse location the returned goods ship out from.'
+                );
+            }
 
             foreach ($rma->items as $item) {
                 $disp = collect($dispositions)->firstWhere('item_id', $item->hash_id);
@@ -332,20 +360,13 @@ class ReturnRequestService
 
             $rma->load('items');
             if ($rma->type === ReturnRequestType::CustomerReturn && $rma->invoice_id) {
-                // Credit only what the customer actually sent back, and only the
-                // lines we kept. Summing $item->total credited the *requested*
-                // quantity, and included lines routed onward to the supplier —
-                // both over-credit the customer against the original invoice.
-                $creditTotal = $rma->items
-                    ->filter(fn ($item) => $item->disposition !== null
-                        && $item->disposition !== DispositionType::ReturnToSupplier->value)
-                    ->reduce(
-                        fn (string $carry, $item) => bcadd($carry, $this->creditableAmount($item), 2),
-                        '0',
-                    );
-
-                if (bccomp($creditTotal, '0', 2) > 0) {
-                    $creditNote = $this->createCreditNote($rma, (float) $creditTotal, $by);
+                // 2026-08-08 — draft customer credit note, one line per returned
+                // item (only what was actually sent back and kept — lines routed
+                // onward to the supplier or scrapped are excluded). The credit
+                // stays DRAFT until finance finalizes it (GL untouched), mirroring
+                // the auto-bill / auto-invoice review-then-post pattern.
+                $creditNote = $this->createCreditNote($rma, $by);
+                if ($creditNote) {
                     $rma->update(['credit_note_id' => $creditNote->id]);
                 }
             }
@@ -354,9 +375,20 @@ class ReturnRequestService
                 $this->processSupplierDisposition($rma, $by, $createReplacementPo);
             }
 
+            // 2026-08-08 — dispose-time stock movement on BOTH sides. Customer
+            // restock/rework lines are received back into inventory immediately
+            // (AdjustmentIn — the O2C twin of GRN acceptance); supplier
+            // return_to_supplier lines ship out right away (ReturnToVendor).
+            // complete() skips every line already stamped with
+            // stock_movement_quantity (idempotent).
+            $this->moveAtDispose($rma, $locationId, $by);
+
             $rma->update(['disposition_status' => 'disposed']);
 
-            return $rma->fresh()->load(['items', 'creditNote', 'replacementPurchaseOrder']);
+            return $rma->fresh()->load([
+                'items', 'creditNote', 'replacementPurchaseOrder',
+                'stockMovement.toLocation', 'stockMovement.fromLocation',
+            ]);
         });
     }
 
@@ -478,7 +510,7 @@ class ReturnRequestService
                 'is_vatable'          => $this->taxPolicy->isVatRegistered(),
                 'remarks'             => "Replacement for supplier RMA {$rma->rma_number}",
                 'items'               => $replacementLines,
-            ], $by);
+            ], $by, true);
             $rma->update(['replacement_purchase_order_id' => $replacement->id]);
         }
     }
@@ -495,17 +527,50 @@ class ReturnRequestService
     }
 
     /**
-     * REC-13 — create + finalize a real customer credit note for a customer
-     * return. Posts a VAT-reversing journal entry (DR Sales Revenue + VAT
-     * Output, CR AR) so the subledger and GL stay reconciled. The credited
-     * amount is the returned line total (VAT is added on top by the service).
+     * REC-13 — stage a DRAFT customer credit note for a customer return, one
+     * line per returned item (sourced from the original invoice lines via
+     * ReturnRequestItem::source_invoice_item_id). The GL is untouched until
+     * finance finalizes the draft — same review-then-post pattern as the
+     * auto-bill / auto-invoice chains. Credited amount per line is the returned
+     * quantity × unit price; VAT is added on top by CreditNoteService.
+     *
+     * Returns null when nothing is creditable (all lines scrapped or routed
+     * onward to the supplier).
      */
-    private function createCreditNote(ReturnRequest $rma, float $amount, User $by): \App\Modules\Accounting\Models\CreditNote
+    private function createCreditNote(ReturnRequest $rma, User $by): ?\App\Modules\Accounting\Models\CreditNote
     {
-        $revenueAccountId = \App\Modules\Accounting\Models\Account::query()
+        $rma->loadMissing(['items.product']);
+        $defaultRevenueId = Account::query()
             ->where('code', $this->accountPolicies->revenue())->value('id');
+        $hashids = app('hashids');
 
-        $cn = $this->creditNotes->create([
+        $lines = [];
+        foreach ($rma->items as $item) {
+            if ($item->disposition === null
+                || $item->disposition === DispositionType::ReturnToSupplier->value) {
+                continue;
+            }
+            $amount = $this->creditableAmount($item);
+            if (bccomp($amount, '0', 2) <= 0) {
+                continue;
+            }
+            $revenueId = $item->product?->revenue_account_id ?? $defaultRevenueId;
+            if (! $revenueId) {
+                throw new \RuntimeException('Default revenue account not configured.');
+            }
+            $lines[] = [
+                'account_id'  => $hashids->encode((int) $revenueId),
+                'description' => ($item->product?->name ?? 'Returned goods')
+                    ." — RMA {$rma->rma_number}",
+                'amount'      => number_format((float) $amount, 2, '.', ''),
+            ];
+        }
+
+        if ($lines === []) {
+            return null;
+        }
+
+        return $this->creditNotes->create([
             'type'              => 'customer',
             'customer_id'       => $rma->customer_id,
             'invoice_id'        => $rma->invoice_id,
@@ -513,28 +578,159 @@ class ReturnRequestService
             'date'              => now()->toDateString(),
             'is_vatable'        => $this->taxPolicy->isVatRegistered(),
             'reason'            => "Customer return — RMA {$rma->rma_number}",
-            'lines'             => [[
-                'account_id'  => $revenueAccountId,
-                'description' => "Returned goods — RMA {$rma->rma_number}",
-                'amount'      => number_format($amount, 2, '.', ''),
-            ]],
+            'lines'             => $lines,
         ], $by);
+    }
 
-        return $this->creditNotes->finalize($cn, $by);
+    /**
+     * Move every line whose disposition triggers inventory movement the moment
+     * the disposition is recorded — no waiting for a separate completion step.
+     * Customer restock/rework lines come back into stock (AdjustmentIn);
+     * supplier return_to_supplier lines ship out (ReturnToVendor). The caller
+     * must name the warehouse location; lines already stamped with
+     * stock_movement_quantity are skipped, so a later complete() can never
+     * move them twice.
+     */
+    private function moveAtDispose(ReturnRequest $rma, ?int $locationId, User $by): void
+    {
+        $movable = $rma->items->filter(fn (ReturnRequestItem $line) => $this->shouldMove($line, $rma));
+        if ($movable->isEmpty()) {
+            return;
+        }
+        if (! $locationId) {
+            // Backstop — the same rule already fired at the top of dispose().
+            throw new BusinessRuleException(
+                $rma->type === ReturnRequestType::CustomerReturn
+                    ? 'Select the warehouse location returned restock lines are received back into.'
+                    : 'Select the warehouse location the returned goods ship out from.'
+            );
+        }
+
+        $last = null;
+        $movedQty = '0';
+        foreach ($rma->items as $line) {
+            $movement = $this->moveLine($line, $rma, $locationId, $by);
+            if ($movement) {
+                $last = $movement;
+                $movedQty = bcadd($movedQty, (string) $line->stock_movement_quantity, 3);
+            }
+        }
+        if ($last) {
+            $rma->update(['stock_movement_id' => $last->id]);
+        }
+
+        // 2026-08-08 — tell the right team the moment the goods physically
+        // move. Customer restocks land back on the shelf (warehouse alert);
+        // supplier returns ship out to the vendor (purchasing alert).
+        if (bccomp($movedQty, '0', 3) <= 0) {
+            return;
+        }
+        if ($rma->type === ReturnRequestType::CustomerReturn) {
+            $this->notifyRestock($rma, $movedQty);
+        } else {
+            $this->notifySupplierShip($rma, $movedQty);
+        }
+    }
+
+    /**
+     * Best-effort alert to everyone with inventory access that returned goods
+     * are back in sellable stock. Never fails the dispose — a notification
+     * problem must not roll back a stock movement.
+     */
+    private function notifyRestock(ReturnRequest $rma, string $quantity): void
+    {
+        $this->sendMovementAlert(
+            $rma,
+            $quantity,
+            'return.restocked',
+            'Returned goods restocked',
+            'were moved back into sellable stock. Shelf and verify them.',
+            'inventory.view',
+        );
+    }
+
+    /**
+     * 2026-08-08 — alert purchasing the moment supplier-returned goods ship
+     * back out (ReturnToVendor), so the shipment is tracked and the vendor
+     * credit is followed up. Best-effort, like the restock alert.
+     */
+    private function notifySupplierShip(ReturnRequest $rma, string $quantity): void
+    {
+        $this->sendMovementAlert(
+            $rma,
+            $quantity,
+            'return.shipped_to_vendor',
+            'Returned goods shipped to vendor',
+            'were shipped back to the vendor. Track the shipment and follow up on the credit.',
+            'purchasing.po.view',
+        );
+    }
+
+    /**
+     * Shared best-effort envelope for the dispose-time movement alerts.
+     * Never fails the dispose — a notification problem must not roll back a
+     * stock movement.
+     */
+    private function sendMovementAlert(
+        ReturnRequest $rma,
+        string $quantity,
+        string $type,
+        string $title,
+        string $messageSuffix,
+        string $permissionSlug,
+    ): void
+    {
+        try {
+            // {permissionSlug} holders (inventory.view for restock,
+            // purchasing.po.view for ship-out), plus wildcard admins —
+            // system_admin holds a '*' permission rather than the explicit
+            // slug, so a plain whereHas would silently drop the very person
+            // performing the disposition.
+            $recipients = User::query()
+                ->where(function ($q) use ($permissionSlug) {
+                    $q->whereHas('role', fn ($role) => $role->where('slug', 'system_admin'))
+                        ->orWhereHas('role.permissions', fn ($perm) => $perm->where('slug', $permissionSlug));
+                })
+                ->where('is_active', true)
+                ->get();
+
+            if ($recipients->isEmpty()) {
+                return;
+            }
+
+            $label = rtrim(rtrim($quantity, '0'), '.');
+
+            $this->notifications->send($recipients, $type, [
+                'title'       => $title,
+                'message'     => "RMA {$rma->rma_number}: {$label} unit(s) {$messageSuffix}",
+                'link_to'     => '/return-management/'.$rma->hash_id,
+                'entity_type' => 'return_request',
+                'entity_id'   => $rma->hash_id,
+                'rma_number'  => $rma->rma_number,
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('ReturnRequestService: movement notification failed', [
+                'rma_id' => $rma->id,
+                'type'   => $type,
+                'error'  => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
      * Complete the RMA (inspected → completed).
-     * For customer returns: adds stock back to inventory.
-     * For supplier returns: removes stock (return_to_vendor movement).
+     *
+     * Customer-return restock/rework lines moved at dispose() already and are
+     * skipped here (idempotent). Supplier-return return_to_supplier lines still
+     * ship out on completion (ReturnToVendor). M-36 — the location is only
+     * required when a line actually still needs to move; never fall back to an
+     * arbitrary first location.
      */
     public function complete(ReturnRequest $rma, User $by, ?int $locationId = null): ReturnRequest
     {
         $this->ensureStatus($rma, ReturnRequestStatus::Inspected);
 
-        // M-36 — refuse the arbitrary first-location fallback. The caller
-        // must declare which warehouse the stock movement lands in.
-        if (! $locationId) {
+        if (! $locationId && $this->hasPendingMovement($rma)) {
             throw new BusinessRuleException('A warehouse location is required to complete a return.');
         }
 
@@ -555,62 +751,125 @@ class ReturnRequestService
                 'completed_at' => now(),
             ]);
 
-            $rma->load('items');
+            $rma->loadMissing('items.product');
 
-            if ($rma->items->isNotEmpty()) {
-                $totalMovedQty = '0';
+            if ($rma->items->isNotEmpty() && $locationId) {
+                $last = null;
 
                 foreach ($rma->items as $line) {
-                    // Only certain dispositions trigger inventory movement.
-                    // Customer returns: restock/rework add inventory back.
-                    // Supplier returns: return_to_supplier ships goods out.
-                    if (! $this->shouldMove($line, $rma)) {
-                        continue;
+                    $movement = $this->moveLine($line, $rma, $locationId, $by);
+                    if ($movement) {
+                        $last = $movement;
                     }
-
-                    $itemId = $line->item_id ?? $line->product?->items()->first()?->id;
-                    if (! $itemId) continue;
-
-                    $qty = $this->settledQuantity($line);
-
-                    if ($rma->type === ReturnRequestType::CustomerReturn) {
-                        // Customer return → add stock back
-                        $movement = $this->stockMovements->move(new StockMovementInput(
-                            type: StockMovementType::AdjustmentIn,
-                            itemId: (int) $itemId,
-                            toLocationId: $locationId,
-                            quantity: $qty,
-                            referenceType: 'return_request',
-                            referenceId: $rma->id,
-                            remarks: "RMA {$rma->rma_number}: Customer return",
-                            createdBy: $by->id,
-                        ));
-                    } else {
-                        // Supplier return → remove stock
-                        $movement = $this->stockMovements->move(new StockMovementInput(
-                            type: StockMovementType::ReturnToVendor,
-                            itemId: (int) $itemId,
-                            fromLocationId: $locationId,
-                            quantity: $qty,
-                            referenceType: 'return_request',
-                            referenceId: $rma->id,
-                            remarks: "RMA {$rma->rma_number}: Supplier return",
-                            createdBy: $by->id,
-                        ));
-                    }
-
-                    $line->update(['stock_movement_quantity' => $qty]);
-                    $totalMovedQty = bcadd($totalMovedQty, $qty, 3);
                 }
 
-                // Link the last stock movement to RMA root (informational)
-                if (isset($movement)) {
-                    $rma->update(['stock_movement_id' => $movement->id]);
+                // Link the last stock movement to the RMA root (informational).
+                if ($last) {
+                    $rma->update(['stock_movement_id' => $last->id]);
                 }
             }
         });
 
-        return $rma->fresh()->load('items');
+        return $rma->fresh()->load(['items', 'stockMovement.toLocation', 'stockMovement.fromLocation']);
+    }
+
+    /**
+     * Move one disposed line's goods, unless they already moved (restocked at
+     * dispose time). Customer returns: restock/rework → AdjustmentIn into the
+     * destination. Supplier returns: return_to_supplier → ReturnToVendor out of
+     * the source. Stamps the moved quantity on the line for idempotency.
+     */
+    private function moveLine(ReturnRequestItem $line, ReturnRequest $rma, int $locationId, User $by): ?StockMovement
+    {
+        if (bccomp((string) $line->stock_movement_quantity, '0', 3) > 0) {
+            return null; // already restocked / shipped — never move twice
+        }
+        if (! $this->shouldMove($line, $rma)) {
+            return null;
+        }
+
+        $itemId = $this->resolvableItemId($line);
+        if (! $itemId) {
+            Log::warning('ReturnRequestService: kept line has no inventory item to move', [
+                'rma_id'        => $rma->id,
+                'line_id'       => $line->id,
+                'disposition'   => $line->disposition,
+                'product_id'    => $line->product_id,
+            ]);
+            return null;
+        }
+
+        $qty = $this->settledQuantity($line);
+
+        if ($rma->type === ReturnRequestType::CustomerReturn) {
+            // Customer return → add stock back.
+            $movement = $this->stockMovements->move(new StockMovementInput(
+                type: StockMovementType::AdjustmentIn,
+                itemId: (int) $itemId,
+                toLocationId: $locationId,
+                quantity: $qty,
+                referenceType: 'return_request',
+                referenceId: $rma->id,
+                remarks: "RMA {$rma->rma_number}: Customer return",
+                createdBy: $by->id,
+            ));
+        } else {
+            // Supplier return → remove stock.
+            $movement = $this->stockMovements->move(new StockMovementInput(
+                type: StockMovementType::ReturnToVendor,
+                itemId: (int) $itemId,
+                fromLocationId: $locationId,
+                quantity: $qty,
+                referenceType: 'return_request',
+                referenceId: $rma->id,
+                remarks: "RMA {$rma->rma_number}: Supplier return",
+                createdBy: $by->id,
+            ));
+        }
+
+        $line->update(['stock_movement_quantity' => $qty]);
+
+        return $movement;
+    }
+
+    /**
+     * Whether any disposed line still needs a stock movement at completion.
+     * Lines already restocked/shipped (stock_movement_quantity set) and lines
+     * whose disposition triggers no movement are excluded.
+     */
+    private function hasPendingMovement(ReturnRequest $rma): bool
+    {
+        foreach ($rma->items as $line) {
+            if (bccomp((string) $line->stock_movement_quantity, '0', 3) > 0) {
+                continue;
+            }
+            if (! $this->shouldMove($line, $rma)) {
+                continue;
+            }
+            if ($this->resolvableItemId($line)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * The inventory item a line's goods move against.
+     *
+     * Returns the line's item_id when set. Products (CRM finished goods) have
+     * NO inventory-item mapping in this system — a line raised against a
+     * product alone cannot re-enter the item ledger, so it resolves to null
+     * and is skipped (the pre-change code called a nonexistent Product::items()
+     * relation and crashed with a 500 on exactly that path).
+     */
+    private function resolvableItemId(ReturnRequestItem $line): ?int
+    {
+        if ($line->item_id) {
+            return (int) $line->item_id;
+        }
+
+        return null;
     }
 
     /**

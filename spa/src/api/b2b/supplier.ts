@@ -12,6 +12,7 @@ import type {
  VendorStatementOfAccount,
  DeliverySchedule,
 } from '@/types/b2b';
+import type { BusinessPolicies } from '@/api/businessPolicies';
 
 const { client: portalClient, setToken } = createPortalClient('ogami_supplier_portal_token');
 
@@ -39,6 +40,12 @@ export const supplierPortalApi = {
 
  me: async () => {
  const { data } = await portalClient.get<{ data: SupplierPortalUser }>('/b2b/supplier/me');
+ return data.data;
+ },
+
+ // Shared read-only policy values, authenticated with the portal bearer token.
+ businessPolicies: async () => {
+ const { data } = await portalClient.get<{ data: BusinessPolicies }>('/business-policies');
  return data.data;
  },
 

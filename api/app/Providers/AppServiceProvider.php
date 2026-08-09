@@ -19,6 +19,7 @@ use App\Modules\Dashboard\Observers\BadgeInvalidationObserver;
 use App\Modules\HR\Exports\EmployeeMasterExport;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Observers\JournalEntryObserver;
+use App\Modules\Accounting\Listeners\AutoCreateBillOnGrnAccepted;
 use App\Modules\Accounting\Listeners\NotifyFinanceOnDeliveryConfirmed;
 use App\Modules\CRM\Events\SalesOrderConfirmed;
 use App\Modules\CRM\Listeners\NotifyOnSalesOrderConfirmed;
@@ -30,10 +31,12 @@ use App\Modules\HR\Listeners\AutoProvisionUserOnEmployeeHire;
 use App\Modules\HR\Listeners\DeactivateAccountOnClearanceComplete;
 use App\Modules\HR\Listeners\InitializeLeaveBalances;
 use App\Modules\HR\Listeners\NotifyOnSeparationInitiated;
+use App\Modules\Inventory\Events\GoodsReceiptNoteAccepted;
 use App\Modules\Inventory\Events\GoodsReceiptNoteCreated;
 use App\Modules\Inventory\Events\LowStockPrCreated;
 use App\Modules\Inventory\Events\StockMovementCompleted;
 use App\Modules\Inventory\Listeners\CheckReorderPoint;
+use App\Modules\Inventory\Listeners\CreateDraftGrnOnPoSent;
 use App\Modules\Inventory\Listeners\NotifyOnGrnReceived;
 use App\Modules\Inventory\Listeners\NotifyOnLowStockPrCreated;
 use App\Modules\Leave\Events\LeaveRequestApproved;
@@ -55,9 +58,11 @@ use App\Modules\Production\Listeners\HandleMachineBreakdown;
 use App\Modules\Production\Listeners\NotifyOnMachineBreakdown;
 use App\Modules\Production\Listeners\NotifyOnWorkOrderCompleted;
 use App\Modules\Purchasing\Events\PurchaseOrderApproved;
+use App\Modules\Purchasing\Events\PurchaseOrderSent;
 use App\Modules\Purchasing\Events\PurchaseRequestApproved;
 use App\Modules\Purchasing\Events\SupplierPerformanceComputed;
 use App\Modules\Purchasing\Listeners\AlertOnSupplierDeterioration;
+use App\Modules\Purchasing\Listeners\ConsolidatePurchaseOrders;
 use App\Modules\Purchasing\Listeners\NotifyOnPurchaseOrderApproved;
 use App\Modules\Purchasing\Listeners\NotifyOnPurchaseRequestApproved;
 use App\Modules\Quality\Events\InspectionFailed;
@@ -120,6 +125,11 @@ class AppServiceProvider extends ServiceProvider
         // connected clients refetch their counts instantly. StockLevel is
         // intentionally excluded — its write frequency would flood the channel;
         // low-stock relies on the 30s cache + 60s SPA poll instead.
+        //
+        // 2026-08-08 scope pass: added the models backing the widened badge set
+        // (inquiries, complaints, inspections, GRN, MRB holds, shipments, MRP
+        // plans, returns, invoices, bills) plus Item, EmployeeTraining and
+        // SalesOrder whose badges previously only refreshed on the TTL/poll.
         foreach ([
             ApprovalRecord::class,
             \App\Modules\Purchasing\Models\PurchaseRequest::class,
@@ -131,6 +141,20 @@ class AppServiceProvider extends ServiceProvider
             \App\Modules\Production\Models\WorkOrder::class,
             \App\Modules\SupplyChain\Models\Delivery::class,
             \App\Modules\Payroll\Models\PayrollPeriod::class,
+            \App\Modules\CRM\Models\SalesOrder::class,
+            \App\Modules\Inventory\Models\Item::class,
+            \App\Modules\HR\Models\EmployeeTraining::class,
+            \App\Modules\HR\Models\JobPosting::class,
+            \App\Modules\Landing\Models\ContactInquiry::class,
+            \App\Modules\CRM\Models\CustomerComplaint::class,
+            \App\Modules\Quality\Models\Inspection::class,
+            \App\Modules\Inventory\Models\GoodsReceiptNote::class,
+            \App\Modules\Inventory\Models\MaterialReviewRecord::class,
+            \App\Modules\SupplyChain\Models\Shipment::class,
+            \App\Modules\MRP\Models\MrpPlan::class,
+            \App\Modules\ReturnManagement\Models\ReturnRequest::class,
+            \App\Modules\Accounting\Models\Invoice::class,
+            \App\Modules\Accounting\Models\Bill::class,
         ] as $badgeModel) {
             $badgeModel::observe(BadgeInvalidationObserver::class);
         }
@@ -162,8 +186,12 @@ class AppServiceProvider extends ServiceProvider
         // C2 Procure-to-Pay
         Event::listen(GoodsReceiptNoteCreated::class, [TriggerIncomingQC::class,                'handle']);
         Event::listen(GoodsReceiptNoteCreated::class, [NotifyOnGrnReceived::class,              'handle']);
+        // Auto-bill chain — GRN accepted → draft supplier bill for review.
+        Event::listen(GoodsReceiptNoteAccepted::class, [AutoCreateBillOnGrnAccepted::class,      'handle']);
         Event::listen(PurchaseRequestApproved::class, [NotifyOnPurchaseRequestApproved::class,  'handle']);
+        Event::listen(PurchaseRequestApproved::class, [ConsolidatePurchaseOrders::class,        'handle']);
         Event::listen(PurchaseOrderApproved::class,   [NotifyOnPurchaseOrderApproved::class,    'handle']);
+        Event::listen(PurchaseOrderSent::class,       [CreateDraftGrnOnPoSent::class,           'handle']);
         // T3.3.C — Supplier deterioration alert (score drop >= 20 vs prior month).
         Event::listen(SupplierPerformanceComputed::class, [AlertOnSupplierDeterioration::class, 'handle']);
         Event::listen(InspectionFailed::class,        [RejectGRNOnQcFail::class,                'handle']);

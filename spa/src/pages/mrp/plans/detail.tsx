@@ -87,14 +87,14 @@ export default function MrpPlanDetailPage() {
  <div className="text-lg font-mono tabular-nums font-medium">{summary.totalDemand.toFixed(0)}</div>
  <div className="text-2xs text-muted mt-0.5">units gross</div>
  </div>
- <div className={`rounded-md border p-3 ${summary.shortageCount > 0 ? 'border-danger/30 bg-danger/5' : 'border-default bg-canvas'}`}>
+ <div className={`rounded-md border p-3 ${summary.shortageCount > 0 ? 'border-danger/30 bg-danger-bg/5' : 'border-default bg-canvas'}`}>
  <div className="text-2xs uppercase tracking-wider text-muted mb-1">Shortages</div>
- <div className={`text-lg font-mono tabular-nums font-medium ${summary.shortageCount > 0 ? 'text-danger' : ''}`}>
+ <div className={`text-lg font-mono tabular-nums font-medium ${summary.shortageCount > 0 ? 'text-danger-fg' : ''}`}>
  {summary.shortageCount}
  </div>
  <div className="text-2xs text-muted mt-0.5">materials short</div>
  </div>
- <div className={`rounded-md border p-3 ${summary.autoPrCount > 0 ? 'border-info/30 bg-info/5' : 'border-default bg-canvas'}`}>
+ <div className={`rounded-md border p-3 ${summary.autoPrCount > 0 ? 'border-info/30 bg-info-bg/5' : 'border-default bg-canvas'}`}>
  <div className="text-2xs uppercase tracking-wider text-muted mb-1">Auto PRs</div>
  <div className="text-lg font-mono tabular-nums font-medium">{summary.autoPrCount}</div>
  <div className="text-2xs text-muted mt-0.5">generated</div>

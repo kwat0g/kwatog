@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronDown, ChevronRight } from 'lucide-react';
@@ -6,7 +6,9 @@ import { accountsApi } from '@/api/accounting/accounts';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { FilterBar } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatPeso } from '@/lib/formatNumber';
 import { cn } from '@/lib/cn';
@@ -16,11 +18,31 @@ import { focusRing } from '@/lib/focus';
 
 export default function ChartOfAccountsPage() {
  const { can } = usePermission();
+ const [filters, setFilters] = useUrlFilters({ search: '' });
+
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['accounting', 'accounts', 'tree'],
  queryFn: () => accountsApi.tree(),
  placeholderData: (prev) => prev,
  });
+
+ const filteredData = useMemo(() => {
+ if (!data) return null;
+ if (!filters.search) return data;
+ const q = filters.search.toLowerCase();
+ const filterTree = (nodes: Account[]): Account[] => {
+ const result: Account[] = [];
+ for (const node of nodes) {
+ const matches = node.name.toLowerCase().includes(q) || node.code.toLowerCase().includes(q);
+ const filteredChildren = node.children ? filterTree(node.children) : undefined;
+ if (matches || (filteredChildren && filteredChildren.length > 0)) {
+ result.push({ ...node, children: filteredChildren });
+ }
+ }
+ return result;
+ };
+ return filterTree(data);
+ }, [data, filters.search]);
 
  const [expanded, setExpanded] = useState<Set<string>>(new Set());
  const [didInit, setDidInit] = useState(false);
@@ -43,16 +65,14 @@ export default function ChartOfAccountsPage() {
  });
  };
 
- const expandAll = () => setExpanded(new Set([...collectIds(data ?? [])]));
+ const expandAll = () => setExpanded(new Set([...collectIds(filteredData ?? [])]));
  const collapseAll = () => setExpanded(new Set());
 
  return (
  <div>
  <PageHeader
  title="Chart of Accounts"
- backTo="/accounting/journal-entries"
- backLabel="Journal Entries"
- subtitle={data ? `${countAll(data)} accounts` : undefined}
+ subtitle={filteredData ? `${countAll(filteredData)} accounts` : undefined}
  actions={
  <div className="flex gap-1.5">
  <Button variant="secondary" size="sm" onClick={collapseAll}>Collapse all</Button>
@@ -66,7 +86,14 @@ export default function ChartOfAccountsPage() {
  }
  />
 
- {isLoading && !data && <div className="px-5 py-4"><SkeletonTable columns={5} rows={8} /></div>}
+ <div className="px-5 pt-4">
+ <FilterBar
+ onSearch={(search) => setFilters((f) => ({ ...f, search }))}
+ searchPlaceholder="Search account code or name..."
+ />
+ </div>
+
+ {isLoading && !filteredData && <div className="px-5 py-4"><SkeletonTable columns={5} rows={8} /></div>}
 
  {isError && (
  <EmptyState
@@ -76,15 +103,15 @@ export default function ChartOfAccountsPage() {
  />
  )}
 
- {data && data.length === 0 && (
- <EmptyState icon="inbox" title="No accounts yet" description="Run the ChartOfAccountsSeeder to install the default 45-account COA." />
+ {filteredData && filteredData.length === 0 && (
+ <EmptyState icon="inbox" title="No accounts found" description={filters.search ? `No matches for "${filters.search}".` : "Run the ChartOfAccountsSeeder to install the default 45-account COA."} />
  )}
 
- {data && data.length > 0 && (
+ {filteredData && filteredData.length > 0 && (
  <div className="px-5 py-4">
  <div className="border border-default rounded-md overflow-hidden">
  {/* Header matches DataTable (bg-canvas + border-b) for consistency. */}
- <div className="grid grid-cols-12 h-8 px-2.5 items-center bg-canvas text-2xs uppercase tracking-wider text-muted font-medium border-b border-default">
+ <div className="grid grid-cols-12 h-row px-2.5 items-center bg-canvas text-2xs uppercase tracking-wider text-muted font-medium border-b border-default">
  <div className="col-span-1">Code</div>
  <div className="col-span-5">Account</div>
  <div className="col-span-2">Type</div>
@@ -92,7 +119,7 @@ export default function ChartOfAccountsPage() {
  <div className="col-span-2 text-right">Balance</div>
  </div>
  <div>
- {data.map((root) => (
+ {filteredData.map((root) => (
  <TreeRow key={root.id} node={root} depth={0} expanded={expanded} onToggle={toggle} canManage={can('accounting.coa.manage')} />
  ))}
  </div>

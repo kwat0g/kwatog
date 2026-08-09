@@ -57,12 +57,13 @@ export interface PurchaseRequest {
  department: { id: string; name: string; code: string } | null;
  template: { id: number; name: string } | null;
  items?: PurchaseRequestItem[];
- approval_records?: ApprovalRecord[];
- purchase_orders?: Array<{
- id: string; po_number: string; status: PurchaseOrderStatus; status_label?: string;
- vendor: { id: string; name: string } | null;
- total_amount: string;
- }>;
+ approval_records?: ApprovalRecord[]; purchase_orders?: Array<{
+  id: string; po_number: string; status: PurchaseOrderStatus; status_label?: string;
+  vendor: { id: string; name: string } | null;
+  total_amount: string;
+  is_auto_generated?: boolean;  bill?: { id: string; bill_number: string; status: string; status_label?: string; total_amount: string } | null;
+  grns?: Array<{ id: string; grn_number: string; status: string }>;
+}>;
 }
 
 export interface PurchaseRequestTemplate {

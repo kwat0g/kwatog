@@ -7,10 +7,10 @@ interface ActivityStreamProps {
 }
 
 const dotColor = {
- success: 'bg-success',
- info: 'bg-info',
- warning: 'bg-warning',
- danger: 'bg-danger',
+ success: 'bg-success-bg',
+ info: 'bg-info-bg',
+ warning: 'bg-warning-bg',
+ danger: 'bg-danger-bg',
  neutral: 'bg-strong',
 } as const;
 

@@ -9,6 +9,7 @@ import { DataTable, NumCell, type BulkAction, type Column } from '@/components/u
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import { StatCard } from '@/components/ui/StatCard';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
@@ -17,7 +18,7 @@ import { formatDate } from '@/lib/formatDate';
 import type { Bill } from '@/types/accounting';
 
 const DEFAULT_FILTERS: BillListParams = {
- page: 1, per_page: 25,
+ page: 1, per_page: 25, status: 'unpaid',
 };
 
 export default function BillsPage() {
@@ -36,6 +37,10 @@ export default function BillsPage() {
  queryFn: billsApi.options,
  staleTime: 5 * 60 * 1000 });
  const statusLabels = new Map((billOptions?.statuses ?? []).map((option) => [option.value, option.label]));
+ const statusLabel = (value: string) => statusLabels.get(value) ?? value.replaceAll('_', ' ');
+ const outstandingBalance = data?.data.some((bill) => bill.balance != null)
+  ? formatPeso(data.data.reduce((sum, bill) => sum + Number(bill.balance ?? 0), 0))
+  : '—';
 
  const columns: Column<Bill>[] = [
  { key: 'bill_number', header: 'Bill no', cell: (r) => <span className="font-mono">{r.bill_number}</span> },
@@ -77,11 +82,36 @@ export default function BillsPage() {
  />
  {isLoading && !data && <SkeletonTable columns={7} rows={6} />}
  {isError && <EmptyState icon="alert-circle" title="Failed to load bills" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />}
- {data && data.data.length === 0 && (
+ {data && (
+ <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 px-5 py-4 border-b border-default bg-canvas">
+
+  <StatCard
+    label={statusLabel('unpaid')}
+    value={data.data.filter(i => i.status === 'unpaid').length}
+    helper="in current view"
+    linkTo="?status=unpaid"
+  />
+  <StatCard
+    label={statusLabel('overdue')}
+    value={data.data.filter(i => i.is_overdue).length}
+    helper="in current view"
+    linkTo="?overdue=1"
+    className="border-danger/30 bg-danger-bg/20"
+  />
+  <StatCard
+    label="Outstanding Balance"
+    value={outstandingBalance}
+    helper="in current view"
+  />
+ </div>
+ )}
+
+{data && data.data.length === 0 && (
  <EmptyState icon="inbox" title="No bills yet"
  description={can('accounting.bills.create') ? 'Record vendor bills to track payables.' : 'Nothing here yet.'}
  action={can('accounting.bills.create') ? <Button variant="primary" onClick={() => navigate('/accounting/bills/create')}>New bill</Button> : undefined} />
  )}
+
  {data && data.data.length > 0 && (
  <div className="px-5 py-4">
   <DataTable

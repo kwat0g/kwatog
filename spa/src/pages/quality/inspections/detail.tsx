@@ -299,7 +299,7 @@ export default function InspectionDetailPage() {
  <dt className="text-2xs uppercase tracking-wider text-muted">Defects</dt>
  <dd
  className={`font-mono tabular-nums ${
- data.defect_count > data.accept_count ? 'text-danger' : ''
+ data.defect_count > data.accept_count ? 'text-danger-fg' : ''
  }`}
  >
  {data.defect_count}
@@ -450,12 +450,12 @@ export default function InspectionDetailPage() {
  until every sampled unit has a pass/fail recorded.
  </p>
  ) : data.defect_count > data.accept_count ? (
- <p className="text-sm text-danger">
+ <p className="text-sm text-danger-fg">
  Defects ({data.defect_count}) exceed Ac ({data.accept_count}). Completing now will mark this
  inspection as <strong>failed</strong>.
  </p>
  ) : (
- <p className="text-sm text-success">
+ <p className="text-sm text-success-fg">
  All measurements recorded within tolerance. Completing will mark this inspection as{' '}
  <strong>passed</strong>.
  </p>

@@ -129,6 +129,22 @@ export default function DemandForecastingPage() {
  },
  });
 
+ const forecastingSettingsReady = settingsQ.data != null;
+ const updateWindow = (value: string, field: 'horizon' | 'lookback') => {
+  if (!settingsQ.data) return;
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) return;
+  const minimum = field === 'horizon'
+    ? settingsQ.data.minimum_horizon_months
+    : settingsQ.data.minimum_lookback_months;
+  const maximum = field === 'horizon'
+    ? settingsQ.data.maximum_horizon_months
+    : settingsQ.data.maximum_lookback_months;
+  const bounded = Math.max(minimum, Math.min(maximum, parsed));
+  if (field === 'horizon') setHorizon(bounded);
+  else setLookback(bounded);
+ };
+
  const manualM = useMutation({
  mutationFn: () => {
  if (!manualRow) throw new Error('No row selected');
@@ -256,15 +272,15 @@ export default function DemandForecastingPage() {
  <div>
  <label className="text-2xs uppercase tracking-wide text-muted mb-1 block">Horizon (mo)</label>
  <Input
- type="number" min={settingsQ.data?.minimum_horizon_months} max={settingsQ.data?.maximum_horizon_months} value={horizon ?? ''}
- onChange={(e) => setHorizon(Math.max(settingsQ.data?.minimum_horizon_months ?? 1, Math.min(settingsQ.data?.maximum_horizon_months ?? Number.MAX_SAFE_INTEGER, parseInt(e.target.value) || settingsQ.data?.default_horizon_months || 1)))}
+ type="number" min={settingsQ.data?.minimum_horizon_months} max={settingsQ.data?.maximum_horizon_months} value={horizon ?? ''} disabled={!forecastingSettingsReady}
+ onChange={(e) => updateWindow(e.target.value, 'horizon')}
  />
  </div>
  <div>
  <label className="text-2xs uppercase tracking-wide text-muted mb-1 block">Lookback (mo)</label>
  <Input
- type="number" min={settingsQ.data?.minimum_lookback_months} max={settingsQ.data?.maximum_lookback_months} value={lookback ?? ''}
- onChange={(e) => setLookback(Math.max(settingsQ.data?.minimum_lookback_months ?? 1, Math.min(settingsQ.data?.maximum_lookback_months ?? Number.MAX_SAFE_INTEGER, parseInt(e.target.value) || settingsQ.data?.default_lookback_months || 1)))}
+ type="number" min={settingsQ.data?.minimum_lookback_months} max={settingsQ.data?.maximum_lookback_months} value={lookback ?? ''} disabled={!forecastingSettingsReady}
+ onChange={(e) => updateWindow(e.target.value, 'lookback')}
  />
  </div>
  </div>
@@ -283,7 +299,7 @@ export default function DemandForecastingPage() {
  />
  <Button
  onClick={() => recomputeM.mutate()}
- disabled={!productId || !canManage || recomputeM.isPending}
+ disabled={!productId || !canManage || !forecastingSettingsReady || horizon == null || lookback == null || !method || recomputeM.isPending}
  >
  {recomputeM.isPending ? 'Recomputing…' : 'Recompute forecast'}
  </Button>
@@ -308,7 +324,7 @@ export default function DemandForecastingPage() {
  Actual demand
  </span>
  <span className="flex items-center gap-1.5">
- <span className="inline-block w-3 h-3 rounded-sm bg-warning/70 border border-warning" />
+ <span className="inline-block w-3 h-3 rounded-sm bg-warning-bg/70 border border-warning" />
  Forecast
  </span>
  </div>
@@ -326,7 +342,7 @@ export default function DemandForecastingPage() {
  {d.forecast > 0 && (
  <div
  title={`Forecast: ${d.forecast.toFixed(2)}`}
- className="w-full bg-warning/70 border border-warning rounded-t-sm transition-all group-hover:bg-warning"
+ className="w-full bg-warning-bg/70 border border-warning rounded-t-sm transition-all group-hover:bg-warning-bg"
  style={{ height: `${Math.max(2, (d.forecast / maxBar) * 100)}%` }}
  />
  )}
@@ -379,7 +395,7 @@ export default function DemandForecastingPage() {
  </Td>
  <Td align="right" mono>
  {f.variance !== null ? (
- <span className={f.variance < 0 ? 'text-danger' : 'text-success'}>
+ <span className={f.variance < 0 ? 'text-danger-fg' : 'text-success-fg'}>
  {f.variance > 0 ? '+' : ''}{f.variance.toFixed(2)}
  </span>
  ) : '—'}

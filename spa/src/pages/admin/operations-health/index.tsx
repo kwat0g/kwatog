@@ -30,9 +30,9 @@ export default function OperationsHealthPage() {
  />
  <div className="p-5 space-y-4">
  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
- <StatCard label="Quality-plan coverage" value={`${health.quality_plans.coverage_percent}%`} helper={`${health.quality_plans.covered_items}/${health.quality_plans.eligible_items} items`} />
+        <StatCard label="Quality-plan coverage" value={health.quality_plans.coverage_percent == null ? '—' : `${health.quality_plans.coverage_percent}%`} helper={`${health.quality_plans.covered_items}/${health.quality_plans.eligible_items} items`} />
  <StatCard label="Missed QC triggers" value={health.qc_triggers.pending_grns_without_inspection} helper={`after ${health.qc_triggers.grace_minutes} min`} />
- <StatCard label="Scanner recognition" value={`${health.scanner.recognition_rate}%`} helper={`${health.scanner.scans_24h} scans / 24h`} />
+        <StatCard label="Scanner recognition" value={health.scanner.recognition_rate == null ? '—' : `${health.scanner.recognition_rate}%`} helper={`${health.scanner.scans_24h} scans / 24h`} />
  <StatCard label="Overdue actions" value={health.actions.overdue} helper={`${health.actions.unassigned} unassigned`} />
  </div>
 

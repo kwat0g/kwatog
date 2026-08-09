@@ -3,7 +3,7 @@ import { cn } from '@/lib/cn';
 import { Spinner } from './Spinner';
 
 type Variant = 'primary' | 'secondary' | 'danger' | 'ghost';
-type Size = 'sm' | 'md' | 'lg';
+type Size = 'xs' | 'sm' | 'md' | 'lg';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
  variant?: Variant;
@@ -15,12 +15,14 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const sizeClasses: Record<Size, string> = {
+ xs: 'h-6 px-2 text-[11px]',
  sm: 'h-7 px-3 text-xs',
  md: 'h-8 px-4 text-sm',
  lg: 'h-9 px-5 text-base font-medium',
 };
 
 const iconOnlySizeClasses: Record<Size, string> = {
+ xs: 'h-6 w-6 text-[11px] rounded',
  sm: 'h-7 w-7 text-xs rounded-md',
  md: 'h-8 w-8 text-sm rounded-md',
  lg: 'h-9 w-9 text-base rounded-md',
@@ -32,7 +34,7 @@ const variantClasses: Record<Variant, string> = {
  secondary:
  'border-hairline border-default bg-transparent text-primary hover:bg-elevated active:scale-[0.98] transition-colors',
  danger:
- 'bg-danger text-white font-medium border-hairline border-transparent hover:bg-danger/90 active:scale-[0.98] transition-colors',
+ 'bg-danger-bg text-white font-medium border-hairline border-transparent hover:bg-danger-bg/90 active:scale-[0.98] transition-colors',
  ghost:
  'bg-transparent text-primary border-hairline border-transparent hover:bg-subtle/80 active:scale-[0.98] transition-colors',
 };
@@ -55,7 +57,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
  )}
  {...rest}
  >
- {loading ? <Spinner size={size === 'sm' || size === 'md' ? 'sm' : 'md'} /> : icon}
+ {loading ? <Spinner size={size === 'sm' || size === 'xs' || size === 'md' ? 'sm' : 'md'} /> : icon}
  {children}
  </button>
  );

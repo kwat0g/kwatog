@@ -5,7 +5,7 @@ import { skillsApi } from '@/api/hr/skills';
 import { DataTable } from '@/components/ui/DataTable';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
-import { Modal } from '@/components/ui/Modal';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { FilterBar } from '@/components/ui/FilterBar';
@@ -78,7 +78,7 @@ export default function SkillsListPage() {
  {
  key: 'actions', header: '',
  cell: (row: Skill) => row.is_active && can('hr.trainings.manage') ? (
- <Button variant="ghost" size="sm" icon={<Trash2 size={12} />}
+ <Button variant="ghost" size="xs" icon={<Trash2 size={12} />}
  onClick={(e) => { e.stopPropagation(); deactivateMutation.mutate(row.id); }} />
  ) : null,
  },
@@ -90,7 +90,7 @@ export default function SkillsListPage() {
  title="Skills"
  subtitle={data ? `${data.meta.total} skills` : undefined}
  actions={can('hr.trainings.manage') && (
- <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => setShowCreate(true)}>
+ <Button variant="primary" size="xs" icon={<Plus size={14} />} onClick={() => setShowCreate(true)}>
  Add Skill
  </Button>
  )}
@@ -115,10 +115,10 @@ export default function SkillsListPage() {
  <Input label="Name" required {...register('name')} error={errors.name?.message} />
  <Input label="Category" {...register('category')} error={errors.category?.message} />
  <Input label="Description" {...register('description')} error={errors.description?.message} />
- <div className="flex justify-end gap-2 pt-3 border-t border-default">
+ <ModalFooter>
  <Button variant="secondary" onClick={() => setShowCreate(false)} disabled={createMutation.isPending}>Cancel</Button>
  <Button type="submit" variant="primary" disabled={createMutation.isPending} loading={createMutation.isPending}>Create</Button>
- </div>
+ </ModalFooter>
  </form>
  </Modal>
  )}

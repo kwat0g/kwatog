@@ -24,6 +24,7 @@ Route::prefix('landing')->group(function (): void {
 
 // ── ERP-side inbox — the consumer the old quote-request path never had ────
 Route::middleware(['auth:sanctum'])->prefix('crm')->group(function (): void {
+    Route::get('/inquiries/options',               [ContactInquiryInboxController::class, 'options'])     ->middleware('permission:crm.inquiries.view');
     Route::get('/inquiries',                    [ContactInquiryInboxController::class, 'index'])        ->middleware('permission:crm.inquiries.view');
     Route::get('/inquiries/{inquiry}',          [ContactInquiryInboxController::class, 'show'])         ->middleware('permission:crm.inquiries.view');
     Route::patch('/inquiries/{inquiry}/status', [ContactInquiryInboxController::class, 'updateStatus']) ->middleware('permission:crm.inquiries.manage');

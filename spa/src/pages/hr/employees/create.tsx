@@ -103,7 +103,7 @@ export default function CreateEmployeePage() {
  ]}
  />
  {fromApplication && conversionData && (
- <div className="mx-auto mt-4 max-w-4xl rounded-md border border-info/30 bg-info/5 px-4 py-3">
+ <div className="mx-auto mt-4 max-w-4xl rounded-md border border-info/30 bg-info-bg/5 px-4 py-3">
  <p className="text-sm">
  <span className="font-medium">Converting applicant:</span>{' '}
  {conversionData.first_name} {conversionData.last_name}.

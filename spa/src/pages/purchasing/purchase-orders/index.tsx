@@ -9,6 +9,7 @@ import { DataTable, NumCell, type BulkAction, type Column } from '@/components/u
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import { StatCard } from '@/components/ui/StatCard';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
@@ -31,7 +32,7 @@ interface PurchaseOrderListParams extends ListParams {
 }
 
 const DEFAULT_FILTERS: PurchaseOrderListParams = {
-  page: 1, per_page: 25,
+  page: 1, per_page: 25, status: 'pending_approval',
 };
 
 export default function PurchaseOrdersListPage() {
@@ -48,6 +49,10 @@ export default function PurchaseOrdersListPage() {
  queryFn: purchaseOrdersApi.options,
  staleTime: 5 * 60 * 1000 });
  const statusLabels = new Map((orderOptions?.statuses ?? []).map((option) => [option.value, option.label]));
+ const statusLabel = (value: string) => statusLabels.get(value) ?? value.replaceAll('_', ' ');
+ const totalValue = data?.data.some((order) => order.total_amount != null)
+  ? formatPeso(data.data.reduce((sum, order) => sum + Number(order.total_amount ?? 0), 0))
+  : '—';
 
  const columns: Column<PurchaseOrder>[] = [
  { key: 'po', header: 'PO #', cell: (r) => (
@@ -99,10 +104,39 @@ export default function PurchaseOrdersListPage() {
  searchPlaceholder="Search PO number…" />
  {isLoading && !data && <SkeletonTable columns={7} rows={6} />}
  {isError && <EmptyState icon="alert-circle" title="Failed to load POs" action={<Button onClick={() => refetch()}>Retry</Button>} />}
- {data && data.data.length === 0 && (
+ {data && (
+  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 px-5 py-4 border-b border-default bg-canvas">
+  <StatCard
+    label={statusLabel('draft')}
+    value={data.data.filter(i => i.status === 'draft').length}
+    helper="in current view"
+    linkTo="?status=draft"
+  />
+  <StatCard
+    label={statusLabel('pending_approval')}
+    value={data.data.filter(i => i.status === 'pending_approval').length}
+    helper="in current view"
+    linkTo="?status=pending_approval"
+  />
+  <StatCard
+    label={statusLabel('approved')}
+    value={data.data.filter(i => i.status === 'approved').length}
+    helper="in current view"
+    linkTo="?status=approved"
+  />
+  <StatCard
+    label="Total Value"
+    value={totalValue}
+    helper="in current view"
+  />
+  </div>
+  )}
+
+{data && data.data.length === 0 && (
  <EmptyState icon="inbox" title="No purchase orders"
  action={can('purchasing.po.create') ? <Button variant="primary" onClick={() => navigate('/purchasing/purchase-orders/create')}>New PO</Button> : undefined} />
  )}
+
  {data && data.data.length > 0 && (
  <div className="px-5 py-4">
   <DataTable

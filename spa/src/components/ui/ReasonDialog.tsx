@@ -79,19 +79,19 @@ export function ReasonDialog({
  }
  };
 
- const iconClass = variant === 'danger' ? 'text-danger' : variant === 'warning' ? 'text-warning' : 'text-accent';
+ const iconClass = variant === 'danger' ? 'text-danger-fg' : variant === 'warning' ? 'text-warning-fg' : 'text-accent';
  const buttonVariant: 'primary' | 'danger' = variant === 'danger' ? 'danger' : 'primary';
 
  return (
  <Modal isOpen={isOpen} onClose={isPending ? () => undefined : onClose} size="sm" closeOnOverlayClick={!isPending}>
- <div className="py-4">
- <div className="flex gap-3">
- <div className={`shrink-0 ${iconClass}`} aria-hidden="true">
- <AlertTriangle size={20} />
+ <div className="py-2">
+ <div className="flex gap-4">
+ <div className={`shrink-0 p-3 bg-canvas/50 rounded-full border border-default/50 ${iconClass}`} aria-hidden="true">
+ <AlertTriangle size={24} />
  </div>
- <div className="space-y-1.5 flex-1">
- <h2 className="text-md font-medium text-primary">{title}</h2>
- {description && <div className="text-sm text-muted">{description}</div>}
+ <div className="space-y-2 mt-1 flex-1">
+ <h2 className="text-lg font-medium tracking-tight text-primary">{title}</h2>
+ {description && <div className="text-base text-muted leading-relaxed">{description}</div>}
  </div>
  </div>
  <div className="mt-4">

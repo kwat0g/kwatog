@@ -164,9 +164,9 @@ function PoPipelinePanel({ items }: { items: PoPipelineItem[] }) {
 }
 
 function poBarClass(status: string): string {
- if (status === 'received' || status === 'closed') return 'h-full bg-success rounded-full';
- if (status === 'sent') return 'h-full bg-info rounded-full';
- if (status === 'approved') return 'h-full bg-warning rounded-full';
+ if (status === 'received' || status === 'closed') return 'h-full bg-success-bg rounded-full';
+ if (status === 'sent') return 'h-full bg-info-bg rounded-full';
+ if (status === 'approved') return 'h-full bg-warning-bg rounded-full';
  return 'h-full bg-strong rounded-full';
 }
 

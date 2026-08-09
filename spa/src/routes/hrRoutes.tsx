@@ -13,10 +13,10 @@ const EditEmployeePage = lazy(() => import('@/pages/hr/employees/edit'));
 
 // HR > Profile Change Requests (Task U3 — HR review queue)
 const ProfileUpdateRequestsPage = lazy(() => import('@/pages/hr/profile-update-requests'));
-const SalaryAdjustmentsPage = lazy(() => import('@/pages/hr/salary-adjustments'));
+// /hr/salary-adjustments removed 2026-08-08 (scope cut — now a tab on /hr/employees)
 
-// Series F / Task F5 — Employee directory + org chart
-const EmployeeDirectoryPage = lazy(() => import('@/pages/hr/directory'));
+// Series F / Task F5 — Employee directory + org chart hidden 2026-08-08
+// (scope cut; the Employees list is the supported directory surface).
 
 // Attendance (Sprint 2 — Tasks 16/17/18/19)
 const ShiftsPage = lazy(() => import('@/pages/attendance/shifts'));
@@ -33,8 +33,8 @@ const LeavesPage = lazy(() => import('@/pages/leaves'));
 const CreateLeavePage = lazy(() => import('@/pages/leaves/create'));
 const LeaveDetailPage = lazy(() => import('@/pages/leaves/detail'));
 const LeaveCalendarPage = lazy(() => import('@/pages/leaves/calendar'));
-const LeaveTypesPage = lazy(() => import('@/pages/leaves/types'));
-const YearEndLeavePage = lazy(() => import('@/pages/leaves/year-end'));
+// /hr/leaves/types removed 2026-08-08 (scope cut — types now a modal on /hr/leaves)
+// /hr/leaves/year-end removed 2026-08-08 (scope cut — now a modal on /hr/leaves)
 
 // Loans (Sprint 2 — Task 22)
 const LoansPage = lazy(() => import('@/pages/loans'));
@@ -79,7 +79,7 @@ export const hrRoutes = (
  />
  <Route
  path="/hr/employees"
- element={<PermissionGuard permission="hr.employees.view"><EmployeesListPage /></PermissionGuard>}
+ element={<PermissionGuard anyOf={['hr.employees.view', 'hr.salary_adjustments.view']}><EmployeesListPage /></PermissionGuard>}
  />
  <Route
  path="/hr/employees/create"
@@ -96,15 +96,6 @@ export const hrRoutes = (
  <Route
  path="/hr/profile-update-requests"
  element={<PermissionGuard permission="hr.employees.view"><ProfileUpdateRequestsPage /></PermissionGuard>}
- />
- <Route
- path="/hr/salary-adjustments"
- element={<PermissionGuard permission="hr.salary_adjustments.view"><SalaryAdjustmentsPage /></PermissionGuard>}
- />
- {/* Series F / Task F5 — Employee directory + org chart */}
- <Route
- path="/hr/directory"
- element={<PermissionGuard permission="hr.directory.view"><EmployeeDirectoryPage /></PermissionGuard>}
  />
  </Route>
 
@@ -148,7 +139,7 @@ export const hrRoutes = (
  <Route element={<ModuleGuard module="leave" />}>
  <Route
  path="/hr/leaves"
- element={<PermissionGuard anyOf={['leave.approve_dept', 'leave.approve_hr']}><LeavesPage /></PermissionGuard>}
+ element={<PermissionGuard anyOf={['leave.approve_dept', 'leave.approve_hr', 'leave.types.manage']}><LeavesPage /></PermissionGuard>}
  />
  <Route
  path="/hr/leaves/calendar"
@@ -162,14 +153,6 @@ export const hrRoutes = (
  path="/hr/leaves/:id"
  element={<PermissionGuard anyOf={['leave.approve_dept', 'leave.approve_hr']}><LeaveDetailPage /></PermissionGuard>}
  />
-<Route
-        path="/hr/leaves/types"
-        element={<PermissionGuard permission="leave.types.manage"><LeaveTypesPage /></PermissionGuard>}
-      />
-      <Route
-        path="/hr/leaves/year-end"
-        element={<PermissionGuard permission="leave.types.manage"><YearEndLeavePage /></PermissionGuard>}
-      />
  </Route>
 
  {/* Loans module */}

@@ -166,7 +166,7 @@ export default function ChangePasswordPage() {
  key={p.label}
  className={cn(
  'flex items-center gap-1.5 transition-colors',
- p.passed ? 'text-success' : 'text-muted',
+ p.passed ? 'text-success-fg' : 'text-muted',
  )}
  >
  {p.passed ? <Check size={12} /> : <X size={12} />}

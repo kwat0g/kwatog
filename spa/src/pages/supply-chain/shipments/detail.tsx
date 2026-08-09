@@ -182,7 +182,7 @@ const removeDoc = useMutation({
  className={[
  'w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium border-2',
  isDone
- ? 'bg-success border-success text-white'
+ ? 'bg-success-bg border-success text-white'
  : isCurrent
  ? 'border-accent text-accent bg-canvas'
  : 'border-default text-muted bg-canvas',
@@ -193,14 +193,14 @@ const removeDoc = useMutation({
  <span
  className={[
  'text-2xs mt-1 capitalize',
- isCurrent ? 'text-accent font-medium' : isDone ? 'text-success' : 'text-muted',
+ isCurrent ? 'text-accent font-medium' : isDone ? 'text-success-fg' : 'text-muted',
  ].join(' ')}
  >
  {statusLabels.get(s) ?? s.replace('_', ' ')}
  </span>
  </div>
  {!isLast && (
- <div className={['h-0.5 w-10 mb-4', isDone ? 'bg-success' : 'bg-border-default'].join(' ')} />
+ <div className={['h-0.5 w-10 mb-4', isDone ? 'bg-success-bg' : 'bg-border-default'].join(' ')} />
  )}
  </li>
  );
@@ -318,7 +318,7 @@ const removeDoc = useMutation({
   icon={<Trash2 size={14} />}
   aria-label="Archive document"
   onClick={() => setDeleteDocId(doc.id)}
-  className="text-muted hover:text-danger"
+  className="text-muted hover:text-danger-fg"
   />
   </>
   )}

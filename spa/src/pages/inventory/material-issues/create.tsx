@@ -176,7 +176,7 @@ export default function CreateMaterialIssuePage() {
 
  <Panel title="Line items">
  <div className="border border-default rounded-md overflow-hidden">
- <div className="grid grid-cols-12 h-8 px-2.5 bg-subtle text-2xs uppercase tracking-wider text-muted font-medium border-b border-default items-center">
+ <div className="grid grid-cols-12 h-row px-2.5 bg-subtle text-2xs uppercase tracking-wider text-muted font-medium border-b border-default items-center">
  <div className="col-span-4">Item</div>
  <div className="col-span-3">Location</div>
  <div className="col-span-2 text-right">Qty issued</div>
@@ -233,7 +233,7 @@ export default function CreateMaterialIssuePage() {
  icon={<Trash2 size={14} />}
  aria-label="Remove line"
  onClick={() => remove(idx)}
- className="text-muted hover:text-danger"
+ className="text-muted hover:text-danger-fg"
  />
  )}
  </div>

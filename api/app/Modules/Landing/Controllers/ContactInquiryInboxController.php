@@ -18,6 +18,19 @@ class ContactInquiryInboxController
 {
     public function __construct(private readonly ContactInquiryInboxService $service) {}
 
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'statuses' => array_map(
+                static fn (ContactInquiryStatus $status): array => [
+                    'value' => $status->value,
+                    'label' => $status->label(),
+                ],
+                ContactInquiryStatus::cases(),
+            ),
+        ]]);
+    }
+
     public function index(Request $request): AnonymousResourceCollection
     {
         return ContactInquiryResource::collection($this->service->list($request->query()));

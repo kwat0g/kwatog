@@ -8,7 +8,7 @@ import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
-import { Modal } from '@/components/ui/Modal';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { Radio } from '@/components/ui/Radio';
 import { Select } from '@/components/ui/Select';
 import { SkeletonTable } from '@/components/ui/Skeleton';
@@ -379,7 +379,7 @@ function AddOverrideModal({ userId, isOpen, onClose }: AddOverrideModalProps) {
  />
  </div>
 
- <div className="flex justify-end gap-2 pt-3 border-t border-default">
+ <ModalFooter>
  <Button variant="secondary" onClick={close} disabled={create.isPending}>
  Cancel
  </Button>
@@ -391,7 +391,7 @@ function AddOverrideModal({ userId, isOpen, onClose }: AddOverrideModalProps) {
  >
  {create.isPending ? 'Applying…' : 'Apply override'}
  </Button>
- </div>
+ </ModalFooter>
  </Modal>
  );
 }

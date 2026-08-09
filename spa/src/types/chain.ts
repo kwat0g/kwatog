@@ -79,7 +79,9 @@ export type ChainEntityType =
  | 'work_order'
  | 'purchase_order'
  | 'delivery'
- | 'grn';
+ | 'grn'
+ | 'bill'
+ | 'invoice';
 
 export interface ChainStepEvent {
  entity_type: ChainEntityType;

@@ -12,223 +12,254 @@
  * Input) render blue-free here without any change to those components.
  */
 
-import { useEffect, useLayoutEffect, useRef, type CSSProperties } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, type CSSProperties } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Outlet, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import gsap from 'gsap';
 import { useThemeStore } from '@/stores/themeStore';
-import { reduceMotion } from '@/pages/landing/motion';
+import { reduceMotion } from '@/lib/motionPrefs';
 
 // Self-hosted display face (Fontsource → same-origin → CSP-safe); the auth
 // pages share the marketing site's display typeface for brand continuity.
 
 import { BrandLogo } from '@/components/brand/BrandLogo';
-import { AutoPartShowcase } from '@/pages/landing/components/AutoPartShowcase';
-import { CrosshairCursor } from '@/pages/landing/components/CrosshairCursor';
 import { landingApi } from '@/api/landing';
 
+// `AuthLayout` is reachable statically from `App.tsx` (via `authRoutes`), so a
+// static import here lands in the entry chunk for EVERY route — someone deep
+// linking to /dashboard would download Three.js before anything painted. The
+// showcase is decorative and `hidden` below `lg`, so defer it: the drawing
+// frame, grid and registration marks render immediately either way.
+const AutoPartShowcase = lazy(() =>
+  import('@/pages/landing/components/AutoPartShowcase').then((m) => ({
+    default: m.AutoPartShowcase,
+  })),
+);
+
 const GRID_BG: CSSProperties = {
- backgroundImage:
- 'linear-gradient(var(--blueprint-grid) 1px, transparent 1px),' +
- 'linear-gradient(90deg, var(--blueprint-grid) 1px, transparent 1px)',
- backgroundSize: 'var(--blueprint-grid-size, 32px) var(--blueprint-grid-size, 32px)',
+  backgroundImage:
+    'linear-gradient(var(--blueprint-grid) 1px, transparent 1px),' +
+    'linear-gradient(90deg, var(--blueprint-grid) 1px, transparent 1px)',
+  backgroundSize: 'var(--blueprint-grid-size, 32px) var(--blueprint-grid-size, 32px)',
 };
 
 export function AuthLayout() {
- const { data: contact } = useQuery({ queryKey: ['landing', 'contact'], queryFn: landingApi.contact, staleTime: 300_000 });
- const legalName = contact?.legal_name || 'Philippine Ogami Corporation';
- const locationCountry = contact?.address?.split(',').at(-1)?.trim() || 'Philippines';
- const address = contact?.address || 'FCIE Dasmariñas, Cavite, Philippines';
+  const { data: contact } = useQuery({
+    queryKey: ['landing', 'contact'],
+    queryFn: landingApi.contact,
+    staleTime: 300_000,
+  });
+  const legalName = contact?.legal_name ?? '';
+  const locationCountry = contact?.address?.split(',').at(-1)?.trim() ?? '';
+  const address = contact?.address ?? '';
 
- // Public/auth pages are light-only. If no authenticated session has set a
- // theme yet, pin light (don't follow system → no dark auth surfaces).
- const initTheme = useThemeStore((s) => s.init);
- useEffect(() => {
- const existing = document.documentElement.getAttribute('data-theme');
- if (!existing) {
- initTheme('light');
- }
- }, [initTheme]);
+  // Public/auth pages are light-only. If no authenticated session has set a
+  // theme yet, pin light (don't follow system → no dark auth surfaces).
+  const initTheme = useThemeStore((s) => s.init);
+  useEffect(() => {
+    const existing = document.documentElement.getAttribute('data-theme');
+    if (!existing) {
+      initTheme('light');
+    }
+  }, [initTheme]);
 
- const asideRef = useRef<HTMLElement>(null);
- const gridRef = useRef<HTMLDivElement>(null);
- const scanRef = useRef<HTMLDivElement>(null);
+  const asideRef = useRef<HTMLElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const scanRef = useRef<HTMLDivElement>(null);
 
- useLayoutEffect(() => {
- const aside = asideRef.current;
- const grid = gridRef.current;
- const scan = scanRef.current;
- if (!aside || !grid || !scan) return;
- if (reduceMotion()) return;
+  useLayoutEffect(() => {
+    const aside = asideRef.current;
+    const grid = gridRef.current;
+    const scan = scanRef.current;
+    if (!aside || !grid || !scan) return;
+    if (reduceMotion()) return;
 
- const ctx = gsap.context(() => {
- // ── CMM scan-line — slow vertical sweep across the figure ───────
- // Animate `top` (0%→100% of the figure) — a 1px-tall line cannot be
- // swept with yPercent (that is relative to its own height).
- gsap.fromTo(
- scan,
- { top: '0%', opacity: 0 },
- {
- duration: 3.5,
- ease: 'none',
- repeat: -1,
- repeatDelay: 0.8,
- keyframes: [
- { top: '0%', opacity: 0, duration: 0 },
- { top: '6%', opacity: 0.5, duration: 0.3 },
- { top: '94%', opacity: 0.4, duration: 2.9 },
- { top: '100%', opacity: 0, duration: 0.3 },
- ],
- },
- );
+    // GSAP is loaded on demand so it stays out of the entry chunk (see the
+    // note on AutoPartShowcase above). Both decorations are ambient, so
+    // starting a tick or two late is imperceptible; `disposed` covers an
+    // unmount that beats the import.
+    let disposed = false;
+    let ctx: { revert: () => void } | undefined;
 
- // ── Grid parallax — pointer depth on the aside ───────────────────
- const gx = gsap.quickTo(grid, 'x', { duration: 0.9, ease: 'power3.out' });
- const gy = gsap.quickTo(grid, 'y', { duration: 0.9, ease: 'power3.out' });
+    void import('gsap').then(({ default: gsap }) => {
+      if (disposed) return;
 
- function onPointerMove(e: PointerEvent) {
- const r = aside!.getBoundingClientRect();
- const rx = (e.clientX - r.left) / r.width - 0.5;
- const ry = (e.clientY - r.top) / r.height - 0.5;
- gx(rx * 10);
- gy(ry * 10);
- }
- function onPointerLeave() {
- gx(0);
- gy(0);
- }
+      ctx = gsap.context(() => {
+        // ── CMM scan-line — slow vertical sweep across the figure ───────
+        // Animate `top` (0%→100% of the figure) — a 1px-tall line cannot be
+        // swept with yPercent (that is relative to its own height).
+        gsap.fromTo(
+          scan,
+          { top: '0%', opacity: 0 },
+          {
+            duration: 3.5,
+            ease: 'none',
+            repeat: -1,
+            repeatDelay: 0.8,
+            keyframes: [
+              { top: '0%', opacity: 0, duration: 0 },
+              { top: '6%', opacity: 0.5, duration: 0.3 },
+              { top: '94%', opacity: 0.4, duration: 2.9 },
+              { top: '100%', opacity: 0, duration: 0.3 },
+            ],
+          },
+        );
 
- aside.addEventListener('pointermove', onPointerMove, { passive: true });
- aside.addEventListener('pointerleave', onPointerLeave, { passive: true });
+        // ── Grid parallax — pointer depth on the aside ───────────────────
+        const gx = gsap.quickTo(grid, 'x', { duration: 0.9, ease: 'power3.out' });
+        const gy = gsap.quickTo(grid, 'y', { duration: 0.9, ease: 'power3.out' });
 
- return () => {
- aside.removeEventListener('pointermove', onPointerMove);
- aside.removeEventListener('pointerleave', onPointerLeave);
- };
- }, aside);
+        function onPointerMove(e: PointerEvent) {
+          const r = aside!.getBoundingClientRect();
+          const rx = (e.clientX - r.left) / r.width - 0.5;
+          const ry = (e.clientY - r.top) / r.height - 0.5;
+          gx(rx * 10);
+          gy(ry * 10);
+        }
+        function onPointerLeave() {
+          gx(0);
+          gy(0);
+        }
 
- return () => ctx.revert();
- }, []);
+        aside.addEventListener('pointermove', onPointerMove, { passive: true });
+        aside.addEventListener('pointerleave', onPointerLeave, { passive: true });
 
- return (
- <div className="grid min-h-screen w-full bg-canvas font-sans text-primary lg:grid-cols-2">
- {/* ── Brand panel (lg+) ─────────────────────────────────────── */}
- <aside
- ref={asideRef}
- data-crosshair-scope
- className="relative hidden overflow-hidden border-r border-default bg-surface lg:flex lg:flex-col lg:justify-between lg:p-12"
- >
- <CrosshairCursor scopeRef={asideRef} />
+        return () => {
+          aside.removeEventListener('pointermove', onPointerMove);
+          aside.removeEventListener('pointerleave', onPointerLeave);
+        };
+      }, aside);
+    });
 
- {/* Grid background — receives pointer parallax via gridRef */}
- <div
- ref={gridRef}
- aria-hidden="true"
- className="absolute inset-0 will-change-transform"
- style={GRID_BG}
- />
+    return () => {
+      disposed = true;
+      ctx?.revert();
+    };
+  }, []);
 
- {/* brand */}
- <Link
- to="/"
- className="relative flex shrink-0 items-center gap-3 self-start rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
- >
- <BrandLogo alt={legalName} className="h-10 shrink-0" />
- <div className="flex flex-col text-left">
- <span className="font-display text-sm font-medium tracking-tight text-primary leading-tight whitespace-nowrap">
- {legalName}
- </span>
- <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted whitespace-nowrap">
- Ogami ERP · {locationCountry}
- </span>
- </div>
- </Link>
+  return (
+    <div className="grid min-h-screen w-full bg-canvas font-sans text-primary lg:grid-cols-2">
+      {/* ── Brand panel (lg+) ─────────────────────────────────────── */}
+      <aside
+        ref={asideRef}
+        className="relative hidden overflow-hidden border-r border-default bg-surface lg:flex lg:flex-col lg:justify-between lg:p-12"
+      >
+        {/* Grid background — receives pointer parallax via gridRef */}
+        <div
+          ref={gridRef}
+          aria-hidden="true"
+          className="absolute inset-0 will-change-transform"
+          style={GRID_BG}
+        />
 
- {/* auto-cycling 3D parts tour inside a drawing frame */}
- <div className="relative mx-auto flex w-full max-w-sm items-center justify-center">
- <figure className="relative aspect-square w-full overflow-hidden rounded-md border border-strong bg-canvas">
- {/* faint blueprint grid inside the frame */}
- <div
- aria-hidden="true"
- className="absolute inset-0"
- style={{
- backgroundImage:
- 'linear-gradient(var(--blueprint-grid) 1px, transparent 1px),' +
- 'linear-gradient(90deg, var(--blueprint-grid) 1px, transparent 1px)',
- backgroundSize: '28px 28px',
- maskImage: 'radial-gradient(120% 100% at 50% 50%, #000 40%, transparent 92%)',
- WebkitMaskImage: 'radial-gradient(120% 100% at 50% 50%, #000 40%, transparent 92%)',
- }}
- />
+        {/* brand */}
+        <Link
+          to="/"
+          className="relative flex shrink-0 items-center gap-3 self-start rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+        >
+          <BrandLogo alt={legalName} className="h-10 shrink-0" />
+          <div className="flex flex-col text-left">
+            <span className=" text-sm tracking-tight text-primary leading-tight whitespace-nowrap">
+              {legalName}
+            </span>
+            <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted whitespace-nowrap">
+              {locationCountry}
+            </span>
+          </div>
+        </Link>
 
- {/* corner registration marks */}
- {[
- 'left-3 top-3 border-l border-t',
- 'right-3 top-3 border-r border-t',
- 'left-3 bottom-3 border-b border-l',
- 'right-3 bottom-3 border-b border-r',
- ].map((pos) => (
- <span
- key={pos}
- aria-hidden="true"
- className={`absolute h-4 w-4 border-strong ${pos}`}
- />
- ))}
+        {/* auto-cycling 3D parts tour inside a drawing frame */}
+        <div className="relative mx-auto flex w-full max-w-sm items-center justify-center">
+          <figure className="relative aspect-square w-full overflow-hidden rounded-md border border-strong bg-canvas">
+            {/* faint blueprint grid inside the frame */}
+            <div
+              aria-hidden="true"
+              className="absolute inset-0"
+              style={{
+                backgroundImage:
+                  'linear-gradient(var(--blueprint-grid) 1px, transparent 1px),' +
+                  'linear-gradient(90deg, var(--blueprint-grid) 1px, transparent 1px)',
+                backgroundSize: '28px 28px',
+                maskImage: 'radial-gradient(120% 100% at 50% 50%, #000 40%, transparent 92%)',
+                WebkitMaskImage: 'radial-gradient(120% 100% at 50% 50%, #000 40%, transparent 92%)',
+              }}
+            />
 
- <AutoPartShowcase className="absolute inset-0" />
+            {/* corner registration marks */}
+            {[
+              'left-3 top-3 border-l border-t',
+              'right-3 top-3 border-r border-t',
+              'left-3 bottom-3 border-b border-l',
+              'right-3 bottom-3 border-b border-r',
+            ].map((pos) => (
+              <span
+                key={pos}
+                aria-hidden="true"
+                className={`absolute h-4 w-4 border-strong ${pos}`}
+              />
+            ))}
 
- {/* CMM scan-line — sweeps over the figure */}
- <div
- ref={scanRef}
- aria-hidden="true"
- className="pointer-events-none absolute inset-x-6 z-30 h-px bg-accent/40"
- style={{ opacity: 0 }}
- />
- </figure>
- </div>
+            <Suspense fallback={null}>
+              <AutoPartShowcase className="absolute inset-0" />
+            </Suspense>
 
- {/* tagline */}
- <div className="relative">
- <p className="font-display text-2xl font-medium leading-tight tracking-tight text-primary">
- Precision, molded
- <br /> in {locationCountry}.
- </p>
- <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.18em] text-text-subtle">
- {address}
- </p>
- </div>
- </aside>
+            {/* CMM scan-line — sweeps over the figure */}
+            <div
+              ref={scanRef}
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-6 z-30 h-px bg-accent/40"
+              style={{ opacity: 0 }}
+            />
+          </figure>
+        </div>
 
- {/* ── Form area ─────────────────────────────────────────────── */}
- <main className="relative flex flex-col items-center justify-center px-5 py-12 sm:px-5">
- {/* compact brand for mobile (brand panel hidden) */}
- <Link to="/" className="mb-10 flex shrink-0 items-center gap-3 rounded-md lg:hidden">
- <BrandLogo alt={legalName} className="h-10 shrink-0" />
- <div className="flex flex-col text-left">
- <span className="font-display text-sm font-medium tracking-tight text-primary leading-tight whitespace-nowrap">
- {legalName}
- </span>
- <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted whitespace-nowrap">
- Ogami ERP
- </span>
- </div>
- </Link>
+        {/* tagline */}
+        <div className="relative">
+          <p className="font-display text-2xl leading-tight tracking-tight text-primary">
+            Precision, molded
+            {locationCountry ? (
+              <>
+                <br /> in {locationCountry}.
+              </>
+            ) : (
+              '—'
+            )}
+          </p>
+          <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.18em] text-text-subtle">
+            {address}
+          </p>
+        </div>
+      </aside>
 
- <div className="w-full max-w-sm">
- <Outlet />
- </div>
+      {/* ── Form area ─────────────────────────────────────────────── */}
+      <main className="relative flex flex-col items-center justify-center px-5 py-12 sm:px-5">
+        {/* compact brand for mobile (brand panel hidden) */}
+        <Link to="/" className="mb-10 flex shrink-0 items-center gap-3 rounded-md lg:hidden">
+          <BrandLogo alt={legalName} className="h-10 shrink-0" />
+          <div className="flex flex-col text-left">
+            <span className=" text-sm tracking-tight text-primary leading-tight whitespace-nowrap">
+              {legalName}
+            </span>
+            <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted whitespace-nowrap">
+              ERP
+            </span>
+          </div>
+        </Link>
 
- <Link
- to="/"
- className="mt-10 inline-flex items-center gap-1.5 rounded-md font-sans text-[13px] text-muted transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
- >
- <ArrowLeft size={14} />
- Back to {legalName}
- </Link>
- </main>
- </div>
- );
+        <div className="w-full max-w-sm">
+          <Outlet />
+        </div>
+
+        <Link
+          to="/"
+          className="mt-10 inline-flex items-center gap-1.5 rounded-md font-sans text-[13px] text-muted transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
+        >
+          <ArrowLeft size={14} />
+          Back to {legalName || 'home'}
+        </Link>
+      </main>
+    </div>
+  );
 }
 
 export default AuthLayout;

@@ -39,7 +39,7 @@ export interface InspectionSummary {
  passed: number;
  failed: number;
  total: number;
- pass_rate: number;
+ pass_rate: number | null;
 }
 
 export const analyticsApi = {

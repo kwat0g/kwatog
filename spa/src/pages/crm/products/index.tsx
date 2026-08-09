@@ -101,7 +101,7 @@ export default function ProductsListPage() {
   iconOnly
   aria-label={`${scope === 'only' ? 'Restore' : 'Delete'} ${r.part_number}`}
   onClick={() => scope === 'only' ? restore.mutate(r.id) : setConfirmDelete(r)}
-  className={scope === 'only' ? 'text-muted hover:text-primary' : 'text-muted hover:text-danger'}
+  className={scope === 'only' ? 'text-muted hover:text-primary' : 'text-muted hover:text-danger-fg'}
   icon={scope === 'only' ? <ArchiveRestore size={14} /> : <Trash2 size={14} />}
   />
   </div>
@@ -123,7 +123,7 @@ export default function ProductsListPage() {
  title="Products"
  subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'product' : 'products'}` : undefined}
  actions={canManage ? (
- <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/crm/products/create')}>
+ <Button variant="primary" size="xs" icon={<Plus size={14} />} onClick={() => navigate('/crm/products/create')}>
  New product
  </Button>
  ) : null}

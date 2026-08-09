@@ -14,7 +14,7 @@ import { Chip, type ChipVariant } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { Modal } from '@/components/ui/Modal';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
@@ -167,12 +167,12 @@ function ReopenModal({
  placeholder="Describe the reason"
  />
  </div>
- <div className="flex justify-end gap-2 pt-3 border-t border-default">
+ <ModalFooter>
  <Button variant="secondary" onClick={onClose} disabled={pending}>Cancel</Button>
  <Button variant="primary" onClick={() => onConfirm(reason.trim())} disabled={tooShort || pending} loading={pending}>
  {pending ? 'Reopening…' : 'Reopen period'}
  </Button>
- </div>
+ </ModalFooter>
  </Modal>
  );
 }

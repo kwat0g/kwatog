@@ -11,21 +11,21 @@ interface Props {
  compact?: boolean;
 }
 
-const colorFor = (v: number, policy?: Props['displayPolicy']) =>
- policy ? (v >= policy.world_class_ratio ? 'bg-success' : v >= policy.on_track_ratio ? 'bg-warning' : 'bg-danger') : 'bg-elevated';
-const textColorFor = (v: number, policy?: Props['displayPolicy']) =>
- policy ? (v >= policy.world_class_ratio ? 'text-success-fg' : v >= policy.on_track_ratio ? 'text-warning-fg' : 'text-danger-fg') : 'text-muted';
+const colorFor = (v: number | null, policy?: Props['displayPolicy']) =>
+ v == null ? 'bg-elevated' : policy ? (v >= policy.world_class_ratio ? 'bg-success-bg' : v >= policy.on_track_ratio ? 'bg-warning-bg' : 'bg-danger-bg') : 'bg-elevated';
+const textColorFor = (v: number | null, policy?: Props['displayPolicy']) =>
+ v == null ? 'text-muted' : policy ? (v >= policy.world_class_ratio ? 'text-success-fg' : v >= policy.on_track_ratio ? 'text-warning-fg' : 'text-danger-fg') : 'text-muted';
 
-function Row({ label, value, policy, weight = 'normal' }: { label: string; value: number; policy?: Props['displayPolicy']; weight?: 'normal' | 'medium' }) {
- const pct = Math.round(value * 1000) / 10; // 1 decimal
+function Row({ label, value, policy, weight = 'normal' }: { label: string; value: number | null; policy?: Props['displayPolicy']; weight?: 'normal' | 'medium' }) {
+ const pct = value == null ? null : Math.round(value * 1000) / 10; // 1 decimal
  return (
  <div className="grid grid-cols-[80px_1fr_60px] items-center gap-2">
  <span className={`text-2xs uppercase tracking-wider text-muted ${weight === 'medium' ? 'font-medium text-primary' : ''}`}>{label}</span>
  <div className="h-1.5 bg-elevated rounded-full overflow-hidden">
- <div className={`h-1.5 rounded-full ${colorFor(value, policy)}`} style={{ width: `${Math.min(100, pct)}%` }} aria-hidden />
+ <div className={`h-1.5 rounded-full ${colorFor(value, policy)}`} style={{ width: `${pct == null ? 0 : Math.min(100, pct)}%` }} aria-hidden />
  </div>
  <span className={`text-xs font-mono tabular-nums text-right ${textColorFor(value, policy)} ${weight === 'medium' ? 'font-medium' : ''}`}>
- {pct.toFixed(1)}%
+ {pct == null ? '—' : `${pct.toFixed(1)}%`}
  </span>
  </div>
  );

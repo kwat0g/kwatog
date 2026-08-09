@@ -33,7 +33,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { ChainHeader } from '@/components/chain/ChainHeader';
 import { AnomalyReviewPanel } from '@/components/payroll/AnomalyReviewPanel';
 import { PayrollComputeProgressPanel } from '@/components/payroll/PayrollComputeProgressPanel';
-import { Modal } from '@/components/ui/Modal';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { usePermission } from '@/hooks/usePermission';
@@ -435,7 +435,7 @@ export default function PayrollPeriodDetailPage() {
             {period.is_company_wide === false && (
               <>
                 {' · '}
-                <span className="text-warning">
+                <span className="text-warning-fg">
                   scoped run
                   {period.scope_departments && period.scope_departments.length > 0 && (
                     <> · {period.scope_departments.map((d) => d.name).join(', ')}</>
@@ -565,8 +565,8 @@ export default function PayrollPeriodDetailPage() {
               </span>
             )}
             {canBankFile && bankBlocked && (
-              <div className="w-full mt-2 rounded border border-danger/40 bg-danger/5 p-3">
-                <p className="text-xs text-danger font-medium">
+              <div className="w-full mt-2 rounded border border-danger/40 bg-danger-bg/5 p-3">
+                <p className="text-xs text-danger-fg font-medium">
                   {bankPreview?.unbankable_count} employee(s) have no bank account on file —{' '}
                   <span className="font-mono">{formatPeso(bankPreview?.unbankable_amount)}</span>{' '}
                   would be left out of the bank file and never paid.
@@ -648,10 +648,10 @@ export default function PayrollPeriodDetailPage() {
           )}
 
           <div className="grid grid-cols-4 gap-3 mb-5">
-            <StatCard label="Employees" value={summary?.employee_count ?? 0} />
-            <StatCard label="Total Gross" value={formatPeso(summary?.total_gross ?? 0)} />
-            <StatCard label="Total Deductions" value={formatPeso(summary?.total_deductions ?? 0)} />
-            <StatCard label="Total Net" value={formatPeso(summary?.total_net ?? 0)} />
+            <StatCard label="Employees" value={summary ? summary.employee_count : '—'} />
+            <StatCard label="Total Gross" value={summary ? formatPeso(summary.total_gross) : '—'} />
+            <StatCard label="Total Deductions" value={summary ? formatPeso(summary.total_deductions) : '—'} />
+            <StatCard label="Total Net" value={summary ? formatPeso(summary.total_net) : '—'} />
           </div>
 
           {period.status === 'voided' && (
@@ -765,7 +765,7 @@ export default function PayrollPeriodDetailPage() {
             {!period.disbursement_proofs || period.disbursement_proofs.length === 0 ? (
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <span className="inline-block h-2 w-2 rounded-full bg-warning" aria-hidden />
+                  <span className="inline-block h-2 w-2 rounded-full bg-warning-bg" aria-hidden />
                   <span className="text-xs font-medium text-muted">
                     Status: Pending disbursement
                   </span>
@@ -788,7 +788,7 @@ export default function PayrollPeriodDetailPage() {
             ) : (
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <span className="inline-block h-2 w-2 rounded-full bg-success" aria-hidden />
+                  <span className="inline-block h-2 w-2 rounded-full bg-success-bg" aria-hidden />
                   <span className="text-xs font-medium text-muted">
                     Status:{' '}
                     {period.status === 'disbursed'
@@ -839,7 +839,7 @@ export default function PayrollPeriodDetailPage() {
           setShowRecomputeDialog(false);
         }}
         title="Recompute this payroll period?"
-        description={`This replaces all ${summary?.employee_count ?? 0} existing payroll row(s). Loan deductions and applied adjustments from the previous run are reversed and re-applied. Anomaly flags are re-evaluated.`}
+        description={`This replaces all ${summary ? summary.employee_count : '—'} existing payroll row(s). Loan deductions and applied adjustments from the previous run are reversed and re-applied. Anomaly flags are re-evaluated.`}
         variant="warning"
         confirmLabel="Recompute"
         pending={computeMutation.isPending}
@@ -912,7 +912,7 @@ function VariancePanel({
   isLoading: boolean;
 }) {
   const fmt = (n: number | string) => formatPeso(n);
-  const deltaColor = (n: number) => (n > 0 ? 'text-success' : n < 0 ? 'text-danger' : 'text-muted');
+  const deltaColor = (n: number) => (n > 0 ? 'text-success-fg' : n < 0 ? 'text-danger-fg' : 'text-muted');
   const pctFmt = (n: number | null) => (n === null ? '—' : `${n > 0 ? '+' : ''}${n.toFixed(1)}%`);
 
   return (
@@ -1116,7 +1116,7 @@ function DisbursementProofCard({
               aria-label="Archive proof"
               onClick={() => setShowDeleteConfirm(true)}
               disabled={deleteMutation.isPending}
-              className="text-muted hover:text-danger"
+              className="text-muted hover:text-danger-fg"
             />
           </>
         )}
@@ -1255,7 +1255,7 @@ function UploadProofModal({
         />
       </div>
 
-      <div className="flex justify-end gap-2 pt-3 border-t border-default">
+      <ModalFooter>
         <Button variant="secondary" onClick={onClose} disabled={mutation.isPending}>
           Cancel
         </Button>
@@ -1267,7 +1267,7 @@ function UploadProofModal({
         >
           {mutation.isPending ? 'Uploading…' : 'Upload'}
         </Button>
-      </div>
+      </ModalFooter>
     </Modal>
   );
 }
@@ -1325,7 +1325,7 @@ function VoidPeriodModal({
         </div>
       </div>
 
-      <div className="flex justify-end gap-2 pt-3 border-t border-default">
+      <ModalFooter>
         <Button variant="secondary" onClick={onClose} disabled={pending}>
           Cancel
         </Button>
@@ -1337,7 +1337,7 @@ function VoidPeriodModal({
         >
           {pending ? 'Voiding…' : 'Void period'}
         </Button>
-      </div>
+      </ModalFooter>
     </Modal>
   );
 }

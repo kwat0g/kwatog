@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use App\Modules\Maintenance\Controllers\DowntimeAnalyticsController;
-use App\Modules\Maintenance\Controllers\MachineConditionReadingController;
 use App\Modules\Maintenance\Controllers\MaintenanceScheduleController;
 use App\Modules\Maintenance\Controllers\MaintenanceWorkOrderController;
 use Illuminate\Support\Facades\Route;
@@ -53,20 +52,33 @@ Route::middleware(['auth:sanctum', 'feature:maintenance'])->prefix('maintenance'
     Route::post('/work-orders/{workOrder}/spare-parts', [MaintenanceWorkOrderController::class, 'recordSparePart'])
         ->middleware('permission:maintenance.wo.complete');
 
-    /* ── Condition readings (predictive maintenance) ─────────── */
-    // Non-parameterised routes must come BEFORE the {reading} wildcard.
-    Route::get('/condition-readings/options', [MachineConditionReadingController::class, 'options'])
-        ->middleware('permission:maintenance.view');
-    Route::get('/condition-readings', [MachineConditionReadingController::class, 'index'])
-        ->middleware('permission:maintenance.view');
-    Route::post('/condition-readings', [MachineConditionReadingController::class, 'store'])
-        ->middleware('permission:maintenance.wo.create');
-    Route::get('/condition-readings/trend', [MachineConditionReadingController::class, 'trend'])
-        ->middleware('permission:maintenance.view');
-    Route::get('/condition-readings/health-snapshot', [MachineConditionReadingController::class, 'healthSnapshot'])
-        ->middleware('permission:maintenance.view');
-    Route::get('/condition-readings/{reading}', [MachineConditionReadingController::class, 'show'])
-        ->middleware('permission:maintenance.view');
+    /*
+     * Condition readings / machine-health — HIDDEN 2026-08-08 (scope cut).
+     *
+     * The system has no IoT/edge connection to machines, so "live" machine
+     * health is impossible; the feature was a manual phone-rounds flow with a
+     * threshold-breach → auto-corrective-WO automation. Per the scope-cut
+     * decision it is fully hidden (desktop + mobile entry + these routes).
+     *
+     * Re-enable: restore the import above, uncomment the block below, and
+     * restore the SPA routes (maintenanceRoutes.tsx, maintenanceMobileRoutes.tsx)
+     * + the sidebar/layout entries. The controller/service/model are intact;
+     * also restore tests/Feature/Maintenance/ConditionReadingHashIdTest.php
+     * (the hash-id contract regression, removed with this surface).
+     *
+     * Route::get('/condition-readings/options', [MachineConditionReadingController::class, 'options'])
+     *     ->middleware('permission:maintenance.view');
+     * Route::get('/condition-readings', [MachineConditionReadingController::class, 'index'])
+     *     ->middleware('permission:maintenance.view');
+     * Route::post('/condition-readings', [MachineConditionReadingController::class, 'store'])
+     *     ->middleware('permission:maintenance.wo.create');
+     * Route::get('/condition-readings/trend', [MachineConditionReadingController::class, 'trend'])
+     *     ->middleware('permission:maintenance.view');
+     * Route::get('/condition-readings/health-snapshot', [MachineConditionReadingController::class, 'healthSnapshot'])
+     *     ->middleware('permission:maintenance.view');
+     * Route::get('/condition-readings/{reading}', [MachineConditionReadingController::class, 'show'])
+     *     ->middleware('permission:maintenance.view');
+     */
 
     /* ── Downtime analytics ──────────────────────────────────── */
     Route::get('/downtime-analytics/summary', [DowntimeAnalyticsController::class, 'summary'])

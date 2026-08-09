@@ -66,11 +66,11 @@ class QualityDashboardService
     }
 
 
-    private function qualityPassRateToday(): string
+    private function qualityPassRateToday(): ?string
     {
-        if (! Schema::hasTable('inspections')) return '0.0';
+        if (! Schema::hasTable('inspections')) return null;
         $total = (int) DB::table('inspections')->whereDate('created_at', today())->count();
-        if ($total === 0) return '0.0';
+        if ($total === 0) return null;
         $passed = (int) DB::table('inspections')->whereDate('created_at', today())->where('status', 'passed')->count();
         return number_format(($passed * 100.0) / $total, 1, '.', '');
     }
@@ -99,7 +99,7 @@ class QualityDashboardService
                 'stage_label'       => Str::headline((string) $r->stage),
                 'product'           => $r->product_name ?? '—',
                 'batch_no'          => null,
-                'qty'               => (string) ($r->batch_quantity ?? '0'),
+                'qty'               => $r->batch_quantity !== null ? (string) $r->batch_quantity : null,
                 'waiting_since'     => $r->created_at ? Carbon::parse((string) $r->created_at)->diffForHumans() : '—',
             ])
             ->all();

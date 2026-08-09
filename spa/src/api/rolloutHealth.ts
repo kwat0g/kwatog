@@ -6,14 +6,14 @@ export interface RolloutHealth {
  quality_plans: {
  eligible_items: number;
  covered_items: number;
- coverage_percent: number;
+    coverage_percent: number | null;
  missing: Array<{ id: string; code: string; name: string; is_critical: boolean }>;
  };
  qc_triggers: { pending_grns_without_inspection: number; failed_inspections_24h: number; grace_minutes: number };
  scanner: {
  scans_24h: number;
  unrecognized_24h: number;
- recognition_rate: number;
+    recognition_rate: number | null;
  top_unrecognized: Array<{ barcode: string; occurrences: number }>;
  };
  actions: { total: number; overdue: number; critical: number; unassigned: number };

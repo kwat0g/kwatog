@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { stockMovementsApi } from '@/api/inventory/stock';
 import { Chip } from '@/components/ui/Chip';
@@ -7,8 +7,6 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
-import { PageHeader } from '@/components/layout/PageHeader';
-import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { formatDateTime } from '@/lib/formatDate';
 import type { ListParams } from '@/types';
 import type { StockMovement } from '@/types/inventory';
@@ -35,23 +33,18 @@ const DEFAULT_FILTERS: StockMovementListParams = {
   page: 1, per_page: 50,
 };
 
-export default function StockMovementsPage() {
-  const [filters, setFilters] = useUrlFilters<StockMovementListParams>(DEFAULT_FILTERS);
-
-  // Dashboard KPI links to ?type=transfer&pending=1 — map `type` to the
-  // backend's movement_type key. `pending` is dropped: stock movements are
-  // recorded at execution time, so there is no pending state to filter on.
-  useEffect(() => {
-    if (filters.type !== undefined || filters.pending !== undefined) {
-      setFilters((f) => {
-        const next: StockMovementListParams = { ...f };
-        if (next.type) next.movement_type = next.type;
-        delete next.type;
-        delete next.pending;
-        return next;
-      });
-    }
-  }, [filters.type, filters.pending, setFilters]);
+export function StockMovementsTab({
+  initialItemId,
+  initialMovementType,
+}: {
+  initialItemId?: string;
+  initialMovementType?: string;
+}) {
+  const [filters, setFilters] = useState<StockMovementListParams>({
+    ...DEFAULT_FILTERS,
+    item_id: initialItemId || undefined,
+    movement_type: initialMovementType || undefined,
+  });
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['inventory', 'movements', filters],
@@ -91,7 +84,6 @@ export default function StockMovementsPage() {
 
  return (
  <div>
- <PageHeader title="Stock movements" backTo="/inventory/items" backLabel="Items" subtitle={data ? `${data.meta.total} movements` : undefined} />
  <FilterBar filters={filterConfig} values={filters}
  onSearch={() => undefined}
  onFilter={(k, v) => setFilters(f => ({ ...f, [k]: v, page: 1 }))}

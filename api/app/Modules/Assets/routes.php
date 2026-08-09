@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use App\Modules\Assets\Controllers\AssetController;
 use App\Modules\Assets\Controllers\AssetDepreciationController;
-use App\Modules\Assets\Controllers\AssetTransferController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -29,11 +28,18 @@ Route::middleware(['auth:sanctum', 'feature:assets'])->prefix('asset-depreciatio
     Route::post('/run', [AssetDepreciationController::class, 'runMonth'])->middleware('permission:assets.depreciation.run');
 });
 
-Route::middleware(['auth:sanctum', 'feature:assets'])->prefix('asset-transfers')->group(function () {
-    Route::get('/options',                [AssetTransferController::class, 'options'])->middleware('permission:assets.view');
-    Route::get('/',                    [AssetTransferController::class, 'index'])->middleware('permission:assets.view');
-    Route::post('/',                   [AssetTransferController::class, 'store'])->middleware('permission:assets.transfer');
-    Route::get('/{assetTransfer}',     [AssetTransferController::class, 'show'])->middleware('permission:assets.view');
-    Route::post('/{assetTransfer}/approve', [AssetTransferController::class, 'approve'])->middleware('permission:assets.transfer.approve');
-    Route::post('/{assetTransfer}/reject',  [AssetTransferController::class, 'reject'])->middleware('permission:assets.transfer.approve');
-});
+/*
+ * Asset Transfers — HIDDEN 2026-08-08 (scope cut).
+ * Weakest Assets piece — 0 live rows, unreachable from asset detail. The
+ * custody-tracking story is kept in AssetTransferService/model (per hide-access
+ * policy). Re-enable: restore the import above + this route group.
+ *
+ * Route::middleware(['auth:sanctum', 'feature:assets'])->prefix('asset-transfers')->group(function () {
+ *     Route::get('/options',                [AssetTransferController::class, 'options'])->middleware('permission:assets.view');
+ *     Route::get('/',                    [AssetTransferController::class, 'index'])->middleware('permission:assets.view');
+ *     Route::post('/',                   [AssetTransferController::class, 'store'])->middleware('permission:assets.transfer');
+ *     Route::get('/{assetTransfer}',     [AssetTransferController::class, 'show'])->middleware('permission:assets.view');
+ *     Route::post('/{assetTransfer}/approve', [AssetTransferController::class, 'approve'])->middleware('permission:assets.transfer.approve');
+ *     Route::post('/{assetTransfer}/reject',  [AssetTransferController::class, 'reject'])->middleware('permission:assets.transfer.approve');
+ * });
+ */

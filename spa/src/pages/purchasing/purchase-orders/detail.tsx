@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { Send, ThumbsUp, ThumbsDown, Truck, X, FileText, CheckSquare, Scale, Receipt, Package as PackageIcon, AlertTriangle } from 'lucide-react';
+import { billsApi } from '@/api/accounting/bills';
 import { purchaseOrdersApi } from '@/api/purchasing/purchase-orders';
 import { downloadAuthenticatedFile } from '@/api/download';
 import { Button } from '@/components/ui/Button';
@@ -20,7 +21,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useChainProgress } from '@/hooks/useChainProgress';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
-import { buildPurchaseOrderChain } from '@/lib/chains';
+import { buildP2pChain } from '@/lib/chains';
 import { fromApprovalRecords } from '@/lib/approvals';
 import type { PurchaseOrderStatus } from '@/types/purchasing';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
@@ -53,6 +54,7 @@ export default function PurchaseOrderDetailPage() {
  const [confirm, setConfirm] = useState<'submit' | 'approve' | 'send' | 'close' | null>(null);
  const [rejectOpen, setRejectOpen] = useState(false);
  const [cancelOpen, setCancelOpen] = useState(false);
+ const [postBillId, setPostBillId] = useState<string | null>(null);
 
  const invalidate = () => qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-orders', id] });
  const errMsg = (e: unknown, fallback: string) =>
@@ -79,6 +81,17 @@ export default function PurchaseOrderDetailPage() {
  const acknowledgeBudget = useMutation({ mutationFn: () => purchaseOrdersApi.acknowledgeBudget(id),
  onSuccess: () => { invalidate(); toast.success('Budget warning acknowledged.'); },
  onError: (e) => toast.error(errMsg(e, 'Failed to acknowledge budget warning.')) });
+ // 2026-08-08 — post an auto-created draft bill straight from the chain view.
+ const postBill = useMutation({
+ mutationFn: (billId: string) => billsApi.postDraft(billId),
+ onSuccess: () => {
+  invalidate();
+  qc.invalidateQueries({ queryKey: ['accounting', 'bills'] });
+  toast.success('Draft bill posted to AP + GL.');
+  setPostBillId(null);
+ },
+ onError: (e) => toast.error(errMsg(e, 'Failed to post bill.')),
+ });
 
  if (isLoading) return <SkeletonTable rows={6} columns={5} />;
  if (isError || !data) return (
@@ -112,8 +125,8 @@ export default function PurchaseOrderDetailPage() {
  )}
  {(data.status === 'draft' || data.status === 'pending_approval') && can('purchasing.po.approve') && (
  <>
- <Button size="sm" variant="secondary" icon={<ThumbsDown size={14} />} onClick={() => setRejectOpen(true)} loading={reject.isPending}>Reject</Button>
- <Button size="sm" variant="primary" icon={<ThumbsUp size={14} />} onClick={() => setConfirm('approve')} loading={approve.isPending}>Approve</Button>
+ <Button size="xs" variant="secondary" icon={<ThumbsDown size={14} />} onClick={() => setRejectOpen(true)} loading={reject.isPending}>Reject</Button>
+ <Button size="xs" variant="primary" icon={<ThumbsUp size={14} />} onClick={() => setConfirm('approve')} loading={approve.isPending}>Approve</Button>
  </>
  )}
  {data.status === 'approved' && can('purchasing.po.send') && (
@@ -132,7 +145,7 @@ export default function PurchaseOrderDetailPage() {
  />
  <div className="px-5 py-4 space-y-4">
  {data.budget_warning_level && (
- <div className="flex items-center justify-between gap-4 rounded-md border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
+ <div className="flex items-center justify-between gap-4 rounded-md border border-warning/40 bg-warning-bg/10 px-4 py-3 text-sm">
  <div>
  <div className="font-medium">Budget {data.budget_warning_level}</div>
  <div className="text-muted">{data.budget_warning_message}</div>
@@ -142,9 +155,15 @@ export default function PurchaseOrderDetailPage() {
  )}
  {data.budget_acknowledged_at && <Chip variant="success">Finance acknowledged</Chip>}
  </div>
- )}
- <Panel title="Procure-to-pay chain">
- <ChainHeader steps={buildPurchaseOrderChain(data)} />
+ )} <Panel title="Procure-to-pay chain">
+  {/* 2026-08-08 — compact cross-document stepper: the whole chain at a glance.
+   Approval detail lives in the approval timeline below. */}
+  <ChainHeader steps={buildP2pChain({
+   pr: data.purchase_request ? { id: data.purchase_request.id, number: data.purchase_request.pr_number } : null,
+   po: { id: data.id, number: data.po_number, date: data.date },
+   grns: data.goods_receipt_notes ?? [],
+   bills: data.bills ?? [],
+  })} />
  </Panel>
  </div>
  <div className="px-5 grid grid-cols-3 gap-4 pb-6">
@@ -241,13 +260,13 @@ export default function PurchaseOrderDetailPage() {
  {(data.bills?.length ?? 0) === 0 ? (
  <div className="text-muted">Pending bill</div>
  ) : data.bills!.some((b) => b.has_variances && !b.three_way_overridden) ? (
- <div className="inline-flex items-center gap-1 text-warning">
+ <div className="inline-flex items-center gap-1 text-warning-fg">
  <AlertTriangle size={12} /> Variance detected — review required
  </div>
  ) : data.bills!.some((b) => b.three_way_overridden) ? (
- <span className="text-info">Variance overridden by Finance</span>
+ <span className="text-info-fg">Variance overridden by Finance</span>
  ) : (
- <span className="text-success">Matched within tolerance</span>
+ <span className="text-success-fg">Matched within tolerance</span>
  )}
  </div>
  </div>
@@ -263,25 +282,36 @@ export default function PurchaseOrderDetailPage() {
  {can('accounting.bills.create') && (data.goods_receipt_notes?.length ?? 0) > 0 && (
  <Link to="/accounting/bills" className="text-2xs text-accent hover:underline">Create bill →</Link>
  )}
- </div>
- ) : (
- <ul className="space-y-1">
- {data.bills!.map((b) => (
- <li key={b.id} className="flex items-center justify-between">
- <Link to={`/accounting/bills/${b.id}`} className="font-mono text-accent hover:underline">{b.bill_number}</Link>
- <span className="text-2xs">
- <span className="font-mono tabular-nums">{formatPeso(b.total_amount)}</span>
- <Chip
- variant={b.status === 'paid' ? 'success' : b.status === 'partial' ? 'info' : 'warning'}
- className="ml-1.5"
- >
- {b.status_label ?? b.status}
- </Chip>
- </span>
- </li>
- ))}
- </ul>
- )}
+ </div>  ) : (
+  <ul className="space-y-1">
+  {data.bills!.map((b) => (
+  <li key={b.id} className="flex items-center justify-between gap-2">
+  <div className="flex items-center gap-1.5 min-w-0">
+  <Link to={`/accounting/bills/${b.id}`} className="font-mono text-accent hover:underline">{b.bill_number}</Link>
+  <span className="font-mono tabular-nums text-2xs">{formatPeso(b.total_amount)}</span>
+  <Chip
+  variant={b.status === 'paid' ? 'success' : b.status === 'partial' ? 'info' : b.status === 'draft' ? 'neutral' : 'warning'}
+  >
+  {b.status_label ?? b.status}
+  </Chip>
+  {b.status === 'draft' && (
+  <span className="text-2xs text-muted">auto-created from GRN</span>
+  )}
+  </div>
+  {b.status === 'draft' && can('accounting.bills.create') && (
+  <Button
+  variant="secondary"
+  size="xs"
+  icon={<Send size={12} />}
+  onClick={() => setPostBillId(b.id)}
+  >
+  Post bill
+  </Button>
+  )}
+  </li>
+  ))}
+  </ul>
+  )}
  </div>
  </div>
  </div>
@@ -403,12 +433,22 @@ export default function PurchaseOrderDetailPage() {
  description="Cancellation is permanent and breaks the procure-to-pay chain. Reason is recorded."
  reasonLabel="Cancellation reason"
  reasonPlaceholder="e.g. Project deferred, no longer needed"
- minLength={10}
- confirmLabel="Yes, cancel PO"
- cancelLabel="Keep PO"
- variant="danger"
- pending={cancel.isPending}
- />
- </div>
- );
-}
+ minLength={10}  confirmLabel="Yes, cancel PO"
+  cancelLabel="Keep PO"
+  variant="danger"
+  pending={cancel.isPending}
+  />
+
+  <ConfirmDialog
+  isOpen={postBillId !== null}
+  onClose={() => setPostBillId(null)}
+  onConfirm={() => { if (postBillId) postBill.mutate(postBillId); }}
+  title="Post draft bill to AP + GL?"
+  description="Posting records the payable: it builds and posts the AP/expense journal entry (debit expense + VAT input, credit AP) and flips the bill to Unpaid. Review the auto-created amounts before posting."
+  confirmLabel="Post bill"
+  variant="primary"
+  pending={postBill.isPending}
+  />
+  </div>
+  );
+ }

@@ -182,7 +182,7 @@ const [page, setPage] = useState(1);
  title="Failed to load scheduled exports"
  description="An error occurred while loading the list. Please try again."
  action={
- <Button variant="secondary" size="sm" onClick={() => refetch()}>
+ <Button variant="secondary" size="xs" onClick={() => refetch()}>
  Retry
  </Button>
  }

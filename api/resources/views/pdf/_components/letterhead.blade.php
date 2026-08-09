@@ -6,12 +6,12 @@
 <table class="header-table">
   <tr>
     <td style="width: 58%;">
-      <div class="company-title">{{ $company['name'] ?? 'PHILIPPINE OGAMI CORPORATION' }}</div>
+      @if (!empty($company['name']))
+        <div class="company-title">{{ $company['name'] }}</div>
+      @endif
       <div class="company-sub">
         @if (!empty($company['address']))
           {{ $company['address'] }}<br>
-        @else
-          First Cavite Industrial Estate (FCIE), Dasmariñas, Cavite, Philippines<br>
         @endif
         @if (!empty($company['phone']) || !empty($company['email']))
           @if (!empty($company['phone'])) Tel: {{ $company['phone'] }} @endif
@@ -24,7 +24,9 @@
           @if (!empty($company['vat_status'])) &middot; {{ $company['vat_status'] }} @endif
           &middot;
         @endif
-        <span style="font-weight:600; color:#475569;">IATF 16949 Certified</span>
+        @if (!empty($company['certification']))
+          <span style="font-weight:600; color:#475569;">{{ $company['certification'] }}</span>
+        @endif
       </div>
     </td>
     <td style="width: 42%;" class="doc-badge-box">

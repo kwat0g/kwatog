@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Input } from '@/components/ui/Input';
-import { Modal } from '@/components/ui/Modal';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -229,14 +229,14 @@ function EditBracketModal({
  <p className="text-xs text-muted">
  Editing changes will affect future payroll runs immediately. Historical payrolls remain unchanged because they store the raw computed amounts.
  </p>
- <div className="flex justify-end gap-2 pt-3 border-t border-default">
+ <ModalFooter>
  <Button variant="secondary" onClick={onClose} disabled={mutation.isPending}>Cancel</Button>
  <Button variant="primary"
  onClick={() => mutation.mutate(data)}
  disabled={mutation.isPending} loading={mutation.isPending}>
  Save changes
  </Button>
- </div>
+ </ModalFooter>
  </Modal>
  );
 }

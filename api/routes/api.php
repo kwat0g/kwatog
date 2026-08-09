@@ -120,6 +120,9 @@ Route::middleware(['auth:sanctum'])->prefix('chain')->group(function () {
 
 // Task F1 — Calendar (per-layer permissions enforced inside the service)
 Route::middleware(['auth:sanctum'])
+    ->get('/calendar/options', [CalendarController::class, 'options'])
+    ->middleware('permission:calendar.view');
+Route::middleware(['auth:sanctum'])
     ->get('/calendar/events', [CalendarController::class, 'index'])
     ->middleware('permission:calendar.view');
 

@@ -15,8 +15,8 @@ interface Props {
 }
 
 const dotClass: Record<string, string> = {
- danger: 'bg-danger',
- warning: 'bg-warning',
+ danger: 'bg-danger-bg',
+ warning: 'bg-warning-bg',
  info: 'bg-accent',
 };
 

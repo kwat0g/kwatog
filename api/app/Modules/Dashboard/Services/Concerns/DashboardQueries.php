@@ -24,10 +24,11 @@ trait DashboardQueries
 {
     private function functionalCurrency(): string
     {
-        return app(SettingsService::class)->requiredString('accounting.functional_currency_code');
+        $value = app(SettingsService::class)->get('accounting.functional_currency_code');
+        return is_string($value) && trim($value) !== '' ? strtoupper(trim($value)) : '';
     }
 
-    private function kpi(string $label, string $value, string $unit): array
+    private function kpi(string $label, ?string $value, string $unit): array
     {
         return ['label' => $label, 'value' => $value, 'unit' => $unit];
     }

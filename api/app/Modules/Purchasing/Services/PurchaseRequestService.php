@@ -79,8 +79,10 @@ class PurchaseRequestService
             'department',
             'items.item',
             'approvalRecords.approver:id,name',
-            'purchaseOrders:id,po_number,status,vendor_id,total_amount,purchase_request_id',
+            'purchaseOrders:id,po_number,status,vendor_id,total_amount,purchase_request_id,is_auto_generated',
             'purchaseOrders.vendor:id,name',
+            'purchaseOrders.bills:id,bill_number,total_amount,status,purchase_order_id',
+            'purchaseOrders.goodsReceiptNotes:id,grn_number,status,purchase_order_id',
         ]);
     }
 
@@ -113,6 +115,10 @@ class PurchaseRequestService
                 $itemId = ! empty($row['item_id'])
                     ? (HashIdFilter::decode($row['item_id'], Item::class) ?? (int) $row['item_id'])
                     : null;
+                // Catalog lines inherit description / unit / price from the Item
+                // record when the client didn't supply them (same source of truth
+                // as AutoReplenishmentService) — ad-hoc lines stay free-form.
+                $item = $itemId ? Item::find($itemId) : null;
 
                 // ADV6 — Pre-fill the preferred supplier when creating an auto-generated PR.
                 $suggestedVendorId = null;
@@ -126,10 +132,19 @@ class PurchaseRequestService
                 PurchaseRequestItem::create([
                     'purchase_request_id'  => $pr->id,
                     'item_id'              => $itemId,
-                    'description'          => $row['description'],
+                    'description'          => trim((string) ($row['description'] ?? '')) !== ''
+                        ? (string) $row['description']
+                        : ($item?->description !== null && trim((string) $item->description) !== ''
+                            ? (string) $item->description
+                            : ($item?->name ?? '')),
                     'quantity'             => $row['quantity'],
-                    'unit'                 => $row['unit'] ?? null,
-                    'estimated_unit_price' => $row['estimated_unit_price'] ?? null,
+                    'unit'                 => trim((string) ($row['unit'] ?? '')) !== ''
+                        ? (string) $row['unit']
+                        : ($item?->unit_of_measure ?? null),
+                    'estimated_unit_price' => ($row['estimated_unit_price'] ?? null) !== null
+                        && trim((string) $row['estimated_unit_price']) !== ''
+                        ? $row['estimated_unit_price']
+                        : ($item ? (string) $item->standard_cost : null),
                     'purpose'              => $row['purpose'] ?? null,
                     // ADV6 — store suggested vendor ID on the item for UI hint
                     'suggested_vendor_id'  => $suggestedVendorId,
@@ -157,13 +172,23 @@ class PurchaseRequestService
                     $itemId = ! empty($row['item_id'])
                         ? (HashIdFilter::decode($row['item_id'], Item::class) ?? (int) $row['item_id'])
                         : null;
+                    $item = $itemId ? Item::find($itemId) : null;
                     PurchaseRequestItem::create([
                         'purchase_request_id'  => $pr->id,
                         'item_id'              => $itemId,
-                        'description'          => $row['description'],
+                        'description'          => trim((string) ($row['description'] ?? '')) !== ''
+                            ? (string) $row['description']
+                            : ($item?->description !== null && trim((string) $item->description) !== ''
+                                ? (string) $item->description
+                                : ($item?->name ?? '')),
                         'quantity'             => $row['quantity'],
-                        'unit'                 => $row['unit'] ?? null,
-                        'estimated_unit_price' => $row['estimated_unit_price'] ?? null,
+                        'unit'                 => trim((string) ($row['unit'] ?? '')) !== ''
+                            ? (string) $row['unit']
+                            : ($item?->unit_of_measure ?? null),
+                        'estimated_unit_price' => ($row['estimated_unit_price'] ?? null) !== null
+                            && trim((string) $row['estimated_unit_price']) !== ''
+                            ? $row['estimated_unit_price']
+                            : ($item ? (string) $item->standard_cost : null),
                         'purpose'              => $row['purpose'] ?? null,
                     ]);
                 }

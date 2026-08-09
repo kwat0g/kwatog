@@ -64,6 +64,13 @@ export default function ComplaintDetailPage() {
  enabled: Boolean(id),
  placeholderData: (prev) => prev,
  });
+ const { data: complaintOptions } = useQuery({
+  queryKey: ['crm', 'complaints', 'options'],
+  queryFn: complaintsApi.options,
+  staleTime: 5 * 60 * 1000,
+ });
+ const statusLabels = new Map((complaintOptions?.statuses ?? []).map((option) => [option.value, option.label]));
+ const statusLabel = (value: string) => statusLabels.get(value) ?? value.replaceAll('_', ' ');
 
  // Hydrate the draft from the latest 8D report fetched.
  useEffect(() => {
@@ -134,9 +141,9 @@ export default function ComplaintDetailPage() {
 
  const complaintChain: ChainStep[] = [
  { key: 'logged', label: 'Logged', state: 'done', date: data.created_at?.slice(0, 10) },
- { key: 'investigating', label: 'Investigating', state: ['investigating', 'resolved', 'closed'].includes(data.status) ? 'done' : data.status === 'cancelled' ? 'pending' : 'active' },
- { key: 'resolved', label: 'Resolved', state: ['resolved', 'closed'].includes(data.status) ? 'done' : data.status === 'investigating' ? 'active' : 'pending' },
- { key: 'closed', label: 'Closed', state: data.status === 'closed' ? 'done' : 'pending', date: data.closed_at?.slice(0, 10) },
+ { key: 'investigating', label: statusLabel('investigating'), state: ['investigating', 'resolved', 'closed'].includes(data.status) ? 'done' : data.status === 'cancelled' ? 'pending' : 'active' },
+ { key: 'resolved', label: statusLabel('resolved'), state: ['resolved', 'closed'].includes(data.status) ? 'done' : data.status === 'investigating' ? 'active' : 'pending' },
+ { key: 'closed', label: statusLabel('closed'), state: data.status === 'closed' ? 'done' : 'pending', date: data.closed_at?.slice(0, 10) },
  ];
  const canManage = can('crm.complaints.manage');
 

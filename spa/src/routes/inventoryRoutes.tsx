@@ -10,13 +10,13 @@ const CreateItemPage = lazy(() => import('@/pages/inventory/items/create'));
 const EditItemPage = lazy(() => import('@/pages/inventory/items/edit'));
 const ItemDetailPage = lazy(() => import('@/pages/inventory/items/detail'));
 const ItemQualityPlansPage = lazy(() => import('@/pages/inventory/items/quality-plans'));
-const ItemCategoriesPage = lazy(() => import('@/pages/inventory/categories'));
+// /inventory/categories removed 2026-08-08 (scope cut — folded into the Items
+// page as a Categories modal; page file kept as ItemCategoriesManager)
 const WarehousePage = lazy(() => import('@/pages/inventory/warehouse'));
 const StockLevelsPage = lazy(() => import('@/pages/inventory/stock-levels'));
-const StockMovementsPage = lazy(() => import('@/pages/inventory/movements'));
+// /inventory/movements removed 2026-08-08 (scope cut — now a view toggle on Stock Levels)
 const StockAdjustmentsPage = lazy(() => import('@/pages/inventory/stock-adjustments'));
 const CreateStockAdjustmentPage = lazy(() => import('@/pages/inventory/stock-adjustments/create'));
-const CreateStockTransferPage = lazy(() => import('@/pages/inventory/stock-transfers/create'));
 const GrnListPage = lazy(() => import('@/pages/inventory/grn'));
 const CreateGrnPage = lazy(() => import('@/pages/inventory/grn/create'));
 const GrnDetailPage = lazy(() => import('@/pages/inventory/grn/detail'));
@@ -31,7 +31,8 @@ const StockCardPage = lazy(() => import('@/pages/inventory/items/stock-card'));
 
 // ADV8 — WMS (Warehouse Management System)
 const WarehouseMapPage = lazy(() => import('@/pages/warehouse/map'));
-const StockCountPage = lazy(() => import('@/pages/warehouse/stock-count'));
+// Stock Count merged into the Warehouse Map page (2026-08-08) — the count
+// workflow now lives behind its Map | Stock Count toggle.
 const PickingListPage = lazy(() => import('@/pages/warehouse/picking'));
 const TransferOrdersPage = lazy(() => import('@/pages/warehouse/transfers'));
 const WarehouseScannerPage = lazy(() => import('@/pages/warehouse/scanner'));
@@ -58,27 +59,27 @@ export const inventoryRoutes = (
  <Route path="/inventory/items/:id/quality-plans"
  element={<PermissionGuard permission="inventory.view"><ItemQualityPlansPage /></PermissionGuard>} />
 
- <Route path="/inventory/categories"
- element={<PermissionGuard permission="inventory.view"><ItemCategoriesPage /></PermissionGuard>} />
+ {/* /inventory/categories removed 2026-08-08 (scope cut — Categories modal on the Items page) */}
  <Route path="/inventory/warehouse"
  element={<PermissionGuard permission="inventory.view"><WarehousePage /></PermissionGuard>} />
 
  <Route path="/inventory/stock-levels"
  element={<PermissionGuard permission="inventory.view"><StockLevelsPage /></PermissionGuard>} />
- <Route path="/inventory/movements"
- element={<PermissionGuard permission="inventory.view"><StockMovementsPage /></PermissionGuard>} />
+ {/* /inventory/movements removed 2026-08-08 (scope cut — now a view toggle on Stock Levels) */}
  <Route path="/inventory/stock-adjustments"
  element={<PermissionGuard permission="inventory.view"><StockAdjustmentsPage /></PermissionGuard>} />
  <Route path="/inventory/stock-adjustments/create"
  element={<PermissionGuard permission="inventory.adjust"><CreateStockAdjustmentPage /></PermissionGuard>} />
- <Route path="/inventory/stock-transfers/create"
- element={<PermissionGuard permission="inventory.adjust"><CreateStockTransferPage /></PermissionGuard>} />
+ {/* /inventory/stock-transfers/create removed 2026-08-08 (scope cut — page file kept) */}
 
  {/* ADV8 — WMS (Warehouse Management System) */}
  <Route path="/inventory/warehouse-map"
  element={<PermissionGuard permission="inventory.view"><WarehouseMapPage /></PermissionGuard>} />
+ {/* /inventory/stock-count merged into Warehouse Map (2026-08-08). Path kept
+ as a live alias — the barcode scanner links here — and renders the merged
+ page in count view (see WarehouseMapPage). */}
  <Route path="/inventory/stock-count"
- element={<PermissionGuard permission="inventory.stock_count.view"><StockCountPage /></PermissionGuard>} />
+ element={<PermissionGuard permission="inventory.stock_count.view"><WarehouseMapPage /></PermissionGuard>} />
  <Route path="/inventory/picking"
  element={<PermissionGuard permission="inventory.view"><PickingListPage /></PermissionGuard>} />
  <Route path="/inventory/transfer-orders"

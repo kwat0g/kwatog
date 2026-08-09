@@ -30,7 +30,11 @@ class CompleteReturnRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'location_id' => ['required', 'integer', 'exists:warehouse_locations,id'],
+            // 2026-08-08 — customer-return restock/rework lines move at dispose()
+            // now, so completion only needs a location when a line still has to
+            // move (supplier return_to_supplier, or a legacy flow that disposed
+            // without one). The service re-enforces this per RMA.
+            'location_id' => ['nullable', 'integer', 'exists:warehouse_locations,id'],
         ];
     }
 

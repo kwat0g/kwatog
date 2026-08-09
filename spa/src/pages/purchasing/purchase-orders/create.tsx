@@ -14,9 +14,11 @@ import { businessPoliciesApi } from '@/api/businessPolicies';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { Panel } from '@/components/ui/Panel';
 import { Select } from '@/components/ui/Select';
+import { SkeletonTable } from '@/components/ui/Skeleton';
 import { Switch } from '@/components/ui/Switch';
 import { Textarea } from '@/components/ui/Textarea';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -79,7 +81,16 @@ export default function CreatePurchaseOrderPage() {
     queryFn: () => purchaseRequestsApi.show(prId!),
     enabled: !!prId,
   });
+  // POs must originate from an approved PR. When none is linked yet, offer a
+  // picker of approved (not yet converted) PRs instead of a blank form.
+  const approvedPrs = useQuery({
+    queryKey: ['purchasing', 'purchase-requests', { status: 'approved', source: 'po' }],
+    queryFn: () => purchaseRequestsApi.list({ status: 'approved', per_page: 100 }),
+    enabled: !prId,
+  });
   const vatStatus = policies.data?.vat_status;
+  const vatRate = policies.data?.vat_rate == null ? null : Number(policies.data.vat_rate);
+  const vatConfigured = vatStatus === 'VAT Registered' && vatRate !== null;
 
   const {
     register,
@@ -102,8 +113,8 @@ export default function CreatePurchaseOrderPage() {
     },
   });
   useEffect(() => {
-    if (vatStatus) setValue('is_vatable', vatStatus === 'VAT Registered');
-  }, [vatStatus, setValue]);
+    if (policies.data) setValue('is_vatable', vatConfigured);
+  }, [policies.data, setValue, vatConfigured]);
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
 
   // Pre-fill from PR.
@@ -113,7 +124,7 @@ export default function CreatePurchaseOrderPage() {
         vendor_id: '',
         date: new Date().toISOString().slice(0, 10),
         expected_delivery_date: '',
-        is_vatable: vatStatus === 'VAT Registered',
+        is_vatable: vatConfigured,
         remarks: `Auto-generated from PR ${pr.pr_number}`,
         items: pr.items.map((i) => ({
           item_id: i.item?.id ?? '',
@@ -124,7 +135,7 @@ export default function CreatePurchaseOrderPage() {
         })),
       });
     }
-  }, [pr, reset, vatStatus]);
+  }, [pr, reset, vatConfigured]);
 
   const watchedItems = watch('items');
   const isVatable = watch('is_vatable');
@@ -132,8 +143,6 @@ export default function CreatePurchaseOrderPage() {
     (s, l) => s + Number(l.quantity || 0) * Number(l.unit_price || 0),
     0,
   );
-  const vatRate = Number(policies.data?.vat_rate ?? 0);
-
   // Unit of measure is always copied from the selected item — never typed.
   const itemById = useMemo(
     () => new Map((items.data?.data ?? []).map((it) => [it.id, it])),
@@ -144,8 +153,8 @@ export default function CreatePurchaseOrderPage() {
     const item = itemById.get(itemId);
     setValue(`items.${index}.unit`, item?.unit_of_measure ?? '');
   };
-  const vatRateLabel = `${(vatRate * 100).toLocaleString()}%`;
-  const vat = isVatable ? subtotal * vatRate : 0;
+  const vatRateLabel = vatConfigured && vatRate !== null ? `${(vatRate * 100).toLocaleString()}%` : '—';
+  const vat = isVatable && vatRate !== null ? subtotal * vatRate : 0;
   const total = subtotal + vat;
   const requiresVp =
     policies.data !== undefined && total >= policies.data.purchase_order_vp_threshold;
@@ -190,6 +199,48 @@ export default function CreatePurchaseOrderPage() {
         ]}
         actions={requiresVp ? <Chip variant="warning">VP approval required</Chip> : null}
       />
+      {!prId && (
+        <Panel title="Source purchase request">
+          <p className="text-sm text-muted mb-3">
+            A purchase order must be created from an <span className="font-medium text-primary">approved</span> purchase
+            request (PR). Choose the PR to source this PO from — its lines, quantities, and estimated prices are
+            carried over for the vendor.
+          </p>
+          {approvedPrs.isLoading && <SkeletonTable rows={3} columns={4} />}
+          {approvedPrs.isError && (
+            <EmptyState icon="alert-circle" title="Failed to load approved PRs" action={<Button onClick={() => approvedPrs.refetch()}>Retry</Button>} />
+          )}
+          {approvedPrs.data && approvedPrs.data.data.length === 0 && (
+            <EmptyState
+              icon="inbox"
+              title="No approved purchase requests"
+              description="Create and approve a purchase request first — a PO always traces back to an approved PR."
+            />
+          )}
+          {approvedPrs.data && approvedPrs.data.data.length > 0 && (
+            <ul className="divide-y divide-subtle border border-subtle rounded-md">
+              {approvedPrs.data.data.map((pr) => (
+                <li key={pr.id}>
+                  <button
+                    type="button"
+                    onClick={() => nav(`/purchasing/purchase-orders/create?pr_id=${pr.id}`, { replace: true })}
+                    className="w-full text-left px-4 py-3 flex items-center gap-3 transition-colors cursor-pointer hover:bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  >
+                    <span className="font-mono text-sm font-medium text-primary">{pr.pr_number}</span>
+                    <span className="flex-1 text-sm text-secondary truncate">{pr.reason ?? '—'}</span>
+                    {pr.items && <span className="text-2xs text-muted">{pr.items.length} lines</span>}
+                    <Chip variant={pr.priority === 'critical' ? 'danger' : pr.priority === 'urgent' ? 'warning' : 'neutral'}>
+                      {pr.priority_label ?? pr.priority}
+                    </Chip>
+                    <span className="font-mono text-sm tabular-nums">{formatPeso(pr.total_estimated_amount)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+      )}
+      {prId && (
       <form
         onSubmit={handleSubmit((d) => {
           setPendingValues(d);
@@ -225,7 +276,7 @@ export default function CreatePurchaseOrderPage() {
               {...register('expected_delivery_date')}
               error={errors.expected_delivery_date?.message}
             />
-            <Switch label={`VAT-able (${vatRateLabel})`} {...register('is_vatable')} />
+            <Switch label={`VAT-able (${vatRateLabel})`} disabled={!vatConfigured} {...register('is_vatable')} />
             <Textarea
               label="Remarks"
               rows={2}
@@ -283,7 +334,7 @@ export default function CreatePurchaseOrderPage() {
                       <option value="">—</option>
                       {items.data?.data.map((it) => (
                         <option key={it.id} value={it.id}>
-                          {it.code}
+                          {it.code} — {it.name}
                         </option>
                       ))}
                     </Select>
@@ -342,7 +393,7 @@ export default function CreatePurchaseOrderPage() {
                         icon={<Trash2 size={12} />}
                         onClick={() => remove(i)}
                         aria-label="Remove line"
-                        className="text-muted hover:text-danger"
+                        className="text-muted hover:text-danger-fg"
                       />
                     )}
                   </Td>
@@ -399,6 +450,7 @@ export default function CreatePurchaseOrderPage() {
           </Button>
         </div>
       </form>
+      )}
 
       <ConfirmDialog
         isOpen={confirmOpen}
@@ -413,7 +465,7 @@ export default function CreatePurchaseOrderPage() {
               Total <span className="font-mono font-medium text-primary">{formatPeso(total)}</span>.
               {requiresVp && (
                 <span className="block mt-1 text-warning-fg">
-                  Total ≥ {formatPeso(policies.data?.purchase_order_vp_threshold ?? 0)} — VP
+                  Total ≥ {formatPeso(policies.data?.purchase_order_vp_threshold)} — VP
                   approval will be required before send.
                 </span>
               )}

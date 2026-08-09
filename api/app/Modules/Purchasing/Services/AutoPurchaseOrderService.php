@@ -77,7 +77,7 @@ class AutoPurchaseOrderService
         }
         $sub   = round($qty * $price, 2);
         $isVatable = $this->taxPolicy->isVatRegistered();
-        $vat   = $isVatable ? round($sub * (float) $this->taxPolicy->vatRate(), 2) : 0.0;
+        $vat   = $isVatable ? round($sub * (float) $this->taxPolicy->requiredVatRate(), 2) : 0.0;
 
         return DB::transaction(function () use ($item, $supplier, $qty, $price, $sub, $vat, $leadTimeDays, $isVatable) {
             $po = PurchaseOrder::create([

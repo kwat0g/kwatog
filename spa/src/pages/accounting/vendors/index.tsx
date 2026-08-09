@@ -28,8 +28,8 @@ export default function VendorsPage() {
  { key: 'name', header: 'Vendor', cell: (r) => r.name },
  { key: 'contact', header: 'Contact', cell: (r) => r.contact_person ?? '—' },
  { key: 'phone', header: 'Phone', cell: (r) => <span className="font-mono">{r.phone ?? '—'}</span> },
- { key: 'terms', header: 'Terms', align: 'right', cell: (r) => <NumCell>{r.payment_terms_days}d</NumCell> },
- { key: 'open_balance', header: 'Open balance', align: 'right', cell: (r) => <NumCell className="font-medium">{formatPeso(r.open_balance ?? '0')}</NumCell> },
+ { key: 'terms', header: 'Terms', align: 'right', cell: (r) => <NumCell>{r.payment_terms_days == null ? '—' : `${r.payment_terms_days}d`}</NumCell> },
+ { key: 'open_balance', header: 'Open balance', align: 'right', cell: (r) => <NumCell className="font-medium">{formatPeso(r.open_balance)}</NumCell> },
  { key: 'status', header: 'Status', cell: (r) => <Chip variant={r.is_active ? 'success' : 'neutral'}>{r.is_active ? 'active' : 'inactive'}</Chip> },
  ];
 

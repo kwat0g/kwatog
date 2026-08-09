@@ -11,6 +11,7 @@ use App\Modules\HR\Enums\PayType;
 use App\Modules\HR\Enums\Gender;
 use App\Modules\HR\Enums\CivilStatus;
 use App\Modules\HR\Enums\SeparationReason;
+use App\Modules\HR\Enums\EmployeeSkillLevel;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\JobApplication;
 use App\Modules\HR\Requests\SeparateEmployeeRequest;
@@ -82,6 +83,13 @@ class EmployeeController
             'separation_reasons' => array_map(
                 static fn (SeparationReason $reason): array => ['value' => $reason->value, 'label' => str_replace('_', ' ', ucfirst($reason->value))],
                 SeparationReason::cases(),
+            ),
+            'skill_levels' => array_map(
+                static fn (EmployeeSkillLevel $level): array => [
+                    'value' => $level->value,
+                    'label' => str_replace('_', ' ', ucfirst($level->value)),
+                ],
+                EmployeeSkillLevel::cases(),
             ),
         ]]);
     }

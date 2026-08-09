@@ -6,6 +6,7 @@ namespace Tests\Feature\Chain;
 
 use App\Modules\HR\Events\EmployeeCreated;
 use App\Modules\HR\Events\SeparationInitiated;
+use App\Modules\Inventory\Events\GoodsReceiptNoteAccepted;
 use App\Modules\Inventory\Events\GoodsReceiptNoteCreated;
 use App\Modules\Payroll\Events\PayrollPeriodFinalized;
 use App\Modules\Production\Events\WorkOrderCompleted;
@@ -32,11 +33,13 @@ class ChainEventDispatchTest extends TestCase
             InspectionFailed::class,
             PurchaseOrderApproved::class,
             GoodsReceiptNoteCreated::class,
+            GoodsReceiptNoteAccepted::class,
             EmployeeCreated::class,
             SeparationInitiated::class,
             PayrollPeriodFinalized::class,
             \App\Modules\HR\Events\ClearanceFullySigned::class,
             \App\Modules\Purchasing\Events\PurchaseRequestApproved::class,
+            \App\Modules\Purchasing\Events\PurchaseOrderSent::class,
         ];
 
         foreach ($events as $cls) {

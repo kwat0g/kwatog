@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { CalendarClock, Plus } from 'lucide-react';
 import { assetsApi, type AssetListParams } from '@/api/assets';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -14,6 +14,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import type { Asset, AssetStatus } from '@/types/assets';
 import { formatPeso } from '@/lib/formatNumber';
+import { DepreciationRunner } from './DepreciationRunner';
 
 const STATUS_CHIP: Record<AssetStatus, 'success' | 'warning' | 'neutral'> = {
  active: 'success',
@@ -24,6 +25,8 @@ export default function AssetsListPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
  const [filters, setFilters] = useState<AssetListParams>({ page: 1, per_page: 25 });
+ // Depreciation folded here 2026-08-08 (was /admin/depreciation). Same gate.
+ const [showDepreciation, setShowDepreciation] = useState(false);
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['assets', filters],
@@ -70,13 +73,23 @@ export default function AssetsListPage() {
  title="Assets"
  subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'asset' : 'assets'}` : undefined}
  actions={
- can('assets.create') ? (
+ can('assets.depreciation.view') || can('assets.create') ? (
+ <div className="flex items-center gap-2">
+ {can('assets.depreciation.view') && (
+ <Button variant="secondary" size="sm" icon={<CalendarClock size={14} />} onClick={() => setShowDepreciation(true)}>
+ Run depreciation
+ </Button>
+ )}
+ {can('assets.create') && (
  <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/assets/create')}>
  New asset
  </Button>
+ )}
+ </div>
  ) : undefined
  }
  />
+ <DepreciationRunner isOpen={showDepreciation} onClose={() => setShowDepreciation(false)} />
  <FilterBar
  filters={filterConfig}
  values={filters}

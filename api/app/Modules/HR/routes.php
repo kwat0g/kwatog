@@ -5,10 +5,8 @@ declare(strict_types=1);
 use App\Modules\HR\Controllers\DepartmentController;
 use App\Modules\HR\Controllers\EmployeeAccountController;
 use App\Modules\HR\Controllers\EmployeeController;
-use App\Modules\HR\Controllers\EmployeeDirectoryController;
 use App\Modules\HR\Controllers\EmployeeDocumentController;
 use App\Modules\HR\Controllers\EmployeeOnboardingController;
-use App\Modules\HR\Controllers\EmployeePropertyController;
 use App\Modules\HR\Controllers\EmployeeSkillController;
 use App\Modules\HR\Controllers\EmployeeTrainingController;
 use App\Modules\HR\Controllers\PositionController;
@@ -25,11 +23,18 @@ use App\Modules\HR\Controllers\TrainingMatrixController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function () {
-    // Series F / Task F5 — Employee directory + org chart.
-    Route::get('/directory', [EmployeeDirectoryController::class, 'index'])
-        ->middleware('permission:hr.directory.view');
-    Route::get('/directory/org-chart', [EmployeeDirectoryController::class, 'orgChart'])
-        ->middleware('permission:hr.directory.view');
+    /*
+     * Employee directory + org chart — HIDDEN 2026-08-08 (scope cut).
+     * SPA page was orphaned (no sidebar entry) and duplicated the Employees
+     * list. hr.directory.view permission KEPT — the employee-photo gate
+     * (permission_any:hr.employees.view,hr.directory.view) depends on it.
+     * Re-enable: restore the import + routes below.
+     *
+     * Route::get('/directory', [EmployeeDirectoryController::class, 'index'])
+     *     ->middleware('permission:hr.directory.view');
+     * Route::get('/directory/org-chart', [EmployeeDirectoryController::class, 'orgChart'])
+     *     ->middleware('permission:hr.directory.view');
+     */
 
     // Departments
     Route::prefix('departments')->group(function () {
@@ -102,25 +107,24 @@ Route::delete('/{employee}/photo', [EmployeeController::class, 'deletePhoto'])->
         Route::post('/{employee}/separation', [SeparationController::class, 'initiate'])
             ->middleware('permission:hr.separation.initiate');
 
-        // Employee property management
-        Route::prefix('{employee}/property')->group(function () {
-            Route::get('/', [EmployeePropertyController::class, 'index'])
-                ->middleware('permission:hr.employees.view');
-            Route::post('/', [EmployeePropertyController::class, 'store'])
-                ->middleware('permission:hr.employees.edit');
-            Route::get('/{employeeProperty}', [EmployeePropertyController::class, 'show'])
-                ->middleware('permission:hr.employees.view');
-            Route::put('/{employeeProperty}', [EmployeePropertyController::class, 'update'])
-                ->middleware('permission:hr.employees.edit');
-            Route::delete('/{employeeProperty}', [EmployeePropertyController::class, 'destroy'])
-                ->middleware('permission:hr.employees.edit');
-            Route::patch('/{employeeProperty}/restore', [EmployeePropertyController::class, 'restore'])
-                ->middleware('permission:hr.employees.edit')
-                ->withTrashed();
-        });
+        /*
+         * Employee property — HIDDEN 2026-08-08 (scope cut).
+         * 0 rows in DB, no test file, not in demo script. Re-enable: restore
+         * the EmployeePropertyController import + this route group.
+         *
+         * Route::prefix('{employee}/property')->group(function () {
+         *     Route::get('/', [EmployeePropertyController::class, 'index'])
+         *         ->middleware('permission:hr.employees.view');
+         *     Route::post('/', [EmployeePropertyController::class, 'store'])
+         *         ->middleware('permission:hr.employees.edit');
+         *     ...
+         * });
+         */
 
         // Employee document management
         Route::prefix('{employee}/documents')->group(function () {
+            Route::get('/options', [EmployeeDocumentController::class, 'options'])
+                ->middleware('permission:hr.employees.documents.view');
             Route::get('/', [EmployeeDocumentController::class, 'index'])
                 ->middleware('permission:hr.employees.documents.view');
             Route::post('/', [EmployeeDocumentController::class, 'store'])

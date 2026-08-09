@@ -346,7 +346,7 @@ export default function RoutingEditorPage() {
  aria-label="Remove operation"
  onClick={() => remove(i)}
  disabled={fields.length === 1}
- className="text-muted hover:text-danger"
+ className="text-muted hover:text-danger-fg"
  />
  </Td>
  </tr>
@@ -386,7 +386,7 @@ export default function RoutingEditorPage() {
  </div>
 
  {errors.operations?.message && (
- <p className="mt-2 text-xs text-danger">{errors.operations.message as string}</p>
+ <p className="mt-2 text-xs text-danger-fg">{errors.operations.message as string}</p>
  )}
  </fieldset>
 

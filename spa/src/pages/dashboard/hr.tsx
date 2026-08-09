@@ -174,10 +174,10 @@ function AttendanceSummaryPanel({
  data: HrDashboardData['panels']['attendance_summary'];
 }) {
  const items: Array<{ label: string; value: number; color: string }> = [
- { label: 'Present', value: data.present, color: 'text-success' },
- { label: 'Late', value: data.late, color: 'text-warning' },
- { label: 'Absent', value: data.absent, color: 'text-danger' },
- { label: 'On Leave', value: data.on_leave, color: 'text-info' },
+ { label: 'Present', value: data.present, color: 'text-success-fg' },
+ { label: 'Late', value: data.late, color: 'text-warning-fg' },
+ { label: 'Absent', value: data.absent, color: 'text-danger-fg' },
+ { label: 'On Leave', value: data.on_leave, color: 'text-info-fg' },
  ];
  const total = data.present + data.late + data.absent + data.on_leave;
 

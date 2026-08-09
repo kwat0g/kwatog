@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
-import { ArchiveRestore, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ArchiveRestore, ListChecks, Pencil, Plus, Trash2 } from 'lucide-react';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { itemsApi, type ItemListParams } from '@/api/inventory/items';
@@ -14,7 +14,10 @@ import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import { StatCard } from '@/components/ui/StatCard';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { Modal } from '@/components/ui/Modal';
+import { ItemCategoriesManager } from '@/pages/inventory/categories';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import type { Item } from '@/types/inventory';
@@ -31,6 +34,10 @@ export default function ItemsListPage() {
   const qc = useQueryClient();
   const { can } = usePermission();
   const canManage = can('inventory.items.manage');
+  // Categories folded into this modal (2026-08-08) — the standalone
+  // /inventory/categories route was removed. Stock Levels + Movements shortcuts
+  // were dropped: both live one click away in the sidebar.
+  const [showCategories, setShowCategories] = useState(false);
   const [filters, setFilters] = useUrlFilters<ItemListParams>(DEFAULT_FILTERS);
  const [confirmDelete, setConfirmDelete] = useState<Item | null>(null);
  const [confirmRestore, setConfirmRestore] = useState<Item | null>(null);
@@ -44,6 +51,8 @@ export default function ItemsListPage() {
  queryKey: ['inventory', 'items', 'options'],
  queryFn: itemsApi.options,
  staleTime: 5 * 60 * 1000 });
+ const stockStatusLabels = new Map((itemOptions?.stock_statuses ?? []).map((status) => [status.value, status.label]));
+ const stockStatusLabel = (value: string) => stockStatusLabels.get(value) ?? value.replaceAll('_', ' ');
 
  const del = useMutation({
  mutationFn: (id: string) => itemsApi.delete(id),
@@ -86,7 +95,7 @@ export default function ItemsListPage() {
  </NumCell>
  ) },
  { key: 'reorder', header: 'Reorder pt', align: 'right', cell: (r) => <NumCell>{Number(r.reorder_point).toFixed(3)}</NumCell> },
- { key: 'status', header: 'Stock', cell: (r) => <Chip variant={stockChip(r.stock_status)}>{r.stock_status}</Chip> },
+ { key: 'status', header: 'Stock', cell: (r) => <Chip variant={stockChip(r.stock_status)}>{stockStatusLabel(r.stock_status)}</Chip> },
  { key: 'quality', header: 'QC plan', cell: (r) => (
  <Chip variant={r.quality_plan_ready ? 'success' : 'warning'}>{r.quality_plan_ready ? 'ready' : 'missing'}</Chip>
  ) },
@@ -114,7 +123,7 @@ export default function ItemsListPage() {
  iconOnly
  aria-label={`${scope === 'only' ? 'Restore' : 'Delete'} ${r.code}`}
  onClick={() => (scope === 'only' ? setConfirmRestore(r) : setConfirmDelete(r))}
- className={scope === 'only' ? 'text-muted hover:text-primary' : 'text-muted hover:text-danger'}
+ className={scope === 'only' ? 'text-muted hover:text-primary' : 'text-muted hover:text-danger-fg'}
  icon={scope === 'only' ? <ArchiveRestore size={14} /> : <Trash2 size={14} />}
  />
  </div>
@@ -142,12 +151,13 @@ export default function ItemsListPage() {
  subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'item' : 'items'}` : undefined}
  actions={
  <>
- <Button variant="secondary" size="sm" onClick={() => navigate('/inventory/categories')}>Categories</Button>
- <Button variant="secondary" size="sm" onClick={() => navigate('/inventory/warehouse')}>Warehouses</Button>
- <Button variant="secondary" size="sm" onClick={() => navigate('/inventory/stock-levels')}>Stock Levels</Button>
- <Button variant="secondary" size="sm" onClick={() => navigate('/inventory/movements')}>Movements</Button>
+ <Button variant="secondary" size="xs" icon={<ListChecks size={14} />} onClick={() => setShowCategories(true)}>
+ Categories
+ </Button>
+ {/* Warehouse Structure = master data (zones/locations). Warehouse Map (sidebar) is the live floor view. */}
+ <Button variant="secondary" size="xs" onClick={() => navigate('/inventory/warehouse')}>Warehouse Structure</Button>
  {canManage && (
- <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/inventory/items/create')}>
+ <Button variant="primary" size="xs" icon={<Plus size={14} />} onClick={() => navigate('/inventory/items/create')}>
  New item
  </Button>
  )}
@@ -164,13 +174,45 @@ export default function ItemsListPage() {
  />
  {isLoading && !data && <SkeletonTable columns={canManage ? 10 : 9} rows={8} />}
  {isError && <EmptyState icon="alert-circle" title="Failed to load items" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />}
- {data && data.data.length === 0 && (
+ {data && (
+   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 px-5 py-4 border-b border-default bg-canvas">
+   <StatCard
+     label="Active Items"
+     value={data.data.filter(i => i.is_active).length}
+     helper="in current view"
+     linkTo="?is_active=true"
+   />
+   <StatCard
+     label="Inactive Items"
+     value={data.data.filter(i => !i.is_active).length}
+     helper="in current view"
+     linkTo="?is_active=false"
+   />
+   <StatCard
+     label={stockStatusLabel('low')}
+     value={data.data.filter(i => i.stock_status === 'low').length}
+     helper="in current view"
+     linkTo="?stock_status=low"
+   />
+   <StatCard
+     label={stockStatusLabel('critical')}
+     value={data.data.filter(i => i.stock_status === 'critical').length}
+     helper="in current view"
+     linkTo="?stock_status=critical"
+     className="border-danger/30 bg-danger-bg/20"
+   />
+   </div>
+  )}
+
+{data && data.data.length === 0 && (
  <EmptyState icon="inbox" title="No items found"
  description={canManage ? 'Add your first item to start tracking stock.' : 'Nothing here yet.'}
  action={canManage ? <Button variant="primary" onClick={() => navigate('/inventory/items/create')}>New item</Button> : undefined}
  />
  )}
- {data && data.data.length > 0 && (
+
+
+  {data && data.data.length > 0 && (
  <div className="px-5 py-4">
   <DataTable
   tableKey="inventory-items"
@@ -222,6 +264,13 @@ export default function ItemsListPage() {
  variant="primary"
  pending={restore.isPending}
  />
+
+ {/* Item categories — 2026-08-08: standalone page folded into this modal (same
+ pattern as Leave Types). CRUD here also refreshes the category dropdown on
+ the item create/edit form (same ['inventory', 'categories'] query key). */}
+ <Modal isOpen={showCategories} onClose={() => setShowCategories(false)} size="xl" title="Item Categories">
+ <ItemCategoriesManager />
+ </Modal>
  </div>
  );
 }

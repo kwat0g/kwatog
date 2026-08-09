@@ -31,6 +31,8 @@ class ChainBroadcaster
         \App\Modules\Purchasing\Models\PurchaseOrder::class => 'purchase_order',
         \App\Modules\SupplyChain\Models\Delivery::class     => 'delivery',
         \App\Modules\Inventory\Models\GoodsReceiptNote::class => 'grn',
+        \App\Modules\Accounting\Models\Bill::class           => 'bill',
+        \App\Modules\Accounting\Models\Invoice::class       => 'invoice',
     ];
 
     /** @var array<class-string<Model>, string> */
@@ -40,6 +42,8 @@ class ChainBroadcaster
         \App\Modules\Purchasing\Models\PurchaseOrder::class => 'po_number',
         \App\Modules\SupplyChain\Models\Delivery::class     => 'delivery_number',
         \App\Modules\Inventory\Models\GoodsReceiptNote::class => 'grn_number',
+        \App\Modules\Accounting\Models\Bill::class           => 'bill_number',
+        \App\Modules\Accounting\Models\Invoice::class       => 'invoice_number',
     ];
 
     /**

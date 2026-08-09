@@ -43,7 +43,13 @@ Route::middleware(['auth:sanctum', 'feature:mrp'])->prefix('mrp')->group(functio
     Route::get('/molds',           [MoldController::class, 'index']) ->middleware('permission:mrp.molds.view');
     Route::get('/molds/{mold}',    [MoldController::class, 'show'])  ->middleware('permission:mrp.molds.view');
     Route::get('/molds/{mold}/history',          [MoldController::class, 'history']) ->middleware('permission:mrp.molds.view');
-    Route::get('/molds/{mold}/cost-trend',       [MoldController::class, 'costTrend'])->middleware('permission:mrp.molds.view');
+    /*
+     * GET /molds/{mold}/cost-trend — HIDDEN 2026-08-08 (scope cut).
+     * Unbuilt chart endpoint — zero SPA callers, zero tests.
+     * Re-enable: uncomment below (MoldController::costTrend() is intact).
+     *
+     * Route::get('/molds/{mold}/cost-trend',       [MoldController::class, 'costTrend'])->middleware('permission:mrp.molds.view');
+     */
     Route::get('/products/{product}/molds',      [MoldController::class, 'byProduct'])->middleware('permission:mrp.molds.view');
     Route::post('/molds',          [MoldController::class, 'store']) ->middleware('permission:production.molds.manage');
     Route::put('/molds/{mold}',    [MoldController::class, 'update'])->middleware('permission:production.molds.manage');

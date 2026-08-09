@@ -28,6 +28,13 @@ class ReturnRequestItemResource extends JsonResource
             'disposition'       => $this->disposition,
             'disposition_label' => DispositionType::tryFrom((string) $this->disposition)?->label(),
             'disposition_notes' => $this->disposition_notes,
+            // 2026-08-08 — dispose-time movement: customer restock/rework lines
+            // come back into stock, supplier return_to_supplier lines ship out.
+            // The quantity actually moved lands here for the UI to show.
+            'moved_quantity' => $this->stock_movement_quantity !== null
+                && bccomp((string) $this->stock_movement_quantity, '0', 3) > 0
+                    ? (string) $this->stock_movement_quantity
+                    : null,
             'ncr'               => $this->whenLoaded('ncr', fn () => $this->ncr ? [
                 'id'         => $this->ncr->hash_id,
                 'ncr_number' => $this->ncr->ncr_number,

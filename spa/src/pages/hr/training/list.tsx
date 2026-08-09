@@ -8,7 +8,7 @@ import { archiveToTrashed, type ArchiveScope } from '@/lib/archiveScope';
 import { DataTable } from '@/components/ui/DataTable';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
-import { Modal } from '@/components/ui/Modal';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { FilterBar } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
@@ -76,11 +76,11 @@ const [deleteTarget, setDeleteTarget] = useState<Training | null>(null);
   key: 'actions', header: '',
   cell: (row: Training) => (
   <div className="flex gap-1">
-  <Button variant="ghost" size="sm" icon={<Pencil size={12} />} onClick={(e) => { e.stopPropagation(); navigate(`/hr/trainings/${row.id}/edit`); }} />
+  <Button variant="ghost" size="xs" icon={<Pencil size={12} />} onClick={(e) => { e.stopPropagation(); navigate(`/hr/trainings/${row.id}/edit`); }} />
   {scope === 'only' ? (
-  <Button variant="ghost" size="sm" icon={<ArchiveRestore size={12} />} onClick={(e) => { e.stopPropagation(); setRestoreTarget(row); }} />
+  <Button variant="ghost" size="xs" icon={<ArchiveRestore size={12} />} onClick={(e) => { e.stopPropagation(); setRestoreTarget(row); }} />
   ) : (
-  <Button variant="ghost" size="sm" icon={<Trash2 size={12} />} onClick={(e) => { e.stopPropagation(); setDeleteTarget(row); }} />
+  <Button variant="ghost" size="xs" icon={<Trash2 size={12} />} onClick={(e) => { e.stopPropagation(); setDeleteTarget(row); }} />
   )}
   </div>
   ),
@@ -93,7 +93,7 @@ const [deleteTarget, setDeleteTarget] = useState<Training | null>(null);
  title="Trainings"
  subtitle={data ? `${data.meta.total} trainings` : undefined}
  actions={can('hr.trainings.manage') && (
- <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/hr/trainings/create')}>
+ <Button variant="primary" size="xs" icon={<Plus size={14} />} onClick={() => navigate('/hr/trainings/create')}>
  Add Training
  </Button>
  )}
@@ -124,10 +124,10 @@ const [deleteTarget, setDeleteTarget] = useState<Training | null>(null);
   <div className="py-3">
   <p className="text-sm">Are you sure you want to archive <span className="font-medium">{deleteTarget.name}</span>? It will be hidden and can be restored later.</p>
   </div>
-  <div className="flex justify-end gap-2 pt-3 border-t border-default">
+  <ModalFooter>
   <Button variant="secondary" onClick={() => setDeleteTarget(null)} disabled={deleteMutation.isPending}>Cancel</Button>
   <Button variant="danger" onClick={() => deleteMutation.mutate(deleteTarget.id)} loading={deleteMutation.isPending}>Archive</Button>
-  </div>
+  </ModalFooter>
   </Modal>
  )}
  {restoreTarget && (
@@ -135,10 +135,10 @@ const [deleteTarget, setDeleteTarget] = useState<Training | null>(null);
   <div className="py-3">
   <p className="text-sm">Restore <span className="font-medium">{restoreTarget.name}</span>? It will reappear in active lists.</p>
   </div>
-  <div className="flex justify-end gap-2 pt-3 border-t border-default">
+  <ModalFooter>
   <Button variant="secondary" onClick={() => setRestoreTarget(null)} disabled={restoreMutation.isPending}>Cancel</Button>
   <Button variant="primary" onClick={() => restoreMutation.mutate(restoreTarget.id)} loading={restoreMutation.isPending}>Restore</Button>
-  </div>
+  </ModalFooter>
   </Modal>
  )}
  </div>

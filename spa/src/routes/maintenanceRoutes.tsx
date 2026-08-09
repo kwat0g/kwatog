@@ -12,8 +12,7 @@ const MaintenanceSchedulesListPage = lazy(() => import('@/pages/maintenance/sche
 const CreateMaintenanceSchedulePage = lazy(() => import('@/pages/maintenance/schedules/create'));
 const MaintenanceScheduleDetailPage = lazy(() => import('@/pages/maintenance/schedules/detail'));
 const EditMaintenanceSchedulePage = lazy(() => import('@/pages/maintenance/schedules/edit'));
-// ADV8 — Predictive maintenance & downtime analytics
-const MachineHealthPage = lazy(() => import('@/pages/maintenance/machine-health'));
+// ADV8 — Downtime analytics
 const DowntimeAnalyticsPage = lazy(() => import('@/pages/maintenance/downtime'));
 
 export const maintenanceRoutes = (
@@ -21,9 +20,7 @@ export const maintenanceRoutes = (
  {/* Maintenance module (Sprint 8 — Task 69 + ADV8) */}
  <Route element={<ModuleGuard module="maintenance" />}>
  <Route path="/maintenance" element={<MaintenanceHomePage />} />
- {/* ADV8 — Predictive maintenance & downtime analytics */}
- <Route path="/maintenance/machine-health"
- element={<PermissionGuard permission="maintenance.view"><MachineHealthPage /></PermissionGuard>} />
+ {/* ADV8 — Downtime analytics (machine-health page removed 2026-08-08, scope cut — page file kept) */}
  <Route path="/maintenance/downtime"
  element={<PermissionGuard permission="maintenance.view"><DowntimeAnalyticsPage /></PermissionGuard>} />
  <Route path="/maintenance/work-orders"

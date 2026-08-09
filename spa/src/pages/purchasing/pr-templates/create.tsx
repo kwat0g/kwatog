@@ -293,7 +293,7 @@ export default function PrTemplateFormPage() {
                     aria-label="Remove line"
                     onClick={() => remove(i)}
                     disabled={fields.length <= 1}
-                    className="text-muted hover:text-danger"
+                    className="text-muted hover:text-danger-fg"
                   />
                 </div>
               </div>

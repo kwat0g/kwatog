@@ -109,9 +109,9 @@ export function ProcessSection() {
       >
         <div className="px-5 sm:px-5 pt-20 sm:pt-28 lg:pt-0">
           <SectionHeading
-            eyebrow={content?.section_copy?.process_eyebrow || 'Manufacturing Journey'}
-            title={content?.section_copy?.process_title || 'From Raw Resin to Certified Shipment'}
-            intro={content?.section_copy?.process_intro || 'Six automated, traceable stages ensuring zero-defect quality and full lot lineage for every component.'}
+            eyebrow={content?.section_copy?.process_eyebrow ?? '—'}
+            title={content?.section_copy?.process_title ?? '—'}
+            intro={content?.section_copy?.process_intro ?? '—'}
           />
 
           {/* Progress rail + step readout + scroll hint (desktop) */}

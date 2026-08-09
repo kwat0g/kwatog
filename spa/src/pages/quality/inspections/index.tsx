@@ -15,6 +15,7 @@ import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import { StatCard } from '@/components/ui/StatCard';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
@@ -28,7 +29,7 @@ const STATUS_CHIP: Record<InspectionStatus, 'success' | 'danger' | 'warning' | '
   cancelled: 'neutral' };
 
 const DEFAULT_FILTERS: InspectionListParams = {
-  page: 1, per_page: 25,
+  page: 1, per_page: 25, status: 'in_progress',
 };
 
 export default function InspectionsListPage() {
@@ -108,7 +109,7 @@ export default function InspectionsListPage() {
  header: 'Defects (Ac)',
  align: 'right',
  cell: (r) => (
- <NumCell className={r.defect_count > r.accept_count ? 'text-danger' : ''}>
+ <NumCell className={r.defect_count > r.accept_count ? 'text-danger-fg' : ''}>
  {r.defect_count} ({r.accept_count})
  </NumCell>
  ) },
@@ -180,13 +181,45 @@ export default function InspectionsListPage() {
  }
  />
  )}
- {data && data.data.length === 0 && (
+ {data && (
+  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 px-5 py-4 border-b border-default bg-canvas">
+  <StatCard
+    label={labels.get('draft') ?? '—'}
+    value={data.data.filter(i => i.status === 'draft').length}
+    helper="in current view"
+    linkTo="?status=draft"
+  />
+  <StatCard
+    label={labels.get('in_progress') ?? '—'}
+    value={data.data.filter(i => i.status === 'in_progress').length}
+    helper="in current view"
+    linkTo="?status=in_progress"
+  />
+  <StatCard
+    label={labels.get('passed') ?? '—'}
+    value={data.data.filter(i => i.status === 'passed').length}
+    helper="in current view"
+    linkTo="?status=passed"
+    className="border-success/30 bg-success-bg/20"
+  />
+  <StatCard
+    label={labels.get('failed') ?? '—'}
+    value={data.data.filter(i => i.status === 'failed').length}
+    helper="in current view"
+    linkTo="?status=failed"
+    className="border-danger/30 bg-danger-bg/20"
+  />
+  </div>
+ )}
+
+{data && data.data.length === 0 && (
  <EmptyState
  icon="clipboard-check"
  title="No inspections yet"
  description="Create one from a GRN, work order, or finished batch to start logging measurements."
  />
  )}
+
  {data && data.data.length > 0 && (
  <div className="px-5 py-4">
   <DataTable

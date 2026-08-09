@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Modal } from '@/components/ui/Modal';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { Panel } from '@/components/ui/Panel';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
@@ -503,7 +503,7 @@ export default function WorkOrderDetailPage() {
  </option>
  ))}
  </Select>
- <div className="flex items-center justify-end gap-2 pt-2 border-t border-default">
+ <ModalFooter>
  <Button variant="secondary" onClick={() => setShowConfirmDialog(false)}>Cancel</Button>
  <Button
  variant="primary"
@@ -513,7 +513,7 @@ export default function WorkOrderDetailPage() {
  >
  {mut.isPending ? 'Confirming…' : 'Confirm work order'}
  </Button>
- </div>
+ </ModalFooter>
  </div>
  </Modal>
 
@@ -550,7 +550,7 @@ export default function WorkOrderDetailPage() {
  <p className="text-xs text-muted">
  This reason and category feed the machine downtime and OEE reports.
  </p>
- <div className="flex items-center justify-end gap-2 pt-2 border-t border-default">
+ <ModalFooter>
  <Button variant="secondary" onClick={() => setShowPauseDialog(false)}>Cancel</Button>
  <Button
  variant="primary"
@@ -560,7 +560,7 @@ export default function WorkOrderDetailPage() {
  >
  {mut.isPending ? 'Pausing…' : 'Pause work order'}
  </Button>
- </div>
+ </ModalFooter>
  </div>
  </Modal>
 

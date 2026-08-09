@@ -63,4 +63,10 @@ class GoodsReceiptNote extends Model
     {
         return $this->belongsTo(User::class, 'accepted_by');
     }
+
+    /** 2026-08-08 — bills auto-created from this receipt (one per accepted GRN). */
+    public function bills(): HasMany
+    {
+        return $this->hasMany(\App\Modules\Accounting\Models\Bill::class);
+    }
 }

@@ -188,16 +188,16 @@ export default function MobileConditionReading() {
  {lastResult?.triggered && (
  <div className="rounded-md border border-danger bg-danger-bg p-4" role="alert">
  <div className="flex items-start gap-3">
- <AlertTriangle className="w-5 h-5 text-danger flex-shrink-0 mt-0.5" />
+ <AlertTriangle className="w-5 h-5 text-danger-fg flex-shrink-0 mt-0.5" />
  <div>
- <div className="text-sm font-medium text-danger">
+ <div className="text-sm font-medium text-danger-fg">
  Threshold breached
  </div>
- <p className="text-sm text-danger mt-1">
+ <p className="text-sm text-danger-fg mt-1">
  {lastResult.reason}
  </p>
  {lastResult.work_order && (
- <p className="text-sm text-danger mt-1 font-mono">
+ <p className="text-sm text-danger-fg mt-1 font-mono">
  Corrective WO created: {lastResult.work_order.mwo_number}
  </p>
  )}
@@ -209,11 +209,11 @@ export default function MobileConditionReading() {
  {/* Success banner for non-breach */}
  {lastResult && !lastResult.triggered && (
  <div className="rounded-md border border-success bg-success-bg p-4">
- <div className="flex items-center gap-2 text-sm text-success">
+ <div className="flex items-center gap-2 text-sm text-success-fg">
  <CheckCircle2 className="w-4 h-4" />
  Reading within normal range.
  {lastResult.reason && (
- <span className="text-xs text-success ml-1">
+ <span className="text-xs text-success-fg ml-1">
  ({lastResult.reason})
  </span>
  )}
@@ -235,10 +235,10 @@ export default function MobileConditionReading() {
  <span
  className={`w-2 h-2 rounded-full flex-shrink-0 ${
  snap.status === 'critical'
- ? 'bg-danger'
+ ? 'bg-danger-bg'
  : snap.status === 'warning'
- ? 'bg-warning'
- : 'bg-success'
+ ? 'bg-warning-bg'
+ : 'bg-success-bg'
  }`}
  />
  <span className="font-medium">{metrics.find((metricOption) => metricOption.value === snap.metric)?.label ?? snap.metric}</span>

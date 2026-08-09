@@ -54,7 +54,7 @@ export default function MoldDetailPage() {
 
  const m = detail.data;
  const pct = Math.min(100, Math.max(0, m.shot_percentage));
- const barColor = pct >= 100 ? 'bg-danger' : m.nearing_limit ? 'bg-warning' : 'bg-success';
+ const barColor = pct >= 100 ? 'bg-danger-bg' : m.nearing_limit ? 'bg-warning-bg' : 'bg-success-bg';
 
  return (
  <div>

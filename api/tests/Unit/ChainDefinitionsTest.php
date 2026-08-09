@@ -72,10 +72,50 @@ class ChainDefinitionsTest extends TestCase
         $this->assertSame([], $completed);
     }
 
-    public function test_allowed_types_includes_all_five_chains(): void
+    public function test_bill_unpaid_maps_to_posted_step(): void
+    {
+        [$active, $completed] = ChainDefinitions::resolve('bill', 'unpaid');
+        $this->assertSame('posted', $active);
+        $this->assertSame(['draft'], $completed);
+    }
+
+    public function test_bill_partial_and_paid_advance_the_chain(): void
+    {
+        [$active, $completed] = ChainDefinitions::resolve('bill', 'partial');
+        $this->assertSame('partial', $active);
+        $this->assertContains('posted', $completed);
+
+        [$paidActive, $paidCompleted] = ChainDefinitions::resolve('bill', 'paid');
+        $this->assertSame('paid', $paidActive);
+        $this->assertSame(['draft', 'posted', 'partial'], $paidCompleted);
+    }
+
+    public function test_bill_cancelled_collapses_to_closed(): void
+    {
+        [$active, $completed] = ChainDefinitions::resolve('bill', 'cancelled');
+        $this->assertSame('closed', $active);
+    }
+
+    public function test_invoice_chain_resolves_statuses(): void
+    {
+        [$draft] = ChainDefinitions::resolve('invoice', 'draft');
+        $this->assertSame('draft', $draft);
+
+        [$finalized] = ChainDefinitions::resolve('invoice', 'finalized');
+        $this->assertSame('finalized', $finalized);
+
+        [$paid, $completed] = ChainDefinitions::resolve('invoice', 'paid');
+        $this->assertSame('paid', $paid);
+        $this->assertSame(['draft', 'finalized', 'partial'], $completed);
+
+        [$cancelled] = ChainDefinitions::resolve('invoice', 'cancelled');
+        $this->assertSame('closed', $cancelled);
+    }
+
+    public function test_allowed_types_includes_all_chains(): void
     {
         $types = ChainDefinitions::allowedTypes();
-        foreach (['sales_order', 'work_order', 'purchase_order', 'delivery', 'grn'] as $t) {
+        foreach (['sales_order', 'work_order', 'purchase_order', 'delivery', 'grn', 'bill', 'invoice'] as $t) {
             $this->assertContains($t, $types);
         }
     }
@@ -87,5 +127,7 @@ class ChainDefinitionsTest extends TestCase
         $this->assertSame('purchasing.view',               ChainDefinitions::viewPermission('purchase_order'));
         $this->assertSame('supply_chain.view',             ChainDefinitions::viewPermission('delivery'));
         $this->assertSame('inventory.view',                ChainDefinitions::viewPermission('grn'));
+        $this->assertSame('accounting.bills.view',         ChainDefinitions::viewPermission('bill'));
+        $this->assertSame('accounting.invoices.view',      ChainDefinitions::viewPermission('invoice'));
     }
 }

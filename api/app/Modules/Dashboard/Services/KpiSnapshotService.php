@@ -323,11 +323,13 @@ class KpiSnapshotService
 
     private function computeSupplierQuality(int $year, int $month): ?float
     {
-        // Average supplier performance score for the month
-        if (! DB::getSchemaBuilder()->hasTable('supplier_performance_scores')) {
-            return null;
-        }
-        $avg = DB::table('supplier_performance_scores')
+        // Average supplier performance score for the month.
+        // Table is `supplier_performance_snapshots` (SupplierPerformanceSnapshot).
+        // This read `supplier_performance_scores`, which never existed, behind a
+        // hasTable() guard — so the KPI silently returned null every month
+        // instead of erroring. Guard removed: the siblings above don't guard
+        // either, and a missing table should fail loudly, not vanish.
+        $avg = DB::table('supplier_performance_snapshots')
             ->where('period_year', $year)
             ->where('period_month', $month)
             ->avg('overall_score');
@@ -340,10 +342,16 @@ class KpiSnapshotService
         $from = Carbon::create($year, $month, 1)->startOfDay()->toDateString();
         $to = Carbon::create($year, $month, 1)->endOfMonth()->toDateString();
 
-        $total = (int) DB::table('daily_time_records')
+        // Table is `attendances` (the Attendance model). The old name,
+        // `daily_time_records`, never existed in the schema, so this KPI threw
+        // "relation does not exist" on every monthly run. Attendance soft-deletes,
+        // so exclude trashed rows the way the Eloquent model would.
+        $total = (int) DB::table('attendances')
+            ->whereNull('deleted_at')
             ->whereBetween('date', [$from, $to])
             ->count();
-        $present = (int) DB::table('daily_time_records')
+        $present = (int) DB::table('attendances')
+            ->whereNull('deleted_at')
             ->whereBetween('date', [$from, $to])
             ->whereNotNull('time_in')
             ->count();

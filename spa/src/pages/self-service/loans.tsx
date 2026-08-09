@@ -9,7 +9,7 @@ import { Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { PageHeader } from '@/components/layout/PageHeader';
 import {
- Button, Chip, EmptyState, Input, Modal, Select, SkeletonTable, Textarea, Td, Th,
+ Button, Chip, EmptyState, Input, Modal, ModalFooter, Select, SkeletonTable, Textarea, Td, Th,
 } from '@/components/ui';
 import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
 import { selfServiceApi } from '@/api/self-service';
@@ -324,14 +324,14 @@ function ApplyLoanModal({
  {...register('reason')}
  error={errors.reason?.message}
  />
- <div className="flex justify-end gap-2 pt-2 border-t border-default">
+ <ModalFooter>
  <Button type="button" variant="secondary" onClick={() => { reset(); onClose(); }} disabled={pending}>
  Cancel
  </Button>
  <Button type="submit" variant="primary" disabled={pending} loading={pending}>
  {pending ? 'Submitting…' : 'Submit request'}
  </Button>
- </div>
+ </ModalFooter>
  </form>
  </Modal>
  );

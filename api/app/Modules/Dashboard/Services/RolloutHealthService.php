@@ -64,7 +64,7 @@ class RolloutHealthService
             'quality_plans' => [
                 'eligible_items' => $totalItems,
                 'covered_items' => $totalItems - $missingItems->count(),
-                'coverage_percent' => $totalItems > 0 ? round((($totalItems - $missingItems->count()) / $totalItems) * 100, 1) : 100.0,
+                'coverage_percent' => $totalItems > 0 ? round((($totalItems - $missingItems->count()) / $totalItems) * 100, 1) : null,
                 'missing' => $missingItems->map(fn (Item $item) => [
                     'id' => $item->hash_id, 'code' => $item->code, 'name' => $item->name,
                     'is_critical' => (bool) $item->is_critical,
@@ -78,7 +78,7 @@ class RolloutHealthService
             'scanner' => [
                 'scans_24h' => $scanTotal,
                 'unrecognized_24h' => $unknownScans,
-                'recognition_rate' => $scanTotal > 0 ? round((($scanTotal - $unknownScans) / $scanTotal) * 100, 1) : 100.0,
+                'recognition_rate' => $scanTotal > 0 ? round((($scanTotal - $unknownScans) / $scanTotal) * 100, 1) : null,
                 'top_unrecognized' => $unknownCodes,
             ],
             'actions' => $actionSummary,

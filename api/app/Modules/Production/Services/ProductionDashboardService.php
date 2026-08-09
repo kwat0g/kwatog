@@ -88,7 +88,8 @@ class ProductionDashboardService
         // Average OEE today across active machines.
         $oeeRows = $this->oee->calculateForAllMachines($from, $to);
         // No machine activity is an unknown OEE, not a measured 0% result.
-        $avgOee = $oeeRows->isEmpty() ? null : round((float) $oeeRows->avg('oee'), 4);
+        $measuredOee = $oeeRows->filter(static fn (array $row): bool => $row['oee'] !== null);
+        $avgOee = $measuredOee->isEmpty() ? null : round((float) $measuredOee->avg('oee'), 4);
 
         return [
             'today_output_total' => $todayGood + $todayReject,
@@ -182,7 +183,7 @@ class ProductionDashboardService
         // Molds nearing or past their shot threshold.
         $warningRatio = $this->settings->requiredFloat('production.dashboard.mold_warning_ratio', 0, 1);
         Mold::query()
-            ->whereRaw('current_shot_count >= max_shots_before_maintenance * ?', [$warningRatio])
+            ->whereRaw('current_shot_count >= (max_shots_before_maintenance * CAST(? AS NUMERIC))', [$warningRatio])
             ->get()
             ->each(function ($mold) use (&$alerts) {
                 $pct = $mold->shot_percentage;

@@ -169,8 +169,21 @@ export function Modal({
   </button>
   </div>
   )}
-  <div className="p-5 overflow-y-auto">{children}</div>
-  </div>
-  </div>
+        <div className="p-5 overflow-y-auto overflow-x-hidden">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+export function ModalFooter({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <div
+      className={cn(
+        'sticky bottom-[-20px] -mx-5 -mb-5 mt-5 px-5 py-4 border-t border-default bg-surface flex items-center justify-end gap-2 rounded-b-md z-10',
+        className
+      )}
+    >
+      {children}
+    </div>
   );
 }

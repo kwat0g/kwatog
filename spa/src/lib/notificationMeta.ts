@@ -71,15 +71,20 @@ const BY_TYPE: Record<string, NotificationMeta> = {
  'quality.inspection_failed': { icon: ShieldAlert, group: 'alerts', label: 'Quality' },
  'chain.delivery_drafted': { icon: Truck, group: 'system', label: 'Logistics' },
  'chain.delivery_confirmed': { icon: Truck, group: 'system', label: 'Logistics' },
+ 'return.restocked': { icon: PackageCheck, group: 'system', label: 'Returns' },
 
  // ── Chain 2 · Procure to Pay ─────────────────────────────────────────
  'inventory.grn_received': { icon: PackageCheck, group: 'system', label: 'Inventory' },
  'chain.incoming_qc_required': { icon: ShieldCheck, group: 'system', label: 'Quality' },
  'inventory.low_stock': { icon: Package, group: 'alerts', label: 'Inventory' },
  'chain.pr_approved': { icon: FileText, group: 'approvals', label: 'Purchasing' },
+ // Auto-conversion failed (no supplier / no price) — needs a human to convert
+ // the PR by hand, so it belongs in alerts, not the informational stream.
+ 'chain.pr_auto_convert_skipped': { icon: FileWarning, group: 'alerts', label: 'Purchasing' },
  'chain.po_approved': { icon: Package, group: 'approvals', label: 'Purchasing' },
  'auto_po_pending': { icon: Package, group: 'approvals', label: 'Purchasing' },
  'purchasing.supplier_deterioration': { icon: TrendingDown, group: 'alerts', label: 'Purchasing' },
+ 'return.shipped_to_vendor': { icon: Truck, group: 'system', label: 'Returns' },
 
  // ── Chain 3 · Hire to Retire ─────────────────────────────────────────
  'leave.submitted': { icon: Calendar, group: 'approvals', label: 'Leave' },

@@ -26,26 +26,6 @@ class SettingsController
         $grouped = [];
         foreach ($rows as $row) {
             $value = json_decode($row->value, true);
-            if ($value === null || (is_string($value) && trim($value) === '')) {
-                $companyFallback = match ($row->key) {
-                    'company.legal_name' => 'PHILIPPINE OGAMI CORPORATION',
-                    'company.address' => 'First Cavite Industrial Estate (FCIE), Dasmariñas, Cavite, Philippines',
-                    'company.tin' => '002-841-935-0000',
-                    'company.phone' => '+63 (046) 402-1234',
-                    'company.email' => 'info@ogami.ph',
-                    'company.sales_inbox_email' => 'sales@ogami.ph',
-                    'company.public_url' => 'https://ogami.ph',
-                    'company.vat_status' => 'VAT Registered',
-                    'company.employee_email_domain' => 'ogami.ph',
-                    'company.latitude' => 14.2860,
-                    'company.longitude' => 120.9345,
-                    default => null,
-                };
-                if ($companyFallback !== null) {
-                    $value = $companyFallback;
-                }
-            }
-
             $grouped[$row->group][] = [
                 'key' => $row->key,
                 'value' => $value,

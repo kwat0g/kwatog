@@ -27,6 +27,12 @@ class ScheduledExportController
         abort_unless($user, 401);
 
         $query = ScheduledExport::query()->with('owner:id,name');
+        $trashed = (string) $request->query('trashed', '');
+        if ($trashed === 'with') {
+            $query->withTrashed();
+        } elseif ($trashed === 'only') {
+            $query->onlyTrashed();
+        }
 
         // Non-admins only see their own.
         if (! $user->can('admin.audit_logs.view')) {

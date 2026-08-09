@@ -95,6 +95,11 @@ export default function StatutoryExportsPage() {
  description={`Annual return for ${year}`}
  onClick={() => void statutoryApi.bir1604cf(year)}
  />
+ <ExportCard
+ title="BIR 2316 Alphalist"
+ description={`Annual employee income-tax alphalist (CSV) for ${year}`}
+ onClick={() => void statutoryApi.bir2316Alphalist(year)}
+ />
  </div>
  </Panel>
  </div>

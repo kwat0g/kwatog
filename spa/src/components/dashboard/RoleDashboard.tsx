@@ -225,16 +225,16 @@ function RolePanels({ envelope }: { envelope: DashboardEnvelope }) {
 }
 
 function stageFillClass(color?: string): string {
- if (color === 'danger') return 'h-full bg-danger';
- if (color === 'warning') return 'h-full bg-warning';
- if (color === 'info') return 'h-full bg-info';
- return 'h-full bg-success';
+ if (color === 'danger') return 'h-full bg-danger-bg';
+ if (color === 'warning') return 'h-full bg-warning-bg';
+ if (color === 'info') return 'h-full bg-info-bg';
+ return 'h-full bg-success-bg';
 }
 
 function alertDotClass(severity?: string): string {
  const base = 'inline-block w-1.5 h-1.5 rounded-full';
- if (severity === 'danger') return `${base} bg-danger`;
- if (severity === 'warning') return `${base} bg-warning`;
- if (severity === 'info') return `${base} bg-info`;
- return `${base} bg-success`;
+ if (severity === 'danger') return `${base} bg-danger-bg`;
+ if (severity === 'warning') return `${base} bg-warning-bg`;
+ if (severity === 'info') return `${base} bg-info-bg`;
+ return `${base} bg-success-bg`;
 }

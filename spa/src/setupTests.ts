@@ -4,17 +4,23 @@ import '@testing-library/jest-dom';
 // Stub it once so any module that triggers themeStore initialization
 // during test imports doesn't blow up.
 if (typeof window !== 'undefined' && !window.matchMedia) {
- Object.defineProperty(window, 'matchMedia', {
- writable: true,
- value: (query: string) => ({
- matches: false,
- media: query,
- onchange: null,
- addListener: () => {},
- removeListener: () => {},
- addEventListener: () => {},
- removeEventListener: () => {},
- dispatchEvent: () => false,
- }),
- });
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  });
+}
+
+// jsdom doesn't implement scrollIntoView; any list that keeps its active row in
+// view (command palette, keyboard-navigable menus) calls it from an effect.
+if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {};
 }

@@ -80,6 +80,28 @@ class ReturnRequestResource extends JsonResource
                 'invoice_number' => $this->creditMemo->invoice_number,
             ] : null),
 
+            // 2026-08-08 — how many units actually moved in/out of stock (sum
+            // of the per-line moved quantities): restocked for customer returns,
+            // shipped back for supplier returns. Null until dispose() moves.
+            'moved_quantity'        => $this->whenLoaded('items', fn () => $this->items
+                ->sum(fn ($item) => (float) ($item->stock_movement_quantity ?? 0)) > 0
+                    ? (string) $this->items->sum(fn ($item) => (float) ($item->stock_movement_quantity ?? 0))
+                    : null),
+
+            'stock_movement'        => $this->whenLoaded('stockMovement', fn () => $this->stockMovement ? [
+                'id'            => $this->stockMovement->hash_id,
+                'quantity'      => (string) $this->stockMovement->quantity,
+                'movement_type' => $this->stockMovement->movement_type?->value,
+                'to_location'   => $this->stockMovement->relationLoaded('toLocation') && $this->stockMovement->toLocation ? [
+                    'id'   => $this->stockMovement->toLocation->hash_id,
+                    'code' => $this->stockMovement->toLocation->code,
+                ] : null,
+                'from_location' => $this->stockMovement->relationLoaded('fromLocation') && $this->stockMovement->fromLocation ? [
+                    'id'   => $this->stockMovement->fromLocation->hash_id,
+                    'code' => $this->stockMovement->fromLocation->code,
+                ] : null,
+            ] : null),
+
             'inspection'           => $this->whenLoaded('inspection', fn () => $this->inspection ? [
                 'id'                => $this->inspection->hash_id,
                 'inspection_number' => $this->inspection->inspection_number,

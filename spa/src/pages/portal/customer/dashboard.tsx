@@ -52,22 +52,22 @@ export default function CustomerDashboardPage() {
  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
  <StatCard
  label="Open Orders"
- value={dashboard?.open_so_count ?? 0}
+ value={dashboard?.open_so_count ?? '—'}
  helper="Pending fulfillment"
  />
  <StatCard
  label="Pending Deliveries"
- value={dashboard?.pending_delivery_count ?? 0}
+ value={dashboard?.pending_delivery_count ?? '—'}
  helper="Awaited deliveries"
  />
  <StatCard
  label="Open Invoices"
- value={dashboard?.open_invoice_count ?? 0}
+ value={dashboard?.open_invoice_count ?? '—'}
  helper="Invoices due"
  />
  <StatCard
  label="Outstanding"
- value={dashboard?.total_outstanding ? formatPeso(dashboard.total_outstanding) : '₱0'}
+ value={dashboard ? formatPeso(dashboard.total_outstanding) : '—'}
  helper="Total balance"
  />
  </div>

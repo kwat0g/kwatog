@@ -9,6 +9,7 @@ import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import { StatCard } from '@/components/ui/StatCard';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
@@ -19,7 +20,7 @@ import type { MaintenanceWorkOrder } from '@/types/maintenance';
 import { formatPeso } from '@/lib/formatNumber';
 
 const DEFAULT_FILTERS: WorkOrderListParams = {
- page: 1, per_page: 25,
+  page: 1, per_page: 25, status: 'open',
 };
 
 export default function MaintenanceWorkOrdersListPage() {
@@ -36,6 +37,11 @@ export default function MaintenanceWorkOrdersListPage() {
  const { data: options } = useQuery({
  queryKey: ['maintenance', 'work-order-options'],
  queryFn: () => workOrdersApi.options() });
+ const typeLabels = new Map((options?.types ?? []).map((type) => [type.value, type.label]));
+ const priorityLabels = new Map((options?.priorities ?? []).map((priority) => [priority.value, priority.label]));
+ const totalCost = data?.data.some((workOrder) => workOrder.cost != null)
+  ? formatPeso(data.data.reduce((sum, workOrder) => sum + Number(workOrder.cost ?? 0), 0))
+  : '—';
 
  const columns: Column<MaintenanceWorkOrder>[] = [
  {
@@ -68,7 +74,7 @@ export default function MaintenanceWorkOrdersListPage() {
  key: 'cost',
  header: 'Cost',
  align: 'right',
- cell: (r) => <NumCell>{formatPeso(r.cost ?? '0.00')}</NumCell> },
+ cell: (r) => <NumCell>{formatPeso(r.cost)}</NumCell> },
  {
  key: 'status',
  header: 'Status',
@@ -126,7 +132,36 @@ export default function MaintenanceWorkOrdersListPage() {
  <EmptyState icon="alert-circle" title="Failed to load work orders"
  action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />
  )}
- {data && data.data.length === 0 && (
+ {data && (
+   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 px-5 py-4 border-b border-default bg-canvas">
+   <StatCard
+     label={typeLabels.get('preventive') ?? '—'}
+     value={data.data.filter(w => w.type === 'preventive').length}
+     helper="in current view"
+     linkTo="?type=preventive"
+   />
+   <StatCard
+     label={typeLabels.get('corrective') ?? '—'}
+     value={data.data.filter(w => w.type === 'corrective').length}
+     helper="in current view"
+     linkTo="?type=corrective"
+   />
+   <StatCard
+     label={`${priorityLabels.get('high') ?? '—'} priority`}
+     value={data.data.filter(w => w.priority === 'high').length}
+     helper="in current view"
+     linkTo="?priority=high"
+     className="border-danger/30 bg-danger-bg/20"
+   />
+   <StatCard
+     label="Total Cost"
+     value={totalCost}
+     helper="in current view"
+   />
+   </div>
+  )}
+
+{data && data.data.length === 0 && (
  <EmptyState icon="wrench" title="No maintenance work orders"
  description={filters.search ? `No results for "${filters.search}".` : 'New preventive WOs are auto-created from due schedules. Corrective WOs can be filed manually.'}
  action={can('maintenance.wo.create') ? (
@@ -134,8 +169,10 @@ export default function MaintenanceWorkOrdersListPage() {
  ) : undefined}
  />
  )}
- {data && data.data.length > 0 && (
-  <div className="px-5 py-4">
+
+
+  {data && data.data.length > 0 && (
+   <div className="px-5 py-4">
   <DataTable
   tableKey="maintenance-wo"
   onRowClick={(r) => navigate(`/maintenance/work-orders/${r.id}`)}

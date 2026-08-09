@@ -9,6 +9,7 @@ use App\Common\Services\SettingsService;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Requests\AcceptGrnRequest;
+use App\Modules\Inventory\Requests\FinalizeGrnRequest;
 use App\Modules\Inventory\Requests\RejectGrnRequest;
 use App\Modules\Inventory\Requests\StoreGrnRequest;
 use App\Modules\Inventory\Resources\GoodsReceiptNoteResource;
@@ -57,6 +58,21 @@ class GoodsReceiptNoteController
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return (new GoodsReceiptNoteResource($grn))->response()->setStatusCode(201);
+    }
+
+    /**
+     * 2026-08-08 — Complete a draft (expected) GRN: the warehouse assigns a
+     * bin + actual quantity per line, and the GRN becomes pending_qc (incoming
+     * QC + stock-on-accept take over from there).
+     */
+    public function finalize(FinalizeGrnRequest $request, GoodsReceiptNote $grn): GoodsReceiptNoteResource
+    {
+        try {
+            $result = $this->service->finalizeDraft($grn, $request->validated()['items'], $request->user());
+        } catch (RuntimeException $e) {
+            abort(422, $e->getMessage());
+        }
+        return new GoodsReceiptNoteResource($this->service->show($result));
     }
 
     public function accept(AcceptGrnRequest $request, GoodsReceiptNote $grn): GoodsReceiptNoteResource

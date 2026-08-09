@@ -50,7 +50,15 @@ if (class_exists(PayrollPeriodController::class)) {
         Route::prefix('payroll-periods')->group(function () {
             Route::get('/', [PayrollPeriodController::class, 'index'])->middleware('permission:payroll.periods.view');
             Route::get('/options', [PayrollPeriodController::class, 'options'])->middleware('permission:payroll.periods.view');
-            Route::get('/pipeline', [PayrollPeriodController::class, 'pipeline'])->middleware('permission:payroll.periods.view');
+            /*
+             * /payroll-periods/pipeline — HIDDEN 2026-08-08 (scope cut).
+             * The full-year pipeline board is a redundant report once the
+             * periods list shows status per row. Re-enable: uncomment and
+             * restore the SPA route + sidebar entry. Controller method and
+             * PayrollPeriodService::pipeline() are intact.
+             *
+             * Route::get('/pipeline', [PayrollPeriodController::class, 'pipeline'])->middleware('permission:payroll.periods.view');
+             */
             Route::post('/', [PayrollPeriodController::class, 'store'])->middleware('permission:payroll.periods.create');
             // Dry-run a scope before creating the period: headcount, estimated
             // gross, and anyone another period already paid for this cutoff.
@@ -107,6 +115,7 @@ if (class_exists(PayrollPeriodController::class)) {
 
         // ─── De minimis benefits ──────────────────────────────────
         Route::prefix('de-minimis')->group(function () {
+            Route::get('/options', [DeMinimisController::class, 'options'])->middleware('permission:payroll.adjustments.create');
             Route::get('/', [DeMinimisController::class, 'index'])->middleware('permission:payroll.adjustments.create');
             Route::post('/', [DeMinimisController::class, 'store'])->middleware('permission:payroll.adjustments.create');
             Route::get('/{deMinimisBenefit}', [DeMinimisController::class, 'show'])->middleware('permission:payroll.adjustments.create');

@@ -241,8 +241,6 @@ const remove = useMutation({
  <PageHeader
  title="Roles & permissions"
  subtitle={data ? `${data.meta.total} roles` : undefined}
- backTo="/admin/roles"
- backLabel="Admin"
  actions={
  can('admin.roles.manage') && (
  <>

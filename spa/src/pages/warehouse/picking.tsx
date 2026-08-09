@@ -36,8 +36,6 @@ export default function PickingListPage() {
  <div>
  <PageHeader
  title="Picking Lists"
- backTo="/inventory/items"
- backLabel="Items"
  subtitle={slipResp ? `${slips.length} ready to pick` : undefined}
  />
 
@@ -64,7 +62,7 @@ export default function PickingListPage() {
  type="button"
  onClick={() => setSelectedMis(slip.id)}
  className={`w-full text-left px-2 py-1.5 text-xs rounded-md transition-colors cursor-pointer ${focusRingInset} ${
- selectedMis === slip.id ? 'bg-accent/10 text-accent border border-accent/20' : 'text-muted hover:text-primary hover:bg-elevated'
+ selectedMis === slip.id ? 'bg-accent/10 text-accent border border-accent/30 shadow-sm' : 'bg-surface border border-default text-secondary hover:border-subtle hover:text-primary hover:bg-elevated'
  }`}
  >
  <div className="font-mono">{slip.slip_number}</div>

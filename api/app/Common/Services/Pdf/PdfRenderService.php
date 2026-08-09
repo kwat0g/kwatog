@@ -95,25 +95,28 @@ class PdfRenderService
     private function companyContext(): array
     {
         return [
-            'name'       => $this->setting('company.legal_name', 'PHILIPPINE OGAMI CORPORATION'),
-            'address'    => $this->setting('company.address', 'First Cavite Industrial Estate (FCIE), Dasmariñas, Cavite, Philippines'),
-            'phone'      => $this->setting('company.phone', '+63 46 402 1234'),
-            'email'      => $this->setting('company.email', 'info@ogami.com.ph'),
-            'tin'        => $this->setting('company.tin', '000-123-456-0000'),
-            'vat_status' => $this->setting('company.vat_status', 'VAT Registered'),
-            'logo_path'  => $this->setting('company.logo_path', ''),
-            'public_url' => $this->setting('company.public_url', 'https://ogami.com.ph'),
-            'disclaimer' => $this->setting('pdf.footer_disclaimer', 'This is a system-generated document. Philippine Ogami Corporation — IATF 16949 Certified.'),
+            // Company identity is deployment data. Never substitute a
+            // hardcoded entity when a setting is absent.
+            'name'       => $this->setting('company.legal_name'),
+            'address'    => $this->setting('company.address'),
+            'phone'      => $this->setting('company.phone'),
+            'email'      => $this->setting('company.email'),
+            'tin'        => $this->setting('company.tin'),
+            'vat_status' => $this->setting('company.vat_status'),
+            'logo_path'  => $this->setting('company.logo_path'),
+            'public_url' => $this->setting('company.public_url'),
+            'certification' => $this->setting('company.certification'),
+            'disclaimer' => $this->setting('pdf.footer_disclaimer'),
         ];
     }
 
-    private function setting(string $key, string $default = ''): string
+    private function setting(string $key): string
     {
         try {
             $val = $this->settings->get($key);
-            return is_string($val) && trim($val) !== '' ? $val : $default;
+            return is_string($val) && trim($val) !== '' ? $val : '';
         } catch (\Throwable) {
-            return $default;
+            return '';
         }
     }
 

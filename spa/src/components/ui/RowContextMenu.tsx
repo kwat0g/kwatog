@@ -77,7 +77,7 @@ export function RowContextMenu({ open, x, y, items, onClose }: Props) {
  focusRingInset,
  item.disabled && 'opacity-40 cursor-not-allowed',
  !item.disabled && 'hover:bg-subtle',
- item.variant === 'danger' ? 'text-danger' : 'text-primary',
+ item.variant === 'danger' ? 'text-danger-fg' : 'text-primary',
  )}
  >
  {item.icon && <span className="w-3.5 inline-flex items-center text-muted">{item.icon}</span>}

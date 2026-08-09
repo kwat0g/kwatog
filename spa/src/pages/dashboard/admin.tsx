@@ -21,9 +21,9 @@ type KpiUnit = 'sessions' | 'accounts' | 'attempts' | 'jobs';
 
 const kpiAccent: Record<KpiUnit, string> = {
  sessions: 'text-accent',
- accounts: 'text-danger',
- attempts: 'text-warning',
- jobs: 'text-danger',
+ accounts: 'text-danger-fg',
+ attempts: 'text-warning-fg',
+ jobs: 'text-danger-fg',
 };
 
 /**
@@ -134,11 +134,11 @@ function AccountSecurityPanel({
 }) {
  const stats = [
  { label: 'Total accounts', value: data.total, color: '' },
- { label: 'Active', value: data.active, color: 'text-success' },
- { label: 'Inactive / disabled', value: data.inactive, color: data.inactive > 0 ? 'text-warning' : '' },
- { label: 'Currently locked', value: data.locked, color: data.locked > 0 ? 'text-danger' : '' },
- { label: 'At risk (≥3 failures)', value: data.at_risk, color: data.at_risk > 0 ? 'text-warning' : '' },
- { label: 'Must change password', value: data.must_change_password, color: data.must_change_password > 0 ? 'text-warning' : '' },
+ { label: 'Active', value: data.active, color: 'text-success-fg' },
+ { label: 'Inactive / disabled', value: data.inactive, color: data.inactive > 0 ? 'text-warning-fg' : '' },
+ { label: 'Currently locked', value: data.locked, color: data.locked > 0 ? 'text-danger-fg' : '' },
+ { label: 'At risk (≥3 failures)', value: data.at_risk, color: data.at_risk > 0 ? 'text-warning-fg' : '' },
+ { label: 'Must change password', value: data.must_change_password, color: data.must_change_password > 0 ? 'text-warning-fg' : '' },
  ];
 
  return (
@@ -172,7 +172,7 @@ function AccountSecurityPanel({
  <span className="font-medium truncate block">{acc.name}</span>
  <span className="text-2xs text-muted truncate block">{acc.email}</span>
  </div>
- <span className="text-xs font-mono tabular-nums text-danger shrink-0 ml-2">
+ <span className="text-xs font-mono tabular-nums text-danger-fg shrink-0 ml-2">
  {acc.attempts} attempts
  </span>
  </div>
@@ -221,7 +221,7 @@ function AuthEventsPanel({
  {statusLabels.get(status) ?? status}
  </span>
  <span className={`font-mono tabular-nums font-medium shrink-0 ${
- status === 'success' ? 'text-success' : 'text-danger'
+ status === 'success' ? 'text-success-fg' : 'text-danger-fg'
  }`}>
  {count}
  </span>
@@ -284,9 +284,9 @@ function QueueHealthPanel({
  title="Queue Health"
  meta={
  data.healthy ? (
- <span className="text-success text-xs font-medium">● Healthy</span>
+ <span className="text-success-fg text-xs font-medium">● Healthy</span>
  ) : (
- <span className="text-danger text-xs font-medium">● Issues detected</span>
+ <span className="text-danger-fg text-xs font-medium">● Issues detected</span>
  )
  }
  >
@@ -297,7 +297,7 @@ function QueueHealthPanel({
  </div>
  <div className="p-3 rounded-md bg-elevated">
  <div className="text-2xs uppercase tracking-wider text-muted mb-0.5">Failed</div>
- <div className={`text-2xl font-mono tabular-nums font-medium ${data.failed_jobs > 0 ? 'text-danger' : ''}`}>
+ <div className={`text-2xl font-mono tabular-nums font-medium ${data.failed_jobs > 0 ? 'text-danger-fg' : ''}`}>
  {data.failed_jobs}
  </div>
  </div>
@@ -349,14 +349,14 @@ function OpenAlertsPanel({
  {data.total > 0 && (
  <div className="flex gap-3 mb-3">
  {data.critical > 0 && (
- <span className="inline-flex items-center gap-1 text-xs font-medium text-danger">
- <span className="h-1.5 w-1.5 rounded-full bg-danger inline-block" />
+ <span className="inline-flex items-center gap-1 text-xs font-medium text-danger-fg">
+ <span className="h-1.5 w-1.5 rounded-full bg-danger-bg inline-block" />
  {data.critical} critical
  </span>
  )}
  {data.warning > 0 && (
- <span className="inline-flex items-center gap-1 text-xs font-medium text-warning">
- <span className="h-1.5 w-1.5 rounded-full bg-warning inline-block" />
+ <span className="inline-flex items-center gap-1 text-xs font-medium text-warning-fg">
+ <span className="h-1.5 w-1.5 rounded-full bg-warning-bg inline-block" />
  {data.warning} warning
  </span>
  )}
@@ -390,9 +390,9 @@ function OpenAlertsPanel({
 /* ── Audit Trail ─────────────────────────────────────────────────────────── */
 
 const ACTION_COLOR: Record<string, string> = {
- created: 'text-success',
- updated: 'text-info',
- deleted: 'text-danger',
+ created: 'text-success-fg',
+ updated: 'text-info-fg',
+ deleted: 'text-danger-fg',
 };
 
 function AuditTrailPanel({ events }: { events: AdminAuditEvent[] }) {

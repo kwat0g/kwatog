@@ -116,6 +116,9 @@ class DispositionTest extends TestCase
         $by = $this->makeUser();
         $customer = $this->makeCustomer();
         $rma = $this->makeInspectedRma($by, $customer);
+        // 2026-08-08 — restock lines are received back into stock at dispose
+        // time, so the destination location is mandatory.
+        $location = WarehouseLocation::factory()->create();
 
         $svc = app(ReturnRequestService::class);
 
@@ -125,7 +128,7 @@ class DispositionTest extends TestCase
                 'disposition' => 'restock',
                 'notes'       => 'Good condition after inspection',
             ],
-        ], $by);
+        ], $by, false, $location->id);
 
         $this->assertSame('disposed', $result->disposition_status);
 
@@ -168,6 +171,7 @@ class DispositionTest extends TestCase
         $customer = $this->makeCustomer();
         $invoice = $this->makeInvoice($customer, $by);
         $rma = $this->makeInspectedRma($by, $customer, $invoice);
+        $location = WarehouseLocation::factory()->create();
 
         $svc = app(ReturnRequestService::class);
 
@@ -176,24 +180,26 @@ class DispositionTest extends TestCase
                 'item_id'     => $rma->items->first()->hash_id,
                 'disposition' => 'restock',
             ],
-        ], $by);
+        ], $by, false, $location->id);
 
-        // REC-13 — a REAL credit note (positive amounts, GL-posted), not a
-        // negative-invoice hack.
+        // REC-13 — a REAL credit note (positive amounts), not a negative-invoice
+        // hack. 2026-08-08 — staged as a DRAFT (GL untouched) so finance reviews
+        // before finalize posts the VAT-reversing entry; mirrors the
+        // auto-bill/auto-invoice review-then-post pattern.
         $this->assertNotNull($result->credit_note_id);
 
         $creditNote = \App\Modules\Accounting\Models\CreditNote::find($result->credit_note_id);
         $this->assertNotNull($creditNote);
         $this->assertSame($customer->id, $creditNote->customer_id);
         $this->assertSame('customer', $creditNote->type->value);
-        $this->assertSame('finalized', $creditNote->status->value);
+        $this->assertSame('draft', $creditNote->status->value);
         $this->assertTrue((float) $creditNote->total_amount > 0, 'Credit note total should be positive');
-        $this->assertNotNull($creditNote->journal_entry_id, 'Credit note must post to the GL');
+        $this->assertNull($creditNote->journal_entry_id, 'Draft credit note must NOT touch the GL');
         $this->assertSame($invoice->id, $creditNote->invoice_id);
+        $this->assertSame($rma->id, $creditNote->return_request_id);
 
-        // The posted JE must balance (subledger↔GL reconciliation).
-        $je = \App\Modules\Accounting\Models\JournalEntry::find($creditNote->journal_entry_id);
-        $this->assertSame((string) $je->total_debit, (string) $je->total_credit);
+        // One line per returned item (sourced from the invoice lines).
+        $this->assertGreaterThanOrEqual(1, $creditNote->lines()->count());
     }
 
     public function test_dispose_rejects_non_inspected_rma(): void
@@ -225,6 +231,8 @@ class DispositionTest extends TestCase
         $customer = $this->makeCustomer();
         $product = $this->makeProduct();
         $rma = $this->makeInspectedRma($by, $customer, product: $product);
+        // Rework lines also go back into stock on disposal → location required.
+        $location = WarehouseLocation::factory()->create();
 
         $svc = app(ReturnRequestService::class);
 
@@ -234,7 +242,7 @@ class DispositionTest extends TestCase
                 'disposition' => 'rework',
                 'notes'       => 'Can be reworked',
             ],
-        ], $by);
+        ], $by, false, $location->id);
 
         $item = $result->items->first();
         $this->assertSame('rework', $item->disposition);
@@ -336,11 +344,25 @@ class DispositionTest extends TestCase
             'source_bill_item_id'=> $billItem->id,
         ]);
 
+        // 2026-08-08 — return_to_supplier lines ship out at dispose time, so
+        // put the goods on the shelf first and name the shipping location.
+        app(\App\Modules\Inventory\Services\StockMovementService::class)->move(
+            new \App\Modules\Inventory\Support\StockMovementInput(
+                type: \App\Modules\Inventory\Enums\StockMovementType::AdjustmentIn,
+                itemId: $item->id,
+                toLocationId: $location->id,
+                quantity: '100',
+                unitCost: '10.00',
+                referenceType: 'opening',
+                createdBy: $by->id,
+            )
+        );
+
         $result = app(ReturnRequestService::class)->dispose($rma->load('items'), [[
             'item_id'     => $rmaItem->hash_id,
             'disposition' => 'return_to_supplier',
             'notes'       => 'Failed incoming QC',
-        ]], $by, true);
+        ]], $by, true, $location->id);
 
         $this->assertSame('80.000', (string) $grnItem->fresh()->quantity_received);
         $this->assertSame('80.000', (string) $grnItem->fresh()->quantity_accepted);
@@ -359,6 +381,16 @@ class DispositionTest extends TestCase
         $this->assertSame(PurchaseOrderStatus::Draft, $replacement->status);
         $this->assertSame('20.00', (string) $replacement->items()->firstOrFail()->quantity);
         $this->assertSame('disposed', $result->disposition_status);
+
+        // The goods leave stock the moment the disposition is recorded.
+        $movement = \App\Modules\Inventory\Models\StockMovement::query()
+            ->where('reference_type', 'return_request')
+            ->where('reference_id', $rma->id)
+            ->firstOrFail();
+        $this->assertSame(\App\Modules\Inventory\Enums\StockMovementType::ReturnToVendor, $movement->movement_type);
+        $this->assertSame('20.000', (string) $movement->quantity);
+        $this->assertSame('80.000', (string) \App\Modules\Inventory\Models\StockLevel::where('item_id', $item->id)
+            ->where('location_id', $location->id)->firstOrFail()->quantity, '100 on shelf − 20 shipped back');
 
         try {
             app(ReturnRequestService::class)->dispose($result->fresh('items'), [[
@@ -399,11 +431,15 @@ class DispositionTest extends TestCase
             // Deliberately no GRN lineage.
         ]);
 
+        // A location is supplied so the dispose-time location rule passes and
+        // the service actually reaches the lineage guard this test is about.
+        $location = WarehouseLocation::factory()->create();
+
         try {
             app(ReturnRequestService::class)->dispose($rma->load('items'), [[
                 'item_id' => $rmaItem->hash_id,
                 'disposition' => 'return_to_supplier',
-            ]], $by);
+            ]], $by, false, $location->id);
             $this->fail('Expected invalid supplier-return lineage to be rejected.');
         } catch (RuntimeException $e) {
             $this->assertStringContainsString('source GRN and PO lines', $e->getMessage());

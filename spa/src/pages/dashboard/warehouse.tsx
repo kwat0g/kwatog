@@ -170,7 +170,7 @@ function LowStockAlertsPanel({ items }: { items: LowStockItem[] }) {
  </Td>
  <Td align="right" mono>{s.current_stock}</Td>
  <Td align="right" mono>{s.reorder_point}</Td>
- <Td align="right" mono className="text-danger">{s.shortage}</Td>
+ <Td align="right" mono className="text-danger-fg">{s.shortage}</Td>
  </tr>
  ))}
  </tbody>
@@ -218,9 +218,9 @@ function ZoneUtilizationPanel({ items, warningPct, criticalPct }: { items: ZoneI
 }
 
 function zonePctClass(pct: number, warningPct?: number, criticalPct?: number): string {
- if (criticalPct != null && pct >= criticalPct) return 'h-full bg-danger rounded-full';
- if (warningPct != null && pct >= warningPct) return 'h-full bg-warning rounded-full';
- return 'h-full bg-success rounded-full';
+ if (criticalPct != null && pct >= criticalPct) return 'h-full bg-danger-bg rounded-full';
+ if (warningPct != null && pct >= warningPct) return 'h-full bg-warning-bg rounded-full';
+ return 'h-full bg-success-bg rounded-full';
 }
 
 /* ───────────────────────── Page component ───────────────────────── */

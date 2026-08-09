@@ -12,7 +12,7 @@ interface BadgeProps {
 const variants = {
  accent: 'bg-accent text-accent-fg',
  warning: 'bg-warning-bg text-warning-fg',
- danger: 'bg-danger text-white',
+ danger: 'bg-danger-bg text-danger-fg',
  neutral: 'bg-elevated text-muted',
 } as const;
 

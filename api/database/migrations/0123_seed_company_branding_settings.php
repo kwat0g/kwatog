@@ -21,6 +21,7 @@ return new class extends Migration {
             'company.tin'          => (string) env('COMPANY_TIN', ''),
             'company.vat_status'   => (string) env('COMPANY_VAT_STATUS', ''),
             'company.logo_path'    => (string) env('COMPANY_LOGO_PATH', ''),
+            'company.certification' => (string) env('COMPANY_CERTIFICATION', ''),
             // Used when generating self-service URLs in QR codes.
             'company.public_url'   => (string) env('COMPANY_PUBLIC_URL', ''),
             // E1: shows on every PDF footer.
@@ -49,7 +50,7 @@ return new class extends Migration {
             ->whereIn('key', [
                 'company.legal_name', 'company.address', 'company.phone',
                 'company.email', 'company.tin', 'company.vat_status',
-                'company.logo_path', 'company.public_url',
+                'company.logo_path', 'company.certification', 'company.public_url',
                 'pdf.footer_disclaimer',
             ])
             ->delete();

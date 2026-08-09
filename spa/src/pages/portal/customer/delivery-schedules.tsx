@@ -148,7 +148,7 @@ export default function DeliverySchedulesPage() {
  onClick={() => removeLine(idx)}
  disabled={lines.length <= 1}
  aria-label="Remove line"
- className="text-muted hover:text-danger"
+ className="text-muted hover:text-danger-fg"
  />
  </div>
  ))}

@@ -25,8 +25,8 @@ interface ApprovalTimelineProps {
 }
 
 const dotClass = (action: ApprovalAction, isActive: boolean): string => {
- if (action === 'approved') return 'bg-success border-success text-white';
- if (action === 'rejected') return 'bg-danger border-danger text-white';
+ if (action === 'approved') return 'bg-success-bg border-success text-white';
+ if (action === 'rejected') return 'bg-danger-bg border-danger text-white';
  if (action === 'skipped') return 'bg-elevated border-default text-muted';
  // pending
  return isActive
@@ -91,7 +91,7 @@ export function ApprovalTimeline({
  <span
  className={cn(
  'w-px flex-1 mt-1 mb-1 min-h-[18px]',
- step.action === 'approved' ? 'bg-success' : 'bg-border-default',
+ step.action === 'approved' ? 'bg-success-bg' : 'bg-border-default',
  )}
  />
  )}

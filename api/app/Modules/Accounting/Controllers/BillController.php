@@ -55,6 +55,18 @@ class BillController
         return (new BillResource($bill))->response()->setStatusCode(201);
     }
 
+    /** 2026-08-08 — post an auto-created draft bill (builds + posts the JE, flips to unpaid). */
+    public function postDraft(Request $request, Bill $bill): BillResource|JsonResponse
+    {
+        try {
+            $bill = $this->service->postDraft($bill, $request->user());
+        } catch (\Throwable $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return new BillResource($bill);
+    }
+
     public function cancel(Request $request, Bill $bill): BillResource|JsonResponse
     {
         try {

@@ -150,6 +150,7 @@ export type PayrollAnomalyType =
 export interface PayrollAnomalyFlag {
  id: string;
  flag_type: PayrollAnomalyType;
+ flag_type_label?: string;
  details: Record<string, unknown>;
  is_resolved: boolean;
  resolution_remarks: string | null;

@@ -15,8 +15,9 @@ use Illuminate\Support\Collection;
 /**
  * Sprint 6 — Task 57. OEE = Availability × Performance × Quality.
  *
- * All four metrics are returned as 0..1 floats with cap at 1.0; the UI
- * renders them as percentages with one decimal. Diagnostics field exposes
+ * Measured metrics are returned as 0..1 floats with cap at 1.0; a metric is
+ * null when the source window has no observations for it. The UI renders
+ * them as percentages with one decimal. Diagnostics field exposes
  * every input so the panel can show a "?" tooltip with the math.
  *
  * Math (per the Sprint 6 plan §0):
@@ -33,9 +34,9 @@ use Illuminate\Support\Collection;
  *   oee               = availability * performance * quality
  *
  * Edge cases handled:
- *   - zero scheduled time → all zeros, no NaN
+ *   - zero scheduled time or no output → null for the unmeasurable metrics
  *   - performance > 1 (stale ideal_cycle) → clamped to 1, diagnostics.performance_capped=true
- *   - zero outputs → quality = 0 (treat as no good production)
+ *   - zero outputs → quality/performance/OEE are null (no measured result)
  */
 class OeeService
 {
@@ -82,19 +83,21 @@ class OeeService
             $idealCycle = $cycles->isNotEmpty() ? (float) $cycles->avg() : 0.0;
         }
 
-        $availability = $availableTime > 0 ? $runTime / $availableTime : 0.0;
-        $performanceRaw = $runTime > 0
+        $availability = $availableTime > 0 ? $runTime / $availableTime : null;
+        $performanceRaw = $runTime > 0 && $total > 0 && $idealCycle > 0
             ? ($total * $idealCycle / 60.0) / $runTime
-            : 0.0;
-        $performance = min(1.0, max(0.0, $performanceRaw));
-        $quality = $total > 0 ? $good / $total : 0.0;
-        $oee = $availability * $performance * $quality;
+            : null;
+        $performance = $performanceRaw === null ? null : min(1.0, max(0.0, $performanceRaw));
+        $quality = $total > 0 ? $good / $total : null;
+        $oee = $availability !== null && $performance !== null && $quality !== null
+            ? $availability * $performance * $quality
+            : null;
 
         return [
-            'availability' => round($availability, 4),
-            'performance'  => round($performance, 4),
-            'quality'      => round($quality, 4),
-            'oee'          => round($oee, 4),
+            'availability' => $availability === null ? null : round($availability, 4),
+            'performance'  => $performance === null ? null : round($performance, 4),
+            'quality'      => $quality === null ? null : round($quality, 4),
+            'oee'          => $oee === null ? null : round($oee, 4),
             'diagnostics'  => [
                 'scheduled_minutes'   => $scheduledMinutes,
                 'planned_downtime'    => $planned,
@@ -104,7 +107,7 @@ class OeeService
                 'good_count'          => $good,
                 'reject_count'        => $reject,
                 'ideal_cycle_seconds' => round($idealCycle, 2),
-                'performance_capped'  => $performanceRaw > 1.0,
+                'performance_capped'  => $performanceRaw !== null && $performanceRaw > 1.0,
             ],
             'period_from'  => $from->toIso8601String(),
             'period_to'    => $to->toIso8601String(),
@@ -135,9 +138,11 @@ class OeeService
      */
     public function calculateForAllMachines(Carbon $from, Carbon $to): Collection
     {
-        return Machine::orderBy('machine_code')
+        return Machine::with('currentWorkOrder.mold')
+            ->orderBy('machine_code')
             ->get()
             ->map(function ($m) use ($from, $to) {
+                $currentWorkOrder = $m->currentWorkOrder;
                 return [
                     'machine_id'   => $m->hash_id,
                     'machine_code' => $m->machine_code,
@@ -145,6 +150,15 @@ class OeeService
                     'tonnage'      => $m->tonnage,
                     'status'       => (string) $m->status?->value,
                     'status_label' => MachineStatus::tryFrom((string) $m->status?->value)?->label() ?? (string) $m->status?->value,
+                    'active_wo'    => $currentWorkOrder?->wo_number,
+                    'active_mold'  => $currentWorkOrder?->mold?->mold_code,
+                    'current_output' => $currentWorkOrder?->quantity_produced !== null
+                        ? (int) $currentWorkOrder->quantity_produced
+                        : null,
+                    'target_output' => $currentWorkOrder?->quantity_target !== null
+                        ? (int) $currentWorkOrder->quantity_target
+                        : null,
+                    'cycle_time_sec' => $currentWorkOrder?->mold?->cycle_time_seconds,
                 ] + $this->calculate($m, $from, $to);
             });
     }
@@ -169,7 +183,7 @@ class OeeService
      *                                   active machines.
      * @return array{
      *     range: array{from:string,to:string},
-     *     overall: array{availability:float,performance:float,quality:float,oee:float},
+     *     overall: array{availability:float|null,performance:float|null,quality:float|null,oee:float|null},
      *     machines: \Illuminate\Support\Collection,
      *     trend: array<int, array{date:string,oee:float}>,
      *     downtime_breakdown: array<int, array{category:string,minutes:int}>
@@ -186,9 +200,12 @@ class OeeService
         // had any production activity (run_time > 0). Machines with no
         // schedule contribute zeros and would tank the average otherwise.
         $active = $machineRows->filter(fn ($r) => ($r['diagnostics']['run_time'] ?? 0) > 0);
-        $overallAvg = static function (string $field) use ($active) {
-            $count = $active->count();
-            return $count === 0 ? 0.0 : round($active->avg($field), 4);
+        $overallAvg = static function (string $field) use ($active): ?float {
+            // No running machine means there is no measured OEE for this
+            // window. Returning zero would present missing evidence as a
+            // genuine quality/performance result.
+            $measured = $active->filter(static fn (array $row): bool => $row[$field] !== null);
+            return $measured->isEmpty() ? null : round((float) $measured->avg($field), 4);
         };
         $overall = [
             'availability' => $overallAvg('availability'),
@@ -215,10 +232,11 @@ class OeeService
                 $perDay = $machinesForTrend
                     ->map(fn ($m) => $this->calculate($m, $dayStart, $dayEnd))
                     ->filter(fn ($r) => ($r['diagnostics']['run_time'] ?? 0) > 0);
+                $measuredOee = $perDay->pluck('oee')->filter(static fn ($value): bool => $value !== null);
                 $trend[] = [
                     'date' => $cursor->toDateString(),
                     // A day with no production activity has no measured OEE.
-                    'oee'  => $perDay->isEmpty() ? null : round($perDay->avg('oee'), 4),
+                    'oee'  => $measuredOee->isEmpty() ? null : round((float) $measuredOee->avg(), 4),
                 ];
                 $cursor->addDay();
             }

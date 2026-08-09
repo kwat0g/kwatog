@@ -187,7 +187,7 @@ export default function SupplierDeliverySchedulesPage() {
  icon={<X size={14} />}
  onClick={() => handleRemoveLine(idx)}
  aria-label="Remove line"
- className="shrink-0 text-muted hover:text-danger"
+ className="shrink-0 text-muted hover:text-danger-fg"
  />
  )}
  </div>

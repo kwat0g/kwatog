@@ -47,6 +47,173 @@ class BudgetController extends Controller
         ]]);
     }
 
+    /**
+     * Decode HashID values on the incoming request so the rest of the
+     * controller can stay numeric. Skips values that already look like
+     * integers (Artisan, tests) or are missing.
+     */
+    private function decodeHashIds(Request $request): void
+    {
+        $merge = [];
+
+        $fiscalYearId = $request->input('fiscal_year_id');
+        if (is_string($fiscalYearId) && $fiscalYearId !== '' && ! ctype_digit($fiscalYearId)) {
+            $merge['fiscal_year_id'] = HashIdFilter::decode($fiscalYearId, FiscalYear::class);
+        }
+
+        $departmentId = $request->input('department_id');
+        if (is_string($departmentId) && $departmentId !== '' && ! ctype_digit($departmentId)) {
+            $merge['department_id'] = HashIdFilter::decode($departmentId, Department::class);
+        }
+
+        $items = $request->input('line_items');
+        if (is_array($items)) {
+            $changed = false;
+            foreach ($items as $idx => $line) {
+                $accountId = $line['account_id'] ?? null;
+                if (is_string($accountId) && $accountId !== '' && ! ctype_digit($accountId)) {
+                    $items[$idx]['account_id'] = HashIdFilter::decode($accountId, Account::class);
+                    $changed = true;
+                }
+            }
+            if ($changed) {
+                $merge['line_items'] = $items;
+            }
+        }
+
+        if ($merge !== []) {
+            $request->merge($merge);
+        }
+    }
+
+    /** List budgets. */
+    public function index(Request $request): JsonResponse
+    {
+        $this->decodeHashIds($request);
+
+        $query = Budget::with(['fiscalYear', 'department']);
+        if ($request->filled('fiscal_year_id')) {
+            $query->byFiscalYear((int) $request->input('fiscal_year_id'));
+        }
+        if ($request->filled('department_id')) {
+            $query->byDepartment((int) $request->input('department_id'));
+        }
+        if ($request->filled('status')) {
+            $query->where('status', $request->input('status'));
+        }
+
+        $perPage = min((int) $request->input('per_page', 20), 100);
+        $budgets = $query->orderByDesc('created_at')->paginate($perPage);
+
+        return response()->json([
+            'success' => true,
+            'data'    => BudgetResource::collection($budgets->items()),
+            'error'   => null,
+            'meta'    => [
+                'page'     => $budgets->currentPage(),
+                'per_page' => $budgets->perPage(),
+                'total'    => $budgets->total(),
+            ],
+        ]);
+    }
+
+    /** Show a single budget with line items. */
+    public function show(Budget $budget): JsonResponse
+    {
+        $budget->load(['fiscalYear', 'department', 'lineItems.account', 'submittedBy', 'approvedBy']);
+
+        return response()->json([
+            'success' => true,
+            'data'    => new BudgetResource($budget),
+            'error'   => null,
+            'meta'    => null,
+        ]);
+    }
+
+    /** Create a budget. */
+    public function store(Request $request): JsonResponse
+    {
+        $this->decodeHashIds($request);
+
+        $validated = $request->validate([
+            'fiscal_year_id'           => 'required|exists:fiscal_years,id',
+            'department_id'            => 'nullable|exists:departments,id',
+            'budget_type'              => ['required', Rule::enum(BudgetType::class)],
+            'name'                     => 'required|string|max:200',
+            'line_items'               => 'required|array|min:1',
+            'line_items.*.account_id'  => 'required|exists:accounts,id',
+            'line_items.*.jan'         => 'numeric|min:0',
+            'line_items.*.feb'         => 'numeric|min:0',
+            'line_items.*.mar'         => 'numeric|min:0',
+            'line_items.*.apr'         => 'numeric|min:0',
+            'line_items.*.may'         => 'numeric|min:0',
+            'line_items.*.jun'         => 'numeric|min:0',
+            'line_items.*.jul'         => 'numeric|min:0',
+            'line_items.*.aug'         => 'numeric|min:0',
+            'line_items.*.sep'         => 'numeric|min:0',
+            'line_items.*.oct'         => 'numeric|min:0',
+            'line_items.*.nov'         => 'numeric|min:0',
+            'line_items.*.dec'         => 'numeric|min:0',
+        ]);
+
+        $budget = $this->budgetService->create($validated, $validated['line_items']);
+
+        return response()->json([
+            'success' => true,
+            'data'    => new BudgetResource($budget->load(['fiscalYear', 'department', 'lineItems.account'])),
+            'error'   => null,
+            'meta'    => null,
+        ], 201);
+    }
+
+    /** Update a budget while it remains in draft status. */
+    public function update(Request $request, Budget $budget): JsonResponse
+    {
+        $this->decodeHashIds($request);
+
+        if ($budget->status !== 'draft') {
+            return response()->json([
+                'success' => false,
+                'data'    => null,
+                'error'   => 'Only draft budgets can be edited.',
+                'meta'    => null,
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'budget_type' => ['sometimes', Rule::enum(BudgetType::class)],
+            'name'        => 'sometimes|string|max:200',
+        ]);
+        $budget->update($validated);
+
+        return response()->json([
+            'success' => true,
+            'data'    => new BudgetResource($budget->fresh()->load(['fiscalYear', 'department'])),
+            'error'   => null,
+            'meta'    => null,
+        ]);
+    }
+
+    /** Submit a budget for approval. */
+    public function submit(Budget $budget): JsonResponse
+    {
+        $this->budgetService->submit($budget, auth()->id());
+        return response()->json(['success' => true, 'data' => null, 'error' => null, 'meta' => null]);
+    }
+
+    /** Approve a budget. */
+    public function approve(Budget $budget): JsonResponse
+    {
+        $this->budgetService->approve($budget, auth()->id());
+        return response()->json(['success' => true, 'data' => null, 'error' => null, 'meta' => null]);
+    }
+
+    /** Close a budget. */
+    public function close(Budget $budget): JsonResponse
+    {
+        $this->budgetService->close($budget);
+        return response()->json(['success' => true, 'data' => null, 'error' => null, 'meta' => null]);
+    }
 
 
 

@@ -214,7 +214,7 @@ class FinanceDashboardService
      * (no active fiscal year, no budgets, or service throws) so the SPA can
      * hide the panel cleanly.
      *
-     * @return array<int, array{category:string, budget:string, actual:string, variance:string, variance_pct:float}>|null
+     * @return array<int, array{category:string, budget:string|null, actual:string|null, variance:string|null, variance_pct:float|null}>|null
      */
     private function budgetVsActualTop(): ?array
     {
@@ -242,7 +242,7 @@ class FinanceDashboardService
      * shaped slightly differently across modules. Unknown shapes are skipped.
      *
      * @param  mixed  $data
-     * @return array<int, array{category:string, budget:string, actual:string, variance:string, variance_pct:float}>
+     * @return array<int, array{category:string, budget:string|null, actual:string|null, variance:string|null, variance_pct:float|null}>
      */
     private function extractBudgetRows(mixed $data): array
     {
@@ -263,19 +263,24 @@ class FinanceDashboardService
             if (! is_array($row)) continue;
             $category = (string) ($row['category'] ?? $row['account_name'] ?? $row['name'] ?? $row['department'] ?? '');
             if ($category === '') continue;
-            $budget = (string) ($row['budget'] ?? $row['budgeted'] ?? $row['budget_amount'] ?? '0');
-            $actual = (string) ($row['actual'] ?? $row['actual_amount'] ?? '0');
-            $variance = (string) ($row['variance'] ?? bcsub($actual, $budget, 2));
-            $variancePct = isset($row['variance_pct'])
+            $budgetRaw = $row['budget'] ?? $row['budgeted'] ?? $row['budget_amount'] ?? null;
+            $actualRaw = $row['actual'] ?? $row['actual_amount'] ?? null;
+            $budget = $budgetRaw !== null && $budgetRaw !== '' ? Money::round2((string) $budgetRaw) : null;
+            $actual = $actualRaw !== null && $actualRaw !== '' ? Money::round2((string) $actualRaw) : null;
+            $varianceRaw = $row['variance'] ?? null;
+            $variance = $varianceRaw !== null && $varianceRaw !== ''
+                ? Money::round2((string) $varianceRaw)
+                : ($budget !== null && $actual !== null ? Money::round2(bcsub($actual, $budget, 2)) : null);
+            $variancePct = array_key_exists('variance_pct', $row) && $row['variance_pct'] !== null
                 ? (float) $row['variance_pct']
-                : ((float) $budget > 0 ? ((float) $actual / (float) $budget) * 100 : 0.0);
+                : ($budget !== null && $actual !== null && (float) $budget > 0 ? ((float) $actual / (float) $budget) * 100 : null);
 
             $out[] = [
                 'category'     => $category,
-                'budget'       => Money::round2($budget),
-                'actual'       => Money::round2($actual),
-                'variance'     => Money::round2($variance),
-                'variance_pct' => round($variancePct, 1),
+                'budget'       => $budget,
+                'actual'       => $actual,
+                'variance'     => $variance,
+                'variance_pct' => $variancePct === null ? null : round($variancePct, 1),
             ];
         }
         return $out;

@@ -52,8 +52,8 @@ function retryAfterSeconds(err: AxiosError<{ message?: string }>): number {
 
 export default function LoginPage() {
  const { data: contact } = useQuery({ queryKey: ['landing', 'contact'], queryFn: landingApi.contact, staleTime: 300_000 });
- const legalName = contact?.legal_name || 'Philippine Ogami Corporation';
- const companyEmail = contact?.company_email || 'it-support@ogami.ph';
+ const legalName = contact?.legal_name ?? '';
+ const companyEmail = contact?.company_email ?? '';
  const navigate = useNavigate();
  const location = useLocation();
  const login = useAuthStore((s) => s.login);
@@ -183,15 +183,15 @@ export default function LoginPage() {
  Secure sign-in
  </p>
  <span className="inline-flex items-center gap-1.5 rounded-full border border-default bg-surface px-2.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.16em] text-muted">
- <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
+ <span className="h-1.5 w-1.5 rounded-full bg-success-bg animate-pulse" />
  System Active
  </span>
  </div>
- <h1 className="mt-3 font-display text-2xl font-medium tracking-tight text-primary">
+ <h1 className="mt-3 font-display text-2xl tracking-tight text-primary">
  Welcome back
  </h1>
  <p className="mt-1.5 text-[13px] text-muted">
- Sign in with your work email to access {legalName} (Ogami ERP).
+ Sign in with your work email to access {legalName ? `${legalName} (ERP)` : 'the ERP'}.
  </p>
  </div>
 
@@ -245,7 +245,7 @@ export default function LoginPage() {
  {/* Caps Lock warning — only when password field is focused */}
  <div aria-live="polite" className="mt-1.5 min-h-[1.25rem]">
  {capsOn && passwordFocused && (
- <span className="flex items-center gap-1.5 font-mono text-[11px] text-warning">
+ <span className="flex items-center gap-1.5 font-mono text-[11px] text-warning-fg">
  <AlertTriangle size={11} />
  Caps Lock is on
  </span>
@@ -281,7 +281,7 @@ export default function LoginPage() {
  <div
  role="status"
  aria-live="polite"
- className="flex flex-col items-center justify-center gap-1.5 text-xs text-warning"
+ className="flex flex-col items-center justify-center gap-1.5 text-xs text-warning-fg"
  >
  <div className="flex items-center gap-1.5">
  <Timer size={12} />
@@ -290,7 +290,7 @@ export default function LoginPage() {
  <span className="text-muted">
  Need access now?{' '}
  <a
- href={`mailto:${companyEmail}?subject=Account%20locked`}
+ href={companyEmail ? `mailto:${companyEmail}?subject=Account%20locked` : undefined}
  className="underline-offset-2 hover:text-primary hover:underline"
  >
  Contact IT

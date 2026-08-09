@@ -187,7 +187,7 @@ export default function RecordOutputPage() {
  icon={<Trash2 size={14} />}
  aria-label="Remove line"
  onClick={() => remove(i)}
- className="text-muted hover:text-danger"
+ className="text-muted hover:text-danger-fg"
  />
  </div>
  ))}

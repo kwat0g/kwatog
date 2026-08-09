@@ -17,8 +17,10 @@ import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { formatDate } from '@/lib/formatDate';
 import type { Attendance } from '@/types/attendance';
 
+const today = new Date().toISOString().split('T')[0];
 const DEFAULT_FILTERS: AttendanceListParams = {
- page: 1, per_page: 25, sort: 'date', direction: 'desc',
+  page: 1, per_page: 25, sort: 'date', direction: 'desc',
+  from: today, to: today,
 };
 
 export default function AttendancePage() {

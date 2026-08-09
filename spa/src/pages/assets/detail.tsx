@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 import { assetsApi } from '@/api/assets';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
-import { Modal } from '@/components/ui/Modal';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { Panel } from '@/components/ui/Panel';
 import { StatCard } from '@/components/ui/StatCard';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
@@ -102,12 +102,12 @@ export default function AssetDetailPage() {
               {statusLabel ?? data.status}
             </Chip>
             {can('assets.create') && (
-              <Button variant="secondary" size="sm" onClick={() => navigate(`/assets/${id}/edit`)}>
+              <Button variant="secondary" size="xs" onClick={() => navigate(`/assets/${id}/edit`)}>
                 <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
               </Button>
             )}
             {data.status === 'active' && can('assets.dispose') && (
-              <Button variant="danger" size="sm" onClick={() => setDisposeOpen(true)}>
+              <Button variant="danger" size="xs" onClick={() => setDisposeOpen(true)}>
                 Dispose
               </Button>
             )}
@@ -231,7 +231,7 @@ export default function AssetDetailPage() {
             className="font-mono"
           />
         </div>
-        <div className="flex justify-end gap-2 pt-3 border-t border-default">
+        <ModalFooter>
           <Button variant="secondary" onClick={() => setDisposeOpen(false)}>
             Cancel
           </Button>
@@ -243,7 +243,7 @@ export default function AssetDetailPage() {
           >
             {dispose.isPending ? 'Disposing…' : 'Confirm dispose'}
           </Button>
-        </div>
+        </ModalFooter>
       </Modal>
     </div>
   );

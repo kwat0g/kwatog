@@ -23,8 +23,8 @@ export function ChainHeader({ steps, className }: ChainHeaderProps) {
  let labelClass = 'text-subtle';
 
  if (step.state === 'done') {
- dotClass = 'bg-success ring-1 ring-success ring-offset-1 ring-offset-canvas';
- lineClass = 'bg-success';
+ dotClass = 'bg-success-bg ring-1 ring-success ring-offset-1 ring-offset-canvas';
+ lineClass = 'bg-success-bg';
  labelClass = 'text-primary font-medium';
  } else if (step.state === 'active') {
  dotClass = 'bg-accent ring-1 ring-accent ring-offset-1 ring-offset-canvas';

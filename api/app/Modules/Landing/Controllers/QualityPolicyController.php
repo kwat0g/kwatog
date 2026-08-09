@@ -29,8 +29,8 @@ class QualityPolicyController
         $objectives = array_values(array_filter((array) $this->settings->get('landing.quality_policy.objectives', []), static fn ($objective): bool => is_array($objective) && isset($objective['title'], $objective['body'])));
         $policy = (array) $this->settings->get('landing.quality_policy', []);
         $standard = (string) ($policy['standard'] ?? '');
-        $companyName = (string) $this->settings->get('company.legal_name', 'PHILIPPINE OGAMI CORPORATION');
-        $companyAddress = (string) $this->settings->get('company.address', 'First Cavite Industrial Estate (FCIE), Dasmariñas, Cavite, Philippines');
+        $companyName = trim((string) $this->settings->get('company.legal_name', ''));
+        $companyAddress = trim((string) $this->settings->get('company.address', ''));
         $replace = static fn (string $text): string => strtr($text, [
             '{{company}}' => $companyName,
             '{{standard}}' => $standard,
@@ -43,6 +43,7 @@ class QualityPolicyController
             'companyName' => $companyName,
             'companyAddress' => $companyAddress,
             'qualityStandard' => $standard,
+            'qualityCertificationTitle' => trim((string) ($policy['certification_title'] ?? '')),
             'commitmentBody' => $replace((string) ($policy['commitment_body'] ?? '')),
             'systemBody' => $replace((string) ($policy['system_body'] ?? '')),
             'partners' => $partners,

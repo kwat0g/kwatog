@@ -118,7 +118,7 @@ export default function CreateJournalEntryPage() {
 
  <Panel title="Lines">
  <div className="border border-default rounded-md overflow-hidden">
- <div className="grid grid-cols-12 h-8 px-2.5 bg-subtle text-2xs uppercase tracking-wider text-muted font-medium border-b border-default items-center">
+ <div className="grid grid-cols-12 h-row px-2.5 bg-subtle text-2xs uppercase tracking-wider text-muted font-medium border-b border-default items-center">
  <div className="col-span-4">Account</div>
  <div className="col-span-3">Description</div>
  <div className="col-span-2 text-right">Debit</div>
@@ -160,7 +160,7 @@ export default function CreateJournalEntryPage() {
  icon={<Trash2 size={14} />}
  aria-label="Remove line"
  onClick={() => remove(idx)}
- className="text-muted hover:text-danger"
+ className="text-muted hover:text-danger-fg"
  />
  )}
  </div>

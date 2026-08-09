@@ -112,8 +112,6 @@ export default function PostingsListPage() {
  { label: 'Recruitment', href: '/hr/recruitment' },
  { label: 'Postings' },
  ]}
- backTo="/hr/recruitment"
- backLabel="Recruitment"
  actions={
  can('hr.recruitment.manage') ? (
  <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/hr/recruitment/postings/create')}>

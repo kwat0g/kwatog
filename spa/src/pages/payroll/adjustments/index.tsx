@@ -10,7 +10,7 @@ import { DataTable, NumCell, StackedCell, type Column } from '@/components/ui/Da
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { Modal } from '@/components/ui/Modal';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { Textarea } from '@/components/ui/Textarea';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -109,12 +109,12 @@ export default function PayrollAdjustmentsPage() {
  header: 'Actions',
  cell: (r) => r.status === 'pending' && can('payroll.adjustments.create') ? (
  <div className="flex items-center gap-1">
- <Button size="sm" variant="ghost" icon={<Check size={12} />}
+ <Button size="xs" variant="ghost" icon={<Check size={12} />}
  onClick={() => setConfirmApprove(r.id)}
  disabled={approveMutation.isPending}>
  Approve
  </Button>
- <Button size="sm" variant="ghost" icon={<X size={12} />}
+ <Button size="xs" variant="ghost" icon={<X size={12} />}
  onClick={() => setRejectTarget(r)}>
  Reject
  </Button>
@@ -128,10 +128,8 @@ export default function PayrollAdjustmentsPage() {
  <PageHeader
  title="Payroll Adjustments"
  subtitle={data ? `${data.meta.total} adjustments` : undefined}
- backTo="/payroll/periods"
- backLabel="Payroll"
  actions={can('payroll.adjustments.create') ? (
- <Button variant="primary" size="sm" icon={<Plus size={14} />}
+ <Button variant="primary" size="xs" icon={<Plus size={14} />}
  onClick={() => navigate('/payroll/adjustments/create')}>
  Raise adjustment
  </Button>
@@ -172,7 +170,7 @@ export default function PayrollAdjustmentsPage() {
  <div className="py-3">
  <p className="text-xs text-muted mb-2">
  Reject {rejectTarget?.employee?.full_name}'s {rejectTarget?.type_label.toLowerCase()} of{' '}
- <span className="font-mono">{formatPeso(rejectTarget?.amount ?? 0)}</span>?
+ <span className="font-mono">{formatPeso(rejectTarget?.amount)}</span>?
  </p>
  <Textarea
  label="Reason for rejection"
@@ -182,7 +180,7 @@ export default function PayrollAdjustmentsPage() {
  rows={3}
  />
  </div>
- <div className="flex justify-end gap-2 pt-3 border-t border-default">
+ <ModalFooter>
  <Button variant="secondary" onClick={() => setRejectTarget(null)} disabled={rejectMutation.isPending}>Cancel</Button>
  <Button variant="danger"
  onClick={() => rejectTarget && rejectMutation.mutate({ id: rejectTarget.id, remarks: rejectRemarks })}
@@ -190,7 +188,7 @@ export default function PayrollAdjustmentsPage() {
  loading={rejectMutation.isPending}>
  Confirm reject
  </Button>
- </div>
+ </ModalFooter>
  </Modal>
 
  <ConfirmDialog

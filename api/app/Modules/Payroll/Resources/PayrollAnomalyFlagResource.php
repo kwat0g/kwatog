@@ -14,6 +14,9 @@ class PayrollAnomalyFlagResource extends JsonResource
         return [
             'id'                 => $this->hash_id,
             'flag_type'          => $this->flag_type instanceof \BackedEnum ? $this->flag_type->value : (string) $this->flag_type,
+            'flag_type_label'    => $this->flag_type instanceof \App\Modules\Payroll\Enums\PayrollAnomalyType
+                ? $this->flag_type->label()
+                : (string) $this->flag_type,
             'details'            => $this->details ?? [],
             'is_resolved'        => (bool) $this->is_resolved,
             'resolution_remarks' => $this->resolution_remarks,

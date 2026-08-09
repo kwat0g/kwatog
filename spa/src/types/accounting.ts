@@ -108,7 +108,7 @@ export interface CreateVendorData {
 }
 export type UpdateVendorData = Partial<CreateVendorData>;
 
-export type BillStatus = 'unpaid' | 'partial' | 'paid' | 'cancelled';
+export type BillStatus = 'draft' | 'unpaid' | 'partial' | 'paid' | 'cancelled';
 export type PaymentMethod = 'cash' | 'check' | 'bank_transfer' | 'online';
 
 export interface BillItem {
@@ -145,6 +145,8 @@ export interface Bill {
  amount_paid: string;
  balance: string;
  status: BillStatus;
+ /** 2026-08-08 — GRN this bill was auto-created from (draft auto-bills). */
+ goods_receipt_note_id?: string | null;
  status_label?: string;
  is_overdue: boolean;
  aging_bucket: string;
@@ -154,7 +156,14 @@ export interface Bill {
  payments?: BillPayment[];
  journal_entry?: { id: string; entry_number: string; status: JournalEntryStatus; status_label?: string } | null;
  // REC-02 — 3-way match linkage (present when the bill is tied to a PO).
- purchase_order?: { id: string; po_number: string } | null;
+ purchase_order?: {
+  id: string;
+  po_number: string;
+  /** 2026-08-08 — P2P stepper: the PR behind this PO. */
+  purchase_request?: { id: string; pr_number: string } | null;
+ } | null;
+ /** 2026-08-08 — P2P stepper: the source receipt(s) this bill came from. */
+ goods_receipt_notes?: Array<{ id: string; grn_number: string; status: string }>;
  has_variances?: boolean;
  three_way_overridden?: boolean;
  three_way_override_reason?: string | null;
@@ -246,8 +255,10 @@ export interface Collection {
  cash_account?: { id: string; code: string; name: string } | null;
  journal_entry_id: string | null;
  created_at?: string;
-}
-export interface Invoice {
+} export interface Invoice {
+ /** 2026-08-08 — O2C stepper: upstream sales order + delivery. */
+ sales_order?: { id: string; so_number: string } | null;
+ delivery?: { id: string; delivery_number: string } | null;
  id: string;
  invoice_number: string | null;
  date: string;
@@ -387,7 +398,7 @@ export interface FinanceDashboardSummary {
  ap_due_horizon_days?: number;
  payroll_pipeline_history_days?: number;
  budget_vs_actual_top?: Array<{
- category: string; budget: string; actual: string; variance: string; variance_pct: number;
+ category: string; budget: string | null; actual: string | null; variance: string | null; variance_pct: number | null;
  }> | null;
  revenue_forecast?: import('./forecasting-dashboard').ForecastPanelData;
 }
@@ -447,4 +458,3 @@ export interface ApplyCreditNoteData {
  invoice_id?: string;
  bill_id?: string;
 }
-

@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
-import { Send, ThumbsUp, ThumbsDown, X, ShoppingCart, FileText, AlertTriangle, Zap } from 'lucide-react';
+import { Send, ThumbsUp, ThumbsDown, X, ShoppingCart, FileText, AlertTriangle, Zap, Sparkles } from 'lucide-react';
+import { billsApi } from '@/api/accounting/bills';
 import { purchaseRequestsApi } from '@/api/purchasing/purchase-requests';
 import { downloadAuthenticatedFile } from '@/api/download';
 import { Button } from '@/components/ui/Button';
@@ -19,6 +20,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import { fromApprovalRecords } from '@/lib/approvals';
+import { buildP2pChain } from '@/lib/chains';
 import type { PurchaseRequest, PurchaseRequestStatus } from '@/types/purchasing';
 import type { ChainStep } from '@/types/chain';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
@@ -39,6 +41,7 @@ export default function PurchaseRequestDetailPage() {
 
  const [confirm, setConfirm] = useState<'submit' | 'approve' | 'cancel' | null>(null);
  const [rejectOpen, setRejectOpen] = useState(false);
+ const [postBillId, setPostBillId] = useState<string | null>(null);
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['purchasing', 'purchase-requests', id],
@@ -73,11 +76,21 @@ export default function PurchaseRequestDetailPage() {
  const submit = useOptimisticAction(() => purchaseRequestsApi.submit(id), 'pending', { successMsg: 'Submitted for approval.', errorMsg: 'Failed to submit.', afterSuccess: () => setConfirm(null) });
  const approve = useOptimisticAction(() => purchaseRequestsApi.approve(id), 'approved', { successMsg: 'Purchase request approved.', errorMsg: 'Failed to approve.', afterSuccess: () => setConfirm(null) });
  const reject = useOptimisticAction<string>((reason) => purchaseRequestsApi.reject(id, reason), 'rejected', { successMsg: 'Purchase request rejected.', errorMsg: 'Failed to reject.', afterSuccess: () => setRejectOpen(false) });
- const cancel = useOptimisticAction(() => purchaseRequestsApi.cancel(id), 'cancelled', { successMsg: 'Purchase request cancelled.', errorMsg: 'Failed to cancel.', afterSuccess: () => setConfirm(null) });
- const acknowledgeBudget = useMutation({
- mutationFn: () => purchaseRequestsApi.acknowledgeBudget(id),
- onSuccess: () => { qc.invalidateQueries({ queryKey: detailKey }); toast.success('Budget warning acknowledged.'); },
- onError: (e) => toast.error(errMsg(e, 'Failed to acknowledge budget warning.')),
+ const cancel = useOptimisticAction(() => purchaseRequestsApi.cancel(id), 'cancelled', { successMsg: 'Purchase request cancelled.', errorMsg: 'Failed to cancel.', afterSuccess: () => setConfirm(null) }); const acknowledgeBudget = useMutation({
+  mutationFn: () => purchaseRequestsApi.acknowledgeBudget(id),
+  onSuccess: () => { qc.invalidateQueries({ queryKey: detailKey }); toast.success('Budget warning acknowledged.'); },
+  onError: (e) => toast.error(errMsg(e, 'Failed to acknowledge budget warning.')),
+ });
+ // 2026-08-08 — post an auto-created draft bill straight from the chain view.
+ const postBill = useMutation({
+  mutationFn: (billId: string) => billsApi.postDraft(billId),
+  onSuccess: () => {
+   qc.invalidateQueries({ queryKey: detailKey });
+   qc.invalidateQueries({ queryKey: ['accounting', 'bills'] });
+   toast.success('Draft bill posted to AP + GL.');
+   setPostBillId(null);
+  },
+  onError: (e) => toast.error(errMsg(e, 'Failed to post bill.')),
  });
 
  if (isLoading) return <SkeletonTable rows={6} columns={5} />;
@@ -101,8 +114,8 @@ export default function PurchaseRequestDetailPage() {
  )}
  {data.status === 'pending' && can('purchasing.pr.approve') && (
  <>
- <Button size="sm" variant="secondary" icon={<ThumbsDown size={14} />} onClick={() => setRejectOpen(true)} loading={reject.isPending}>Reject</Button>
- <Button size="sm" variant="primary" icon={<ThumbsUp size={14} />} onClick={() => setConfirm('approve')} loading={approve.isPending}>Approve</Button>
+ <Button size="xs" variant="secondary" icon={<ThumbsDown size={14} />} onClick={() => setRejectOpen(true)} loading={reject.isPending}>Reject</Button>
+ <Button size="xs" variant="primary" icon={<ThumbsUp size={14} />} onClick={() => setConfirm('approve')} loading={approve.isPending}>Approve</Button>
  </>
  )}
  {data.status === 'approved' && can('purchasing.po.create') && (
@@ -116,9 +129,71 @@ export default function PurchaseRequestDetailPage() {
  </div>
  }
  />
- <div className="px-5 py-4 space-y-4">
+ <div className="px-5 py-4 space-y-4">  {data.status === 'converted' && data.purchase_orders?.some((po) => po.is_auto_generated) && (
+  <div className="flex items-center gap-3 rounded-md border border-success/40 bg-success-bg/10 px-4 py-3 text-sm">
+  <Sparkles size={16} className="shrink-0 text-success-fg" />
+  <div>
+  <div className="font-medium">Auto-converted to purchase order</div>
+  <div className="text-muted">
+  This PR was approved and its purchase orders were created automatically.
+  {data.purchase_orders.filter((po) => po.is_auto_generated).map((po) => (
+  <Link
+  key={po.id}
+  to={`/purchasing/purchase-orders/${po.id}`}
+  className="font-mono font-medium text-accent hover:underline"
+  >{po.po_number}</Link>
+  ))}
+  </div>
+  </div>
+  </div>
+  )}
+  {/* 2026-08-08 — auto-bill chain: the whole PR → PO → GRN → Bill path is
+  visible from the PR; a draft supplier bill on any linked PO can be posted here. */}
+  {data.purchase_orders?.some((po) => po.bill?.status === 'draft') && (
+  <div className="flex items-center gap-3 rounded-md border border-success/40 bg-success-bg/10 px-4 py-3 text-sm">
+  <FileText size={16} className="shrink-0 text-success-fg" />
+  <div className="flex-1">
+  <div className="font-medium">Supplier bill auto-created</div>
+  <div className="text-muted">
+  Draft AP bills were staged from the receipts on these purchase orders —
+  {data.purchase_orders.filter((po) => po.bill?.status === 'draft').map((po) => (
+  <span key={po.id} className="inline-flex items-center gap-1.5">
+  <Link
+  to={`/accounting/bills/${po.bill!.id}`}
+  className="font-mono text-accent hover:underline"
+  >{po.bill!.bill_number}</Link>
+  <span className="font-mono tabular-nums">{formatPeso(po.bill!.total_amount)}</span>
+  <Chip variant="neutral">{po.bill!.status_label ?? po.bill!.status}</Chip>
+  <span className="text-2xs text-muted">on <Link to={`/purchasing/purchase-orders/${po.id}`} className="font-mono text-accent hover:underline">{po.po_number}</Link></span>
+  {can('accounting.bills.create') && (
+  <Button variant="secondary" size="xs" icon={<Send size={11} />} onClick={() => setPostBillId(po.bill!.id)}>
+  Post
+  </Button>
+  )}
+  </span>
+  ))}
+  </div>
+  </div>
+  </div>
+  )}
+ {data.purchase_orders && data.purchase_orders.length > 0 && (
+  <Panel title="Procure-to-pay chain">
+  {/* 2026-08-08 — compact cross-document stepper: PR → PO → GRN → Bill → Paid,
+   so the PR page shows downstream completion at a glance. */}
+  <ChainHeader steps={buildP2pChain({
+   pr: { id: data.id, number: data.pr_number },
+   po: data.purchase_orders[0]
+   ? { id: data.purchase_orders[0].id, number: data.purchase_orders[0].po_number }
+   : null,
+   grns: data.purchase_orders.flatMap((po) => po.grns ?? []),
+   bills: data.purchase_orders.flatMap((po) =>
+   po.bill ? [{ id: po.bill.id, bill_number: po.bill.bill_number, status: po.bill.status }] : [],
+   ),
+  })} />
+  </Panel>
+ )}
  {data.budget_warning_level && (
- <div className="flex items-center justify-between gap-4 rounded-md border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
+ <div className="flex items-center justify-between gap-4 rounded-md border border-warning/40 bg-warning-bg/10 px-4 py-3 text-sm">
  <div>
  <div className="font-medium">Budget {data.budget_warning_level}</div>
  <div className="text-muted">{data.budget_warning_message}</div>
@@ -138,7 +213,7 @@ export default function PurchaseRequestDetailPage() {
  <Panel title="Header">
  <dl className="grid grid-cols-3 gap-y-3 gap-x-6 text-sm">
  <div><dt className="text-2xs uppercase tracking-wider text-muted">Date</dt><dd className="font-mono">{formatDate(data.date)}</dd></div>
- <div><dt className="text-2xs uppercase tracking-wider text-muted">Priority</dt><dd className="flex items-center gap-1">{data.priority_label ?? data.priority}{data.is_urgent && <span title={data.urgency_reason ?? ''}><AlertTriangle size={12} className="text-danger" /></span>}</dd></div>
+ <div><dt className="text-2xs uppercase tracking-wider text-muted">Priority</dt><dd className="flex items-center gap-1">{data.priority_label ?? data.priority}{data.is_urgent && <span title={data.urgency_reason ?? ''}><AlertTriangle size={12} className="text-danger-fg" /></span>}</dd></div>
  <div><dt className="text-2xs uppercase tracking-wider text-muted">Department</dt><dd>{data.department?.name ?? '—'}</dd></div>
  <div><dt className="text-2xs uppercase tracking-wider text-muted">Template</dt><dd>{data.template?.name ?? '—'}</dd></div>
  <div><dt className="text-2xs uppercase tracking-wider text-muted">Requester</dt><dd>{data.requester?.name ?? '—'}</dd></div>
@@ -244,16 +319,26 @@ export default function PurchaseRequestDetailPage() {
  description="Rejection is recorded in the approval workflow. Provide a clear reason for the requester."
  reasonLabel="Rejection reason"
  reasonPlaceholder="e.g. Budget exceeded, please re-scope and re-submit"
- minLength={10}
- confirmLabel="Reject"
- variant="danger"
- pending={reject.isPending}
- />
- </div>
- );
-}
+ minLength={10}  confirmLabel="Reject"
+  variant="danger"
+  pending={reject.isPending}
+  />
 
-/** PR chain: Draft → Submitted → each approval step → Approved → Converted. */
+  <ConfirmDialog
+  isOpen={postBillId !== null}
+  onClose={() => setPostBillId(null)}
+  onConfirm={() => { if (postBillId) postBill.mutate(postBillId); }}
+  title="Post draft bill to AP + GL?"
+  description="Posting records the payable: it builds and posts the AP/expense journal entry (debit expense + VAT input, credit AP) and flips the bill to Unpaid. Review the auto-created amounts before posting."
+  confirmLabel="Post bill"
+  variant="primary"
+  pending={postBill.isPending}
+  />
+  </div>
+  );
+ }
+
+ /** PR chain: Draft → Submitted → each approval step → Approved → Converted. */
 function buildPrChainSteps(pr: PurchaseRequest): ChainStep[] {
  const steps: ChainStep[] = [
  { key: 'draft', label: 'Draft', date: formatDate(pr.date),

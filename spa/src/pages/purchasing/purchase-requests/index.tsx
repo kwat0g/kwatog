@@ -11,7 +11,7 @@ import { Chip } from '@/components/ui/Chip';
 import { DataTable, NumCell, type Column, type BulkAction } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
-import { Modal } from '@/components/ui/Modal';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -38,7 +38,7 @@ interface PurchaseRequestListParams extends ListParams {
 }
 
 const DEFAULT_FILTERS: PurchaseRequestListParams = {
-  page: 1, per_page: 25,
+  page: 1, per_page: 25, status: 'pending',
 };
 
 const errMsg = (e: unknown, fallback: string) =>
@@ -136,7 +136,7 @@ export default function PurchaseRequestsListPage() {
  { key: 'priority', header: 'Priority', cell: (r) => (
  <span className="flex items-center gap-1">
  <Chip variant={priorityVariant[r.priority]}>{r.priority_label ?? r.priority}</Chip>
- {r.is_urgent && <Zap size={12} className="text-danger" />}
+ {r.is_urgent && <Zap size={12} className="text-danger-fg" />}
  </span>
  ) },
  { key: 'status', header: 'Status', cell: (r) => (
@@ -182,7 +182,7 @@ export default function PurchaseRequestsListPage() {
  <div>
  <PageHeader title="Purchase requests" subtitle={data ? `${data.meta.total} requests` : undefined}
  actions={can('purchasing.pr.create') ? (
- <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/purchasing/purchase-requests/create')}>New PR</Button>
+ <Button variant="primary" size="xs" icon={<Plus size={14} />} onClick={() => navigate('/purchasing/purchase-requests/create')}>New PR</Button>
  ) : null} />
  <FilterBar filters={filterConfig} values={filters}
  onSearch={(s) => setFilters(f => ({ ...f, search: s, page: 1 }))}
@@ -220,7 +220,7 @@ export default function PurchaseRequestsListPage() {
  <div key={item.id} className="grid grid-cols-[1fr_120px_220px] gap-3 items-end border-b border-subtle pb-3">
  <div>
  <div className="font-medium text-sm">{item.item?.code ?? 'Uncoded item'} · {item.description}</div>
- <div className="text-xs text-muted">{item.quantity} {item.unit ?? item.item?.unit_of_measure ?? ''} · {formatPeso(item.estimated_unit_price ?? '0')}</div>
+ <div className="text-xs text-muted">{item.quantity} {item.unit ?? item.item?.unit_of_measure ?? '—'} · {formatPeso(item.estimated_unit_price)}</div>
  </div>
  <div className="text-xs text-muted">{formatPeso(item.estimated_total)}</div>
  <Select
@@ -233,7 +233,7 @@ export default function PurchaseRequestsListPage() {
  </Select>
  </div>
  ))}
- <div className="flex justify-end gap-2 pt-3 border-t border-default">
+ <ModalFooter>
  <Button variant="secondary" onClick={() => { setConvertTarget(null); setVendorMap({}); }}>Cancel</Button>
  <Button
  variant="primary"
@@ -243,7 +243,7 @@ export default function PurchaseRequestsListPage() {
  >
  Create PO
  </Button>
- </div>
+ </ModalFooter>
  </div>
  </Modal>
  </div>

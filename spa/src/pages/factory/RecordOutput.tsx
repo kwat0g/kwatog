@@ -176,11 +176,11 @@ export default function RecordOutput() {
  <div>
  <div className="flex items-center gap-3">
  <span className="text-sm">
- <span className="font-mono tabular-nums font-medium text-success">
+ <span className="font-mono tabular-nums font-medium text-success-fg">
  +{output.good_count}
  </span>
  {output.reject_count > 0 && (
- <span className="font-mono tabular-nums text-danger ml-2">
+ <span className="font-mono tabular-nums text-danger-fg ml-2">
  -{output.reject_count}
  </span>
  )}

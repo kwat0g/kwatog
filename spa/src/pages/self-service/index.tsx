@@ -350,7 +350,7 @@ function LeaveBalancesPanel({ balances, policy }: { balances: SelfServiceHome['l
  <div
  className={`h-full rounded-full transition-[width] duration-500 ${
  criticalRatio !== undefined && warningRatio !== undefined
- ? (pct <= criticalRatio * 100 ? 'bg-danger' : pct <= warningRatio * 100 ? 'bg-warning' : 'bg-accent')
+ ? (pct <= criticalRatio * 100 ? 'bg-danger-bg' : pct <= warningRatio * 100 ? 'bg-warning-bg' : 'bg-accent')
  : 'bg-accent'
  }`}
  style={{ width: `${pct}%` }}

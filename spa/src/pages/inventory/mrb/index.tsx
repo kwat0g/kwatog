@@ -20,6 +20,8 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { FilterBar } from '@/components/ui/FilterBar';
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
@@ -51,14 +53,8 @@ export default function MrbListPage() {
  const { can } = usePermission();
  const canManage = can('inventory.mrb.manage');
 
- const [statusFilter, setStatusFilter] = useState('');
- const [page, setPage] = useState(1);
  const [holdOpen, setHoldOpen] = useState(false);
-
- const filters = useMemo(
- () => ({ page, per_page: 25, ...(statusFilter ? { status: statusFilter } : {}) }),
- [page, statusFilter],
- );
+ const [filters, setFilters] = useUrlFilters({ search: '', status: '', page: 1, per_page: 25 });
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['inventory', 'mrb', filters],
@@ -145,13 +141,13 @@ export default function MrbListPage() {
  }
  />
 
- <div className="px-5 pt-3">
+ <div className="px-5 pt-3 flex gap-3">
+ <FilterBar onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))} searchPlaceholder="Search MRB ticket..." />
  <Select
  className="max-w-xs"
- value={statusFilter}
+ value={filters.status ?? ''}
  onChange={(e) => {
- setStatusFilter(e.target.value);
- setPage(1);
+ setFilters((f) => ({ ...f, status: e.target.value, page: 1 }));
  }}
  >
  {statusFilters.map((s) => (
@@ -191,7 +187,7 @@ export default function MrbListPage() {
  {data && data.data.length > 0 && (
  <div className="px-5 py-4">
  <DataTable onRowClick={(r) => navigate(`/inventory/mrb/${r.id}`)}
- columns={columns} data={data.data} meta={data.meta} onPageChange={setPage} />
+ columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters((f) => ({ ...f, page }))} />
  </div>
  )}
 

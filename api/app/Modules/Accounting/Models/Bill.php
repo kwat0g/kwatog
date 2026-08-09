@@ -18,8 +18,13 @@ class Bill extends Model
 {
     use HasFactory, HasHashId, HasAuditLog;
 
+    protected static function newFactory(): \Database\Factories\BillFactory
+    {
+        return \Database\Factories\BillFactory::new();
+    }
+
     protected $fillable = [
-        'bill_number', 'vendor_id', 'purchase_order_id',
+        'bill_number', 'vendor_id', 'purchase_order_id', 'goods_receipt_note_id',
         'date', 'due_date', 'is_vatable',
         'subtotal', 'vat_amount', 'total_amount', 'amount_paid', 'balance',
         'status', 'journal_entry_id', 'created_by', 'remarks',
@@ -47,6 +52,12 @@ class Bill extends Model
     public function purchaseOrder(): BelongsTo
     {
         return $this->belongsTo(\App\Modules\Purchasing\Models\PurchaseOrder::class);
+    }
+
+    /** 2026-08-08 — the goods receipt this bill was auto-created from (if any). */
+    public function goodsReceiptNote(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\Inventory\Models\GoodsReceiptNote::class);
     }
 
     public function vendor(): BelongsTo
@@ -81,14 +92,14 @@ class Bill extends Model
 
     public function isOverdue(): bool
     {
-        if ($this->status === BillStatus::Paid || $this->status === BillStatus::Cancelled) return false;
+        if ($this->status === BillStatus::Paid || $this->status === BillStatus::Cancelled || $this->status === BillStatus::Draft) return false;
         return $this->due_date && $this->due_date->isPast();
     }
 
     public function agingBucket(?\Carbon\Carbon $asOf = null): string
     {
         $asOf = $asOf ?? now();
-        if ($this->status === BillStatus::Paid || $this->status === BillStatus::Cancelled) return 'paid';
+        if ($this->status === BillStatus::Paid || $this->status === BillStatus::Cancelled || $this->status === BillStatus::Draft) return 'paid';
         if (! $this->due_date || $this->due_date->gte($asOf)) return 'current';
         $days = $this->due_date->diffInDays($asOf);
         return match (true) {

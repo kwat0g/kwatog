@@ -63,7 +63,7 @@ export default function CreateStockAdjustmentPage() {
  }),
  onSuccess: () => {
  toast.success('Stock adjustment recorded.');
- nav('/inventory/movements');
+ nav('/inventory/stock-levels?view=movements');
  },
  onError: (e) => {
  setConfirmOpen(false);
@@ -81,7 +81,7 @@ export default function CreateStockAdjustmentPage() {
 
  return (
  <div>
- <PageHeader title="Stock adjustment" backTo="/inventory/movements" backLabel="Movements" />
+ <PageHeader title="Stock adjustment" backTo="/inventory/stock-levels?view=movements" backLabel="Movements" />
  <form
  onSubmit={handleSubmit((d) => { setPendingValues(d); setConfirmOpen(true); }, onFormInvalid<V>())}
  className="max-w-3xl mx-auto px-5 py-4 space-y-4"
@@ -135,7 +135,7 @@ export default function CreateStockAdjustmentPage() {
  </div>
  </Panel>
  <div className="flex justify-end gap-2">
- <Button type="button" variant="secondary" onClick={() => nav('/inventory/movements')}>Cancel</Button>
+ <Button type="button" variant="secondary" onClick={() => nav('/inventory/stock-levels?view=movements')}>Cancel</Button>
  <Button type="submit" variant="primary" disabled={isSubmitting}>Record adjustment</Button>
  </div>
  </form>

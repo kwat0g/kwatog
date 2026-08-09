@@ -8,7 +8,6 @@ import { PermissionGuard } from '@/components/guards/PermissionGuard';
 const MaintenanceMobileLayout = lazy(() => import('@/layouts/MaintenanceMobileLayout'));
 const MobileMaintenanceList = lazy(() => import('@/pages/maintenance/mobile'));
 const MobileWorkOrderDetail = lazy(() => import('@/pages/maintenance/mobile/work-order'));
-const MobileConditionReading = lazy(() => import('@/pages/maintenance/mobile/condition-reading'));
 
 export const maintenanceMobileRoutes = (
  <Route
@@ -23,7 +22,7 @@ export const maintenanceMobileRoutes = (
  }
  >
  <Route path="/maintenance/mobile" element={<MobileMaintenanceList />} />
- <Route path="/maintenance/mobile/condition-reading" element={<MobileConditionReading />} />
+ {/* /maintenance/mobile/condition-reading removed 2026-08-08 (scope cut — page file kept) */}
  <Route path="/maintenance/mobile/:mwoId" element={<MobileWorkOrderDetail />} />
  </Route>
 );

@@ -54,19 +54,18 @@ describe('role-aligned sidebar permissions', () => {
  expect(isNavItemVisible(item('/payroll/statutory'), departmentHead)).toBe(false);
  });
 
- it('does not expose stock count from the generic inventory permission', () => {
+ it('exposes the merged Warehouse Map from inventory.view (Stock Count is its toggle)', () => {
+ // 2026-08-08: Stock Count merged into the Warehouse Map page. The sidebar
+ // shows one entry for inventory.view users; the Stock Count tab inside the
+ // page is gated on inventory.stock_count.view by the page itself, and the
+ // /inventory/stock-count route keeps its stock_count gate for scanner links.
  const genericInventory = {
  permissions: new Set(['inventory.view']),
  features: allFeatures,
  roleSlug: 'production_manager',
  };
- const warehouse = {
- permissions: new Set(['inventory.view', 'inventory.stock_count.view']),
- features: allFeatures,
- roleSlug: 'warehouse_staff',
- };
 
- expect(isNavItemVisible(item('/inventory/stock-count'), genericInventory)).toBe(false);
- expect(isNavItemVisible(item('/inventory/stock-count'), warehouse)).toBe(true);
+ expect(isNavItemVisible(item('/inventory/warehouse-map'), genericInventory)).toBe(true);
+ expect(SECTIONS.flatMap((s) => s.items).some((entry) => entry.to === '/inventory/stock-count')).toBe(false);
  });
 });

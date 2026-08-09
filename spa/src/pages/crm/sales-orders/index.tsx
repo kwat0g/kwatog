@@ -8,6 +8,7 @@ import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import { StatCard } from '@/components/ui/StatCard';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
@@ -24,7 +25,7 @@ const statusVariant: Record<SalesOrderStatus, 'success' | 'info' | 'warning' | '
  cancelled: 'danger' };
 
 const DEFAULT_FILTERS: SalesOrderListParams = {
- page: 1, per_page: 25,
+ page: 1, per_page: 25, status: 'confirmed',
 };
 
 export default function SalesOrdersListPage() {
@@ -44,6 +45,10 @@ export default function SalesOrdersListPage() {
  queryFn: salesOrdersApi.options,
  staleTime: 5 * 60 * 1000 });
  const statusLabels = new Map((salesOrderOptions?.statuses ?? []).map((option) => [option.value, option.label]));
+ const statusLabel = (value: string) => statusLabels.get(value) ?? value.replaceAll('_', ' ');
+ const totalValue = data?.data.some((order) => order.total_amount != null)
+  ? formatPeso(data.data.reduce((sum, order) => sum + Number(order.total_amount ?? 0), 0))
+  : '—';
 
  const columns: Column<SalesOrder>[] = [
  {
@@ -95,7 +100,35 @@ export default function SalesOrdersListPage() {
  action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
  />
  )}
- {data && data.data.length === 0 && (
+ {data && (
+  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 px-5 py-4 border-b border-default bg-canvas">
+  <StatCard
+    label={statusLabel('draft')}
+    value={data.data.filter(i => i.status === 'draft').length}
+    helper="in current view"
+    linkTo="?status=draft"
+  />
+  <StatCard
+    label={statusLabel('confirmed')}
+    value={data.data.filter(i => i.status === 'confirmed').length}
+    helper="in current view"
+    linkTo="?status=confirmed"
+  />
+  <StatCard
+    label={statusLabel('in_production')}
+    value={data.data.filter(i => i.status === 'in_production').length}
+    helper="in current view"
+    linkTo="?status=in_production"
+  />
+  <StatCard
+    label="Total Value"
+    value={totalValue}
+    helper="in current view"
+  />
+  </div>
+  )}
+
+{data && data.data.length === 0 && (
  <EmptyState
  icon="file-text"
  title="No sales orders yet"
@@ -103,6 +136,7 @@ export default function SalesOrdersListPage() {
  action={canCreate ? <Button variant="primary" onClick={() => navigate('/crm/sales-orders/create')}>New sales order</Button> : undefined}
  />
  )}
+
  {data && data.data.length > 0 && (
   <div className="px-5 py-4">
   <DataTable

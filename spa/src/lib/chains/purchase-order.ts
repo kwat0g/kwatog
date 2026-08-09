@@ -3,6 +3,11 @@
  *
  * Procure-to-Pay chain:
  * PR → PO Created → PO Approved → Sent → GRN Received → Bill Created → Payment → Closed
+ *
+ * @deprecated 2026-08-08 — superseded on the PO detail page by the compact
+ * cross-document `buildP2pChain` (PR → PO → GRN → Bill → Paid). Kept as dead
+ * code per the keep-code policy; re-enable if a detailed approval-stepper view
+ * is wanted again.
  */
 import type { ChainStep } from '@/types/chain';
 import type { PurchaseOrder, PurchaseOrderStatus } from '@/types/purchasing';

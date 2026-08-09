@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { onFormInvalid } from '@/lib/formErrors';
-import { Printer, Receipt, Ban } from 'lucide-react';
+import { Printer, Receipt, Ban, Send } from 'lucide-react';
 import { billsApi } from '@/api/accounting/bills';
 import { accountingOptionsApi } from '@/api/accounting/options';
 import { downloadAuthenticatedFile } from '@/api/download';
@@ -15,7 +15,7 @@ import { threeWayMatchApi } from '@/api/purchasing/purchase-orders';
 import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import type { ChipVariant } from '@/components/ui/Chip';import { EmptyState } from '@/components/ui/EmptyState';
-import { Modal } from '@/components/ui/Modal';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -23,9 +23,10 @@ import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { StatCard } from '@/components/ui/StatCard';
 import { ChainHeader } from '@/components/chain';
-import type { ChainStep } from '@/types/chain';
+import { buildP2pChain } from '@/lib/chains';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
+import { useChainProgress } from '@/hooks/useChainProgress';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
 import { numberInputProps } from '@/lib/numberInput';
@@ -48,30 +49,20 @@ const MATCH_LINE_VARIANT: Record<MatchLineStatus, ChipVariant> = {
  matched: 'success', qty_variance: 'warning', price_variance: 'warning', both: 'warning', grn_short: 'danger',
 };
 
-function buildBillChain(bill: { status: string; amount_paid: string; balance: string; date: string; payments?: Array<{ payment_date: string }> }): ChainStep[] {
- const isCancelled = bill.status === 'cancelled';
- const billCreated = !isCancelled;
- const hasPayment = (bill.payments?.length ?? 0) > 0;
- const fullyPaid = parseFloat(bill.balance) <= 0 && parseFloat(bill.amount_paid) > 0;
- return [
- { key: 'bill', label: 'Bill Created', state: billCreated ? 'done' : isCancelled ? 'pending' : 'active', date: bill.date.slice(0, 10) },
- { key: 'pay', label: 'Payment Made', state: fullyPaid ? 'done' : hasPayment ? 'active' : 'pending', date: bill.payments?.[0]?.payment_date.slice(0, 10) },
- { key: 'closed', label: 'Settled', state: fullyPaid ? 'done' : 'pending' },
- ];
-}
-
 export default function BillDetailPage() {
  const { id = '' } = useParams<{ id: string }>();
  const qc = useQueryClient();
  const { can } = usePermission();
  const [showPay, setShowPay] = useState(false);
  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
-
- const { data: bill, isLoading, isError, refetch } = useQuery({
- queryKey: ['accounting', 'bills', id],
- queryFn: () => billsApi.show(id),
- enabled: !!id,
+ const [showPostConfirm, setShowPostConfirm] = useState(false); const { data: bill, isLoading, isError, refetch } = useQuery({
+  queryKey: ['accounting', 'bills', id],
+  queryFn: () => billsApi.show(id),
+  enabled: !!id,
  });
+ // 2026-08-08 — final P2P link: live chain progress (payments / credit-note
+ // applications settle the bill in real time).
+ useChainProgress('bill', id, ['accounting', 'bills', id]);
  const { data: accountingOptions } = useQuery({ queryKey: ['accounting', 'options'], queryFn: () => accountingOptionsApi.list() });
 
  const { data: cashAccounts } = useQuery({
@@ -100,6 +91,15 @@ export default function BillDetailPage() {
  qc.invalidateQueries({ queryKey: ['accounting', 'bills'] });
  },
  onError: (e: Error & { response?: { data?: { message?: string } } }) => toast.error(e.response?.data?.message ?? 'Failed to cancel.'),
+ });
+ const postMut = useMutation({
+ mutationFn: () => billsApi.postDraft(id),
+ onSuccess: () => {
+  toast.success('Draft bill posted to AP + GL.');
+  qc.invalidateQueries({ queryKey: ['accounting', 'bills'] });
+  setShowPostConfirm(false);
+ },
+ onError: (e: Error & { response?: { data?: { message?: string } } }) => toast.error(e.response?.data?.message ?? 'Failed to post bill.'),
  });
  const payMut = useMutation({
  mutationFn: (d: PaymentFormValues) => billsApi.recordPayment(id, {
@@ -147,11 +147,13 @@ export default function BillDetailPage() {
  { label: 'Accounting', href: '/accounting' },
  { label: 'Bills', href: '/accounting/bills' },
  { label: bill.bill_number },
- ]}
- actions={
- <div className="flex gap-1.5">
- <Button variant="secondary" size="sm" icon={<Printer size={14} />} onClick={() => void downloadAuthenticatedFile(billsApi.pdfUrl(bill.id), { openInNewTab: true, errorMessage: 'Failed to generate bill PDF.' })}>Print</Button>
- {isOpen && can('accounting.bills.pay') && (
+ ]}  actions={
+   <div className="flex gap-1.5">
+   <Button variant="secondary" size="sm" icon={<Printer size={14} />} onClick={() => void downloadAuthenticatedFile(billsApi.pdfUrl(bill.id), { openInNewTab: true, errorMessage: 'Failed to generate bill PDF.' })}>Print</Button>
+   {bill.status === 'draft' && can('accounting.bills.create') && (
+    <Button variant="primary" size="sm" icon={<Send size={14} />} onClick={() => setShowPostConfirm(true)}>Post bill</Button>
+   )}
+   {isOpen && can('accounting.bills.pay') && (
  <Button variant="primary" size="sm" icon={<Receipt size={14} />} onClick={() => setShowPay(true)}>Record payment</Button>
  )}
  {bill.amount_paid === '0.00' && bill.status !== 'cancelled' && can('accounting.bills.update') && (
@@ -165,7 +167,17 @@ export default function BillDetailPage() {
 
  <div className="px-5 pt-4">
  <Panel title="Procure-to-Pay">
- <ChainHeader steps={buildBillChain(bill)} />
+ {/* 2026-08-08 — compact cross-document stepper: the whole chain at a glance.
+ This bill is the Bill step; upstream (PR/PO/GRN) and downstream (Paid)
+ stay visible and clickable from here. */}
+ <ChainHeader steps={buildP2pChain({
+  pr: bill.purchase_order?.purchase_request
+  ? { id: bill.purchase_order.purchase_request.id, number: bill.purchase_order.purchase_request.pr_number }
+  : null,
+  po: bill.purchase_order ? { id: bill.purchase_order.id, number: bill.purchase_order.po_number } : null,
+  grns: bill.goods_receipt_notes ?? [],
+  bills: [{ id: bill.id, bill_number: bill.bill_number, status: bill.status }],
+ })} />
  </Panel>
  </div>
 
@@ -318,12 +330,23 @@ export default function BillDetailPage() {
  {(accountingOptions?.payment_methods ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
  </Select>
  <Input label="Reference no." {...register('reference_number')} />
- <div className="flex justify-end gap-2 pt-2 border-t border-default">
+ <ModalFooter>
  <Button type="button" variant="secondary" onClick={() => setShowPay(false)}>Cancel</Button>
  <Button type="submit" variant="primary" loading={payMut.isPending} disabled={payMut.isPending}>Record</Button>
- </div>
+ </ModalFooter>
  </form>
  </Modal>
+
+ <ConfirmDialog
+ isOpen={showPostConfirm}
+ onClose={() => setShowPostConfirm(false)}
+ onConfirm={() => postMut.mutate()}
+ title={`Post draft bill ${bill.bill_number}?`}
+ description="Posting records the payable: it builds and posts the AP/expense journal entry (debit expense + VAT input, credit AP) and flips the bill to Unpaid. Review the auto-created amounts before posting."
+ confirmLabel="Post bill"
+ variant="primary"
+ pending={postMut.isPending}
+ />
 
  <ConfirmDialog
  isOpen={showCancelConfirm}

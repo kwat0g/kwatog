@@ -144,8 +144,8 @@ export function DemandForecastPanel({
  className={`w-full rounded-sm transition-all duration-200 ${
  hasActual
  ? isOver
- ? 'bg-warning/70'
- : 'bg-success/70'
+ ? 'bg-warning-bg/70'
+ : 'bg-success-bg/70'
  : 'bg-accent/40'
  }`}
  style={{ height: `${Math.max(3, heightPct)}%` }}

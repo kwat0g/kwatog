@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { FilterBar } from '@/components/ui/FilterBar';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { formatDate } from '@/lib/formatDate';
 import type { ListParams } from '@/types';
@@ -15,6 +16,7 @@ import type { MaterialIssueSlip } from '@/types/inventory';
 import { formatPeso } from '@/lib/formatNumber';
 
 interface MaterialIssueListParams extends ListParams {
+  search?: string;
   status?: string;
   date?: string;
   from?: string;
@@ -22,7 +24,7 @@ interface MaterialIssueListParams extends ListParams {
 }
 
 const DEFAULT_FILTERS: MaterialIssueListParams = {
-  page: 1, per_page: 25,
+  search: '', page: 1, per_page: 25,
 };
 
 export default function MaterialIssuesListPage() {
@@ -59,6 +61,9 @@ export default function MaterialIssuesListPage() {
  return (
  <div>
  <PageHeader title="Material issues" subtitle={data ? `${data.meta.total} slips` : undefined} />
+ <div className="px-5 pt-3">
+   <FilterBar onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))} searchPlaceholder="Search MIS number..." />
+ </div>
  {isLoading && !data && <SkeletonTable rows={6} columns={5} />}
  {isError && <EmptyState icon="alert-circle" title="Failed to load" action={<Button onClick={() => refetch()}>Retry</Button>} />}
  {data && data.data.length === 0 && (

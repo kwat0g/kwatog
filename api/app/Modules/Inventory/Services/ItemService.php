@@ -7,6 +7,7 @@ namespace App\Modules\Inventory\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
+use App\Common\Support\TrashedFilter;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\ItemCategory;
 use App\Modules\Inventory\Models\StockLevel;
@@ -19,6 +20,7 @@ class ItemService
     {
         $q = Item::query()->with('category:id,name,parent_id');
         $q->withExists(['qualityPlans as has_active_quality_plan' => fn ($plan) => $plan->effective()]);
+        TrashedFilter::apply($q, $filters);
 
         // Subqueries for available/on-hand to prevent N+1.
         $q->withSum(['stockLevels as on_hand_quantity' => fn ($s) => $s], 'quantity')

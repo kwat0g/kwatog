@@ -35,9 +35,9 @@ const UNIT_SUFFIX: Record<string, string> = {
 };
 
 const STATUS_DOT: Record<string, string> = {
- on_target: 'bg-success',
- warning: 'bg-warning',
- off_target: 'bg-danger',
+ on_target: 'bg-success-bg',
+ warning: 'bg-warning-bg',
+ off_target: 'bg-danger-bg',
 };
 
 const TREND_COLOR: Record<string, string> = {
@@ -191,7 +191,7 @@ function KpiCard({ item }: { item: KpiScorecardItem }) {
  const TrendIcon = trend === 'up' ? TrendingUp : trend === 'down' ? TrendingDown : Minus;
  const trendColor = trend === 'flat'
  ? 'text-muted'
- : trendIsPositive ? 'text-success' : 'text-danger';
+ : trendIsPositive ? 'text-success-fg' : 'text-danger-fg';
 
  const card = (
  <Panel className="group relative transition-colors duration-fast hover:bg-elevated">

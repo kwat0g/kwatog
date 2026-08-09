@@ -43,12 +43,10 @@ import {
  GitFork,
  ListTree,
  Cpu,
- Activity,
  BadgeCheck,
  Navigation,
  Route,
  X,
- Coins,
  ShieldAlert,
  Monitor,
  ListChecks,
@@ -56,6 +54,7 @@ import {
  GraduationCap,
  type LucideIcon,
 } from 'lucide-react';
+
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { cn } from '@/lib/cn';
 import { useSidebarStore } from '@/stores/sidebarStore';
@@ -111,7 +110,9 @@ export const SECTIONS: NavSection[] = [
  items: [
  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
  { to: '/action-center', label: 'Action Center', icon: ListChecks, badgeKey: 'action_center' },
- { to: '/exceptions', label: 'Exceptions', icon: ShieldAlert },
+ // /exceptions removed 2026-08-08 (scope cut — folded into Action Center as
+ // the 'Exceptions' scope toggle, which filters out approvals exactly like the
+ // old ActionCenterService::exceptions endpoint. Page file kept.)
  { to: '/dashboard/scorecard', label: 'KPI Scorecard', icon: BarChart3 },
  { to: '/chains', label: 'Chain Tracker', icon: Workflow, permission: 'crm.sales_orders.view' },
  { to: '/approvals', label: 'Approvals', icon: Inbox, permission: 'approvals.board.view', badgeKey: 'approvals' },
@@ -122,13 +123,17 @@ export const SECTIONS: NavSection[] = [
  label: 'Sales & CRM',
  items: [
  { to: '/crm/sales-orders', label: 'Sales Orders', icon: Briefcase, feature: 'crm', permission: 'crm.sales_orders.view', badgeKey: 'pending_so' },
- { to: '/crm/inquiries', label: 'Inquiries', icon: MailOpen, feature: 'crm', permission: 'crm.inquiries.view' },
- { to: '/crm/customers', label: 'CRM Customers', icon: Users2, feature: 'crm', permission: 'crm.sales_orders.view' },
+ { to: '/crm/inquiries', label: 'Inquiries', icon: MailOpen, feature: 'crm', permission: 'crm.inquiries.view', badgeKey: 'inquiries' },
+ // Customers deduped 2026-08-08: /accounting/customers and /crm/customers are
+ // the SAME table + controller (Accounting CustomerController). One entry kept
+ // under Sales & CRM, gated on accounting.customers.view (the shared backend
+ // permission) so finance_officer still sees it — crm.sales_orders.view is only
+ // held by system_admin. The /accounting/customers URL still works for links.
+ { to: '/crm/customers', label: 'Customers', icon: Users2, feature: 'crm', permission: 'accounting.customers.view' },
  { to: '/crm/products', label: 'Products', icon: Tag, feature: 'crm', permission: 'crm.products.view' },
  { to: '/crm/price-agreements', label: 'Price Agreements', icon: FileText, feature: 'crm', permission: 'crm.price_agreements.view' },
- { to: '/crm/complaints', label: 'Complaints', icon: MessageSquare, feature: 'crm', permission: 'crm.complaints.manage' },
- { to: '/accounting/customers', label: 'AR Customers', icon: Users, feature: 'accounting', permission: 'accounting.customers.view' },
- { to: '/return-management', label: 'Returns (RMA)', icon: RotateCcw, feature: 'return_management', permission: 'return_management.view' },
+ { to: '/crm/complaints', label: 'Complaints', icon: MessageSquare, feature: 'crm', permission: 'crm.complaints.manage', badgeKey: 'open_complaints' },
+ { to: '/return-management', label: 'Returns (RMA)', icon: RotateCcw, feature: 'return_management', permission: 'return_management.view', badgeKey: 'pending_returns' },
  ],
  },
  {
@@ -137,13 +142,12 @@ export const SECTIONS: NavSection[] = [
  { to: '/production/work-orders', label: 'Work Orders', icon: FileText, feature: 'production', permission: 'production.work_orders.view', badgeKey: 'work_orders' },
  { to: '/production/schedule', label: 'Schedule (Gantt)', icon: CalendarClock, feature: 'production', permission: 'production.schedule.view' },
  { to: '/production/routings', label: 'Routings', icon: Route, feature: 'production', permission: 'production.routings.view' },
- { to: '/production/oee', label: 'OEE Report', icon: Activity, feature: 'production', permission: 'production.dashboard.view' },
  ],
  },
  {
  label: 'Production Planning (MRP)',
  items: [
- { to: '/mrp/plans', label: 'MRP Plans', icon: Layers, feature: 'mrp', permission: 'mrp.plans.view' },
+ { to: '/mrp/plans', label: 'MRP Plans', icon: Layers, feature: 'mrp', permission: 'mrp.plans.view', badgeKey: 'mrp_plans' },
  { to: '/mrp/boms', label: 'Bill of Materials', icon: ListTree, feature: 'mrp', permission: 'mrp.boms.view' },
  { to: '/mrp/machines', label: 'Machines', icon: Cpu, feature: 'mrp', permission: 'mrp.machines.view' },
  { to: '/mrp/molds', label: 'Molds', icon: Package, feature: 'mrp', permission: 'mrp.molds.view' },
@@ -153,8 +157,8 @@ export const SECTIONS: NavSection[] = [
  label: 'Procurement',
  items: [
  { to: '/purchasing/chain', label: 'Procurement Chain', icon: Workflow, feature: 'purchasing', permission: 'purchasing.view' },
- { to: '/purchasing/purchase-orders', label: 'Purchase Orders', icon: ShoppingCart, feature: 'purchasing', permission: 'purchasing.view', badgeKey: 'purchase_requests' },
- { to: '/purchasing/purchase-requests', label: 'Purchase Requests', icon: FileText, feature: 'purchasing', permission: 'purchasing.view' },
+ { to: '/purchasing/purchase-orders', label: 'Purchase Orders', icon: ShoppingCart, feature: 'purchasing', permission: 'purchasing.view' },
+ { to: '/purchasing/purchase-requests', label: 'Purchase Requests', icon: FileText, feature: 'purchasing', permission: 'purchasing.view', badgeKey: 'purchase_requests' },
  { to: '/purchasing/approved-suppliers', label: 'Approved Suppliers', icon: BadgeCheck, feature: 'purchasing', permission: 'purchasing.view' },
  ],
  },
@@ -162,15 +166,16 @@ export const SECTIONS: NavSection[] = [
  label: 'Warehouse',
  items: [
  { to: '/inventory/items', label: 'Items', icon: Boxes, feature: 'inventory', permission: 'inventory.view', badgeKey: 'low_stock' },
- { to: '/inventory/grn', label: 'Receiving (GRN)', icon: Package, feature: 'inventory', permission: 'inventory.view' },
+ { to: '/inventory/grn', label: 'Receiving (GRN)', icon: Package, feature: 'inventory', permission: 'inventory.view', badgeKey: 'pending_grn' },
  { to: '/inventory/material-issues', label: 'Issuance', icon: FileEdit, feature: 'inventory', permission: 'inventory.view' },
- { to: '/inventory/mrb', label: 'MRB / Quarantine',icon: AlertTriangle, feature: 'inventory', permission: 'inventory.mrb.view' },
+ { to: '/inventory/mrb', label: 'MRB / Quarantine',icon: AlertTriangle, feature: 'inventory', permission: 'inventory.mrb.view', badgeKey: 'mrb_holds' },
  { to: '/inventory/stock-levels', label: 'Stock Levels', icon: BarChart2, feature: 'inventory', permission: 'inventory.view' },
- { to: '/inventory/movements', label: 'Movements', icon: ArrowLeftRight, feature: 'inventory', permission: 'inventory.view' },
+ // /inventory/movements removed 2026-08-08 (scope cut — now a view toggle on Stock Levels)
  { to: '/inventory/stock-adjustments', label: 'Stock Adjustments', icon: Settings2, feature: 'inventory', permission: 'inventory.view' },
  { to: '/inventory/scanner', label: 'Warehouse Scanner', icon: ScanBarcode, feature: 'inventory', permission: 'inventory.view' },
+ // Stock Count merged into Warehouse Map (2026-08-08) — use its Map | Stock
+ // Count toggle. The /inventory/stock-count path still works (scanner links).
  { to: '/inventory/warehouse-map', label: 'Warehouse Map', icon: Boxes, feature: 'inventory', permission: 'inventory.view' },
- { to: '/inventory/stock-count', label: 'Stock Count', icon: ClipboardList, feature: 'inventory', permission: 'inventory.stock_count.view' },
  { to: '/inventory/transfer-orders', label: 'Transfer Orders', icon: ArrowLeftRight, feature: 'inventory', permission: 'inventory.view' },
  { to: '/inventory/picking', label: 'Picking', icon: Package, feature: 'inventory', permission: 'inventory.view' },
  ],
@@ -179,7 +184,7 @@ export const SECTIONS: NavSection[] = [
  label: 'Supply Chain',
  items: [
  { to: '/supply-chain/deliveries', label: 'Deliveries', icon: Truck, feature: 'supply_chain', permission: 'supply_chain.view', badgeKey: 'deliveries' },
- { to: '/supply-chain/shipments', label: 'Shipments', icon: Package, feature: 'supply_chain', permission: 'supply_chain.view' },
+ { to: '/supply-chain/shipments', label: 'Shipments', icon: Package, feature: 'supply_chain', permission: 'supply_chain.view', badgeKey: 'shipments' },
  { to: '/supply-chain/fleet', label: 'Fleet', icon: Navigation, feature: 'supply_chain', permission: 'supply_chain.view' },
  ],
  },
@@ -187,7 +192,7 @@ export const SECTIONS: NavSection[] = [
  label: 'Quality',
  items: [
  { to: '/quality/inspection-specs', label: 'Inspection Specs', icon: ClipboardList, feature: 'quality', permission: 'quality.specs.view' },
- { to: '/quality/inspections', label: 'Inspections', icon: ShieldCheck, feature: 'quality', permission: 'quality.inspections.view' },
+ { to: '/quality/inspections', label: 'Inspections', icon: ShieldCheck, feature: 'quality', permission: 'quality.inspections.view', badgeKey: 'pending_inspections' },
  { to: '/quality/ncrs', label: 'NCRs', icon: AlertTriangle, feature: 'quality', permission: 'quality.ncr.view', badgeKey: 'ncrs' },
  { to: '/quality/traceability', label: 'Traceability', icon: GitFork, feature: 'quality', permission: 'quality.inspections.view' },
  ],
@@ -197,8 +202,8 @@ export const SECTIONS: NavSection[] = [
  items: [
  { to: '/accounting/coa', label: 'Chart of Accounts', icon: Landmark, feature: 'accounting', permission: 'accounting.coa.view' },
  { to: '/accounting/journal-entries', label: 'Journal Entries', icon: BookOpen, feature: 'accounting', permission: 'accounting.journal.view' },
- { to: '/accounting/invoices', label: 'Invoices (AR)', icon: FileText, feature: 'accounting', permission: 'accounting.invoices.view' },
- { to: '/accounting/bills', label: 'Bills (AP)', icon: Receipt, feature: 'accounting', permission: 'accounting.bills.view' },
+ { to: '/accounting/invoices', label: 'Invoices (AR)', icon: FileText, feature: 'accounting', permission: 'accounting.invoices.view', badgeKey: 'draft_invoices' },
+ { to: '/accounting/bills', label: 'Bills (AP)', icon: Receipt, feature: 'accounting', permission: 'accounting.bills.view', badgeKey: 'overdue_bills' },
  { to: '/accounting/credit-notes', label: 'Credit Notes', icon: Receipt, feature: 'accounting', permission: 'accounting.credit_notes.view' },
  { to: '/accounting/vendors', label: 'Vendors', icon: Store, feature: 'accounting', permission: 'accounting.vendors.view' },
  { to: '/budgeting', label: 'Budgets', icon: PieChart, feature: 'budgeting', permission: 'budgeting.view' },
@@ -208,20 +213,19 @@ export const SECTIONS: NavSection[] = [
  {
  label: 'Human Resources',
  items: [
- { to: '/hr/employees', label: 'Employees', icon: Users, feature: 'hr', permission: 'hr.employees.view', badgeKey: 'profile_requests' },
+ { to: '/hr/employees', label: 'Employees', icon: Users, feature: 'hr', anyPermissions: ['hr.employees.view', 'hr.salary_adjustments.view'], badgeKey: 'profile_requests' },
  { to: '/hr/departments', label: 'Departments', icon: Building2, feature: 'hr', permission: 'hr.departments.view' },
- { to: '/hr/attendance', label: 'Attendance', icon: Clock4, feature: 'attendance', anyPermissions: ['attendance.edit', 'attendance.import', 'attendance.ot.approve'], badgeKey: 'leaves' },
+ { to: '/hr/attendance', label: 'Attendance', icon: Clock4, feature: 'attendance', anyPermissions: ['attendance.edit', 'attendance.import', 'attendance.ot.approve'] },
  { to: '/hr/attendance/overtime', label: 'Overtime', icon: CalendarClock, feature: 'attendance', permission: 'attendance.ot.approve', badgeKey: 'overtime' },
- { to: '/hr/leaves', label: 'Leave', icon: CalendarDays, feature: 'leave', anyPermissions: ['leave.approve_dept', 'leave.approve_hr', 'leave.types.manage'] },
-{ to: '/hr/leaves/types', label: 'Leave Types', icon: ListChecks,   feature: 'leave',     permission: 'leave.types.manage' },
-      { to: '/hr/leaves/year-end', label: 'Year-End Leave', icon: RotateCcw,    feature: 'leave',     permission: 'leave.types.manage' },
- { to: '/hr/salary-adjustments', label: 'Salary Adjustments', icon: Coins, feature: 'hr', permission: 'hr.salary_adjustments.view' },
+ // 2026-08-08: the `leaves` badge (pending leave approvals) moved here from
+ // Attendance — the Leave page is where those approvals are actioned.
+ { to: '/hr/leaves', label: 'Leave', icon: CalendarDays, feature: 'leave', anyPermissions: ['leave.approve_dept', 'leave.approve_hr', 'leave.types.manage'], badgeKey: 'leaves' },
  { to: '/payroll/periods', label: 'Payroll', icon: Wallet, feature: 'payroll', permission: 'payroll.periods.view', badgeKey: 'payroll' },
+ { to: '/payroll/adjustments', label: 'Adjustments', icon: Settings2, feature: 'payroll', permission: 'payroll.adjustments.create' },
  { to: '/payroll/statutory', label: 'Statutory Exports', icon: FileText, feature: 'payroll', permission: 'payroll.statutory.export' },
-      { to: '/payroll/de-minimis', label: 'De Minimis', icon: Coins, feature: 'payroll', permission: 'payroll.adjustments.create' },
- { to: '/hr/recruitment', label: 'Recruitment', icon: Briefcase, feature: 'recruitment', permission: 'hr.recruitment.view' },
+ { to: '/hr/recruitment', label: 'Recruitment', icon: Briefcase, feature: 'recruitment', permission: 'hr.recruitment.view', badgeKey: 'open_postings' },
  { to: '/hr/training/matrix', label: 'Training Matrix', icon: ClipboardList, feature: 'hr', permission: 'hr.trainings.view', badgeKey: 'training_expiry' },
- { to: '/hr/trainings', label: 'Trainings', icon: GraduationCap, feature: 'hr', permission: 'hr.trainings.view' },
+ { to: '/hr/trainings', label: 'Trainings', icon: GraduationCap, feature: 'hr', permission: 'hr.trainings.view', badgeKey: 'training_upcoming' },
  ],
  },
  {
@@ -229,7 +233,6 @@ export const SECTIONS: NavSection[] = [
  items: [
  { to: '/maintenance/work-orders', label: 'Work Orders', icon: Wrench, feature: 'maintenance', permission: 'maintenance.view', badgeKey: 'maintenance_wo' },
  { to: '/maintenance/schedules', label: 'Schedules', icon: Calendar, feature: 'maintenance', permission: 'maintenance.view' },
- { to: '/maintenance/machine-health', label: 'Machine Health', icon: Activity, feature: 'maintenance', permission: 'maintenance.view' },
  { to: '/maintenance/downtime', label: 'Downtime', icon: BarChart2, feature: 'maintenance', permission: 'maintenance.view' },
  ],
  },
@@ -237,7 +240,6 @@ export const SECTIONS: NavSection[] = [
  label: 'Assets',
  items: [
  { to: '/assets', label: 'Fixed Assets', icon: Building2, feature: 'assets', permission: 'assets.view' },
- { to: '/assets/transfers', label: 'Asset Transfers', icon: ArrowLeftRight, feature: 'assets', permission: 'assets.transfer' },
  ],
  },
  {
@@ -249,7 +251,9 @@ export const SECTIONS: NavSection[] = [
  { to: '/admin/sod', label: 'Segregation of Duties', icon: ShieldAlert, permission: 'admin.sod.view' },
  { to: '/admin/settings', label: 'Settings', icon: SettingsIcon, permission: 'admin.settings.manage' },
  { to: '/admin/sessions', label: 'Sessions', icon: Monitor, permission: 'admin.settings.manage' },
- { to: '/admin/depreciation', label: 'Depreciation', icon: BarChart2, permission: 'assets.depreciation.view' },
+ { to: '/admin/gov-tables', label: 'Gov Contribution Tables', icon: Landmark, permission: 'admin.gov_tables.manage' },
+ // /admin/depreciation removed 2026-08-08 (scope cut — monthly runner moved
+ // to the Fixed Assets page as a header button/modal, same permission gate).
  ],
  },
 ];
@@ -379,19 +383,19 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
  {section.visibleItems.map((item) => {
  const entry = getBadge(item.badgeKey);
  return (
- <li key={item.to}>
- {collapsed && !mobileOpen ? (
- <Tooltip content={`${item.label}${entry?.count ? ` (${entry.count})` : ''}`} side="right">
- <NavLink item={item} active={isActive(item.to)} collapsed badgeOverride={entry?.count} badgeVariant={entry?.severity} />
- </Tooltip>
- ) : (
- <NavLink
- item={item}
- active={isActive(item.to)}
- badgeOverride={entry?.count}
- badgeVariant={entry?.severity}
- />
- )}
+ <li key={item.to}>  {collapsed && !mobileOpen ? (
+   <Tooltip content={`${entry?.description ?? item.label}${entry?.count ? ` · ${entry.count}` : ''}`} side="right">
+    <NavLink item={item} active={isActive(item.to)} collapsed badgeOverride={entry?.count} badgeVariant={entry?.severity} badgeDescription={entry?.description} />
+   </Tooltip>
+  ) : (
+   <NavLink
+    item={item}
+    active={isActive(item.to)}
+    badgeOverride={entry?.count}
+    badgeVariant={entry?.severity}
+    badgeDescription={entry?.description}
+   />
+  )}
  </li>
  );
  })}
@@ -461,12 +465,15 @@ const NavLink = memo(function NavLink({
  collapsed,
  badgeOverride,
  badgeVariant,
+ badgeDescription,
 }: {
  item: NavItem;
  active: boolean;
  collapsed?: boolean;
  badgeOverride?: number;
  badgeVariant?: BadgeSeverity | 'accent';
+ /** What the badge count represents (server-provided, e.g. "Overdue bills payable"). */
+ badgeDescription?: string;
 }) {
  const Icon = item.icon;
  const badgeValue = badgeOverride ?? item.badge;
@@ -497,24 +504,25 @@ const NavLink = memo(function NavLink({
  <span
  className={cn(
  'absolute top-1 right-2 h-2 w-2 rounded-full',
- badgeVariant === 'danger' ? 'bg-danger' : badgeVariant === 'warning' ? 'bg-warning' : 'bg-accent',
+ badgeVariant === 'danger' ? 'bg-danger-bg' : badgeVariant === 'warning' ? 'bg-warning-bg' : 'bg-accent',
  )}
  aria-hidden
  />
- )}
- {!collapsed && (
- <>
- <span className="truncate flex-1">{item.label}</span>
- {badgeValue != null && badgeValue > 0 ? (
- <Badge
- variant={badgeVariant ?? 'accent'}
- aria-label={`${badgeValue} pending`}
- >
- {badgeValue}
- </Badge>
- ) : null}
- </>
- )}
+ )}  {!collapsed && (
+   <>
+    <span className="truncate flex-1">{item.label}</span>
+    {badgeValue != null && badgeValue > 0 ? (
+     <Tooltip content={`${badgeDescription ?? item.label} · ${badgeValue}`} side="top">
+      <Badge
+       variant={badgeVariant ?? 'accent'}
+       aria-label={`${badgeDescription ?? item.label} — ${badgeValue}`}
+      >
+       {badgeValue > 99 ? '99+' : badgeValue}
+      </Badge>
+     </Tooltip>
+    ) : null}
+   </>
+  )}
  </Link>
  );
 });

@@ -10,14 +10,14 @@ interface ChainHeaderProps {
 }
 
 const dotClass = (step: ChainStep) => {
- if (step.is_overdue) return 'bg-danger border-danger animate-pulse ring-2 ring-danger/30';
- if (step.state === 'done') return 'bg-success border-success';
+ if (step.is_overdue) return 'bg-danger-bg border-danger animate-pulse ring-2 ring-danger/30';
+ if (step.state === 'done') return 'bg-success-bg border-success';
  if (step.state === 'active') return 'bg-accent border-accent';
  return 'bg-canvas border-strong';
 };
 
 const lineClass = (left: ChainStep) =>
- left.state === 'done' ? 'bg-success' : 'bg-strong';
+ left.state === 'done' ? 'bg-success-bg' : 'bg-strong';
 
 export function ChainHeader({ steps, className }: ChainHeaderProps) {
  if (steps.length === 0) return null;
@@ -47,7 +47,7 @@ export function ChainHeader({ steps, className }: ChainHeaderProps) {
  <div
  className={cn(
  'text-xs',
- step.is_overdue ? 'text-danger font-medium' : step.state === 'pending' ? 'text-subtle' : 'text-primary',
+ step.is_overdue ? 'text-danger-fg font-medium' : step.state === 'pending' ? 'text-subtle' : 'text-primary',
  step.state === 'active' && 'font-medium',
  isInteractive && 'hover:underline underline-offset-2',
  )}
@@ -55,7 +55,7 @@ export function ChainHeader({ steps, className }: ChainHeaderProps) {
  {step.label}
  </div>
  {step.sla_label && (
- <div className="text-[10px] leading-tight font-mono text-danger bg-danger-bg px-1 rounded mt-0.5 inline-block">
+ <div className="text-[10px] leading-tight font-mono text-danger-fg bg-danger-bg px-1 rounded mt-0.5 inline-block">
  {step.sla_label}
  </div>
  )}

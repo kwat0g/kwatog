@@ -252,7 +252,7 @@ export default function BudgetCreatePage() {
  onClick={() => removeLineItem(i)}
  title="Remove line"
  aria-label="Remove line"
- className="text-muted hover:text-danger"
+ className="text-muted hover:text-danger-fg"
  />
  </Td>
  </tr>

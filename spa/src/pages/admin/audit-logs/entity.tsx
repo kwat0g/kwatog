@@ -182,10 +182,10 @@ export default function EntityAuditTrailPage() {
  <div
  className={`w-2.5 h-2.5 rounded-full mt-1.5 shrink-0 ${
  entry.action === 'created'
- ? 'bg-success'
+ ? 'bg-success-bg'
  : entry.action === 'deleted'
- ? 'bg-danger'
- : 'bg-info'
+ ? 'bg-danger-bg'
+ : 'bg-info-bg'
  }`}
  />
  {idx < data.data.length - 1 && (

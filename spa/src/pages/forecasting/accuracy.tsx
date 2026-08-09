@@ -263,7 +263,7 @@ export default function ForecastAccuracyPage() {
  <Td mono className="text-xs">{p.part_number}</Td>
  <Td className="text-primary">{p.name}</Td>
  <Td align="right" mono>
- <span className={excellentMape != null && p.mape <= excellentMape ? 'text-success' : acceptableMape != null && p.mape <= acceptableMape ? 'text-warning' : 'text-danger'}>
+ <span className={excellentMape != null && p.mape <= excellentMape ? 'text-success-fg' : acceptableMape != null && p.mape <= acceptableMape ? 'text-warning-fg' : 'text-danger-fg'}>
  {p.mape.toFixed(1)}%
  </span>
  </Td>

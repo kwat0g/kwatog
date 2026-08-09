@@ -58,7 +58,7 @@ const columns: Column<Payroll>[] = [
  )}
  {/* ADV1 — Show disbursement status if available */}
  {p.period_disbursement_status === 'disbursed' && (
- <span className="inline-flex items-center gap-1 text-xs text-success">
+ <span className="inline-flex items-center gap-1 text-xs text-success-fg">
  <CheckCircle2 size={12} /> Disbursed
  </span>
  )}

@@ -114,7 +114,7 @@ export default function BudgetDetailPage() {
  </Button>
  )}
  {canApproveAction && (
- <Button size="sm" variant="primary" onClick={() => setConfirmApprove(true)} loading={approveMutation.isPending}>
+ <Button size="xs" variant="primary" onClick={() => setConfirmApprove(true)} loading={approveMutation.isPending}>
  <CheckCircle size={14} /> Approve
  </Button>
  )}
@@ -135,7 +135,7 @@ export default function BudgetDetailPage() {
  <StatCard
  label="Available"
  value={formatCompactCurrency(budget.available, 1_000_000, 'M')}
- className={budget.available < 0 ? 'text-danger' : 'text-success'}
+ className={budget.available < 0 ? 'text-danger-fg' : 'text-success-fg'}
  />
  </div>
 
@@ -143,7 +143,7 @@ export default function BudgetDetailPage() {
  <div className="space-y-1.5">
  <div className="flex justify-between text-sm">
  <span className="text-secondary">Utilization</span>
- <span className={cn('font-medium', budget.utilization_pct >= (budgetOptions?.critical_ratio_pct ?? Number.POSITIVE_INFINITY) ? 'text-danger' : 'text-success')}>
+ <span className={cn('font-medium', budget.utilization_pct >= (budgetOptions?.critical_ratio_pct ?? Number.POSITIVE_INFINITY) ? 'text-danger-fg' : 'text-success-fg')}>
  {budget.utilization_pct}%
  </span>
  </div>
@@ -151,8 +151,8 @@ export default function BudgetDetailPage() {
  <div
  className={cn(
  'h-full rounded-full transition-all duration-500',
- budget.utilization_pct >= (budgetOptions?.critical_ratio_pct ?? Number.POSITIVE_INFINITY) ? 'bg-danger' :
- budget.utilization_pct >= (budgetOptions?.warning_ratio_pct ?? Number.POSITIVE_INFINITY) ? 'bg-warning' : 'bg-success'
+ budget.utilization_pct >= (budgetOptions?.critical_ratio_pct ?? Number.POSITIVE_INFINITY) ? 'bg-danger-bg' :
+ budget.utilization_pct >= (budgetOptions?.warning_ratio_pct ?? Number.POSITIVE_INFINITY) ? 'bg-warning-bg' : 'bg-success-bg'
  )}
  style={{ width: `${Math.min(budget.utilization_pct, 100)}%` }}
  />
@@ -192,7 +192,7 @@ export default function BudgetDetailPage() {
  })}
  <Td align="right" mono className="font-medium">{formatCompactCurrency(li.annual_total, 1_000, 'K')}</Td>
  <Td align="right" mono>{formatCompactCurrency(li.actual_total, 1_000, 'K')}</Td>
- <Td align="right" mono className={cn(li.variance < 0 ? 'text-danger' : 'text-success')}>
+ <Td align="right" mono className={cn(li.variance < 0 ? 'text-danger-fg' : 'text-success-fg')}>
  {li.variance >= 0 ? '+' : '-'}{formatCompactCurrency(Math.abs(li.variance), 1_000, 'K')}
  </Td>
  </tr>

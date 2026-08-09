@@ -6,6 +6,11 @@ namespace App\Modules\Accounting\Enums;
 
 enum BillStatus: string
 {
+    // 2026-08-08 — auto-created supplier bills (GRN accepted → draft bill)
+    // live in this state until accounting reviews and posts them. Nothing in
+    // open-bill/aging/AP queries matches it, so drafts never leak into
+    // payables or the supplier portal.
+    case Draft     = 'draft';
     case Unpaid    = 'unpaid';
     case Partial   = 'partial';
     case Paid      = 'paid';
@@ -20,6 +25,7 @@ enum BillStatus: string
     public function label(): string
     {
         return match ($this) {
+            self::Draft => 'Draft',
             self::Unpaid => 'Unpaid',
             self::Partial => 'Partially paid',
             self::Paid => 'Paid',

@@ -43,14 +43,14 @@ export function DraftRestoreBanner({ ageMs, onRestore, onDiscard }: Props) {
  <button
  type="button"
  onClick={onRestore}
- className={cn('h-7 px-2.5 rounded-md text-xs font-medium bg-warning text-canvas hover:opacity-90 cursor-pointer', focusRing)}
+ className={cn('h-7 px-2.5 rounded-md text-xs font-medium bg-warning-bg text-canvas hover:opacity-90 cursor-pointer', focusRing)}
  >
  Restore
  </button>
  <button
  type="button"
  onClick={onDiscard}
- className={cn('h-7 px-2.5 rounded-md text-xs text-warning-fg hover:bg-warning/20 cursor-pointer', focusRing)}
+ className={cn('h-7 px-2.5 rounded-md text-xs text-warning-fg hover:bg-warning-bg/20 cursor-pointer', focusRing)}
  >
  Discard
  </button>

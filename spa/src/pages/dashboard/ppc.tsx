@@ -236,18 +236,18 @@ function MachineUtilPanel({ machines }: { machines: MachineRow[] }) {
 /* ───────────────────────── Helpers ───────────────────────── */
 
 function stageFillClass(color?: string): string {
- if (color === 'danger') return 'h-full bg-danger';
- if (color === 'warning') return 'h-full bg-warning';
- if (color === 'info') return 'h-full bg-info';
- return 'h-full bg-success';
+ if (color === 'danger') return 'h-full bg-danger-bg';
+ if (color === 'warning') return 'h-full bg-warning-bg';
+ if (color === 'info') return 'h-full bg-info-bg';
+ return 'h-full bg-success-bg';
 }
 
 function alertDotClass(severity?: string): string {
  const base = 'inline-block w-1.5 h-1.5 rounded-full';
- if (severity === 'danger') return `${base} bg-danger`;
- if (severity === 'warning') return `${base} bg-warning`;
- if (severity === 'info') return `${base} bg-info`;
- return `${base} bg-success`;
+ if (severity === 'danger') return `${base} bg-danger-bg`;
+ if (severity === 'warning') return `${base} bg-warning-bg`;
+ if (severity === 'info') return `${base} bg-info-bg`;
+ return `${base} bg-success-bg`;
 }
 
 function machineStatusVariant(status: string): 'info' | 'danger' | 'warning' | 'neutral' {
@@ -308,8 +308,8 @@ function ProductionGanttPanel({ rows, horizonDays }: { rows: ProductionGanttRow[
  <Td mono className="text-xs">{m}</Td>
  {days.map((d) => {
  const cell = rows.find((r) => r.machine === m && r.day === d);
- const cls = cell?.status === 'running' ? 'bg-info/30'
- : cell?.status === 'planned' ? 'bg-warning/20'
+ const cls = cell?.status === 'running' ? 'bg-info-bg/30'
+ : cell?.status === 'planned' ? 'bg-warning-bg/20'
  : 'bg-subtle/30';
  return (
  <Td align="center" className={` rounded-sm ${cls}`} key={`${m}-${d}`} title={cell?.wo_number ?? undefined} aria-label={`${m} on ${d}: ${cell?.status ?? 'available'}${cell?.wo_number ? ` (${cell.wo_number})` : ''}`}>
@@ -403,9 +403,9 @@ function MachineAvailabilityGrid({ rows, horizonDays }: { rows: GanttRow[]; hori
  <Td mono className="text-xs">{m}</Td>
  {days.map(([date]) => {
  const cell = rows.find((r) => r.machine === m && r.date === date);
- const cls = cell?.status === 'available' ? 'bg-success/20'
- : cell?.status === 'busy' ? 'bg-info/30'
- : 'bg-danger/20';
+ const cls = cell?.status === 'available' ? 'bg-success-bg/20'
+ : cell?.status === 'busy' ? 'bg-info-bg/30'
+ : 'bg-danger-bg/20';
  return (
  <Td align="center" className={` rounded-sm ${cls}`} key={`${m}-${date}`} aria-label={`${m} on ${date}: ${cell?.status ?? 'unknown'}`}>
  {cell?.status === 'available' ? '✓' : cell?.status === 'busy' ? '●' : '✗'}
@@ -465,9 +465,9 @@ function WoStatusBreakdownPanel({ items }: { items: WoStatusItem[] }) {
 }
 
 function woBarClass(status: string): string {
- if (status === 'in_progress') return 'h-full bg-info rounded-full';
- if (status === 'completed') return 'h-full bg-success rounded-full';
- if (status === 'paused') return 'h-full bg-warning rounded-full';
+ if (status === 'in_progress') return 'h-full bg-info-bg rounded-full';
+ if (status === 'completed') return 'h-full bg-success-bg rounded-full';
+ if (status === 'paused') return 'h-full bg-warning-bg rounded-full';
  if (status === 'planned' || status === 'confirmed') return 'h-full bg-accent rounded-full';
  return 'h-full bg-subtle rounded-full';
 }

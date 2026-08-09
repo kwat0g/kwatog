@@ -52,7 +52,13 @@ class LeaveRequestService
                     ->orWhere('middle_name', 'ilike', "%{$term}%")
                     ->orWhere('last_name', 'ilike', "%{$term}%")));
         }
-        if (!empty($filters['status'])) $q->where('status', $filters['status']);
+        if (!empty($filters['status'])) {
+            if ($filters['status'] === 'pending') {
+                $q->whereIn('status', [LeaveRequestStatus::PendingDept->value, LeaveRequestStatus::PendingHr->value]);
+            } else {
+                $q->where('status', $filters['status']);
+            }
+        }
         if (!empty($filters['from'])) $q->where('start_date', '>=', $filters['from']);
         if (!empty($filters['to'])) $q->where('end_date', '<=', $filters['to']);
 

@@ -26,7 +26,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/Input';
-import { Modal } from '@/components/ui/Modal';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -529,8 +529,8 @@ function EditablePanel({
  />
  ))}
  </div>
- {error && <p className="text-xs text-danger">{error}</p>}
- <div className="flex items-center justify-between gap-3 pt-2 border-t border-default">
+ {error && <p className="text-xs text-danger-fg">{error}</p>}
+ <ModalFooter className="justify-between">
  <p className="text-2xs text-muted">Changes are reviewed by HR before they take effect.</p>
  <div className="flex gap-2 shrink-0">
  <Button variant="secondary" size="sm" onClick={() => setEditing(false)} disabled={mutation.isPending}>
@@ -546,7 +546,7 @@ function EditablePanel({
  {mutation.isPending ? 'Submitting…' : 'Submit for review'}
  </Button>
  </div>
- </div>
+ </ModalFooter>
  </div>
  )}
  </Panel>
@@ -642,8 +642,8 @@ function BankPanel({
  placeholder="Account number"
  className="font-mono"
  />
- {error && <p className="text-xs text-danger">{error}</p>}
- <div className="flex justify-end gap-2 pt-2 border-t border-default">
+ {error && <p className="text-xs text-danger-fg">{error}</p>}
+ <ModalFooter>
  <Button variant="secondary" onClick={() => setOpen(false)} disabled={mutation.isPending}>
  Cancel
  </Button>
@@ -655,7 +655,7 @@ function BankPanel({
  >
  {mutation.isPending ? 'Submitting…' : 'Submit request'}
  </Button>
- </div>
+ </ModalFooter>
  </div>
  </Modal>
  </Panel>

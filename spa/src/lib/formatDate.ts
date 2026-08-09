@@ -28,12 +28,12 @@ export function formatDateIso(value: string | Date | null | undefined, fallback 
 
 export function formatDateTime(value: string | Date | null | undefined, fallback = '—'): string {
  const d = toDate(value);
- return d ? format(d, 'MMM d, yyyy · HH:mm') : fallback;
+ return d ? format(d, 'MMM d, yyyy · h:mm a') : fallback;
 }
 
 export function formatTime(value: string | Date | null | undefined, fallback = '—'): string {
  const d = toDate(value);
- return d ? format(d, 'HH:mm') : fallback;
+ return d ? format(d, 'h:mm a') : fallback;
 }
 
 export function formatRelative(value: string | Date | null | undefined, fallback = '—'): string {

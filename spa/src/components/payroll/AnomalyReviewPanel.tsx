@@ -17,14 +17,6 @@ import { usePermission } from '@/hooks/usePermission';
 import { formatDateTime } from '@/lib/formatDate';
 import type { PayrollAnomalyFlag, PayrollAnomalyType } from '@/types/payroll';
 
-const TYPE_LABEL: Record<PayrollAnomalyType, string> = {
- large_change: 'Large net pay change',
- excessive_ot: 'Excessive overtime',
- high_deduction: 'High deduction ratio',
- first_payroll: 'First payroll',
- zero_pay: 'Zero net pay',
-};
-
 const TYPE_VARIANT: Record<PayrollAnomalyType, 'danger' | 'warning' | 'info'> = {
  large_change: 'warning',
  excessive_ot: 'warning',
@@ -125,7 +117,7 @@ export function AnomalyReviewPanel({ periodId }: Props) {
  />
  <div className="flex-1 min-w-0">
  <div className="flex items-center gap-2 flex-wrap">
- <Chip variant={TYPE_VARIANT[f.flag_type]}>{TYPE_LABEL[f.flag_type]}</Chip>
+ <Chip variant={TYPE_VARIANT[f.flag_type]}>{f.flag_type_label ?? f.flag_type}</Chip>
  {f.employee && (
  <span className="text-sm text-primary">
  <span className="font-mono text-muted">{f.employee.employee_no}</span>{' '}
@@ -171,7 +163,7 @@ export function AnomalyReviewPanel({ periodId }: Props) {
  <Modal isOpen onClose={() => setResolveTarget(null)} size="sm" title="Resolve anomaly">
  <div className="px-5 py-4 space-y-3">
  <p className="text-sm text-muted">
- Confirm review for <strong>{TYPE_LABEL[resolveTarget.flag_type]}</strong>
+ Confirm review for <strong>{resolveTarget.flag_type_label ?? resolveTarget.flag_type}</strong>
  {resolveTarget.employee ? <> on <span className="font-mono">{resolveTarget.employee.employee_no}</span> {resolveTarget.employee.name}</> : null}.
  </p>
  <Textarea

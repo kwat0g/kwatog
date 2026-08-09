@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import type { AxiosError } from 'axios';
-import { Button, Input, Modal, Panel, Select, Switch } from '@/components/ui';
+import { Button, Input, Modal, ModalFooter, Panel, Select, Switch } from '@/components/ui';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { adminUsersApi } from '@/api/admin/users';
 import { client } from '@/api/client';
@@ -115,7 +115,7 @@ export default function AdminCreateUserPage() {
  </fieldset>
  </Panel>
 
- <div className="flex justify-end gap-2 pt-4 border-t border-default mt-4">
+ <ModalFooter>
  <Button
  type="button"
  variant="secondary"
@@ -131,7 +131,7 @@ export default function AdminCreateUserPage() {
  >
  {mutation.isPending ? 'Creating…' : 'Create User'}
  </Button>
- </div>
+ </ModalFooter>
  </form>
 
  <Modal
@@ -151,7 +151,7 @@ export default function AdminCreateUserPage() {
  <code className="block bg-elevated rounded-md p-3 font-mono tabular-nums text-md select-all">
  {tempPasswordModal}
  </code>
- <div className="flex justify-end pt-2 border-t border-default">
+ <ModalFooter>
  <Button
  variant="primary"
  onClick={() => {
@@ -161,7 +161,7 @@ export default function AdminCreateUserPage() {
  >
  Done
  </Button>
- </div>
+ </ModalFooter>
  </div>
  </Modal>
  </div>

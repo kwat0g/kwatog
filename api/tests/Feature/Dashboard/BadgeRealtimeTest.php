@@ -26,6 +26,37 @@ class BadgeRealtimeTest extends TestCase
         }
     }
 
+    public function test_widened_scope_definitions_carry_labels_and_descriptions(): void
+    {
+        $user = \App\Modules\Auth\Models\User::factory()->create();
+        $svc = app(BadgeService::class);
+        $ref = new \ReflectionClass($svc);
+        $m = $ref->getMethod('definitions');
+        $m->setAccessible(true);
+        $defs = $m->invoke($svc, $user);
+
+        $widened = [
+            'inquiries', 'open_complaints', 'pending_inspections', 'pending_grn',
+            'mrb_holds', 'shipments', 'mrp_plans', 'pending_returns',
+            'draft_invoices', 'overdue_bills', 'training_upcoming', 'open_postings',
+        ];
+        foreach ($widened as $key) {
+            $this->assertArrayHasKey($key, $defs, "Missing badge definition: {$key}");
+            $this->assertNotEmpty($defs[$key]['permissions']);
+            $this->assertIsString($defs[$key]['label']);
+            $this->assertNotSame('', $defs[$key]['label']);
+            $this->assertIsString($defs[$key]['description']);
+            $this->assertNotSame('', $defs[$key]['description']);
+        }
+
+        // Every legacy key must also carry the metadata so the SPA can render
+        // tooltips uniformly.
+        foreach (['approvals', 'leaves', 'low_stock', 'unread'] as $key) {
+            $this->assertArrayHasKey('label', $defs[$key]);
+            $this->assertArrayHasKey('description', $defs[$key]);
+        }
+    }
+
     public function test_touch_bumps_global_version_so_cache_recomputes(): void
     {
         $user = \App\Modules\Auth\Models\User::factory()->create();

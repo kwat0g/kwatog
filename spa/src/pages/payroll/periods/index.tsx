@@ -1,16 +1,17 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Plus, CalendarRange, Download } from 'lucide-react';
+import { Plus, CalendarRange, Coins } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { periodsApi, type PeriodListParams } from '@/api/payroll/periods';
+import { DeMinimisManager } from '@/pages/payroll/de-minimis';
 import { Button } from '@/components/ui/Button';
 import { Chip, type ChipVariant } from '@/components/ui/Chip';
 import { DataTable, NumCell, StackedCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
-import { Modal } from '@/components/ui/Modal';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
@@ -37,6 +38,7 @@ export default function PayrollPeriodsPage() {
  page: 1, per_page: 25, sort: 'period_start', direction: 'desc',
  });
  const [showThirteenth, setShowThirteenth] = useState(false);
+ const [showDeMinimis, setShowDeMinimis] = useState(false);
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['payroll-periods', filters],
@@ -120,23 +122,8 @@ export default function PayrollPeriodsPage() {
  },
  ];
 
- const canView = can('payroll.view');
  const canCreate = can('payroll.periods.create');
  const canRunThirteenth = can('payroll.thirteenth_month.run') || can('payroll.periods.create');
-
- const handleBir2316Download = () => {
- const year = new Date().getFullYear();
- periodsApi.downloadBirAlphalist(year)
- .then((res) => {
- const url = URL.createObjectURL(res.data as Blob);
- const a = document.createElement('a');
- a.href = url;
- a.download = `BIR-2316-Alphalist-${year}.csv`;
- a.click();
- URL.revokeObjectURL(url);
- })
- .catch(() => toast.error('Failed to download BIR 2316 alphalist'));
- };
 
  return (
  <div>
@@ -145,23 +132,11 @@ export default function PayrollPeriodsPage() {
  subtitle={data ? `${data.meta.total} periods` : undefined}
  actions={
  <>
- {canView && (
- <Button
- variant="secondary" size="sm" icon={<Download size={14} />}
- onClick={handleBir2316Download}
- >
- BIR 2316
+ {can('payroll.adjustments.create') && (
+ <Button variant="secondary" size="sm" icon={<Coins size={14} />} onClick={() => setShowDeMinimis(true)}>
+ De Minimis
  </Button>
  )}
- <Button variant="secondary" size="sm" onClick={() => navigate('/payroll/adjustments')}>
- Adjustments
- </Button>
- <Button variant="secondary" size="sm" onClick={() => navigate('/payroll/pipeline')}>
- Pipeline
- </Button>
- <Button variant="secondary" size="sm" onClick={() => navigate('/admin/gov-tables')}>
- Gov Tables
- </Button>
  {canRunThirteenth && (
  <Button
  variant="secondary" size="sm" icon={<CalendarRange size={14} />}
@@ -223,6 +198,11 @@ export default function PayrollPeriodsPage() {
  onClose={() => setShowThirteenth(false)}
  onSuccess={() => qc.invalidateQueries({ queryKey: ['payroll-periods'] })}
  />
+
+ {/* De Minimis — scope cut: standalone page folded into a modal on the Payroll page */}
+ <Modal isOpen={showDeMinimis} onClose={() => setShowDeMinimis(false)} size="xl" title="De Minimis Benefits">
+ <DeMinimisManager />
+ </Modal>
  </div>
  );
 }
@@ -264,13 +244,13 @@ function ThirteenthMonthModal({
  Creates a special period that finalizes 13th-month accruals for every active employee with year-to-date earnings.
  </p>
  </div>
- <div className="flex justify-end gap-2 pt-3 border-t border-default">
+ <ModalFooter>
  <Button variant="secondary" onClick={onClose} disabled={mutation.isPending}>Cancel</Button>
  <Button variant="primary" onClick={() => mutation.mutate()}
  disabled={!year || mutation.isPending} loading={mutation.isPending}>
  {mutation.isPending ? 'Creating…' : 'Create period'}
  </Button>
- </div>
+ </ModalFooter>
  </Modal>
  );
 }

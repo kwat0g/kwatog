@@ -144,7 +144,7 @@ export default function JobPostingDetailPage() {
  </section>
 
  {posting.closes_at && (
- <p className="mt-6 text-sm text-warning">
+ <p className="mt-6 text-sm text-warning-fg">
  Application deadline: {formatDate(posting.closes_at)}
  </p>
  )}
@@ -153,7 +153,7 @@ export default function JobPostingDetailPage() {
 
  {trackingCode ? (
  <div className="rounded-md border border-default bg-success-bg p-5 text-center">
- <CheckCircle className="mx-auto mb-3 text-success" size={40} />
+ <CheckCircle className="mx-auto mb-3 text-success-fg" size={40} />
  <h2 className="text-xl font-medium text-primary">Application Submitted!</h2>
  <p className="mt-2 text-secondary">
  Your tracking code is:
@@ -174,12 +174,12 @@ export default function JobPostingDetailPage() {
  <div>
  <label className="mb-1 block text-sm font-medium text-secondary">First Name *</label>
  <Input {...register('first_name')} />
- {errors.first_name && <p className="mt-1 text-xs text-danger">{errors.first_name.message}</p>}
+ {errors.first_name && <p className="mt-1 text-xs text-danger-fg">{errors.first_name.message}</p>}
  </div>
  <div>
  <label className="mb-1 block text-sm font-medium text-secondary">Last Name *</label>
  <Input {...register('last_name')} />
- {errors.last_name && <p className="mt-1 text-xs text-danger">{errors.last_name.message}</p>}
+ {errors.last_name && <p className="mt-1 text-xs text-danger-fg">{errors.last_name.message}</p>}
  </div>
  </div>
 
@@ -187,12 +187,12 @@ export default function JobPostingDetailPage() {
  <div>
  <label className="mb-1 block text-sm font-medium text-secondary">Email *</label>
  <Input type="email" {...register('email')} />
- {errors.email && <p className="mt-1 text-xs text-danger">{errors.email.message}</p>}
+ {errors.email && <p className="mt-1 text-xs text-danger-fg">{errors.email.message}</p>}
  </div>
  <div>
  <label className="mb-1 block text-sm font-medium text-secondary">Phone *</label>
  <Input {...register('phone')} placeholder="09XX-XXX-XXXX" />
- {errors.phone && <p className="mt-1 text-xs text-danger">{errors.phone.message}</p>}
+ {errors.phone && <p className="mt-1 text-xs text-danger-fg">{errors.phone.message}</p>}
  </div>
  </div>
 
@@ -215,7 +215,7 @@ export default function JobPostingDetailPage() {
  setResumeError(null);
  }}
  />
- {resumeError && <p className="mt-1 text-xs text-danger">{resumeError}</p>}
+ {resumeError && <p className="mt-1 text-xs text-danger-fg">{resumeError}</p>}
  </div>
 
  <div>
@@ -228,7 +228,7 @@ export default function JobPostingDetailPage() {
  </Button>
 
  {mutation.isError && (
- <p className="text-sm text-danger">Something went wrong. Please try again.</p>
+ <p className="text-sm text-danger-fg">Something went wrong. Please try again.</p>
  )}
  </form>
  </div>

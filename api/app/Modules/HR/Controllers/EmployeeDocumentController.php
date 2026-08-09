@@ -13,6 +13,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Illuminate\Support\Str;
 
 class EmployeeDocumentController
 {
@@ -25,6 +26,27 @@ class EmployeeDocumentController
         return EmployeeDocumentResource::collection(
             $this->service->list($employee, $request->query()),
         );
+    }
+
+    /** GET /hr/employees/{employee}/documents/options */
+    public function options(): JsonResponse
+    {
+        // Employee document types are intentionally extensible. Return the
+        // values already used by the organization instead of duplicating a
+        // fixed list in every client.
+        $types = EmployeeDocument::query()
+            ->whereNotNull('document_type')
+            ->where('document_type', '<>', '')
+            ->distinct()
+            ->orderBy('document_type')
+            ->pluck('document_type')
+            ->map(static fn (string $value): array => [
+                'value' => $value,
+                'label' => Str::headline($value),
+            ])
+            ->values();
+
+        return response()->json(['data' => ['document_types' => $types]]);
     }
 
     public function store(StoreEmployeeDocumentRequest $request, Employee $employee): JsonResponse

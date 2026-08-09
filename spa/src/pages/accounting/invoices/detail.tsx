@@ -15,16 +15,17 @@ import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { Modal } from '@/components/ui/Modal';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { StatCard } from '@/components/ui/StatCard';
 import { ChainHeader } from '@/components/chain';
-import type { ChainStep } from '@/types/chain';
+import { buildO2cChain } from '@/lib/chains';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
+import { useChainProgress } from '@/hooks/useChainProgress';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
 import { numberInputProps } from '@/lib/numberInput';
@@ -40,18 +41,6 @@ const collectionSchema = z.object({
 });
 type CollectionFormValues = z.infer<typeof collectionSchema>;
 
-function buildInvoiceChain(inv: { status: string; amount_paid: string; balance: string; date: string; payments?: Array<{ collection_date?: string; payment_date?: string }> }): ChainStep[] {
- const isCancelled = inv.status === 'cancelled';
- const issued = !isCancelled;
- const hasPayment = (inv.payments?.length ?? 0) > 0;
- const fullyPaid = parseFloat(inv.balance) <= 0 && parseFloat(inv.amount_paid) > 0;
- const firstPayDate = inv.payments?.[0]?.collection_date ?? inv.payments?.[0]?.payment_date;
- return [
- { key: 'invoice', label: 'Invoiced', state: issued ? 'done' : 'pending', date: inv.date.slice(0, 10) },
- { key: 'collect', label: 'Collected', state: fullyPaid ? 'done' : hasPayment ? 'active' : 'pending', date: firstPayDate?.slice(0, 10) },
- ];
-}
-
 export default function InvoiceDetailPage() {
  const { id = '' } = useParams<{ id: string }>();
  const qc = useQueryClient();
@@ -65,6 +54,9 @@ export default function InvoiceDetailPage() {
  queryFn: () => invoicesApi.show(id),
  enabled: !!id,
  });
+
+ // 2026-08-08 — live chain progress (finalize / collections) on the invoice page.
+ useChainProgress('invoice', id, ['accounting', 'invoices', id]);
  const { data: accountingOptions } = useQuery({ queryKey: ['accounting', 'options'], queryFn: () => accountingOptionsApi.list() });
 
  const { data: cashAccounts } = useQuery({
@@ -154,7 +146,14 @@ export default function InvoiceDetailPage() {
 
  <div className="px-5 pt-4">
  <Panel title="Order-to-Cash">
- <ChainHeader steps={buildInvoiceChain(invoice)} />
+ {/* 2026-08-08 — compact cross-document stepper: the whole chain at a glance.
+ This invoice is the Invoice step; upstream (SO/Delivery) and downstream
+ (Payment) stay visible and clickable from here. */}
+ <ChainHeader steps={buildO2cChain({
+  so: invoice.sales_order ? { id: invoice.sales_order.id, number: invoice.sales_order.so_number } : null,
+  delivery: invoice.delivery ? { id: invoice.delivery.id, number: invoice.delivery.delivery_number } : null,
+  invoices: [{ id: invoice.id, invoice_number: invoice.invoice_number ?? '', status: invoice.status }],
+ })} />
  </Panel>
  </div>
 
@@ -245,10 +244,10 @@ export default function InvoiceDetailPage() {
  {(accountingOptions?.payment_methods ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
  </Select>
  <Input label="Reference no." {...register('reference_number')} />
- <div className="flex justify-end gap-2 pt-2 border-t border-default">
+ <ModalFooter>
  <Button type="button" variant="secondary" onClick={() => setShowCollect(false)}>Cancel</Button>
  <Button type="submit" variant="primary" loading={collectMut.isPending} disabled={collectMut.isPending}>Record</Button>
- </div>
+ </ModalFooter>
  </form>
  </Modal>
 

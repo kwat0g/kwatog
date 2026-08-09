@@ -122,7 +122,7 @@ export function PayrollComputeProgressPanel({
  <span className="font-mono tabular-nums">
  {processed} / {total} employees
  {failures > 0 && (
- <span className="text-danger"> · {failures} failed</span>
+ <span className="text-danger-fg"> · {failures} failed</span>
  )}
  </span>
  {startedAt && <span>Started {formatRelative(startedAt)}</span>}

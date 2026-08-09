@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Ban, Check, Pencil } from 'lucide-react';
+import { Ban, Check, Pencil, FileText } from 'lucide-react';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { salesOrdersApi } from '@/api/crm/salesOrders';
+import { invoicesApi } from '@/api/accounting/invoices';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -15,6 +16,7 @@ import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { ChainHeader } from '@/components/chain';
+import { buildO2cChain } from '@/lib/chains';
 import { usePermission } from '@/hooks/usePermission';
 import { formatPeso, formatInt, formatDecimal } from '@/lib/formatNumber';
 import { useChainProgress } from '@/hooks/useChainProgress';
@@ -42,6 +44,7 @@ export default function SalesOrderDetailPage() {
  const [cancelOpen, setCancelOpen] = useState(false);
  const [chainResult, setChainResult] = useState<SoChainResult | null>(null);
  const [confirmError, setConfirmError] = useState<{ message: string; errors?: Record<string, string[]> } | null>(null);
+ const [finalizeInvoiceId, setFinalizeInvoiceId] = useState<string | null>(null);
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['crm', 'sales-orders', 'detail', id],
@@ -88,6 +91,17 @@ export default function SalesOrderDetailPage() {
  onError: (e: AxiosError<{ message?: string }>) => {
  toast.error(e.response?.data?.message ?? 'Failed to cancel sales order.');
  },
+ });
+
+ const finalizeInvoice = useMutation({
+ mutationFn: (invoiceId: string) => invoicesApi.finalize(invoiceId),
+ onSuccess: () => {
+ toast.success('Draft invoice finalized to AR + GL.');
+ setFinalizeInvoiceId(null);
+ qc.invalidateQueries({ queryKey: ['crm', 'sales-orders', 'detail', id] });
+ qc.invalidateQueries({ queryKey: ['accounting', 'invoices'] });
+ },
+ onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed to finalize invoice.'),
  });
 
  if (isLoading) {
@@ -169,6 +183,50 @@ export default function SalesOrderDetailPage() {
 
  <div className="px-5 py-4 space-y-4">
  <ChainErrorPanel error={confirmError} onDismiss={() => setConfirmError(null)} />
+
+ {/* 2026-08-08 — compact cross-document stepper: the whole chain at a glance.
+ The MRP chain above stays; this shows the downstream O2C completion. */}
+ <Panel title="Order-to-cash chain">
+ <ChainHeader steps={buildO2cChain({
+  so: { id: data.id, number: data.so_number },
+  delivery: data.deliveries?.[0]
+  ? { id: data.deliveries[0].id, number: data.deliveries[0].delivery_number }
+  : null,
+  deliveryStatus: data.deliveries?.some((d) => d.status === 'delivered' || d.status === 'confirmed')
+  ? 'confirmed'
+  : (data.deliveries?.[0]?.status ?? null),
+  invoices: (data.invoices ?? []).map((inv) => ({
+  id: inv.id,
+  invoice_number: inv.invoice_number,
+  status: inv.status,
+  })),
+ })} />
+ </Panel>
+
+ {/* 2026-08-08 — auto-invoice chain: confirmed deliveries stage draft AR
+  invoices; review and finalize them here (mirrors the P2P auto-bill banner). */}
+ {data.invoices?.some((inv) => inv.status === 'draft') && (
+ <div className="flex items-center gap-3 rounded-md border border-success/40 bg-success-bg/10 px-4 py-3 text-sm">
+ <FileText size={16} className="shrink-0 text-success-fg" />
+ <div className="flex-1">
+ <div className="font-medium">Customer invoice auto-created</div>
+ <div className="text-muted">
+ Draft AR invoices were staged from the confirmed deliveries —{' '}
+ {data.invoices.filter((inv) => inv.status === 'draft').map((inv) => (
+ <span key={inv.id} className="inline-flex items-center gap-1.5">
+ <Link to={`/accounting/invoices/${inv.id}`} className="font-mono text-accent hover:underline">{inv.invoice_number ?? '(draft)'}</Link>
+ <span className="font-mono tabular-nums">{formatPeso(inv.total_amount)}</span>
+ {can('accounting.invoices.create') && (
+ <Button variant="secondary" size="xs" icon={<Check size={11} />} onClick={() => setFinalizeInvoiceId(inv.id)}>
+ Finalize
+ </Button>
+ )}
+ </span>
+ ))}
+ </div>
+ </div>
+ </div>
+ )}
 
  <div className="grid gap-4 lg:grid-cols-3">
  <div className="lg:col-span-2 space-y-4">
@@ -353,6 +411,17 @@ export default function SalesOrderDetailPage() {
  confirmLabel="Cancel order"
  variant="danger"
  pending={cancel.isPending}
+ />
+
+ {/* 2026-08-08 — finalize the auto-created draft invoice from the SO. */}
+ <ConfirmDialog
+ isOpen={!!finalizeInvoiceId}
+ onClose={() => setFinalizeInvoiceId(null)}
+ onConfirm={() => { if (finalizeInvoiceId) finalizeInvoice.mutate(finalizeInvoiceId); }}
+ title="Finalize draft invoice?"
+ description="Finalizing locks the invoice number, posts the AR/revenue journal entry, and flips the invoice to Finalized. Review the auto-created amounts before posting."
+ confirmLabel="Finalize invoice"
+ pending={finalizeInvoice.isPending}
  />
 
  <ChainResultModal chainResult={chainResult} onClose={() => setChainResult(null)} />

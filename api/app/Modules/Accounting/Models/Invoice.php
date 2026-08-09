@@ -60,6 +60,11 @@ class Invoice extends Model
         return $this->belongsTo(\App\Modules\CRM\Models\SalesOrder::class);
     }
 
+    public function delivery(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\SupplyChain\Models\Delivery::class);
+    }
+
     public function items(): HasMany
     {
         return $this->hasMany(InvoiceItem::class);

@@ -53,11 +53,11 @@ export const crmRoutes = (
  element={<PermissionGuard permission="crm.products.manage"><EditProductPage /></PermissionGuard>} />
 
  <Route path="/crm/customers"
- element={<PermissionGuard permission="crm.sales_orders.view"><CrmCustomersListPage /></PermissionGuard>} />
+ element={<PermissionGuard permission="accounting.customers.view"><CrmCustomersListPage /></PermissionGuard>} />
  <Route path="/crm/customers/create"
  element={<PermissionGuard permission="accounting.customers.manage"><CrmCustomerCreatePage /></PermissionGuard>} />
  <Route path="/crm/customers/:id"
- element={<PermissionGuard permission="crm.sales_orders.view"><CrmCustomerDetailPage /></PermissionGuard>} />
+ element={<PermissionGuard permission="accounting.customers.view"><CrmCustomerDetailPage /></PermissionGuard>} />
  <Route path="/crm/customers/:id/edit"
  element={<PermissionGuard permission="accounting.customers.manage"><CrmCustomerEditPage /></PermissionGuard>} />
 

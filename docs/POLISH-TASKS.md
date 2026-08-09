@@ -513,6 +513,33 @@ useEffect(() => {
 }, []);
 ```
 
+**Implemented + widened 2026-08-08** (see `api/app/Modules/Dashboard/Services/BadgeService.php`):
+
+- Every badge now carries `label` + `description` metadata so the SPA sidebar
+  tooltip / aria-label explain what the count means (no client-side taxonomy).
+- Scope widened from 15 to 27 nav-slot badges. New keys: `inquiries`,
+  `open_complaints`, `pending_inspections`, `pending_grn`, `mrb_holds`,
+  `shipments`, `mrp_plans`, `pending_returns`, `draft_invoices`,
+  `overdue_bills`, `training_upcoming`, `open_postings` — wired to their
+  sidebar entries, gated on the exact same permissions as the nav items they
+  back. The `leaves` badge also moved from Attendance to the Leave page (the
+  entry where leave approvals are actioned).
+- Hardening: severity thresholds + cache TTL are read ONCE per compute (not
+  once per badge) and fall back to shipped defaults if a settings row is
+  missing, so `/dashboards/badges` can never 500 on a missing setting.
+- Real-time invalidation widened: `BadgeInvalidationObserver` now also covers
+  Item, EmployeeTraining, SalesOrder (previously TTL/poll only) plus all ten
+  new badge models. StockLevel stays excluded (write-frequency).
+- Fixes found en route: `pending_so` matched a non-existent
+  `pending_confirmation` status (drafts only, per `SalesOrderStatus`); the
+  `purchase_requests` badge moved from the Purchase Orders entry to Purchase
+  Requests where the approvals actually land; sidebar counts cap at `99+`.
+- Per-badge severity overrides: settings keys
+  `dashboard.badges.overrides.<badge_key>.{danger,warning}` let specific
+  badges escalate earlier than the global thresholds (e.g. `overdue_bills` is
+  red at 3+ instead of the global 20). Migration 0462 seeds curated overrides;
+  the "Dashboard & Badges" group is now editable on the Admin > Settings page.
+
 ---
 
 ## SERIES CA2 — CHAIN AUTOMATION HARDENING

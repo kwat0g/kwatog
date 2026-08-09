@@ -216,11 +216,11 @@ export default function PostingEditPage() {
  </Panel>
 
  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
- <Panel title={<>Description <span className="text-danger ml-0.5">*</span></>}>
+ <Panel title={<>Description <span className="text-danger-fg ml-0.5">*</span></>}>
  <Textarea required {...register('description')} rows={8} error={errors.description?.message} />
  </Panel>
 
- <Panel title={<>Requirements <span className="text-danger ml-0.5">*</span></>}>
+ <Panel title={<>Requirements <span className="text-danger-fg ml-0.5">*</span></>}>
  <div className="space-y-3">
  <input type="hidden" {...register('requirements')} />
  <div className="flex gap-2">
@@ -239,7 +239,7 @@ export default function PostingEditPage() {
  </div>
 
  {errors.requirements && reqTags.length === 0 && (
- <span className="text-xs text-danger">{errors.requirements.message}</span>
+ <span className="text-xs text-danger-fg">{errors.requirements.message}</span>
  )}
 
  {reqTags.length > 0 ? (
@@ -253,7 +253,7 @@ export default function PostingEditPage() {
  <button
  type="button"
  onClick={() => removeTag(i)}
- className={cn('ml-2 text-muted hover:text-danger transition-colors shrink-0 cursor-pointer rounded', focusRing)}
+ className={cn('ml-2 text-muted hover:text-danger-fg transition-colors shrink-0 cursor-pointer rounded', focusRing)}
  >
  <X size={14} />
  </button>

@@ -7,6 +7,7 @@ import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import { StatCard } from '@/components/ui/StatCard';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { formatInt } from '@/lib/formatNumber';
@@ -14,7 +15,7 @@ import { workOrderStatusVariant as variant } from '@/lib/statusVariants';
 import type { WorkOrder } from '@/types/production';
 
 const DEFAULT_FILTERS: WorkOrderListParams = {
- page: 1, per_page: 25,
+ page: 1, per_page: 25, status: 'in_progress',
 };
 
 export default function WorkOrdersListPage() {
@@ -32,6 +33,7 @@ export default function WorkOrdersListPage() {
  queryFn: workOrdersApi.options,
  staleTime: 5 * 60 * 1000 });
  const statusLabels = new Map((workOrderOptions?.statuses ?? []).map((option) => [option.value, option.label]));
+ const statusLabel = (value: string) => statusLabels.get(value) ?? value.replaceAll('_', ' ');
 
  const columns: Column<WorkOrder>[] = [
  {
@@ -89,11 +91,36 @@ export default function WorkOrdersListPage() {
  {isLoading && !data && <SkeletonTable columns={8} rows={8} />}
  {isError && <EmptyState icon="alert-circle" title="Failed to load work orders"
  action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />}
- {data && data.data.length === 0 && (
+ {data && (
+   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 px-5 py-4 border-b border-default bg-canvas">
+   <StatCard
+     label={statusLabel('planned')}
+     value={data.data.filter(w => w.status === 'planned').length}
+     helper="in current view"
+     linkTo="?status=planned"
+   />
+   <StatCard
+     label={statusLabel('in_progress')}
+     value={data.data.filter(w => w.status === 'in_progress').length}
+     helper="in current view"
+     linkTo="?status=in_progress"
+   />
+   <StatCard
+     label={statusLabel('completed')}
+     value={data.data.filter(w => w.status === 'completed').length}
+     helper="in current view"
+     linkTo="?status=completed"
+   />
+   </div>
+  )}
+
+{data && data.data.length === 0 && (
  <EmptyState icon="factory" title="No work orders yet"
  description="Work orders are auto-created by the MRP engine when a sales order is confirmed." />
  )}
- {data && data.data.length > 0 && (
+
+
+  {data && data.data.length > 0 && (
   <div className="px-5 py-4">
   <DataTable tableKey="work-orders" onRowClick={(r) => navigate(`/production/work-orders/${r.id}`)}
  columns={columns} data={data.data} meta={data.meta}

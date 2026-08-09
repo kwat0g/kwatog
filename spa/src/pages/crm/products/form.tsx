@@ -22,172 +22,205 @@ import { uomsApi } from '@/api/inventory/uoms';
 import type { Product, CreateProductData, UpdateProductData } from '@/types/crm';
 
 const schema = z.object({
- part_number: z.string().regex(/^[A-Z0-9-]{2,30}$/, 'Use 2–30 uppercase letters, digits, or hyphens.'),
- name: z.string().min(1, 'Name is required').max(200),
- description: z.string().max(1000).optional().or(z.literal('')),
- unit_of_measure: z.string().min(1, 'UOM is required').max(20),
- standard_cost: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Use a non-negative decimal with up to 2 places'),
- is_active: z.boolean().optional(),
+  part_number: z
+    .string()
+    .regex(/^[A-Z0-9-]{2,30}$/, 'Use 2–30 uppercase letters, digits, or hyphens.'),
+  name: z.string().min(1, 'Name is required').max(200),
+  description: z.string().max(1000).optional().or(z.literal('')),
+  unit_of_measure: z.string().min(1, 'UOM is required').max(20),
+  standard_cost: z
+    .string()
+    .regex(/^\d+(\.\d{1,2})?$/, 'Use a non-negative decimal with up to 2 places'),
+  is_active: z.boolean().optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
 
 interface Props {
- initial?: Product;
- mode: 'create' | 'edit';
+  initial?: Product;
+  mode: 'create' | 'edit';
 }
 
 export function ProductForm({ initial, mode }: Props) {
- const navigate = useNavigate();
- const qc = useQueryClient();
+  const navigate = useNavigate();
+  const qc = useQueryClient();
 
- const { data: uoms = [] } = useQuery({
-   queryKey: ['inventory', 'uoms'],
-   queryFn: uomsApi.list,
-   staleTime: 300_000
- });
+  const { data: uoms = [] } = useQuery({
+    queryKey: ['inventory', 'uoms'],
+    queryFn: uomsApi.list,
+    staleTime: 300_000,
+  });
 
- const {
- register, handleSubmit, setError, watch, setValue,
- formState: { errors, isSubmitting },
- } = useForm<FormValues>({
- resolver: zodResolver(schema),
- defaultValues: {
- part_number: initial?.part_number ?? '',
- name: initial?.name ?? '',
- description: initial?.description ?? '',
- unit_of_measure: initial?.unit_of_measure ?? '',
- standard_cost: initial?.standard_cost ?? '',
- is_active: initial?.is_active ?? true,
- },
- });
+  const {
+    register,
+    handleSubmit,
+    setError,
+    watch,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      part_number: initial?.part_number ?? '',
+      name: initial?.name ?? '',
+      description: initial?.description ?? '',
+      unit_of_measure: initial?.unit_of_measure ?? '',
+      standard_cost: initial?.standard_cost ?? '',
+      is_active: initial?.is_active ?? true,
+    },
+  });
 
- // Re-sync defaults if initial changes (e.g. edit page after fetch).
- useEffect(() => {
- if (initial) {
- setValue('part_number', initial.part_number);
- setValue('name', initial.name);
- setValue('description', initial.description ?? '');
- setValue('unit_of_measure', initial.unit_of_measure);
- setValue('standard_cost', initial.standard_cost);
- setValue('is_active', initial.is_active);
- }
- }, [initial, setValue]);
+  // Re-sync defaults if initial changes (e.g. edit page after fetch).
+  // `reset` rather than field-by-field `setValue`: one render instead of six,
+  // and it re-baselines the defaults so a hydrated record doesn't leave the
+  // form looking dirty before the user has touched it.
+  useEffect(() => {
+    if (initial) {
+      reset({
+        part_number: initial.part_number,
+        name: initial.name,
+        description: initial.description ?? '',
+        unit_of_measure: initial.unit_of_measure,
+        standard_cost: initial.standard_cost,
+        is_active: initial.is_active,
+      });
+    }
+  }, [initial, reset]);
 
- const isActive = watch('is_active');
- const { ref: isActiveRef, ...isActiveRegister } = register('is_active');
- void isActiveRef;
+  const isActive = watch('is_active');
+  const { ref: isActiveRef, ...isActiveRegister } = register('is_active');
+  void isActiveRef;
 
- const mutation = useMutation({
- mutationFn: (values: FormValues) => {
- const payload: CreateProductData | UpdateProductData = {
- ...values,
- description: values.description?.trim() ? values.description : null,
- };
- return mode === 'create'
- ? productsApi.create(payload as CreateProductData)
- : productsApi.update(initial!.id, payload);
- },
- onSuccess: (product) => {
- qc.invalidateQueries({ queryKey: ['crm', 'products'] });
- toast.success(mode === 'create' ? 'Product created.' : 'Product updated.');
- navigate(`/crm/products/${product.id}`);
- },
- onError: (e: AxiosError<{ message?: string; errors?: Record<string, string[]> }>) => {
- if (e.response?.status === 422 && e.response.data.errors) {
- Object.entries(e.response.data.errors).forEach(([field, msgs]) => {
- setError(field as keyof FormValues, { type: 'server', message: msgs[0] });
- });
- toast.error(e.response?.data?.message || 'Validation failed.');
- } else {
- toast.error(e.response?.data?.message ?? 'Failed to save product.');
- }
- },
- });
+  const mutation = useMutation({
+    mutationFn: (values: FormValues) => {
+      const payload: CreateProductData | UpdateProductData = {
+        ...values,
+        description: values.description?.trim() ? values.description : null,
+      };
+      return mode === 'create'
+        ? productsApi.create(payload as CreateProductData)
+        : productsApi.update(initial!.id, payload);
+    },
+    onSuccess: (product) => {
+      qc.invalidateQueries({ queryKey: ['crm', 'products'] });
+      toast.success(mode === 'create' ? 'Product created.' : 'Product updated.');
+      navigate(`/crm/products/${product.id}`);
+    },
+    onError: (e: AxiosError<{ message?: string; errors?: Record<string, string[]> }>) => {
+      if (e.response?.status === 422 && e.response.data.errors) {
+        Object.entries(e.response.data.errors).forEach(([field, msgs]) => {
+          setError(field as keyof FormValues, { type: 'server', message: msgs[0] });
+        });
+        toast.error(e.response?.data?.message || 'Validation failed.');
+      } else {
+        toast.error(e.response?.data?.message ?? 'Failed to save product.');
+      }
+    },
+  });
 
- return (
- <form
- onSubmit={handleSubmit((v) => mutation.mutate(v), onFormInvalid<FormValues>())}
- className="max-w-3xl mx-auto px-5 py-4"
- >
- <fieldset className="mb-8">
- <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Identification</legend>
- <div className="grid grid-cols-2 gap-3">
- <Input
- label="Part Number"
- required
- {...register('part_number')}
- error={errors.part_number?.message}
- placeholder="Enter part number"
- className="font-mono"
- />
- <Select label="Unit of Measure" required {...register('unit_of_measure')} error={errors.unit_of_measure?.message}>
-   <option value="">— Select UOM —</option>
-   {uoms.map((u) => <option key={u.id} value={u.code}>{u.code}</option>)}
- </Select>
- <div className="col-span-2">
- <Input
- label="Name"
- required
- {...register('name')}
- error={errors.name?.message}
- placeholder="Enter product name"
- />
- </div>
- <div className="col-span-2">
- <Textarea
- label="Description"
- rows={3}
- {...register('description')}
- error={errors.description?.message}
- placeholder="Optional notes for production / sales reference."
- />
- </div>
- </div>
- </fieldset>
+  return (
+    <form
+      onSubmit={handleSubmit((v) => mutation.mutate(v), onFormInvalid<FormValues>())}
+      className="max-w-3xl mx-auto px-5 py-4"
+    >
+      <fieldset className="mb-8">
+        <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">
+          Identification
+        </legend>
+        <div className="grid grid-cols-2 gap-3">
+          <Input
+            label="Part Number"
+            required
+            {...register('part_number')}
+            error={errors.part_number?.message}
+            placeholder="Enter part number"
+            className="font-mono"
+          />
+          <Select
+            label="Unit of Measure"
+            required
+            {...register('unit_of_measure')}
+            error={errors.unit_of_measure?.message}
+          >
+            <option value="">— Select UOM —</option>
+            {uoms.map((u) => (
+              <option key={u.id} value={u.code}>
+                {u.code}
+              </option>
+            ))}
+          </Select>
+          <div className="col-span-2">
+            <Input
+              label="Name"
+              required
+              {...register('name')}
+              error={errors.name?.message}
+              placeholder="Enter product name"
+            />
+          </div>
+          <div className="col-span-2">
+            <Textarea
+              label="Description"
+              rows={3}
+              {...register('description')}
+              error={errors.description?.message}
+              placeholder="Optional notes for production / sales reference."
+            />
+          </div>
+        </div>
+      </fieldset>
 
- <fieldset className="mb-8">
- <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Costing</legend>
- <div className="grid grid-cols-2 gap-3">
- <Input
- label="Standard Cost"
- required
- prefix="₱"
- {...register('standard_cost')}
- error={errors.standard_cost?.message}
- placeholder="0.00"
- className="font-mono"
- />
- </div>
- <p className="mt-2 text-xs text-muted">
- Internal accounting figure. Customer pricing is set per Price Agreement (Sales → Customers → Price Agreements).
- </p>
- </fieldset>
+      <fieldset className="mb-8">
+        <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">
+          Costing
+        </legend>
+        <div className="grid grid-cols-2 gap-3">
+          <Input
+            label="Standard Cost"
+            required
+            prefix="₱"
+            {...register('standard_cost')}
+            error={errors.standard_cost?.message}
+            placeholder="0.00"
+            className="font-mono"
+          />
+        </div>
+        <p className="mt-2 text-xs text-muted">
+          Internal accounting figure. Customer pricing is set per Price Agreement (Sales → Customers
+          → Price Agreements).
+        </p>
+      </fieldset>
 
- <fieldset className="mb-8">
- <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Status</legend>
- <Switch
- {...isActiveRegister}
- checked={!!isActive}
- label="Active — visible to CRM officers when creating sales orders"
- />
- </fieldset>
+      <fieldset className="mb-8">
+        <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">
+          Status
+        </legend>
+        <Switch
+          {...isActiveRegister}
+          checked={!!isActive}
+          label="Active — visible to CRM officers when creating sales orders"
+        />
+      </fieldset>
 
- <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
- <Button type="button" variant="secondary" onClick={() => navigate('/crm/products')}>
- Cancel
- </Button>
- <Button
- type="submit"
- variant="primary"
- disabled={isSubmitting || mutation.isPending}
- loading={mutation.isPending}
- >
- {mutation.isPending
- ? mode === 'create' ? 'Creating…' : 'Saving…'
- : mode === 'create' ? 'Create product' : 'Save changes'}
- </Button>
- </div>
- </form>
- );
+      <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+        <Button type="button" variant="secondary" onClick={() => navigate('/crm/products')}>
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          variant="primary"
+          disabled={isSubmitting || mutation.isPending}
+          loading={mutation.isPending}
+        >
+          {mutation.isPending
+            ? mode === 'create'
+              ? 'Creating…'
+              : 'Saving…'
+            : mode === 'create'
+              ? 'Create product'
+              : 'Save changes'}
+        </Button>
+      </div>
+    </form>
+  );
 }

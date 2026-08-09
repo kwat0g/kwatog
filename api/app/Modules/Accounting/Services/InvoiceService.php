@@ -7,6 +7,7 @@ namespace App\Modules\Accounting\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\SearchOperator;
 
+use App\Common\Services\ChainBroadcaster;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\TaxPolicyService;
 use App\Common\Support\HashIdFilter;
@@ -73,6 +74,9 @@ class InvoiceService
             'items.revenueAccount:id,code,name',
             'collections.cashAccount:id,code,name',
             'journalEntry:id,entry_number,date,status,total_debit,total_credit',
+            // 2026-08-08 — compact O2C stepper: the upstream SO + delivery.
+            'salesOrder:id,so_number',
+            'delivery:id,delivery_number',
             // role_id required so User's $with=['role'] eager-load can resolve.
             'creator:id,name,role_id',
         ]);
@@ -247,6 +251,16 @@ class InvoiceService
                     ->markInvoiced((int) $invoice->sales_order_id);
             }
 
+            // 2026-08-08 — final P2P-analog link: broadcast the chain step so
+            // the invoice page updates in real time (draft → finalized).
+            DB::afterCommit(function () use ($invoice) {
+                app(ChainBroadcaster::class)->broadcastFor(
+                    $invoice->fresh(),
+                    InvoiceStatus::Finalized->value,
+                    auth()->user(),
+                );
+            });
+
             return $this->show($invoice->fresh());
         });
     }
@@ -328,6 +342,15 @@ class InvoiceService
                 'balance'     => $newBalance,
                 'status'      => $newStatus,
             ]);
+
+            // 2026-08-08 — broadcast the chain step: partial → paid on settle.
+            DB::afterCommit(function () use ($invoice, $newStatus) {
+                app(ChainBroadcaster::class)->broadcastFor(
+                    $invoice->fresh(),
+                    $newStatus->value,
+                    auth()->user(),
+                );
+            });
 
             return $coll->fresh(['cashAccount']);
         });
@@ -463,7 +486,7 @@ class InvoiceService
     private function computeTotals(VatClassification $classification, string $subtotal, string $discount): array
     {
         $netBase = Money::sub($subtotal, $discount);
-        $vat = $classification->chargesVat() ? Money::mul($netBase, $this->taxPolicy->vatRate()) : Money::zero();
+        $vat = $classification->chargesVat() ? Money::mul($netBase, $this->taxPolicy->requiredVatRate()) : Money::zero();
         $total = Money::add($netBase, $vat);
         return [$vat, $total];
     }

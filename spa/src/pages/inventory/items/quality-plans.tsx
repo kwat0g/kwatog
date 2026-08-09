@@ -114,7 +114,7 @@ export default function ItemQualityPlansPage() {
    {uoms.map((u) => <option key={u.id} value={u.code}>{u.code}</option>)}
  </Select>
  <Input type="number" step="any" placeholder="Min" value={parameter.tolerance_min ?? ''} onChange={(e) => updateParameter(index, { tolerance_min: e.target.value === '' ? null : Number(e.target.value) })} />
- <div className="flex gap-1"><Input type="number" step="any" placeholder="Max" value={parameter.tolerance_max ?? ''} onChange={(e) => updateParameter(index, { tolerance_max: e.target.value === '' ? null : Number(e.target.value) })} /><Button type="button" variant="ghost" size="sm" iconOnly icon={<Trash2 size={14} />} aria-label="Remove parameter" disabled={parameters.length === 1} onClick={() => setParameters((p) => p.filter((_, i) => i !== index))} className="text-muted hover:text-danger" /></div>
+ <div className="flex gap-1"><Input type="number" step="any" placeholder="Max" value={parameter.tolerance_max ?? ''} onChange={(e) => updateParameter(index, { tolerance_max: e.target.value === '' ? null : Number(e.target.value) })} /><Button type="button" variant="ghost" size="sm" iconOnly icon={<Trash2 size={14} />} aria-label="Remove parameter" disabled={parameters.length === 1} onClick={() => setParameters((p) => p.filter((_, i) => i !== index))} className="text-muted hover:text-danger-fg" /></div>
  <Checkbox className="col-span-2" label="Critical characteristic" checked={parameter.is_critical} onChange={(e) => updateParameter(index, { is_critical: e.target.checked })} />
  </div>
  ))}

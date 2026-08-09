@@ -83,8 +83,6 @@ export default function AuditLogsPage() {
  <PageHeader
  title="Audit logs"
  subtitle={data ? `${formatInt(data.meta.total)} entries` : undefined}
- backTo="/admin/audit-logs"
- backLabel="Admin"
  actions={
  <Button variant="secondary" size="sm" icon={<Download size={14} />}
  onClick={() => void downloadAuthenticatedFile(auditLogsApi.exportUrl(filters), { errorMessage: 'Failed to export audit logs.' })}>

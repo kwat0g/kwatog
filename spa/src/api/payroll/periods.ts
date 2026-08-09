@@ -104,13 +104,13 @@ export const periodsApi = {
  restoreProof: (periodId: string, proofId: string) =>
  client.patch(`/payroll-periods/${periodId}/disbursement-proofs/${proofId}/restore`),
 
- // CA3 — Payroll pipeline (full-year view)
+ // CA3 — Payroll pipeline (full-year view) — kept: referenced by the retained
+ // pipeline.tsx page file (dead code per hide-access policy).
  pipeline: (year?: number) =>
  client.get<{ data: PayrollPipeline }>('/payroll-periods/pipeline', { params: year ? { year } : undefined }).then((r) => r.data.data),
 
- // Task 6 — BIR 2316 Alphalist CSV export
- downloadBirAlphalist: (year: number) =>
- client.get(`/payroll/bir-alphalist?year=${year}`, { responseType: 'blob' }),
+ // BIR 2316 alphalist moved to statutoryApi.bir2316Alphalist (2026-08-08) —
+ // the export lives on the Statutory Exports page behind payroll.statutory.export.
 
  // Task 9 — Period-over-period variance report
  variance: (id: string, compareTo: string) =>

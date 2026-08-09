@@ -31,7 +31,7 @@ class CapabilityController
         $items = InspectionSpecItem::query()
             ->whereNotNull('tolerance_min')
             ->whereNotNull('tolerance_max')
-            ->with('inspectionSpec:id,product_id')
+            ->with('spec:id,product_id')
             ->get(['id', 'inspection_spec_id', 'parameter_name', 'unit_of_measure']);
 
         return response()->json([

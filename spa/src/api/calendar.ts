@@ -2,12 +2,14 @@ import { client } from './client';
 import type {
  CalendarEventsParams,
  CalendarEventsResponse,
+ CalendarOptionsResponse,
 } from '@/types/calendar';
 
 /**
  * Series F — Task F1. Calendar API client.
  */
 export const calendarApi = {
+ options: () => client.get<CalendarOptionsResponse>('/calendar/options').then((r) => r.data.data),
  events: (params: CalendarEventsParams) =>
  client
  .get<CalendarEventsResponse>('/calendar/events', {

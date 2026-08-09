@@ -19,6 +19,9 @@ export interface ReturnRequestItem {
  disposition?: DispositionType;
  disposition_label?: string;
  disposition_notes?: string;
+ // 2026-08-08 — units actually moved in/out of stock at dispose time
+ // (restocked for customer returns, shipped back for supplier returns).
+ moved_quantity?: string | null;
  ncr?: { id: string; ncr_number: string };
  product?: { id: string; part_number: string; name: string };
  item?: { id: string; code: string; name: string };
@@ -47,10 +50,19 @@ export interface ReturnRequest {
  bill?: { id: string; bill_number: string };
  customer?: { id: string; name: string };
  vendor?: { id: string; name: string };
- credit_note?: { id: string; credit_note_number: string; type: string; status: string; total_amount: string };
+ credit_note?: { id: string; credit_note_number: string | null; type: string; status: string; total_amount: string };
  replacement_purchase_order?: { id: string; po_number: string; status: string };
  credit_memo?: { id: string; invoice_number: string };
  inspection?: { id: string; inspection_number: string; status: string };
+ // 2026-08-08 — dispose-time movement summary + last movement for the banner.
+ moved_quantity?: string | null;
+ stock_movement?: {
+  id: string;
+  quantity: string;
+  movement_type?: string;
+  to_location?: { id: string; code: string } | null;
+  from_location?: { id: string; code: string } | null;
+ } | null;
  items?: ReturnRequestItem[];
  item_count: number;
  creator?: { id: string; name: string };

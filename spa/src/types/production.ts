@@ -121,10 +121,10 @@ export interface RecordOutputData {
 }
 
 export interface OeeResult {
- availability: number;
- performance: number;
- quality: number;
- oee: number;
+ availability: number | null;
+ performance: number | null;
+ quality: number | null;
+ oee: number | null;
  diagnostics: {
  scheduled_minutes: number;
  planned_downtime: number;
@@ -157,7 +157,7 @@ export interface OeeReport {
  benchmark_pct?: number;
  display_policy?: { world_class_ratio: number; on_track_ratio: number };
  range: { from: string; to: string };
- overall: { availability: number; performance: number; quality: number; oee: number };
+ overall: { availability: number | null; performance: number | null; quality: number | null; oee: number | null };
  machines: MachineOeeRow[];
  trend: Array<{ date: string; oee: number | null }>;
  downtime_breakdown: Array<{ category: string; minutes: number }>;

@@ -19,7 +19,7 @@
         ['label' => 'Good',        'value' => number_format($summary['totals']['good']),    'color' => '#059669'],
         ['label' => 'Reject',      'value' => number_format($summary['totals']['reject']),  'color' => '#DC2626'],
         ['label' => 'Total Units', 'value' => number_format($summary['totals']['total_units']), 'color' => '#09090b'],
-        ['label' => 'Scrap Rate',  'value' => $summary['totals']['scrap_rate'].'%',          'color' => $summary['totals']['scrap_rate'] > 5 ? '#DC2626' : '#09090b'],
+        ['label' => 'Scrap Rate',  'value' => $summary['totals']['scrap_rate'] === null ? '—' : $summary['totals']['scrap_rate'].'%', 'color' => ($summary['totals']['scrap_rate'] ?? 0) > 5 ? '#DC2626' : '#09090b'],
       ] as $tile)
       <td style="border:1px solid #e4e4e7;border-radius:6px;padding:12px;background:#fafafa;width:25%;">
         <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:#71717a;margin-bottom:6px;">{{ $tile['label'] }}</div>

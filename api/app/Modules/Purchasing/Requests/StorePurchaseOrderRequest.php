@@ -34,7 +34,9 @@ class StorePurchaseOrderRequest extends FormRequest
     {
         return [
             'vendor_id'              => ['required', 'integer', 'exists:vendors,id'],
-            'purchase_request_id'    => ['nullable', 'integer', 'exists:purchase_requests,id'],
+            // POs must originate from an approved PR (PR → approved → PO).
+            // The approved-status gate itself lives in PurchaseOrderService::create().
+            'purchase_request_id'    => ['required', 'integer', 'exists:purchase_requests,id'],
             'date'                   => ['nullable', 'date'],
             'expected_delivery_date' => ['nullable', 'date', 'after_or_equal:date'],
             'is_vatable'             => ['nullable', 'boolean'],
@@ -53,6 +55,7 @@ class StorePurchaseOrderRequest extends FormRequest
     {
         return [
             'items.required' => 'A purchase order must have at least one line.',
+            'purchase_request_id.required' => 'A purchase order must be created from an approved purchase request (PR).',
         ];
     }
 }

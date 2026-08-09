@@ -528,7 +528,7 @@ class ComprehensiveDemoSeeder extends Seeder
             'to_location_id'    => $toLoc->id,
             'item_id'           => $item->id,
             'quantity'          => 25,
-            'status'            => 'completed',
+            'status'            => 'transferred',
             'created_by'        => $this->admin->id,
             'transferred_at'    => $now->copy()->subDays(2),
         ]);

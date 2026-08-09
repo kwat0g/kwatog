@@ -78,9 +78,9 @@ export default function VendorDetailPage() {
  />
 
  <div className="px-5 py-4 grid grid-cols-3 gap-4">
- <StatCard label="Open Balance" value={formatPeso(vendor.open_balance ?? '0')} />
- <StatCard label="Payment Terms" value={`${vendor.payment_terms_days} days`} />
- <StatCard label="Bills" value={String(vendor.bills_count ?? billsData?.meta.total ?? 0)} />
+ <StatCard label="Open Balance" value={formatPeso(vendor.open_balance)} />
+ <StatCard label="Payment Terms" value={vendor.payment_terms_days == null ? '—' : `${vendor.payment_terms_days} days`} />
+ <StatCard label="Bills" value={vendor.bills_count ?? billsData?.meta.total ?? '—'} />
  </div>
 
  <div className="px-5 grid grid-cols-3 gap-4">

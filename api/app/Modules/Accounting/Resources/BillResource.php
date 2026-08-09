@@ -25,6 +25,8 @@ class BillResource extends JsonResource
             'balance'        => (string) $this->balance,
             'status'         => $this->status?->value,
             'status_label'   => $this->status?->label(),
+            // 2026-08-08 — source receipt for auto-created draft bills.
+            'goods_receipt_note_id' => $this->whenLoaded('goodsReceiptNote', fn () => $this->goodsReceiptNote ? $this->goodsReceiptNote->hash_id : null),
             'is_overdue'     => $this->isOverdue(),
             'aging_bucket'   => $this->agingBucket(),
             'remarks'        => $this->remarks,
@@ -35,7 +37,23 @@ class BillResource extends JsonResource
             'purchase_order' => $this->whenLoaded('purchaseOrder', fn () => $this->purchaseOrder ? [
                 'id'        => $this->purchaseOrder->hash_id,
                 'po_number' => $this->purchaseOrder->po_number,
+                // 2026-08-08 — P2P stepper: the PR behind this PO.
+                'purchase_request' => $this->purchaseOrder->relationLoaded('purchaseRequest')
+                    && $this->purchaseOrder->purchaseRequest
+                    ? [
+                        'id'        => $this->purchaseOrder->purchaseRequest->hash_id,
+                        'pr_number' => $this->purchaseOrder->purchaseRequest->pr_number,
+                    ]
+                    : null,
             ] : null),
+            // 2026-08-08 — P2P stepper: the source receipt(s) this bill came from.
+            'goods_receipt_notes' => $this->whenLoaded('goodsReceiptNote', fn () => $this->goodsReceiptNote ? [
+                [
+                    'id'         => $this->goodsReceiptNote->hash_id,
+                    'grn_number' => $this->goodsReceiptNote->grn_number,
+                    'status'     => (string) $this->goodsReceiptNote->status?->value,
+                ],
+            ] : []),
             'vendor'         => $this->whenLoaded('vendor', fn () => $this->vendor ? [
                 'id' => $this->vendor->hash_id, 'name' => $this->vendor->name,
             ] : null),

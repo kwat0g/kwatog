@@ -35,6 +35,47 @@ class CalendarAggregatorService
     ];
 
     /**
+     * Return the calendar layers available to the current user. Keeping the
+     * labels and layer colours at the API boundary prevents each client from
+     * maintaining a second, potentially stale taxonomy.
+     *
+     * @return array<int, array{value: string, label: string, variant: string}>
+     */
+    public function layerOptions($user): array
+    {
+        $labels = [
+            'holiday'     => 'Holidays',
+            'leave'       => 'Leaves',
+            'delivery'    => 'Deliveries',
+            'maintenance' => 'Maintenance',
+            'payroll'     => 'Payroll',
+            'wo_due'      => 'WO due',
+        ];
+        $variants = [
+            'holiday'     => 'info',
+            'leave'       => 'neutral',
+            'delivery'    => 'info',
+            'maintenance' => 'warning',
+            'payroll'     => 'success',
+            'wo_due'      => 'warning',
+        ];
+
+        $options = [];
+        foreach (self::LAYER_PERMISSIONS as $value => $permission) {
+            if ($permission !== null && ! $user?->can($permission)) {
+                continue;
+            }
+            $options[] = [
+                'value' => $value,
+                'label' => $labels[$value] ?? $value,
+                'variant' => $variants[$value] ?? 'neutral',
+            ];
+        }
+
+        return $options;
+    }
+
+    /**
      * @param  array<int, string>  $layers   Layer keys to fetch (intersection with permissions).
      * @return array<int, array<string, mixed>>
      */

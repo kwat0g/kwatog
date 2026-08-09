@@ -129,7 +129,7 @@ export function StockOutPanel({
  <Td align="right" mono className="text-xs">{r.daily_demand}</Td>
  <Td align="right" mono className="text-xs">
  {r.days_until_stockout != null ? (
- <span className={r.risk === 'critical' ? 'text-danger' : r.risk === 'high' || r.risk === 'medium' ? 'text-warning' : ''}>
+ <span className={r.risk === 'critical' ? 'text-danger-fg' : r.risk === 'high' || r.risk === 'medium' ? 'text-warning-fg' : ''}>
  {r.days_until_stockout}
  </span>
  ) : (

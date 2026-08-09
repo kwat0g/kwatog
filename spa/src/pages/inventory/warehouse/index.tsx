@@ -14,7 +14,7 @@ import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
-import { Modal } from '@/components/ui/Modal';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { Panel } from '@/components/ui/Panel';
 import { Select } from '@/components/ui/Select';
 import { Switch } from '@/components/ui/Switch';
@@ -131,8 +131,6 @@ export default function WarehousePage() {
  <div>
  <PageHeader
  title="Warehouse structure"
- backTo="/inventory/items"
- backLabel="Items"
  subtitle={data ? `${data.length} ${data.length === 1 ? 'warehouse' : 'warehouses'}` : undefined}
  actions={
  canManage ? (
@@ -434,7 +432,7 @@ function IconBtn({ children, label, danger, onClick }: { children: React.ReactNo
  icon={children}
  aria-label={label}
  onClick={onClick}
- className={danger ? 'text-muted hover:text-danger' : 'text-muted hover:text-primary'}
+ className={danger ? 'text-muted hover:text-danger-fg' : 'text-muted hover:text-primary'}
  />
  );
 }
@@ -504,12 +502,12 @@ function WarehouseForm({ mode, existing, onClose, onSaved }: {
  <Input label="Address" maxLength={500} {...register('address')} error={errors.address?.message} />
  <Switch label="Active" {...register('is_active')} />
  </div>
- <div className="flex justify-end gap-2 pt-3 mt-4 border-t border-default">
+ <ModalFooter>
  <Button type="button" variant="secondary" onClick={onClose} disabled={m.isPending}>Cancel</Button>
  <Button type="submit" variant="primary" loading={m.isPending} disabled={m.isPending || isSubmitting}>
  {mode === 'create' ? 'Create' : 'Save changes'}
  </Button>
- </div>
+ </ModalFooter>
  </form>
  );
 }
@@ -550,12 +548,12 @@ function ZoneForm({ mode, existing, warehouseId, onClose, onSaved }: {
  {(warehouseOptions?.zone_types ?? []).map((z) => <option key={z.value} value={z.value}>{z.label}</option>)}
  </Select>
  </div>
- <div className="flex justify-end gap-2 pt-3 mt-4 border-t border-default">
+ <ModalFooter>
  <Button type="button" variant="secondary" onClick={onClose} disabled={m.isPending}>Cancel</Button>
  <Button type="submit" variant="primary" loading={m.isPending} disabled={m.isPending || isSubmitting}>
  {mode === 'create' ? 'Create' : 'Save changes'}
  </Button>
- </div>
+ </ModalFooter>
  </form>
  );
 }
@@ -595,12 +593,12 @@ function LocationForm({ mode, existing, zoneId, onClose, onSaved }: {
  </div>
  <Switch label="Active" {...register('is_active')} />
  </div>
- <div className="flex justify-end gap-2 pt-3 mt-4 border-t border-default">
+ <ModalFooter>
  <Button type="button" variant="secondary" onClick={onClose} disabled={m.isPending}>Cancel</Button>
  <Button type="submit" variant="primary" loading={m.isPending} disabled={m.isPending || isSubmitting}>
  {mode === 'create' ? 'Create' : 'Save changes'}
  </Button>
- </div>
+ </ModalFooter>
  </form>
  );
 }

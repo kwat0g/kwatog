@@ -22,6 +22,12 @@ export type CalendarEventVariant =
  | 'info'
  | 'neutral';
 
+export interface CalendarLayerOption {
+ value: CalendarLayer;
+ label: string;
+ variant: CalendarEventVariant;
+}
+
 export interface CalendarEvent {
  id: string;
  type: CalendarLayer;
@@ -42,6 +48,12 @@ export interface CalendarEventsResponse {
  to: string;
  count: number;
  layers: CalendarLayer[];
+ };
+}
+
+export interface CalendarOptionsResponse {
+ data: {
+  layers: CalendarLayerOption[];
  };
 }
 

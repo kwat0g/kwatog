@@ -233,7 +233,7 @@ function ActiveCard({
  const consumedPct = slaHours ? Math.min(100, Math.max(0, ((slaHours - remaining) / slaHours) * 100)) : 0;
  const hasSla = showSla && slaHours != null;
  const barColor =
- tone === 'danger' ? 'bg-danger' : tone === 'warning' ? 'bg-warning' : 'bg-accent';
+ tone === 'danger' ? 'bg-danger-bg' : tone === 'warning' ? 'bg-warning-bg' : 'bg-accent';
 
  return (
  <button

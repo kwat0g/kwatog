@@ -140,7 +140,7 @@ cell: (r: MaintenanceSchedule) => (
   icon={<Trash2 size={14} />}
   aria-label="Delete schedule"
   onClick={() => { setDeleteTarget(r.id); }}
-  className="text-muted hover:text-danger"
+  className="text-muted hover:text-danger-fg"
   />
   )}
   </div>
@@ -169,7 +169,7 @@ cell: (r: MaintenanceSchedule) => (
  subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'schedule' : 'schedules'}` : undefined}
  actions={
  can('maintenance.schedules.manage') ? (
- <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/maintenance/schedules/create')}>
+ <Button variant="primary" size="xs" icon={<Plus size={14} />} onClick={() => navigate('/maintenance/schedules/create')}>
  New schedule
  </Button>
  ) : undefined

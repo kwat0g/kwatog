@@ -21,7 +21,7 @@ const variant: Record<MrpPlanStatus, 'success' | 'neutral' | 'danger'> = {
  active: 'success', superseded: 'neutral', cancelled: 'danger' };
 
 const DEFAULT_FILTERS: MrpPlanListParams = {
- page: 1, per_page: 25,
+ page: 1, per_page: 25, status: 'active',
 };
 
 export default function MrpPlansListPage() {
