@@ -74,6 +74,10 @@ Route::prefix('dashboard')
         Route::get('/widgets',       [DashboardLayoutController::class, 'widgets']);
         Route::get('/layout',        [DashboardLayoutController::class, 'show']);
         Route::get('/widget-data',   [DashboardLayoutController::class, 'data']);
+        // Permission-derived landing dashboard. No `permission:` gate — the
+        // service returns only what the caller already qualifies for, and
+        // every authenticated user has at least the default.
+        Route::get('/dispatch',      [DashboardLayoutController::class, 'dispatch']);
         Route::put('/layout',        [DashboardLayoutController::class, 'save']);
         Route::post('/layout/reset', [DashboardLayoutController::class, 'reset']);
     });

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Dashboard\Controllers;
 
 use App\Modules\Dashboard\Requests\SaveDashboardLayoutRequest;
+use App\Modules\Dashboard\Services\DashboardDispatchService;
 use App\Modules\Dashboard\Services\DashboardLayoutService;
 use App\Modules\Dashboard\Services\DashboardWidgetDataService;
 use Illuminate\Http\JsonResponse;
@@ -16,6 +17,7 @@ use Illuminate\Http\Request;
  * Endpoints:
  *   GET    /api/v1/dashboard/widgets   — catalog filtered by permission
  *   GET    /api/v1/dashboard/layout    — effective layout (user → role → empty)
+ *   GET    /api/v1/dashboard/dispatch  — where this user's /dashboard lands
  *   PUT    /api/v1/dashboard/layout    — replace user layout
  *   POST   /api/v1/dashboard/layout/reset — delete user rows (fall back to role)
  */
@@ -24,7 +26,26 @@ class DashboardLayoutController
     public function __construct(
         private readonly DashboardLayoutService $service,
         private readonly DashboardWidgetDataService $widgetData,
+        private readonly DashboardDispatchService $dispatch,
     ) {}
+
+    /**
+     * Resolves the landing dashboard from the caller's permissions. The SPA
+     * redirects `/dashboard` to `target.path`; `candidates` is returned so
+     * the UI can offer the other dashboards a user qualifies for without
+     * knowing any role names.
+     */
+    public function dispatch(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        return response()->json([
+            'data' => [
+                'target'     => $this->dispatch->resolve($user),
+                'candidates' => $this->dispatch->qualifying($user),
+            ],
+        ]);
+    }
 
     public function widgets(Request $request): JsonResponse
     {

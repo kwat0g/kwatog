@@ -1,48 +1,38 @@
 import { Navigate } from 'react-router-dom';
-import { useAuthStore } from '@/stores/authStore';
-import { usePermission } from '@/hooks/usePermission';
-import DashboardDefaultPage from '@/pages/dashboard/default';
+import { useQuery } from '@tanstack/react-query';
+import { dashboardLayoutApi } from '@/api/dashboard-layout';
+import { SkeletonGrid } from '@/components/ui/Skeleton';
 
 /**
- * Task D1 — Role-default dashboard router.
+ * Task D1 — dashboard router.
  *
- * Reads `user.role.slug` from the auth store and, if a role-specific
- * dashboard exists AND the user has the gating permission, redirects with
- * `replace` (so the back-button doesn't trap the user in a redirect loop).
- * Otherwise renders the generic widget-layout home.
+ * The landing dashboard is resolved SERVER-SIDE from the user's permissions
+ * (GET /dashboard/dispatch → DashboardDispatchService). This component holds
+ * no role-to-dashboard mapping.
  *
- * The route table includes `/dashboard/default` as a direct escape hatch so
- * users who prefer the generic widgets can bookmark it; the redirect here
- * never points there to keep `/dashboard` as the canonical landing URL.
+ * It used to: a `ROLE_DASHBOARDS: Record<roleSlug, …>` literal switched on
+ * `user.role.slug`, so a role that was renamed, added, or re-permissioned
+ * silently fell through to the generic page. Five of the thirteen seeded
+ * roles were missing from that map. Permissions now decide, and when several
+ * dashboards qualify the rarest permission wins — see the service.
  *
- * Note: `production_manager` is the closest match to the adviser brief's
- * "Plant Manager" persona — there is no `plant_manager` role slug in our
- * RBAC catalog (see RolePermissionSeeder). `finance_officer` maps to
- * `/dashboard/finance` (the canonical URL after Task D5; the legacy
- * `/dashboard/accounting` route now 301s into it).
+ * The server returns `/dashboard/default` when nothing else qualifies, so
+ * every branch here is a redirect to a route that already exists in
+ * `dashboardRoutes`; `/dashboard/default` stays reachable directly as the
+ * escape hatch for users who prefer the generic widget home.
  */
-const ROLE_DASHBOARDS: Record<string, { path: string; permission: string }> = {
- production_manager: { path: '/dashboard/plant-manager', permission: 'dashboard.plant_manager.view' },
- hr_officer: { path: '/dashboard/hr', permission: 'dashboard.hr.view' },
- ppc_head: { path: '/dashboard/ppc', permission: 'dashboard.ppc.view' },
- finance_officer: { path: '/dashboard/finance', permission: 'dashboard.accounting.view' },
- // D6, D7, D8 — New role-specific dashboards
- purchasing_officer: { path: '/dashboard/purchasing', permission: 'dashboard.purchasing.view' },
- warehouse_staff: { path: '/dashboard/warehouse', permission: 'dashboard.warehouse.view' },
- qc_inspector: { path: '/dashboard/quality', permission: 'dashboard.quality.view' },
- system_admin: { path: '/dashboard/admin', permission: 'dashboard.admin.view' },
-};
-
 export default function DashboardPage() {
- const user = useAuthStore((s) => s.user);
- const { can } = usePermission();
+ const { data, isError } = useQuery({
+ queryKey: ['dashboard', 'dispatch'],
+ queryFn: () => dashboardLayoutApi.dispatch(),
+ staleTime: 5 * 60_000,
+ });
 
- const roleSlug = user?.role?.slug;
- const target = roleSlug ? ROLE_DASHBOARDS[roleSlug] : undefined;
+ // A failed dispatch must not strand the user on a spinner — the generic
+ // widget home works for every authenticated role.
+ if (isError) return <Navigate to="/dashboard/default" replace />;
 
- if (target && can(target.permission)) {
- return <Navigate to={target.path} replace />;
- }
+ if (!data) return <SkeletonGrid count={6} className="px-5 py-4" />;
 
- return <DashboardDefaultPage />;
+ return <Navigate to={data.target.path} replace />;
 }

@@ -46,10 +46,34 @@ export interface DashboardWidgetSummary {
  updated_at: string;
 }
 
+export interface DashboardTarget {
+ /** SPA route to land on. Always set — falls back to /dashboard/default. */
+ path: string;
+ /** null when the fallback was used. */
+ key: string | null;
+ name: string | null;
+ permission: string | null;
+}
+
+export interface DashboardDispatch {
+ target: DashboardTarget;
+ /** Every purpose-built dashboard this user qualifies for, most specific first. */
+ candidates: Array<DashboardTarget & { holder_count: number }>;
+}
+
 export const dashboardLayoutApi = {
  widgets: () =>
  client
  .get<ApiSuccess<DashboardWidgetMeta[]>>('/dashboard/widgets')
+ .then((r) => r.data.data),
+
+ /**
+  * Where `/dashboard` should land this user. Resolved server-side from
+  * their permissions — the SPA holds no role-to-dashboard mapping.
+  */
+ dispatch: () =>
+ client
+ .get<ApiSuccess<DashboardDispatch>>('/dashboard/dispatch')
  .then((r) => r.data.data),
 
  layout: () =>
