@@ -95,11 +95,15 @@ class DashboardWidgetDataService
 
             'hr.headcount' => $this->number(DB::table('employees')->where('status', 'active')->count(), 'active employees'),
             'hr.on_leave_today' => $this->number($this->leaveCount($today), 'approved leave today'),
-            'hr.team_on_leave_today' => $this->number($this->leaveCount($today, $departmentId), 'approved leave in your department'),
-            'hr.team_dtr_today' => $this->number($this->attendanceCount($today, $departmentId), 'department DTR records today'),
+            'hr.team_on_leave_today' => $departmentId
+                ? $this->number($this->leaveCount($today, $departmentId), 'approved leave in your department')
+                : ['value' => null, 'kind' => 'number', 'helper' => 'No department is linked to this account'],
+            'hr.team_dtr_today' => $departmentId
+                ? $this->number($this->attendanceCount($today, $departmentId), 'department DTR records today')
+                : ['value' => null, 'kind' => 'number', 'helper' => 'No department is linked to this account'],
             'hr.probation_alerts' => $this->number(DB::table('employees')->where('status', 'active')->whereBetween('date_regularized', [$today, now()->addDays($probationDays)->toDateString()])->count(), "regularization due in {$probationDays} days"),
             'payroll.upcoming' => $this->upcomingPayroll(),
-            'approvals.pending' => $this->number(DB::table('approval_records')->where('action', 'pending')->count(), 'approval requests awaiting action'),
+            'approvals.pending' => $this->pendingApprovalsForRole($user),
 
             'purchasing.open_prs' => $this->number(DB::table('purchase_requests')->whereNotIn('status', [PurchaseRequestStatus::Converted->value, PurchaseRequestStatus::Rejected->value, PurchaseRequestStatus::Cancelled->value])->count(), 'open purchase requests'),
             'purchasing.open_pos' => $this->number(DB::table('purchase_orders')->whereNotIn('status', [PurchaseOrderStatus::Received->value, PurchaseOrderStatus::Cancelled->value])->count(), 'open purchase orders'),
@@ -173,6 +177,28 @@ class DashboardWidgetDataService
     private function attendanceCount(string $today, mixed $departmentId): int
     {
         return DB::table('attendances as a')->join('employees as e', 'e.id', '=', 'a.employee_id')->whereDate('a.date', $today)->when($departmentId, fn ($q) => $q->where('e.department_id', $departmentId))->count();
+    }
+
+    /**
+     * Pending approvals routed to THIS user's role — never the company-wide
+     * queue. Mirrors the "my action" rule in ApprovalBoardService::board()
+     * and the `approvals` badge in BadgeService: a row is yours when its
+     * `role_slug` matches your role. Counting every pending row instead
+     * leaked the company's total approval backlog to every authenticated
+     * user, including `employee` and `driver`, because this widget carries
+     * no permission of its own.
+     */
+    private function pendingApprovalsForRole(User $user): array
+    {
+        $roleSlug = $user->role?->slug;
+        if ($roleSlug === null) {
+            return ['value' => null, 'kind' => 'number', 'helper' => 'No role is assigned to this account'];
+        }
+
+        return $this->number(
+            DB::table('approval_records')->where('action', 'pending')->where('role_slug', $roleSlug)->count(),
+            'approval requests awaiting your role',
+        );
     }
 
     private function upcomingPayroll(): array

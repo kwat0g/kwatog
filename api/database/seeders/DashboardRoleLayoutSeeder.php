@@ -63,6 +63,28 @@ class DashboardRoleLayoutSeeder extends Seeder
                 'self.payslip_summary', 'self.leave_balance',
                 'self.dtr_today', 'self.pending_requests',
             ],
+            // Roles without a bespoke dashboard page get their best qualifying
+            // widget set (all self-scoped or permission-consistent). Order
+            // matters: the widget registry strips anything the role can't see
+            // (DashboardLayoutService::getEffectiveLayout), so these lists
+            // stay valid if role permissions change.
+            'maintenance_tech' => [
+                'machine.status', 'approvals.pending',
+                'self.payslip_summary', 'self.leave_balance',
+                'self.dtr_today', 'self.pending_requests',
+            ],
+            'impex_officer' => [
+                'supply.overdue_deliveries', 'supply.delivery_schedule',
+                'purchasing.open_prs', 'purchasing.open_pos',
+                'purchasing.supplier_perf', 'approvals.pending',
+                'self.payslip_summary', 'self.leave_balance',
+                'self.dtr_today', 'self.pending_requests',
+            ],
+            'driver' => [
+                'approvals.pending',
+                'self.payslip_summary', 'self.leave_balance',
+                'self.dtr_today', 'self.pending_requests',
+            ],
         ];
     }
 

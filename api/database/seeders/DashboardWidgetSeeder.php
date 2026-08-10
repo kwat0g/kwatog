@@ -53,11 +53,19 @@ class DashboardWidgetSeeder extends Seeder
 
             // ─── HR / Payroll ───────────────────────────────────────
             ['key' => 'hr.headcount',                  'name' => 'Headcount by Department',   'module' => 'hr',          'permission' => 'hr.employees.view'],
-            ['key' => 'hr.on_leave_today',             'name' => 'On Leave Today',            'module' => 'hr',          'permission' => 'leave.view'],
+            // Company-wide counts, so they must be gated on a company-wide
+            // read — NOT on `leave.view` / `payroll.view`, which every role
+            // holds for its own self-service pages (RolePermissionSeeder::selfService).
+            // Gated that way, `employee` and `driver` saw the whole company's
+            // leave roster and the payroll calendar. The department-scoped
+            // reading of the same data is `hr.team_on_leave_today`.
+            ['key' => 'hr.on_leave_today',             'name' => 'On Leave Today',            'module' => 'hr',          'permission' => 'hr.employees.view'],
             ['key' => 'hr.team_on_leave_today',        'name' => 'Team On Leave Today',       'module' => 'hr',          'permission' => 'leave.view'],
             ['key' => 'hr.team_dtr_today',             'name' => 'Team DTR Today',            'module' => 'hr',          'permission' => 'attendance.view'],
             ['key' => 'hr.probation_alerts',           'name' => 'Probation Alerts',          'module' => 'hr',          'permission' => 'hr.employees.view'],
-            ['key' => 'payroll.upcoming',              'name' => 'Upcoming Payroll',          'module' => 'payroll',     'permission' => 'payroll.view'],
+            ['key' => 'payroll.upcoming',              'name' => 'Upcoming Payroll',          'module' => 'payroll',     'permission' => 'payroll.periods.view'],
+            // No permission: the resolver scopes to the caller's own role
+            // (DashboardWidgetDataService::pendingApprovalsForRole).
             ['key' => 'approvals.pending',             'name' => 'Pending Approvals',         'module' => 'platform',    'permission' => null],
 
             // ─── Purchasing / Supply Chain ─────────────────────────

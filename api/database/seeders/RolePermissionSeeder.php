@@ -364,6 +364,18 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'dashboard.admin.view',         'name' => 'View System Administrator Dashboard'],
                 // Series C — Task C5
                 ['slug' => 'dashboard.view_bottlenecks',  'name' => 'View Chain Bottleneck Widget'],
+                // Series C — listener-level recovery surface. Read and
+                // mutation permissions are separate because replay can
+                // execute a stateful cross-module listener.
+                ['slug' => 'dashboard.chain_recovery.view',   'name' => 'View Chain Listener Recovery Runs'],
+                ['slug' => 'dashboard.chain_recovery.manage', 'name' => 'Replay / Resolve Chain Listener Runs'],
+                // Series R — resetting your own layout only ever touches rows
+                // owned by owner_type='user', owner_id=you. Because it is
+                // strictly self-scoped it is granted to every role (merged in
+                // run() below), matching how the reset endpoint itself is
+                // auth-only (Dashboard/routes.php). The SPA gates the Reset
+                // button on this slug (pages/dashboard/default.tsx).
+                ['slug' => 'dashboard.layout.reset',          'name' => 'Reset Own Dashboard Layout'],
             ],
             'platform' => [
                 ['slug' => 'search.global',                       'name' => 'Use Global Search'],
@@ -490,6 +502,7 @@ class RolePermissionSeeder extends Seeder
                         'payroll.anomalies.review',
                         'alerts.view', 'alerts.dismiss',
                         'dashboard.view_bottlenecks',
+                        'dashboard.chain_recovery.view', 'dashboard.chain_recovery.manage',
                         'purchasing.suppliers.performance.view',
                         'forecasting.view',
                         'return_management.view',
@@ -515,6 +528,7 @@ class RolePermissionSeeder extends Seeder
                         'search.global', 'notifications.preferences.manage',
                         'alerts.view', 'alerts.dismiss',
                         'dashboard.view_bottlenecks',
+                        'dashboard.chain_recovery.view', 'dashboard.chain_recovery.manage',
                         'forecasting.view',
                         // Final step of the return_request approval chain.
                         'return_management.view', 'return_management.approve',
@@ -541,6 +555,7 @@ class RolePermissionSeeder extends Seeder
                         'search.global', 'notifications.preferences.manage',
                         'alerts.view', 'alerts.dismiss',
                         'dashboard.view_bottlenecks',
+                        'dashboard.chain_recovery.view', 'dashboard.chain_recovery.manage',
                         'return_management.view', 'return_management.manage',
                     ],
                 ),
@@ -557,6 +572,8 @@ class RolePermissionSeeder extends Seeder
                         'forecasting.view',
                         'return_management.view', 'return_management.manage',
                         'dashboard.purchasing.view',
+                        'dashboard.view_bottlenecks',
+                        'dashboard.chain_recovery.view', 'dashboard.chain_recovery.manage',
                     ],
                 ),
             ],
@@ -737,6 +754,9 @@ class RolePermissionSeeder extends Seeder
                         'hr.directory.view',
                         'dashboard.action_center.view',
                         'dashboard.exceptions.view',
+                        // Self-scoped layout reset — every role (see catalog
+                        // comment under 'dashboards').
+                        'dashboard.layout.reset',
                     ],
                 )));
 
