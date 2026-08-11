@@ -34,7 +34,9 @@ Existing hardening primitives (not a greenfield audit):
 
 - 379 `DB::transaction` sites, 209 `lockForUpdate`, 17 `afterCommit`
 - transactional outbox — `api/app/Common/Services/OutboxService.php`,
-  `OutboxDispatcher.php`, `OutboxEventCodec.php` (57 allowlist entries)
+  `OutboxDispatcher.php`, `OutboxEventCodec.php` (51 allowlist entries in
+  `SUPPORTED_EVENTS`, `:75-127`; an earlier draft said 57, which was
+  `grep -cE '::class'` over the whole file and caught six non-allowlist lines)
 - chain telemetry — `api/app/Common/Models/ChainStepRun.php`,
   `ChainListenerRun.php`
 - 58 `Event::listen` registrations in
@@ -53,9 +55,17 @@ Two documents already claim this scope:
   every boundary closed and pushes residual risk to staging and providers
 
 Both were untracked, self-authored, and never reviewed when this design was
-written; they are now committed in `feaa9621` but still unreviewed. Both cite
-`Edge` (audit ×5, matrix ×1) although `api/app/Modules/Edge` was deleted in
-commit `c3156301`.
+written; they are now committed in `feaa9621` but still unreviewed.
+
+**Correction (Task 1 review).** This section previously claimed both documents
+cite `Edge` (audit ×5, matrix ×1), a module deleted in `c3156301`. That claim
+was wrong and is withdrawn: the string `Edge` appears zero times in either
+document, and the only `edge` substrings are inside "acknowledgement" and
+"ledger". The module deletion is real — `c3156301` removed
+`api/app/Modules/Edge` across 9 paths — but these two documents never
+referenced it. The three properties that actually disqualify them as evidence
+are that they are self-authored, unreviewed, and were never committed at the
+time they were written.
 
 Every "Closed" claim is therefore treated as an unverified hypothesis and
 re-derived from current code with fresh citations. Prior docs are used as a
@@ -111,7 +121,7 @@ Six enumerable sources:
 |---|---|
 | module `routes.php` + `api/routes/api.php` | HTTP entry points |
 | `AppServiceProvider.php` `Event::listen` ×58 | async edges |
-| `OutboxEventCodec.php` ×57 allowlist | durable edges |
+| `OutboxEventCodec.php` ×51 allowlist | durable edges |
 | `api/routes/console.php` | scheduled entries |
 | `Jobs/` ×9 | queued entries |
 | cross-module import graph ×708 | direct-call edges, filtered to write-reaching |
@@ -206,7 +216,13 @@ These are changes rather than findings:
    `docs/PROCESS-FAILURE-MATRIX-2026-08-11.md` are now committed but still
    unreviewed; they need a disposition once Phase 1 contradicts or confirms
    them — supersede, annotate, or delete.
-2. `docs/PROCESS-FLOWS.md` is stale on cut scope: Edge ×9, COPQ ×3, SPC ×2.
+2. `docs/PROCESS-FLOWS.md` is stale on cut scope, though less so than this
+   spec first claimed. Corrected counts: `Edge` ×3 — and all three are the
+   heading phrase "Edge Cases" (`:18`, `:1377`, `:1635`), unrelated to the
+   deleted module, so this is not a staleness hit at all. `COPQ` ×1 (`:1268`),
+   which *is* stale: it documents `GET /api/v1/quality/copq/trend` while zero
+   COPQ files remain under `api/app`. `SPC` ×2 (`:1240`, `:1245`) — count
+   correct, and stale per `f007f6a9` "cut SPC control charts, keep Cp/Cpk".
 3. `CLAUDE.md` advertises `EdgeSystemUserResolver` — a deleted class — under
    shared helpers to reuse before reinventing.
 

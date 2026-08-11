@@ -120,12 +120,23 @@ echo "event classes: $(find . -path '*Events*' -name '*.php' | wc -l)"
 echo "listener files: $(find . -path '*Listeners*' -name '*.php' | wc -l)"
 echo "jobs: $(find . -path '*Jobs*' -name '*.php' | wc -l)"
 echo "Event::listen: $(grep -c 'Event::listen' Providers/AppServiceProvider.php)"
-echo "codec allowlist: $(grep -cE '::class' Common/Services/OutboxEventCodec.php)"
+echo "codec allowlist: $(sed -n '75,127p' Common/Services/OutboxEventCodec.php | grep -cE '::class')"
 ```
 
 Record the actual output. If any number contradicts the spec (spec says 215 /
-168 / 53 / 50 / 9 / 58 / 57), the plan is stale — record the real number and
+168 / 53 / 50 / 9 / 58 / 51), the plan is stale — record the real number and
 note the discrepancy in the audit doc's scope section.
+
+**Codec count — corrected after Task 1 review.** The command above is now
+scoped to the `SUPPORTED_EVENTS` array (`:75-127`) and yields **51**. The
+original command ran `grep -cE '::class'` over the entire file and returned
+57, because six matches lie outside the allowlist: `$event::class` (`:132`),
+`$value::class` (`:208`, `:217`, `:225`), `Model::class` (`:268`), and
+`BackedEnum::class` (`:289`). Downstream tasks enumerating durable edges from
+the allowlist must expect 51, not 57. If the array bounds have shifted since,
+locate `SUPPORTED_EVENTS` and re-scope rather than reverting to a whole-file
+count — this is a case where the proxy and the thing measured diverged, which
+is exactly the class of defect this audit exists to find.
 
 - [ ] **Step 3: Write the document skeleton**
 
