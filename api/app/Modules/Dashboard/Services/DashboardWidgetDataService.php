@@ -24,7 +24,10 @@ use Throwable;
 /** Resolves configurable dashboard widgets from live transactional tables. */
 class DashboardWidgetDataService
 {
-    public function __construct(private readonly SettingsService $settings) {}
+    public function __construct(
+        private readonly SettingsService $settings,
+        private readonly ForecastingDashboardService $forecasts,
+    ) {}
     /** @return array<string, array{key:string,value:string|null,kind:string,helper:?string,available:bool,updated_at:string}> */
     public function summaries(array $keys, User $user): array
     {
@@ -124,8 +127,48 @@ class DashboardWidgetDataService
                 : ['value' => null, 'kind' => 'hours', 'helper' => 'No employee is linked to this account'],
             'self.pending_requests' => $this->number($this->selfPendingCount($employeeId), 'your pending requests'),
             'alerts' => $this->number(DB::table('alerts')->where('is_dismissed', false)->count(), 'open operational alerts'),
+
+            'forecast.headcount'   => $this->forecast($this->forecasts->headcountForecast(), 'number'),
+            'forecast.revenue'     => $this->forecast($this->forecasts->revenueForecast(), 'currency'),
+            'forecast.defect_rate' => $this->forecast($this->forecasts->defectRateForecast(), 'percent'),
             default => throw new \InvalidArgumentException("Unsupported dashboard widget: {$key}"),
         };
+    }
+
+    /**
+     * Map a ForecastingDashboardService payload onto the widget contract.
+     *
+     * The service already formatted the value and named its own unit, so this
+     * passes both through rather than re-rounding. An empty projection is
+     * unknown, not zero: emptyResponse() reports an em-dash, which becomes a
+     * null value so the tile renders as "no data" instead of a fake figure.
+     *
+     * @param  array{historical:array,forecast:array,trend:string,kpi:array{label:string,value:string,unit:string,trend:string}}  $data
+     * @return array{value:string|null,kind:string,helper:?string}
+     */
+    /**
+     * $kind is passed per widget rather than derived from the payload's unit:
+     * ForecastingDashboardService::emptyResponse() reports unit '', so deriving
+     * it would make an empty defect-rate tile a 'number' and a populated one a
+     * 'percent'. Formatting is a property of the widget, not of data presence.
+     */
+    private function forecast(array $data, string $kind): array
+    {
+        $kpi = $data['kpi'];
+        $known = $data['forecast'] !== [] && $kpi['value'] !== '—';
+        $direction = match ($data['trend']) {
+            'up' => 'trending up',
+            'down' => 'trending down',
+            default => 'holding steady',
+        };
+
+        return [
+            'value' => $known ? $kpi['value'] : null,
+            'kind' => $kind,
+            'helper' => $known
+                ? $kpi['label'].' — '.$direction
+                : 'Not enough history to project',
+        ];
     }
 
     private function number(mixed $value, ?string $helper): array { return ['value' => (string) (int) $value, 'kind' => 'number', 'helper' => $helper]; }

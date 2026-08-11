@@ -6,6 +6,7 @@ namespace Tests\Feature\Dashboard;
 
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\Dashboard\Models\DashboardWidget;
 use App\Modules\Dashboard\Services\DashboardLayoutService;
 use App\Modules\Dashboard\Services\DashboardWidgetDataService;
 use App\Modules\HR\Models\Employee;
@@ -36,7 +37,12 @@ class DashboardWidgetDataTest extends TestCase
 
         $summaries = app(DashboardWidgetDataService::class)->summaries($keys, $admin);
 
-        $this->assertCount(40, $summaries);
+        // Every widget in the catalog must resolve — asserted against the
+        // catalog itself rather than a hardcoded count, so adding a widget
+        // without a resolver fails here instead of silently passing once
+        // someone bumps the number.
+        $this->assertCount(count($keys), $summaries);
+        $this->assertSame(DashboardWidget::count(), count($summaries));
         $unavailable = collect($summaries)->where('available', false);
         $this->assertSame([], $unavailable->keys()->all(), $unavailable->pluck('helper', 'key')->toJson());
     }

@@ -88,6 +88,17 @@ class DashboardWidgetSeeder extends Seeder
 
             // ─── Platform ──────────────────────────────────────────
             ['key' => 'alerts',                        'name' => 'Alerts',                    'module' => 'platform',    'permission' => 'alerts.view'],
+
+            // ─── Forecasts ─────────────────────────────────────────
+            // ForecastingDashboardService already computed these; until now
+            // they were reachable only from the bespoke HR / Finance /
+            // Quality dashboard pages. Each is gated on the SAME permission
+            // as the existing widget over the same underlying data
+            // (hr.headcount, finance.revenue_mtd, qc.pareto) — a projection
+            // of a dataset is no less sensitive than the dataset.
+            ['key' => 'forecast.headcount',            'name' => 'Headcount Forecast',        'module' => 'hr',          'permission' => 'hr.employees.view'],
+            ['key' => 'forecast.revenue',              'name' => 'Revenue Forecast',          'module' => 'accounting',  'permission' => 'accounting.dashboard.view'],
+            ['key' => 'forecast.defect_rate',          'name' => 'Defect Rate Forecast',      'module' => 'quality',     'permission' => 'quality.view'],
         ];
     }
 

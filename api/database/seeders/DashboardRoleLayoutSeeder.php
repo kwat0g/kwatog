@@ -40,10 +40,11 @@ class DashboardRoleLayoutSeeder extends Seeder
             'finance_officer' => [
                 'finance.cash_position', 'finance.ar_aging', 'finance.ap_aging',
                 'finance.revenue_mtd', 'finance.unpaid_invoices', 'finance.upcoming_payables',
+                'forecast.revenue',
             ],
             'hr_officer' => [
                 'hr.headcount', 'hr.on_leave_today', 'approvals.pending',
-                'hr.probation_alerts', 'payroll.upcoming',
+                'hr.probation_alerts', 'payroll.upcoming', 'forecast.headcount',
             ],
             'purchasing_officer' => [
                 'purchasing.open_prs', 'purchasing.open_pos', 'purchasing.supplier_perf',
@@ -51,6 +52,7 @@ class DashboardRoleLayoutSeeder extends Seeder
             ],
             'qc_inspector' => [
                 'qc.pending_inspections', 'qc.pareto', 'qc.open_ncrs', 'qc.pass_rate',
+                'forecast.defect_rate',
             ],
             'warehouse_staff' => [
                 'inventory.pending_grns', 'inventory.low_stock',
