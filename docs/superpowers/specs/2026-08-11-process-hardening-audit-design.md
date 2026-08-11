@@ -19,10 +19,13 @@ clean.
 
 ## Starting state
 
-The audit runs against the **working tree**, not `HEAD`. At audit time the tree
-carries 501 changed files (357 modified, +26,300/−12,343; 144 untracked). The
-tree is what ships and what the prior audit docs describe, so it is the correct
-subject. Findings are anchored to this state and note that it was dirty.
+The audit runs against commit **`feaa9621`** on `main`, pushed to `origin/main`.
+
+The tree was dirty when this design was written (501 changed files); it was
+committed wholesale and pushed before Phase 1 began. Findings therefore cite a
+committed, pushed SHA, so every claim can be re-checked against exactly the
+code that was read. If the tree drifts during the audit, findings remain
+anchored to `feaa9621` and any drift is noted.
 
 Surface: 22 modules, 215 services, 168 controllers, 53 domain event classes, 50
 listener files, 9 jobs.
@@ -49,9 +52,10 @@ Two documents already claim this scope:
 - `docs/PROCESS-FAILURE-MATRIX-2026-08-11.md` — 137 lines, declares nearly
   every boundary closed and pushes residual risk to staging and providers
 
-Both are untracked, self-authored, and never reviewed. Both cite `Edge` (audit
-×5, matrix ×1) although `api/app/Modules/Edge` was deleted in commit
-`c3156301`.
+Both were untracked, self-authored, and never reviewed when this design was
+written; they are now committed in `feaa9621` but still unreviewed. Both cite
+`Edge` (audit ×5, matrix ×1) although `api/app/Modules/Edge` was deleted in
+commit `c3156301`.
 
 Every "Closed" claim is therefore treated as an unverified hypothesis and
 re-derived from current code with fresh citations. Prior docs are used as a
@@ -199,8 +203,9 @@ cost completed findings.
 These are changes rather than findings:
 
 1. `docs/PROCESS-AUDIT-2026-08-10.md` and
-   `docs/PROCESS-FAILURE-MATRIX-2026-08-11.md` are untracked and need a
-   disposition — commit, supersede, or delete.
+   `docs/PROCESS-FAILURE-MATRIX-2026-08-11.md` are now committed but still
+   unreviewed; they need a disposition once Phase 1 contradicts or confirms
+   them — supersede, annotate, or delete.
 2. `docs/PROCESS-FLOWS.md` is stale on cut scope: Edge ×9, COPQ ×3, SPC ×2.
 3. `CLAUDE.md` advertises `EdgeSystemUserResolver` — a deleted class — under
    shared helpers to reuse before reinventing.
