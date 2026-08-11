@@ -34,11 +34,24 @@ describe the code the citations point at.
 | Listener files | 50 | `find api/app -path '*Listeners*' -name '*.php'` |
 | Jobs | 9 | `find api/app -path '*Jobs*' -name '*.php'` |
 | `Event::listen` registrations | 58 | `grep -c 'Event::listen' api/app/Providers/AppServiceProvider.php` |
-| Outbox codec allowlist entries | 57 | `grep -cE '::class' api/app/Common/Services/OutboxEventCodec.php` |
+| `::class` tokens in codec file | 57 | `grep -cE '::class' api/app/Common/Services/OutboxEventCodec.php` |
+| **Outbox codec allowlist entries** | **51** | `::class` entries inside `SUPPORTED_EVENTS`, `OutboxEventCodec.php:75-127` |
 
-All seven match the figures in the design spec
+The first six match the design spec
 (`docs/superpowers/specs/2026-08-11-process-hardening-audit-design.md:30`,
-`:37`, `:40`). **No discrepancy.** The plan is not stale on surface counts.
+`:37`, `:40`). The seventh does **not**, and the discrepancy is instructive.
+
+The spec and plan both cite 57 codec allowlist entries. 57 is the output of
+`grep -cE '::class'` over the whole file, but the allowlist —
+`SUPPORTED_EVENTS` at `api/app/Common/Services/OutboxEventCodec.php:75-127` —
+holds exactly **51** unique entries. The grep additionally matches six lines
+that are not allowlist members: `$event::class` (`:132`), `$value::class`
+(`:208`, `:217`, `:225`), `Model::class` (`:268`), and `BackedEnum::class`
+(`:289`).
+
+The count of durable edges is therefore 51. This is a proxy-versus-reality
+gap of exactly the kind this audit exists to find, discovered in the audit's
+own instrument before a single process was traced.
 
 Module count is 22 (`api/app/Modules/`), matching the spec's stated surface.
 
@@ -77,10 +90,17 @@ memory, so coverage is checkable
 |---|---|
 | module `routes.php` + `api/routes/api.php` | HTTP entry points |
 | `api/app/Providers/AppServiceProvider.php` `Event::listen` ×58 | async edges |
-| `api/app/Common/Services/OutboxEventCodec.php` ×57 allowlist | durable edges |
+| `api/app/Common/Services/OutboxEventCodec.php` ×51 allowlist | durable edges |
 | `api/routes/console.php` | scheduled entries |
 | `Jobs/` ×9 | queued entries |
 | cross-module import graph ×708 | direct-call edges, filtered to write-reaching |
+
+The 708 figure originates in the design spec (`:67`). Unlike the seven surface
+counts above, it was not measured by this task; it was re-measured
+independently at `HEAD` before Task 3 relied on it, and confirmed at 708
+(sum over all 22 modules of `use App\Modules\*\(Services|Models)\` imports,
+excluding same-module imports). Task 2 re-derives it a third time as its own
+gate.
 
 The last row is the reason for the classification rule below. Direct
 synchronous calls outnumber event edges by roughly an order of magnitude (708
@@ -94,7 +114,9 @@ is *generated* from rows lacking a disposition.
 
 ### 1.4 Classification rule — write reach, not import reach
 
-Quoted verbatim from the design spec (`:92`):
+Quoted verbatim from the implementation plan
+(`docs/superpowers/plans/2026-08-11-process-hardening-audit.md:47-49`; the
+design spec states the same rule at `:92-94` with an additional sentence):
 
 > **Classification is by write reach, not import reach.** A process is
 > cross-module only if it *writes* across module namespaces, or triggers
@@ -112,7 +134,9 @@ and explicitly parked in the untraced list.
 
 ### 1.5 Evidence standard — PROVEN / ARGUED
 
-Every claim carries `file:line`. Quoted verbatim from the design spec (`:164`):
+Every claim carries `file:line`. Quoted verbatim from the implementation plan
+(`docs/superpowers/plans/2026-08-11-process-hardening-audit.md:56-58`; the
+design spec states the same standard at `:164-172` in different wording):
 
 > Severe findings (data-corrupting, non-idempotent, race) carry an executable
 > probe and are labeled PROVEN. A finding whose probe proves too expensive
@@ -128,10 +152,25 @@ two prior documents (section 6).
 
 `docs/PROCESS-AUDIT-2026-08-10.md` (499 lines) and
 `docs/PROCESS-FAILURE-MATRIX-2026-08-11.md` (137 lines) already claim this
-scope and mark most boundaries closed. Both were self-authored and remain
-unreviewed, and both cite `Edge` — a module deleted in `c3156301`. Every
-"Closed" claim is treated as an unverified hypothesis and re-derived from
-current code with fresh citations. Contradictions are recorded in section 6.
+scope and mark most boundaries closed. Three properties disqualify them as
+evidence: both are self-authored, both remain unreviewed, and neither was ever
+committed — they are untracked files, so no reviewer has ever seen a diff of
+them. Every "Closed" claim is treated as an unverified hypothesis and
+re-derived from current code with fresh citations. Contradictions are recorded
+in section 6.
+
+A correction belongs here, because it is the same error this section warns
+against. An earlier draft of this document, following the design spec (`:57`,
+`:209`), stated that both prior documents cite `Edge`, a module deleted in
+`c3156301`. That is false. The string `Edge` appears **zero** times in either
+document, case-sensitively or otherwise; the only `edge` substrings are inside
+"acknowledgement" and "ledger". `docs/PROCESS-FLOWS.md` does contain `Edge`
+three times — not nine — and all three are the heading phrase "Edge Cases",
+unrelated to the deleted module. The deletion itself is real: `c3156301`
+removed `api/app/Modules/Edge` across 9 paths. The claim entered the spec
+un-verified and was inherited here un-verified, which is precisely the failure
+mode described above. It is withdrawn; the conclusion of this section rests on
+the three properties named in the paragraph above.
 
 ### 1.7 Severity classes
 
