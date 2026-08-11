@@ -57,28 +57,41 @@ Module count is 22 (`api/app/Modules/`), matching the spec's stated surface.
 
 ### 1.2 Anchor and drift
 
-Findings are anchored to `feaa9621`. `HEAD` at the time of writing is
-`d3a1b9e4`, six commits later. The spec anticipated only docs-only commits
-after the anchor; that expectation is **not** met — two of the six commits
-touch `api/` and `spa/`:
+Findings are anchored to `feaa9621`. The spec anticipated only docs-only commits
+after the anchor; that expectation is **not** met, and the gap is now large.
+Feature work on the Dashboard surface has continued *concurrently with this
+audit* — as of Task 4 the anchor is 19 commits behind `HEAD`, with `api/` and
+`spa/` drift of 23 files, +1525/-5 lines.
 
-- `da3d8f56` — `feat(dashboard): richer department_head default layout`
-- `b1fe60d1` — `feat(dashboard): widgets for maintenance, assets, returns, CRM, budget, loans`
+Drift is confined to two module namespaces plus their tests, migrations, and
+seeders:
 
-Combined drift across `api/` and `spa/` is 7 files, +210/-4 lines, confined to
-the Dashboard read-model surface (`DashboardWidgetDataService.php`, widget and
-role-layout seeders, migration `0442`, a settings request, a dashboard test,
-and the SPA widget registry). No service in another module, no listener
-registration, no outbox codec entry, and no job changed. This is why all seven
-surface counts are identical at `feaa9621` and at `HEAD`.
+| Namespace | Status |
+|---|---|
+| `api/app/Modules/Dashboard` | drifted — widget analytics, `WidgetScope` |
+| `api/app/Modules/Admin` | drifted |
+| `api/database/{migrations,seeders}` | drifted — dashboard widget seeds |
+| `api/tests/Feature/Dashboard` | drifted — 5 new/changed test files |
+| `spa/src/components/dashboard/registry.tsx` | drifted |
+| **every other module** | **untouched since the anchor** |
 
-Per the spec (`:26`), findings remain anchored to `feaa9621` and the drift is
-noted here rather than re-baselined. Line citations in this document are valid
-against `feaa9621`; readers checking against a later `HEAD` should expect
-offsets only in the seven files listed above.
+No service outside Dashboard/Admin, no listener registration, no outbox codec
+entry, and no job has changed. This is why all seven surface counts in §1.1 are
+still identical at `feaa9621` and at `HEAD`, and why the 83-row inventory does
+not need re-deriving.
 
-The working tree is otherwise clean: `git status --porcelain`, excluding
-untracked `.codex/` and `.impeccable/` scratch directories, printed `0`.
+Per the spec (`:26`), findings remain anchored to `feaa9621` rather than
+re-baselined. Citations are valid at both commits for every module except
+Dashboard and Admin. **A task tracing a Dashboard or Admin process (P63, P64,
+and any Dashboard row) must re-verify its citations against `HEAD` rather than
+trusting this section.**
+
+The working tree is **not** clean and its contents change during the audit — at
+Task 4 it held a modified `DashboardWidgetSeeder.php` and an untracked dashboard
+test. Any task asserting a clean tree must run `git status --porcelain api/ spa/`
+itself; an assertion inherited from a brief is stale by the time it is read.
+Nothing under `api/` or `spa/` is modified *by* this audit — Phase 1 is
+findings-only, and every audit commit touches this document alone.
 
 ### 1.3 The six edge sources
 
@@ -835,14 +848,6 @@ the window exists; a probe would have to inject a failure between the insert and
 job completion, which is a harness change rather than a state setup, and I chose
 not to spend it. Blast is employee-visible duplicate notifications and duplicate
 payslip emails, not money — no financial row is touched.
-
-### 3.5 Missing compensation
-
-### 3.2 Silent failure
-
-### 3.3 Bypassable
-
-### 3.4 Non-idempotent
 
 ### 3.5 Missing compensation
 
