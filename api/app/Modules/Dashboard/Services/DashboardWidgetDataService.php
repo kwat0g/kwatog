@@ -23,6 +23,7 @@ use App\Modules\Assets\Enums\AssetStatus;
 use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
 use App\Modules\CRM\Enums\ComplaintStatus;
 use App\Modules\Loans\Enums\LoanStatus;
+use App\Modules\Dashboard\Support\WidgetScope;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -32,6 +33,7 @@ class DashboardWidgetDataService
     public function __construct(
         private readonly SettingsService $settings,
         private readonly ForecastingDashboardService $forecasts,
+        private readonly WidgetScope $scope,
     ) {}
     /** @return array<string, array{key:string,value:string|null,kind:string,helper:?string,available:bool,updated_at:string}> */
     public function summaries(array $keys, User $user): array
@@ -66,7 +68,7 @@ class DashboardWidgetDataService
         $deliveryDays = $this->settings->requiredInt('dashboard.widgets.delivery_horizon_days', 0);
         $maintenanceDays = $this->settings->requiredInt('dashboard.widgets.maintenance_horizon_days', 0);
         $employeeId = $user->employee_id ? (int) $user->employee_id : null;
-        $departmentId = $employeeId ? DB::table('employees')->where('id', $employeeId)->value('department_id') : null;
+        $departmentId = $this->scope->departmentId($user);
 
         return match ($key) {
             'production.kpi' => $this->number(
@@ -247,7 +249,7 @@ class DashboardWidgetDataService
      */
     private function outstandingLoans(User $user, mixed $departmentId): array
     {
-        $companyWide = $user->hasPermission('loans.write_off');
+        $companyWide = $this->scope->isCompanyWide($user, 'loans.write_off');
 
         if (! $companyWide && $departmentId === null) {
             return ['value' => null, 'kind' => 'currency', 'helper' => 'No department is linked to this account'];
