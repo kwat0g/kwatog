@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Dashboard\Services;
 
 use App\Modules\Auth\Models\User;
+use App\Modules\Dashboard\Enums\RenderKind;
 use App\Modules\Dashboard\Models\DashboardLayout;
 use App\Modules\Dashboard\Models\DashboardWidget;
 use Illuminate\Support\Collection;
@@ -24,8 +25,12 @@ use Illuminate\Support\Facades\DB;
  */
 class DashboardLayoutService
 {
+    public function __construct(
+        private readonly WidgetAnalyticsService $analytics,
+    ) {}
+
     /**
-     * @return array<int, array{key: string, name: string, description: ?string, module: string, x: int, y: int, w: int, h: int, source: string}>
+     * @return array<int, array{key: string, name: string, description: ?string, module: string, render_kind: string, x: int, y: int, w: int, h: int, source: string}>
      */
     public function getEffectiveLayout(User $user): array
     {
@@ -72,6 +77,7 @@ class DashboardLayoutService
                 'description' => $widget->description,
                 'module'      => $widget->module,
                 'permission'  => $widget->permission,
+                'render_kind' => $widget->render_kind->value,
                 'x'           => (int) $row->position_x,
                 'y'           => (int) $row->position_y,
                 'w'           => (int) $row->width,
@@ -81,6 +87,27 @@ class DashboardLayoutService
         }
 
         return $rows;
+    }
+
+    /**
+     * The effective layout with each widget's rich payload attached.
+     *
+     * Deliberately built ON TOP of getEffectiveLayout rather than beside it:
+     * the permission strip lives there, so rich mode cannot widen access by
+     * construction. A widget with no rich payload gets `data => null` and the
+     * SPA renders the scalar it always did.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function getRichLayout(User $user): array
+    {
+        return array_map(function (array $row) use ($user): array {
+            $kind = RenderKind::fromNullable($row['render_kind']);
+            $payload = $this->analytics->payload($row['key'], $kind, $user);
+            $row['data'] = $payload === [] ? null : $payload;
+
+            return $row;
+        }, $this->getEffectiveLayout($user));
     }
 
     /** @return Collection<int, DashboardLayout> */
@@ -210,6 +237,7 @@ class DashboardLayoutService
                 'description' => $w->description,
                 'module'      => $w->module,
                 'permission'  => $w->permission,
+                'render_kind' => $w->render_kind->value,
                 'default_w'   => (int) $w->default_w,
                 'default_h'   => (int) $w->default_h,
             ])

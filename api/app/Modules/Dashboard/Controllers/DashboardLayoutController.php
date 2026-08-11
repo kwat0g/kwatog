@@ -54,10 +54,17 @@ class DashboardLayoutController
         ]);
     }
 
+    /**
+     * `?rich=1` attaches each widget's rich payload (breakdown / trend /
+     * table / gauge). Without the flag the response is what it always was,
+     * plus `render_kind` — so an old client keeps working.
+     */
     public function show(Request $request): JsonResponse
     {
         return response()->json([
-            'data' => $this->service->getEffectiveLayout($request->user()),
+            'data' => $request->boolean('rich')
+                ? $this->service->getRichLayout($request->user())
+                : $this->service->getEffectiveLayout($request->user()),
         ]);
     }
 
