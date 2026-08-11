@@ -178,6 +178,63 @@ Findings group into five classes, on evidence only: data-corrupting, silent
 failure, bypassable, non-idempotent, missing compensation. These are the
 section 3 subheadings.
 
+### 1.8 Trace protocol (finalized on P01, Task 4)
+
+Eight fields per traced process, each carrying `file:line`. The protocol was
+dry-run on P01 before being spent across the remaining traces; the amendments
+below are what that dry run changed.
+
+| # | Field | What it must answer |
+|---|---|---|
+| 1 | Steps | Every step in order, with the owning class and the line that performs it. Steps that only *record intent* (an outbox row) are marked as such — they are not the effect. |
+| 2 | Transaction boundary | Which steps the boundary encloses and which fall outside. State the enclosing method, not just "wrapped". |
+| 3 | N succeeds, N+1 fails | Per boundary crossing: rollback, compensation, or orphan. "Orphan" must name the row left behind. |
+| 4 | Handoff | Sync or async per edge; behavior on failure, retry, and out-of-order delivery. Name the retry budget (`$tries`/`$backoff`) or its absence. |
+| 5 | Idempotency under replay | What a second delivery of the same event, or a second call of the same method, does. Name the dedupe mechanism and the column or index enforcing it. |
+| 6 | Guard reachability | **Mechanical enumeration**, see below. |
+| 7 | Audit attribution | Which steps write an `audit_logs` row and which are silent; who is recorded as actor. |
+| 8 | Verdict | Findings with severity class and PROVEN/ARGUED, or clean with the citation that makes it clean. |
+
+**Field 6 is enumerated, never intuited.** Four greps, because three
+constructs are invisible to any one of them:
+
+```bash
+cd /home/kwat0g/Desktop/kwatog/api/app
+grep -rn "<StatusEnum>::" --include=*.php . | grep -vE '/tests/'   # 1. enum writers
+grep -rn "DB::table('<table>')" --include=*.php .                  # 2. raw writes (no import)
+grep -rn "<Model>::query()" --include=*.php . | grep -E "update\(|delete\("  # 3. mass ops
+grep -rnE "app\(|resolve\(|App::make\(|make\(" <traced files>      # 4. FQN resolution
+```
+
+Grep 1 must NOT be narrowed to `'status' =>` mass-assignment form: this repo
+removes `status` from `$fillable` and writes it via `forceFill`, `->status =`,
+and conditional `->update([...])`. Filtering to the mass-assignment shape alone
+would have missed `PayrollPeriodService.php:928` (`->status =`) and
+`:788` (conditional `update()`). Greps 2 and 4 are the blind spots recovered in
+sections 2.2 and 2.3a; they are part of the protocol, not a one-time sweep.
+
+Every writer found is then checked individually for the guard. The output of
+field 6 is a table of *all* writers with a guard column, so a reviewer can see
+the enumeration rather than trust it.
+
+**Two amendments the P01 dry run forced.**
+
+1. *Guarded-vs-locked is a separate column.* The first pass recorded field 6 as
+   "does this writer check the status?" — every P01 writer answered yes, and the
+   field read clean. The real distinction is *which row* the check reads: a
+   guard on a route-bound model that was fetched before the request is a guard
+   on stale data. Splitting the column into `guard` and `reads locked row`
+   turned a uniformly-clean field into the P01-01 finding. Field 6 now records
+   both.
+2. *A field may not be answered in prose alone.* Fields 5 and 6 must each carry
+   a table. Prose let "the outbox dedupes it" stand as an answer in the first
+   pass; the table forced the dedupe *key* to be written down, which is what
+   exposed P01-02. A field with no table and no `file:line` is not an answer.
+
+The protocol is falsifiable in the intended sense: every P01 claim below can be
+checked by opening one cited line, and the two severe findings were each driven
+to their bad outcome by a probe rather than argued.
+
 ## 2. Edge inventory
 
 ### 2.1 How the 642 mechanical edges collapse to 81 processes
@@ -306,7 +363,7 @@ are dismissed here rather than enumerated.
 
 | ID | Process | Class | Domains | Entry point | Trigger | Blast | Disposition |
 |---|---|---|---|---|---|---|---|
-| P01 | Payroll finalize → bank file + payslip email + employee notify | cross-module | Payroll, Accounting | `api/app/Modules/Payroll/Controllers/PayrollPeriodController.php:174` | HTTP + event | money | |
+| P01 | Payroll finalize → bank file + payslip email + employee notify | cross-module | Payroll, Accounting | `api/app/Modules/Payroll/Controllers/PayrollPeriodController.php:174` | HTTP + event | money | **traced** (§3.0) — 3 findings: P01-01 PROVEN, P01-02 PROVEN, P01-03 ARGUED |
 | P02 | Payroll GL posting handoff + retry (raw `journal_entries` insert) | cross-module | Payroll, Accounting | `api/app/Modules/Payroll/Services/PayrollGlPostingService.php:313` | event + job + HTTP | money | |
 | P03 | Payroll compute → loan deduction + loan balance write | cross-module | Payroll, Loans | `api/app/Modules/Payroll/Controllers/PayrollPeriodController.php:143` | HTTP + event + job | money | |
 | P04 | Payroll period void → GL reversal + cycle-claim release | cross-module | Payroll, Accounting | `api/app/Modules/Payroll/Controllers/PayrollPeriodController.php:275` | HTTP | money | |
@@ -487,7 +544,299 @@ events lack codec coverage.
 
 ## 3. Findings by severity
 
+### 3.0 Traces
+
+Full eight-field traces. Findings raised here are filed into 3.1–3.5 below with
+their severity class; the trace is the evidence, the finding is the claim.
+
+#### P01 — Payroll finalize → bank file + payslip email + employee notify
+
+Entry point `api/app/Modules/Payroll/Controllers/PayrollPeriodController.php:174`
+→ `PayrollPeriodService::finalize()` at
+`api/app/Modules/Payroll/Services/PayrollPeriodService.php:1049`.
+
+**Field 1 — steps and owning class**
+
+| # | Step | Owner | Line |
+|---|---|---|---|
+| 1 | Re-read + `lockForUpdate` the period | `PayrollPeriodService` | `:1061` |
+| 2 | Guard: status must be `Approved` | `PayrollPeriodService` | `:1065` |
+| 3 | Guard: zero unresolved `PayrollAnomalyFlag` | `PayrollPeriodService` | `:1070-1076` |
+| 4 | Write `status=Finalized`, `finalized_by/at`, `bank_file_status=Pending`, `gl_handoff_status=Pending` | `PayrollPeriodService` | `:1080-1090` |
+| 5 | 13th-month: flip accruals `is_paid=true` | `ThirteenthMonthService::markAccrualsPaidOnFinalize` | `:1100` → `ThirteenthMonthService.php:259` |
+| 6 | Audit row `payroll.period.finalize` | `AuditLog` | `:1102-1112` |
+| 7 | **Record intent** — outbox row for `PayrollPeriodFinalized` | `OutboxService::recordForChain` | `:1115-1121` |
+| 8 | **Record intent** — outbox row for `PayrollGlPostingRequested`, dedupe key `payroll-gl-finalize:{id}` | `OutboxService::recordForChain` | `:1122-1129` |
+
+Steps 7–8 are intent, not effect. The effects run later, off the outbox:
+
+| # | Effect | Owner | Line |
+|---|---|---|---|
+| 9 | Bank file CSV + `BankFileRecord` | `GenerateBankFileOnPayrollFinalized` → `BankFileService::generate` | `Listeners/GenerateBankFileOnPayrollFinalized.php:43` → `Services/BankFileService.php:92` |
+| 10 | Payslip email child jobs, one per employee | `EmailPayslipPdfOnPayrollFinalized` → `SendPayslipEmailJob` | `Listeners/EmailPayslipPdfOnPayrollFinalized.php:26`, dispatch `:59` |
+| 11 | In-app + email notification to every paid employee | `NotifyEmployeesOnPayrollFinalized` → `NotificationService::send` | `Listeners/NotifyEmployeesOnPayrollFinalized.php:18`, `:34` |
+| 12 | GL journal entry (raw `journal_entries` insert — P02) | `PostPayrollToGlOnRequested` → `PayrollGlPostingService` | `Listeners/PostPayrollToGlOnRequested.php:28`, raw insert at `Services/PayrollGlPostingService.php:313` |
+
+Registrations: `api/app/Providers/AppServiceProvider.php:298-300` (three
+`PayrollPeriodFinalized` listeners) and `:302` (`PayrollGlPostingRequested`).
+
+**Field 2 — transaction boundary**
+
+One `DB::transaction` at `:1056` encloses steps 1–8 only. It covers the status
+write, the 13th-month accrual flip, the audit row, and both outbox rows — the
+transactional-outbox pattern, correctly applied: `OutboxService::record` detects
+the open transaction and joins it rather than opening its own
+(`api/app/Common/Services/OutboxService.php:59-61`), and defers the queue push
+to `DB::afterCommit` (`:65-74`). Steps 9–12 each run in their own later
+transaction (`GenerateBankFileOnPayrollFinalized.php:45`,
+`BankFileService.php:102`, `EmailPayslipPdfOnPayrollFinalized.php:83`). No
+enclosing boundary spans finalize and its effects, by design.
+
+**Field 3 — step N succeeds, N+1 fails**
+
+| Crossing | Behavior | Evidence |
+|---|---|---|
+| 4 → 5 | Rollback. Accrual flip is inside the boundary and synchronous, deliberately not a queued listener | `:1092-1100` |
+| 8 → 9 (bank file) | No rollback, and none wanted: the period stays Finalized and `bank_file_status` is driven to `manual_required` with an operator note on every failure branch | `GenerateBankFileOnPayrollFinalized.php:79`, `:107`, `:119` |
+| 8 → 12 (GL) | No rollback. Period stays Finalized with `gl_handoff_status` recoverable; operator retry at `PayrollPeriodController.php:188` | `PayrollPeriodService.php:1138`, `PostPayrollToGlOnRequested.php:67` |
+| Partial payslip batch | Per-row claim state, not all-or-nothing; a failed dispatch returns the row to `EMAIL_FAILED` before rethrowing | `EmailPayslipPdfOnPayrollFinalized.php:62`, `:116-134` |
+
+Compensation is genuinely present on this process rather than assumed: every
+cross-boundary failure lands on a persisted recovery state plus a scheduled
+reconciler (`api/routes/console.php:91`, `:99`, `:163`).
+
+**Field 4 — sync vs async handoff**
+
+| Edge | Kind | Retry budget | Out-of-order |
+|---|---|---|---|
+| finalize → accrual flip | **sync**, in-transaction | n/a — rolls back | n/a |
+| finalize → all four listeners | async via outbox, `DispatchOutboxMessage` | outbox `$tries=3`, `backoff [10,60,300]` (`Common/Jobs/DispatchOutboxMessage.php:19-22`); scheduled recovery every minute (`routes/console.php:163`) | Lease-fenced: `claim()` refuses a PUBLISHED or freshly-PROCESSING row (`OutboxDispatcher.php:119-139`) |
+| bank-file listener | queued | `$tries=3`, `backoff [60,300]` (`GenerateBankFileOnPayrollFinalized.php:36-39`) | Re-entrant safe (field 5) |
+| GL listener | queued | `$tries=3`, `backoff [60,300,900]` (`PostPayrollToGlOnRequested.php:21-24`) | Guards on current status + `journal_entry_id` (`:39`, `:51`) |
+| payslip listener | queued, fans out to child jobs | no `$tries` declared → queue default | 15-min stale-claim reclaim (`EmailPayslipPdfOnPayrollFinalized.php:20`, `:42-47`) |
+
+**Field 5 — idempotency under replay**
+
+| Effect | Dedupe mechanism | Enforced by | Verdict |
+|---|---|---|---|
+| Status write | `status === Approved` guard on the locked row | `:1065` | idempotent — second call 422s |
+| 13th-month accrual flip | `where('is_paid', false)` | `ThirteenthMonthService.php:270` | idempotent |
+| Bank file | `bank_file_status === Generated \|\| bankFileRecords()->exists()` | `GenerateBankFileOnPayrollFinalized.php:53-54` | idempotent — replay is a read |
+| Payslip email | per-row `payslip_emailed_at` + status claim under `lockForUpdate` | `:89-110` | idempotent per employee |
+| GL posting | `journal_entry_id !== null` early return | `PostPayrollToGlOnRequested.php:51` | idempotent |
+| Employee notification | **none** — no dedupe key, no sent-marker column | `NotifyEmployeesOnPayrollFinalized.php:34` | **not idempotent**, but bounded by outbox lease (see P01-03) |
+| Outbox row itself | `dedupe_key` + `insertOrIgnore` | `OutboxService.php:32`, `:36` | idempotent — **and this is the defect in P01-02** |
+
+**Field 6 — guard reachability (mechanical enumeration)**
+
+Grep 1, `PayrollPeriodStatus::` writers outside `/tests/`, yields nine writers.
+Grep 2 (`DB::table('payroll_periods')`) returns four sites, all reads
+(`Common/Services/ChainBottleneckService.php:491`,
+`Common/Services/CalendarAggregatorService.php:271`,
+`Modules/Dashboard/Services/HrDashboardService.php:97`,
+`Modules/Dashboard/Services/DashboardWidgetDataService.php:343`) — no raw
+write to this table exists. Grep 3 returns zero `PayrollPeriod::query()`
+mass `update`/`delete`. Grep 4 output is in field 8's note.
+
+| # | Writer | Target status | Guard | Reads locked row |
+|---|---|---|---|---|
+| 1 | `PayrollPeriodService::create` `:256` | Draft | new row | n/a |
+| 2 | `PayrollPeriodService::claimForCompute` `:788` | Processing | conditional `UPDATE … WHERE status IN (draft,computed) OR stale` `:774-786` | **yes** — the WHERE *is* the lock |
+| 3 | `PayrollPeriodService::approve` `:889` | Approved | `status === Computed` `:858` | yes `:849` |
+| 4 | `PayrollPeriodService::finalize` `:1081` | Finalized | `status === Approved` `:1065` | yes `:1061` |
+| 5 | `PayrollPeriodService::markDisbursed` `:928` | Disbursed | in `markDisbursed` `:914-928` | yes `:915` |
+| 6 | `PayrollPeriodService::void` `:1254` | Voided | `status === Finalized` `:1233` | yes `:1229` |
+| 7 | `PayrollPeriodService::releaseClaim` `:693` | Computed **or Draft** | **none in the method** | **no** |
+| 8 | `AutoPayrollPeriodService` `:111` | Draft | new row | n/a |
+| 9 | `ThirteenthMonthService` `:163`, `:244` | Draft, Computed | own-run scope | no, but confined to a 13th-month period it just created |
+
+Writer 7 is the bypass. `releaseClaim` writes `status` with no guard of its own
+and has four callers, of which three carry a guard and one does not:
+
+| Caller | Guard before calling | Line |
+|---|---|---|
+| `ProcessPayrollJob` finally block | job bailed earlier unless `status === Processing` | `Jobs/ProcessPayrollJob.php:80`, call at `:162` |
+| `ProcessPayrollJob::failed` | `status === Processing` | `:191`, call at `:192` |
+| `ReapStalePayrollRuns` | `where('status', Processing)` in the query | `Console/Commands/ReapStalePayrollRuns.php:53`, call at `:73` |
+| `PayrollPeriodService::forceUnlock` | `$period->status !== Processing` — **on the unlocked, route-bound model** | `:1180`, call at `:1190` |
+
+**Field 7 — audit attribution**
+
+| Step | Audit row | Actor |
+|---|---|---|
+| finalize | `payroll.period.finalize`, in-transaction | `finalized_by = $actor->id` `:1082`, `:1102-1112` |
+| approve | `payroll.period.approve` | `approved_by` `:894` |
+| void | `payroll.period.void`, records reversal JE id | `voided_by` `:1281-1291` |
+| force-unlock | `payroll.period.force_unlock` | `force_unlocked_by` `:1190`, `:1193-1203` |
+| bank file generated | `BankFileRecord.generated_by` — a *resolved system actor*, not the finalizer | `GenerateBankFileOnPayrollFinalized.php:71-75`, `BankFileService.php:183` |
+| payslip email | `saveQuietly()` — no audit row, by design (per-row delivery state) | `EmailPayslipPdfOnPayrollFinalized.php:110` |
+| employee notification | none | — |
+
+One attribution gap worth naming without inflating it: the bank file is
+attributed to whichever active user holds an automation role, ordered by `id`
+(`GenerateBankFileOnPayrollFinalized.php:71-75`), because the listener has no
+access to the finalizer. The period *does* carry `finalized_by` (`:1082`), so
+the information exists but is not threaded through. Filed as advisory, not a
+severity finding.
+
+**Field 8 — verdict**
+
+Three findings. The GL leg (step 12) belongs to P02 and is not verdicted here.
+Grep 4 (FQN container resolution) over the ten traced files found no unseen
+cross-module edge: `app(JournalEntryService::class)` at `:1247` is Accounting,
+but that file already imports it at `:12`, so the import graph saw it; all other
+`app()` calls resolve `Common` or same-module services. P01's declared domains
+(Payroll, Accounting) are correct.
+
+- **P01-01** — `forceUnlock` can demote a Finalized period. **PROVEN.**
+  Data-corrupting → 3.1.
+- **P01-02** — re-finalize after void records no new GL request. **PROVEN.**
+  Silent failure → 3.2.
+- **P01-03** — employee payslip notification has no dedupe. **ARGUED.**
+  Non-idempotent → 3.4.
+
 ### 3.1 Data-corrupting
+
+#### P01-01 — `forceUnlock` demotes a Finalized period to Computed (PROVEN)
+
+`PayrollPeriodService::forceUnlock`
+(`api/app/Modules/Payroll/Services/PayrollPeriodService.php:1178`) reads its
+guard from the **route-bound model**, before the transaction and before any
+lock:
+
+```php
+if ($period->status !== PayrollPeriodStatus::Processing) {   // :1180 — unlocked read
+    throw new BusinessRuleException('Only periods stuck at Processing can be force-unlocked.');
+}
+return DB::transaction(function () use ($period, ...) {       // :1184 — lock starts here
+    $this->releaseClaim($period, ['force_unlocked_by' => $actor->id]);  // :1190
+```
+
+Every sibling lifecycle method re-reads under `lockForUpdate` inside the
+transaction and checks the locked row: `approve` `:849`/`:858`, `finalize`
+`:1061`/`:1065`, `void` `:1229`/`:1233`, `markDisbursed` `:915`. `forceUnlock`
+is the only one that does not, and `releaseClaim` `:691` carries no guard of its
+own (field 6, writer 7) — it writes `Computed` unconditionally when payroll rows
+exist.
+
+Consequence: a force-unlock request whose model was loaded while the period was
+Processing will demote the period even if it has since been approved and
+finalized. The docblock at `:1175-1176` claims the opposite — "cannot demote
+Approved/Finalized/Disbursed". A demoted period is computable again
+(`PayrollPeriodStatus::isComputable()` accepts `Computed`,
+`Enums/PayrollPeriodStatus.php:53-56`), so a recompute can overwrite payroll
+rows that a bank file has already paid, while `finalized_by`/`finalized_at`
+remain stamped on the row from the finalize that was undone.
+
+**Probe (PROVEN).** Throwaway PHPUnit test, deleted after the run. Loaded a
+stale `PayrollPeriod` instance at Processing, updated the row to Finalized to
+simulate the concurrent finalize, then called
+`forceUnlock($staleModel, $admin, 'probe')`. Result: the finalized period
+transitioned to `computed`. Probe output:
+
+```
+[PROBE1] status after forceUnlock on finalized row: computed
+```
+
+The window is real rather than theoretical: `forceUnlock` exists precisely for
+periods that have been sitting at Processing, so an operator opening the period
+list, then finalizing in another tab (or another operator finalizing after the
+reaper released the claim at `Console/Commands/ReapStalePayrollRuns.php:73`),
+reproduces it without contrivance.
+
+### 3.2 Silent failure
+
+#### P01-02 — re-finalize after void records no new GL request, and reports success (PROVEN)
+
+`finalize` records the GL handoff request with a dedupe key derived from the
+period id alone:
+
+```php
+app(OutboxService::class)->recordForChain(
+    new PayrollGlPostingRequested($fresh, 'payroll_finalized'),
+    ..., 'payroll-gl-finalize:'.$fresh->id,    // :1128 — no run discriminator
+);
+```
+
+`OutboxService::record` inserts with `insertOrIgnore` keyed on `dedupe_key`
+(`api/app/Common/Services/OutboxService.php:36-46`) and then *re-reads the
+existing row* (`:48-50`). On a second finalize of the same period the insert is
+ignored, the already-PUBLISHED row from the first finalize is returned, and
+`DB::afterCommit` re-enqueues it (`:65-74`). `OutboxDispatcher::claim` refuses
+any PUBLISHED row (`OutboxDispatcher.php:119-121`), so the second finalize's GL
+request is never delivered. Nothing throws: `finalize` returns 200 with
+`gl_handoff_status = pending` written at `:1087`, so the period reports a GL
+handoff in flight that no longer exists.
+
+Contrast the operator retry path, which appends a UUID to the same key family
+precisely to avoid this — `'payroll-gl-retry:'.$fresh->id.':'.Str::uuid()`
+(`:1162`). The finalize path has no such discriminator.
+
+**Probe (PROVEN).** Seeded a PUBLISHED `event_outbox` row with dedupe key
+`payroll-gl-finalize:{id}`, then called `recordForChain` with the same key as
+finalize does. Result: row count stayed at 1 and the returned row was still
+`published` — the second request was swallowed. Probe output:
+
+```
+[PROBE2] rows before=1 after=1 status=published
+```
+
+**Reachability is narrower than the mechanism, and this is the honest bound.**
+Reaching a second finalize requires returning a period to `Approved`, and the
+sanctioned correction path does not allow it: `void` moves the period to
+`Voided` (`:1254`), and `claimForCompute` explicitly refuses a Voided period
+with "Create a replacement period instead." (`:746`). So on the sanctioned path
+this is latent. It becomes live by composition with **P01-01**: force-unlock a
+finalized period to `Computed`, recompute, approve, finalize again — the second
+finalize is now reachable and its GL request is silently dropped. Payroll is
+finalized, the bank file regenerates (that listener is guarded by
+`bankFileRecords()->exists()` and would skip, `GenerateBankFileOnPayrollFinalized.php:54`),
+and the ledger never receives the entry. That is money-blast cross-module
+inconsistency, which is why it is filed rather than dismissed as latent.
+
+A related documentation defect sits on the same path, and it is not confined to
+a comment. The `void` docblock at `:1218` says the period "can be
+recomputed/re-finalized (see allowedToRecompute)". No `allowedToRecompute`
+exists anywhere in `api/app`, and the code does the opposite — Voided is refused
+at `:746`. The same wrong instruction reaches the operator: the void endpoint
+responds "you can recompute or create a replacement period"
+(`PayrollPeriodController.php:285`), and the first half of that sentence is
+false. Only the "replacement period" half is achievable.
+
+### 3.3 Bypassable
+
+### 3.4 Non-idempotent
+
+#### P01-03 — payslip-ready notification has no dedupe or sent-marker (ARGUED)
+
+`NotifyEmployeesOnPayrollFinalized::handle`
+(`api/app/Modules/Payroll/Listeners/NotifyEmployeesOnPayrollFinalized.php:18`)
+selects every user with a payroll row in the period (`:23-27`) and calls
+`NotificationService::send` (`:34`). There is no sent-marker column, no dedupe
+key, and no per-employee claim — compare the payslip-email listener, which
+claims each row under `lockForUpdate` and checks `payslip_emailed_at`
+(`EmailPayslipPdfOnPayrollFinalized.php:89-110`). `NotificationService::send`
+inserts inbox rows directly (`api/app/Common/Services/NotificationService.php:113`)
+and dedupes only *within one call*, by keying recipients on user id
+(`:168-175`); it has no cross-call idempotency. A second delivery therefore
+inserts a second "Your payslip for … is ready" row per employee and queues a
+second email (`:135`, `queueEmail` at `:255`).
+
+Severity is bounded, and I am labeling this ARGUED rather than PROVEN because
+the bound is what matters and I did not drive the duplicate. The outbox lease
+prevents replay of a PUBLISHED message (`OutboxDispatcher.php:119-121`), so the
+ordinary paths cannot double-deliver. Reaching a duplicate requires the
+listener to fail *after* `NotificationService::send` commits but before the job
+completes, so the outbox row returns to PENDING (`:191-219`) and redelivers all
+three finalize listeners. The listener rethrows after logging (`:41-44`), and
+the notification insert is not deferred — inbox rows commit inside `send`
+(`:112-114`), while only the broadcast and email are `afterCommit` (`:118`). So
+the window exists; a probe would have to inject a failure between the insert and
+job completion, which is a harness change rather than a state setup, and I chose
+not to spend it. Blast is employee-visible duplicate notifications and duplicate
+payslip emails, not money — no financial row is touched.
+
+### 3.5 Missing compensation
 
 ### 3.2 Silent failure
 
@@ -501,4 +850,34 @@ events lack codec coverage.
 
 ## 5. Untraced list
 
+Generated in Task 11 from inventory rows with an empty disposition. As of Task 4
+that is P02–P83; P01 is traced (§3.0).
+
+Residual gaps recorded rather than claimed closed:
+
+- Container resolution split across an intermediate variable, or via a string
+  class name, still evades the section 2.3a sweep and protocol grep 4.
+- P01 field 4 notes `EmailPayslipPdfOnPayrollFinalized` declares no `$tries`, so
+  it inherits the queue default. Whether that default is appropriate for a
+  fan-out listener is a queue-configuration question, not traced here.
+- P01's GL leg (effect 12, `PayrollGlPostingService.php:313`) is P02's subject
+  and is verdicted there, not in §3.0.
+- P01-03's duplicate-notification window was not driven by a probe (see its
+  ARGUED label). It needs a failure injected between the notification insert and
+  job completion; if Phase 2 builds that harness, the label should be revisited
+  rather than assumed.
+
 ## 6. Prior-claim delta
+
+**P01 vs `docs/PROCESS-FAILURE-MATRIX-2026-08-11.md`.** Task 4 does not yet
+re-derive that document's P01-adjacent claims line by line; the two PROVEN
+findings above are recorded here as the first concrete contradictions to its
+"nearly every boundary closed" posture, pending the full delta in Task 11.
+
+**Stale docblock found while tracing P01.** `PayrollPeriodService::void`'s
+docblock references `allowedToRecompute`
+(`api/app/Modules/Payroll/Services/PayrollPeriodService.php:1218`), a method that
+does not exist in `api/app`, and describes a Voided period as re-computable when
+`claimForCompute` refuses exactly that (`:746`). `forceUnlock`'s docblock claims
+it "cannot demote Approved/Finalized/Disbursed" (`:1175-1176`), which P01-01
+disproves. Both are recorded as changes for Phase 2, not findings.
