@@ -91,7 +91,7 @@ The remaining candidates (`finance.ap_aging`, `finance.cash_position`, `finance.
 ### Task 1: `render_kind` column, enum, and model cast
 
 **Files:**
-- Create: `api/database/migrations/0442_add_render_kind_to_dashboard_widgets.php`
+- Create: `api/database/migrations/0450_add_render_kind_to_dashboard_widgets.php` (0442 was already taken by two migrations; highest 4-digit at execution time was 0449)
 - Create: `api/app/Modules/Dashboard/Enums/RenderKind.php`
 - Modify: `api/app/Modules/Dashboard/Models/DashboardWidget.php:15-28`
 - Test: `api/tests/Feature/Dashboard/RenderKindTest.php`
