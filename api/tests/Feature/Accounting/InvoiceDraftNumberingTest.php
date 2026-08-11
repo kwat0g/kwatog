@@ -137,4 +137,62 @@ class InvoiceDraftNumberingTest extends TestCase
             'Cancelled drafts must not leave gaps in the sequence.',
         );
     }
+
+    public function test_finalize_rejects_a_stale_draft_after_the_persisted_invoice_is_cancelled(): void
+    {
+        $user     = $this->newUser();
+        $customer = Customer::create(['name' => 'Stale Toyota PH', 'payment_terms_days' => 30]);
+        $svc      = app(InvoiceService::class);
+        $draft    = $this->makeDraft($svc, $user, $customer);
+
+        // Keep the caller's draft object stale while another writer changes the
+        // authoritative row before finalize() starts.
+        DB::table('invoices')->where('id', $draft->id)->update([
+            'status' => InvoiceStatus::Cancelled->value,
+        ]);
+
+        $exception = null;
+        try {
+            $svc->finalize($draft, $user);
+        } catch (\RuntimeException $e) {
+            $exception = $e;
+        }
+        $this->assertNotNull($exception, 'A stale draft must not finalize after the persisted invoice is cancelled.');
+        $this->assertSame('Only draft invoices can be finalized.', $exception->getMessage());
+
+        $row = DB::table('invoices')->where('id', $draft->id)->first();
+        $this->assertSame(InvoiceStatus::Cancelled->value, $row->status);
+        $this->assertNull($row->invoice_number);
+        $this->assertSame(0, DB::table('journal_entries')->where('reference_type', 'invoice')->count());
+        $this->assertSame(0, DB::table('document_sequences')->where('document_type', 'invoice')->count());
+    }
+
+    public function test_finalize_calculates_from_the_locked_invoice_and_items_when_caller_is_stale(): void
+    {
+        $user     = $this->newUser();
+        $customer = Customer::create(['name' => 'Authoritative Nissan PH', 'payment_terms_days' => 30]);
+        $svc      = app(InvoiceService::class);
+        $draft    = $this->makeDraft($svc, $user, $customer);
+        $itemId   = $draft->items->firstOrFail()->id;
+
+        // Change the persisted aggregate and line while retaining the stale
+        // model handed to the service (the original total was 10000.00).
+        DB::table('invoices')->where('id', $draft->id)->update([
+            'subtotal'    => '9000.00',
+            'total_amount'=> '9000.00',
+            'balance'     => '9000.00',
+        ]);
+        DB::table('invoice_items')->where('id', $itemId)->update([
+            'quantity' => '9.00',
+            'total'    => '9000.00',
+        ]);
+
+        $finalized = $svc->finalize($draft, $user);
+
+        $this->assertSame('10000.00', (string) $draft->total_amount, 'The caller must remain stale for this regression.');
+        $this->assertSame('9000.00', (string) $finalized->total_amount);
+        $this->assertSame('9000.00', (string) $finalized->journalEntry->total_debit);
+        $this->assertSame('9000.00', (string) $finalized->journalEntry->total_credit);
+        $this->assertSame(InvoiceStatus::Finalized, $finalized->status);
+    }
 }
