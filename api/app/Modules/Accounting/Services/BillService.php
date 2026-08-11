@@ -502,29 +502,34 @@ class BillService
      */
     public function recordPayment(Bill $bill, array $data, User $by): BillPayment
     {
-        if ($bill->status === BillStatus::Cancelled) {
-            throw new BusinessRuleException('Cannot record payment on a cancelled bill.');
-        }
-        if ($bill->status === BillStatus::Paid) {
-            throw new BusinessRuleException('Bill is already fully paid.');
-        }
-
         $amount = Money::round2((string) $data['amount']);
-        if (Money::lte($amount, '0')) {
-            throw new BusinessRuleException('Payment amount must be greater than zero.');
-        }
-        if (Money::gt($amount, (string) $bill->balance)) {
-            throw new BusinessRuleException("Payment {$amount} exceeds outstanding balance ".$bill->balance.'.');
-        }
 
         return DB::transaction(function () use ($bill, $data, $amount, $by) {
+            // Lock and reload before checking the bill state or balance so a
+            // stale caller cannot create a second payment against settled AP.
+            $lockedBill = Bill::query()
+                ->lockForUpdate()
+                ->findOrFail($bill->getKey());
+            if ($lockedBill->status === BillStatus::Cancelled) {
+                throw new BusinessRuleException('Cannot record payment on a cancelled bill.');
+            }
+            if ($lockedBill->status === BillStatus::Paid) {
+                throw new BusinessRuleException('Bill is already fully paid.');
+            }
+            if (Money::lte($amount, '0')) {
+                throw new BusinessRuleException('Payment amount must be greater than zero.');
+            }
+            if (Money::gt($amount, (string) $lockedBill->balance)) {
+                throw new BusinessRuleException("Payment {$amount} exceeds outstanding balance ".$lockedBill->balance.'.');
+            }
+
             $cashAccountId = HashIdFilter::decode($data['cash_account_id'], Account::class);
             if (! $cashAccountId) {
                 throw new BusinessRuleException('Invalid cash account.');
             }
 
             $payment = BillPayment::create([
-                'bill_id' => $bill->id,
+                'bill_id' => $lockedBill->id,
                 'cash_account_id' => $cashAccountId,
                 'payment_date' => $data['payment_date'],
                 'amount' => $amount,
@@ -536,7 +541,7 @@ class BillService
             $apId = $this->accountId($this->accounts->ap());
             $je = $this->journals->create([
                 'date' => $payment->payment_date->toDateString(),
-                'description' => "Payment for Bill {$bill->bill_number}",
+                'description' => "Payment for Bill {$lockedBill->bill_number}",
                 'reference_type' => 'bill_payment',
                 'reference_id' => $payment->id,
                 'lines' => [
@@ -549,11 +554,11 @@ class BillService
             $payment->update(['journal_entry_id' => $je->id]);
 
             // Update bill totals.
-            $newPaid = Money::add((string) $bill->amount_paid, $amount);
-            $newBalance = Money::sub((string) $bill->total_amount, $newPaid);
+            $newPaid = Money::add((string) $lockedBill->amount_paid, $amount);
+            $newBalance = Money::sub((string) $lockedBill->total_amount, $newPaid);
             $newStatus = Money::isZero($newBalance) ? BillStatus::Paid : BillStatus::Partial;
 
-            $bill->update([
+            $lockedBill->update([
                 'amount_paid' => $newPaid,
                 'balance' => $newBalance,
                 'status' => $newStatus,
@@ -564,7 +569,7 @@ class BillService
             // Partial payments move the chain to 'partial'; the settling
             // payment completes it ('paid'). The outbox dispatcher waits for
             // commit before publishing to the channel consumer.
-            $fresh = $bill->fresh();
+            $fresh = $lockedBill->fresh();
             app(ChainBroadcaster::class)
                 ->broadcastFor($fresh, (string) $fresh->status?->value, $by);
 

@@ -179,15 +179,21 @@ class InvoiceService
     /** Lock the number, build + post the JE, flip status to finalized. */
     public function finalize(Invoice $invoice, User $by): Invoice
     {
-        if ($invoice->status !== InvoiceStatus::Draft) {
-            throw new BusinessRuleException('Only draft invoices can be finalized.');
-        }
-
         return DB::transaction(function () use ($invoice, $by) {
-            // OGAMI-001 — block finalizing into a closed period.
-            $this->periods->assertPostingAllowed($invoice->date);
+            // The caller may be holding a stale draft. Serialize against the
+            // persisted invoice and make every validation/calculation use that
+            // authoritative row.
+            $lockedInvoice = Invoice::query()
+                ->lockForUpdate()
+                ->findOrFail($invoice->getKey());
+            if ($lockedInvoice->status !== InvoiceStatus::Draft) {
+                throw new BusinessRuleException('Only draft invoices can be finalized.');
+            }
 
-            $invoice->loadMissing(['items', 'customer']);
+            // OGAMI-001 — block finalizing into a closed period.
+            $this->periods->assertPostingAllowed($lockedInvoice->date);
+
+            $lockedInvoice->loadMissing(['items', 'customer']);
 
             $arId        = $this->accountId($this->accounts->ar());
             $vatOutputId = $this->accountId($this->accounts->vatOutput());
@@ -195,11 +201,11 @@ class InvoiceService
             $lines = [];
             $lines[] = [
                 'account_id' => $arId,
-                'debit'      => (string) $invoice->total_amount,
+                'debit'      => (string) $lockedInvoice->total_amount,
                 'credit'     => '0.00',
-                'description'=> "AR — {$invoice->customer->name}",
+                'description'=> "AR — {$lockedInvoice->customer->name}",
             ];
-            foreach ($invoice->items as $item) {
+            foreach ($lockedInvoice->items as $item) {
                 $lines[] = [
                     'account_id' => $item->revenue_account_id,
                     'debit'      => '0.00',
@@ -209,19 +215,19 @@ class InvoiceService
             }
             // OGAMI-008 — Senior/PWD discount: contra-revenue debit keeps the JE
             // balanced (AR is net of discount while revenue is booked gross).
-            if (Money::gt((string) $invoice->senior_pwd_discount, '0')) {
+            if (Money::gt((string) $lockedInvoice->senior_pwd_discount, '0')) {
                 $lines[] = [
                     'account_id' => $this->discountAccountId(),
-                    'debit'      => (string) $invoice->senior_pwd_discount,
+                    'debit'      => (string) $lockedInvoice->senior_pwd_discount,
                     'credit'     => '0.00',
                     'description'=> 'Senior/PWD discount',
                 ];
             }
-            if ($invoice->is_vatable && Money::gt((string) $invoice->vat_amount, '0')) {
+            if ($lockedInvoice->is_vatable && Money::gt((string) $lockedInvoice->vat_amount, '0')) {
                 $lines[] = [
                     'account_id' => $vatOutputId,
                     'debit'      => '0.00',
-                    'credit'     => (string) $invoice->vat_amount,
+                    'credit'     => (string) $lockedInvoice->vat_amount,
                     'description'=> 'VAT Output',
                 ];
             }
@@ -229,15 +235,15 @@ class InvoiceService
             $invoiceNumber = $this->sequences->generate('invoice');
 
             $je = $this->journals->create([
-                'date'           => $invoice->date->toDateString(),
-                'description'    => "Invoice {$invoiceNumber} to {$invoice->customer->name}",
+                'date'           => $lockedInvoice->date->toDateString(),
+                'description'    => "Invoice {$invoiceNumber} to {$lockedInvoice->customer->name}",
                 'reference_type' => 'invoice',
-                'reference_id'   => $invoice->id,
+                'reference_id'   => $lockedInvoice->id,
                 'lines'          => $lines,
             ], $by);
             $je = $this->journals->post($je, $by);
 
-            $invoice->update([
+            $lockedInvoice->update([
                 'invoice_number'   => $invoiceNumber,
                 'journal_entry_id' => $je->id,
                 'status'           => InvoiceStatus::Finalized,
@@ -246,20 +252,20 @@ class InvoiceService
             // C-2 — Promote the parent SO to 'invoiced' once we have a posted
             // JE and a locked invoice number. No-op if the invoice isn't
             // linked to an SO or the SO is already at/past invoiced.
-            if ($invoice->sales_order_id) {
+            if ($lockedInvoice->sales_order_id) {
                 app(\App\Modules\CRM\Services\SalesOrderService::class)
-                    ->markInvoiced((int) $invoice->sales_order_id);
+                    ->markInvoiced((int) $lockedInvoice->sales_order_id);
             }
 
             // 2026-08-08 — final P2P-analog link: broadcast the chain step so
             // the invoice page updates in real time (draft → finalized).
             app(ChainBroadcaster::class)->broadcastFor(
-                $invoice->fresh(),
+                $lockedInvoice->fresh(),
                 InvoiceStatus::Finalized->value,
                 auth()->user(),
             );
 
-            return $this->show($invoice->fresh());
+            return $this->show($lockedInvoice->fresh());
         });
     }
 
@@ -289,26 +295,32 @@ class InvoiceService
 
     public function recordCollection(Invoice $invoice, array $data, User $by): InvoiceCollection
     {
-        if (in_array($invoice->status, [InvoiceStatus::Draft, InvoiceStatus::Cancelled, InvoiceStatus::Paid], true)) {
-            throw new BusinessRuleException("Cannot record a collection while invoice status is {$invoice->status->value}.");
-        }
-
         $amount = Money::round2((string) $data['amount']);
-        if (Money::lte($amount, '0')) {
-            throw new BusinessRuleException('Amount must be > 0.');
-        }
-        if (Money::gt($amount, (string) $invoice->balance)) {
-            throw new BusinessRuleException("Amount {$amount} exceeds outstanding balance " . $invoice->balance . '.');
-        }
 
         return DB::transaction(function () use ($invoice, $data, $amount, $by) {
+            // Lock and reload before checking status/balance. The caller's
+            // invoice can be stale after another collection settled or changed
+            // the outstanding balance.
+            $lockedInvoice = Invoice::query()
+                ->lockForUpdate()
+                ->findOrFail($invoice->getKey());
+            if (in_array($lockedInvoice->status, [InvoiceStatus::Draft, InvoiceStatus::Cancelled, InvoiceStatus::Paid], true)) {
+                throw new BusinessRuleException("Cannot record a collection while invoice status is {$lockedInvoice->status->value}.");
+            }
+            if (Money::lte($amount, '0')) {
+                throw new BusinessRuleException('Amount must be > 0.');
+            }
+            if (Money::gt($amount, (string) $lockedInvoice->balance)) {
+                throw new BusinessRuleException("Amount {$amount} exceeds outstanding balance " . $lockedInvoice->balance . '.');
+            }
+
             $cashAccountId = HashIdFilter::decode($data['cash_account_id'], Account::class);
             if (! $cashAccountId) {
                 throw new BusinessRuleException('Invalid cash account.');
             }
 
             $coll = InvoiceCollection::create([
-                'invoice_id'       => $invoice->id,
+                'invoice_id'       => $lockedInvoice->id,
                 'cash_account_id'  => $cashAccountId,
                 'collection_date'  => $data['collection_date'],
                 'amount'           => $amount,
@@ -320,7 +332,7 @@ class InvoiceService
             $arId = $this->accountId($this->accounts->ar());
             $je = $this->journals->create([
                 'date'           => $coll->collection_date->toDateString(),
-                'description'    => "Collection for Invoice {$invoice->invoice_number}",
+                'description'    => "Collection for Invoice {$lockedInvoice->invoice_number}",
                 'reference_type' => 'collection',
                 'reference_id'   => $coll->id,
                 'lines'          => [
@@ -331,11 +343,11 @@ class InvoiceService
             $je = $this->journals->post($je, $by);
             $coll->update(['journal_entry_id' => $je->id]);
 
-            $newPaid    = Money::add((string) $invoice->amount_paid, $amount);
-            $newBalance = Money::sub((string) $invoice->total_amount, $newPaid);
+            $newPaid    = Money::add((string) $lockedInvoice->amount_paid, $amount);
+            $newBalance = Money::sub((string) $lockedInvoice->total_amount, $newPaid);
             $newStatus  = Money::isZero($newBalance) ? InvoiceStatus::Paid : InvoiceStatus::Partial;
 
-            $invoice->update([
+            $lockedInvoice->update([
                 'amount_paid' => $newPaid,
                 'balance'     => $newBalance,
                 'status'      => $newStatus,
@@ -343,7 +355,7 @@ class InvoiceService
 
             // 2026-08-08 — broadcast the chain step: partial → paid on settle.
             app(ChainBroadcaster::class)->broadcastFor(
-                $invoice->fresh(),
+                $lockedInvoice->fresh(),
                 $newStatus->value,
                 auth()->user(),
             );
