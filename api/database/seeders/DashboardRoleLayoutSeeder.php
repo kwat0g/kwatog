@@ -58,8 +58,17 @@ class DashboardRoleLayoutSeeder extends Seeder
                 'inventory.pending_grns', 'inventory.low_stock',
                 'inventory.pending_issues', 'supply.delivery_schedule',
             ],
+            // Approvals-first: this role carries the second-most approve-type
+            // permissions but has no bespoke dashboard page, so the registry
+            // default IS its dashboard. Deliberately department-scoped — the
+            // company-wide `hr.headcount` / `hr.on_leave_today` readings it
+            // also qualifies for duplicate the team-scoped widgets below at a
+            // breadth a single department's head has no use for.
             'department_head' => [
-                'approvals.pending', 'hr.team_on_leave_today', 'hr.team_dtr_today',
+                'approvals.pending', 'hr.team_dtr_today', 'hr.team_on_leave_today',
+                'purchasing.open_prs', 'hr.probation_alerts',
+                'self.payslip_summary', 'self.leave_balance',
+                'self.dtr_today', 'self.pending_requests',
             ],
             'employee' => [
                 'self.payslip_summary', 'self.leave_balance',
