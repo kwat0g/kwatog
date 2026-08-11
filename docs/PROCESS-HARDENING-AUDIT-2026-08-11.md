@@ -219,6 +219,14 @@ blast-radius order, so `P01`…`P81` *is* the trace order for Tasks 4–9 — th
 ranking is inspectable rather than implicit. Within a blast band, cross-module
 sorts before chain before single-module.
 
+`Domains` lists the namespaces a process **writes** — the same write-reach test
+that sets `Class`, not every namespace it touches. A module that is only read
+from does not appear. This is why P77 can read eight foreign modules
+(`api/app/Common/Services/AlertEngineService.php:11-18`) and still list only
+`Common`: its only writes are `$alert->update()` at `:93`, `:105`, `:465`. Tasks
+4–9 use this column to decide which namespaces to open, so a missing domain
+means an untraced write.
+
 `Disposition` is empty for every row. Nothing is traced in this task. Task 11
 generates the untraced list from rows still empty, so an empty cell is a
 measurement, not an oversight.
@@ -240,13 +248,13 @@ falling back to the creating migration where no model exists.
 
 | # | Write site | Target table | Owning module | Folded into |
 |---|---|---|---|---|
-| 1 | `api/app/Modules/HR/Services/EmployeeService.php:205` | `employee_shift_assignments` | Attendance (`api/app/Modules/Attendance/Models/EmployeeShiftAssignment.php`) | P44 |
-| 2 | `api/app/Modules/HR/Services/EmployeeService.php:224` | `employee_leave_balances` | Leave (`api/app/Modules/Leave/Models/EmployeeLeaveBalance.php`) | P44 |
-| 3 | `api/app/Modules/HR/Listeners/InitializeLeaveBalances.php:57` | `employee_leave_balances` | Leave | P44 |
+| 1 | `api/app/Modules/HR/Services/EmployeeService.php:205` | `employee_shift_assignments` | Attendance (`api/app/Modules/Attendance/Models/EmployeeShiftAssignment.php`) | P42 |
+| 2 | `api/app/Modules/HR/Services/EmployeeService.php:224` | `employee_leave_balances` | Leave (`api/app/Modules/Leave/Models/EmployeeLeaveBalance.php`) | P42 |
+| 3 | `api/app/Modules/HR/Listeners/InitializeLeaveBalances.php:57` | `employee_leave_balances` | Leave | P42 |
 | 4 | `api/app/Modules/HR/Services/UserProvisioningService.php:100` | `sessions` | *unresolved — see below* | P54 |
-| 5 | `api/app/Modules/Admin/Controllers/SessionController.php:44` | `sessions` | *unresolved* | P73 |
-| 6 | `api/app/Modules/Admin/Services/UserAdminService.php:135` | `sessions` | *unresolved* | P73 |
-| 7 | `api/app/Modules/Admin/Controllers/SettingsController.php:48` | `settings` | Common (`api/app/Common/Services/SettingsService.php:15`) | P75 |
+| 5 | `api/app/Modules/Admin/Controllers/SessionController.php:44` | `sessions` | *unresolved* | P63 |
+| 6 | `api/app/Modules/Admin/Services/UserAdminService.php:135` | `sessions` | *unresolved* | P63 |
+| 7 | `api/app/Modules/Admin/Controllers/SettingsController.php:48` | `settings` | Common (`api/app/Common/Services/SettingsService.php:15`) | P64 |
 | 8 | `api/app/Modules/Payroll/Services/PayrollGlPostingService.php:313` | `journal_entries` | Accounting (`api/app/Modules/Accounting/Models/JournalEntry.php`) | P02 |
 | 9 | `api/app/Modules/Payroll/Services/PayrollGlPostingService.php:328` | `journal_entry_lines` | Accounting (`api/app/Modules/Accounting/Models/JournalEntryLine.php`) | P02 |
 | 10 | `api/app/Modules/Inventory/Services/GrnGlPostingService.php:223` | `journal_entries` | Accounting | P15 |
@@ -274,7 +282,19 @@ Common-module service owner, so it is attributed to Common.
 spot: the same file already imports `GoodsReceiptNote`, so Task 2's import scan
 caught the Quality→Inventory edge (`InspectionService.php:14`, evidenced at
 `:250`). They are additional evidence for an already-visible edge, folded into
-P28/P29, and are excluded from the count of 11 for that reason.
+P57, and are excluded from the count of 11 for that reason.
+
+**Correction (Task 3 review).** Six of the eleven `Folded into` pointers above,
+and the exclusion pointer in the preceding paragraph, were wrong on first
+writing — they were numbered against a draft inventory and not re-synced. Rows
+1–3 pointed at P44 (*leave request approval*) instead of P42, whose cited entry
+point is `EmployeeService.php` itself; rows 5–6 pointed at P73 (*preventive
+maintenance*) instead of P63; row 7 pointed at P75 (*PPAP*) instead of P64,
+whose cited entry point is `SettingsController.php:48` itself; the exclusion
+note pointed at P28/P29 (*reorder-point breach, MRP run*) instead of P57, whose
+name already reads "writes GRN link". All are corrected above. This column is
+the only map from recovered blind spot to covering process, so a wrong pointer
+would have let a raw write go untraced while both rows read clean.
 
 Read-only `DB::table()` queries are out of scope. Of 353 `DB::table()`
 occurrences in `api/app/`, the great majority are reads
@@ -302,7 +322,7 @@ are dismissed here rather than enumerated.
 | P14 | Payroll disbursement proof → mark disbursed → force-unlock / stale reap | chain | Payroll | `api/app/Modules/Payroll/Controllers/PayrollPeriodController.php:230` | HTTP + scheduled | money | |
 | P15 | GRN GL posting | chain | Inventory, Accounting | `api/app/Modules/Inventory/Services/GrnGlPostingService.php:203` | event | money | |
 | P16 | Stock movement GL posting + retry | chain | Inventory, Accounting | `api/app/Modules/Inventory/Listeners/PostStockMovementToGlOnRequested.php:27` | event + HTTP | money | |
-| P17 | AR: invoice create → finalize → collection → credit note | chain | Accounting | `api/app/Modules/Accounting/Controllers/InvoiceController.php:62` | HTTP | money | |
+| P17 | AR: invoice create → finalize → collection → credit note | cross-module | Accounting, CRM | `api/app/Modules/Accounting/Controllers/InvoiceController.php:62` | HTTP | money | |
 | P18 | AP: bill create → post → payment | chain | Accounting | `api/app/Modules/Accounting/Controllers/BillController.php:43` | HTTP | money | |
 | P19 | Payroll adjustment request → approve / reject | single-module | Payroll | `api/app/Modules/Payroll/Controllers/PayrollAdjustmentController.php:48` | HTTP | money | |
 | P20 | Manual journal entry post / reverse + accounting period lock-relock | single-module | Accounting | `api/app/Modules/Accounting/Controllers/JournalEntryController.php:44` | HTTP + scheduled | money | |
@@ -316,7 +336,7 @@ are dismissed here rather than enumerated.
 | P28 | Reorder-point breach → auto purchase request | cross-module | Inventory, Purchasing | `api/app/Modules/Inventory/Services/AutoReplenishmentService.php:34` | event | stock | |
 | P29 | MRP run → material plan → PR + WO draft | cross-module | MRP, Purchasing, Production, CRM | `api/app/Modules/MRP/Services/MrpEngineService.php:68` | HTTP + scheduled | stock | |
 | P30 | MRP II capacity schedule → confirm → reassign / reorder | cross-module | MRP, Production | `api/app/Modules/MRP/Controllers/SchedulerController.php:26` | HTTP | stock | |
-| P31 | WO confirm → material reservation + issue → stock | cross-module | Production, Inventory | `api/app/Modules/Production/Controllers/WorkOrderController.php:143` | HTTP | stock | |
+| P31 | WO confirm → material reservation + issue → stock | cross-module | Production, Inventory, CRM | `api/app/Modules/Production/Controllers/WorkOrderController.php:143` | HTTP | stock | |
 | P32 | WO output → production receipt → stock + mold shot count | cross-module | Production, Inventory, MRP | `api/app/Modules/Production/Services/WorkOrderOutputService.php:67` | HTTP + event | stock | |
 | P33 | WO operation lifecycle → operator binding | cross-module | Production, HR | `api/app/Modules/Production/Controllers/WoOperationController.php:87` | HTTP | stock | |
 | P34 | Spare part usage → stock issue | cross-module | Maintenance, Inventory | `api/app/Modules/Maintenance/Services/SparePartUsageService.php:31` | HTTP | stock | |
@@ -352,7 +372,7 @@ are dismissed here rather than enumerated.
 | P64 | System settings update (raw `settings` write) | cross-module | Admin, Common | `api/app/Modules/Admin/Controllers/SettingsController.php:48` | HTTP | other | |
 | P65 | Bulk import dry-run → commit → rollback | cross-module | Common + target modules | `api/app/Common/Controllers/ImportController.php:45` | HTTP | other | |
 | P66 | Sales order create → confirm → cancel | chain | CRM | `api/app/Modules/CRM/Controllers/SalesOrderController.php:47` | HTTP + event | other | |
-| P67 | NCR lifecycle: create → action → disposition → close (+ escalation, effectiveness) | chain | Quality | `api/app/Modules/Quality/Controllers/NcrController.php:60` | HTTP + scheduled | other | |
+| P67 | NCR lifecycle: create → action → disposition → close (+ escalation, effectiveness) | cross-module | Quality, Production | `api/app/Modules/Quality/Controllers/NcrController.php:60` | HTTP + scheduled | other | |
 | P68 | PR lifecycle: create → submit → approve → convert to PO | chain | Purchasing | `api/app/Modules/Purchasing/Controllers/PurchaseRequestController.php:72` | HTTP + event | other | |
 | P69 | PO lifecycle: create → submit → approve → send → close / cancel | chain | Purchasing | `api/app/Modules/Purchasing/Controllers/PurchaseOrderController.php:51` | HTTP + event | other | |
 | P70 | Supplier dispatch prepare / close / recover + performance recompute | chain | Purchasing | `api/app/Modules/Purchasing/Listeners/PrepareSupplierDispatch.php:23` | event + scheduled + HTTP | other | |
@@ -366,20 +386,78 @@ are dismissed here rather than enumerated.
 | P78 | Platform services: notifications, digests, scheduled exports, documents, print, retention prune, DB backup | single-module | Common, Auth, Admin | `api/app/Common/Services/NotificationService.php:113` | event + scheduled + HTTP | other | |
 | P79 | Reporting: dashboard KPI compute, layout save / reset, production summaries | single-module | Dashboard, Production | `api/app/Modules/Dashboard/Controllers/KpiController.php:31` | HTTP + scheduled | other | |
 | P80 | Landing public writes: contact inquiry + newsletter | single-module | Landing | `api/app/Modules/Landing/Controllers/ContactInquiryController.php:16` | HTTP | other | |
-| P81 | Master data maintenance (operations, commercial, people / payroll reference) | single-module | Inventory, MRP, Production, Quality, SupplyChain, CRM, Accounting, HR, Attendance, Leave, Payroll | `api/app/Modules/Inventory/Controllers/ItemController.php:60` | HTTP | other | |
+| P81 | Master data maintenance (operations, commercial, people — 25 pure-CRUD reference tables) | single-module | Inventory, MRP, Production, Quality, SupplyChain, CRM, Accounting, HR, Attendance, Leave | `api/app/Modules/Inventory/Controllers/ItemController.php:60` | HTTP | other | |
+| P82 | Government contribution table maintenance (update, activate/deactivate, import, restore) | chain | Payroll | `api/app/Modules/Payroll/Controllers/GovernmentTableController.php:43` | HTTP | money | |
+| P83 | De-minimis benefit table maintenance (update, activate/deactivate) | chain | Payroll | `api/app/Modules/Payroll/routes.php:121` | HTTP | money | |
 
-**Counts.** 81 processes: 43 cross-module, 16 chain, 22 single-module. By blast
-radius: 23 money, 18 stock, 11 employee-state, 29 other.
+**Counts.** 83 processes: 45 cross-module, 16 chain, 22 single-module. By blast
+radius: 25 money, 18 stock, 11 employee-state, 29 other.
 
 P81 is deliberately one row covering the pure-CRUD reference tables (items,
 categories, UOM, warehouses / zones / locations, BOM, machines, molds, routings,
 inspection specs, NCR templates, item quality plans, vehicles, containers,
 customers, vendors, products, price agreements, COA accounts, departments,
-positions, skills, trainings, shifts, holidays, leave types, government
-contribution tables, de-minimis benefits). These have no multi-step state
-machine and no cross-module write reach; splitting them into 27 rows would
-inflate the inventory without adding a traceable process. Their entry points are
-enumerated in the Task 2 HTTP section.
+positions, skills, trainings, shifts, holidays, leave types). These have no
+multi-step state machine and no cross-module write reach; splitting them into 25
+rows would inflate the inventory without adding a traceable process. Their entry
+points are enumerated in the Task 2 HTTP section.
+
+**Correction (Task 3 review) — payroll reference tables split out as P82/P83.**
+The government contribution and de-minimis tables were originally inside P81 and
+therefore ranked `other`, `single-module`, and last in the trace order. That was
+wrong on both stated criteria. They *do* have a state machine —
+`activate`/`deactivate` at `api/app/Modules/Payroll/routes.php:29,31` and
+`:123,:124`, alongside `update` (`GovernmentTableController.php:43`), `destroy`
+(`:58`), `restore` (`:65`), and `import` (`:74`). And they carry money blast:
+`CLAUDE.md` records these tables as effective-dated and selected by
+`payroll_date`, worth roughly ₱100/employee between the 2024 and 2025 schedules,
+so editing one bracket changes computed deductions for every employee in a
+cutoff. They are now P82 and P83 with `money` blast, which moves them out of the
+parked pile and into the traced set.
+
+Note that P82/P83 break the otherwise strict rule that ID order equals blast
+order: they are money-blast rows carrying IDs above the `other` band. Renumbering
+83 rows to preserve the invariant would invalidate every ID already cited in this
+document and in the task ledger. Tasks 4–9 trace P82/P83 with the money band
+(after P23), not at the end.
+
+### 2.3a FQN container resolution — third blind spot (recovered in review)
+
+Import scanning misses a second construct beyond raw `DB::table()`. A service can
+reach a foreign module with no `use` statement at all, by resolving the class
+through the container from its fully-qualified name:
+
+```php
+app(\App\Modules\CRM\Services\SalesOrderService::class)->markInvoiced(...)
+```
+
+There is no import to match, so the edge is absent from *both* Task 2 edge files
+— not mis-dismissed as read-only, simply never seen in any form. Sweeping
+`api/app/` for every container syntax (`app(`, `resolve(`, `App::make(`, `make(`)
+followed by an `App\Modules\` FQN, excluding tests, finds **11 call sites, of
+which 5 cross module namespaces**:
+
+| Call site | Resolves | Writes? | Status |
+|---|---|---|---|
+| `api/app/Modules/Accounting/Services/InvoiceService.php:250` | CRM `SalesOrderService` | **yes** — `transitionTo()` at `api/app/Modules/CRM/Services/SalesOrderService.php:589` locks and writes the SO row | **missed** → P17 reclassified |
+| `api/app/Modules/Quality/Services/NcrService.php:338` | Production `WorkOrderService` | **yes** — `createDraft()` writes `work_orders` at `api/app/Modules/Production/Services/WorkOrderService.php:148` | **missed** → P67 reclassified |
+| `api/app/Modules/Production/Services/WorkOrderService.php:354` | CRM `SalesOrderService` | **yes** — `markInProduction()` | edge present, domain omitted → P31 corrected |
+| `api/app/Modules/Inventory/Services/AutoReplenishmentService.php:53` | Purchasing `AutoPurchaseOrderService` | yes — `PurchaseOrder::create` at `:83` | already covered: file imports Purchasing (4 `use` lines), edge at P28 |
+| `api/app/Modules/Purchasing/Services/PurchaseOrderService.php:363` | Quality `PpapService` | **no** — `vendorHasActivePpap()` is `exists()`-only, returns bool (`api/app/Modules/Quality/Services/PpapService.php:198`) | correctly excluded under write reach |
+
+The remaining six resolve same-module services and are not edges.
+
+Both `InvoiceService.php` and `NcrService.php` have **zero** foreign-module
+imports for the module they write (`grep -c 'use App\Modules\CRM'` and
+`'use App\Modules\Production'` both return `0`), which is precisely why the
+import graph could not see them. P17 was classed `chain | Accounting` while
+writing CRM on a money path; P67 was classed `chain | Quality` while creating
+Production work orders — the NCR corrective-action loop `CLAUDE.md` names as the
+thesis differentiator. Both are now `cross-module`.
+
+The sweep above is complete for these four syntaxes. Resolution split across an
+intermediate variable, or via a string class name, would still evade it; that
+residual gap is recorded in section 5 rather than claimed as closed.
 
 ### 2.4 Durable events with no consumer (finding candidates, not traced here)
 
