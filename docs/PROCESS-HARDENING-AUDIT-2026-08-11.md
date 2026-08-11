@@ -378,7 +378,7 @@ are dismissed here rather than enumerated.
 |---|---|---|---|---|---|---|---|
 | P01 | Payroll finalize → bank file + payslip email + employee notify | cross-module | Payroll, Accounting | `api/app/Modules/Payroll/Controllers/PayrollPeriodController.php:174` | HTTP + event | money | **traced** (§3.0) — 3 findings: P01-01 PROVEN, P01-02 PROVEN, P01-03 ARGUED |
 | P02 | Payroll GL posting handoff + retry (raw `journal_entries` insert) | cross-module | Payroll, Accounting | `api/app/Modules/Payroll/Services/PayrollGlPostingService.php:313` | event + job + HTTP | money | **traced** (§3.0) — 2 findings: P02-01 PROVEN, P02-02 PROVEN |
-| P03 | Payroll compute → loan deduction + loan balance write | cross-module | Payroll, Loans | `api/app/Modules/Payroll/Controllers/PayrollPeriodController.php:143` | HTTP + event + job | money | **traced** (§3.0) — 1 finding: P03-01 PROVEN |
+| P03 | Payroll compute → loan deduction + loan balance write | cross-module | Payroll, Loans | `api/app/Modules/Payroll/Controllers/PayrollPeriodController.php:143` | HTTP + event + job | money | **traced** (§3.0) — 1 finding: P03-01 ARGUED (downgraded from PROVEN, §3.1) |
 | P04 | Payroll period void → GL reversal + cycle-claim release | cross-module | Payroll, Accounting | `api/app/Modules/Payroll/Controllers/PayrollPeriodController.php:275` | HTTP | money | **traced** (§3.0) — **clean** (§4); cause of P02-02 filed there |
 | P05 | Final pay compute → GL | cross-module | HR, Accounting | `api/app/Modules/HR/Controllers/SeparationController.php:80` | HTTP | money | |
 | P06 | Delivery confirm → SO marked delivered + draft invoice | cross-module | SupplyChain, CRM, Accounting | `api/app/Modules/SupplyChain/Controllers/DeliveryController.php:79` | HTTP + event | money | |
@@ -988,7 +988,7 @@ table. Grep 3 (`EmployeeLoan::query()` mass `update`/`delete`) returns zero.
 | 2 | `LoanService::approve` `:221-222` | `status=Active`, `start_date` | `status !== Pending` `:213` | **yes** `:212` |
 | 3 | `LoanService::reject` `:267` | `status=Rejected` | `status !== Pending` `:263` | **yes** `:262` |
 | 4 | `LoanService::cancel` `:283` | `status=Cancelled` | not in {Pending, Active} `:280` | **yes** `:279` |
-| 5 | `LoanService::recordPayment` `:307-324` | **`balance`, `total_paid`, `pay_periods_remaining`, `status`** | `status !== Active` `:296` | **no** — no lock anywhere in the method |
+| 5 | `LoanService::recordPayment` `:307-324` | **`balance`, `total_paid`, `pay_periods_remaining`, `status`** | `status !== Active` `:296` | **no** — no lock anywhere in the method; **and no production caller, see the correction below** |
 | 6 | `PayrollCalculatorService::applyLoanDeductions` `:862-870` | **`balance`, `total_paid`, `pay_periods_remaining`, `status`** | `status=Active` + `pay_periods_remaining > 0` in the **read** query `:826-827` | **no** — plain `get()` at `:822-825` |
 | 7 | `PayrollCalculatorService::reverseLoanDeductions` `:908-916` | **`balance`, `total_paid`, `pay_periods_remaining`, `status`** | none — driven by `loan_payments` rows | **no** — `EmployeeLoan::find()` `:907` |
 
@@ -1027,7 +1027,8 @@ deduction is traceable back to the run. No finding here.
 One finding.
 
 - **P03-01** — loan balance is an unlocked read-modify-write on all three money
-  writers; a concurrent write silently loses one deduction. **PROVEN.**
+  writers; a concurrent write silently loses one deduction. **ARGUED**
+  (downgraded from PROVEN during P05 — see the correction in §3.1).
   Data-corrupting → 3.1.
 
 Sound on this process, recorded so the clean parts are visible: the claim is a
@@ -1264,7 +1265,21 @@ list, then finalizing in another tab (or another operator finalizing after the
 reaper released the claim at `Console/Commands/ReapStalePayrollRuns.php:73`),
 reproduces it without contrivance.
 
-#### P03-01 — loan balance is an unlocked read-modify-write; a concurrent write loses a deduction (PROVEN)
+#### P03-01 — loan balance is an unlocked read-modify-write; a concurrent write loses a deduction (ARGUED)
+
+**Label correction (made while tracing P05).** This finding was first filed
+PROVEN. It is downgraded to ARGUED, because the writer the probe drove —
+`LoanService::recordPayment` — turns out to have **no production caller
+anywhere**: `grep -rn "recordPayment" api/` outside `/tests/` returns only
+`BillService::recordPayment` (Accounting, unrelated to loans) and the declaration
+itself at `Modules/Loans/Services/LoanService.php:288`, and
+`Modules/Loans/routes.php` exposes no payment route (`:9-21`). The probe
+therefore drove the bad outcome through code no user can reach. The mechanism it
+demonstrated is real and the reachable writers share it exactly, but per the
+evidence standard the reachable interleaving was not itself driven, so the label
+must come down rather than stand on a same-shape argument. The original
+reachability list also asserted `recordPayment` was "reachable from the Loans
+UI"; that sentence was false and is removed below.
 
 All three writers that change `employee_loans.balance` read the row without a
 lock, compute the new figure in PHP, and write it back as a literal. None uses
@@ -1292,20 +1307,20 @@ first.
 
 Three writers, one shape (field 6, writers 5–7):
 
-| Writer | Line | Locks? |
-|---|---|---|
-| `PayrollCalculatorService::applyLoanDeductions` | `:822-825` read, `:862-870` write | no |
-| `PayrollCalculatorService::reverseLoanDeductions` | `:907` read, `:908-916` write | no |
-| `LoanService::recordPayment` | `:288` entry, `:307-324` write | no |
+| Writer | Line | Locks? | Reachable in production |
+|---|---|---|---|
+| `PayrollCalculatorService::applyLoanDeductions` | `:822-825` read, `:862-870` write | no | **yes** — every compute run |
+| `PayrollCalculatorService::reverseLoanDeductions` | `:907` read, `:908-916` write | no | **yes** — every recompute |
+| `LoanService::recordPayment` | `:288` entry, `:307-324` write | no | **no caller** |
 
 The contrast inside `LoanService` itself is the sharpest evidence that this is an
 oversight rather than a considered trade-off: `approve` `:212`, `reject` `:262`
 and `cancel` `:279` each open with
 `EmployeeLoan::query()->lockForUpdate()->findOrFail(...)`. The module locks for
-its three *status* transitions and does not lock for either of its *money*
-transitions.
+its three *status* transitions and does not lock for its *money* transition.
 
-**Reachable interleavings.** Nothing serializes two writers against one loan:
+**Reachable interleavings.** Both live writers sit in `PayrollCalculatorService`,
+and nothing serializes two of them against one loan row:
 
 1. **Two payroll periods computing at once.** The overlap lock is keyed per
    period — `WithoutOverlapping("payroll-period-compute:{$event->period->id}")`
@@ -1316,26 +1331,27 @@ transitions.
    halves by design — "Company loan: half the monthly amortization per
    semi-monthly period" (`:832-835`). Computing two cutoffs concurrently, e.g.
    during a backfill, puts two unlocked writers on one loan row.
-2. **Payroll compute racing a manual payment.** `recordPayment` is reachable from
-   the Loans UI while the scheduled 23:00 compute runs
-   (`routes/console.php:71`, `:75`).
-3. **Recompute racing anything.** `reverseLoanDeductions` restores a balance from
-   the same unlocked read.
+2. **A single-row recompute racing a batch run.** `POST /payrolls/{payroll}/recompute`
+   (`Modules/Payroll/routes.php:104`) calls `computeForEmployee` **synchronously
+   in the request** (`Controllers/PayrollController.php:80-87`), which runs writer
+   7 then writer 6. Its guard refuses only `Approved` and `Processing` periods
+   (`:104-112`), so a recompute on a `Computed` period is permitted while another
+   period's batch job is mid-run. Two HTTP recomputes for the same employee in
+   two different periods collide the same way, with no queue involved at all.
 
 **Consequence.** The employee is deducted twice — two `LoanPayment` rows, two
 payroll rows, two amounts withheld from take-home pay — while the loan is
 credited once. The employee pays money the loan ledger never receives. It is also
 the one direction that will not self-correct: `total_paid` under-counts, so the
-loan stays `Active` for longer and keeps deducting past settlement, and
-`FinalPayService` reads `employee_loans.balance` verbatim when computing a
-leaver's final pay (`Modules/HR/Services/FinalPayService.php:341`), so the
-inflated balance is deducted again at separation.
+loan stays `Active` and keeps deducting past settlement, and `FinalPayService`
+reads `employee_loans.balance` verbatim when computing a leaver's final pay
+(`Modules/HR/Services/FinalPayService.php:341`), so the inflated balance is
+deducted again at separation.
 
-**Probe (PROVEN).** Throwaway PHPUnit test, deleted after the run. Loaded two
-`EmployeeLoan` instances before either wrote — which is exactly what two
-concurrent transactions read, since no path locks — then drove the real
-production writer `LoanService::recordPayment` twice, ₱2,500.00 each, against a
-₱10,000.00 balance:
+**Probe (mechanism demonstrated; reachable path not driven).** Throwaway PHPUnit
+test, deleted after the run. Loaded two `EmployeeLoan` instances before either
+wrote — what two concurrent transactions see, since no path locks — then called
+`LoanService::recordPayment` twice, ₱2,500.00 each, against a ₱10,000.00 balance:
 
 ```
 [PROBE7] both readers see balance=10000.00 total_paid=0.00
@@ -1343,7 +1359,8 @@ production writer `LoanService::recordPayment` twice, ₱2,500.00 each, against 
 [PROBE7] LOST: 2500.00 withheld from the employee but never credited to the loan
 ```
 
-A second probe captured the SQL to confirm no lock is taken:
+A second probe captured the SQL, confirming no lock is taken and that the write
+is a blind assignment rather than a relative decrement:
 
 ```
 [PROBE8] employee_loans queries during recordPayment=2, of which FOR UPDATE=0
@@ -1351,16 +1368,13 @@ A second probe captured the SQL to confirm no lock is taken:
 [PROBE8]   update "employee_loans" set "total_paid" = ?, "balance" = ?, "pay_periods_remaining" = ?, "updated_at" = ? whe…
 ```
 
-**What the probe proves and what it does not.** It proves the mechanism on a
-production writer of the same column: an unlocked read-modify-write on
-`employee_loans.balance` loses money, and no `FOR UPDATE` is issued. It does
-*not* independently drive `applyLoanDeductions` under true concurrency —
-`applyLoanDeductions` is private and re-queries inside its own transaction, so
-interleaving it needs two live DB connections, which under `RefreshDatabase`'s
-enclosing transaction is a harness change Phase 1 forbids. Writer 6 is therefore
-argued from identical code shape (`:822-825` / `:862-870`) plus the per-period
-overlap key, while writers 5–7's shared defect is proven. Flagged in §5 so Phase 2
-can drive the payroll-path variant rather than inherit this bound.
+**What remains unproven.** `applyLoanDeductions` and `reverseLoanDeductions` are
+private and re-query inside their own transaction, so interleaving them needs two
+live DB connections; under `RefreshDatabase`'s enclosing transaction that is a
+harness change Phase 1 forbids. The two live writers are therefore argued from
+identical code shape (`:822-825` / `:862-870`, `:907` / `:908-916`) plus the
+per-period overlap key and the synchronous recompute route. Flagged in §5 for
+Phase 2 to drive with real concurrency.
 
 ### 3.2 Silent failure
 
