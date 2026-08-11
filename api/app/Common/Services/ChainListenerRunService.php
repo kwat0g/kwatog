@@ -12,6 +12,7 @@ use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Throwable;
@@ -103,6 +104,7 @@ class ChainListenerRunService
             $updated = DB::table('chain_listener_runs')
                 ->where('job_uuid', $context['job_uuid'])
                 ->where('outbox_id', $context['outbox_id'])
+                ->where('status', '!=', ChainListenerRun::STATUS_FAILED)
                 ->update($attributes);
 
             if ($updated > 0) {
@@ -139,6 +141,20 @@ class ChainListenerRunService
     {
         $metadata = $this->metadata($job);
         if ($metadata === null) {
+            return;
+        }
+
+        // Laravel can emit JobFailed before JobExceptionOccurred when the
+        // worker exhausts a job's attempts. A failed run is a terminal
+        // execution fact: retry/processed callbacks from the same queue job
+        // must never reopen it or erase the failure details operators need.
+        $terminal = DB::table('chain_listener_runs')
+            ->where('job_uuid', $metadata['job_uuid'])
+            ->where('outbox_id', $metadata['outbox_id'])
+            ->where('status', ChainListenerRun::STATUS_FAILED)
+            ->exists();
+        if ($terminal) {
+            $this->correlateFailedJob($metadata);
             return;
         }
 
@@ -222,15 +238,19 @@ class ChainListenerRunService
             ];
         }
 
-        DB::table('chain_listener_runs')
+        $update = DB::table('chain_listener_runs')
             ->where('job_uuid', $metadata['job_uuid'])
             ->where('outbox_id', $metadata['outbox_id'])
-            ->update($attributes);
+            // Protect against a terminal failure being written between the
+            // existence check and this update by a concurrent queue callback.
+            ->where('status', '!=', ChainListenerRun::STATUS_FAILED);
+        $update->update($attributes);
 
         if ($status === ChainListenerRun::STATUS_COMPLETED) {
             DB::table('chain_listener_runs')
                 ->where('job_uuid', $metadata['job_uuid'])
                 ->where('outbox_id', $metadata['outbox_id'])
+                ->where('status', '!=', ChainListenerRun::STATUS_FAILED)
                 ->whereNull('outcome_status')
                 ->update([
                     'outcome_status' => ChainListenerRun::OUTCOME_COMPLETED,
@@ -238,6 +258,75 @@ class ChainListenerRunService
                     'outcome_at' => $now,
                     'updated_at' => $now,
                 ]);
+        }
+
+        if ($status === ChainListenerRun::STATUS_FAILED) {
+            $this->correlateFailedJob($metadata);
+        }
+    }
+
+    /**
+     * Keep a failed queue row correlated when the deployed schema has an
+     * optional failed-job column, without requiring a Friday migration.
+     *
+     * The normal schema already carries the queue UUID on
+     * chain_listener_runs.job_uuid. Older/deployed variants may additionally
+     * expose failed_job_uuid or failed_job_id; only write those columns when
+     * both tables and the required columns exist.
+     *
+     * @param array{outbox_id: string, job_uuid: string, event_type: string, listener_class: string, listener_method: string, replayed_from_id: string|null} $metadata
+     */
+    private function correlateFailedJob(array $metadata): void
+    {
+        try {
+            if (! Schema::hasTable('failed_jobs') || ! Schema::hasColumn('failed_jobs', 'uuid')) {
+                Log::warning('Unable to correlate chain listener run to failed job: failed_jobs.uuid is unavailable.', [
+                    'job_uuid' => $metadata['job_uuid'],
+                    'outbox_id' => $metadata['outbox_id'],
+                ]);
+                return;
+            }
+
+            $failedJob = DB::table('failed_jobs')
+                ->where('uuid', $metadata['job_uuid'])
+                ->first(['id', 'uuid']);
+            if ($failedJob === null) {
+                Log::warning('Unable to correlate chain listener run to failed job: no matching failed_jobs.uuid.', [
+                    'job_uuid' => $metadata['job_uuid'],
+                    'outbox_id' => $metadata['outbox_id'],
+                ]);
+                return;
+            }
+
+            $attributes = [];
+            if (Schema::hasColumn('chain_listener_runs', 'failed_job_uuid')) {
+                $attributes['failed_job_uuid'] = $failedJob->uuid;
+            } elseif (Schema::hasColumn('chain_listener_runs', 'failed_job_id')) {
+                $attributes['failed_job_id'] = $failedJob->id;
+            }
+
+            if ($attributes === []) {
+                return;
+            }
+
+            DB::table('chain_listener_runs')
+                ->where('job_uuid', $metadata['job_uuid'])
+                ->where('outbox_id', $metadata['outbox_id'])
+                ->where('status', ChainListenerRun::STATUS_FAILED)
+                ->where(function ($query) use ($attributes): void {
+                    foreach (array_keys($attributes) as $column) {
+                        $query->orWhereNull($column);
+                    }
+                })
+                ->update($attributes + ['updated_at' => now()]);
+        } catch (Throwable $e) {
+            // Failed-job correlation is best-effort observability. It must
+            // never prevent the terminal queue failure from being recorded.
+            Log::warning('Unable to correlate chain listener run to failed job.', [
+                'job_uuid' => $metadata['job_uuid'],
+                'outbox_id' => $metadata['outbox_id'],
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 
@@ -301,6 +390,13 @@ class ChainListenerRunService
         $outboxId = $payload['outbox_id'] ?? null;
         $eventType = $payload['outbox_event_type'] ?? null;
         $jobUuid = $payload['uuid'] ?? null;
+        // The queue contract exposes the UUID separately from the decoded
+        // payload. Use it when a legacy/custom job payload omitted the UUID so
+        // an existing failed_jobs.uuid can still be correlated safely.
+        if (! is_string($jobUuid) || $jobUuid === '') {
+            $queueUuid = $job->uuid();
+            $jobUuid = is_string($queueUuid) && $queueUuid !== '' ? $queueUuid : null;
+        }
         $listenerClass = $payload['displayName'] ?? null;
         $replayedFromId = $payload['chain_replayed_from_id'] ?? null;
 

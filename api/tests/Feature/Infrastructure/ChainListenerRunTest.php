@@ -190,6 +190,41 @@ class ChainListenerRunTest extends TestCase
         $this->assertSame($jobUuid, $run->job_uuid);
     }
 
+    public function test_terminal_failure_uses_the_queue_uuid_when_legacy_payload_omits_it(): void
+    {
+        $outboxId = (string) \Illuminate\Support\Str::uuid();
+        $jobUuid = (string) \Illuminate\Support\Str::uuid();
+        $payload = [
+            'outbox_id' => $outboxId,
+            'outbox_event_type' => PurchaseOrderApproved::class,
+            'displayName' => NotifyOnPurchaseOrderApproved::class,
+        ];
+
+        DB::table('failed_jobs')->insert([
+            'uuid' => $jobUuid,
+            'connection' => 'redis',
+            'queue' => 'default',
+            'payload' => json_encode($payload, JSON_THROW_ON_ERROR),
+            'exception' => 'legacy payload failure',
+            'failed_at' => now(),
+        ]);
+
+        $job = Mockery::mock(\Illuminate\Contracts\Queue\Job::class);
+        $job->shouldReceive('payload')->andReturn($payload);
+        $job->shouldReceive('uuid')->andReturn($jobUuid);
+        $job->shouldReceive('attempts')->andReturn(1);
+
+        app(ChainListenerRunService::class)->markFailed(new JobFailed(
+            'redis',
+            $job,
+            new RuntimeException('legacy payload failure'),
+        ));
+
+        $run = ChainListenerRun::query()->where('outbox_id', $outboxId)->firstOrFail();
+        $this->assertSame(ChainListenerRun::STATUS_FAILED, $run->status);
+        $this->assertSame($jobUuid, $run->job_uuid);
+    }
+
     public function test_business_outcome_is_preserved_when_the_listener_job_completes(): void
     {
         $outboxId = (string) \Illuminate\Support\Str::uuid();
