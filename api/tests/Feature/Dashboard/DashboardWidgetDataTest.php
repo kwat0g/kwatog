@@ -71,4 +71,52 @@ class DashboardWidgetDataTest extends TestCase
         $this->assertSame('hours', $data['self.dtr_today']['kind']);
         $this->assertArrayNotHasKey('finance.cash_position', $data);
     }
+
+    /**
+     * `loans.outstanding` is gated on `loans.view`, which department_head holds
+     * so it can approve its own team's loans. Read company-wide, that gate
+     * would hand one department's head every employee's debt, so the resolver
+     * narrows to the caller's department unless they also hold
+     * `loans.write_off` (finance/HR, the company-wide readers).
+     */
+    public function test_loans_outstanding_widget_is_department_scoped_for_department_heads(): void
+    {
+        $ownDept = Employee::factory()->create();
+        $otherDept = Employee::factory()->create();
+        $this->assertNotSame($ownDept->department_id, $otherDept->department_id);
+
+        foreach ([[$ownDept, '1000.00'], [$otherDept, '4000.00']] as [$employee, $balance]) {
+            DB::table('employee_loans')->insert([
+                'employee_id' => $employee->id,
+                'loan_no' => 'LN-T-'.substr(uniqid(), -5),
+                'loan_type' => 'company_loan',
+                'principal' => $balance,
+                'balance' => $balance,
+                'monthly_amortization' => '500.00',
+                'pay_periods_total' => 2,
+                'pay_periods_remaining' => 2,
+                'status' => 'active',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $head = User::factory()->create([
+            'role_id' => Role::where('slug', 'department_head')->firstOrFail()->id,
+            'employee_id' => $ownDept->id,
+        ]);
+        $finance = User::factory()->create([
+            'role_id' => Role::where('slug', 'finance_officer')->firstOrFail()->id,
+        ]);
+
+        $service = app(DashboardWidgetDataService::class);
+
+        $scoped = $service->summaries(['loans.outstanding'], $head)['loans.outstanding'];
+        $this->assertSame('1000.00', $scoped['value']);
+        $this->assertSame('outstanding in your department', $scoped['helper']);
+
+        $companyWide = $service->summaries(['loans.outstanding'], $finance)['loans.outstanding'];
+        $this->assertSame('5000.00', $companyWide['value']);
+        $this->assertSame('outstanding across all active loans', $companyWide['helper']);
+    }
 }

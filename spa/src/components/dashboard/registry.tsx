@@ -51,6 +51,14 @@ const WIDGET_LINKS: Record<string, string> = {
   'forecast.headcount': '/dashboard/hr',
   'forecast.revenue': '/dashboard/finance',
   'forecast.defect_rate': '/dashboard/quality',
+  'maintenance.open_wos': '/maintenance/work-orders',
+  'maintenance.due_schedules': '/maintenance/schedules',
+  'assets.under_maintenance': '/assets',
+  'rma.open_returns': '/return-management',
+  'rma.pending_approval': '/return-management',
+  'crm.open_complaints': '/crm/complaints',
+  'budget.utilization': '/budgeting/budget-vs-actual',
+  'loans.outstanding': '/hr/loans',
   alerts: '/alerts',
 };
 

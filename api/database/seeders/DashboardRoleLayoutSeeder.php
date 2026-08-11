@@ -32,15 +32,17 @@ class DashboardRoleLayoutSeeder extends Seeder
             'production_manager' => [
                 'production.kpi', 'chain.stage_breakdown', 'machine.utilization',
                 'oee.gauges', 'qc.pareto', 'alerts', 'production.active_wo',
+                'maintenance.open_wos',
             ],
             'ppc_head' => [
                 'production.gantt_mini', 'mrp.shortages', 'machine.status',
                 'production.wo_breakdown', 'material.reservations',
+                'maintenance.due_schedules',
             ],
             'finance_officer' => [
                 'finance.cash_position', 'finance.ar_aging', 'finance.ap_aging',
                 'finance.revenue_mtd', 'finance.unpaid_invoices', 'finance.upcoming_payables',
-                'forecast.revenue',
+                'forecast.revenue', 'budget.utilization',
             ],
             'hr_officer' => [
                 'hr.headcount', 'hr.on_leave_today', 'approvals.pending',
@@ -49,14 +51,16 @@ class DashboardRoleLayoutSeeder extends Seeder
             'purchasing_officer' => [
                 'purchasing.open_prs', 'purchasing.open_pos', 'purchasing.supplier_perf',
                 'supply.overdue_deliveries', 'inventory.low_stock',
+                'rma.open_returns',
             ],
             'qc_inspector' => [
                 'qc.pending_inspections', 'qc.pareto', 'qc.open_ncrs', 'qc.pass_rate',
-                'forecast.defect_rate',
+                'forecast.defect_rate', 'rma.open_returns',
             ],
             'warehouse_staff' => [
                 'inventory.pending_grns', 'inventory.low_stock',
                 'inventory.pending_issues', 'supply.delivery_schedule',
+                'rma.open_returns',
             ],
             // Approvals-first: this role carries the second-most approve-type
             // permissions but has no bespoke dashboard page, so the registry
@@ -66,7 +70,8 @@ class DashboardRoleLayoutSeeder extends Seeder
             // breadth a single department's head has no use for.
             'department_head' => [
                 'approvals.pending', 'hr.team_dtr_today', 'hr.team_on_leave_today',
-                'purchasing.open_prs', 'hr.probation_alerts',
+                'purchasing.open_prs', 'hr.probation_alerts', 'loans.outstanding',
+                'rma.pending_approval',
                 'self.payslip_summary', 'self.leave_balance',
                 'self.dtr_today', 'self.pending_requests',
             ],
@@ -80,7 +85,8 @@ class DashboardRoleLayoutSeeder extends Seeder
             // (DashboardLayoutService::getEffectiveLayout), so these lists
             // stay valid if role permissions change.
             'maintenance_tech' => [
-                'machine.status', 'approvals.pending',
+                'machine.status', 'maintenance.open_wos', 'maintenance.due_schedules',
+                'assets.under_maintenance', 'approvals.pending',
                 'self.payslip_summary', 'self.leave_balance',
                 'self.dtr_today', 'self.pending_requests',
             ],

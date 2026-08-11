@@ -346,6 +346,7 @@ class UpdateSettingRequest extends FormRequest
             'dashboard.widgets.payables_horizon_days' => ['value' => ['required', 'integer', 'min:0', 'max:365']],
             'dashboard.widgets.probation_horizon_days' => ['value' => ['required', 'integer', 'min:0', 'max:365']],
             'dashboard.widgets.delivery_horizon_days' => ['value' => ['required', 'integer', 'min:0', 'max:365']],
+            'dashboard.widgets.maintenance_horizon_days' => ['value' => ['required', 'integer', 'min:0', 'max:365']],
             'inventory.dashboard.consumption_history_days' => ['value' => ['required', 'integer', 'min:1', 'max:3650']],
             'inventory.stock_count.variance_tolerance_pct' => ['value' => ['required', 'numeric', 'min:0', 'max:100']],
             'inventory.dashboard.zone_utilization_warning_ratio' => ['value' => ['required', 'numeric', 'between:0,1']],

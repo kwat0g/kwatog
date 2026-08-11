@@ -18,6 +18,11 @@ use App\Modules\MRP\Enums\MachineStatus;
 use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
+use App\Modules\Maintenance\Enums\MaintenanceWorkOrderStatus;
+use App\Modules\Assets\Enums\AssetStatus;
+use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
+use App\Modules\CRM\Enums\ComplaintStatus;
+use App\Modules\Loans\Enums\LoanStatus;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -59,6 +64,7 @@ class DashboardWidgetDataService
         $payablesDays = $this->settings->requiredInt('dashboard.widgets.payables_horizon_days', 0);
         $probationDays = $this->settings->requiredInt('dashboard.widgets.probation_horizon_days', 0);
         $deliveryDays = $this->settings->requiredInt('dashboard.widgets.delivery_horizon_days', 0);
+        $maintenanceDays = $this->settings->requiredInt('dashboard.widgets.maintenance_horizon_days', 0);
         $employeeId = $user->employee_id ? (int) $user->employee_id : null;
         $departmentId = $employeeId ? DB::table('employees')->where('id', $employeeId)->value('department_id') : null;
 
@@ -131,6 +137,46 @@ class DashboardWidgetDataService
             'forecast.headcount'   => $this->forecast($this->forecasts->headcountForecast(), 'number'),
             'forecast.revenue'     => $this->forecast($this->forecasts->revenueForecast(), 'currency'),
             'forecast.defect_rate' => $this->forecast($this->forecasts->defectRateForecast(), 'percent'),
+
+            'maintenance.open_wos' => $this->number(DB::table('maintenance_work_orders')->whereIn('status', [
+                MaintenanceWorkOrderStatus::Open->value,
+                MaintenanceWorkOrderStatus::Assigned->value,
+                MaintenanceWorkOrderStatus::InProgress->value,
+            ])->count(), 'maintenance work orders not yet completed'),
+            'maintenance.due_schedules' => $this->number(DB::table('maintenance_schedules')
+                ->where('is_active', true)
+                ->whereNull('deleted_at')
+                ->whereNotNull('next_due_at')
+                ->where('next_due_at', '<=', now()->addDays($maintenanceDays))
+                ->count(), "preventive schedules due in the next {$maintenanceDays} days"),
+
+            'assets.under_maintenance' => $this->number(DB::table('assets')
+                ->where('status', AssetStatus::UnderMaintenance->value)
+                ->whereNull('deleted_at')
+                ->count(), 'assets currently out of service'),
+
+            'rma.open_returns' => $this->number(DB::table('return_requests')->whereNotIn('status', [
+                ReturnRequestStatus::Completed->value,
+                ReturnRequestStatus::Rejected->value,
+                ReturnRequestStatus::Cancelled->value,
+            ])->count(), 'return requests still in progress'),
+            'rma.pending_approval' => $this->number(DB::table('return_requests')
+                ->where('status', ReturnRequestStatus::PendingApproval->value)
+                ->count(), 'returns awaiting an approval decision'),
+
+            'budget.utilization' => $this->budgetUtilization(),
+
+            'crm.open_complaints' => $this->number(DB::table('customer_complaints')->whereIn('status', [
+                ComplaintStatus::Open->value,
+                ComplaintStatus::Investigating->value,
+            ])->count(), 'customer complaints open or under investigation'),
+
+            // Department-scoped: `loans.view` is held by department_head, whose
+            // loan list is department-filtered (Loans/Controllers/LoanController).
+            // A company-wide count here would hand that role figures its own
+            // module refuses it — the same defect class as the old
+            // company-wide hr.on_leave_today gated on self-service leave.view.
+            'loans.outstanding' => $this->outstandingLoans($user, $departmentId),
             default => throw new \InvalidArgumentException("Unsupported dashboard widget: {$key}"),
         };
     }
@@ -169,6 +215,54 @@ class DashboardWidgetDataService
                 ? $kpi['label'].' — '.$direction
                 : 'Not enough history to project',
         ];
+    }
+
+    /**
+     * Spend against allocation across budgets that are live this fiscal year.
+     * Ratio of nothing is unknown, not 0% — same rule as ::ratio().
+     */
+    private function budgetUtilization(): array
+    {
+        $row = DB::table('budgets')->whereIn('status', ['approved', 'active'])
+            ->selectRaw('COALESCE(SUM(total_allocated),0) AS allocated, COALESCE(SUM(total_spent),0) AS spent')
+            ->first();
+
+        $allocated = (float) ($row->allocated ?? 0);
+        if ($allocated <= 0.0) {
+            return ['value' => null, 'kind' => 'percent', 'helper' => 'No approved budget to measure against'];
+        }
+
+        return [
+            'value' => number_format(((float) $row->spent / $allocated) * 100, 1, '.', ''),
+            'kind' => 'percent',
+            'helper' => 'of approved budget spent',
+        ];
+    }
+
+    /**
+     * Outstanding loan balance. Scoped to the caller's department unless they
+     * hold a company-wide loans read (`loans.write_off`, which finance and HR
+     * carry but department_head does not), mirroring LoanController's own
+     * department filter.
+     */
+    private function outstandingLoans(User $user, mixed $departmentId): array
+    {
+        $companyWide = $user->hasPermission('loans.write_off');
+
+        if (! $companyWide && $departmentId === null) {
+            return ['value' => null, 'kind' => 'currency', 'helper' => 'No department is linked to this account'];
+        }
+
+        $balance = DB::table('employee_loans as l')
+            ->whereIn('l.status', [LoanStatus::Active->value, LoanStatus::Pending->value])
+            ->when(! $companyWide, fn ($q) => $q
+                ->join('employees as e', 'e.id', '=', 'l.employee_id')
+                ->where('e.department_id', $departmentId))
+            ->sum('l.balance');
+
+        return $this->currency($balance, $companyWide
+            ? 'outstanding across all active loans'
+            : 'outstanding in your department');
     }
 
     private function number(mixed $value, ?string $helper): array { return ['value' => (string) (int) $value, 'kind' => 'number', 'helper' => $helper]; }

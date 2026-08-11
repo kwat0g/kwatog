@@ -99,6 +99,20 @@ class DashboardWidgetSeeder extends Seeder
             ['key' => 'forecast.headcount',            'name' => 'Headcount Forecast',        'module' => 'hr',          'permission' => 'hr.employees.view'],
             ['key' => 'forecast.revenue',              'name' => 'Revenue Forecast',          'module' => 'accounting',  'permission' => 'accounting.dashboard.view'],
             ['key' => 'forecast.defect_rate',          'name' => 'Defect Rate Forecast',      'module' => 'quality',     'permission' => 'quality.view'],
+
+            // ─── Maintenance / Assets ──────────────────────────────
+            ['key' => 'maintenance.open_wos',          'name' => 'Open Maintenance WOs',      'module' => 'maintenance', 'permission' => 'maintenance.view'],
+            ['key' => 'maintenance.due_schedules',     'name' => 'Preventive Maintenance Due', 'module' => 'maintenance', 'permission' => 'maintenance.view'],
+            ['key' => 'assets.under_maintenance',      'name' => 'Assets Under Maintenance',  'module' => 'assets',      'permission' => 'assets.view'],
+
+            // ─── Returns / CRM / Budget ────────────────────────────
+            ['key' => 'rma.open_returns',              'name' => 'Open Return Requests',      'module' => 'return_management', 'permission' => 'return_management.view'],
+            ['key' => 'rma.pending_approval',          'name' => 'Returns Awaiting Approval', 'module' => 'return_management', 'permission' => 'return_management.view'],
+            ['key' => 'crm.open_complaints',           'name' => 'Open Customer Complaints',  'module' => 'crm',         'permission' => 'crm.view'],
+            ['key' => 'budget.utilization',            'name' => 'Budget Utilization',        'module' => 'budgeting',   'permission' => 'budgeting.view'],
+            // Resolver scopes to the caller's department unless they hold a
+            // company-wide loans read — see ::outstandingLoans.
+            ['key' => 'loans.outstanding',             'name' => 'Outstanding Loans',         'module' => 'loans',       'permission' => 'loans.view'],
         ];
     }
 
