@@ -29,9 +29,13 @@ React 18 SPA. All commands run through `docker compose exec`.
   confirms priority; only then does code change.
 - **No subagents.** All tracing runs inline in one session, per standing user
   instruction.
-- **Anchor commit is `feaa9621`** on `main`, pushed to `origin/main`. Every
-  citation is `file:line` as of that SHA. If the tree drifts mid-audit, note the
-  drift rather than silently re-citing.
+- **Anchor commit is `feaa9621`** on `main`, pushed to `origin/main` — the
+  commit whose code the citations describe. **The no-drift compare point is
+  `80fc31ee`** (this plan's own commit), because one unrelated seeder change
+  (`api/database/seeders/DashboardRoleLayoutSeeder.php`, +10/−1) landed between
+  them. Citations reference `feaa9621`; Task 12 compares against `80fc31ee`. If
+  the tree drifts further mid-audit, note the drift rather than silently
+  re-citing.
 - **Every claim carries `file:line`.** A process not traced end to end is
   reported as untraced, never as clean.
 - **Severe findings** (data-corrupting, non-idempotent, race) carry an
@@ -812,7 +816,7 @@ Expected: "No such file or directory".
 
 ```bash
 cd /home/kwat0g/Desktop/kwatog
-git diff --stat feaa9621..HEAD -- api/ spa/
+git diff --stat 80fc31ee..HEAD -- api/ spa/
 ```
 
 Expected: **empty output**. Any line here is a Phase 1 violation — Phase 1 is
@@ -832,7 +836,7 @@ different count means a probe survived deletion or a file was modified.
 
 ```bash
 cd /home/kwat0g/Desktop/kwatog
-git diff --name-only feaa9621..HEAD
+git diff --name-only 80fc31ee..HEAD
 ```
 
 Expected: only paths under `docs/`.
