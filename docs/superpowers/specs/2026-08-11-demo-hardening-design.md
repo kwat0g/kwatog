@@ -243,10 +243,14 @@ shared component behind twelve routes beats twelve individual fixes. Clear the 4
 ### 5.1 Model routing
 
 The requested `gpt-5.6-sol` / `gpt-5.6-luna` split is not available — this harness is
-Claude Code running Opus 5 (`claude-opus-5[1m]`), with no cross-provider dispatch. The
-intent is mirrored with subagents: high-reasoning agents for audit design and provenance
-repair (where a wrong call corrupts data), cheaper agents for mechanical seeding and
-dead-end fixes.
+Claude Code running Opus 5 (`claude-opus-5[1m]`), with no cross-provider dispatch.
+
+**Decision: Opus for every agent**, no cheaper tier for mechanical work. The rationale is
+that this plan's "mechanical" tracks are not actually mechanical — Track C seeds through
+domain services that fire real events and outbox rows, and Track B repairs money rows. A
+cheap-tier mistake in either is a corrupted demo database on the day before the defense,
+which costs far more than the token difference. Uniform Opus also removes per-task tier
+decisions from the critical path.
 
 ---
 
