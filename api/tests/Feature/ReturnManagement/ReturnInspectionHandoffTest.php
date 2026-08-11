@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace Tests\Feature\ReturnManagement;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\ChainListenerRun;
 use App\Common\Services\OutboxEventCodec;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionParameterType;
+use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\InspectionSpec;
 use App\Modules\Quality\Models\InspectionSpecItem;
@@ -144,6 +147,46 @@ class ReturnInspectionHandoffTest extends TestCase
         $this->assertSame(ReturnRequestStatus::Inspected, $updated->status);
         $this->assertSame(ReturnInspectionHandoffStatus::NotRequired, $updated->inspection_handoff_status);
         $this->assertSame(0, DB::table('event_outbox')->where('event_type', ReturnInspectionRequested::class)->count());
+    }
+
+    public function test_generated_handoff_does_not_authorize_disposition_without_a_pass(): void
+    {
+        $product = Product::factory()->create(['part_number' => 'RMA-QC-GENERATED']);
+        $rma = $this->receivedRma($product);
+        $inspection = Inspection::create([
+            'inspection_number' => 'QC-RMA-'.substr(uniqid(), -8),
+            'stage'             => InspectionStage::CustomerReturn->value,
+            'status'            => 'draft',
+            'product_id'        => $product->id,
+            'entity_type'       => InspectionEntityType::ReturnRequest->value,
+            'entity_id'         => $rma->id,
+            'batch_quantity'    => 5,
+            'sample_size'       => 5,
+            'accept_count'      => 0,
+            'reject_count'      => 1,
+            'defect_count'      => 0,
+            'inspector_id'      => $this->user->id,
+        ]);
+        $rma->forceFill([
+            'status' => ReturnRequestStatus::Inspected,
+            'inspection_id' => $inspection->id,
+            'inspection_handoff_status' => ReturnInspectionHandoffStatus::Generated,
+        ])->save();
+
+        $blocked = false;
+        try {
+            app(ReturnRequestService::class)->dispose($rma->fresh('items'), [[
+                'item_id' => $rma->items->first()->hash_id,
+                'disposition' => 'scrap',
+            ]], $this->user);
+        } catch (BusinessRuleException $e) {
+            $blocked = true;
+            $this->assertStringContainsString('passed', strtolower($e->getMessage()));
+        }
+
+        $this->assertTrue($blocked, 'A generated handoff is not a Quality pass.');
+        $this->assertNull($rma->fresh()->disposition_status);
+        $this->assertNull($rma->items->first()->fresh()->disposition);
     }
 
     public function test_retry_route_uses_hashed_id_and_manage_permission(): void

@@ -64,7 +64,7 @@ class ReceiveGoodsAuthorizationTest extends TestCase
             $this->assertSame(0, Inspection::query()->where('entity_type', 'grn')->count());
             $this->assertSame(0, StockMovement::query()->count());
             $this->assertSame(0, Bill::query()->where('purchase_order_id', $po->id)->count());
-            $this->assertSame('0.000', (string) $poItem->fresh()->quantity_received);
+            $this->assertSame('0.00', (string) $poItem->fresh()->quantity_received);
         }
     }
 
