@@ -380,7 +380,7 @@ are dismissed here rather than enumerated.
 | P02 | Payroll GL posting handoff + retry (raw `journal_entries` insert) | cross-module | Payroll, Accounting | `api/app/Modules/Payroll/Services/PayrollGlPostingService.php:313` | event + job + HTTP | money | **traced** (§3.0) — 2 findings: P02-01 PROVEN, P02-02 PROVEN |
 | P03 | Payroll compute → loan deduction + loan balance write | cross-module | Payroll, Loans | `api/app/Modules/Payroll/Controllers/PayrollPeriodController.php:143` | HTTP + event + job | money | **traced** (§3.0) — 1 finding: P03-01 ARGUED (downgraded from PROVEN, §3.1) |
 | P04 | Payroll period void → GL reversal + cycle-claim release | cross-module | Payroll, Accounting | `api/app/Modules/Payroll/Controllers/PayrollPeriodController.php:275` | HTTP | money | **traced** (§3.0) — **clean** (§4); cause of P02-02 filed there |
-| P05 | Final pay compute → GL | cross-module | HR, Accounting | `api/app/Modules/HR/Controllers/SeparationController.php:80` | HTTP | money | |
+| P05 | Final pay compute → GL | cross-module | HR, Accounting | `api/app/Modules/HR/Controllers/SeparationController.php:80` | HTTP | money | **traced** (§3.0) — 2 findings: P05-01 PROVEN, P05-02 PROVEN |
 | P06 | Delivery confirm → SO marked delivered + draft invoice | cross-module | SupplyChain, CRM, Accounting | `api/app/Modules/SupplyChain/Controllers/DeliveryController.php:79` | HTTP + event | money | |
 | P07 | GRN accepted → auto-create bill (AP) | cross-module | Inventory, Accounting | `api/app/Modules/Accounting/Listeners/AutoCreateBillOnGrnAccepted.php:34` | event | money | |
 | P08 | Budget enforcement acknowledge on PR / PO | cross-module | Purchasing, Accounting | `api/app/Modules/Purchasing/Services/PurchaseRequestService.php:342` | HTTP | money | |
@@ -1216,7 +1216,242 @@ P04's own defect surface is covered by **P02-02**, whose *cause* is here — voi
 failure to clear `journal_entry_id` at `:1253-1258` — and whose *effect* is in
 P02's re-post guards. It is filed once, under P02, rather than double-counted.
 
+#### P05 — Final pay compute → GL
+
+Entry point `api/app/Modules/HR/Controllers/SeparationController.php:80`
+(`computeFinalPay`) → `FinalPayService::compute()` at `:45`. The GL leg runs from
+the sibling endpoint at `:86` (`finalize`) →
+`SeparationService::finalize()` at `:265` → `FinalPayService::postJournalEntry()`
+at `:115`. Two HTTP calls, two transactions, one shared aggregate — and the split
+is where both findings live.
+
+**Field 1 — steps and owning class**
+
+Stage A — `POST /clearances/{clearance}/final-pay/compute`:
+
+| # | Step | Owner | Line |
+|---|---|---|---|
+| 1 | Re-read + `lockForUpdate` the clearance | `FinalPayService::compute` | `:52-54` |
+| 2 | Guard: status not terminal | `compute` | `:59` |
+| 3 | Read 6 components, 4 of them cross-module | `compute` | `:67-72` |
+| 4 | `net = max(0.0, plus − less)` — **the clamp** | `compute` | `:76` |
+| 5 | Persist `final_pay_breakdown`, `final_pay_amount`, `final_pay_computed=true` | `compute` | `:90-94` |
+
+Stage B — `PATCH /clearances/{clearance}/finalize`:
+
+| # | Step | Owner | Line |
+|---|---|---|---|
+| 6 | Re-read + `lockForUpdate` the clearance | `SeparationService::finalize` | `:272-274` |
+| 7 | Guards: not already Finalized, status is Completed, `final_pay_computed` | `finalize` | `:279-287` |
+| 8 | **Lock + count outstanding loans; refuse if any** | `finalize` | `:291-306` |
+| 9 | Lock the employee row | `finalize` | `:308-310` |
+| 10 | Build lines from the **stored breakdown** and post the JE | `FinalPayService::postJournalEntry` | `:319` → `:171-207` |
+| 11 | Flip employee status to the separation outcome | `finalize` | `:326` |
+| 12 | Write clearance `Finalized`, `finalized_at/by` | `finalize` | `:328-331` |
+| 13 | `EmploymentHistory` row | `finalize` | `:333` |
+
+The four cross-module reads at step 3 are Payroll (`payrolls`, `payroll_periods`
+— `:218-245`, `:327-334`), Attendance (`attendances` — `:251`), Leave
+(`employee_leave_balances` — `:267`) and Loans (`employee_loans` — `:341`,
+`:350`). The write at step 10 is Accounting. Inventory lists P05's domains as HR,
+Accounting, which is correct under the write-reach rule — the other three are
+read-only.
+
+**Field 2 — transaction boundary**
+
+| Boundary | Encloses | Line |
+|---|---|---|
+| `compute` | steps 1–5 | `:47` |
+| `finalize` | steps 6–13, including the JE post | `SeparationService.php:267` |
+| `postJournalEntry` | its own nested transaction (savepoint) | `:117` |
+| `JournalEntryService::create` / `post` | nested savepoints | `:99`, `:186` |
+
+Both stages lock the clearance before reading their guards — the correct pattern,
+and notably better than P01's `forceUnlock`. **No boundary spans stage A and
+stage B**, which is by design (two operator actions) and is exactly what makes
+the breakdown a snapshot.
+
+**Field 3 — step N succeeds, N+1 fails**
+
+| Crossing | Behavior | Evidence |
+|---|---|---|
+| 5 → 6 (computed, never finalized) | Clearance sits at Completed with a stored breakdown; no money moved. Recomputable while non-terminal | `:59`, `:90-94` |
+| 8 → 10 (gate passed, JE fails) | Whole `finalize` rolls back — employee status, clearance status and `EmploymentHistory` all revert | `SeparationService.php:267` encloses `:319`–`:333` |
+| 10 → 11 (JE posted, employee flip fails) | Rollback, including the posted JE and its lines | same boundary |
+| 10 unbalanced | `UnbalancedJournalEntryException` → whole finalize rolls back, **rendered as HTTP 500** | `:105-107`; handler scope `bootstrap/app.php:86-90` → **P05-01** |
+| JE exists from an interrupted attempt | Recovered rather than duplicated: locked lookup by `reference_type`/`reference_id`, draft gets posted, posted gets reused | `:147-169` |
+| JE was reversed | Refuses with a clear message rather than silently re-posting | `:156-160` |
+
+**Field 4 — sync vs async handoff**
+
+| Edge | Kind | Retry budget | Out-of-order |
+|---|---|---|---|
+| HTTP → `compute` | **sync**, transactional | n/a | n/a |
+| HTTP → `finalize` | **sync**, transactional | n/a | n/a |
+| `finalize` → `postJournalEntry` | **sync**, in-transaction, cross-module (HR → Accounting) | n/a — rolls back | n/a |
+| `postJournalEntry` → `JournalEntryService` | **sync**, via the module's public service | n/a | n/a |
+
+Boundary-vs-dispatch (plan step 2): **P05 dispatches no event at all.** There is
+no outbox row, no listener, no queued job — `grep -n "dispatch(\|event(\|OutboxService"`
+over `FinalPayService.php` and the `finalize` method returns nothing. So the
+naked-dispatch-in-transaction defect cannot occur here. The trade-off is that
+nothing downstream is notified of a separation's final pay; whether that is a gap
+belongs to P43 (separation lifecycle), not to this money trace.
+
+Worth recording as a positive contrast with P02: this process writes the ledger
+through `JournalEntryService::create` + `post` (`:200-207`), so the JE carries
+`created_by` and `posted_by` and fires `HasAuditLog`. The two GL writers in this
+audit's money band take opposite approaches to the same table, and only this one
+is attributable.
+
+**Field 5 — idempotency under replay**
+
+| Effect | Dedupe mechanism | Enforced by | Verdict |
+|---|---|---|---|
+| Breakdown write | none needed — recompute overwrites deterministically from current sources | `:90-94` | idempotent, **but see P05-02: "current" moves** |
+| Finalize | `status === Finalized` → refuse; `status !== Completed` → refuse, both on the locked row | `:279-284` after lock `:272` | idempotent — second call 422s |
+| JE creation | `journal_entry_id` link, **plus** an orphan-recovery lookup on `reference_type`/`reference_id` under `lockForUpdate` | `:134-153` | idempotent — the strongest guard of any GL writer traced so far |
+| JE double-post | draft is posted, already-posted is returned unchanged | `:162-164` | idempotent |
+| Loan settlement | **none — the loan is never written by this process** | no write exists in `FinalPayService` | see P05-02 |
+| Employee status flip | derived from `separation_reason`, so replay is the same value | `:326` | idempotent |
+| `EmploymentHistory` | **no dedupe key** — a second successful finalize would append a second row | `:333` | unreachable while step 7's guard holds |
+
+The JE recovery at `:147-153` deserves explicit credit: it is the only GL writer
+in this batch that handles the "entry created but link not yet persisted" window,
+and it does so with a locked lookup rather than a bare `first()`.
+
+**Field 6 — guard reachability (mechanical enumeration)**
+
+The money target here is `clearances.final_pay_amount` / `final_pay_breakdown`
+plus the `journal_entries` write. Journal-entry writers are enumerated at P02
+field 6 (seven writers) and not repeated; `FinalPayService` reaches the table only
+through `JournalEntryService`, i.e. writers 1–2 of that table.
+
+Grep 1 on `ClearanceStatus::`, outside tests, yields these writers:
+
+| # | Writer | Target status | Guard | Reads locked row |
+|---|---|---|---|---|
+| 1 | `SeparationService::initiate` | `Pending` / `InProgress`, new row | duplicate-clearance check | n/a |
+| 2 | `SeparationService::signItem` | `InProgress` → `Completed` when all items signed | item-key validation | yes — locks the clearance |
+| 3 | `SeparationService::finalize` `:328` | `Finalized` | `:279-287` **and** the loan gate `:291-306` | **yes** `:272-274` |
+| 4 | `FinalPayService::compute` `:90-94` | writes the breakdown, not `status` | `isTerminal()` `:59` | **yes** `:52-54` |
+
+Every clearance writer locks before guarding. Grep 2
+(`DB::table('clearances')`) returns **zero** — no raw write to this table. Grep 3
+(`Clearance::query()` mass `update`/`delete`) returns zero.
+
+Grep 2 applied to the *read* side is what surfaced P05-02's blast radius:
+`FinalPayService` reads four foreign tables through the query builder
+(`employee_leave_balances` `:267`, `thirteenth_month_accruals` `:316`,
+`employee_loans` `:341`/`:350`, `employee_property` `:359`) with no import for
+any of them — the §2.2 blind spot in read form. They are reads, so they are
+correctly out of scope for write reach, but they are also *the six numbers the
+whole process is built on*, and nothing re-reads them at stage B.
+
+Grep 4 (FQN resolution) over `FinalPayService`, `SeparationService::finalize` and
+`SeparationController`: no `app(\App\Modules\…)` calls. Both services take their
+collaborators through constructor injection (`FinalPayService.php:40-43`), so the
+import graph sees every edge. P05's declared domains (HR, Accounting) are
+correct.
+
+**Field 7 — audit attribution**
+
+| Step | Audit row | Actor |
+|---|---|---|
+| compute | `HasAuditLog` on `Clearance` (`Models/Clearance.php:21`) fires on `save()` | no user — `compute` takes no actor at all (`:45`) |
+| finalize | `HasAuditLog` on `Clearance` | `finalized_by = $by->id` `:330` |
+| JE create + post | `HasAuditLog` on `JournalEntry`; `created_by` and `posted_by` both set | `$by->id` (`JournalEntryService.php:123`, `:215`) |
+| employee status flip | `HasAuditLog` on `Employee` | no actor on the row itself |
+| `EmploymentHistory` | explicit row | `:333-341` |
+
+One gap worth naming without inflating it: `FinalPayService::compute` accepts no
+`User` and records none, so the breakdown — which fixes every figure the JE later
+spends — has no author. `finalize` is attributed; `compute` is not. Given P05-02
+makes the compute-time snapshot financially decisive, the actor who produced it is
+the one you would want. Advisory, not a severity finding.
+
+**Field 8 — verdict**
+
+Two findings.
+
+- **P05-01** — the final-pay JE cannot balance when deductions exceed earnings,
+  and the clearance dead-ends on an HTTP 500. **PROVEN.** Silent failure → 3.2.
+- **P05-02** — the breakdown is a snapshot; finalize re-validates the loan gate
+  but not the arithmetic, double-deducting a settled loan. **PROVEN.**
+  Data-corrupting → 3.1.
+
+Sound on this process, recorded so the clean parts are visible: both stages lock
+the clearance before guarding (`:52`, `:272`), the finalize boundary spans the JE
+post and every state flip so a failed posting reverts the separation
+(`SeparationService.php:267`), the JE is written through the Accounting service
+layer and is therefore fully attributed and audited (`:200-207`), the
+orphan-JE recovery is locked (`:147-153`), a reversed JE is refused rather than
+re-posted (`:156-160`), and every cross-module read fails loudly instead of
+defaulting to zero (`readFinalPaySource` `:370-381`).
+
 ### 3.1 Data-corrupting
+
+#### P05-02 — the final-pay breakdown is a snapshot; finalize re-checks the loan but spends the stale figure (PROVEN)
+
+`compute()` freezes six components into `final_pay_breakdown` (`:78-94`).
+`postJournalEntry()` reads that stored array and spends it verbatim
+(`:171-177`) — `gross_plus`, `less_loan_balance`, `less_advance`,
+`less_unreturned_property_value`, `net`. Nothing recomputes it at finalize time:
+`SeparationService::finalize` checks only the boolean `final_pay_computed`
+(`:285-287`).
+
+The defect is not the snapshot itself; it is that finalize **does** re-read one of
+the six components and then ignores what it learned. Step 8 locks and counts the
+employee's outstanding loans (`:291-297`) and refuses if any has a balance
+(`:299-306`). So the loan figure is re-validated against live data, while the
+arithmetic keeps using the frozen copy. The two disagree in exactly one direction:
+
+- Loan still outstanding at finalize → **refused** (P05-03 below).
+- Loan settled between compute and finalize → **gate passes, stale deduction is
+  still applied.**
+
+The second case is not an edge case, it is the workflow the error message
+prescribes: *"Settle all loans or confirm deduction in the final pay breakdown
+before finalizing"* (`:302-304`). An operator who computes final pay, then settles
+the loan as instructed, then finalizes, lands squarely on it. And the only
+production path that settles a loan is a payroll deduction — which withholds the
+money from the employee's payslip (`PayrollCalculatorService.php:853-870`) — so
+the employee pays the loan twice: once to payroll, once as a deduction from final
+pay. The GL double-counts too: payroll's own posting credits Loans Payable
+(`PayrollGlPostingService.php:283`) and the final-pay JE credits it again
+(`:187-189`).
+
+**Probe (PROVEN).** Throwaway PHPUnit test, deleted after the run. A ₱5,000.00
+company loan, an employee with enough persisted DTR that earnings exceed the
+deduction, and the prescribed sequence — compute, settle via payroll, finalize:
+
+```
+[PROBE12] T1 compute: gross_plus=7272.73 less_loan_balance=5000.00 net=2272.73
+[PROBE12] T2 payroll settled the loan: balance=0.00 status=paid withheld=5000.00
+[PROBE12] T3 finalize SUCCEEDED: final_pay_amount=2272.73 | final-pay JE credits Loans Payable=5000.00 | loan balance=0.00
+[PROBE12] DOUBLE PAID: employee lost 5000.00 to payroll withholding AND 5000.00 more from final pay, for one 5000.00 loan
+```
+
+Finalize **succeeded** — no exception, no warning, no operator prompt. A ₱5,000.00
+loan cost the employee ₱10,000.00, and Loans Payable was credited ₱10,000.00
+across two journal entries for a ₱5,000.00 liability.
+
+**Related, and the reason the settlement never self-corrects: the final-pay loan
+settlement is entirely unwired.** Three pieces of machinery exist for it and none
+is connected:
+
+| Artefact | State |
+|---|---|
+| `LoanPaymentType::FinalPay` (`Modules/Loans/Enums/LoanPaymentType.php:11`) | **zero usages** anywhere in `api/`, tests included |
+| `employee_loans.is_final_pay_deduction` | fillable (`Models/EmployeeLoan.php:29`), cast (`:46`), exposed in the API resource (`Resources/EmployeeLoanResource.php:37`) — **never written** |
+| `LoanService::recordPayment` (`:288`) | **no caller anywhere**; `Modules/Loans/routes.php:9-21` exposes no payment route |
+
+`FinalPayService` contains no write to `employee_loans` at all — only the two
+`sum('balance')` reads at `:341` and `:350`. So the intended design (deduct the
+loan from final pay and retire it, stamping `is_final_pay_deduction`, recording a
+`FinalPay` loan payment) was specified in the schema and the enum and never
+implemented. That is also why P03-01's probe had to be downgraded: the writer it
+drove is part of this same dead machinery.
 
 #### P01-01 — `forceUnlock` demotes a Finalized period to Computed (PROVEN)
 
@@ -1377,6 +1612,98 @@ per-period overlap key and the synchronous recompute route. Flagged in §5 for
 Phase 2 to drive with real concurrency.
 
 ### 3.2 Silent failure
+
+#### P05-01 — the final-pay JE cannot balance when deductions exceed earnings; the separation dead-ends on a 500 (PROVEN)
+
+`compute()` clamps the net at zero:
+
+```php
+$net = max(0.0, $plus - $less);        // :76
+```
+
+`postJournalEntry()` then builds the entry as one debit and up to three credits:
+
+| Line | Amount | Line |
+|---|---|---|
+| DR final-pay salary expense | `gross_plus` | `:185` |
+| CR loans payable | `less_loan_balance`, if > 0 | `:187-189` |
+| CR accrued expenses | `less_advance + less_unreturned_property_value`, if > 0 | `:190-192` |
+| CR cash in bank | `net`, **only if > 0** | `:196-198` |
+
+The entry balances only if `plus == less + net`. That identity holds while
+`plus >= less`, and the clamp at `:76` breaks it the moment deductions exceed
+earnings: `net` becomes `0`, the cash line is omitted, and credits stay at the
+full `less` while debits are only `plus`. `JournalEntryService::create` then
+throws `UnbalancedJournalEntryException` (`:105-107`), which rolls the entire
+`finalize` transaction back (`SeparationService.php:267`).
+
+**The exception is not rendered as a 4xx.** `UnbalancedJournalEntryException`
+extends `RuntimeException`
+(`Modules/Accounting/Exceptions/UnbalancedJournalEntryException.php:9`), and the
+handler registers a renderer for `BusinessRuleException` only — deliberately so,
+per its own comment: *"Scoped to BusinessRuleException, never to RuntimeException
+itself"* (`bootstrap/app.php:86-90`). `SeparationController::finalize` has no
+try/catch (`:86-90`). So the operator gets an HTTP 500 with a debit/credit dump,
+not a business message, and the clearance is stuck at `Completed` with no path
+forward.
+
+**This is the common shape for a leaver, not a corner case.** A separating
+employee's final cutoff is partial, so `gross_plus` is small, while the
+deductions — outstanding loan, cash advance, unreturned property — are sized
+against their whole tenure. The loan gate at `:291-306` catches only the loan
+component; nothing gates `less_advance` or
+`less_unreturned_property_value` (`:350-354`, `:357-363`), so an employee with a
+lost laptop worth more than their last few days of pay is unfinalizable with a
+perfectly fresh breakdown.
+
+**The repo already contains the correct treatment, in the sibling GL writer.**
+`PayrollGlPostingService` hits the identical clamp and handles it explicitly:
+
+```php
+// Net pay is clamped at zero when deductions would exceed pay, so the
+// un-recovered remainder is not cash that ever left the bank. Credit it
+// back explicitly rather than letting it show up as a mystery imbalance.
+$unrecovered = Money::sub(Money::add(Money::sub($grossTotal, $eeDeductions), $adjustments), $net);
+if (Money::lt($unrecovered, '0')) {
+    $debit($code('salary_expense'), Money::negate($unrecovered), 'Net Pay Floor Adjustment');
+} else {
+    $credit($code('salary_expense'), $unrecovered, 'Unrecovered Deductions (net pay floored at zero)');
+}
+```
+
+(`PayrollGlPostingService.php:288-302`.) The comment states the exact failure this
+finding describes — "a mystery imbalance" — and the in-line note at `:230-233`
+records that this class of omission "is why payroll GL posting had never succeeded
+on any period that had a single late employee." `FinalPayService::postJournalEntry`
+never received the equivalent line.
+
+**Probe (PROVEN).** Throwaway PHPUnit test, deleted after the run. An employee with
+one 8-hour DTR day in their final cutoff (₱909.09 earned) and a ₱5,000.00 company
+loan. Probe 10 first confirmed the loan gate blocks finalize outright; probe 11
+then settled the loan via payroll — the prescribed unblock — and finalized:
+
+```
+[PROBE10] breakdown: gross_plus=909.09 less_loan_balance=5000.00 net=0.00 | loan balance=5000.00 status=active
+[PROBE10] finalize with the loan still outstanding → Illuminate\Validation\ValidationException: Cannot finalize: employee has 1 outstanding loan(s) with a remaining balance. Settle all loans or confirm deduction in the final pay breakdown before finalizing.
+
+[PROBE11] T1 compute: less_loan_balance=5000.00 net=0.00 (loan balance=5000.00)
+[PROBE11] T2 payroll deduction: loan balance=0.00 status=paid | withheld via loan_payments=5000.00
+[PROBE11] T3 finalize → App\Modules\Accounting\Exceptions\UnbalancedJournalEntryException: Journal entry is not balanced: debits=909.09 credits=5000.00 (difference=-4090.91)
+```
+
+Debits ₱909.09 against credits ₱5,000.00. The separation cannot be completed
+through the product at all.
+
+**A third defect sits on the same guard, and it is a contradiction rather than a
+race.** The refusal message at `:302-304` offers two remedies — "Settle all
+loans **or** confirm deduction in the final pay breakdown" — and the second does
+not exist. The check is unconditional (`if ($outstandingLoans > 0) throw`), with no
+confirm flag, no override permission, and no `force` parameter anywhere in
+`SeparationController::finalize` (`:84-90`) or its request validation. The
+breakdown's `less_loan_balance` component and the JE's loans-payable line
+(`:187-189`) are therefore only ever reachable via the stale-snapshot path of
+P05-02 — the one that double-charges. Recorded here rather than as a separate
+finding because it is the same guard and the same two lines of code.
 
 #### P01-02 — re-finalize after void records no new GL request, and reports success (PROVEN)
 
@@ -1608,8 +1935,8 @@ live in P02.
 
 ## 5. Untraced list
 
-Generated in Task 11 from inventory rows with an empty disposition. As of Task 4
-that is P02–P83; P01 is traced (§3.0).
+Generated in Task 11 from inventory rows with an empty disposition. As of Task 5a
+that is P06–P83; P01–P05 are traced (§3.0), of which P04 is clean (§4).
 
 Residual gaps recorded rather than claimed closed:
 
@@ -1618,12 +1945,50 @@ Residual gaps recorded rather than claimed closed:
 - P01 field 4 notes `EmailPayslipPdfOnPayrollFinalized` declares no `$tries`, so
   it inherits the queue default. Whether that default is appropriate for a
   fan-out listener is a queue-configuration question, not traced here.
-- P01's GL leg (effect 12, `PayrollGlPostingService.php:313`) is P02's subject
-  and is verdicted there, not in §3.0.
 - P01-03's duplicate-notification window was not driven by a probe (see its
   ARGUED label). It needs a failure injected between the notification insert and
   job completion; if Phase 2 builds that harness, the label should be revisited
   rather than assumed.
+- **Protocol gap confirmed live (Task 5a).** Field 6's grep 1 anchors on
+  `SomeEnum::`, and P02 proved the gap real: three `journal_entries` status
+  writers assign the plain string `'posted'` and are invisible to it —
+  `PayrollGlPostingService.php:321`, `GrnGlPostingService.php:224`,
+  `MovementGlPostingService.php:202`. Only grep 2 (raw `DB::table`) recovered
+  them. Every subsequent trace must run greps 1 **and** 2 against its target
+  table and treat grep 1 alone as incomplete. A fourth plain-string writer sits
+  outside the money band (`MrpEngineService.php:218`, `'draft'`).
+- **P03-01 needs real concurrency to upgrade.** Both live writers are private and
+  re-query inside their own transaction, so two live DB connections are required;
+  under `RefreshDatabase` that is a harness change Phase 1 forbids. The label is
+  ARGUED and must not be upgraded without driving
+  `applyLoanDeductions`/`reverseLoanDeductions` concurrently.
+- **`JournalEntryService::reverse` guards on an unlocked pre-transaction read**
+  (`:270`, `:273`, transaction at `:277`) — the P01-01 shape, on the ledger. Four
+  callers: `PayrollPeriodService.php:1247` (P04, serialized by its own period
+  lock), `Accounting/Controllers/JournalEntryController.php:103` (manual),
+  `BillService.php:488`, `InvoiceService.php:279`. Two concurrent reversals of one
+  entry would post two mirror entries. Belongs to **P20**; enumerated here so P20
+  inherits it rather than re-deriving it. The same unlocked-guard shape applies to
+  `JournalEntryService::post` (`:182` vs `:186`).
+- **P04 advisories**, none rising to a finding: `PayrollPeriodVoided` has no
+  consumer (adjudicated an intentional seam, §3.0), the void writes no
+  `chain_step_runs` row so it is invisible to chain observability, and the
+  13th-month accrual un-payment is a mass `update()` (`:1275-1279`) that writes no
+  audit row despite `ThirteenthMonthAccrual` carrying `HasAuditLog`.
+- **P05 advisory:** `FinalPayService::compute` accepts no actor and records none
+  (`:45`), so the breakdown that fixes every figure the JE later spends has no
+  author, while `finalize` is attributed (`:330`).
+- **Dead machinery found in Loans, not traced as a process:**
+  `LoanService::recordPayment` (`:288`) has no caller,
+  `LoanPaymentType::FinalPay` has zero usages, and
+  `employee_loans.is_final_pay_deduction` is fillable, cast and exposed in the API
+  resource but never written. Relevant to P47 (loan lifecycle) and P43
+  (separation) as well as P05-02.
+- **Six of P05's six breakdown components are read through the query builder with
+  no import** (`FinalPayService.php:267`, `:316`, `:341`, `:350`, `:359`) — the
+  §2.2 blind spot in read form. Out of scope under write reach, but they are the
+  numbers the money is computed from, so a reader-side sweep may be worth adding
+  to the protocol for aggregate-consuming processes.
 
 ## 6. Prior-claim delta
 
@@ -1639,3 +2004,22 @@ does not exist in `api/app`, and describes a Voided period as re-computable when
 `claimForCompute` refuses exactly that (`:746`). `forceUnlock`'s docblock claims
 it "cannot demote Approved/Finalized/Disbursed" (`:1175-1176`), which P01-01
 disproves. Both are recorded as changes for Phase 2, not findings.
+
+**Operator-facing message that promises a feature the code lacks (Task 5a).**
+`SeparationService::finalize` refuses an employee with an outstanding loan and
+tells the operator to "Settle all loans **or** confirm deduction in the final pay
+breakdown before finalizing"
+(`api/app/Modules/HR/Services/SeparationService.php:302-304`). No confirm
+mechanism exists — the check is unconditional and no override flag, permission or
+parameter appears anywhere on the endpoint. This is the same class of defect as
+the `void` endpoint's "you can recompute" message: the guidance is not merely
+stale, it directs the operator toward the one path (P05-02) that double-charges.
+Recorded as a Phase-2 change alongside the P05-01 fix.
+
+**Task 5a contradictions to `docs/PROCESS-FAILURE-MATRIX-2026-08-11.md`.** The
+prior document's "nearly every boundary closed" posture now has five further
+counter-examples, four of them PROVEN: P02-01, P02-02, P05-01 and P05-02, plus
+P03-01 ARGUED. Two are worth singling out because they are not race conditions
+that a reviewer could dismiss as theoretical — P05-01 makes a routine separation
+impossible to complete, and P05-02 double-charges a leaver on the workflow the
+product's own error message prescribes. The full delta remains Task 11's job.
