@@ -379,7 +379,7 @@ are dismissed here rather than enumerated.
 | P01 | Payroll finalize → bank file + payslip email + employee notify | cross-module | Payroll, Accounting | `api/app/Modules/Payroll/Controllers/PayrollPeriodController.php:174` | HTTP + event | money | **traced** (§3.0) — 3 findings: P01-01 PROVEN, P01-02 PROVEN, P01-03 ARGUED |
 | P02 | Payroll GL posting handoff + retry (raw `journal_entries` insert) | cross-module | Payroll, Accounting | `api/app/Modules/Payroll/Services/PayrollGlPostingService.php:313` | event + job + HTTP | money | **traced** (§3.0) — 2 findings: P02-01 PROVEN, P02-02 PROVEN |
 | P03 | Payroll compute → loan deduction + loan balance write | cross-module | Payroll, Loans | `api/app/Modules/Payroll/Controllers/PayrollPeriodController.php:143` | HTTP + event + job | money | **traced** (§3.0) — 1 finding: P03-01 PROVEN |
-| P04 | Payroll period void → GL reversal + cycle-claim release | cross-module | Payroll, Accounting | `api/app/Modules/Payroll/Controllers/PayrollPeriodController.php:275` | HTTP | money | |
+| P04 | Payroll period void → GL reversal + cycle-claim release | cross-module | Payroll, Accounting | `api/app/Modules/Payroll/Controllers/PayrollPeriodController.php:275` | HTTP | money | **traced** (§3.0) — **clean** (§4); cause of P02-02 filed there |
 | P05 | Final pay compute → GL | cross-module | HR, Accounting | `api/app/Modules/HR/Controllers/SeparationController.php:80` | HTTP | money | |
 | P06 | Delivery confirm → SO marked delivered + draft invoice | cross-module | SupplyChain, CRM, Accounting | `api/app/Modules/SupplyChain/Controllers/DeliveryController.php:79` | HTTP + event | money | |
 | P07 | GRN accepted → auto-create bill (AP) | cross-module | Inventory, Accounting | `api/app/Modules/Accounting/Listeners/AutoCreateBillOnGrnAccepted.php:34` | event | money | |
@@ -1040,6 +1040,181 @@ runs before any loan write (`:289` before `:306`), recompute reverses loan
 payments before deleting them (`:123-131`), and the missing dedupe key on the
 compute request is covered by a UUID inside the event payload (`:831`).
 
+#### P04 — Payroll period void → GL reversal + cycle-claim release
+
+Entry point `api/app/Modules/Payroll/Controllers/PayrollPeriodController.php:275`
+→ `PayrollPeriodService::void()` at `:1222`. The one sanctioned correction for a
+bad finalized run.
+
+**Field 1 — steps and owning class**
+
+| # | Step | Owner | Line |
+|---|---|---|---|
+| 1 | Guard: non-empty reason (outside the transaction — pure input validation) | `void` | `:1224-1226` |
+| 2 | Re-read + `lockForUpdate` the period | `void` | `:1229` |
+| 3 | Guard: status must be `Finalized` | `void` | `:1233` |
+| 4 | If a JE exists and is `Posted` and un-reversed → **reverse it** (cross-module) | `JournalEntryService::reverse` | `:1243-1251` → `Accounting/Services/JournalEntryService.php:268` |
+| 5 | Write `status=Voided`, `voided_at/by`, `void_reason` | `void` | `:1253-1258` |
+| 6 | `markGlNotRequired('period_voided')` **only if** no JE was linked | `void` | `:1259-1261` |
+| 7 | **Release pay-cycle claims** — hard delete | `void` | `:1268-1270` |
+| 8 | 13th-month only: un-pay accruals (`is_paid=false`, `paid_date=null`) | `void` | `:1275-1279` |
+| 9 | Audit row `payroll.period.void`, recording the reversal JE id | `AuditLog` | `:1281-1291` |
+| 10 | **Record intent** — outbox row for `PayrollPeriodVoided` | `OutboxService::record` | `:1294` |
+
+Payroll rows are deliberately **not** deleted (`:1266-1267`); only the claim on the
+cycle is freed.
+
+**Field 2 — transaction boundary**
+
+One `DB::transaction` at `:1228` encloses steps 2–10. That is the answer to the
+brief's question: the claim release (step 7) and the GL reversal (step 4) are in
+**the same transaction**, so a failed reversal rolls back the release and the
+period stays Finalized. `JournalEntryService::reverse` opens its own transaction
+at `:277`, which nests as a savepoint rather than a second boundary. Step 1 sits
+outside, correctly — it validates input and touches nothing.
+
+**Field 3 — step N succeeds, N+1 fails**
+
+| Crossing | Behavior | Evidence |
+|---|---|---|
+| 4 → 5 (reversal posted, status write fails) | Rollback, including the reversal JE and its lines | `:1228` encloses `:1247` and `:1253` |
+| 5 → 7 (voided, claim release fails) | Rollback — the period returns to Finalized rather than becoming a Voided period whose employees stay unpayable | `:1228` encloses `:1268` |
+| 7 → 8 (claims freed, accrual un-pay fails) | Rollback | same boundary |
+| 9 → 10 (audit written, outbox insert fails) | Rollback | same boundary |
+| JE already reversed or missing | Skipped, no throw — `:1246` re-checks `status === Posted` and `reversed_by_entry_id === null`; the in-line comment names this as intentional idempotency | `:1246`, `:1250` |
+
+**Field 4 — sync vs async handoff**
+
+| Edge | Kind | Retry budget | Out-of-order |
+|---|---|---|---|
+| HTTP → `void` | **sync**, fully transactional | n/a — 422 on any guard failure | n/a |
+| void → `JournalEntryService::reverse` | **sync**, in-transaction, cross-module (Payroll → Accounting) | n/a — rolls back | n/a |
+| void → `PayrollPeriodVoided` | async via outbox | outbox `$tries=3` | **no consumer exists** — see below |
+
+Boundary-vs-dispatch (plan step 2): the only event is recorded through
+`OutboxService::record` (`:1294`), which joins the open transaction
+(`OutboxService.php:59-61`) and defers the queue push to `DB::afterCommit`
+(`:65-74`). No naked in-transaction dispatch on this process.
+
+Two observations on the handoff, neither rising to a finding but both answering
+questions this audit left open elsewhere:
+
+- **`PayrollPeriodVoided` has no consumer.** §2.4 listed it as one of ten
+  allowlisted-but-unconsumed events and deferred the verdict to the tracing task.
+  The verdict for P04: it is an **intentionally unwired seam, not a defect**.
+  Everything the void must accomplish — GL reversal, claim release, accrual
+  un-payment — happens synchronously inside the transaction at `:1228`, precisely
+  so that no queued listener can swallow a half-done correction. The event exists
+  for future subscribers; nothing is missing because nothing is delegated.
+- **The void is invisible to chain observability.** `finalize` records through
+  `recordForChain` and so writes a `chain_step_runs` row
+  (`:1115-1129`, `OutboxService.php:100-124`); `void` uses plain `record`
+  (`:1294`) and writes none. The h2r chain view therefore shows a period
+  advancing to Finalized but never shows it being withdrawn. Advisory —
+  a reporting gap, not a correctness one.
+
+**Field 5 — idempotency under replay**
+
+| Effect | Dedupe mechanism | Enforced by | Verdict |
+|---|---|---|---|
+| Status write | `status === Finalized` on the **locked** row | `:1233` after lock `:1229` | idempotent — second call 422s |
+| GL reversal | `status === Posted` **and** `reversed_by_entry_id === null` | `:1246`; also re-checked inside `reverse` at `JournalEntryService.php:270`, `:273` | idempotent per period; see the flag in field 6 for the cross-caller case |
+| Claim release | `delete()` on `where payroll_period_id` — no-op when already empty | `:1268-1270` | idempotent |
+| Accrual un-pay | mass `update` to a fixed state | `:1275-1279` | idempotent |
+| Audit row | one per successful call, and only one call can succeed | `:1281` | bounded by the status guard |
+| Outbox row | no explicit key → content hash of `event_type` + payload | `OutboxService.php:32` | idempotent; moot, only one void can succeed |
+| `journal_entry_id` | **never cleared** | `:1253-1258` writes four columns, not this one | **this is P02-02** |
+
+**Field 6 — guard reachability (mechanical enumeration)**
+
+Period-status writers are enumerated in full at P01 field 6 (nine writers,
+unchanged at this commit); `void` is writer 6 there, guarded at `:1233` and
+reading the locked row from `:1229`. Journal-entry writers are enumerated at P02
+field 6 (seven writers, three of them plain-string). Neither is repeated here.
+
+Two greps specific to P04:
+
+- Grep 2 (`DB::table('payroll_cycle_claims')`) — **zero** sites. Every claim write
+  goes through the model: `PayrollCalculatorService.php:378`,
+  `ThirteenthMonthService.php:313`, and the release at `:1268-1270`.
+- Grep 3 — the release **is** a mass `delete()`, which is correct here:
+  `PayrollCycleClaim` has no `SoftDeletes` (`Models/PayrollCycleClaim.php:23-25`,
+  `use HasHashId` only), so `delete()` removes the row outright and the UNIQUE
+  `(employee_id, cycle_key)` is genuinely freed. Had the model soft-deleted, the
+  index would still hold and the replacement run would be refused — the probe
+  below exists to rule exactly that out.
+
+**Inherited flag, not verdicted here.** `JournalEntryService::reverse` guards on
+`$je` read *before* its transaction (`:270`, `:273`, transaction at `:277`) — the
+P01-01 shape. It has four callers: this void (`:1247`), the manual endpoint
+(`Accounting/Controllers/JournalEntryController.php:103`),
+`BillService.php:488`, and `InvoiceService.php:279`. Payroll-side concurrency is
+serialized by the period lock at `:1229`, so P04 cannot double-reverse on its
+own. A void racing a *manual* reversal of the same JE is not serialized by
+anything, and the outcome would be two posted mirror entries against one
+original. That belongs to P20 (manual JE post/reverse), where the manual endpoint
+is the subject; carried to §5 so P20 inherits it rather than re-deriving it.
+
+Grep 4 (FQN resolution) over `void` and its callees:
+`app(JournalEntryService::class)` at `:1247` — Accounting, already imported at
+`:12`, so the import graph saw it — plus `app(OutboxService::class)` at `:1294`
+(Common). No unseen cross-module edge. P04's declared domains (Payroll,
+Accounting) are correct.
+
+**Field 7 — audit attribution**
+
+| Step | Audit row | Actor |
+|---|---|---|
+| void | `payroll.period.void`, in-transaction, records `reversal_journal_entry_id` | `voided_by = $actor->id` `:1256`, `:1281-1291` |
+| GL reversal | `HasAuditLog` on `JournalEntry` fires — `reverse` uses `JournalEntry::create` and `$je->update` | `posted_by`/`created_by` = `$actor->id` (`JournalEntryService.php:291-292`) |
+| claim release | none — mass `delete()`, and the model deliberately omits `HasAuditLog` | documented at `Models/PayrollCycleClaim.php:19-22` |
+| accrual un-pay | **none** — mass `update()` fires no model events although `ThirteenthMonthAccrual` carries `HasAuditLog` (`Models/ThirteenthMonthAccrual.php:16`) | — |
+
+The accrual gap is the same mechanism P02-01 proves — a query-builder write
+bypasses the Eloquent hooks `HasAuditLog` registers
+(`Common/Traits/HasAuditLog.php:20-22`). It is narrower than P02-01: reachable
+only on a 13th-month void (`:1275`), and the parent `payroll.period.void` audit
+row does record the void itself. Advisory, filed as neither a finding nor clean —
+noted in §5.
+
+Notably the reversal *is* attributed here, which sharpens P02-01: the void's
+mirror entry carries `posted_by = $actor->id`, so the ledger ends up holding a
+named reversal of an entry that nobody is recorded as having created.
+
+**Field 8 — verdict**
+
+**Clean.** No finding originates in P04. The two properties the brief asked to
+verify both hold, and both were driven rather than read:
+
+1. Void **does** release the claims — hard `delete()` at `:1268-1270`.
+2. The release **is** in the same transaction as the GL reversal — one boundary at
+   `:1228` spanning `:1247` and `:1268`.
+
+**Probe (confirmatory).** Throwaway PHPUnit test, deleted after the run. Computed,
+finalized and GL-posted a real period, voided it, then created a replacement
+period covering the same cutoff and computed the same employee:
+
+```
+[PROBE9] cycle claims before=1 after=0 | payroll rows kept=1 | bank_file_status='not_started'
+[PROBE9] replacement run: PAID net=8450.00 | claims now=1
+```
+
+The claim was released, the historical payroll row was preserved, and the
+replacement run paid the employee ₱8,450.00 for the same cycle — the exact
+behaviour `CLAUDE.md` specifies and `0439`'s docblock promises (`:38-39`).
+
+One code fact that is **not** a finding: void does not reset `bank_file_status` or
+delete the `BankFileRecord` (`:1253-1258` writes four columns; the only
+`bank_file_status` write in the service is finalize's at `:1084`). That is
+correct — the file really was generated and may already have reached the bank, so
+un-recording it would be the falsification. The `not_started` value above is a
+probe artefact: the probe reached Finalized by `forceFill` rather than through
+`finalize()`, so `bank_file_status` was never advanced.
+
+P04's own defect surface is covered by **P02-02**, whose *cause* is here — void's
+failure to clear `journal_entry_id` at `:1253-1258` — and whose *effect* is in
+P02's re-post guards. It is filed once, under P02, rather than double-counted.
+
 ### 3.1 Data-corrupting
 
 #### P01-01 — `forceUnlock` demotes a Finalized period to Computed (PROVEN)
@@ -1400,6 +1575,22 @@ payslip emails, not money — no financial row is touched.
 ### 3.5 Missing compensation
 
 ## 4. Clean list
+
+Processes traced end to end whose own boundaries hold. A process appears here
+only after all eight protocol fields were answered; a finding *caused* by a clean
+process but *filed* elsewhere is named so the entry is not read as a blanket
+acquittal.
+
+| Process | Why clean | Key citations |
+|---|---|---|
+| **P04** — Payroll period void → GL reversal + cycle-claim release | Single transaction spans the GL reversal, the status write, the claim release and the accrual un-payment, so no partial correction can persist. Guard reads the locked row. Claim release is a hard `delete()` on a model without `SoftDeletes`, so the double-pay UNIQUE is genuinely freed and a replacement run can pay — driven by probe, not assumed. Payroll history is preserved rather than deleted. | boundary `PayrollPeriodService.php:1228`; lock `:1229`; guard `:1233`; reversal `:1247`; claim release `:1268-1270`; `PayrollCycleClaim` traits `Models/PayrollCycleClaim.php:23-25`; UNIQUE `0439_create_payroll_cycle_claims_table.php:55` |
+
+P04 carries three advisories that are recorded in §3.0 and §5 rather than here:
+`PayrollPeriodVoided` has no consumer (adjudicated as an intentional seam), the
+void writes no `chain_step_runs` row, and the 13th-month accrual un-payment is a
+mass `update()` that writes no audit row. Its one severe defect — the uncleared
+`journal_entry_id` — is filed as **P02-02**, because the guards that misread it
+live in P02.
 
 ## 5. Untraced list
 
