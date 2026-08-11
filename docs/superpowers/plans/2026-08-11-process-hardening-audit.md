@@ -2,8 +2,10 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 >
-> **This plan overrides the sub-skill's subagent default.** The spec forbids
-> subagents (see Global Constraints). Execute inline.
+> **Execution mode: subagent-driven**, per explicit user selection on
+> 2026-08-11. This supersedes the spec's "no subagents" constraint, which
+> encoded a standing default the user has now overridden for this plan.
+> One fresh subagent per task, reviewed between tasks.
 
 **Goal:** Produce an evidence-cited audit of every cross-module and chain
 business process in the Ogami ERP API, identifying where they lose data, skip
@@ -27,8 +29,12 @@ React 18 SPA. All commands run through `docker compose exec`.
 - **Phase 1 is findings-only.** No production code is modified. No transaction
   boundary widened, no guard added, no refactor. Phase 2 proposes; the user
   confirms priority; only then does code change.
-- **No subagents.** All tracing runs inline in one session, per standing user
-  instruction.
+- **Subagent-driven execution.** One fresh subagent per task, reviewed between
+  tasks. Each subagent starts with no context beyond this plan, so every task
+  states its own paths, commands, and expected output. Because a subagent
+  cannot see prior traces, **findings must be appended to the audit document
+  before the task ends** — the document, not conversation memory, is the
+  handoff between tasks.
 - **Anchor commit is `feaa9621`** on `main`, pushed to `origin/main` — the
   commit whose code the citations describe. **The no-drift compare point is
   `80fc31ee`** (this plan's own commit), because one unrelated seeder change
