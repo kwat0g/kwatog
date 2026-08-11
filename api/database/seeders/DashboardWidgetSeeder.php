@@ -18,23 +18,36 @@ use Illuminate\Database\Seeder;
 class DashboardWidgetSeeder extends Seeder
 {
     /**
-     * @return array<int, array{key: string, name: string, module: string, permission: ?string, default_w?: int, default_h?: int, description?: string}>
+     * Default width per render kind, in 12-column units. A widget's shape,
+     * not its module, decides how much room it needs: a table wants the full
+     * row, a gauge reads fine at a third of one.
+     */
+    private const WIDTH_BY_KIND = [
+        'table' => 12,
+        'trend' => 8,
+        'breakdown' => 6,
+        'gauge' => 4,
+        'scalar' => 4,
+    ];
+
+    /**
+     * @return array<int, array{key: string, name: string, module: string, permission: ?string, render_kind?: string, default_w?: int, default_h?: int, description?: string}>
      */
     private function catalog(): array
     {
         return [
             // ─── Production / Plant ────────────────────────────────
-            ['key' => 'production.kpi',                'name' => 'Production KPIs',           'module' => 'production',  'permission' => 'production.dashboard.view'],
+            ['key' => 'production.kpi',                'name' => 'Production KPIs',           'module' => 'production',  'permission' => 'production.dashboard.view', 'render_kind' => 'trend'],
             ['key' => 'production.active_wo',          'name' => 'Active Work Orders',        'module' => 'production',  'permission' => 'production.work_orders.view'],
-            ['key' => 'production.wo_breakdown',       'name' => 'WO Status Breakdown',       'module' => 'production',  'permission' => 'production.work_orders.view'],
+            ['key' => 'production.wo_breakdown',       'name' => 'WO Status Breakdown',       'module' => 'production',  'permission' => 'production.work_orders.view', 'render_kind' => 'breakdown'],
             ['key' => 'production.gantt_mini',         'name' => 'Production Schedule (Gantt)', 'module' => 'production', 'permission' => 'production.schedule.view'],
-            ['key' => 'machine.utilization',           'name' => 'Machine Utilization',       'module' => 'production',  'permission' => 'production.dashboard.view'],
+            ['key' => 'machine.utilization',           'name' => 'Machine Utilization',       'module' => 'production',  'permission' => 'production.dashboard.view', 'render_kind' => 'gauge'],
             ['key' => 'machine.status',                'name' => 'Machine Status',            'module' => 'production',  'permission' => 'mrp.machines.view'],
-            ['key' => 'oee.gauges',                    'name' => 'OEE Gauges',                'module' => 'production',  'permission' => 'production.dashboard.view'],
+            ['key' => 'oee.gauges',                    'name' => 'OEE Gauges',                'module' => 'production',  'permission' => 'production.dashboard.view', 'render_kind' => 'gauge'],
             ['key' => 'chain.stage_breakdown',         'name' => 'Chain Stage Breakdown',     'module' => 'production',  'permission' => 'dashboard.view_bottlenecks'],
 
             // ─── Quality ────────────────────────────────────────────
-            ['key' => 'qc.pareto',                     'name' => 'QC Defect Pareto',          'module' => 'quality',     'permission' => 'quality.view'],
+            ['key' => 'qc.pareto',                     'name' => 'QC Defect Pareto',          'module' => 'quality',     'permission' => 'quality.view', 'render_kind' => 'breakdown'],
             ['key' => 'qc.pending_inspections',        'name' => 'Pending Inspections',       'module' => 'quality',     'permission' => 'quality.inspections.view'],
             ['key' => 'qc.open_ncrs',                  'name' => 'Open NCRs',                 'module' => 'quality',     'permission' => 'quality.ncr.view'],
             ['key' => 'qc.pass_rate',                  'name' => 'Pass Rate by Product',      'module' => 'quality',     'permission' => 'quality.view'],
@@ -45,14 +58,14 @@ class DashboardWidgetSeeder extends Seeder
 
             // ─── Finance ────────────────────────────────────────────
             ['key' => 'finance.cash_position',         'name' => 'Cash Position',             'module' => 'accounting',  'permission' => 'accounting.dashboard.view'],
-            ['key' => 'finance.ar_aging',              'name' => 'AR Aging',                  'module' => 'accounting',  'permission' => 'accounting.invoices.view'],
+            ['key' => 'finance.ar_aging',              'name' => 'AR Aging',                  'module' => 'accounting',  'permission' => 'accounting.invoices.view', 'render_kind' => 'breakdown'],
             ['key' => 'finance.ap_aging',              'name' => 'AP Aging',                  'module' => 'accounting',  'permission' => 'accounting.bills.view'],
             ['key' => 'finance.revenue_mtd',           'name' => 'Revenue Month-To-Date',     'module' => 'accounting',  'permission' => 'accounting.dashboard.view'],
             ['key' => 'finance.unpaid_invoices',       'name' => 'Unpaid Invoices',           'module' => 'accounting',  'permission' => 'accounting.invoices.view'],
             ['key' => 'finance.upcoming_payables',     'name' => 'Upcoming Payables',         'module' => 'accounting',  'permission' => 'accounting.bills.view'],
 
             // ─── HR / Payroll ───────────────────────────────────────
-            ['key' => 'hr.headcount',                  'name' => 'Headcount by Department',   'module' => 'hr',          'permission' => 'hr.employees.view'],
+            ['key' => 'hr.headcount',                  'name' => 'Headcount by Department',   'module' => 'hr',          'permission' => 'hr.employees.view', 'render_kind' => 'breakdown'],
             // Company-wide counts, so they must be gated on a company-wide
             // read — NOT on `leave.view` / `payroll.view`, which every role
             // holds for its own self-service pages (RolePermissionSeeder::selfService).
@@ -70,10 +83,10 @@ class DashboardWidgetSeeder extends Seeder
 
             // ─── Purchasing / Supply Chain ─────────────────────────
             ['key' => 'purchasing.open_prs',           'name' => 'Open Purchase Requests',    'module' => 'purchasing',  'permission' => 'purchasing.view'],
-            ['key' => 'purchasing.open_pos',           'name' => 'Open Purchase Orders',      'module' => 'purchasing',  'permission' => 'purchasing.view'],
+            ['key' => 'purchasing.open_pos',           'name' => 'Open Purchase Orders',      'module' => 'purchasing',  'permission' => 'purchasing.view', 'render_kind' => 'breakdown'],
             ['key' => 'purchasing.supplier_perf',      'name' => 'Supplier Performance',      'module' => 'purchasing',  'permission' => 'purchasing.view'],
-            ['key' => 'supply.overdue_deliveries',     'name' => 'Overdue Deliveries',        'module' => 'supply_chain', 'permission' => 'supply_chain.view'],
-            ['key' => 'supply.delivery_schedule',      'name' => 'Delivery Schedule',         'module' => 'supply_chain', 'permission' => 'supply_chain.view'],
+            ['key' => 'supply.overdue_deliveries',     'name' => 'Overdue Deliveries',        'module' => 'supply_chain', 'permission' => 'supply_chain.view', 'render_kind' => 'table'],
+            ['key' => 'supply.delivery_schedule',      'name' => 'Delivery Schedule',         'module' => 'supply_chain', 'permission' => 'supply_chain.view', 'render_kind' => 'table'],
 
             // ─── Inventory / Warehouse ─────────────────────────────
             ['key' => 'inventory.low_stock',           'name' => 'Low Stock Alerts',          'module' => 'inventory',   'permission' => 'inventory.view'],
@@ -103,22 +116,24 @@ class DashboardWidgetSeeder extends Seeder
             // ─── Maintenance / Assets ──────────────────────────────
             ['key' => 'maintenance.open_wos',          'name' => 'Open Maintenance WOs',      'module' => 'maintenance', 'permission' => 'maintenance.view'],
             ['key' => 'maintenance.due_schedules',     'name' => 'Preventive Maintenance Due', 'module' => 'maintenance', 'permission' => 'maintenance.view'],
-            ['key' => 'assets.under_maintenance',      'name' => 'Assets Under Maintenance',  'module' => 'assets',      'permission' => 'assets.view'],
+            ['key' => 'assets.under_maintenance',      'name' => 'Assets Under Maintenance',  'module' => 'assets',      'permission' => 'assets.view', 'render_kind' => 'breakdown'],
 
             // ─── Returns / CRM / Budget ────────────────────────────
-            ['key' => 'rma.open_returns',              'name' => 'Open Return Requests',      'module' => 'return_management', 'permission' => 'return_management.view'],
-            ['key' => 'rma.pending_approval',          'name' => 'Returns Awaiting Approval', 'module' => 'return_management', 'permission' => 'return_management.view'],
-            ['key' => 'crm.open_complaints',           'name' => 'Open Customer Complaints',  'module' => 'crm',         'permission' => 'crm.view'],
-            ['key' => 'budget.utilization',            'name' => 'Budget Utilization',        'module' => 'budgeting',   'permission' => 'budgeting.view'],
+            ['key' => 'rma.open_returns',              'name' => 'Open Return Requests',      'module' => 'return_management', 'permission' => 'return_management.view', 'render_kind' => 'breakdown'],
+            ['key' => 'rma.pending_approval',          'name' => 'Returns Awaiting Approval', 'module' => 'return_management', 'permission' => 'return_management.view', 'render_kind' => 'table'],
+            ['key' => 'crm.open_complaints',           'name' => 'Open Customer Complaints',  'module' => 'crm',         'permission' => 'crm.view', 'render_kind' => 'breakdown'],
+            ['key' => 'budget.utilization',            'name' => 'Budget Utilization',        'module' => 'budgeting',   'permission' => 'budgeting.view', 'render_kind' => 'gauge'],
             // Resolver scopes to the caller's department unless they hold a
             // company-wide loans read — see ::outstandingLoans.
-            ['key' => 'loans.outstanding',             'name' => 'Outstanding Loans',         'module' => 'loans',       'permission' => 'loans.view'],
+            ['key' => 'loans.outstanding',             'name' => 'Outstanding Loans',         'module' => 'loans',       'permission' => 'loans.view', 'render_kind' => 'table'],
         ];
     }
 
     public function run(): void
     {
         foreach ($this->catalog() as $w) {
+            $kind = $w['render_kind'] ?? 'scalar';
+
             DashboardWidget::updateOrCreate(
                 ['key' => $w['key']],
                 [
@@ -126,7 +141,8 @@ class DashboardWidgetSeeder extends Seeder
                     'description' => $w['description'] ?? null,
                     'module'      => $w['module'],
                     'permission'  => $w['permission'],
-                    'default_w'   => $w['default_w'] ?? 12,
+                    'render_kind' => $kind,
+                    'default_w'   => $w['default_w'] ?? self::WIDTH_BY_KIND[$kind] ?? 4,
                     'default_h'   => $w['default_h'] ?? 4,
                 ],
             );

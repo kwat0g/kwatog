@@ -105,10 +105,14 @@ class DashboardRoleLayoutSeeder extends Seeder
         ];
     }
 
+    /** Columns in the dashboard grid. Mirrors the SPA's 12-column layout. */
+    private const GRID_COLUMNS = 12;
+
     public function run(): void
     {
         $now = now();
         $rolesByslug = Role::pluck('id', 'slug');
+        $defaults = DB::table('dashboard_widgets')->pluck('default_w', 'key');
 
         foreach ($this->roleWidgets() as $slug => $widgetKeys) {
             $roleId = $rolesByslug->get($slug);
@@ -123,19 +127,33 @@ class DashboardRoleLayoutSeeder extends Seeder
                 ->where('owner_id', $roleId)
                 ->delete();
 
+            // Each widget takes the width its render kind implies, packed
+            // left-to-right and wrapped at the 12-column boundary. Every row
+            // used to be full-width because the SPA ignored the column.
             $rows = [];
-            foreach ($widgetKeys as $i => $key) {
+            $x = 0;
+            $y = 0;
+            foreach ($widgetKeys as $key) {
+                $width = (int) ($defaults[$key] ?? 12);
+
+                if ($x + $width > self::GRID_COLUMNS) {
+                    $x = 0;
+                    $y++;
+                }
+
                 $rows[] = [
                     'owner_type' => DashboardLayout::OWNER_ROLE,
                     'owner_id'   => $roleId,
                     'widget_key' => $key,
-                    'position_x' => 0,
-                    'position_y' => $i,
-                    'width'      => 12,
+                    'position_x' => $x,
+                    'position_y' => $y,
+                    'width'      => $width,
                     'height'     => 4,
                     'created_at' => $now,
                     'updated_at' => $now,
                 ];
+
+                $x += $width;
             }
             if (! empty($rows)) {
                 DB::table('dashboard_layouts')->insert($rows);
