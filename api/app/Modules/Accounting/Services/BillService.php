@@ -473,27 +473,34 @@ class BillService
 
     public function cancel(Bill $bill, User $by): Bill
     {
-        if (! Money::isZero((string) $bill->amount_paid)) {
-            throw new BusinessRuleException('Cannot cancel a bill that has payments.');
-        }
-        if ($bill->status === BillStatus::Cancelled) {
-            return $bill;
-        }
-
         return DB::transaction(function () use ($bill, $by) {
+            // Lock the parent before locking its JE so cancellation uses the
+            // authoritative AP state and shares the parent-first lock order
+            // with recordPayment()/postDraft().
+            $lockedBill = Bill::query()
+                ->lockForUpdate()
+                ->findOrFail($bill->getKey());
+            if (! Money::isZero((string) $lockedBill->amount_paid)) {
+                throw new BusinessRuleException('Cannot cancel a bill that has payments.');
+            }
+            if ($lockedBill->status === BillStatus::Cancelled) {
+                return $lockedBill;
+            }
+
             // Reverse the original JE if posted.
-            if ($bill->journal_entry_id) {
-                $je = $bill->journalEntry;
+            if ($lockedBill->journal_entry_id) {
+                $lockedBill->loadMissing('journalEntry');
+                $je = $lockedBill->journalEntry;
                 if ($je && $je->status === JournalEntryStatus::Posted) {
                     $this->journals->reverse($je, $by);
                 }
             }
-            $bill->update([
+            $lockedBill->update([
                 'status' => BillStatus::Cancelled,
                 'balance' => Money::zero(),
             ]);
 
-            return $bill->fresh();
+            return $lockedBill->fresh();
         });
     }
 

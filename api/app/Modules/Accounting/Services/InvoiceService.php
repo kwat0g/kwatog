@@ -271,25 +271,32 @@ class InvoiceService
 
     public function cancel(Invoice $invoice, User $by): Invoice
     {
-        if (! Money::isZero((string) $invoice->amount_paid)) {
-            throw new BusinessRuleException('Cannot cancel an invoice that has collections.');
-        }
-        if ($invoice->status === InvoiceStatus::Cancelled) {
-            return $invoice;
-        }
-
         return DB::transaction(function () use ($invoice, $by) {
-            if ($invoice->journal_entry_id) {
-                $je = $invoice->journalEntry;
+            // Lock the parent before locking its JE so cancel follows the same
+            // parent-first order as collection/finalization and never acts on
+            // stale amount/status/journal-link attributes.
+            $lockedInvoice = Invoice::query()
+                ->lockForUpdate()
+                ->findOrFail($invoice->getKey());
+            if (! Money::isZero((string) $lockedInvoice->amount_paid)) {
+                throw new BusinessRuleException('Cannot cancel an invoice that has collections.');
+            }
+            if ($lockedInvoice->status === InvoiceStatus::Cancelled) {
+                return $lockedInvoice;
+            }
+
+            if ($lockedInvoice->journal_entry_id) {
+                $lockedInvoice->loadMissing('journalEntry');
+                $je = $lockedInvoice->journalEntry;
                 if ($je && $je->status === JournalEntryStatus::Posted) {
                     $this->journals->reverse($je, $by);
                 }
             }
-            $invoice->update([
+            $lockedInvoice->update([
                 'status'  => InvoiceStatus::Cancelled,
                 'balance' => Money::zero(),
             ]);
-            return $invoice->fresh();
+            return $lockedInvoice->fresh();
         });
     }
 
