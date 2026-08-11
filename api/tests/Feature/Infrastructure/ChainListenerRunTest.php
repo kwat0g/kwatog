@@ -15,6 +15,7 @@ use Illuminate\Queue\Events\JobExceptionOccurred;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Queue\Events\JobProcessed;
+use Illuminate\Support\Facades\DB;
 use Mockery;
 use RuntimeException;
 use Tests\TestCase;
@@ -90,6 +91,103 @@ class ChainListenerRunTest extends TestCase
         $this->assertStringContainsString('permanent listener failure', (string) $run->last_error);
         $this->assertSame(ChainListenerRun::OUTCOME_FAILED, $run->outcome_status);
         $this->assertSame('queue_failed', $run->outcome_code);
+    }
+
+    public function test_a_late_exception_event_cannot_reopen_a_terminal_failed_listener_run(): void
+    {
+        $outboxId = (string) \Illuminate\Support\Str::uuid();
+        $jobUuid = (string) \Illuminate\Support\Str::uuid();
+        $payload = [
+            'outbox_id' => $outboxId,
+            'outbox_event_type' => PurchaseOrderApproved::class,
+            'uuid' => $jobUuid,
+            'displayName' => NotifyOnPurchaseOrderApproved::class,
+        ];
+
+        DB::table('failed_jobs')->insert([
+            'uuid' => $jobUuid,
+            'connection' => 'redis',
+            'queue' => 'default',
+            'payload' => json_encode($payload, JSON_THROW_ON_ERROR),
+            'exception' => 'permanent listener failure',
+            'failed_at' => now(),
+        ]);
+
+        $job = Mockery::mock(\Illuminate\Contracts\Queue\Job::class);
+        $job->shouldReceive('payload')->andReturn($payload);
+        $job->shouldReceive('attempts')->andReturn(3);
+
+        $service = app(ChainListenerRunService::class);
+        $service->markProcessing(new JobProcessing('redis', $job));
+        $service->markFailed(new JobFailed(
+            'redis',
+            $job,
+            new RuntimeException('permanent listener failure'),
+        ));
+
+        $failed = ChainListenerRun::query()->where('job_uuid', $jobUuid)->firstOrFail();
+        $terminal = [
+            'status' => $failed->status,
+            'attempts' => $failed->attempts,
+            'failed_at' => $failed->failed_at?->toIso8601String(),
+            'last_error' => $failed->last_error,
+            'outcome_status' => $failed->outcome_status,
+            'outcome_code' => $failed->outcome_code,
+            'outcome_message' => $failed->outcome_message,
+            'outcome_at' => $failed->outcome_at?->toIso8601String(),
+            'job_uuid' => $failed->job_uuid,
+        ];
+
+        // Laravel may dispatch JobFailed before JobExceptionOccurred when a
+        // job has exhausted its attempts. The latter is an informational
+        // retry event and must not erase the terminal failure fact.
+        $service->markRetrying(new JobExceptionOccurred(
+            'redis',
+            $job,
+            new RuntimeException('late retry notification'),
+        ));
+
+        $failed->refresh();
+        $this->assertSame($terminal, [
+            'status' => $failed->status,
+            'attempts' => $failed->attempts,
+            'failed_at' => $failed->failed_at?->toIso8601String(),
+            'last_error' => $failed->last_error,
+            'outcome_status' => $failed->outcome_status,
+            'outcome_code' => $failed->outcome_code,
+            'outcome_message' => $failed->outcome_message,
+            'outcome_at' => $failed->outcome_at?->toIso8601String(),
+            'job_uuid' => $failed->job_uuid,
+        ]);
+        $this->assertSame($jobUuid, DB::table('failed_jobs')->where('uuid', $jobUuid)->value('uuid'));
+    }
+
+    public function test_terminal_failure_without_a_matching_failed_job_is_safe(): void
+    {
+        $outboxId = (string) \Illuminate\Support\Str::uuid();
+        $jobUuid = (string) \Illuminate\Support\Str::uuid();
+        $payload = [
+            'outbox_id' => $outboxId,
+            'outbox_event_type' => PurchaseOrderApproved::class,
+            'uuid' => $jobUuid,
+            'displayName' => NotifyOnPurchaseOrderApproved::class,
+        ];
+
+        $job = Mockery::mock(\Illuminate\Contracts\Queue\Job::class);
+        $job->shouldReceive('payload')->andReturn($payload);
+        $job->shouldReceive('attempts')->andReturn(1);
+
+        $service = app(ChainListenerRunService::class);
+        $service->markFailed(new JobFailed(
+            'redis',
+            $job,
+            new RuntimeException('failed before failed_jobs was persisted'),
+        ));
+
+        $run = ChainListenerRun::query()->where('job_uuid', $jobUuid)->firstOrFail();
+        $this->assertSame(ChainListenerRun::STATUS_FAILED, $run->status);
+        $this->assertSame(ChainListenerRun::OUTCOME_FAILED, $run->outcome_status);
+        $this->assertSame($jobUuid, $run->job_uuid);
     }
 
     public function test_business_outcome_is_preserved_when_the_listener_job_completes(): void
