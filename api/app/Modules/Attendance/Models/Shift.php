@@ -8,11 +8,12 @@ use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Shift extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog, SoftDeletes;
+    use HasAuditLog, HasFactory, HasHashId, SoftDeletes;
 
     protected $fillable = [
         'name', 'start_time', 'end_time', 'break_minutes', 'grace_minutes',
@@ -21,12 +22,12 @@ class Shift extends Model
 
     protected $casts = [
         'is_night_shift' => 'boolean',
-        'is_extended'    => 'boolean',
-        'is_active'      => 'boolean',
-        'is_default'     => 'boolean',
-        'auto_ot_hours'  => 'decimal:1',
-        'break_minutes'  => 'integer',
-        'grace_minutes'  => 'integer',
+        'is_extended' => 'boolean',
+        'is_active' => 'boolean',
+        'is_default' => 'boolean',
+        'auto_ot_hours' => 'decimal:1',
+        'break_minutes' => 'integer',
+        'grace_minutes' => 'integer',
     ];
 
     public function assignments(): HasMany

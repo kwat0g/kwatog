@@ -202,10 +202,7 @@ export function PartShowcaseSection() {
               {/* live 3D model */}
               {motionOK && part && <PartShowcase3D part={part} exploded={exploded} />}
 
-              {/* dimension callouts */}
-              <span className="absolute left-5 top-5 font-mono text-[10px] uppercase tracking-[0.16em] text-accent">
-                REV · A
-              </span>
+              {/* live dimension callout */}
               <span className="absolute right-5 top-5 font-mono text-[10px] uppercase tracking-[0.16em] text-accent">
                 {part?.tolerance || '—'}
               </span>

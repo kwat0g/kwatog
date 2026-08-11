@@ -5,20 +5,27 @@ declare(strict_types=1);
 namespace App\Modules\Production\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
 use App\Modules\Inventory\Enums\ItemType;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Enums\WarehouseZoneType;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
+use App\Modules\Inventory\Exceptions\InvalidMovementException;
 use App\Modules\Inventory\Services\StockMovementService;
 use App\Modules\Inventory\Support\StockMovementInput;
 use App\Modules\MRP\Models\Mold;
 use App\Modules\MRP\Services\MoldService;
+use App\Modules\Production\Enums\ProductionReceiptHandoffStatus;
 use App\Modules\Production\Enums\WorkOrderStatus;
+use App\Modules\Production\Events\ProductionReceiptRequested;
 use App\Modules\Production\Events\WorkOrderOutputRecorded;
+use App\Modules\Production\Exceptions\ProductionReceiptHandoffException;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderOutput;
+use App\Modules\Auth\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -43,6 +50,7 @@ use Illuminate\Support\Facades\Log;
 class WorkOrderOutputService
 {
     private const IDEMPOTENCY_TTL_SECONDS = 86400;
+    private const RECEIPT_MANUAL_MESSAGE = 'Finished-goods inventory receipt could not be created automatically. Fix the item/location setup, then replay the handoff or create the receipt manually.';
 
     public function __construct(
         private readonly MoldService $molds,
@@ -123,6 +131,10 @@ class WorkOrderOutputService
                 'shift'         => $data['shift'] ?? null,
                 'batch_code'    => $batchCode,
                 'remarks'       => $data['remarks'] ?? null,
+                'production_receipt_handoff_status' => $good > 0
+                    ? ProductionReceiptHandoffStatus::NotStarted->value
+                    : ProductionReceiptHandoffStatus::NotRequired->value,
+                'production_receipt_handoff_at' => Carbon::now(),
             ]);
 
             foreach ($defects as $d) {
@@ -155,44 +167,43 @@ class WorkOrderOutputService
             }
 
             // F-04 — record ProductionReceipt for good output at an FG-zone location.
+            $receiptNeedsRecovery = false;
+            $receiptReasonCode = 'automatic_production_receipt_failed';
             if ($good > 0) {
                 try {
-                    $product = $fresh->relationLoaded('product') ? $fresh->product : $fresh->product()->first();
-                    if ($product && $product->part_number) {
-                        $fgItem = Item::query()
-                            ->where('code', $product->part_number)
-                            ->where('item_type', ItemType::FinishedGood)
-                            ->first();
-                        if ($fgItem) {
-                            $fgLocation = WarehouseLocation::query()
-                                ->where('is_active', true)
-                                ->whereHas('zone', fn ($q) => $q->where('zone_type', WarehouseZoneType::FinishedGoods->value))
-                                ->orderBy('id')
-                                ->first();
-                            if ($fgLocation) {
-                                $this->movements->move(new StockMovementInput(
-                                    type: StockMovementType::ProductionReceipt,
-                                    itemId: $fgItem->id,
-                                    quantity: (string) $good,
-                                    toLocationId: $fgLocation->id,
-                                    referenceType: 'work_order',
-                                    referenceId: $fresh->id,
-                                    remarks: "WO {$fresh->wo_number} batch {$batchCode}",
-                                    createdBy: $recordedBy,
-                                    bypassCountFreeze: true,
-                                ));
-                            }
-                        }
-                    }
-                } catch (\Throwable $e) {
-                    Log::warning('F-04: ProductionReceipt movement skipped', [
+                    $this->createProductionReceipt($output, $fresh, $recordedBy);
+                } catch (ProductionReceiptHandoffException|BusinessRuleException|InvalidMovementException $e) {
+                    $receiptNeedsRecovery = true;
+                    $receiptReasonCode = $e instanceof ProductionReceiptHandoffException
+                        ? $e->reasonCode
+                        : 'production_receipt_business_rule';
+                    $this->markProductionReceiptManual($output->id);
+                    Log::warning('F-04: ProductionReceipt handoff requires recovery', [
                         'wo_id' => $fresh->id,
+                        'output_id' => $output->id,
+                        'reason_code' => $receiptReasonCode,
                         'error' => $e->getMessage(),
                     ]);
                 }
             }
 
-            return $output->load('defects.defectType');
+            $eventOutput = $output->load('defects.defectType');
+            app(OutboxService::class)->record(
+                new WorkOrderOutputRecorded($fresh->fresh(), $eventOutput),
+            );
+
+            if ($receiptNeedsRecovery) {
+                app(OutboxService::class)->recordForChain(
+                    new ProductionReceiptRequested($eventOutput, $receiptReasonCode),
+                    $fresh,
+                    'production',
+                    'work_order',
+                    'production_receipt',
+                    'production-receipt-request:'.$output->id,
+                );
+            }
+
+            return $eventOutput;
         });
 
         // Cache idempotency key (Redis or array driver — service container picks).
@@ -200,9 +211,195 @@ class WorkOrderOutputService
             Cache::put("production:idem:{$idempotencyKey}", $output->id, self::IDEMPOTENCY_TTL_SECONDS);
         }
 
-        // Broadcast.
-        WorkOrderOutputRecorded::dispatch($wo->fresh(), $output);
-
         return $output;
+    }
+
+    /**
+     * Retry only the output → stock receipt handoff. The output and WO facts
+     * are already committed, so this method never re-records production or
+     * increments WO totals a second time.
+     */
+    public function retryProductionReceipt(WorkOrderOutput $output, User $by): WorkOrderOutput
+    {
+        try {
+            return DB::transaction(function () use ($output, $by): WorkOrderOutput {
+                $lockedOutput = WorkOrderOutput::query()
+                    ->whereKey($output->id)
+                    ->lockForUpdate()
+                    ->first();
+                if (! $lockedOutput) {
+                    throw new ProductionReceiptHandoffException(
+                        'The production output no longer exists.',
+                        'work_order_output_missing',
+                    );
+                }
+
+                if ((int) $lockedOutput->good_count <= 0) {
+                    $lockedOutput->forceFill([
+                        'production_receipt_handoff_status' => ProductionReceiptHandoffStatus::NotRequired->value,
+                        'production_receipt_handoff_message' => null,
+                        'production_receipt_handoff_at' => $lockedOutput->production_receipt_handoff_at ?? now(),
+                    ])->save();
+
+                    return $lockedOutput->fresh();
+                }
+
+                $workOrder = WorkOrder::query()
+                    ->whereKey($lockedOutput->work_order_id)
+                    ->lockForUpdate()
+                    ->first();
+                if (! $workOrder) {
+                    throw new ProductionReceiptHandoffException(
+                        'The parent work order no longer exists.',
+                        'work_order_missing',
+                    );
+                }
+
+                return $this->createProductionReceipt($lockedOutput, $workOrder, (int) $by->id);
+            });
+        } catch (ProductionReceiptHandoffException|BusinessRuleException|InvalidMovementException $e) {
+            $this->markProductionReceiptManual($output->id);
+            throw $e;
+        }
+    }
+
+    /** Persist the safe operator-facing state for a failed receipt handoff. */
+    public function markProductionReceiptManual(int $outputId): void
+    {
+        DB::transaction(function () use ($outputId): void {
+            $output = WorkOrderOutput::query()->whereKey($outputId)->lockForUpdate()->first();
+            if (! $output || (int) $output->good_count <= 0 || $output->production_receipt_movement_id !== null) {
+                return;
+            }
+
+            $output->forceFill([
+                'production_receipt_handoff_status' => ProductionReceiptHandoffStatus::ManualRequired->value,
+                'production_receipt_handoff_message' => self::RECEIPT_MANUAL_MESSAGE,
+                'production_receipt_handoff_at' => now(),
+            ])->save();
+        });
+    }
+
+    /** @throws ProductionReceiptHandoffException|BusinessRuleException|InvalidMovementException */
+    private function createProductionReceipt(
+        WorkOrderOutput $output,
+        WorkOrder $workOrder,
+        int $createdBy,
+    ): WorkOrderOutput {
+        if ((int) $output->good_count <= 0) {
+            $output->forceFill([
+                'production_receipt_handoff_status' => ProductionReceiptHandoffStatus::NotRequired->value,
+                'production_receipt_handoff_message' => null,
+                'production_receipt_handoff_at' => $output->production_receipt_handoff_at ?? now(),
+            ])->save();
+
+            return $output->fresh();
+        }
+
+        if ($output->production_receipt_movement_id !== null) {
+            $linked = StockMovement::query()->find($output->production_receipt_movement_id);
+            if ($linked) {
+                return $this->markProductionReceiptGenerated($output, (int) $linked->id);
+            }
+        }
+
+        $existing = StockMovement::query()
+            ->where('movement_type', StockMovementType::ProductionReceipt->value)
+            ->where('reference_type', 'work_order_output')
+            ->where('reference_id', $output->id)
+            ->orderBy('id')
+            ->get();
+        if ($existing->count() > 1) {
+            throw new ProductionReceiptHandoffException(
+                'More than one finished-goods receipt is linked to this production output.',
+                'duplicate_production_receipts',
+            );
+        }
+        if ($existing->count() === 1) {
+            return $this->markProductionReceiptGenerated($output, (int) $existing->first()->id);
+        }
+
+        // Pre-existing installations used the parent WO as the reference. A
+        // single-output/one-movement match is safe to adopt; multiple legacy
+        // rows remain manual because guessing would double-count inventory.
+        $legacy = StockMovement::query()
+            ->where('movement_type', StockMovementType::ProductionReceipt->value)
+            ->where('reference_type', 'work_order')
+            ->where('reference_id', $workOrder->id)
+            ->orderBy('id')
+            ->get();
+        $goodOutputCount = WorkOrderOutput::query()
+            ->where('work_order_id', $workOrder->id)
+            ->where('good_count', '>', 0)
+            ->count();
+        if ($legacy->count() > 0) {
+            if ($legacy->count() === 1 && $goodOutputCount === 1) {
+                return $this->markProductionReceiptGenerated($output, (int) $legacy->first()->id);
+            }
+
+            throw new ProductionReceiptHandoffException(
+                'Legacy finished-goods receipts cannot be assigned to this output without reconciliation.',
+                'legacy_production_receipt_ambiguous',
+            );
+        }
+
+        $product = $workOrder->relationLoaded('product')
+            ? $workOrder->product
+            : $workOrder->product()->first();
+        if (! $product || ! $product->part_number) {
+            throw new ProductionReceiptHandoffException(
+                'The work order product has no part number for finished-goods inventory.',
+                'product_part_number_missing',
+            );
+        }
+
+        $fgItem = Item::query()
+            ->where('code', $product->part_number)
+            ->where('item_type', ItemType::FinishedGood)
+            ->first();
+        if (! $fgItem) {
+            throw new ProductionReceiptHandoffException(
+                'No finished-goods inventory item matches the work order product.',
+                'finished_good_item_missing',
+            );
+        }
+
+        $fgLocation = WarehouseLocation::query()
+            ->where('is_active', true)
+            ->whereHas('zone', fn ($q) => $q->where('zone_type', WarehouseZoneType::FinishedGoods->value))
+            ->orderBy('id')
+            ->first();
+        if (! $fgLocation) {
+            throw new ProductionReceiptHandoffException(
+                'No active finished-goods warehouse location is configured.',
+                'finished_good_location_missing',
+            );
+        }
+
+        $movement = $this->movements->move(new StockMovementInput(
+            type: StockMovementType::ProductionReceipt,
+            itemId: $fgItem->id,
+            quantity: (string) $output->good_count,
+            toLocationId: $fgLocation->id,
+            referenceType: 'work_order_output',
+            referenceId: $output->id,
+            remarks: "WO {$workOrder->wo_number} batch {$output->batch_code}",
+            createdBy: $createdBy,
+            bypassCountFreeze: true,
+        ));
+
+        return $this->markProductionReceiptGenerated($output, (int) $movement->id);
+    }
+
+    private function markProductionReceiptGenerated(WorkOrderOutput $output, int $movementId): WorkOrderOutput
+    {
+        $output->forceFill([
+            'production_receipt_handoff_status' => ProductionReceiptHandoffStatus::Generated->value,
+            'production_receipt_handoff_message' => null,
+            'production_receipt_handoff_at' => now(),
+            'production_receipt_movement_id' => $movementId,
+        ])->save();
+
+        return $output->fresh();
     }
 }

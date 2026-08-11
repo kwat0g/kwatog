@@ -54,6 +54,10 @@ class HrDashboardService
                 'attendance_summary' => $this->hrAttendanceSummary(),
                 'probation_alerts'   => $this->hrProbationAlerts(),
                 'leave_calendar_week'=> $this->hrLeaveCalendarWeek(),
+                // The leave calendar's window is an operator setting, not a
+                // calendar week, so the panel cannot label itself honestly
+                // without being told the number the query actually used.
+                'leave_calendar_horizon_days' => $this->settings->requiredInt('dashboard.widgets.leave_calendar_horizon_days', 0),
                 'hr_calendar_events' => $this->hrCalendarEvents(),
                 'pending_my_action'  => $this->hrPendingMyAction($user),
                 'headcount_forecast' => $this->forecastingService->headcountForecast(),

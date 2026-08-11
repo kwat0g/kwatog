@@ -9,6 +9,7 @@ use App\Common\Traits\HasHashId;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\GrnStatus;
+use App\Modules\Inventory\Enums\IncomingQcHandoffStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -30,6 +31,7 @@ class GoodsReceiptNote extends Model
         'grn_number', 'purchase_order_id', 'vendor_id',
         'received_date', 'received_by', 'status',
         'qc_inspection_id', 'accepted_by', 'accepted_at',
+        'incoming_qc_handoff_status', 'incoming_qc_handoff_message', 'incoming_qc_handoff_at',
         'rejected_reason', 'remarks', 'journal_entry_id',
     ];
 
@@ -37,6 +39,8 @@ class GoodsReceiptNote extends Model
         'received_date' => 'date',
         'accepted_at'   => 'datetime',
         'status'        => GrnStatus::class,
+        'incoming_qc_handoff_status' => IncomingQcHandoffStatus::class,
+        'incoming_qc_handoff_at' => 'datetime',
     ];
 
     public function purchaseOrder(): BelongsTo

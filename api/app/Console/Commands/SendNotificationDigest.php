@@ -16,19 +16,21 @@ use Illuminate\Console\Command;
  */
 class SendNotificationDigest extends Command
 {
-    protected $signature   = 'notifications:send-digest';
+    protected $signature = 'notifications:send-digest';
+
     protected $description = 'Email each opted-in user a summary of their unread notifications';
 
     public function handle(NotificationDigestService $svc): int
     {
         $r = $svc->run();
         $this->info(sprintf(
-            'Notification digest: %d users evaluated, %d emails sent, %d notifications summarised.',
+            'Notification digest: %d users evaluated, %d emails sent, %d notifications summarised, %d failures.',
             $r['users_evaluated'],
             $r['emails_sent'],
             $r['notifications_summarised'],
+            $r['failures'],
         ));
 
-        return self::SUCCESS;
+        return $r['failures'] > 0 ? self::FAILURE : self::SUCCESS;
     }
 }

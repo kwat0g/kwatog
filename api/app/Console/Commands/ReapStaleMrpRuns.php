@@ -60,6 +60,7 @@ class ReapStaleMrpRuns extends Command
 
         $reaped       = 0;
         $prsCancelled = 0;
+        $errors       = 0;
 
         foreach ($stale as $run) {
             try {
@@ -87,6 +88,7 @@ class ReapStaleMrpRuns extends Command
                 });
                 $reaped++;
             } catch (\Throwable $e) {
+                $errors++;
                 Log::warning('mrp:reap-stale-runs — failed to reap run', [
                     'run_id' => $run->id,
                     'error'  => $e->getMessage(),
@@ -95,6 +97,6 @@ class ReapStaleMrpRuns extends Command
         }
 
         $this->info("Reaped {$reaped} stale MRP run(s); cancelled {$prsCancelled} orphan draft auto-PR(s).");
-        return self::SUCCESS;
+        return $errors > 0 ? self::FAILURE : self::SUCCESS;
     }
 }

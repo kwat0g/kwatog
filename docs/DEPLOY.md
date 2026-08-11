@@ -117,9 +117,11 @@ docker run --rm -v "$PWD:/app" -w /app/api composer:2 php artisan key:generate -
 openssl rand -base64 32   # run multiple times
 ```
 
-**Critical:** the `${SERVER_NAME}` placeholder in
-[`docker/nginx/prod.conf`](../docker/nginx/prod.conf) must be substituted at deploy
-time. The Makefile target below does that with `envsubst`.
+**Critical:** `SERVER_NAME` in `.env` must be the real production DNS name.
+The production Compose file mounts [`docker/nginx/prod.conf`](../docker/nginx/prod.conf)
+as an official Nginx template; the Nginx entrypoint expands `SERVER_NAME` on
+container start. The API and queue processes enforce the same requirement, so a
+missing or localhost value fails closed.
 
 ## 6. First-time deploy
 
@@ -127,25 +129,55 @@ The repo's [`Makefile`](../Makefile) gains a production-flavoured target. Add it
 on the host (or use the inline command):
 
 ```bash
-# Build images, run migrations, seed once, start services.
+# Build images, migrate before any application or queue process starts, then
+# bring up the consumers.
 docker compose -f docker-compose.prod.yml pull
 docker compose -f docker-compose.prod.yml build --no-cache
-# Render nginx config with the right SERVER_NAME.
-export SERVER_NAME=erp.ogami.example
-envsubst '${SERVER_NAME}' < docker/nginx/prod.conf > docker/nginx/prod.conf.rendered
-mv docker/nginx/prod.conf.rendered docker/nginx/prod.conf
-# Start everything.
-docker compose -f docker-compose.prod.yml up -d
-# Wait for db.
-sleep 10
-# Run migrations + seed once.
-docker compose -f docker-compose.prod.yml exec api php artisan migrate --force
+docker compose -f docker-compose.prod.yml up -d db redis meilisearch
+# Wait with a bounded loop; a failed healthcheck must stop the release.
+status=missing
+for i in $(seq 1 60); do
+    status="$(docker inspect -f '{{.State.Health.Status}}' ogami-db 2>/dev/null || echo missing)"
+    [ "$status" = healthy ] && break
+    sleep 3
+done
+[ "$status" = healthy ] || { echo "ERROR: production database did not become healthy" >&2; exit 1; }
+# The one-shot service must complete before any application consumer starts.
+docker compose -f docker-compose.prod.yml up migrate
+# Start the API, realtime server, queue worker, scheduler, and Nginx only after
+# the schema is ready.
+docker compose -f docker-compose.prod.yml up -d api nginx reverb queue scheduler
+# Seed once on a new installation, after migration and before opening traffic.
 docker compose -f docker-compose.prod.yml exec api php artisan db:seed --force
 docker compose -f docker-compose.prod.yml exec api php artisan storage:link
 ```
 
 > **DO NOT** run `migrate:fresh` in production. Ever. Laravel only re-runs
 > migrations it hasn't seen, so subsequent deploys are safe with `migrate --force`.
+
+### Release evidence before opening traffic
+
+Run the disposable staging gate from a checkout whose Docker services point at
+the staging database/Redis. It creates a constrained `ogami_chain_smoke_*`
+database, applies the complete migration chain, runs a real Redis worker
+against a narrow listener replay, checks lineage/outcome/failed-jobs, and
+removes its temporary state automatically:
+
+```bash
+make chain-smoke
+```
+
+This gate must pass before a new worker or migration tranche is considered
+ready. It does not write to the application database.
+
+For a disposable worker interruption/recovery check, run this from the same
+checkout. It uses a unique Redis namespace, kills a real worker during a
+test-only probe, waits for `retry_after`, and verifies the second attempt
+completes before cleaning its keys:
+
+```bash
+make worker-recovery-smoke
+```
 
 ## 7. Build & deploy the SPA
 
@@ -192,33 +224,45 @@ Run [SSL Labs](https://www.ssllabs.com/ssltest/) against the domain — target g
 
 ## 9. Daily backups
 
-The repo ships `scripts/db-backup.sh` which handles dump, retention,
-and optional off-site upload to S3 in one script. Cron entry on the
-host runs it via `docker compose exec`:
+The repo ships `scripts/db-backup.sh` for the dump itself and
+`scripts/db-backup-cron.sh` for the host-level validation/copy/upload wrapper.
+Prepare the persistent host directory once; the production compose file mounts
+it into the Postgres container:
+
+```bash
+sudo install -d -m 0750 /var/backups/ogami
+```
 
 ```bash
 sudo tee /etc/cron.daily/ogami-pgdump <<'EOF'
 #!/bin/sh
 set -eu
 cd /opt/ogami-erp
-# Source env so BACKUP_S3_BUCKET / AWS_* (if configured) reach the script.
+# Source env so the host wrapper can upload to BACKUP_S3_BUCKET / AWS_*.
 set -a; . ./.env; set +a
-docker compose -f docker-compose.prod.yml exec -T \
-    -e DB_HOST -e DB_PORT \
-    -e DB_USERNAME -e DB_PASSWORD -e DB_DATABASE \
-    -e BACKUP_DIR=/var/backups/ogami \
-    -e BACKUP_KEEP=30 \
-    -e BACKUP_S3_BUCKET -e BACKUP_S3_PREFIX \
-    -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_DEFAULT_REGION \
-    db /opt/scripts/db-backup.sh
+DB_CONTAINER=ogami-db \
+CONTAINER_BACKUP_DIR=/var/backups/ogami \
+HOST_BACKUP_DIR=/var/backups/ogami \
+DB_USERNAME="$DB_USERNAME" DB_PASSWORD="$DB_PASSWORD" DB_DATABASE="$DB_DATABASE" \
+BACKUP_KEEP=30 BACKUP_S3_BUCKET="${BACKUP_S3_BUCKET:-}" \
+BACKUP_S3_PREFIX="${BACKUP_S3_PREFIX:-}" \
+/opt/ogami-erp/scripts/db-backup-cron.sh
 EOF
 sudo chmod +x /etc/cron.daily/ogami-pgdump
 sudo /etc/cron.daily/ogami-pgdump   # test once
 ```
 
-The script mounts at `/opt/scripts/db-backup.sh` inside the db container
-(add `- ./scripts:/opt/scripts:ro` to the `db` service volumes in
-`docker-compose.prod.yml` if not already there).
+The wrapper runs the checked-in script through `/opt/scripts/db-backup.sh`
+inside the db container, where `/var/backups/ogami` is a persistent host mount.
+It validates the archive, bounds host retention, and performs an optional S3
+upload from the host (the stock Postgres image is not assumed to contain the
+AWS CLI). A configured off-site target fails the backup command if the host
+tool or upload is unavailable.
+
+The Laravel scheduler also runs `db:backup` daily at 03:17. Production API
+images include the backup script, `pg_dump`, and the optional AWS CLI, and the
+default scheduler output is retained in the shared application storage. The
+host-cron path above remains the operator-visible copy used for restore drills.
 
 ### Off-site (S3) replication
 
@@ -234,13 +278,7 @@ Daily backups live on the same droplet by default. To replicate off-site:
    AWS_SECRET_ACCESS_KEY=...
    AWS_DEFAULT_REGION=ap-southeast-1
    ```
-3. The db container needs the AWS CLI. Either bake it into a custom
-   Dockerfile or install at runtime:
-   ```bash
-   docker compose -f docker-compose.prod.yml exec db \
-     apk add --no-cache aws-cli
-   ```
-4. Re-run the cron entry; you should see `uploading to s3://...` in the
+3. Re-run the cron entry; you should see `uploading to s3://...` in the
    stderr stream and the bucket should pick up the gzipped dump.
 
 When BACKUP_S3_BUCKET is unset (default), the script is local-only — no
@@ -257,10 +295,20 @@ git checkout v0.1-sem1   # or a tag, or main
 git pull --ff-only
 
 docker compose -f docker-compose.prod.yml build --pull
-docker compose -f docker-compose.prod.yml up -d
-
-# Backwards-compatible migrations only — Laravel skips already-run files.
-docker compose -f docker-compose.prod.yml exec api php artisan migrate --force
+docker compose -f docker-compose.prod.yml up -d db redis
+# Take the pre-migration backup before changing the schema.
+DB_PASSWORD="$DB_PASSWORD" make prod-backup
+status=missing
+for i in $(seq 1 60); do
+    status="$(docker inspect -f '{{.State.Health.Status}}' ogami-db 2>/dev/null || echo missing)"
+    [ "$status" = healthy ] && break
+    sleep 3
+done
+[ "$status" = healthy ] || { echo "ERROR: production database did not become healthy" >&2; exit 1; }
+# Migrate before starting the new code's consumers. Laravel skips already-run
+# files, so this remains safe for additive/backwards-compatible migrations.
+docker compose -f docker-compose.prod.yml up migrate
+docker compose -f docker-compose.prod.yml up -d api nginx reverb queue scheduler
 docker compose -f docker-compose.prod.yml exec api php artisan config:cache
 docker compose -f docker-compose.prod.yml exec api php artisan route:cache
 docker compose -f docker-compose.prod.yml exec api php artisan view:cache
@@ -270,6 +318,12 @@ cd spa && docker run --rm -v "$PWD:/app" -w /app node:20-alpine sh -c \
     "npm ci --no-audit --no-fund && npm run build"
 docker compose -f /opt/ogami-erp/docker-compose.prod.yml exec nginx nginx -s reload
 ```
+
+The production Compose file also contains a one-shot `migrate` dependency:
+direct `docker compose up` waits for that service to complete successfully
+before starting the API and its consumers. The explicit `up migrate` command in
+this runbook makes that gate visible and rerunnable for an operator-controlled
+release.
 
 ## 11. Rollback (atomic deploy)
 
@@ -319,6 +373,37 @@ docker compose -f docker-compose.prod.yml exec api php artisan tinker
 
 # Queue status / restart
 docker compose -f docker-compose.prod.yml exec api php artisan queue:restart
+
+# Queue lease invariant: REDIS_QUEUE_RETRY_AFTER must stay above the longest
+# queued job timeout (1800s in the shipped production compose; default 2400s).
+# Restart workers after changing it.
+docker compose -f docker-compose.prod.yml exec api php artisan config:show queue.connections.redis.retry_after
+
+# Cross-module automation recovery
+docker compose -f docker-compose.prod.yml exec api \
+  php artisan supplier:dispatch-recover
+# Only after reviewing provider errors and the idempotency key:
+docker compose -f docker-compose.prod.yml exec api \
+  php artisan supplier:dispatch-recover --retry-failed
+docker compose -f docker-compose.prod.yml exec api \
+  php artisan outbox:dispatch --retry-failed
+
+# Inspect the worker and scheduler that drive the recovery paths
+docker compose -f docker-compose.prod.yml logs --tail=200 queue scheduler
+
+# Run one operator-visible scheduler tick. The fail-fast wrapper returns
+# non-zero if any due task fails, which is the same signal Compose uses to
+# restart the scheduler container.
+docker compose -f docker-compose.prod.yml exec -T api \
+  php artisan schedule:run-fail-fast --no-interaction
+
+# Durable scheduler heartbeat/task probe. Run from an independent monitor or
+# during incident response; it fails non-zero for a dead/stuck tick, a failed
+# task, or a scheduler restart gap that may have missed a calendar window. The
+# production scheduler container also exposes this probe as its Docker
+# healthcheck; keep an external monitor because a dead container cannot run it.
+docker compose -f docker-compose.prod.yml exec -T api \
+  php artisan scheduler:health --stale-minutes=15
 
 # Cache flush (admin escape hatch)
 docker compose -f docker-compose.prod.yml exec api php artisan cache:clear

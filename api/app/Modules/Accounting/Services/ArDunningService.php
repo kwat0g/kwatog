@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\CurrencyDisplayService;
 use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Enums\InvoiceStatus;
@@ -11,6 +13,7 @@ use App\Modules\Accounting\Mail\InvoiceDunningMail;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Auth\Models\User;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
@@ -24,21 +27,25 @@ class ArDunningService
     /**
      * Scan overdue invoices and send tiered reminder emails.
      *
-     * @return array{evaluated:int, sent:int, skipped:int}
+     * @return array{evaluated:int, sent:int, skipped:int, blocked:int, failed:int}
      */
     public function run(?Carbon $asOf = null): array
     {
         if (! $this->settings->requiredBool('accounting.ar_dunning.enabled')) {
-            return ['evaluated' => 0, 'sent' => 0, 'skipped' => 0];
+            return ['evaluated' => 0, 'sent' => 0, 'skipped' => 0, 'blocked' => 0, 'failed' => 0];
         }
 
         $today = ($asOf ?? Carbon::now())->startOfDay();
         $tiers = $this->loadTiers();
-        if (empty($tiers)) return ['evaluated' => 0, 'sent' => 0, 'skipped' => 0];
+        if (empty($tiers)) {
+            return ['evaluated' => 0, 'sent' => 0, 'skipped' => 0, 'blocked' => 0, 'failed' => 0];
+        }
 
         $evaluated = 0;
         $sent = 0;
         $skipped = 0;
+        $blocked = 0;
+        $failed = 0;
 
         $invoices = Invoice::query()
             ->with('customer:id,name,email,contact_person')
@@ -51,47 +58,73 @@ class ArDunningService
         foreach ($invoices as $invoice) {
             $evaluated++;
             try {
-                $daysOverdue = (int) Carbon::parse($invoice->due_date)->diffInDays($today, false);
-                $tier = $this->selectTier($daysOverdue, (int) $invoice->last_dunning_tier, $tiers);
-                if ($tier === null) {
-                    $skipped++;
-                    continue;
-                }
+                $outcome = DB::transaction(function () use ($invoice, $today, $tiers): string {
+                    // Two scheduler instances can select the same invoice
+                    // before either has persisted last_dunning_tier. Re-read
+                    // and lock the authoritative row so only one tier claim
+                    // can enqueue a reminder.
+                    $locked = Invoice::query()
+                        ->with('customer:id,name,email,contact_person')
+                        ->lockForUpdate()
+                        ->find($invoice->id);
 
-                $email = $invoice->customer?->email;
-                if (! $email) {
-                    $skipped++;
-                    continue;
-                }
+                    if (! $locked
+                        || ! in_array($locked->status, [InvoiceStatus::Finalized, InvoiceStatus::Partial], true)
+                        || $locked->due_date === null
+                        || Carbon::parse($locked->due_date)->gte($today)) {
+                        return 'skipped';
+                    }
 
-                Mail::to($email)->queue(new InvoiceDunningMail($invoice, $tier, $daysOverdue));
+                    $daysOverdue = (int) Carbon::parse($locked->due_date)->diffInDays($today, false);
+                    $tier = $this->selectTier($daysOverdue, (int) $locked->last_dunning_tier, $tiers);
+                    if ($tier === null) {
+                        return 'skipped';
+                    }
 
-                $invoice->forceFill([
-                    'last_dunning_tier' => $tier,
-                    'last_dunning_at'   => now(),
-                ])->saveQuietly();
+                    $email = $locked->customer?->email;
+                    if (! $email) {
+                        Log::warning('ArDunning blocked: invoice customer has no email.', [
+                            'invoice_id' => $locked->id,
+                        ]);
 
-                if ($tier === max($tiers)) {
-                    $this->notifyArOfficers($invoice, $daysOverdue);
-                }
+                        return 'blocked';
+                    }
 
-                $sent++;
+                    Mail::to($email)->queue(new InvoiceDunningMail($locked, $tier, $daysOverdue));
+
+                    $locked->forceFill([
+                        'last_dunning_tier' => $tier,
+                        'last_dunning_at' => now(),
+                    ])->saveQuietly();
+
+                    if ($tier === max($tiers)) {
+                        $this->notifyArOfficers($locked, $daysOverdue);
+                    }
+
+                    return 'sent';
+                });
+
+                match ($outcome) {
+                    'sent' => $sent++,
+                    'blocked' => $blocked++,
+                    default => $skipped++,
+                };
             } catch (\Throwable $e) {
-                $skipped++;
+                $failed++;
                 Log::warning('ArDunning failed for invoice', [
                     'invoice_id' => $invoice->id,
-                    'error'      => $e->getMessage(),
+                    'error' => $e->getMessage(),
                 ]);
             }
         }
 
-        return compact('evaluated', 'sent', 'skipped');
+        return compact('evaluated', 'sent', 'skipped', 'blocked', 'failed');
     }
 
     /**
      * Select the highest tier crossed-but-not-yet-sent. Pure for testability.
      *
-     * @param array<int, int> $tiersDesc tier days, descending
+     * @param  array<int, int>  $tiersDesc  tier days, descending
      */
     public function selectTier(int $daysOverdue, int $lastTier, array $tiersDesc): ?int
     {
@@ -100,6 +133,7 @@ class ArDunningService
                 return $tier;
             }
         }
+
         return null;
     }
 
@@ -110,9 +144,10 @@ class ArDunningService
         $tiers = array_map('intval', array_filter(array_map('trim', explode(',', $csv))));
         $tiers = array_values(array_unique(array_filter($tiers, fn ($t) => $t > 0)));
         if ($tiers === []) {
-            throw new \App\Common\Exceptions\BusinessRuleException('Required setting accounting.ar_dunning.tier_days_csv is invalid.');
+            throw new BusinessRuleException('Required setting accounting.ar_dunning.tier_days_csv is invalid.');
         }
         rsort($tiers);
+
         return $tiers;
     }
 
@@ -122,13 +157,15 @@ class ArDunningService
             ->whereHas('role.permissions', fn ($q) => $q->where('slug', 'accounting.invoices.view'))
             ->where('is_active', true)
             ->get();
-        if ($officers->isEmpty()) return;
+        if ($officers->isEmpty()) {
+            return;
+        }
 
         $this->notifications->send($officers, 'ar.dunning.escalation', [
-            'title'   => 'AR Escalation — Highest dunning tier reached',
+            'title' => 'AR Escalation — Highest dunning tier reached',
             'message' => "Invoice {$invoice->invoice_number} for ".
                 ($invoice->customer?->name ?? 'unknown customer').
-                " is {$daysOverdue} days overdue (".app(\App\Common\Services\CurrencyDisplayService::class)->format($invoice->balance).").",
+                " is {$daysOverdue} days overdue (".app(CurrencyDisplayService::class)->format($invoice->balance).').',
             'link_to' => '/accounting/invoices',
         ]);
     }

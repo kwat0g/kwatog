@@ -121,4 +121,163 @@ export interface ChainBottleneckGroup {
 export interface ChainBottlenecks {
  total: number;
  groups: ChainBottleneckGroup[];
+ automation?: ChainAutomationSummary;
+}
+
+export type ChainAutomationStatus = 'healthy' | 'attention' | 'unavailable';
+
+export interface ChainAutomationSource {
+ available: boolean;
+ total: number;
+ processing: number;
+ stale_processing: number;
+ failed: number;
+ oldest_failure_at: string | null;
+}
+
+export interface ChainOutboxAutomationSource extends ChainAutomationSource {
+ pending: number;
+ stale_pending: number;
+ published: number;
+ oldest_pending_at: string | null;
+}
+
+export interface ChainListenerAutomationSource extends ChainAutomationSource {
+ retrying: number;
+ completed: number;
+ oldest_active_at: string | null;
+ outcomes?: ChainListenerOutcomeSummary;
+}
+
+export interface ChainListenerOutcomeSummary {
+ available: boolean;
+ total: number;
+ completed: number;
+ skipped: number;
+ manual_required: number;
+ failed: number;
+ unclassified: number;
+}
+
+export interface ChainAutomationSummary {
+ status: ChainAutomationStatus;
+ outbox: ChainOutboxAutomationSource;
+ listeners: ChainListenerAutomationSource;
+ supplier_dispatch?: ChainSupplierDispatchAutomationSource;
+ failed_jobs: ChainFailedJobAutomationSource;
+}
+
+export interface ChainFailedJobAutomationSource {
+ available: boolean;
+ total: number;
+ oldest_at: string | null;
+}
+
+export interface ChainSupplierDispatchAutomationSource {
+ available: boolean;
+ total: number;
+ pending: number;
+ portal_available: number;
+ manual_required: number;
+ confirmed: number;
+ failed: number;
+ cancelled: number;
+ stale_pending: number;
+  oldest_attention_at: string | null;
+}
+
+/* ──────────────────────────────────────────────────────────────────
+ * Listener-level recovery surface.
+ * ────────────────────────────────────────────────────────────────── */
+
+export type ChainListenerQueueStatus = 'processing' | 'retrying' | 'completed' | 'failed';
+export type ChainListenerOutcomeStatus = 'completed' | 'skipped' | 'manual_required' | 'failed' | 'unclassified';
+export type ChainListenerResolutionStatus = 'open' | 'resolved' | 'not_required';
+
+export interface ChainListenerRun {
+  id: string;
+  event_type: string;
+  listener_class: string;
+  listener_method: string;
+  queue: {
+    status: ChainListenerQueueStatus;
+    attempts: number;
+    started_at: string | null;
+    last_attempt_at: string | null;
+    completed_at: string | null;
+    failed_at: string | null;
+    last_error: string | null;
+  };
+  outcome: {
+    status: ChainListenerOutcomeStatus;
+    code: string | null;
+    message: string | null;
+    at: string | null;
+  };
+  resolution: {
+    status: ChainListenerResolutionStatus;
+    note: string | null;
+    resolved_at: string | null;
+    resolved_by: string | null;
+  };
+  correlation: {
+    outbox_id: string;
+    job_uuid: string;
+    replayed_from_id: string | null;
+  };
+  replay: {
+    count: number;
+    requested_at: string | null;
+    requested_by: string | null;
+  };
+  outbox: {
+    status: string;
+    attempts: number;
+    available_at: string | null;
+    locked_at: string | null;
+    published_at: string | null;
+    last_error: string | null;
+  } | null;
+  chain_step: {
+    chain: string;
+    entity_type: string;
+    entity_hash_id: string | null;
+    step: string;
+    event_key: string;
+    status: string;
+  } | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface ChainListenerRunsData {
+  items: ChainListenerRun[];
+  meta: {
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+    from: number | null;
+    to: number | null;
+  };
+  generated_at: string;
+}
+
+export interface ChainListenerReplayResult {
+  status: 'queued';
+  source_run_id: string;
+  outbox_id: string;
+  event_type: string;
+  listener_class: string;
+  listener_method: string;
+  replay_count: number;
+}
+
+export interface ChainListenerResolutionResult {
+  run_id: string;
+  resolution_status: 'resolved';
+  resolution_note: string;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  idempotent: boolean;
 }

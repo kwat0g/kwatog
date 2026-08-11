@@ -20,11 +20,15 @@ class InvoiceDunningMail extends Mailable implements ShouldQueue
         public readonly Invoice $invoice,
         public readonly int $tier,
         public readonly int $daysOverdue,
-    ) {}
+    ) {
+        // Never enqueue a reminder that belongs to a rolled-back invoice scan.
+        $this->afterCommit();
+    }
 
     public function envelope(): Envelope
     {
         $no = $this->invoice->invoice_number ?? 'INV';
+
         return new Envelope(
             subject: "Reminder: Invoice {$no} is {$this->daysOverdue} days overdue",
         );
@@ -35,10 +39,10 @@ class InvoiceDunningMail extends Mailable implements ShouldQueue
         return new Content(
             markdown: 'emails.invoice-dunning',
             with: [
-                'invoice'     => $this->invoice,
-                'customer'    => $this->invoice->customer,
+                'invoice' => $this->invoice,
+                'customer' => $this->invoice->customer,
                 'daysOverdue' => $this->daysOverdue,
-                'tier'        => $this->tier,
+                'tier' => $this->tier,
             ],
         );
     }

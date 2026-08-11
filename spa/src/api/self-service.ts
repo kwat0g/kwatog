@@ -63,6 +63,13 @@ export const selfServiceApi = {
  .delete<{ message: string }>(`/hr/self-service/overtime/${id}`)
  .then((r) => r.data),
 
+ restoreOvertime: (id: string) =>
+ client
+ .patch<{ message: string; data: { id: string; status: string } }>(
+ '/hr/self-service/overtime/' + id + '/restore',
+ )
+ .then((r) => r.data),
+
  // ─── Documents (SS3) ────────────────────────────────────────────
  documents: () =>
  client

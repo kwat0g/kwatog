@@ -129,7 +129,27 @@ export default function PurchaseRequestDetailPage() {
  </div>
  }
  />
- <div className="px-5 py-4 space-y-4">  {data.status === 'converted' && data.purchase_orders?.some((po) => po.is_auto_generated) && (
+ <div className="px-5 py-4 space-y-4">
+  {data.status === 'approved' && data.po_conversion_status === 'manual_required' && (
+  <div className="flex items-center gap-3 rounded-md border border-warning/40 bg-warning-bg/10 px-4 py-3 text-sm">
+  <AlertTriangle size={16} className="shrink-0 text-warning-fg" />
+  <div className="flex-1">
+  <div className="font-medium">Manual PO conversion required</div>
+  <div className="text-muted">{data.po_conversion_note ?? 'Automatic conversion could not complete. Review the request and convert it manually.'}</div>
+  </div>
+  <Chip variant="warning">Manual action</Chip>
+  </div>
+  )}
+  {data.status === 'approved' && data.po_conversion_status === 'pending' && (
+  <div className="flex items-center gap-3 rounded-md border border-info/40 bg-info-bg/10 px-4 py-3 text-sm">
+  <ShoppingCart size={16} className="shrink-0 text-info-fg" />
+  <div>
+  <div className="font-medium">Automatic PO conversion pending</div>
+  <div className="text-muted">The approved request is queued for purchase-order creation.</div>
+  </div>
+  </div>
+  )}
+  {data.status === 'converted' && data.purchase_orders?.some((po) => po.is_auto_generated) && (
   <div className="flex items-center gap-3 rounded-md border border-success/40 bg-success-bg/10 px-4 py-3 text-sm">
   <Sparkles size={16} className="shrink-0 text-success-fg" />
   <div>

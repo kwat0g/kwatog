@@ -119,7 +119,14 @@ const [page, setPage] = useState(1);
  {
  key: 'last_run_at',
  header: 'Last run',
- cell: (row) => <NumCell>{row.last_run_at ? formatDateTime(row.last_run_at) : '—'}</NumCell>,
+ cell: (row) => (
+ <StackedCell
+ primary={<NumCell>{row.last_run_at ? formatDateTime(row.last_run_at) : '—'}</NumCell>}
+ secondary={
+ row.processing ? 'Running…' : row.last_error ? `Retry pending: ${row.last_error}` : undefined
+ }
+ />
+ ),
  },
  {
  key: 'is_active',

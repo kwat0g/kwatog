@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Payroll\Resources;
 
+use App\Modules\Payroll\Enums\BankFileGenerationStatus;
+use App\Modules\Payroll\Enums\PayrollGlHandoffStatus;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -51,6 +53,14 @@ class PayrollPeriodResource extends JsonResource
             'is_auto_created'     => (bool) $this->is_auto_created,
             'auto_created_at'     => optional($this->auto_created_at)->toIso8601String(),
             'employee_count'      => (int) ($this->payrolls_count ?? 0),
+
+            // The finalized payroll may exist before its bank artifact does;
+            // expose that handoff explicitly instead of making operators infer
+            // it from an empty bank_files collection.
+            'bank_file_status'       => $this->bank_file_status?->value ?? BankFileGenerationStatus::NotStarted->value,
+            'bank_file_status_label' => $this->bank_file_status?->label() ?? BankFileGenerationStatus::NotStarted->label(),
+            'bank_file_note'         => $this->bank_file_note,
+            'bank_file_at'           => optional($this->bank_file_at)->toIso8601String(),
 
             // Compute-run telemetry. processing_started_at lets the UI say how
             // long a run has been going; is_compute_stale flags a claim whose
@@ -108,6 +118,10 @@ class PayrollPeriodResource extends JsonResource
             // GL link (set by service.show() when the period has been posted).
             // We expose only the human-readable entry_number, never the integer id.
             'gl_entry_number'     => $this->resource->gl_entry_number ?? null,
+            'gl_handoff_status'       => $this->gl_handoff_status?->value ?? PayrollGlHandoffStatus::NotStarted->value,
+            'gl_handoff_status_label' => $this->gl_handoff_status?->label() ?? PayrollGlHandoffStatus::NotStarted->label(),
+            'gl_handoff_note'         => $this->gl_handoff_note,
+            'gl_handoff_at'           => optional($this->gl_handoff_at)->toIso8601String(),
 
             // Bank file disbursement audit trail. Only the count, total, and
             // generator metadata — file paths stay server-side (private disk).

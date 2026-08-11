@@ -104,4 +104,23 @@ class PurchaseOrderCancelTest extends TestCase
 
         $this->svc->cancel($po, 'no');
     }
+
+    public function test_cancel_rechecks_the_authoritative_row_before_overwriting_a_stale_request(): void
+    {
+        $po = PurchaseOrder::factory()->create([
+            'status'     => PurchaseOrderStatus::Approved->value,
+            'created_by' => User::factory()->create()->id,
+        ]);
+        $stale = $po->fresh();
+
+        $po->forceFill(['status' => PurchaseOrderStatus::Received])->save();
+
+        try {
+            $this->svc->cancel($stale, 'stale request');
+            $this->fail('A stale cancellation request must be rejected.');
+        } catch (RuntimeException $e) {
+            $this->assertSame('Cannot cancel a fully received or closed PO.', $e->getMessage());
+        }
+        $this->assertSame(PurchaseOrderStatus::Received, $po->fresh()->status);
+    }
 }

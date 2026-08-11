@@ -4,12 +4,20 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Inventory;
 
+use App\Common\Models\ChainListenerRun;
+use App\Common\Services\OutboxEventCodec;
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Auth\Models\Permission;
+use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\Inventory\Enums\MovementGlHandoffStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
+use App\Modules\Inventory\Events\StockMovementGlPostingRequested;
+use App\Modules\Inventory\Listeners\PostStockMovementToGlOnRequested;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Services\StockMovementService;
 use App\Modules\Inventory\Support\StockMovementInput;
@@ -194,5 +202,128 @@ class MovementGlPostingTest extends TestCase
 
         $this->assertNull($m->journal_entry_id);
         $this->assertDatabaseCount('journal_entries', 0);
+    }
+
+    public function test_missing_gl_configuration_commits_stock_and_replays_idempotently(): void
+    {
+        $this->movements->move(new StockMovementInput(
+            type: StockMovementType::AdjustmentIn,
+            itemId: $this->item->id,
+            toLocationId: $this->location->id,
+            quantity: '10.000',
+            unitCost: '5.00',
+            referenceType: 'opening',
+        ));
+
+        app(SettingsService::class)->set('accounting.accounts.material_consumption_code', '999999', 'accounting');
+
+        $movement = $this->movements->move(new StockMovementInput(
+            type: StockMovementType::MaterialIssue,
+            itemId: $this->item->id,
+            fromLocationId: $this->location->id,
+            quantity: '4.000',
+            unitCost: '5.00',
+            referenceType: 'work_order',
+        ));
+
+        $this->assertSame(MovementGlHandoffStatus::ManualRequired, $movement->gl_handoff_status);
+        $this->assertNull($movement->journal_entry_id);
+        $this->assertSame('6.000', (string) StockLevel::query()
+            ->where('item_id', $this->item->id)
+            ->where('location_id', $this->location->id)
+            ->value('quantity'));
+
+        $outbox = DB::table('event_outbox')
+            ->where('event_type', StockMovementGlPostingRequested::class)
+            ->where('dedupe_key', 'stock-movement-gl-request:'.$movement->id)
+            ->first();
+        $this->assertNotNull($outbox);
+        $this->assertDatabaseHas('chain_step_runs', [
+            'outbox_id' => $outbox->id,
+            'chain' => 'inventory',
+            'entity_type' => 'stock_movement',
+            'entity_id' => $movement->id,
+            'step' => 'gl_handoff',
+            'status' => 'published',
+        ]);
+        $this->assertDatabaseHas('chain_listener_runs', [
+            'outbox_id' => $outbox->id,
+            'listener_class' => PostStockMovementToGlOnRequested::class,
+            'outcome_status' => ChainListenerRun::OUTCOME_MANUAL_REQUIRED,
+            'outcome_code' => 'movement_gl_posting_manual_required',
+        ]);
+
+        $event = app(OutboxEventCodec::class)->decode(
+            $outbox->event_type,
+            json_decode($outbox->payload, true, 512, JSON_THROW_ON_ERROR),
+        );
+        $this->assertInstanceOf(StockMovementGlPostingRequested::class, $event);
+
+        app(SettingsService::class)->set('accounting.accounts.material_consumption_code', '5010', 'accounting');
+        app(PostStockMovementToGlOnRequested::class)->handle($event);
+        app(PostStockMovementToGlOnRequested::class)->handle($event);
+
+        $posted = $movement->fresh();
+        $this->assertSame(MovementGlHandoffStatus::Generated, $posted->gl_handoff_status);
+        $this->assertNotNull($posted->journal_entry_id);
+        $this->assertSame(2, DB::table('journal_entries')->count(), 'the opening JE plus one replayed movement JE');
+        $this->assertSame(1, DB::table('journal_entries')
+            ->where('reference_type', 'stock_movement')
+            ->where('reference_id', $movement->id)
+            ->count(), 'the movement must not be double-posted');
+    }
+
+    public function test_accounting_disabled_marks_value_change_not_required_without_recovery_event(): void
+    {
+        app(SettingsService::class)->set('modules.accounting', false, 'modules');
+
+        $movement = $this->movements->move(new StockMovementInput(
+            type: StockMovementType::AdjustmentIn,
+            itemId: $this->item->id,
+            toLocationId: $this->location->id,
+            quantity: '5.000',
+            unitCost: '5.00',
+            referenceType: 'manual_adjustment',
+        ));
+
+        $this->assertSame(MovementGlHandoffStatus::NotRequired, $movement->gl_handoff_status);
+        $this->assertNull($movement->journal_entry_id);
+        $this->assertSame(0, DB::table('event_outbox')
+            ->where('event_type', StockMovementGlPostingRequested::class)
+            ->count());
+    }
+
+    public function test_retry_gl_route_requires_post_permission_and_posts_with_hashed_id(): void
+    {
+        app(SettingsService::class)->set('accounting.accounts.inventory_raw_material_code', '999999', 'accounting');
+        $movement = $this->movements->move(new StockMovementInput(
+            type: StockMovementType::AdjustmentIn,
+            itemId: $this->item->id,
+            toLocationId: $this->location->id,
+            quantity: '2.000',
+            unitCost: '5.00',
+            referenceType: 'manual_adjustment',
+        ));
+        app(SettingsService::class)->set('accounting.accounts.inventory_raw_material_code', '1200', 'accounting');
+
+        $role = Role::query()->create([
+            'name' => 'GL Retry Test',
+            'slug' => 'gl_retry_test_'.bin2hex(random_bytes(3)),
+            'is_system' => false,
+        ]);
+        $permission = Permission::query()->create([
+            'name' => 'Post journal entries',
+            'slug' => 'accounting.journal.post',
+            'module' => 'accounting',
+        ]);
+        $role->permissions()->attach($permission);
+        $user = User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
+
+        $this->actingAs($user, 'sanctum')
+            ->postJson('/api/v1/inventory/stock-movements/'.$movement->hash_id.'/retry-gl')
+            ->assertOk()
+            ->assertJsonPath('data.gl_handoff.status', MovementGlHandoffStatus::Generated->value);
+
+        $this->assertNotNull($movement->fresh()->journal_entry_id);
     }
 }

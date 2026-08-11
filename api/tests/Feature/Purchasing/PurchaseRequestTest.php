@@ -182,6 +182,7 @@ class PurchaseRequestTest extends TestCase
         $this->assertSame($vendor->id, $po->vendor_id);
         $this->assertSame($line->id, $po->items->first()->purchase_request_item_id);
         $this->assertSame('converted', $pr->fresh()->status->value);
+        $this->assertSame('converted', $pr->fresh()->po_conversion_status->value);
     }
 
     public function test_conversion_rejects_missing_vendor_assignment_without_creating_po(): void

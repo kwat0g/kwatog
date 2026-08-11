@@ -17,13 +17,11 @@ use Symfony\Component\Process\Process;
  * already present in the API container's environment (config/database.php
  * reads the same ones), pointing BACKUP_DIR at a persistent volume.
  *
- * Container note: pg_dump must be reachable from wherever this runs. In the
- * docker-compose dev/prod setup the db container owns pg_dump; if the api
- * container lacks the postgres client, set DB_BACKUP_SCRIPT to a wrapper that
- * `docker exec`s into the db service, or run `make backup` from the host
- * instead. The schedule entry is intentionally tolerant: a missing script or
- * missing pg_dump is reported as a command FAILURE (surfaced by the scheduler)
- * rather than throwing.
+ * The production image carries both this script and the PostgreSQL client, so
+ * the scheduler does not depend on `docker exec` or a mutable container. A
+ * configured DB_BACKUP_SCRIPT can still point at an operator-managed wrapper.
+ * A missing script or missing pg_dump is reported as command FAILURE (surfaced
+ * by the scheduler) rather than throwing.
  */
 class RunDatabaseBackup extends Command
 {
@@ -35,29 +33,43 @@ class RunDatabaseBackup extends Command
 
     public function handle(): int
     {
-        $script = env('DB_BACKUP_SCRIPT', base_path('../scripts/db-backup.sh'));
+        $configuredScript = config('backup.script');
+        $script = is_string($configuredScript) && $configuredScript !== ''
+            ? $configuredScript
+            : collect([
+                base_path('scripts/db-backup.sh'),
+                base_path('../scripts/db-backup.sh'),
+            ])->first(static fn (string $candidate): bool => is_file($candidate));
 
-        if (! is_file($script)) {
+        if (! is_string($script) || ! is_file($script)) {
             $this->error("db:backup — backup script not found at {$script}. Set DB_BACKUP_SCRIPT or run `make backup` from the host.");
             return self::FAILURE;
         }
 
-        $backupDir = $this->option('dir') ?: env('BACKUP_DIR', storage_path('app/backups'));
+        $backupDir = $this->option('dir') ?: config('backup.directory') ?: storage_path('app/backups');
 
         $env = [
-            'DB_HOST' => (string) config('database.connections.pgsql.host', env('DB_HOST', 'db')),
-            'DB_PORT' => (string) config('database.connections.pgsql.port', env('DB_PORT', '5432')),
-            'DB_USERNAME' => (string) config('database.connections.pgsql.username', env('DB_USERNAME', '')),
-            'DB_PASSWORD' => (string) config('database.connections.pgsql.password', env('DB_PASSWORD', '')),
-            'DB_DATABASE' => (string) config('database.connections.pgsql.database', env('DB_DATABASE', '')),
+            'DB_HOST' => (string) config('database.connections.pgsql.host', 'db'),
+            'DB_PORT' => (string) config('database.connections.pgsql.port', '5432'),
+            'DB_USERNAME' => (string) config('database.connections.pgsql.username', ''),
+            'DB_PASSWORD' => (string) config('database.connections.pgsql.password', ''),
+            'DB_DATABASE' => (string) config('database.connections.pgsql.database', ''),
             'BACKUP_DIR' => (string) $backupDir,
         ];
 
-        if ($keep = $this->option('keep')) {
-            $env['BACKUP_KEEP'] = (string) $keep;
-        }
-        if ($bucket = env('BACKUP_S3_BUCKET')) {
-            $env['BACKUP_S3_BUCKET'] = (string) $bucket;
+        $env['BACKUP_KEEP'] = (string) ($this->option('keep') ?: config('backup.keep', 14));
+
+        foreach ([
+            'BACKUP_S3_BUCKET' => 'backup.s3_bucket',
+            'BACKUP_S3_PREFIX' => 'backup.s3_prefix',
+            'AWS_ACCESS_KEY_ID' => 'backup.aws_access_key_id',
+            'AWS_SECRET_ACCESS_KEY' => 'backup.aws_secret_access_key',
+            'AWS_DEFAULT_REGION' => 'backup.aws_default_region',
+        ] as $environmentKey => $configKey) {
+            $value = config($configKey);
+            if ($value !== null && $value !== '') {
+                $env[$environmentKey] = (string) $value;
+            }
         }
 
         @mkdir($backupDir, 0775, true);

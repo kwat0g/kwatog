@@ -13,6 +13,7 @@ use App\Modules\Payroll\Models\BankFileRecord;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -90,91 +91,136 @@ class BankFileService
      */
     public function generate(PayrollPeriod $period, User $generator, ?string $format = null): BankFileRecord
     {
-        $format ??= $this->defaultFormat();
-        if (! in_array($format, $this->formats(), true)) {
-            throw new BusinessRuleException("Unsupported bank file format: {$format}");
-        }
+        $writtenPath = null;
 
-        // Business rule, not a server fault: a bare RuntimeException is unmapped
-        // in bootstrap/app.php and reached the browser as a 500 "Server Error"
-        // toast whenever a user opened Bank File on a non-finalized period.
-        if ($period->status !== PayrollPeriodStatus::Finalized) {
-            throw new BusinessRuleException('Bank file can only be generated for finalized periods.');
-        }
-
-        $this->assertEveryoneIsBankable($period);
-
-        return DB::transaction(function () use ($period, $generator, $format) {
-            $payrolls = Payroll::query()
-                ->with('employee')
-                ->where('payroll_period_id', $period->id)
-                ->whereNull('error_message')
-                ->where('net_pay', '>', 0)
-                ->get();
-
-            $rows = match ($format) {
-                'bdo'       => $this->buildBdo($payrolls, $period),
-                'bpi'       => $this->buildBpi($payrolls, $period),
-                'metrobank' => $this->buildMetrobank($payrolls),
-                default     => $this->buildGeneric($payrolls),
-            };
-
-            $total = $rows['total'];
-            $count = $rows['count'];
-            $data  = $rows['data'];
-
-            // Reconcile the file against the payroll it claims to pay. The
-            // builders each accumulate their own total independently of the
-            // period, so a builder bug (a skipped row, a mis-parsed amount)
-            // would produce a plausible-looking file that quietly disburses the
-            // wrong sum. Cheap to check, and this is the last point before the
-            // numbers leave for the bank.
-            $expected = Payroll::query()
-                ->where('payroll_period_id', $period->id)
-                ->whereNull('error_message')
-                ->where('net_pay', '>', 0)
-                ->get(['net_pay'])
-                ->reduce(fn (string $carry, Payroll $p) => bcadd($carry, (string) $p->net_pay, 2), '0.00');
-
-            if (bccomp($total, $expected, 2) !== 0) {
-                throw new BusinessRuleException(sprintf(
-                    'Bank file failed reconciliation: the file totals %s but this period owes %s. Nothing was generated — this is a bug, please report it.',
-                    number_format((float) $total, 2),
-                    number_format((float) $expected, 2),
-                ));
+        try {
+            $format ??= $this->defaultFormat();
+            if (! in_array($format, $this->formats(), true)) {
+                throw new BusinessRuleException("Unsupported bank file format: {$format}");
             }
 
-            $csv = '';
-            foreach ($data as $r) {
-                $csv .= implode(',', array_map(fn ($v) => $this->escape((string) $v), $r))."\n";
+            return DB::transaction(function () use ($period, $generator, $format, &$writtenPath) {
+                // The route-bound period can be stale while finalization,
+                // disbursement, or another download is in flight. The locked
+                // row is the authority for both the lifecycle and the payroll
+                // rows that the file claims to pay.
+                $lockedPeriod = PayrollPeriod::query()
+                    ->lockForUpdate()
+                    ->find($period->id);
+                if (! $lockedPeriod) {
+                    throw new BusinessRuleException('The payroll period no longer exists.');
+                }
+                if (! in_array($lockedPeriod->status, [PayrollPeriodStatus::Finalized, PayrollPeriodStatus::Disbursed], true)) {
+                    throw new BusinessRuleException('Bank file can only be generated for finalized or disbursed periods.');
+                }
+
+                $this->assertEveryoneIsBankable($lockedPeriod);
+
+                $payrolls = Payroll::query()
+                    ->with('employee')
+                    ->where('payroll_period_id', $lockedPeriod->id)
+                    ->whereNull('error_message')
+                    ->where('net_pay', '>', 0)
+                    ->get();
+
+                $rows = match ($format) {
+                    'bdo'       => $this->buildBdo($payrolls, $lockedPeriod),
+                    'bpi'       => $this->buildBpi($payrolls, $lockedPeriod),
+                    'metrobank' => $this->buildMetrobank($payrolls),
+                    default     => $this->buildGeneric($payrolls),
+                };
+
+                $total = $rows['total'];
+                $count = $rows['count'];
+                $data  = $rows['data'];
+
+                // Reconcile the file against the payroll it claims to pay. The
+                // builders each accumulate their own total independently of the
+                // period, so a builder bug (a skipped row, a mis-parsed amount)
+                // would produce a plausible-looking file that quietly disburses
+                // the wrong sum. This is the last point before the numbers leave
+                // for the bank.
+                $expected = Payroll::query()
+                    ->where('payroll_period_id', $lockedPeriod->id)
+                    ->whereNull('error_message')
+                    ->where('net_pay', '>', 0)
+                    ->get(['net_pay'])
+                    ->reduce(fn (string $carry, Payroll $p) => bcadd($carry, (string) $p->net_pay, 2), '0.00');
+
+                if (bccomp($total, $expected, 2) !== 0) {
+                    throw new BusinessRuleException(sprintf(
+                        'Bank file failed reconciliation: the file totals %s but this period owes %s. Nothing was generated — this is a bug, please report it.',
+                        number_format((float) $total, 2),
+                        number_format((float) $expected, 2),
+                    ));
+                }
+
+                $csv = '';
+                foreach ($data as $r) {
+                    $csv .= implode(',', array_map(fn ($v) => $this->escape((string) $v), $r))."\n";
+                }
+
+                $disk = Storage::disk('local');
+                $dir  = 'bank-files';
+                if (! $disk->exists($dir)) $disk->makeDirectory($dir);
+
+                $filename = sprintf(
+                    'bank_%s_%s_%s.csv',
+                    $lockedPeriod->id,
+                    $lockedPeriod->period_start?->format('Ymd'),
+                    bin2hex(random_bytes(4)),
+                );
+                $relative = $dir.DIRECTORY_SEPARATOR.$filename;
+                $disk->put($relative, $csv);
+                $writtenPath = $relative;
+
+                $record = BankFileRecord::create([
+                    'payroll_period_id' => $lockedPeriod->id,
+                    'file_path'         => $relative,
+                    'format'            => $format,
+                    'record_count'      => $count,
+                    'total_amount'      => $total,
+                    'generated_by'      => $generator->id,
+                    'generated_at'      => now(),
+                    'created_at'        => now(),
+                ]);
+
+                $lockedPeriod->markBankFileGenerated();
+
+                return $record;
+            });
+        } catch (\Throwable $e) {
+            if ($writtenPath !== null) {
+                try {
+                    Storage::disk('local')->delete($writtenPath);
+                } catch (\Throwable $cleanupError) {
+                    Log::warning('BankFileService: failed to clean up an uncommitted file', [
+                        'file_path' => $writtenPath,
+                        'error' => $cleanupError->getMessage(),
+                    ]);
+                }
             }
 
-            $disk = Storage::disk('local');
-            $dir  = 'bank-files';
-            if (! $disk->exists($dir)) $disk->makeDirectory($dir);
+            // A finalized payroll must expose a recovery state even when the
+            // manual endpoint, rather than the automatic listener, hit the
+            // failure. Keep the original exception for the caller's response.
+            try {
+                $failedPeriod = $period->fresh();
+                if ($failedPeriod && in_array($failedPeriod->status, [PayrollPeriodStatus::Finalized, PayrollPeriodStatus::Disbursed], true)) {
+                    $note = $e instanceof BusinessRuleException
+                        ? $e->getMessage()
+                        : 'Bank-file generation failed. Fix the reported issue and generate the file manually.';
+                    $failedPeriod->markBankFileManualRequired($note);
+                }
+            } catch (\Throwable $stateError) {
+                Log::warning('BankFileService: could not persist generation failure state', [
+                    'period_id' => $period->id,
+                    'error' => $stateError->getMessage(),
+                ]);
+            }
 
-            $filename = sprintf(
-                'bank_%s_%s_%s.csv',
-                $period->id,
-                $period->period_start?->format('Ymd'),
-                bin2hex(random_bytes(4)),
-            );
-            $relative = $dir.DIRECTORY_SEPARATOR.$filename;
-            $disk->put($relative, $csv);
-
-            $record = BankFileRecord::create([
-                'payroll_period_id' => $period->id,
-                'file_path'         => $relative,
-                'format'            => $format,
-                'record_count'      => $count,
-                'total_amount'      => $total,
-                'generated_by'      => $generator->id,
-                'generated_at'      => now(),
-                'created_at'        => now(),
-            ]);
-
-            return $record;
-        });
+            throw $e;
+        }
     }
 
     /**
@@ -184,7 +230,7 @@ class BankFileService
     {
         $record = $this->generate($period, $generator, $format);
         $contents = Storage::disk('local')->get($record->file_path);
-        $filename = sprintf('bank_%s_%s.csv', $format, $period->period_start?->format('Y-m-d'));
+        $filename = sprintf('bank_%s_%s.csv', $record->format, $period->period_start?->format('Y-m-d'));
 
         return response()->streamDownload(
             fn () => print $contents,

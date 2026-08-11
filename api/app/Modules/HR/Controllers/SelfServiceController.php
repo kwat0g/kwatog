@@ -19,6 +19,7 @@ use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Loans\Services\LoanService;
 use App\Modules\Loans\Enums\LoanStatus;
 use App\Modules\Loans\Enums\LoanType;
+use App\Modules\Loans\Models\EmployeeLoan;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -92,28 +93,36 @@ class SelfServiceController
             return response()->json(['data' => ['active' => [], 'history' => [], 'loan_types' => $this->loans->types(), 'max_pay_periods' => $this->settings->requiredInt('loans.max_pay_periods', 1, 120)]]);
         }
 
-        $rows = DB::table('employee_loans')
+        $rows = EmployeeLoan::query()
             ->where('employee_id', $employee->id)
             ->orderByDesc('created_at')
             ->get();
 
-        $map = fn ($r) => [
-            'id' => app('hashids')->encode((int) $r->id),
-            'loan_type' => $r->loan_type ?? null,
-            'loan_type_label' => LoanType::tryFrom((string) ($r->loan_type ?? ''))?->label() ?? ($r->loan_type ?? null),
-            'principal' => $r->principal !== null ? (string) $r->principal : null,
-            'outstanding_balance' => $r->outstanding_balance !== null ? (string) $r->outstanding_balance : null,
-            'monthly_amortization' => $r->monthly_amortization !== null ? (string) $r->monthly_amortization : null,
-            'periods' => (int) ($r->periods ?? 0),
-            'periods_remaining' => (int) ($r->periods_remaining ?? 0),
-            'status' => (string) ($r->status ?? ''),
-            'status_label' => LoanStatus::tryFrom((string) ($r->status ?? ''))?->label() ?? (string) ($r->status ?? ''),
-            'created_at' => $r->created_at !== null ? (string) $r->created_at : null,
+        $map = fn (EmployeeLoan $loan) => [
+            'id' => $loan->hash_id,
+            'loan_type' => $loan->loan_type?->value,
+            'loan_type_label' => $loan->loan_type?->label(),
+            'principal' => $loan->principal !== null ? (string) $loan->principal : null,
+            'outstanding_balance' => $loan->balance !== null ? (string) $loan->balance : null,
+            'monthly_amortization' => $loan->monthly_amortization !== null ? (string) $loan->monthly_amortization : null,
+            'periods' => (int) ($loan->pay_periods_total ?? 0),
+            'periods_remaining' => (int) ($loan->pay_periods_remaining ?? 0),
+            'status' => $loan->status?->value,
+            'status_label' => $loan->status?->label(),
+            'created_at' => optional($loan->created_at)->toIso8601String(),
         ];
 
-        $active = $rows->whereIn('status', [LoanStatus::Pending->value, LoanStatus::Active->value])
+        $active = $rows->filter(fn (EmployeeLoan $loan): bool => in_array(
+            $loan->status,
+            [LoanStatus::Pending, LoanStatus::Active],
+            true,
+        ))
             ->map($map)->values()->all();
-        $history = $rows->whereNotIn('status', [LoanStatus::Pending->value, LoanStatus::Active->value])
+        $history = $rows->reject(fn (EmployeeLoan $loan): bool => in_array(
+            $loan->status,
+            [LoanStatus::Pending, LoanStatus::Active],
+            true,
+        ))
             ->map($map)->values()->all();
 
         return response()->json(['data' => ['active' => $active, 'history' => $history, 'loan_types' => $this->loans->types(), 'max_pay_periods' => $this->settings->requiredInt('loans.max_pay_periods', 1, 120)]]);
@@ -134,23 +143,26 @@ class SelfServiceController
             abort(503, 'Loans module is not enabled.');
         }
 
-        $id = DB::table('employee_loans')->insertGetId([
-            'employee_id' => $employee->id,
-            'loan_type' => $validated['loan_type'],
-            'principal' => $validated['amount'],
-            'outstanding_balance' => $validated['amount'],
-            'monthly_amortization' => round(((float) $validated['amount']) / max(1, (int) $validated['periods']), 2),
-            'periods' => (int) $validated['periods'],
-            'periods_remaining' => (int) $validated['periods'],
-            'status' => LoanStatus::Pending->value,
-            'remarks' => $validated['reason'] ?? null,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        try {
+            $loan = $this->loans->request(
+                $employee->id,
+                LoanType::from($validated['loan_type']),
+                [
+                    'principal' => (string) $validated['amount'],
+                    'pay_periods' => (int) $validated['periods'],
+                    'purpose' => $validated['reason'] ?? null,
+                ],
+            );
+        } catch (\RuntimeException $e) {
+            abort(422, $e->getMessage());
+        }
 
         return response()->json([
             'message' => 'Loan request submitted for approval.',
-            'data' => ['id' => app('hashids')->encode((int) $id)],
+            'data' => [
+                'id' => $loan->hash_id,
+                'status' => $loan->status?->value,
+            ],
         ], 201);
     }
 
@@ -191,6 +203,10 @@ class SelfServiceController
             'status_label' => $r->status?->label(),
             'rejection_reason' => $r->rejection_reason,
             'approver' => $r->approver?->name,
+            'cancelled_at' => optional($r->cancelled_at)->toIso8601String(),
+            'can_restore' => $r->status === OvertimeStatus::Rejected
+                && $r->cancelled_at !== null
+                && (int) $r->cancelled_by === (int) $request->user()?->id,
             'created_at' => optional($r->created_at)->toIso8601String(),
         ];
 
@@ -268,9 +284,11 @@ class SelfServiceController
         abort_if(! $ot, 404);
         abort_if($ot->status !== OvertimeStatus::Pending, 422, 'Only pending requests can be cancelled.');
 
-        DB::transaction(function () use ($ot): void {
-            $ot->update(['status' => OvertimeStatus::Rejected, 'rejection_reason' => 'Cancelled by employee.']);
-        });
+        try {
+            $this->overtime->cancel($ot, $request->user(), 'Cancelled by employee.');
+        } catch (\RuntimeException $e) {
+            abort(422, $e->getMessage());
+        }
 
         return response()->json(['message' => 'Overtime request cancelled.']);
     }
@@ -295,16 +313,19 @@ class SelfServiceController
             ->first();
 
         abort_if(! $ot, 404);
-        abort_if($ot->status !== OvertimeStatus::Rejected, 422, 'Only cancelled requests can be restored.');
+        try {
+            $this->overtime->restore($ot, $request->user());
+        } catch (\RuntimeException $e) {
+            abort(422, $e->getMessage());
+        }
 
-        DB::transaction(function () use ($ot): void {
-            $ot->update([
-                'status'           => OvertimeStatus::Pending,
-                'rejection_reason' => null,
-            ]);
-        });
-
-        return response()->json(['message' => 'Overtime request restored.']);
+        return response()->json([
+            'message' => 'Overtime request restored.',
+            'data' => [
+                'id' => $ot->hash_id,
+                'status' => OvertimeStatus::Pending->value,
+            ],
+        ]);
     }
 
     public function profile(Request $request): JsonResponse

@@ -118,8 +118,10 @@ class WorkOrderSplitReservationTest extends TestCase
 
         $machine = $this->machine();
         $wo = $this->plannedWo();
+        $mold = $this->mold();
+        $mold->compatibleMachines()->syncWithoutDetaching([$machine->id]);
 
-        $confirmed = $this->service->confirm($wo, $machine->id, $this->mold()->id);
+        $confirmed = $this->service->confirm($wo, $machine->id, $mold->id);
 
         $this->assertSame(WorkOrderStatus::Confirmed, $confirmed->status);
 
@@ -149,8 +151,10 @@ class WorkOrderSplitReservationTest extends TestCase
 
         $machine = $this->machine();
         $wo = $this->plannedWo();
+        $mold = $this->mold();
+        $mold->compatibleMachines()->syncWithoutDetaching([$machine->id]);
 
-        $this->service->confirm($wo, $machine->id, $this->mold()->id);
+        $this->service->confirm($wo, $machine->id, $mold->id);
 
         $reservations = MaterialReservation::where('work_order_id', $wo->id)->get();
         $this->assertCount(1, $reservations, 'Single location covers demand — no split');
@@ -164,12 +168,14 @@ class WorkOrderSplitReservationTest extends TestCase
 
         $machine = $this->machine();
         $wo = $this->plannedWo();
+        $mold = $this->mold();
+        $mold->compatibleMachines()->syncWithoutDetaching([$machine->id]);
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('Insufficient stock for item');
 
         try {
-            $this->service->confirm($wo, $machine->id, $this->mold()->id);
+            $this->service->confirm($wo, $machine->id, $mold->id);
         } finally {
             // Transaction rolled back — nothing reserved.
             $this->assertSame(0, MaterialReservation::where('work_order_id', $wo->id)->count());

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\MRP\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\MRP\Enums\MachineStatus;
 use App\Modules\MRP\Enums\MoldStatus;
 use App\Modules\MRP\Models\Machine;
@@ -40,6 +41,13 @@ use Illuminate\Support\Facades\DB;
  */
 class CapacityPlanningService
 {
+    /** Schedule states that reserve a machine time window. */
+    private const BLOCKING_SCHEDULE_STATUSES = [
+        'pending',
+        'confirmed',
+        'executed',
+    ];
+
     public function __construct(
         private readonly \App\Modules\Production\Services\WorkOrderService $workOrders,
     ) {}
@@ -60,7 +68,32 @@ class CapacityPlanningService
             if ($workOrderIds) {
                 $q->whereIn('id', $workOrderIds);
             }
-            $workOrders = $q->orderByDesc('priority')->orderBy('planned_start')->get();
+            $workOrders = $q
+                ->orderByDesc('priority')
+                ->orderBy('planned_start')
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            if ($workOrders->isEmpty()) {
+                return ['scheduled' => [], 'conflicts' => []];
+            }
+
+            // Scheduler runs, manual reassignments, and machine/mold lifecycle
+            // changes must serialize on the same resource rows. This makes the
+            // persisted-window check below meaningful under concurrent requests.
+            Machine::query()
+                ->whereIn('status', [MachineStatus::Idle->value, MachineStatus::Running->value])
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+            Mold::query()
+                ->whereIn('status', [MoldStatus::Available->value, MoldStatus::InUse->value])
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            $blockedWindowsByMachine = $this->loadScheduleWindows();
 
             // Track machine end-of-last-job per machine for the simulation.
             $machineCursor = []; // [machine_id => Carbon]
@@ -68,12 +101,17 @@ class CapacityPlanningService
             $conflicts = [];
 
             foreach ($workOrders as $wo) {
-                $placement = $this->placeWorkOrder($wo, $machineCursor);
+                $placement = $this->placeWorkOrder($wo, $machineCursor, $blockedWindowsByMachine);
                 if ($placement['ok']) {
                     // Supersede any existing pending schedule for this WO.
                     ProductionSchedule::where('work_order_id', $wo->id)
                         ->where('status', ProductionScheduleStatus::Pending->value)
                         ->update(['status' => ProductionScheduleStatus::Superseded->value]);
+
+                    // The old pending row was kept in the blocked-window index
+                    // while this WO was being placed. Remove it only after a
+                    // replacement has been successfully selected.
+                    $this->removePendingWindowsForWorkOrder($blockedWindowsByMachine, (int) $wo->id);
 
                     $row = ProductionSchedule::create([
                         'work_order_id'   => $wo->id,
@@ -85,7 +123,8 @@ class CapacityPlanningService
                         'status'          => ProductionScheduleStatus::Pending->value,
                         'is_confirmed'    => false,
                     ]);
-                    $machineCursor[$placement['machine_id']] = $placement['end'];
+                    $machineCursor[$placement['machine_id']] = Carbon::parse($placement['end']);
+                    $this->addScheduleWindow($blockedWindowsByMachine, $row);
                     $scheduled[] = $this->scheduleSummary($row, $wo);
                 } else {
                     $conflicts[] = [
@@ -108,26 +147,62 @@ class CapacityPlanningService
     public function confirm(array $scheduleIds, int $confirmedBy): Collection
     {
         return DB::transaction(function () use ($scheduleIds, $confirmedBy) {
+            $requestedIds = array_values(array_unique(array_map('intval', $scheduleIds)));
+            if ($requestedIds === []) {
+                return collect();
+            }
+
             $rows = ProductionSchedule::whereIn('id', $scheduleIds)
                 ->where('status', ProductionScheduleStatus::Pending->value)
+                ->orderBy('machine_id')
+                ->orderBy('id')
                 ->lockForUpdate()
                 ->get();
 
+            if ($rows->count() !== count($requestedIds)) {
+                throw new BusinessRuleException('One or more selected schedules are no longer pending. Refresh the scheduler and try again.');
+            }
+
+            $machineIds = $rows->pluck('machine_id')->map(fn ($id): int => (int) $id)->unique()->sort()->values()->all();
+            $machines = Machine::query()
+                ->whereIn('id', $machineIds)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
+            $moldIds = $rows->pluck('mold_id')->map(fn ($id): int => (int) $id)->unique()->sort()->values()->all();
+            $molds = Mold::query()
+                ->whereIn('id', $moldIds)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
+
             $confirmed = collect();
             foreach ($rows as $row) {
+                $wo = WorkOrder::lockForUpdate()->find($row->work_order_id);
+                $machine = $machines->get((int) $row->machine_id);
+                $mold = $molds->get((int) $row->mold_id);
+                if (! $wo || ! $machine || ! $mold) {
+                    throw new BusinessRuleException('A selected schedule references a missing work-order resource.');
+                }
+                if ($wo->status !== WorkOrderStatus::Planned) {
+                    throw new BusinessRuleException("Work order {$wo->wo_number} is no longer planned.");
+                }
+                $this->assertScheduleWindowIsValid($row);
+                $this->assertScheduleWindowAvailable($row, (int) $machine->id);
+                $this->workOrders->assertAssignmentValid($wo, $machine, $mold);
+
+                // Hand off to WorkOrderService first. If reservations or any
+                // later row fail, the surrounding transaction rolls back both
+                // the WO status and the schedule status.
+                $this->workOrders->confirm($wo, (int) $machine->id, (int) $mold->id);
                 $row->update([
                     'status'       => ProductionScheduleStatus::Confirmed->value,
                     'is_confirmed' => true,
                     'confirmed_by' => $confirmedBy,
                     'confirmed_at' => Carbon::now(),
                 ]);
-                // Hand off to WorkOrderService — it sets machine + mold and
-                // flips status to 'confirmed' (which Sprint 5 reservation
-                // hooks will see once wired).
-                $wo = WorkOrder::lockForUpdate()->find($row->work_order_id);
-                if ($wo && $wo->status === WorkOrderStatus::Planned) {
-                    $this->workOrders->confirm($wo, $row->machine_id, $row->mold_id);
-                }
                 $confirmed->push($row->fresh());
             }
             return $confirmed;
@@ -136,18 +211,46 @@ class CapacityPlanningService
 
     public function reorder(int $scheduleId, int $newPriorityOrder): ProductionSchedule
     {
-        $row = ProductionSchedule::where('status', ProductionScheduleStatus::Pending->value)
-            ->findOrFail($scheduleId);
-        $row->update(['priority_order' => $newPriorityOrder]);
-        return $row->fresh();
+        if ($newPriorityOrder < 0 || $newPriorityOrder > 65535) {
+            throw new BusinessRuleException('Schedule priority must be between 0 and 65535.');
+        }
+
+        return DB::transaction(function () use ($scheduleId, $newPriorityOrder) {
+            $row = ProductionSchedule::where('status', ProductionScheduleStatus::Pending->value)
+                ->lockForUpdate()
+                ->findOrFail($scheduleId);
+            $row->update(['priority_order' => $newPriorityOrder]);
+            return $row->fresh();
+        });
     }
 
     public function reassign(int $scheduleId, int $machineId, int $moldId): ProductionSchedule
     {
-        $row = ProductionSchedule::where('status', ProductionScheduleStatus::Pending->value)
-            ->findOrFail($scheduleId);
-        $row->update(['machine_id' => $machineId, 'mold_id' => $moldId]);
-        return $row->fresh();
+        return DB::transaction(function () use ($scheduleId, $machineId, $moldId) {
+            $row = ProductionSchedule::where('status', ProductionScheduleStatus::Pending->value)
+                ->lockForUpdate()
+                ->findOrFail($scheduleId);
+            $wo = WorkOrder::query()->lockForUpdate()->find($row->work_order_id);
+            if (! $wo) {
+                throw new BusinessRuleException('Work order for schedule not found.');
+            }
+            if ($wo->status !== WorkOrderStatus::Planned) {
+                throw new BusinessRuleException("Work order {$wo->wo_number} is no longer planned.");
+            }
+
+            $machine = Machine::query()->lockForUpdate()->find($machineId);
+            $mold = Mold::query()->lockForUpdate()->find($moldId);
+            if (! $machine || ! $mold) {
+                throw new BusinessRuleException('Selected machine or mold not found.');
+            }
+
+            $this->assertScheduleWindowIsValid($row);
+            $this->assertScheduleWindowAvailable($row, (int) $machine->id);
+            $this->workOrders->assertAssignmentValid($wo, $machine, $mold);
+
+            $row->update(['machine_id' => $machine->id, 'mold_id' => $mold->id]);
+            return $row->fresh();
+        });
     }
 
     /**
@@ -206,10 +309,150 @@ class CapacityPlanningService
     // Internal — slot finder
 
     /**
+     * Index every active persisted window before placing new work orders.
+     * Pending rows are deliberately included: a rerun must not overlap an
+     * existing proposal until that proposal is replaced successfully.
+     *
+     * @return array<int, list<array{schedule_id:int, work_order_id:int, status:string, start:Carbon, end:Carbon}>>
+     */
+    private function loadScheduleWindows(): array
+    {
+        $windows = [];
+
+        $schedules = ProductionSchedule::query()
+            ->whereIn('status', self::BLOCKING_SCHEDULE_STATUSES)
+            ->orderBy('machine_id')
+            ->orderBy('scheduled_start')
+            ->get();
+
+        foreach ($schedules as $schedule) {
+            $start = $schedule->scheduled_start instanceof Carbon
+                ? $schedule->scheduled_start->copy()
+                : Carbon::parse($schedule->scheduled_start);
+            $end = $schedule->scheduled_end instanceof Carbon
+                ? $schedule->scheduled_end->copy()
+                : Carbon::parse($schedule->scheduled_end);
+            if (! $start->lt($end)) {
+                throw new BusinessRuleException("Production schedule #{$schedule->id} has an invalid time window.");
+            }
+
+            $windows[(int) $schedule->machine_id][] = [
+                'schedule_id' => (int) $schedule->id,
+                'work_order_id' => (int) $schedule->work_order_id,
+                'status' => (string) ($schedule->status?->value ?? $schedule->status),
+                'start' => $start,
+                'end' => $end,
+            ];
+        }
+
+        return $windows;
+    }
+
+    /** Remove only old pending rows after a replacement has been selected. */
+    private function removePendingWindowsForWorkOrder(array &$windows, int $workOrderId): void
+    {
+        foreach ($windows as $machineId => $entries) {
+            $windows[$machineId] = array_values(array_filter(
+                $entries,
+                static fn (array $entry): bool => ! (
+                    $entry['work_order_id'] === $workOrderId
+                    && $entry['status'] === ProductionScheduleStatus::Pending->value
+                ),
+            ));
+            if ($windows[$machineId] === []) {
+                unset($windows[$machineId]);
+            }
+        }
+    }
+
+    /** Add a newly persisted proposal to the in-memory conflict index. */
+    private function addScheduleWindow(array &$windows, ProductionSchedule $schedule): void
+    {
+        $windows[(int) $schedule->machine_id][] = [
+            'schedule_id' => (int) $schedule->id,
+            'work_order_id' => (int) $schedule->work_order_id,
+            'status' => ProductionScheduleStatus::Pending->value,
+            'start' => Carbon::parse($schedule->scheduled_start),
+            'end' => Carbon::parse($schedule->scheduled_end),
+        ];
+    }
+
+    private function assertScheduleWindowIsValid(ProductionSchedule $row): void
+    {
+        $start = $row->scheduled_start instanceof Carbon
+            ? $row->scheduled_start
+            : Carbon::parse($row->scheduled_start);
+        $end = $row->scheduled_end instanceof Carbon
+            ? $row->scheduled_end
+            : Carbon::parse($row->scheduled_end);
+        if (! $start->lt($end)) {
+            throw new BusinessRuleException("Production schedule #{$row->id} has an invalid time window.");
+        }
+    }
+
+    /**
+     * Reject a manual move/confirmation that would overlap another active
+     * schedule on the target machine. Intervals are half-open, so an adjacent
+     * schedule ending at the candidate start is valid.
+     */
+    private function assertScheduleWindowAvailable(ProductionSchedule $row, int $machineId): void
+    {
+        $conflict = ProductionSchedule::query()
+            ->where('machine_id', $machineId)
+            ->where('id', '!=', $row->id)
+            ->whereIn('status', self::BLOCKING_SCHEDULE_STATUSES)
+            ->where('scheduled_start', '<', $row->scheduled_end)
+            ->where('scheduled_end', '>', $row->scheduled_start)
+            ->with('workOrder:id,wo_number')
+            ->first();
+
+        if ($conflict) {
+            $number = $conflict->workOrder?->wo_number ?? "#{$conflict->work_order_id}";
+            throw new BusinessRuleException(
+                "Machine schedule overlaps work order {$number} in the requested time window."
+            );
+        }
+    }
+
+    /**
+     * Return the first slot after $desiredStart that does not overlap an
+     * existing window. A pending row belonging to the WO being replanned is
+     * ignored; it is superseded only after a replacement is found.
+     *
+     * @param list<array{schedule_id:int, work_order_id:int, status:string, start:Carbon, end:Carbon}> $windows
+     * @return array{start:Carbon, end:Carbon}
+     */
+    private function nextFreeSlot(Carbon $desiredStart, int $durationMinutes, array $windows, int $workOrderId): array
+    {
+        usort($windows, static fn (array $left, array $right): int => $left['start']->getTimestamp() <=> $right['start']->getTimestamp());
+        $start = $desiredStart->copy();
+
+        foreach ($windows as $window) {
+            if ($window['work_order_id'] === $workOrderId
+                && $window['status'] === ProductionScheduleStatus::Pending->value) {
+                continue;
+            }
+
+            $end = $start->copy()->addMinutes($durationMinutes);
+            if ($end->lessThanOrEqualTo($window['start'])) {
+                break;
+            }
+            if ($start->lessThan($window['end']) && $window['start']->lessThan($end)) {
+                $start = $window['end']->copy();
+            }
+        }
+
+        return [
+            'start' => $start,
+            'end' => $start->copy()->addMinutes($durationMinutes),
+        ];
+    }
+
+    /**
      * Try to place one WO. Returns ['ok'=>bool, ...] with placement details
      * or reasons array.
      */
-    private function placeWorkOrder(WorkOrder $wo, array &$machineCursor): array
+    private function placeWorkOrder(WorkOrder $wo, array &$machineCursor, array &$blockedWindowsByMachine): array
     {
         $reasons = [];
 
@@ -227,8 +470,16 @@ class CapacityPlanningService
         // load away from the high-tonnage machines.
         foreach ($compatibleMolds as $mold) {
             $machines = $mold->compatibleMachines
-                ->whereIn('status', [MachineStatus::Idle->value, MachineStatus::Running->value])
-                ->sortBy('tonnage')
+                ->filter(static fn (Machine $machine): bool => in_array(
+                    $machine->status,
+                    [MachineStatus::Idle, MachineStatus::Running],
+                    true,
+                ))
+                ->sortBy(static fn (Machine $machine): string => sprintf(
+                    '%010d-%010d',
+                    $machine->tonnage ?? PHP_INT_MAX,
+                    $machine->id,
+                ))
                 ->values();
             if ($machines->isEmpty()) {
                 $reasons[] = "mold {$mold->mold_code}: no compatible machine available";
@@ -238,20 +489,26 @@ class CapacityPlanningService
             foreach ($machines as $machine) {
                 $duration = (float) $wo->quantity_target / max(1, (int) $mold->output_rate_per_hour)
                           + ((int) $mold->setup_time_minutes / 60.0);
-                $hours = max(0.5, $duration); // minimum 30 minutes
+                $durationMinutes = (int) round(max(0.5, $duration) * 60); // minimum 30 minutes
 
-                $start = $machineCursor[$machine->id] ?? Carbon::parse($wo->planned_start);
-                if ($start->lt(Carbon::parse($wo->planned_start))) {
-                    $start = Carbon::parse($wo->planned_start);
-                }
-                $end = $start->copy()->addMinutes((int) round($hours * 60));
+                $plannedStart = Carbon::parse($wo->planned_start);
+                $cursor = $machineCursor[$machine->id] ?? null;
+                $desiredStart = $cursor && $cursor->gt($plannedStart)
+                    ? $cursor->copy()
+                    : $plannedStart;
+                $slot = $this->nextFreeSlot(
+                    $desiredStart,
+                    $durationMinutes,
+                    $blockedWindowsByMachine[$machine->id] ?? [],
+                    (int) $wo->id,
+                );
 
                 return [
                     'ok'         => true,
                     'machine_id' => $machine->id,
                     'mold_id'    => $mold->id,
-                    'start'      => $start->toDateTimeString(),
-                    'end'        => $end->toDateTimeString(),
+                    'start'      => $slot['start']->toDateTimeString(),
+                    'end'        => $slot['end']->toDateTimeString(),
                 ];
             }
         }

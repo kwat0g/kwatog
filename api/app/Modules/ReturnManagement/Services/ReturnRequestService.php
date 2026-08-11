@@ -22,14 +22,19 @@ use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Services\InspectionService;
 use App\Modules\Quality\Services\NcrService;
 use App\Modules\ReturnManagement\Enums\DispositionType;
+use App\Modules\ReturnManagement\Enums\ReturnInspectionHandoffStatus;
 use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
 use App\Modules\ReturnManagement\Enums\ReturnRequestType;
+use App\Modules\ReturnManagement\Events\ReturnInspectionRequested;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\ReturnManagement\Models\ReturnRequestItem;
 use App\Common\Services\ApprovalService;
+use App\Common\Services\ChainBroadcaster;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\NotificationService;
+use App\Common\Services\OutboxService;
 use App\Common\Services\TaxPolicyService;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -119,12 +124,13 @@ class ReturnRequestService
      */
     public function submit(ReturnRequest $rma): ReturnRequest
     {
-        $this->ensureStatus($rma, ReturnRequestStatus::Draft);
-
         return DB::transaction(function () use ($rma) {
-            $rma->update(['status' => ReturnRequestStatus::PendingApproval]);
+            $locked = ReturnRequest::query()->lockForUpdate()->findOrFail($rma->id);
+            $this->ensureStatus($locked, ReturnRequestStatus::Draft);
+
+            $locked->update(['status' => ReturnRequestStatus::PendingApproval]);
             try {
-                $this->approvals->submit($rma, 'return_request');
+                $this->approvals->submit($locked, 'return_request');
             } catch (\Throwable $e) {
                 // A swallowed failure here used to strand the RMA: the status
                 // flipped to pending_approval while no approval records existed,
@@ -141,7 +147,7 @@ class ReturnRequestService
                     . 'Ask an administrator to set up the "Return Request Approval" workflow.'
                 );
             }
-            return $rma->fresh();
+            return $locked->fresh();
         });
     }
 
@@ -154,16 +160,17 @@ class ReturnRequestService
      */
     public function approve(ReturnRequest $rma, User $by, ?string $remarks = null): ReturnRequest
     {
-        $this->ensureStatus($rma, ReturnRequestStatus::PendingApproval);
-
         return DB::transaction(function () use ($rma, $by, $remarks) {
+            $locked = ReturnRequest::query()->lockForUpdate()->findOrFail($rma->id);
+            $this->ensureStatus($locked, ReturnRequestStatus::PendingApproval);
+
             try {
-                $this->approvals->approve($rma, $by, $remarks);
+                $this->approvals->approve($locked, $by, $remarks);
             } catch (\Throwable $e) {
                 // Swallowing this returned 200 with an unchanged RMA, so the SPA
                 // showed "RMA approved." for an approval that never happened.
                 Log::warning('return_request approval approve failed', [
-                    'rma_id' => $rma->id,
+                    'rma_id' => $locked->id,
                     'error'  => $e->getMessage(),
                 ]);
 
@@ -172,15 +179,15 @@ class ReturnRequestService
                     : new BusinessRuleException($e->getMessage() ?: 'You cannot approve this return request.');
             }
 
-            if ($this->approvals->isFullyApproved($rma)) {
-                $rma->update([
+            if ($this->approvals->isFullyApproved($locked)) {
+                $locked->update([
                     'status'      => ReturnRequestStatus::Approved,
                     'approved_by' => $by->id,
                     'approved_at' => now(),
                 ]);
             }
 
-            return $rma->fresh();
+            return $locked->fresh();
         });
     }
 
@@ -191,15 +198,17 @@ class ReturnRequestService
      */
     public function receive(ReturnRequest $rma, array $receivedQtys = []): ReturnRequest
     {
-        $this->ensureStatus($rma, ReturnRequestStatus::Approved);
-
         return DB::transaction(function () use ($rma, $receivedQtys) {
-            $rma->update([
+            $locked = ReturnRequest::query()->lockForUpdate()->findOrFail($rma->id);
+            $this->ensureStatus($locked, ReturnRequestStatus::Approved);
+            $locked->load('items');
+
+            $locked->update([
                 'status'      => ReturnRequestStatus::Received,
                 'received_at' => now(),
             ]);
 
-            foreach ($rma->items as $item) {
+            foreach ($locked->items as $item) {
                 // Default to the requested quantity so a receipt recorded without
                 // per-line counts still yields a usable returned_quantity — every
                 // downstream step (credit note, restock) reads that column, and it
@@ -210,7 +219,7 @@ class ReturnRequestService
                 ]);
             }
 
-            return $rma->fresh()->load('items');
+            return $locked->fresh()->load('items');
         });
     }
 
@@ -224,63 +233,199 @@ class ReturnRequestService
      */
     public function inspect(ReturnRequest $rma, ?string $internalNotes = null, ?User $by = null): ReturnRequest
     {
-        $this->ensureStatus($rma, ReturnRequestStatus::Received);
+        if (! $by) {
+            throw new BusinessRuleException('An active user is required to stage the Quality inspection.');
+        }
 
-        $rma->loadMissing('items.product');
+        return DB::transaction(function () use ($rma, $internalNotes, $by) {
+            $rma = ReturnRequest::query()->lockForUpdate()->findOrFail($rma->id);
+            $this->ensureStatus($rma, ReturnRequestStatus::Received);
+            $rma->load('items.product');
 
-        $stage = $rma->type === ReturnRequestType::SupplierReturn
-            ? InspectionStage::SupplierReturn
-            : InspectionStage::CustomerReturn;
-
-        return DB::transaction(function () use ($rma, $internalNotes, $by, $stage) {
-            $rma->update([
-                'status'        => ReturnRequestStatus::Inspected,
-                'inspected_at'  => now(),
-            ]);
+            $stage = $rma->type === ReturnRequestType::SupplierReturn
+                ? InspectionStage::SupplierReturn
+                : InspectionStage::CustomerReturn;
 
             if ($internalNotes !== null) {
                 $rma->update(['internal_notes' => $internalNotes]);
             }
 
-            // Group items by product_id, then create one Inspection per product.
-            $itemsByProduct = $rma->items->groupBy(fn ($i) => $i->product_id);
+            $result = $this->stageReturnInspections($rma, $stage, $by, $internalNotes);
 
-            $createdInspectionIds = [];
+            if ($result['failures'] !== []) {
+                $rma->update([
+                    // The RMA remains physically received until every required
+                    // product-linked inspection has been staged. This prevents
+                    // dispose/complete from bypassing a failed Quality handoff.
+                    'status' => ReturnRequestStatus::Received,
+                    'inspected_at' => null,
+                    'inspection_id' => $result['inspection_ids'][0] ?? $rma->inspection_id,
+                    'inspection_handoff_status' => ReturnInspectionHandoffStatus::ManualRequired,
+                    'inspection_handoff_message' => $this->inspectionHandoffFailureMessage($result['failures']),
+                    'inspection_handoff_at' => now(),
+                ]);
+                $this->recordReturnInspectionRequest($rma);
 
-            foreach ($itemsByProduct as $productId => $productItems) {
-                if (! $productId) {
-                    continue; // skip items without a product — no inspection spec available
-                }
-
-                $batchQty = $productItems->sum(fn ($i) => (int) ($i->returned_quantity > 0 ? $i->returned_quantity : $i->quantity));
-
-                try {
-                    $insp = $this->inspections->create([
-                        'stage'          => $stage->value,
-                        'product_id'     => $productId,
-                        'batch_quantity' => $batchQty,
-                        'entity_type'    => InspectionEntityType::ReturnRequest->value,
-                        'entity_id'      => $rma->id,
-                        'notes'          => $internalNotes ?: 'Auto-created from RMA ' . $rma->rma_number,
-                    ], $by ?? User::query()->find($rma->created_by));
-
-                    $createdInspectionIds[] = $insp->id;
-                } catch (\Throwable $e) {
-                    Log::warning('ReturnRequestService: failed to create inspection for RMA item', [
-                        'rma_id'     => $rma->id,
-                        'product_id' => $productId,
-                        'error'      => $e->getMessage(),
-                    ]);
-                }
+                return $rma->fresh();
             }
 
-            // Link the first inspection to the RMA root.
-            if (! empty($createdInspectionIds)) {
-                $rma->update(['inspection_id' => $createdInspectionIds[0]]);
-            }
+            $rma->update([
+                'status' => ReturnRequestStatus::Inspected,
+                'inspected_at' => $rma->inspected_at ?? now(),
+                'inspection_id' => $result['inspection_ids'][0] ?? $rma->inspection_id,
+                'inspection_handoff_status' => $result['inspection_ids'] !== []
+                    ? ReturnInspectionHandoffStatus::Generated
+                    : ReturnInspectionHandoffStatus::NotRequired,
+                'inspection_handoff_message' => null,
+                'inspection_handoff_at' => now(),
+            ]);
 
             return $rma->fresh();
         });
+    }
+
+    /**
+     * Retry a previously failed RMA → Quality handoff.
+     *
+     * The RMA row is locked and an existing non-cancelled inspection is reused
+     * per (RMA, stage, product), so a worker retry or operator double-click can
+     * never create duplicate inspection shells for the same returned product.
+     */
+    public function retryInspectionHandoff(ReturnRequest $rma, User $by): ReturnRequest
+    {
+        return DB::transaction(function () use ($rma, $by): ReturnRequest {
+            $rma = ReturnRequest::query()->lockForUpdate()->findOrFail($rma->id);
+            if (! in_array($rma->status, [ReturnRequestStatus::Received, ReturnRequestStatus::Inspected], true)) {
+                throw new BusinessRuleException(
+                    "Only received or previously inspected RMAs can retry Quality inspection staging; got {$rma->status->value}."
+                );
+            }
+
+            $rma->load('items.product');
+            $stage = $rma->type === ReturnRequestType::SupplierReturn
+                ? InspectionStage::SupplierReturn
+                : InspectionStage::CustomerReturn;
+            $result = $this->stageReturnInspections($rma, $stage, $by, null);
+
+            if ($result['failures'] !== []) {
+                $rma->update([
+                    'status' => ReturnRequestStatus::Received,
+                    'inspected_at' => null,
+                    'inspection_id' => $result['inspection_ids'][0] ?? $rma->inspection_id,
+                    'inspection_handoff_status' => ReturnInspectionHandoffStatus::ManualRequired,
+                    'inspection_handoff_message' => $this->inspectionHandoffFailureMessage($result['failures']),
+                    'inspection_handoff_at' => now(),
+                ]);
+
+                return $rma->fresh();
+            }
+
+            $rma->update([
+                'status' => ReturnRequestStatus::Inspected,
+                'inspected_at' => $rma->inspected_at ?? now(),
+                'inspection_id' => $result['inspection_ids'][0] ?? $rma->inspection_id,
+                'inspection_handoff_status' => $result['inspection_ids'] !== []
+                    ? ReturnInspectionHandoffStatus::Generated
+                    : ReturnInspectionHandoffStatus::NotRequired,
+                'inspection_handoff_message' => null,
+                'inspection_handoff_at' => now(),
+            ]);
+
+            return $rma->fresh();
+        });
+    }
+
+    /** Mark an RMA handoff as operator-actionable when the worker has no actor. */
+    public function markInspectionHandoffManual(int $rmaId, ?string $message = null): void
+    {
+        ReturnRequest::query()->whereKey($rmaId)->update([
+            'inspection_handoff_status' => ReturnInspectionHandoffStatus::ManualRequired,
+            'inspection_handoff_message' => $message ?: 'Quality inspection staging requires manual action.',
+            'inspection_handoff_at' => now(),
+        ]);
+    }
+
+    /**
+     * @return array{inspection_ids: list<int>, failures: list<string>}
+     */
+    private function stageReturnInspections(
+        ReturnRequest $rma,
+        InspectionStage $stage,
+        User $by,
+        ?string $internalNotes,
+    ): array {
+        $inspectionIds = [];
+        $failures = [];
+
+        foreach ($rma->items->groupBy(fn (ReturnRequestItem $item) => $item->product_id) as $productId => $productItems) {
+            if (! $productId) {
+                // Item-only/free-text lines have no Product inspection spec.
+                continue;
+            }
+
+            $existing = Inspection::query()
+                ->where('entity_type', InspectionEntityType::ReturnRequest->value)
+                ->where('entity_id', $rma->id)
+                ->where('stage', $stage->value)
+                ->where('product_id', (int) $productId)
+                ->where('status', '<>', 'cancelled')
+                ->orderByDesc('id')
+                ->first();
+
+            if ($existing) {
+                $inspectionIds[] = (int) $existing->id;
+                continue;
+            }
+
+            $batchQty = (int) ceil((float) $productItems->sum(
+                fn (ReturnRequestItem $item): float => (float) ($item->returned_quantity > 0
+                    ? $item->returned_quantity
+                    : $item->quantity)
+            ));
+
+            try {
+                $inspection = $this->inspections->create([
+                    'stage' => $stage->value,
+                    'product_id' => (int) $productId,
+                    'batch_quantity' => max(1, $batchQty),
+                    'entity_type' => InspectionEntityType::ReturnRequest->value,
+                    'entity_id' => $rma->id,
+                    'notes' => $internalNotes ?: 'Auto-created from RMA ' . $rma->rma_number,
+                ], $by);
+                $inspectionIds[] = (int) $inspection->id;
+            } catch (BusinessRuleException|ModelNotFoundException $e) {
+                $productLabel = $productItems->first()?->product?->part_number ?: "product {$productId}";
+                $failures[] = "{$productLabel}: {$e->getMessage()}";
+                Log::warning('ReturnRequestService: inspection handoff requires manual action', [
+                    'rma_id' => $rma->id,
+                    'product_id' => $productId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return [
+            'inspection_ids' => array_values(array_unique($inspectionIds)),
+            'failures' => $failures,
+        ];
+    }
+
+    /** @param list<string> $failures */
+    private function inspectionHandoffFailureMessage(array $failures): string
+    {
+        return 'Quality inspection staging requires manual action: ' . implode(' | ', $failures);
+    }
+
+    private function recordReturnInspectionRequest(ReturnRequest $rma): void
+    {
+        app(OutboxService::class)->recordForChain(
+            new ReturnInspectionRequested($rma),
+            $rma,
+            'returns',
+            'return_request',
+            'inspection_handoff',
+            'return-inspection-request:' . $rma->id,
+        );
     }
 
     /**
@@ -302,6 +447,7 @@ class ReturnRequestService
         return DB::transaction(function () use ($rma, $dispositions, $by, $createReplacementPo, $locationId) {
             $rma = ReturnRequest::query()->lockForUpdate()->findOrFail($rma->id);
             $this->ensureStatus($rma, ReturnRequestStatus::Inspected);
+            $this->ensureInspectionHandoffReady($rma);
             if ($rma->disposition_status === 'disposed') {
                 throw new BusinessRuleException('RMA has already been disposed.');
             }
@@ -472,7 +618,7 @@ class ReturnRequestService
             ];
         }
 
-        $this->recalculatePurchaseOrderReceiptStatus($rma);
+        $this->recalculatePurchaseOrderReceiptStatus($rma, $by);
 
         if ($creditLines !== []) {
             $creditNote = $this->creditNotes->create([
@@ -515,7 +661,7 @@ class ReturnRequestService
         }
     }
 
-    private function recalculatePurchaseOrderReceiptStatus(ReturnRequest $rma): void
+    private function recalculatePurchaseOrderReceiptStatus(ReturnRequest $rma, User $by): void
     {
         $po = $rma->purchaseOrder()->lockForUpdate()->firstOrFail();
         $ordered = (float) $po->items()->sum('quantity');
@@ -523,7 +669,13 @@ class ReturnRequestService
         $status = $received <= 0
             ? PurchaseOrderStatus::Approved
             : ($received < $ordered ? PurchaseOrderStatus::PartiallyReceived : PurchaseOrderStatus::Received);
+
+        if ($po->status === $status) {
+            return;
+        }
+
         $po->forceFill(['status' => $status])->save();
+        app(ChainBroadcaster::class)->broadcastFor($po->fresh(), $status->value, $by);
     }
 
     /**
@@ -687,6 +839,12 @@ class ReturnRequestService
             // slug, so a plain whereHas would silently drop the very person
             // performing the disposition.
             $recipients = User::query()
+                // NotificationService only needs the identity envelope. User's
+                // model-wide role eager load is useful for authorization, but
+                // it is unnecessary here and made every disposition fetch a
+                // wide user row plus a second role query.
+                ->without('role')
+                ->select(['id', 'name', 'email'])
                 ->where(function ($q) use ($permissionSlug) {
                     $q->whereHas('role', fn ($role) => $role->where('slug', 'system_admin'))
                         ->orWhereHas('role.permissions', fn ($perm) => $perm->where('slug', $permissionSlug));
@@ -728,36 +886,40 @@ class ReturnRequestService
      */
     public function complete(ReturnRequest $rma, User $by, ?int $locationId = null): ReturnRequest
     {
-        $this->ensureStatus($rma, ReturnRequestStatus::Inspected);
+        return DB::transaction(function () use ($rma, $by, $locationId): ReturnRequest {
+            // Completion is a cross-module terminal transition. Re-read and
+            // lock the RMA before checking status or movement stamps so two
+            // stale requests cannot both issue stock and close the same RMA.
+            $locked = ReturnRequest::query()->lockForUpdate()->findOrFail($rma->id);
+            $this->ensureStatus($locked, ReturnRequestStatus::Inspected);
+            $this->ensureInspectionHandoffReady($locked);
+            $locked->load('items.product');
 
-        if (! $locationId && $this->hasPendingMovement($rma)) {
-            throw new BusinessRuleException('A warehouse location is required to complete a return.');
-        }
+            if (! $locationId && $this->hasPendingMovement($locked)) {
+                throw new BusinessRuleException('A warehouse location is required to complete a return.');
+            }
 
-        // Completing straight from Inspected skipped dispose() entirely, so the
-        // RMA closed with no credit note, no NCR and every line restocked
-        // regardless of condition — a defective batch silently re-entered
-        // sellable stock and the customer was never credited.
-        if ($rma->disposition_status !== 'disposed') {
-            throw new BusinessRuleException(
-                'Record a disposition for every returned line before completing this RMA.'
-            );
-        }
+            // Completing straight from Inspected skipped dispose() entirely, so the
+            // RMA closed with no credit note, no NCR and every line restocked
+            // regardless of condition — a defective batch silently re-entered
+            // sellable stock and the customer was never credited.
+            if ($locked->disposition_status !== 'disposed') {
+                throw new BusinessRuleException(
+                    'Record a disposition for every returned line before completing this RMA.'
+                );
+            }
 
-        DB::transaction(function () use ($rma, $by, $locationId) {
-            $rma->update([
+            $locked->update([
                 'status'       => ReturnRequestStatus::Completed,
                 'completed_by' => $by->id,
                 'completed_at' => now(),
             ]);
 
-            $rma->loadMissing('items.product');
-
-            if ($rma->items->isNotEmpty() && $locationId) {
+            if ($locked->items->isNotEmpty() && $locationId) {
                 $last = null;
 
-                foreach ($rma->items as $line) {
-                    $movement = $this->moveLine($line, $rma, $locationId, $by);
+                foreach ($locked->items as $line) {
+                    $movement = $this->moveLine($line, $locked, $locationId, $by);
                     if ($movement) {
                         $last = $movement;
                     }
@@ -765,12 +927,12 @@ class ReturnRequestService
 
                 // Link the last stock movement to the RMA root (informational).
                 if ($last) {
-                    $rma->update(['stock_movement_id' => $last->id]);
+                    $locked->update(['stock_movement_id' => $last->id]);
                 }
             }
-        });
 
-        return $rma->fresh()->load(['items', 'stockMovement.toLocation', 'stockMovement.fromLocation']);
+            return $locked->fresh()->load(['items', 'stockMovement.toLocation', 'stockMovement.fromLocation']);
+        });
     }
 
     /**
@@ -902,28 +1064,31 @@ class ReturnRequestService
      */
     public function reject(ReturnRequest $rma, ?string $reason = null): ReturnRequest
     {
-        if (! $rma->status->isActive()) {
-            throw new BusinessRuleException("Cannot reject a {$rma->status->value} RMA.");
-        }
+        return DB::transaction(function () use ($rma, $reason): ReturnRequest {
+            $locked = ReturnRequest::query()->lockForUpdate()->findOrFail($rma->id);
+            if (! $locked->status->isActive()) {
+                throw new BusinessRuleException("Cannot reject a {$locked->status->value} RMA.");
+            }
 
-        // Rejecting after dispose() already shipped units back to the supplier,
-        // raised a debit memo and/or issued a customer credit note left those
-        // documents live against a dead RMA with no reversal path.
-        if ($rma->disposition_status === 'disposed') {
-            throw new BusinessRuleException(
-                'This RMA has already been disposed and cannot be rejected. '
-                . 'Reverse the linked credit or debit memo instead.'
-            );
-        }
-        $update = [
-            'status'      => ReturnRequestStatus::Rejected,
-            'rejected_at' => now(),
-        ];
-        if ($reason) {
-            $update['internal_notes'] = $this->appendNote($rma, "Rejected: {$reason}");
-        }
-        $rma->update($update);
-        return $rma->fresh();
+            // Rejecting after dispose() already shipped units back to the
+            // supplier, raised a debit memo and/or issued a customer credit
+            // note would leave live documents against a dead RMA.
+            if ($locked->disposition_status === 'disposed') {
+                throw new BusinessRuleException(
+                    'This RMA has already been disposed and cannot be rejected. '
+                    . 'Reverse the linked credit or debit memo instead.'
+                );
+            }
+            $update = [
+                'status'      => ReturnRequestStatus::Rejected,
+                'rejected_at' => now(),
+            ];
+            if ($reason) {
+                $update['internal_notes'] = $this->appendNote($locked, "Rejected: {$reason}");
+            }
+            $locked->update($update);
+            return $locked->fresh();
+        });
     }
 
     /**
@@ -931,18 +1096,21 @@ class ReturnRequestService
      */
     public function cancel(ReturnRequest $rma, ?string $reason = null): ReturnRequest
     {
-        if (! in_array($rma->status, [ReturnRequestStatus::Draft, ReturnRequestStatus::PendingApproval], true)) {
-            throw new BusinessRuleException("Only draft or pending_approval RMA can be cancelled.");
-        }
-        $update = [
-            'status'        => ReturnRequestStatus::Cancelled,
-            'cancelled_at'  => now(),
-        ];
-        if ($reason) {
-            $update['internal_notes'] = $this->appendNote($rma, "Cancelled: {$reason}");
-        }
-        $rma->update($update);
-        return $rma->fresh();
+        return DB::transaction(function () use ($rma, $reason): ReturnRequest {
+            $locked = ReturnRequest::query()->lockForUpdate()->findOrFail($rma->id);
+            if (! in_array($locked->status, [ReturnRequestStatus::Draft, ReturnRequestStatus::PendingApproval], true)) {
+                throw new BusinessRuleException("Only draft or pending_approval RMA can be cancelled.");
+            }
+            $update = [
+                'status'        => ReturnRequestStatus::Cancelled,
+                'cancelled_at'  => now(),
+            ];
+            if ($reason) {
+                $update['internal_notes'] = $this->appendNote($locked, "Cancelled: {$reason}");
+            }
+            $locked->update($update);
+            return $locked->fresh();
+        });
     }
 
     /**
@@ -961,6 +1129,15 @@ class ReturnRequestService
         if ($rma->status !== $expected) {
             throw new BusinessRuleException(
                 "Expected status {$expected->value}, got {$rma->status->value}."
+            );
+        }
+    }
+
+    private function ensureInspectionHandoffReady(ReturnRequest $rma): void
+    {
+        if ($rma->inspection_handoff_status === ReturnInspectionHandoffStatus::ManualRequired) {
+            throw new BusinessRuleException(
+                'Quality inspection staging is incomplete. Fix the Quality setup and retry the handoff before disposing or completing this RMA.'
             );
         }
     }

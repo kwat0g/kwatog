@@ -25,6 +25,10 @@ services:
     working_dir: /app
     volumes:
       - ./spa:/app
+      # SPA contract tests read the backend notification catalog so frontend
+      # metadata cannot drift from the API's canonical type list. Keep the
+      # source mount read-only; the SPA container only needs it for inspection.
+      - ./api:/api:ro
       - spa_node_modules:/app/node_modules
     environment:
       # Forwarded so vite.config.ts can rewire HMR through the Nginx proxy.
@@ -117,7 +121,10 @@ services:
     working_dir: /var/www
     volumes:
       - ./api:/var/www
-    command: php artisan queue:work --tries=3 --timeout=120
+    # Keep the local worker aligned with the longest durable listener. A
+    # shorter worker timeout would kill a healthy payroll run while the Redis
+    # retry lease still considers it in flight.
+    command: php artisan queue:work --tries=3 --timeout=1800 --sleep=3
     depends_on:
       - api
       - redis

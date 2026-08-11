@@ -57,6 +57,31 @@ class EmployeeController
         return EmployeeResource::collection($this->service->list($request->query(), $request->user()));
     }
 
+    /**
+     * @OA\Get(
+     *     path="/employees/status-counts",
+     *     tags={"Employees"},
+     *     summary="Headcount per status for the filtered employee set",
+     *     description="Aggregate counts across every matching row, not the current page. Honours the same row-level scope and filters as the list endpoint, except `status` itself.",
+     *     security={{"sanctum":{}}},
+     *
+     *     @OA\Parameter(name="department_id", in="query", required=false, @OA\Schema(type="string")),
+     *     @OA\Parameter(name="employment_type", in="query", required=false, @OA\Schema(type="string")),
+     *     @OA\Parameter(name="pay_type", in="query", required=false, @OA\Schema(type="string")),
+     *     @OA\Parameter(name="search", in="query", required=false, @OA\Schema(type="string")),
+     *
+     *     @OA\Response(response=200, description="Counts keyed by status, plus the total"),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=403, description="Unauthorized")
+     * )
+     */
+    public function statusCounts(Request $request): JsonResponse
+    {
+        return response()->json([
+            'data' => $this->service->statusCounts($request->query(), $request->user()),
+        ]);
+    }
+
     public function options(): JsonResponse
     {
         return response()->json(['data' => [

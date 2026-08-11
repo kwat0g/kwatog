@@ -36,6 +36,12 @@ export interface ReturnRequest {
  status_label: string;
  is_editable: boolean;
  disposition_status?: string;
+ inspection_handoff?: {
+  status: 'not_started' | 'generated' | 'manual_required' | 'not_required' | string;
+  status_label?: string | null;
+  message?: string | null;
+  at?: string | null;
+ };
  reason_code?: string;
  reason_description?: string;
  customer_notes?: string;

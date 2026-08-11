@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature\ReturnManagement;
 
+use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Models\ChainStepRun;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
@@ -368,6 +370,12 @@ class DispositionTest extends TestCase
         $this->assertSame('80.000', (string) $grnItem->fresh()->quantity_accepted);
         $this->assertSame('80.00', (string) $poItem->fresh()->quantity_received);
         $this->assertSame(PurchaseOrderStatus::PartiallyReceived, $po->fresh()->status);
+        $this->assertTrue(ChainStepRun::query()
+            ->where('chain', 'p2p')
+            ->where('entity_type', 'purchase_order')
+            ->where('entity_id', $po->id)
+            ->where('step', 'partial_received')
+            ->exists(), 'Supplier returns must publish the recalculated PO receipt step.');
 
         $credit = CreditNote::findOrFail($result->credit_note_id);
         $this->assertSame('supplier', $credit->type->value);
@@ -448,6 +456,52 @@ class DispositionTest extends TestCase
         $this->assertNull($rmaItem->fresh()->disposition, 'Item update must roll back with the transaction.');
         $this->assertNull($rma->fresh()->disposition_status);
         $this->assertSame('10.00', (string) $poItem->fresh()->quantity_received);
+    }
+
+    public function test_replayed_completion_cannot_issue_return_stock_twice(): void
+    {
+        $by = $this->makeUser();
+        $item = Item::factory()->create();
+        $location = WarehouseLocation::factory()->create();
+        $rma = ReturnRequest::create([
+            'rma_number'        => 'RMA-REPLAY-'.substr(uniqid(), -5),
+            'type'              => ReturnRequestType::CustomerReturn->value,
+            'status'            => ReturnRequestStatus::Inspected->value,
+            'disposition_status'=> 'disposed',
+            'reason_code'       => 'defective',
+            'return_date'       => now()->toDateString(),
+            'created_by'        => $by->id,
+        ]);
+        ReturnRequestItem::create([
+            'return_request_id' => $rma->id,
+            'item_id'           => $item->id,
+            'quantity'           => '2.000',
+            'returned_quantity'  => '2.000',
+            'unit_price'         => '10.00',
+            'total'              => '20.00',
+            'disposition'       => 'restock',
+        ]);
+
+        // Keep a stale aggregate with an unsent movement stamp. Before the
+        // authoritative completion lock, replaying this object could issue a
+        // second AdjustmentIn movement.
+        $stale = $rma->fresh()->load('items.product');
+        $service = app(ReturnRequestService::class);
+
+        $service->complete($rma, $by, $location->id);
+
+        try {
+            $service->complete($stale, $by, $location->id);
+            $this->fail('A replayed completion must not issue return stock twice.');
+        } catch (BusinessRuleException $e) {
+            $this->assertStringContainsString('Expected status inspected, got completed', $e->getMessage());
+        }
+
+        $this->assertSame(1, \App\Modules\Inventory\Models\StockMovement::query()
+            ->where('reference_type', 'return_request')
+            ->where('reference_id', $rma->id)
+            ->count());
+        $this->assertSame('2.000', (string) $rma->fresh('items')->items->first()->stock_movement_quantity);
     }
 
     /**

@@ -48,6 +48,7 @@ class NotifyOnLoanSubmitted implements ShouldQueue
             ]);
         } catch (\Throwable $e) {
             Log::warning('NotifyOnLoanSubmitted failed', ['error' => $e->getMessage()]);
+            throw $e;
         }
     }
 }

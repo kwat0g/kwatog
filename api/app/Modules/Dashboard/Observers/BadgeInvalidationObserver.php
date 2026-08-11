@@ -6,6 +6,7 @@ namespace App\Modules\Dashboard\Observers;
 
 use App\Modules\Dashboard\Events\BadgesChanged;
 use App\Modules\Dashboard\Services\BadgeService;
+use App\Common\Services\OutboxService;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -18,22 +19,26 @@ class BadgeInvalidationObserver
 {
     public function created(Model $model): void
     {
-        $this->invalidate();
+        $this->invalidate($model);
     }
 
     public function updated(Model $model): void
     {
-        $this->invalidate();
+        $this->invalidate($model);
     }
 
     public function deleted(Model $model): void
     {
-        $this->invalidate();
+        $this->invalidate($model);
     }
 
-    private function invalidate(): void
+    private function invalidate(Model $model): void
     {
         BadgeService::touch();
-        BadgesChanged::dispatch();
+        $version = (string) ($model->getRawOriginal('updated_at') ?? microtime(true));
+        app(OutboxService::class)->record(
+            new BadgesChanged(),
+            'badges:'.hash('sha256', implode('|', [$model::class, (string) $model->getKey(), $version])),
+        );
     }
 }

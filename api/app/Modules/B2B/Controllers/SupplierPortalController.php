@@ -6,7 +6,6 @@ namespace App\Modules\B2B\Controllers;
 
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Enums\BillStatus;
-use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Resources\BillResource;
 use App\Modules\Accounting\Services\PdfService;
 use App\Modules\B2B\Models\SupplierPortalUser;
@@ -111,16 +110,12 @@ class SupplierPortalController extends Controller
     /**
      * GET /api/v1/b2b/supplier/invoices/{id}/pdf
      */
-    public function invoicePdf(Invoice $invoice, Request $request)
+    public function invoicePdf(Bill $invoice, Request $request)
     {
         $user = $this->user($request);
-        abort_if(
-            ! $invoice->purchaseOrder || $invoice->purchaseOrder->vendor_id !== $user->vendor_id,
-            403,
-            'You do not have access to this invoice.',
-        );
+        $bill = $this->service->invoiceDetail($user->vendor_id, $invoice);
 
-        return $this->pdf->invoice($invoice);
+        return $this->pdf->bill($bill);
     }
 
     /**

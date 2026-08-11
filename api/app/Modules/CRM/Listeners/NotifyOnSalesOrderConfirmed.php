@@ -38,6 +38,7 @@ class NotifyOnSalesOrderConfirmed implements ShouldQueue
             ]);
         } catch (\Throwable $e) {
             Log::warning('NotifyOnSalesOrderConfirmed failed', ['error' => $e->getMessage()]);
+            throw $e;
         }
     }
 }

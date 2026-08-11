@@ -22,28 +22,49 @@ set -euo pipefail
 : "${BACKUP_DIR:=/backups}"
 : "${BACKUP_KEEP:=14}"
 
+case "${BACKUP_KEEP}" in
+    ''|*[!0-9]*)
+        echo "ERROR: BACKUP_KEEP must be a non-negative integer" >&2
+        exit 2
+        ;;
+esac
+
 mkdir -p "${BACKUP_DIR}"
 
 TS="$(date +%Y%m%d-%H%M%S)"
 OUT="${BACKUP_DIR}/ogami-${TS}.sql.gz"
+TMP="$(mktemp "${BACKUP_DIR}/.ogami-${TS}.XXXXXX")"
+
+cleanup() {
+    if [ -n "${TMP:-}" ]; then
+        rm -f "${TMP}"
+    fi
+}
+trap cleanup EXIT
 
 # PGPASSWORD is the cleanest non-interactive password path for pg_dump.
-PGPASSWORD="${DB_PASSWORD}" pg_dump \
-    --host="${DB_HOST}" \
-    --port="${DB_PORT}" \
-    --username="${DB_USERNAME}" \
-    --dbname="${DB_DATABASE}" \
-    --format=plain \
-    --no-owner \
-    --no-privileges \
-    | gzip > "${OUT}"
-
-# Sanity: a successful dump is never empty.
-if [ ! -s "${OUT}" ]; then
-    echo "FATAL: backup file ${OUT} is empty" >&2
-    rm -f "${OUT}"
+if ! PGPASSWORD="${DB_PASSWORD}" pg_dump \
+        --host="${DB_HOST}" \
+        --port="${DB_PORT}" \
+        --username="${DB_USERNAME}" \
+        --dbname="${DB_DATABASE}" \
+        --format=plain \
+        --no-owner \
+        --no-privileges \
+        | gzip > "${TMP}"; then
+    echo "ERROR: pg_dump failed; no backup was published" >&2
     exit 1
 fi
+
+# Sanity: validate before atomically publishing the final filename. A killed
+# process can leave only the hidden temp file, never a plausible backup name.
+if [ ! -s "${TMP}" ] || ! gzip -t "${TMP}"; then
+    echo "FATAL: backup archive is empty or corrupt; no backup was published" >&2
+    exit 1
+fi
+
+mv -f "${TMP}" "${OUT}"
+TMP=""
 
 SIZE="$(du -h "${OUT}" | cut -f1)"
 echo "backup written: ${OUT} (${SIZE})"
@@ -51,18 +72,22 @@ echo "backup written: ${OUT} (${SIZE})"
 # Phase 5b — optional off-site upload.
 #
 # If BACKUP_S3_BUCKET is set (e.g. 's3://ogami-backups') the dump is also
-# uploaded with `aws s3 cp`. The script silently no-ops the upload when:
-#   - BACKUP_S3_BUCKET is unset (local-only mode)
-#   - the aws CLI is not installed
-#   - the upload fails (logged + reported via exit code)
+# uploaded with `aws s3 cp`. A configured off-site target is a requirement:
+# missing tooling or a failed upload is reported non-zero rather than allowing
+# the scheduler to claim that the backup process finished.
 #
 # Use AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_DEFAULT_REGION env
 # vars (already set via .env on the prod box) for authentication.
 if [ -n "${BACKUP_S3_BUCKET:-}" ]; then
     if ! command -v aws >/dev/null 2>&1; then
-        echo "WARN: BACKUP_S3_BUCKET set but 'aws' CLI not installed; skipping upload" >&2
+        echo "ERROR: BACKUP_S3_BUCKET is set but 'aws' CLI is not installed" >&2
+        exit 2
     else
-        REMOTE="${BACKUP_S3_BUCKET%/}/${BACKUP_S3_PREFIX:-}$(basename "${OUT}")"
+        PREFIX="${BACKUP_S3_PREFIX:-}"
+        if [ -n "${PREFIX}" ] && [ "${PREFIX%/}" = "${PREFIX}" ]; then
+            PREFIX="${PREFIX}/"
+        fi
+        REMOTE="${BACKUP_S3_BUCKET%/}/${PREFIX}$(basename "${OUT}")"
         echo "uploading to ${REMOTE}"
         if aws s3 cp "${OUT}" "${REMOTE}" --only-show-errors; then
             echo "off-site copy ok"

@@ -143,7 +143,7 @@ class ScheduledExportController
             'frequency'    => [$required, 'string', 'in:daily,weekly,monthly'],
             'day_of_week'  => ['nullable', 'integer', 'between:0,6'],
             'day_of_month' => ['nullable', 'integer', 'between:1,31'],
-            'time_of_day'  => ['nullable', 'string', 'regex:/^[0-2][0-9]:[0-5][0-9]$/'],
+            'time_of_day'  => ['nullable', 'string', 'regex:/^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/'],
             'recipients'   => [$required, 'array', 'min:1'],
             'recipients.*' => ['email'],
             'is_active'    => ['sometimes', 'boolean'],

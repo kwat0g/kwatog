@@ -253,13 +253,11 @@ class InvoiceService
 
             // 2026-08-08 — final P2P-analog link: broadcast the chain step so
             // the invoice page updates in real time (draft → finalized).
-            DB::afterCommit(function () use ($invoice) {
-                app(ChainBroadcaster::class)->broadcastFor(
-                    $invoice->fresh(),
-                    InvoiceStatus::Finalized->value,
-                    auth()->user(),
-                );
-            });
+            app(ChainBroadcaster::class)->broadcastFor(
+                $invoice->fresh(),
+                InvoiceStatus::Finalized->value,
+                auth()->user(),
+            );
 
             return $this->show($invoice->fresh());
         });
@@ -344,13 +342,11 @@ class InvoiceService
             ]);
 
             // 2026-08-08 — broadcast the chain step: partial → paid on settle.
-            DB::afterCommit(function () use ($invoice, $newStatus) {
-                app(ChainBroadcaster::class)->broadcastFor(
-                    $invoice->fresh(),
-                    $newStatus->value,
-                    auth()->user(),
-                );
-            });
+            app(ChainBroadcaster::class)->broadcastFor(
+                $invoice->fresh(),
+                $newStatus->value,
+                auth()->user(),
+            );
 
             return $coll->fresh(['cashAccount']);
         });

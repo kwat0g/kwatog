@@ -79,6 +79,10 @@ class WorkOrderMachineConflictTest extends TestCase
 
     private function plannedWo(?Machine $machine = null, ?Mold $mold = null): WorkOrder
     {
+        if ($machine && $mold) {
+            $mold->compatibleMachines()->syncWithoutDetaching([$machine->id]);
+        }
+
         return WorkOrder::factory()->create([
             'product_id'    => $this->product->id,
             'machine_id'    => $machine?->id,

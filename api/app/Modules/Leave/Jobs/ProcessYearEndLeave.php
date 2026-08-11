@@ -46,7 +46,10 @@ class ProcessYearEndLeave implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    public const TIMEOUT_SECONDS = 600;
+
     public int $tries = 1;
+    public int $timeout = self::TIMEOUT_SECONDS;
 
     /**
      * @param User $runBy  Who triggered processing (audit + adjustment.created_by).
@@ -61,7 +64,8 @@ class ProcessYearEndLeave implements ShouldQueue
         public ?array $leaveTypeIds = null,
     ) {}
 
-    public function handle(): void
+    /** @return array{processed_types:int, skipped_types:int, employees:int, converted:float, carried:float, forfeited:float} */
+    public function handle(): array
     {
         $year = $this->year ?? Carbon::now()->year;
 
@@ -80,10 +84,11 @@ class ProcessYearEndLeave implements ShouldQueue
         $totalCarried   = 0.0;
         $totalForfeited = 0.0;
         $skipped        = 0;
+        $processedTypes = 0;
 
         DB::transaction(function () use (
             $year, $types, $employees,
-            &$totalEmployees, &$totalConverted, &$totalCarried, &$totalForfeited, &$skipped
+            &$totalEmployees, &$totalConverted, &$totalCarried, &$totalForfeited, &$skipped, &$processedTypes
         ) {
             foreach ($types as $lt) {
                 // Idempotency: skip a type+year already processed.
@@ -174,6 +179,7 @@ class ProcessYearEndLeave implements ShouldQueue
                     'days_forfeited'  => round($typeForfeited, 1),
                 ]);
 
+                $processedTypes++;
                 $totalEmployees += $typeEmployees;
                 $totalConverted += $typeConverted;
                 $totalCarried   += $typeCarried;
@@ -190,6 +196,15 @@ class ProcessYearEndLeave implements ShouldQueue
             'skipped_types'   => $skipped,
             'run_by'          => $this->runBy->id,
         ]);
+
+        return [
+            'processed_types' => $processedTypes,
+            'skipped_types' => $skipped,
+            'employees' => $totalEmployees,
+            'converted' => $totalConverted,
+            'carried' => $totalCarried,
+            'forfeited' => $totalForfeited,
+        ];
     }
 
     /** Daily rate, mirroring FinalPayService and the configured payroll divisor. */

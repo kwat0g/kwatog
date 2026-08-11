@@ -26,14 +26,19 @@ const config: Config = {
 
         // Text — exposed as text-primary / text-secondary / text-muted / text-subtle
         primary: 'color-mix(in srgb, var(--text-primary) calc(<alpha-value> * 100%), transparent)',
-        secondary: 'color-mix(in srgb, var(--text-secondary) calc(<alpha-value> * 100%), transparent)',
+        secondary:
+          'color-mix(in srgb, var(--text-secondary) calc(<alpha-value> * 100%), transparent)',
         muted: 'color-mix(in srgb, var(--text-muted) calc(<alpha-value> * 100%), transparent)',
-        'text-subtle': 'color-mix(in srgb, var(--text-subtle) calc(<alpha-value> * 100%), transparent)',
+        'text-subtle':
+          'color-mix(in srgb, var(--text-subtle) calc(<alpha-value> * 100%), transparent)',
 
         // Borders
-        'border-subtle': 'color-mix(in srgb, var(--border-subtle) calc(<alpha-value> * 100%), transparent)',
-        'border-default': 'color-mix(in srgb, var(--border-default) calc(<alpha-value> * 100%), transparent)',
-        'border-strong': 'color-mix(in srgb, var(--border-strong) calc(<alpha-value> * 100%), transparent)',
+        'border-subtle':
+          'color-mix(in srgb, var(--border-subtle) calc(<alpha-value> * 100%), transparent)',
+        'border-default':
+          'color-mix(in srgb, var(--border-default) calc(<alpha-value> * 100%), transparent)',
+        'border-strong':
+          'color-mix(in srgb, var(--border-strong) calc(<alpha-value> * 100%), transparent)',
 
         // Convenience: same gray ramp exposed as bg/text utilities
         // (e.g. bg-strong, text-strong) so neutral fills don't need
@@ -50,7 +55,8 @@ const config: Config = {
         // Links — colored per design-system ("color is for meaning")
         link: {
           DEFAULT: 'color-mix(in srgb, var(--text-link) calc(<alpha-value> * 100%), transparent)',
-          hover: 'color-mix(in srgb, var(--text-link-hover) calc(<alpha-value> * 100%), transparent)',
+          hover:
+            'color-mix(in srgb, var(--text-link-hover) calc(<alpha-value> * 100%), transparent)',
         },
 
         // Semantic
@@ -89,7 +95,6 @@ const config: Config = {
           grid: 'color-mix(in srgb, var(--blueprint-grid) calc(<alpha-value> * 100%), transparent)',
           line: 'color-mix(in srgb, var(--blueprint-line) calc(<alpha-value> * 100%), transparent)',
         },
-
       },
 
       // Border-only aliases: `border-default` / `border-subtle` / `border-strong`
@@ -97,21 +102,26 @@ const config: Config = {
       // `border` pick up the token.
       textColor: {
         subtle: 'color-mix(in srgb, var(--text-subtle) calc(<alpha-value> * 100%), transparent)',
-        'text-subtle': 'color-mix(in srgb, var(--text-subtle) calc(<alpha-value> * 100%), transparent)',
+        'text-subtle':
+          'color-mix(in srgb, var(--text-subtle) calc(<alpha-value> * 100%), transparent)',
       },
 
       borderColor: {
-        DEFAULT: 'color-mix(in srgb, var(--border-default) calc(<alpha-value> * 100%), transparent)',
+        DEFAULT:
+          'color-mix(in srgb, var(--border-default) calc(<alpha-value> * 100%), transparent)',
         subtle: 'color-mix(in srgb, var(--border-subtle) calc(<alpha-value> * 100%), transparent)',
-        default: 'color-mix(in srgb, var(--border-default) calc(<alpha-value> * 100%), transparent)',
+        default:
+          'color-mix(in srgb, var(--border-default) calc(<alpha-value> * 100%), transparent)',
         strong: 'color-mix(in srgb, var(--border-strong) calc(<alpha-value> * 100%), transparent)',
       },
 
       // `divide-*` follows `border-*` so a divided list uses the same ramp.
       divideColor: {
-        DEFAULT: 'color-mix(in srgb, var(--border-default) calc(<alpha-value> * 100%), transparent)',
+        DEFAULT:
+          'color-mix(in srgb, var(--border-default) calc(<alpha-value> * 100%), transparent)',
         subtle: 'color-mix(in srgb, var(--border-subtle) calc(<alpha-value> * 100%), transparent)',
-        default: 'color-mix(in srgb, var(--border-default) calc(<alpha-value> * 100%), transparent)',
+        default:
+          'color-mix(in srgb, var(--border-default) calc(<alpha-value> * 100%), transparent)',
         strong: 'color-mix(in srgb, var(--border-strong) calc(<alpha-value> * 100%), transparent)',
       },
 
@@ -187,9 +197,21 @@ const config: Config = {
         // Sprint P3 — soft pulse on the active step of an ApprovalTimeline
         // (and reusable for any "current bottleneck" indicator). 1.5s cycle,
         // gentle on the eyes, respects prefers-reduced-motion via globals.css.
+        // Pre-Atelier survivor: this hardcoded `rgba(79,70,229,.55)` — Tailwind's
+        // default indigo-600 — which matches no token in any of the three
+        // palettes and is exactly the blue family DESIGN-SYSTEM.md names as what
+        // makes an interface read as templated. It renders on the active step of
+        // every ApprovalTimeline. Now the accent (clay), via color-mix so the
+        // ring follows whichever palette is mounted. The token gate missed it
+        // because HEX only matches `#rrggbb` and PALETTE only matches class
+        // names, never a raw `rgba()` in this config.
         'approval-pulse': {
-          '0%, 100%': { boxShadow: '0 0 0 0 rgba(79,70,229,0.55)' },
-          '50%':      { boxShadow: '0 0 0 6px rgba(79,70,229,0)' },
+          '0%, 100%': {
+            boxShadow: '0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent)',
+          },
+          '50%': {
+            boxShadow: '0 0 0 6px color-mix(in srgb, var(--accent) 0%, transparent)',
+          },
         },
         'slide-right': {
           '0%': { opacity: '0', transform: 'translateX(-100%)' },

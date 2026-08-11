@@ -229,5 +229,37 @@ class GrnRejectionTest extends TestCase
             $totalNcrCount,
             'A logistics GRN rejection must NOT create any NCR',
         );
+
+        $this->assertSame(
+            '0.00',
+            (string) $poItem->fresh()->quantity_received,
+            'Rejecting a pre-QC GRN must reverse its PO-line receipt quantity.',
+        );
+        $this->assertSame(
+            PurchaseOrderStatus::Approved,
+            $po->fresh()->status,
+            'A rejected receipt must return an otherwise untouched PO to Approved.',
+        );
+    }
+
+    public function test_public_rejection_restores_a_sent_po_and_reverses_only_this_grn(): void
+    {
+        [$po, $poItem, $item, $location] = $this->buildPurchaseOrder();
+        $po->forceFill([
+            'status' => PurchaseOrderStatus::Sent,
+            'sent_to_supplier_at' => now(),
+        ])->save();
+
+        $grn = $this->grnSvc->create(
+            $po->fresh(),
+            $this->buildItems($poItem, $item, $location),
+            ['received_date' => now()->toDateString()],
+            $this->user,
+        );
+        $rejected = $this->grnSvc->reject($grn, 'Supplier shipment failed receiving inspection.', $this->user);
+
+        $this->assertSame('rejected', $rejected->status->value);
+        $this->assertSame('0.00', (string) $poItem->fresh()->quantity_received);
+        $this->assertSame(PurchaseOrderStatus::Sent, $po->fresh()->status);
     }
 }

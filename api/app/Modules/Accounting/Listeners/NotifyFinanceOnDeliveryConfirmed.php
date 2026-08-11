@@ -45,6 +45,7 @@ class NotifyFinanceOnDeliveryConfirmed implements ShouldQueue
             ]);
         } catch (\Throwable $e) {
             Log::warning('NotifyFinanceOnDeliveryConfirmed failed', ['error' => $e->getMessage()]);
+            throw $e;
         }
     }
 }

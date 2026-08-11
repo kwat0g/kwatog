@@ -30,7 +30,10 @@ class SyncBudgetActuals implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    public const TIMEOUT_SECONDS = 120;
+
     public int $tries = 1;
+    public int $timeout = self::TIMEOUT_SECONDS;
 
     public function __construct(
         private readonly ?int $fiscalYearId = null,
@@ -40,9 +43,7 @@ class SyncBudgetActuals implements ShouldQueue
     {
         $fiscalYear = $this->resolveFiscalYear();
         if (! $fiscalYear) {
-            Log::warning('[SyncBudgetActuals] No fiscal year found; aborting.');
-
-            return;
+            throw new \RuntimeException('[SyncBudgetActuals] No fiscal year found for the requested sync.');
         }
 
         $lineItems = BudgetLineItem::query()
@@ -91,5 +92,13 @@ class SyncBudgetActuals implements ShouldQueue
             ->whereDate('end_date', '>=', now())
             ->orderByDesc('year')
             ->first();
+    }
+
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('[SyncBudgetActuals] job failed permanently.', [
+            'fiscal_year_id' => $this->fiscalYearId,
+            'error' => $exception->getMessage(),
+        ]);
     }
 }

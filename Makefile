@@ -1,4 +1,4 @@
-.PHONY: help up down build restart logs ps shell tinker migrate seed fresh test test-db lint analyse spa-shell deploy build-spa prod-up prod-down prod-logs prod-migrate prod-shell backup restore prod-backup prod-restore
+.PHONY: help up down build restart logs ps shell tinker migrate seed fresh test test-db lint analyse spa-shell chain-smoke worker-recovery-smoke deploy build-spa prod-up prod-down prod-logs prod-migrate prod-shell backup restore prod-backup prod-restore
 
 help:
 	@echo "Ogami ERP — Make targets"
@@ -15,7 +15,9 @@ help:
 	@echo "  make seed        — run database seeders"
 	@echo "  make fresh       — drop, migrate, seed (destructive)"
 	@echo "  make test        — phpunit + vitest"
-	@echo "  make lint        — eslint + php-cs-fixer (dry-run)"
+	@echo "  make chain-smoke — isolated migrations + real Redis listener replay worker"
+	@echo "  make worker-recovery-smoke — kill a real worker and verify Redis redelivery"
+	@echo "  make lint        — eslint + Laravel Pint (dry-run)"
 	@echo "  make analyse     — larastan + tsc --noEmit"
 	@echo "  make backup      — dump dev DB to ./backups/ogami-<ts>.sql.gz"
 	@echo "  make restore FILE=path/to/dump.sql.gz — restore dev DB (destructive)"
@@ -60,16 +62,27 @@ test:
 	docker compose exec api php artisan test
 	docker compose exec spa npm run test -- --run
 
+chain-smoke:
+	bash scripts/chain-recovery-smoke.sh
+
+worker-recovery-smoke:
+	bash scripts/queue-worker-recovery-smoke.sh
+
 test-db:
-	docker compose exec db psql -U ogami -c "CREATE DATABASE ogami_test;" || true
+	@set -eu; \
+	if docker compose exec -T db psql -U ogami -Atqc "SELECT 1 FROM pg_database WHERE datname = 'ogami_test'" | grep -q '^1$$'; then \
+		echo "ogami_test already exists"; \
+	else \
+		docker compose exec -T db psql -U ogami -v ON_ERROR_STOP=1 -c "CREATE DATABASE ogami_test;"; \
+	fi
 
 lint:
-	docker compose exec api ./vendor/bin/php-cs-fixer fix --dry-run --diff || true
-	docker compose exec spa npm run lint || true
+	docker compose exec -T api ./vendor/bin/pint --test
+	docker compose exec -T spa npm run lint
 
 analyse:
-	docker compose exec api ./vendor/bin/phpstan analyse --memory-limit=1G || true
-	docker compose exec spa npx tsc --noEmit || true
+	docker compose exec -T api ./vendor/bin/phpstan analyse app --memory-limit=1G
+	docker compose exec -T spa npx tsc --noEmit
 
 # ─── Backup / Restore ──────────────────────────────────────────────────
 # Dev: dumps to ./backups on the HOST (the db container has /backups
@@ -87,8 +100,15 @@ backup:
 		-e DB_PASSWORD=$${DB_PASSWORD:-ogami_dev_pw} \
 		-e DB_DATABASE=$${DB_DATABASE:-ogami} \
 		db sh -c 'mkdir -p /backups && bash /tmp/db-backup.sh'
-	@docker cp ogami-db:/backups/. ./backups/ 2>/dev/null || true
-	@echo "→ backups available in ./backups/"
+	@latest=$$(docker exec ogami-db sh -c 'set -eu; latest="$$(ls -1t /backups/ogami-*.sql.gz 2>/dev/null | head -n 1)"; test -n "$$latest"; gzip -t "$$latest"; printf "%s" "$$latest"'); \
+		docker cp "ogami-db:$$latest" ./backups/; \
+		local="./backups/$$(basename "$$latest")"; test -s "$$local"; gzip -t "$$local"; \
+		if [ -n "$${BACKUP_S3_BUCKET:-}" ]; then \
+			command -v aws >/dev/null 2>&1 || { echo "ERROR: BACKUP_S3_BUCKET is set but aws CLI is not installed" >&2; exit 2; }; \
+			prefix="$${BACKUP_S3_PREFIX:-}"; [ -z "$$prefix" ] || [ "$${prefix%/}" != "$$prefix" ] || prefix="$$prefix/"; \
+			aws s3 cp "$$local" "$${BACKUP_S3_BUCKET%/}/$$prefix$$(basename "$$local")" --only-show-errors; \
+		fi; \
+		echo "→ backup available at $$local"
 
 restore:
 	@if [ -z "$(FILE)" ]; then echo "Usage: make restore FILE=backups/ogami-<ts>.sql.gz"; exit 2; fi
@@ -106,20 +126,28 @@ restore:
 # OGAMI-018 — Production backup/restore. Same scripts, prod compose file.
 # In prod the scheduler ALSO runs `php artisan db:backup` daily (03:17) inside
 # the api container; these targets are the manual / drill entry points.
-# Backups land in ./backups on the host (db container mounts /backups).
+# Backups land in ./backups on the host (the prod db also persists
+# /var/backups/ogami for host-cron drills).
 prod-backup:
 	@mkdir -p backups
 	@docker cp scripts/db-backup.sh ogami-db:/tmp/db-backup.sh
 	@$(PROD_COMPOSE) exec -T \
-		-e BACKUP_DIR=/backups \
+		-e BACKUP_DIR=/var/backups/ogami \
 		-e DB_HOST=localhost \
 		-e DB_PORT=5432 \
 		-e DB_USERNAME=$${DB_USERNAME:-ogami} \
 		-e DB_PASSWORD=$${DB_PASSWORD:?set DB_PASSWORD} \
 		-e DB_DATABASE=$${DB_DATABASE:-ogami} \
-		db sh -c 'mkdir -p /backups && bash /tmp/db-backup.sh'
-	@docker cp ogami-db:/backups/. ./backups/ 2>/dev/null || true
-	@echo "→ prod backups available in ./backups/"
+		db sh -c 'mkdir -p /var/backups/ogami && bash /tmp/db-backup.sh'
+	@latest=$$(docker exec ogami-db sh -c 'set -eu; latest="$$(ls -1t /var/backups/ogami/ogami-*.sql.gz 2>/dev/null | head -n 1)"; test -n "$$latest"; gzip -t "$$latest"; printf "%s" "$$latest"'); \
+		docker cp "ogami-db:$$latest" ./backups/; \
+		local="./backups/$$(basename "$$latest")"; test -s "$$local"; gzip -t "$$local"; \
+		if [ -n "$${BACKUP_S3_BUCKET:-}" ]; then \
+			command -v aws >/dev/null 2>&1 || { echo "ERROR: BACKUP_S3_BUCKET is set but aws CLI is not installed" >&2; exit 2; }; \
+			prefix="$${BACKUP_S3_PREFIX:-}"; [ -z "$$prefix" ] || [ "$${prefix%/}" != "$$prefix" ] || prefix="$$prefix/"; \
+			aws s3 cp "$$local" "$${BACKUP_S3_BUCKET%/}/$$prefix$$(basename "$$local")" --only-show-errors; \
+		fi; \
+		echo "→ prod backup available at $$local"
 
 prod-restore:
 	@if [ -z "$(FILE)" ]; then echo "Usage: make prod-restore FILE=backups/ogami-<ts>.sql.gz"; exit 2; fi
@@ -148,7 +176,17 @@ build-spa:
 		sh -c "npm ci --no-audit --no-fund && npm run build"
 
 prod-up:
-	$(PROD_COMPOSE) up -d
+	$(PROD_COMPOSE) up -d db redis meilisearch
+	@set -eu; \
+		status=; \
+		for i in 1 2 3 4 5 6 7 8 9 10; do \
+			status=$$(docker inspect -f '{{.State.Health.Status}}' ogami-db 2>/dev/null || true); \
+			[ "$$status" = healthy ] && break; \
+			sleep 3; \
+		done; \
+		[ "$$status" = healthy ] || { echo 'ERROR: production database did not become healthy'; exit 1; }
+	$(PROD_COMPOSE) up migrate
+	$(PROD_COMPOSE) up -d api nginx reverb queue scheduler
 
 prod-down:
 	$(PROD_COMPOSE) down
@@ -164,18 +202,24 @@ prod-migrate:
 
 deploy: build-spa
 	@if [ -z "$$SERVER_NAME" ]; then echo "ERROR: export SERVER_NAME=erp.your.domain"; exit 1; fi
-	# Render nginx config with the live domain.
-	envsubst '$${SERVER_NAME}' < docker/nginx/prod.conf > docker/nginx/prod.conf.rendered
-	mv docker/nginx/prod.conf.rendered docker/nginx/prod.conf
 	$(PROD_COMPOSE) build --pull
-	$(PROD_COMPOSE) up -d
-	# Allow the DB a moment to come up before running migrations.
-	sleep 5
-	$(PROD_COMPOSE) exec -T api php artisan migrate --force
+	# Apply schema changes before starting code that can consume queued work.
+	$(PROD_COMPOSE) up -d db redis meilisearch
+	@set -eu; \
+		status=; \
+		for i in 1 2 3 4 5 6 7 8 9 10; do \
+			status=$$(docker inspect -f '{{.State.Health.Status}}' ogami-db 2>/dev/null || true); \
+			[ "$$status" = healthy ] && break; \
+			sleep 3; \
+		done; \
+		[ "$$status" = healthy ] || { echo 'ERROR: production database did not become healthy'; exit 1; }
+	$(MAKE) prod-backup
+	$(PROD_COMPOSE) up migrate
+	$(PROD_COMPOSE) up -d api nginx reverb queue scheduler
 	$(PROD_COMPOSE) exec -T api php artisan config:cache
 	$(PROD_COMPOSE) exec -T api php artisan route:cache
 	$(PROD_COMPOSE) exec -T api php artisan view:cache
-	$(PROD_COMPOSE) exec -T nginx nginx -s reload || true
+	$(PROD_COMPOSE) exec -T nginx nginx -s reload
 	@echo ""
 	@echo "  Deploy complete. Smoke-test https://$$SERVER_NAME/sanctum/csrf-cookie"
 	@echo ""

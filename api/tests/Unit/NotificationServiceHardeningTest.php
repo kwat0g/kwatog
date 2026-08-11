@@ -12,6 +12,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
+use RuntimeException;
 use Tests\TestCase;
 
 /**
@@ -27,18 +28,18 @@ class NotificationServiceHardeningTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->service = new NotificationService();
+        $this->service = new NotificationService;
     }
 
     private function enableEmailFor(User $user, string $type): void
     {
         DB::table('notification_preferences')->insert([
-            'user_id'           => $user->id,
+            'user_id' => $user->id,
             'notification_type' => $type,
-            'channel'           => 'email',
-            'enabled'           => true,
-            'created_at'        => now(),
-            'updated_at'        => now(),
+            'channel' => 'email',
+            'enabled' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
     }
 
@@ -55,13 +56,13 @@ class NotificationServiceHardeningTest extends TestCase
         try {
             DB::transaction(function () use ($user): void {
                 $this->service->send($user, 'test.rollback', [
-                    'title'   => 'Should never arrive',
+                    'title' => 'Should never arrive',
                     'message' => 'The caller is about to fail.',
                 ]);
 
-                throw new \RuntimeException('caller failed after notifying');
+                throw new RuntimeException('caller failed after notifying');
             });
-        } catch (\RuntimeException) {
+        } catch (RuntimeException) {
             // expected
         }
 
@@ -80,7 +81,7 @@ class NotificationServiceHardeningTest extends TestCase
 
         DB::transaction(function () use ($user): void {
             $this->service->send($user, 'test.commit', [
-                'title'   => 'Arrives',
+                'title' => 'Arrives',
                 'message' => 'The caller commits.',
             ]);
 
@@ -102,6 +103,25 @@ class NotificationServiceHardeningTest extends TestCase
         $this->service->send($user, 'test.no_txn', ['title' => 'Inline', 'message' => 'x']);
 
         Event::assertDispatched(UserNotificationCreated::class, 1);
+    }
+
+    public function test_realtime_broadcast_failure_does_not_retry_the_durable_inbox_write(): void
+    {
+        $user = User::factory()->create();
+        Mail::fake();
+        Event::listen(UserNotificationCreated::class, static function (): void {
+            throw new RuntimeException('realtime broker unavailable');
+        });
+
+        $this->service->send($user, 'test.broadcast_failure', [
+            'title' => 'Durable inbox',
+            'message' => 'The realtime channel is optional.',
+        ]);
+
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $user->id,
+            'type' => 'test.broadcast_failure',
+        ]);
     }
 
     /* ─── Bounded cost ─────────────────────────────────────────────────── */
@@ -143,16 +163,16 @@ class NotificationServiceHardeningTest extends TestCase
 
     public function test_disabled_recipient_is_skipped_without_blocking_the_others(): void
     {
-        $muted   = User::factory()->create();
+        $muted = User::factory()->create();
         $wanting = User::factory()->create();
 
         DB::table('notification_preferences')->insert([
-            'user_id'           => $muted->id,
+            'user_id' => $muted->id,
             'notification_type' => 'test.mixed',
-            'channel'           => 'in_app',
-            'enabled'           => false,
-            'created_at'        => now(),
-            'updated_at'        => now(),
+            'channel' => 'in_app',
+            'enabled' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
 
         Event::fake();
@@ -160,11 +180,11 @@ class NotificationServiceHardeningTest extends TestCase
         $this->service->send([$muted, $wanting], 'test.mixed', ['title' => 'Mixed', 'message' => 'x']);
 
         $this->assertDatabaseMissing('notifications', [
-            'type'          => 'test.mixed',
+            'type' => 'test.mixed',
             'notifiable_id' => $muted->id,
         ]);
         $this->assertDatabaseHas('notifications', [
-            'type'          => 'test.mixed',
+            'type' => 'test.mixed',
             'notifiable_id' => $wanting->id,
         ]);
     }
@@ -199,7 +219,7 @@ class NotificationServiceHardeningTest extends TestCase
         Event::fake();
 
         $this->service->send($user, 'test.big', [
-            'title'   => str_repeat('T', 400),
+            'title' => str_repeat('T', 400),
             'message' => str_repeat('M', 5000),
         ]);
 
@@ -215,7 +235,7 @@ class NotificationServiceHardeningTest extends TestCase
         Event::fake();
 
         $this->service->send($user, 'test.badtypes', [
-            'title'   => 'Fine',
+            'title' => 'Fine',
             'message' => ['unexpected' => 'array'],
             'link_to' => 12345,
         ]);
@@ -232,12 +252,12 @@ class NotificationServiceHardeningTest extends TestCase
         Event::fake();
 
         $this->service->send($user, 'test.extra', [
-            'title'       => 'Keeps context',
-            'message'     => 'x',
-            'link_to'     => '/purchasing/purchase-orders/abc',
+            'title' => 'Keeps context',
+            'message' => 'x',
+            'link_to' => '/purchasing/purchase-orders/abc',
             'entity_type' => 'purchase_order',
-            'entity_id'   => 'abc',
-            'po_number'   => 'PO-202608-0001',
+            'entity_id' => 'abc',
+            'po_number' => 'PO-202608-0001',
         ]);
 
         $data = json_decode((string) DB::table('notifications')->value('data'), true);
@@ -249,8 +269,8 @@ class NotificationServiceHardeningTest extends TestCase
 
     public function test_email_stays_opt_in(): void
     {
-        $optedIn  = User::factory()->create(['email' => 'yes@ogami.test']);
-        $default  = User::factory()->create(['email' => 'no@ogami.test']);
+        $optedIn = User::factory()->create(['email' => 'yes@ogami.test']);
+        $default = User::factory()->create(['email' => 'no@ogami.test']);
         $this->enableEmailFor($optedIn, 'test.optin');
 
         Event::fake();

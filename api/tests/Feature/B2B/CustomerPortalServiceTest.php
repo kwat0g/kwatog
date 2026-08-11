@@ -11,6 +11,7 @@ use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\B2B\Models\DeliverySchedule;
 use App\Modules\CRM\Models\CustomerComplaint;
 use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\CRM\Enums\ComplaintNcrHandoffStatus;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\DeliveryProof;
 use Database\Seeders\RolePermissionSeeder;
@@ -276,21 +277,31 @@ class CustomerPortalServiceTest extends TestCase
     {
         $customer = Customer::factory()->create();
         $user = $this->makePortalUser($customer);
+        $order = SalesOrder::factory()->create(['customer_id' => $customer->id]);
 
         $this->actAs($user);
 
         $response = $this->postJson('/api/v1/b2b/customer/complaints', [
+            'order_id' => $order->hash_id,
             'severity' => 'critical',
             'description' => 'Parts arrived damaged',
             'affected_quantity' => 10,
         ]);
 
         $response->assertStatus(201);
+        $response->assertJsonPath('data.sales_order.id', $order->hash_id);
+        $response->assertJsonPath('data.ncr_handoff.status', ComplaintNcrHandoffStatus::Generated->value);
+        $this->assertIsString($response->json('data.ncr.id'));
 
         $complaint = CustomerComplaint::where('customer_id', $customer->id)->first();
         $this->assertNotNull($complaint);
         $this->assertSame($customer->id, $complaint->customer_id);
+        $this->assertSame($order->id, $complaint->sales_order_id);
         $this->assertSame('open', $complaint->status->value);
+        $this->assertSame(ComplaintNcrHandoffStatus::Generated, $complaint->ncr_handoff_status);
+        $this->assertNotNull($complaint->ncr_id);
+        $this->assertNotNull($complaint->eightDReport);
+        $this->assertNotNull($complaint->created_by);
     }
 
     /* ─── Delivery Schedules ─────────────────────────────────────── */

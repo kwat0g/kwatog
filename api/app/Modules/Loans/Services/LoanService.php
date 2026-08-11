@@ -7,6 +7,7 @@ namespace App\Modules\Loans\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\ApprovalService;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
 use App\Common\Models\WorkflowDefinition;
 use App\Modules\Auth\Models\User;
@@ -20,7 +21,6 @@ use App\Modules\Loans\Events\LoanDecided;
 use App\Modules\Loans\Events\LoanSubmitted;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Event;
 
 class LoanService
 {
@@ -137,7 +137,9 @@ class LoanService
     public function request(int $employeeId, LoanType $type, array $data): EmployeeLoan
     {
         return DB::transaction(function () use ($employeeId, $type, $data) {
-            $employee = Employee::findOrFail($employeeId);
+            // Serialize requests for one employee so two concurrent portal
+            // submissions cannot both pass the active-loan check.
+            $employee = Employee::query()->lockForUpdate()->findOrFail($employeeId);
 
             // One active loan per type rule.
             $hasActive = EmployeeLoan::query()
@@ -196,7 +198,9 @@ class LoanService
 
             $this->approvals->submit($loan, $type->workflowType(), (float) $data['principal']);
 
-            DB::afterCommit(fn () => Event::dispatch(new LoanSubmitted($loan->fresh(['employee']))));
+            app(OutboxService::class)->record(
+                new LoanSubmitted($loan->fresh(['employee'])),
+            );
 
             return $loan->load('employee');
         });
@@ -205,20 +209,23 @@ class LoanService
     public function approve(EmployeeLoan $loan, User $user, ?string $remarks = null): EmployeeLoan
     {
         return DB::transaction(function () use ($loan, $user, $remarks) {
-            if ($loan->status !== LoanStatus::Pending) {
+            $authoritative = EmployeeLoan::query()->lockForUpdate()->findOrFail($loan->id);
+            if ($authoritative->status !== LoanStatus::Pending) {
                 throw new BusinessRuleException('Only pending loans can be approved.');
             }
-            $this->approvals->approve($loan, $user, $remarks);
+            $this->approvals->approve($authoritative, $user, $remarks);
 
-            if ($this->approvals->isFullyApproved($loan)) {
+            if ($this->approvals->isFullyApproved($authoritative)) {
                 // Single save → single audit row for one logical action.
-                $loan->fill(['start_date' => now()->toDateString()]);
-                $loan->status = LoanStatus::Active;
-                $loan->save();
+                $authoritative->fill(['start_date' => now()->toDateString()]);
+                $authoritative->status = LoanStatus::Active;
+                $authoritative->save();
             }
 
-            $loan = $loan->fresh(['employee', 'payments']);
-            DB::afterCommit(fn () => Event::dispatch(new LoanDecided($loan->fresh(['employee']), true)));
+            $loan = $authoritative->fresh(['employee', 'payments']);
+            app(OutboxService::class)->record(
+                new LoanDecided($loan->fresh(['employee']), true),
+            );
             return $loan;
         });
     }
@@ -252,13 +259,16 @@ class LoanService
     public function reject(EmployeeLoan $loan, User $user, string $reason): EmployeeLoan
     {
         return DB::transaction(function () use ($loan, $user, $reason) {
-            if ($loan->status !== LoanStatus::Pending) {
+            $authoritative = EmployeeLoan::query()->lockForUpdate()->findOrFail($loan->id);
+            if ($authoritative->status !== LoanStatus::Pending) {
                 throw new BusinessRuleException('Only pending loans can be rejected.');
             }
-            $this->approvals->reject($loan, $user, $reason);
-            $loan->forceFill(['status' => LoanStatus::Rejected->value])->save();
-            $loan = $loan->fresh(['employee']);
-            DB::afterCommit(fn () => Event::dispatch(new LoanDecided($loan->fresh(['employee']), false)));
+            $this->approvals->reject($authoritative, $user, $reason);
+            $authoritative->forceFill(['status' => LoanStatus::Rejected->value])->save();
+            $loan = $authoritative->fresh(['employee']);
+            app(OutboxService::class)->record(
+                new LoanDecided($loan->fresh(['employee']), false),
+            );
             return $loan;
         });
     }
@@ -266,11 +276,12 @@ class LoanService
     public function cancel(EmployeeLoan $loan): EmployeeLoan
     {
         return DB::transaction(function () use ($loan) {
-            if (! in_array($loan->status, [LoanStatus::Pending, LoanStatus::Active], true)) {
+            $authoritative = EmployeeLoan::query()->lockForUpdate()->findOrFail($loan->id);
+            if (! in_array($authoritative->status, [LoanStatus::Pending, LoanStatus::Active], true)) {
                 throw new BusinessRuleException('Cannot cancel a finalized loan.');
             }
-            $loan->forceFill(['status' => LoanStatus::Cancelled->value])->save();
-            return $loan->fresh(['employee', 'payments']);
+            $authoritative->forceFill(['status' => LoanStatus::Cancelled->value])->save();
+            return $authoritative->fresh(['employee', 'payments']);
         });
     }
 

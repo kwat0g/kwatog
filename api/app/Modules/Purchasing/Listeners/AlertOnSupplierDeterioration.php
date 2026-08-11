@@ -16,8 +16,10 @@ use Illuminate\Support\Facades\Log;
  * T3.3.C — When a vendor's overall_score drops by 20+ points vs the prior
  * month's snapshot, notify all active users with role 'purchasing_officer'.
  *
- * Queued; swallows all \Throwable so a failure here never blocks the
- * SupplierPerformanceService::compute() workflow that dispatched the event.
+ * Queued; notification failures are rethrown after logging so the alert is
+ * retryable/dead-lettered instead of being recorded as a false-green job.
+ * The supplier-performance snapshot is already committed before this event
+ * is published, so retrying this listener never rolls back the computation.
  */
 class AlertOnSupplierDeterioration implements ShouldQueue
 {
@@ -75,6 +77,7 @@ class AlertOnSupplierDeterioration implements ShouldQueue
                 'snapshot_id' => $event->snapshot->id ?? null,
                 'error'       => $e->getMessage(),
             ]);
+            throw $e;
         }
     }
 

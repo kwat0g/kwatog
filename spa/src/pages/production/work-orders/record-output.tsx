@@ -101,7 +101,11 @@ export default function RecordOutputPage() {
  }, key);
  },
  onSuccess: (output) => {
+ if (output.production_receipt_handoff?.status === 'manual_required') {
+ toast(`Output ${output.batch_code ?? ''} recorded. Finished-goods receipt needs Inventory attention.`, { icon: '⚠️' });
+ } else {
  toast.success(`Output ${output.batch_code ?? ''} recorded.`);
+ }
  reset({ good_count: '', shift: '', remarks: '', defects: [] });
  navigate(`/production/work-orders/${id}`);
  },

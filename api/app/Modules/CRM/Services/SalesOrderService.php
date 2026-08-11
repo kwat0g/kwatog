@@ -6,12 +6,14 @@ namespace App\Modules\CRM\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\OutboxService;
 use App\Common\Services\TaxPolicyService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
 use App\Common\Support\TrashedFilter;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\CRM\Enums\SalesOrderStatus;
+use App\Modules\CRM\Events\SalesOrderConfirmed;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
@@ -309,16 +311,29 @@ class SalesOrderService
      */
     public function confirm(SalesOrder $so): SalesOrder
     {
-        $this->checkCreditLimit($so);
-
-        if ($so->status !== SalesOrderStatus::Draft) {
-            throw new BusinessRuleException('Only draft sales orders can be confirmed.');
-        }
-        if ($so->items()->count() === 0) {
-            throw new BusinessRuleException('Cannot confirm a sales order with no items.');
-        }
         return DB::transaction(function () use ($so) {
-            $so->update(['status' => SalesOrderStatus::Confirmed->value]);
+            // The HTTP route-bound model may be stale when a cancellation or
+            // another confirmation races this request. Lock the authoritative
+            // SO and customer rows before checking state or credit exposure.
+            $lockedSo = SalesOrder::query()
+                ->lockForUpdate()
+                ->findOrFail($so->id);
+            if ($lockedSo->status !== SalesOrderStatus::Draft) {
+                throw new BusinessRuleException('Only draft sales orders can be confirmed.');
+            }
+            if ($lockedSo->items()->count() === 0) {
+                throw new BusinessRuleException('Cannot confirm a sales order with no items.');
+            }
+
+            // Serialize same-customer confirmations so two draft SOs cannot
+            // both pass the credit check against the same open exposure.
+            $customer = Customer::query()
+                ->lockForUpdate()
+                ->findOrFail($lockedSo->customer_id);
+            $lockedSo->setRelation('customer', $customer);
+            $this->checkCreditLimit($lockedSo);
+
+            $lockedSo->update(['status' => SalesOrderStatus::Confirmed->value]);
 
             // Sprint 6 Task 52: trigger MRP run synchronously inside the
             // confirmation transaction. Wrapped in try/catch so a broken BOM or
@@ -326,25 +341,32 @@ class SalesOrderService
             // CRM officer has to fix the data before the SO can advance.
             $engine = $this->mrpEngine();
             if ($engine) {
-                $engine->runForSalesOrder($so);
+                $engine->runForSalesOrder($lockedSo);
             }
 
-            // Sprint 6 audit §1.7: broadcast on production.dashboard so the
-            // chain stage breakdown updates without a manual refetch.
-            DB::afterCommit(function () use ($so) {
-                $fresh = $so->fresh();
-                event(new \App\Modules\CRM\Events\SalesOrderConfirmed($fresh));
+            $fresh = $lockedSo->fresh();
 
-                // Series C — Task C4. Real-time chain progress for the
-                // SO detail page.
-                app(\App\Common\Services\ChainBroadcaster::class)->broadcastFor(
-                    $fresh,
-                    \App\Modules\CRM\Enums\SalesOrderStatus::Confirmed->value,
-                    auth()->user(),
-                );
-            });
+            // Durable cross-module publication. The row is written inside the
+            // same transaction as the confirmation and is enqueued only after
+            // commit; the scheduler recovers a queue outage.
+            app(OutboxService::class)->recordForChain(
+                new SalesOrderConfirmed($fresh),
+                $fresh,
+                'o2c',
+                'sales_order',
+                SalesOrderStatus::Confirmed->value,
+            );
 
-            return $this->show($so->fresh());
+            // Stage real-time chain progress with the confirmation. The
+            // outbox dispatch itself still waits for commit, so a rollback
+            // cannot leave a phantom confirmed step.
+            app(\App\Common\Services\ChainBroadcaster::class)->broadcastFor(
+                $fresh,
+                SalesOrderStatus::Confirmed->value,
+                auth()->user(),
+            );
+
+            return $this->show($fresh);
         });
     }
 
@@ -461,13 +483,19 @@ class SalesOrderService
 
     public function cancel(SalesOrder $so, ?string $reason = null): SalesOrder
     {
-        if (! $so->is_cancellable) {
-            throw new BusinessRuleException('This sales order cannot be cancelled at its current status.');
-        }
         return DB::transaction(function () use ($so, $reason) {
-            $so->update([
+            // A stale route-bound SO must not overwrite a delivered/invoiced
+            // or already-cancelled order. Re-read and lock before the guard.
+            $lockedSo = SalesOrder::query()
+                ->lockForUpdate()
+                ->findOrFail($so->id);
+            if (! $lockedSo->is_cancellable) {
+                throw new BusinessRuleException('This sales order cannot be cancelled at its current status.');
+            }
+
+            $lockedSo->update([
                 'status' => SalesOrderStatus::Cancelled->value,
-                'notes'  => trim(($so->notes ?? '') . "\n\n[Cancelled" . ($reason ? ': ' . $reason : '') . ']'),
+                'notes'  => trim(($lockedSo->notes ?? '') . "\n\n[Cancelled" . ($reason ? ': ' . $reason : '') . ']'),
             ]);
 
             // Sprint 6 audit §1.2: cascade through the chain.
@@ -476,7 +504,7 @@ class SalesOrderService
             //     the MRP plan; in_progress/completed/closed WOs are left
             //     alone — the operator must finish or cancel them manually.
             //     WorkOrderService::cancel() releases each WO's reservations.
-            $plan = \App\Modules\MRP\Models\MrpPlan::where('sales_order_id', $so->id)
+            $plan = \App\Modules\MRP\Models\MrpPlan::where('sales_order_id', $lockedSo->id)
                 ->where('status', \App\Modules\MRP\Enums\MrpPlanStatus::Active->value)
                 ->lockForUpdate()
                 ->first();
@@ -492,25 +520,25 @@ class SalesOrderService
                     \App\Modules\Production\Enums\WorkOrderStatus::Paused->value,
                 ];
                 $linkedWos = \App\Modules\Production\Models\WorkOrder::query()
-                    ->where('sales_order_id', $so->id)
+                    ->where('sales_order_id', $lockedSo->id)
                     ->whereIn('status', $cancellableStatuses)
                     ->lockForUpdate()
                     ->get();
                 foreach ($linkedWos as $wo) {
-                    $woService->cancel($wo, $reason ?? "Sales order {$so->so_number} cancelled");
+                    $woService->cancel($wo, $reason ?? "Sales order {$lockedSo->so_number} cancelled");
                 }
             }
 
-            // Series C — Task C4. Real-time chain progress.
-            DB::afterCommit(function () use ($so) {
-                app(\App\Common\Services\ChainBroadcaster::class)->broadcastFor(
-                    $so->fresh(),
-                    \App\Modules\CRM\Enums\SalesOrderStatus::Cancelled->value,
-                    auth()->user(),
-                );
-            });
+            // Series C — Task C4. Stage real-time chain progress atomically
+            // with the cancellation and its downstream work-order changes.
+            $fresh = $lockedSo->fresh();
+            app(\App\Common\Services\ChainBroadcaster::class)->broadcastFor(
+                $fresh,
+                \App\Modules\CRM\Enums\SalesOrderStatus::Cancelled->value,
+                auth()->user(),
+            );
 
-            return $this->show($so->fresh());
+            return $this->show($fresh);
         });
     }
 
@@ -564,9 +592,7 @@ class SalesOrderService
             return;
         }
 
-        $broadcastFromTo = null;
-
-        DB::transaction(function () use ($salesOrderId, $target, &$broadcastFromTo) {
+        DB::transaction(function () use ($salesOrderId, $target) {
             $so = SalesOrder::lockForUpdate()->find($salesOrderId);
             if (! $so) {
                 return;
@@ -590,15 +616,9 @@ class SalesOrderService
             }
 
             $so->update(['status' => $target->value]);
-            $broadcastFromTo = [$so->fresh(), $currentValue, $target->value];
+            $fresh = $so->fresh();
+            app(\App\Common\Services\ChainBroadcaster::class)->broadcastFor($fresh, $target->value);
         });
-
-        if ($broadcastFromTo !== null) {
-            [$so, $from, $to] = $broadcastFromTo;
-            DB::afterCommit(function () use ($so, $to) {
-                app(\App\Common\Services\ChainBroadcaster::class)->broadcastFor($so, $to);
-            });
-        }
     }
 
     /**

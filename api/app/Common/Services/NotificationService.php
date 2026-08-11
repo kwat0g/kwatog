@@ -47,8 +47,8 @@ class NotificationService
     /**
      * Send an in-app notification with a standardized data envelope.
      *
-     * @param User|Collection<int, User>|array<int, User> $recipients
-     * @param array{title?: string, message?: string, link_to?: string, entity_type?: string, entity_id?: string} $data
+     * @param  User|Collection<int, User>|array<int, User>  $recipients
+     * @param  array{title?: string, message?: string, link_to?: string, entity_type?: string, entity_id?: string}  $data
      */
     public function send(
         User|Collection|array $recipients,
@@ -64,11 +64,11 @@ class NotificationService
         $data = $this->normaliseEnvelope($type, $data);
         $prefs = $this->channelPreferences(array_keys($users), $type);
 
-        $now      = now();
-        $encoded  = json_encode($data);
-        $rows     = [];
-        $events   = [];
-        $emails   = [];
+        $now = now();
+        $encoded = json_encode($data);
+        $rows = [];
+        $events = [];
+        $emails = [];
 
         foreach ($users as $userId => $user) {
             // in_app is opt-OUT: it fires unless an explicit row disables it.
@@ -79,21 +79,21 @@ class NotificationService
             $id = (string) Str::uuid();
 
             $rows[] = [
-                'id'              => $id,
-                'type'            => $type,
+                'id' => $id,
+                'type' => $type,
                 'notifiable_type' => $user::class,
-                'notifiable_id'   => $userId,
-                'data'            => $encoded,
-                'read_at'         => null,
-                'created_at'      => $now,
-                'updated_at'      => $now,
+                'notifiable_id' => $userId,
+                'data' => $encoded,
+                'read_at' => null,
+                'created_at' => $now,
+                'updated_at' => $now,
             ];
 
             $events[] = new UserNotificationCreated($userId, [
-                'id'         => $id,
-                'type'       => $type,
-                'data'       => $data,
-                'read_at'    => null,
+                'id' => $id,
+                'type' => $type,
+                'data' => $data,
+                'read_at' => null,
                 'created_at' => $now->toISOString(),
             ]);
 
@@ -117,7 +117,19 @@ class NotificationService
         // an email behind. Runs inline when no transaction is open.
         DB::afterCommit(function () use ($events, $emails, $type, $data): void {
             foreach ($events as $notificationEvent) {
-                event($notificationEvent);
+                try {
+                    // The notification row is the durable business result.
+                    // Realtime delivery is an optimization: a broker/Reverb
+                    // outage must not make the caller retry the notification
+                    // insert and create duplicate inbox rows.
+                    event($notificationEvent);
+                } catch (\Throwable $e) {
+                    Log::warning('Notification realtime broadcast failed; inbox row remains durable.', [
+                        'user_id' => $notificationEvent->userId ?? null,
+                        'type' => $type,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
             }
 
             foreach ($emails as [$address, $userId, $name]) {
@@ -157,15 +169,15 @@ class NotificationService
      * (`$deptHeads->merge($hrOfficers)`) and a user holding both roles would
      * otherwise get the same alert twice.
      *
-     * @param User|Collection<int, User>|array<int, User> $recipients
+     * @param  User|Collection<int, User>|array<int, User>  $recipients
      * @return array<int, User>
      */
     private function normaliseRecipients(User|Collection|array $recipients): array
     {
         $list = match (true) {
-            $recipients instanceof User       => [$recipients],
+            $recipients instanceof User => [$recipients],
             $recipients instanceof Collection => $recipients->all(),
-            default                           => $recipients,
+            default => $recipients,
         };
 
         $users = [];
@@ -184,7 +196,7 @@ class NotificationService
     /**
      * Load every relevant channel preference for the audience in one query.
      *
-     * @param array<int, int> $userIds
+     * @param  array<int, int>  $userIds
      * @return array<string, bool> keyed `"{userId}:{channel}"`
      */
     private function channelPreferences(array $userIds, string $type): array
@@ -212,7 +224,7 @@ class NotificationService
      * and nothing bounded `message`, so a caller interpolating an exception
      * trace could write megabytes into the JSON column.
      *
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
     private function normaliseEnvelope(string $type, array $data): array
@@ -238,7 +250,7 @@ class NotificationService
      * Dispatch a queued email. Failures never block the caller — mail is the
      * lossy channel; the in-app row is already durable by this point.
      *
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     private function queueEmail(string $address, int $userId, ?string $name, string $type, array $data): void
     {
@@ -247,8 +259,8 @@ class NotificationService
         } catch (\Throwable $e) {
             Log::warning('Notification email dispatch failed', [
                 'user_id' => $userId,
-                'type'    => $type,
-                'error'   => $e->getMessage(),
+                'type' => $type,
+                'error' => $e->getMessage(),
             ]);
         }
     }

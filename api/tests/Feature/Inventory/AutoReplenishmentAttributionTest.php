@@ -54,4 +54,25 @@ class AutoReplenishmentAttributionTest extends TestCase
         $this->assertNull(app(AutoReplenishmentService::class)->checkAndReplenish($item->id));
         $this->assertSame(0, PurchaseRequest::query()->count());
     }
+
+    public function test_replayed_low_stock_event_does_not_create_a_second_pr(): void
+    {
+        $role = Role::query()->create(['name' => 'System Admin', 'slug' => 'system_admin']);
+        $admin = User::factory()->create(['role_id' => $role->id]);
+        $item = Item::factory()->create([
+            'is_active' => true,
+            'reorder_point' => 100,
+            'safety_stock' => 10,
+            'standard_cost' => '25.00',
+        ]);
+
+        $service = app(AutoReplenishmentService::class);
+        $first = $service->checkAndReplenish($item->id);
+        $second = $service->checkAndReplenish($item->id);
+
+        $this->assertNotNull($first);
+        $this->assertNull($second);
+        $this->assertSame($admin->id, $first->requested_by);
+        $this->assertSame(1, PurchaseRequest::query()->count());
+    }
 }

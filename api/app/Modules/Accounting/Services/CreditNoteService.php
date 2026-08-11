@@ -199,30 +199,35 @@ class CreditNoteService
      */
     public function apply(CreditNote $cn, array $data, User $by): CreditNoteApplication
     {
-        if ($cn->status !== CreditNoteStatus::Finalized) {
-            throw new BusinessRuleException('Only a finalized credit note can be applied.');
-        }
         $amount = Money::round2((string) $data['amount']);
         if (Money::lte($amount, '0')) {
             throw new BusinessRuleException('Application amount must be > 0.');
         }
-        if (Money::gt($amount, (string) $cn->balance)) {
-            throw new BusinessRuleException("Amount {$amount} exceeds the credit note's remaining balance {$cn->balance}.");
-        }
 
         return DB::transaction(function () use ($cn, $data, $amount, $by) {
+            // Route-bound credit notes can be stale when two applications race.
+            // Lock the authoritative credit row before checking status/balance
+            // so an already-consumed note cannot be applied a second time.
+            $creditNote = CreditNote::query()->lockForUpdate()->findOrFail($cn->id);
+            if ($creditNote->status !== CreditNoteStatus::Finalized) {
+                throw new BusinessRuleException('Only a finalized credit note can be applied.');
+            }
+            if (Money::gt($amount, (string) $creditNote->balance)) {
+                throw new BusinessRuleException("Amount {$amount} exceeds the credit note's remaining balance {$creditNote->balance}.");
+            }
+
             $application = new CreditNoteApplication([
-                'credit_note_id' => $cn->id,
+                'credit_note_id' => $creditNote->id,
                 'amount'         => $amount,
                 'created_by'     => $by->id,
             ]);
 
-            if ($cn->type === CreditNoteType::Customer) {
-                $invoice = Invoice::query()->findOrFail(
+            if ($creditNote->type === CreditNoteType::Customer) {
+                $invoice = Invoice::query()->lockForUpdate()->findOrFail(
                     $this->decode($data['invoice_id'] ?? null, Invoice::class)
                         ?? throw new BusinessRuleException('invoice_id is required to apply a customer credit.')
                 );
-                if ($invoice->customer_id !== $cn->customer_id) {
+                if ($invoice->customer_id !== $creditNote->customer_id) {
                     throw new BusinessRuleException('Credit note and invoice belong to different customers.');
                 }
                 if (Money::gt($amount, (string) $invoice->balance)) {
@@ -230,18 +235,24 @@ class CreditNoteService
                 }
                 $newPaid    = Money::add((string) $invoice->amount_paid, $amount);
                 $newBalance = Money::sub((string) $invoice->total_amount, $newPaid);
+                $newStatus  = Money::isZero($newBalance) ? InvoiceStatus::Paid : InvoiceStatus::Partial;
                 $invoice->update([
                     'amount_paid' => $newPaid,
                     'balance'     => $newBalance,
-                    'status'      => Money::isZero($newBalance) ? InvoiceStatus::Paid : InvoiceStatus::Partial,
+                    'status'      => $newStatus,
                 ]);
+                if ($invoice->wasChanged('status')) {
+                    $fresh = $invoice->fresh();
+                    app(ChainBroadcaster::class)
+                        ->broadcastFor($fresh, $newStatus->value, $by);
+                }
                 $application->invoice_id = $invoice->id;
             } else {
-                $bill = Bill::query()->findOrFail(
+                $bill = Bill::query()->lockForUpdate()->findOrFail(
                     $this->decode($data['bill_id'] ?? null, Bill::class)
                         ?? throw new BusinessRuleException('bill_id is required to apply a supplier credit.')
                 );
-                if ($bill->vendor_id !== $cn->vendor_id) {
+                if ($bill->vendor_id !== $creditNote->vendor_id) {
                     throw new BusinessRuleException('Credit note and bill belong to different vendors.');
                 }
                 if (Money::gt($amount, (string) $bill->balance)) {
@@ -249,33 +260,29 @@ class CreditNoteService
                 }
                 $newPaid    = Money::add((string) $bill->amount_paid, $amount);
                 $newBalance = Money::sub((string) $bill->total_amount, $newPaid);
+                $newStatus  = Money::isZero($newBalance) ? BillStatus::Paid : BillStatus::Partial;
                 $bill->update([
                     'amount_paid' => $newPaid,
                     'balance'     => $newBalance,
-                    'status'      => Money::isZero($newBalance) ? BillStatus::Paid : BillStatus::Partial,
+                    'status'      => $newStatus,
                 ]);
+                if ($bill->wasChanged('status')) {
+                    $fresh = $bill->fresh();
+                    app(ChainBroadcaster::class)
+                        ->broadcastFor($fresh, $newStatus->value, $by);
+                }
                 $application->bill_id = $bill->id;
             }
 
             $application->save();
 
-            $newApplied = Money::add((string) $cn->applied_amount, $amount);
-            $newCnBalance = Money::sub((string) $cn->total_amount, $newApplied);
-            $cn->fill(['applied_amount' => $newApplied, 'balance' => $newCnBalance]);
+            $newApplied = Money::add((string) $creditNote->applied_amount, $amount);
+            $newCnBalance = Money::sub((string) $creditNote->total_amount, $newApplied);
+            $creditNote->fill(['applied_amount' => $newApplied, 'balance' => $newCnBalance]);
             if (Money::isZero($newCnBalance)) {
-                $cn->status = CreditNoteStatus::Applied;
+                $creditNote->status = CreditNoteStatus::Applied;
             }
-            $cn->save();
-
-            // 2026-08-08 — final P2P link: a supplier credit settling a bill
-            // advances the bill's chain step just like a cash payment does.
-            if (isset($bill) && $bill->wasChanged('status')) {
-                $fresh = $bill->fresh();
-                DB::afterCommit(function () use ($fresh): void {
-                    app(ChainBroadcaster::class)
-                        ->broadcastFor($fresh, (string) $fresh->status?->value);
-                });
-            }
+            $creditNote->save();
 
             return $application->fresh();
         });

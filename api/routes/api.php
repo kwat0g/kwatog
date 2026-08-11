@@ -6,6 +6,7 @@ use App\Common\Controllers\AlertController;
 use App\Common\Controllers\ApprovalBoardController;
 use App\Common\Controllers\CalendarController;
 use App\Common\Controllers\ChainBottleneckController;
+use App\Common\Controllers\ChainListenerRecoveryController;
 use App\Common\Controllers\BusinessPolicyController;
 use Illuminate\Broadcasting\BroadcastController;
 use Illuminate\Support\Facades\Route;
@@ -114,6 +115,12 @@ Route::middleware(['auth:sanctum'])->prefix('alerts')->group(function () {
 Route::middleware(['auth:sanctum'])->prefix('chain')->group(function () {
     Route::get('/bottlenecks', [ChainBottleneckController::class, 'index'])
         ->middleware('permission:dashboard.view_bottlenecks');
+    Route::get('/listener-runs', [ChainListenerRecoveryController::class, 'index'])
+        ->middleware('permission:dashboard.chain_recovery.view');
+    Route::post('/listener-runs/{run}/replay', [ChainListenerRecoveryController::class, 'replay'])
+        ->middleware('permission:dashboard.chain_recovery.manage');
+    Route::post('/listener-runs/{run}/resolve', [ChainListenerRecoveryController::class, 'resolve'])
+        ->middleware('permission:dashboard.chain_recovery.manage');
 });
 
 /* ─── Series F — Cross-module aggregator endpoints ───────────────── */

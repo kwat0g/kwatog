@@ -15,6 +15,9 @@ use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\Quality\Models\Inspection;
+use App\Modules\Quality\Enums\InspectionStatus;
+use App\Modules\Quality\Events\InspectionPassed;
+use App\Modules\Quality\Listeners\AcceptGrnOnIncomingQcPass;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use RuntimeException;
 use Tests\TestCase;
@@ -115,6 +118,51 @@ class GrnQcGateTest extends TestCase
         $accepted = $this->grnSvc->accept($grn->fresh(), $this->user);
 
         $this->assertSame(GrnStatus::Accepted, $accepted->status);
+    }
+
+    public function test_incoming_qc_pass_consumes_the_event_and_releases_the_grn(): void
+    {
+        $item = Item::factory()->create(['is_active' => true]);
+        $grn = $this->createGrnFor($item);
+        $inspection = Inspection::query()
+            ->where('entity_type', 'grn')
+            ->where('entity_id', $grn->id)
+            ->firstOrFail();
+        $inspection->update(['status' => 'passed']);
+
+        app(AcceptGrnOnIncomingQcPass::class)->handle(new InspectionPassed($inspection->fresh()));
+
+        $released = $grn->fresh();
+        $this->assertSame(GrnStatus::Accepted, $released->status);
+        $this->assertSame(
+            (string) $released->items()->firstOrFail()->quantity_received,
+            (string) $released->items()->firstOrFail()->quantity_accepted,
+        );
+    }
+
+    public function test_incoming_qc_pass_ignores_cancelled_sibling_inspections(): void
+    {
+        $item = Item::factory()->create(['is_active' => true]);
+        $grn = $this->createGrnFor($item);
+        $inspection = Inspection::query()
+            ->where('entity_type', 'grn')
+            ->where('entity_id', $grn->id)
+            ->firstOrFail();
+        $inspection->update(['status' => InspectionStatus::Passed->value]);
+
+        // Model a second line-level decision on the same multi-line receipt:
+        // it was explicitly cancelled for logistics reasons, so it is not an
+        // unresolved QC verdict and must not strand the passed GRN.
+        $cancelled = $inspection->replicate();
+        $cancelled->forceFill([
+            'inspection_number' => 'QC-CANCELLED-'.substr(uniqid(), -8),
+            'status' => InspectionStatus::Cancelled->value,
+            'grn_item_id' => null,
+        ])->save();
+
+        app(AcceptGrnOnIncomingQcPass::class)->handle(new InspectionPassed($inspection->fresh()));
+
+        $this->assertSame(GrnStatus::Accepted, $grn->fresh()->status);
     }
 
     public function test_cancelled_inspection_does_not_block_acceptance(): void

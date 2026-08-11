@@ -9,6 +9,7 @@ use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
+use App\Modules\Purchasing\Events\PurchaseOrderCancelled;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\Purchasing\Models\PurchaseRequest;
@@ -117,6 +118,16 @@ class PurchaseOrderReopenPrTest extends TestCase
 
         $this->assertSame(PurchaseOrderStatus::Cancelled, $po->fresh()->status);
         $this->assertSame(PurchaseRequestStatus::Approved, $pr->fresh()->status);
+        $this->assertDatabaseHas('event_outbox', [
+            'event_type' => PurchaseOrderCancelled::class,
+        ]);
+        $this->assertDatabaseHas('chain_step_runs', [
+            'chain' => 'p2p',
+            'entity_type' => 'purchase_order',
+            'entity_id' => $po->id,
+            'step' => PurchaseOrderStatus::Cancelled->value,
+            'event_type' => PurchaseOrderCancelled::class,
+        ]);
     }
 
     public function test_pr_stays_converted_when_a_sibling_po_is_still_live(): void

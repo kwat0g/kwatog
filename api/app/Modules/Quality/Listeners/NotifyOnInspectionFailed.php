@@ -46,6 +46,7 @@ class NotifyOnInspectionFailed implements ShouldQueue
             ]);
         } catch (\Throwable $e) {
             Log::warning('NotifyOnInspectionFailed failed', ['error' => $e->getMessage()]);
+            throw $e;
         }
     }
 }

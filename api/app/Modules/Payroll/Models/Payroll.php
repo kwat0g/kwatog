@@ -16,6 +16,11 @@ class Payroll extends Model
 {
     use HasFactory, HasHashId, HasAuditLog;
 
+    public const EMAIL_PENDING = 'pending';
+    public const EMAIL_QUEUED = 'queued';
+    public const EMAIL_SENT = 'sent';
+    public const EMAIL_FAILED = 'failed';
+
     protected static function newFactory(): \Database\Factories\PayrollFactory
     {
         return \Database\Factories\PayrollFactory::new();
@@ -34,6 +39,9 @@ class Payroll extends Model
         'loan_deductions', 'other_deductions', 'adjustment_amount',
         'total_deductions', 'net_pay',
         'error_message', 'computed_at',
+        'payslip_emailed_at', 'payslip_email_status',
+        'payslip_email_attempts', 'payslip_email_queued_at',
+        'payslip_email_last_error',
     ];
 
     protected $casts = [
@@ -60,6 +68,8 @@ class Payroll extends Model
         'net_pay'           => 'decimal:2',
         'computed_at'       => 'datetime',
         'payslip_emailed_at' => 'datetime',
+        'payslip_email_attempts' => 'integer',
+        'payslip_email_queued_at' => 'datetime',
     ];
 
     public function period(): BelongsTo

@@ -6,6 +6,7 @@ namespace App\Common\Services;
 
 use App\Common\Mail\NotificationDigestMail;
 use App\Modules\Auth\Models\User;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -41,13 +42,14 @@ class NotificationDigestService
     public function __construct(private readonly int $maxItemsPerUser = 20) {}
 
     /**
-     * @return array{users_evaluated:int, emails_sent:int, notifications_summarised:int}
+     * @return array{users_evaluated:int, emails_sent:int, notifications_summarised:int, failures:int}
      */
     public function run(): array
     {
-        $evaluated  = 0;
+        $evaluated = 0;
         $emailsSent = 0;
         $summarised = 0;
+        $failures = 0;
 
         foreach (array_chunk($this->subscriberIds(), self::USER_CHUNK) as $userIds) {
             $unreadByUser = $this->unreadFor($userIds);
@@ -80,18 +82,20 @@ class NotificationDigestService
                     $emailsSent++;
                     $summarised += $total;
                 } catch (\Throwable $e) {
+                    $failures++;
                     Log::warning('Notification digest dispatch failed', [
                         'user_id' => $userId,
-                        'error'   => $e->getMessage(),
+                        'error' => $e->getMessage(),
                     ]);
                 }
             }
         }
 
         return [
-            'users_evaluated'          => $evaluated,
-            'emails_sent'              => $emailsSent,
+            'users_evaluated' => $evaluated,
+            'emails_sent' => $emailsSent,
             'notifications_summarised' => $summarised,
+            'failures' => $failures,
         ];
     }
 
@@ -116,8 +120,8 @@ class NotificationDigestService
     /**
      * Unread notifications for a bounded set of users, newest first.
      *
-     * @param array<int, int> $userIds
-     * @return \Illuminate\Support\Collection<int, \Illuminate\Support\Collection<int, object>>
+     * @param  array<int, int>  $userIds
+     * @return Collection<int, Collection<int, object>>
      */
     private function unreadFor(array $userIds)
     {
@@ -132,7 +136,7 @@ class NotificationDigestService
     }
 
     /**
-     * @param \Illuminate\Support\Collection<int, object> $rows
+     * @param  Collection<int, object>  $rows
      * @return array<int, array{title:string,message:string,link_to:string|null,type:string,created_at:string}>
      */
     private function summarise($rows): array
@@ -142,10 +146,10 @@ class NotificationDigestService
             $data = is_array($data) ? $data : [];
 
             return [
-                'title'      => is_string($data['title'] ?? null) ? $data['title'] : 'Notification',
-                'message'    => is_string($data['message'] ?? null) ? $data['message'] : '',
-                'link_to'    => is_string($data['link_to'] ?? null) ? $data['link_to'] : null,
-                'type'       => (string) $r->type,
+                'title' => is_string($data['title'] ?? null) ? $data['title'] : 'Notification',
+                'message' => is_string($data['message'] ?? null) ? $data['message'] : '',
+                'link_to' => is_string($data['link_to'] ?? null) ? $data['link_to'] : null,
+                'type' => (string) $r->type,
                 'created_at' => (string) $r->created_at,
             ];
         })->values()->all();

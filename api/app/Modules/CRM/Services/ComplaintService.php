@@ -7,16 +7,21 @@ namespace App\Modules\CRM\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\SearchOperator;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
+use App\Modules\CRM\Enums\ComplaintNcrHandoffStatus;
 use App\Modules\CRM\Enums\ComplaintStatus;
 use App\Modules\CRM\Models\Complaint8DReport;
 use App\Modules\CRM\Models\CustomerComplaint;
+use App\Modules\CRM\Events\ComplaintNcrRequested;
 use App\Modules\Quality\Enums\NcrSeverity;
 use App\Modules\Quality\Enums\NcrSource;
+use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\Quality\Services\NcrService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -89,6 +94,7 @@ class ComplaintService
                 'received_date'     => $data['received_date'],
                 'severity'          => $data['severity'],
                 'status'            => 'open',
+                'ncr_handoff_status' => ComplaintNcrHandoffStatus::NotStarted,
                 'description'       => $data['description'],
                 'affected_quantity' => (int) ($data['affected_quantity'] ?? 0),
                 'created_by'        => $by->id,
@@ -105,7 +111,9 @@ class ComplaintService
                 'd2_problem'   => $data['description'], // pre-fill from initial complaint
             ]);
 
-            // Auto-open NCR (Task 61).
+            // Auto-open NCR (Task 61). Expected Quality setup failures leave
+            // the complaint committed, but create a durable recovery request;
+            // unexpected infrastructure failures still roll back the complaint.
             try {
                 $ncr = app(NcrService::class)->create([
                     'source'             => NcrSource::CustomerComplaint->value,
@@ -116,9 +124,19 @@ class ComplaintService
                     'affected_quantity'  => $complaint->affected_quantity,
                     'assigned_to'        => $complaint->assigned_to,
                 ], $by);
-                $complaint->forceFill(['ncr_id' => $ncr->id])->save();
-            } catch (\Throwable) {
-                // NCR auto-open is best-effort; user can still operate the complaint manually.
+                $complaint->forceFill([
+                    'ncr_id' => $ncr->id,
+                    'ncr_handoff_status' => ComplaintNcrHandoffStatus::Generated,
+                    'ncr_handoff_message' => null,
+                    'ncr_handoff_at' => now(),
+                ])->save();
+            } catch (BusinessRuleException|ModelNotFoundException $e) {
+                $complaint->forceFill([
+                    'ncr_handoff_status' => ComplaintNcrHandoffStatus::ManualRequired,
+                    'ncr_handoff_message' => 'NCR creation requires manual action: ' . $e->getMessage(),
+                    'ncr_handoff_at' => now(),
+                ])->save();
+                $this->recordComplaintNcrRequest($complaint);
             }
 
             return $this->show($complaint);
@@ -168,6 +186,7 @@ class ComplaintService
         if ($current->isTerminal()) {
             throw new BusinessRuleException('Complaint is already terminal.');
         }
+        $this->ensureNcrHandoffReady($c);
         $c->forceFill([
             'status'      => ComplaintStatus::Resolved->value,
             'resolved_at' => now(),
@@ -179,10 +198,96 @@ class ComplaintService
     {
         $current = $c->status instanceof ComplaintStatus ? $c->status : ComplaintStatus::from((string) $c->status);
         if ($current->isTerminal()) return $this->show($c);
+        $this->ensureNcrHandoffReady($c);
         $c->forceFill([
             'status'    => ComplaintStatus::Closed->value,
             'closed_at' => now(),
         ])->save();
         return $this->show($c);
+    }
+
+    /** Retry a previously failed complaint → Quality NCR handoff. */
+    public function retryNcrHandoff(CustomerComplaint $complaint, User $by): CustomerComplaint
+    {
+        return DB::transaction(function () use ($complaint, $by): CustomerComplaint {
+            $complaint = CustomerComplaint::query()->lockForUpdate()->findOrFail($complaint->id);
+            if ($complaint->ncr_id !== null) {
+                return $this->show($complaint);
+            }
+
+            $ncr = NonConformanceReport::query()
+                ->where('complaint_id', $complaint->id)
+                ->first();
+
+            if (! $ncr) {
+                try {
+                    $ncr = app(NcrService::class)->create([
+                        'source' => NcrSource::CustomerComplaint->value,
+                        'severity' => ($complaint->severity instanceof NcrSeverity
+                            ? $complaint->severity
+                            : NcrSeverity::from((string) $complaint->severity))->value,
+                        'product_id' => $complaint->product_id,
+                        'complaint_id' => $complaint->id,
+                        'defect_description' => 'Customer complaint ' . $complaint->complaint_number . ': ' . $complaint->description,
+                        'affected_quantity' => $complaint->affected_quantity,
+                        'assigned_to' => $complaint->assigned_to,
+                    ], $by);
+                } catch (BusinessRuleException|ModelNotFoundException $e) {
+                    $complaint->forceFill([
+                        'ncr_handoff_status' => ComplaintNcrHandoffStatus::ManualRequired,
+                        'ncr_handoff_message' => 'NCR creation requires manual action: ' . $e->getMessage(),
+                        'ncr_handoff_at' => now(),
+                    ])->save();
+                    $this->recordComplaintNcrRequest($complaint);
+
+                    return $this->show($complaint);
+                }
+            }
+
+            $complaint->forceFill([
+                'ncr_id' => $ncr->id,
+                'ncr_handoff_status' => ComplaintNcrHandoffStatus::Generated,
+                'ncr_handoff_message' => null,
+                'ncr_handoff_at' => now(),
+            ])->save();
+
+            return $this->show($complaint);
+        });
+    }
+
+    public function markNcrHandoffManual(int $complaintId, ?string $message = null): void
+    {
+        CustomerComplaint::query()->whereKey($complaintId)->update([
+            'ncr_handoff_status' => ComplaintNcrHandoffStatus::ManualRequired,
+            'ncr_handoff_message' => $message ?: 'NCR creation requires manual action.',
+            'ncr_handoff_at' => now(),
+        ]);
+    }
+
+    private function ensureNcrHandoffReady(CustomerComplaint $complaint): void
+    {
+        if ($complaint->ncr_id === null
+            || $complaint->ncr_handoff_status !== ComplaintNcrHandoffStatus::Generated) {
+            throw new BusinessRuleException(
+                'The complaint cannot be resolved or closed until its Quality NCR handoff succeeds.'
+            );
+        }
+    }
+
+    private function recordComplaintNcrRequest(CustomerComplaint $complaint): void
+    {
+        $dedupeKey = 'complaint-ncr-request:' . $complaint->id;
+        if (DB::table('event_outbox')->where('dedupe_key', $dedupeKey)->exists()) {
+            return;
+        }
+
+        app(OutboxService::class)->recordForChain(
+            new ComplaintNcrRequested($complaint),
+            $complaint,
+            'crm_quality',
+            'customer_complaint',
+            'ncr_handoff',
+            $dedupeKey,
+        );
     }
 }

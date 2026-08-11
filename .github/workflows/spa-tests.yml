@@ -1,9 +1,8 @@
 name: SPA tests
 
-# SPA-side CI: typecheck, lint, vitest, production build.
-# Typecheck is now ENFORCED — the legacy Sprint 1/2 type errors were cleared,
-# so `tsc --noEmit` is clean and any NEW type error blocks the PR. Lint stays
-# advisory (pre-existing no-explicit-any debt). Vitest + build are enforced.
+# SPA-side CI: typecheck, lint, token audit, vitest, and production build.
+# Every step is enforced. A failing lint, typecheck, token audit, test, or build
+# must stop the release rather than leave a green-but-incomplete workflow.
 
 on:
   pull_request:
@@ -41,8 +40,7 @@ jobs:
       - name: Install
         run: npm ci
 
-      - name: Lint (advisory)
-        continue-on-error: true
+      - name: Lint (enforced)
         run: npm run lint
 
       - name: Typecheck (enforced)
@@ -62,10 +60,7 @@ jobs:
         # vitest still exits non-zero on any actual failed assertion.
         run: npm test -- --run --passWithNoTests
 
-      - name: Production build (vite, skipping tsc)
-        # `npm run build` does `tsc -b && vite build`, which trips on
-        # pre-existing Sprint 1/2 type debt enumerated in the Sprint 8 plan.
-        # The actual production bundle is what `vite build` produces — tsc is
-        # only a typecheck. We surface tsc errors via the advisory `typecheck`
-        # step above and let the build prove the bundle ships.
-        run: npx vite build
+      - name: Production build (enforced)
+        # Keep the release artifact on the same path developers use locally:
+        # TypeScript must compile before Vite emits the bundle.
+        run: npm run build

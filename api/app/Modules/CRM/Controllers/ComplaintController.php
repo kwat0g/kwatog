@@ -81,6 +81,14 @@ class ComplaintController
         return new CustomerComplaintResource($this->service->create($payload, $request->user()));
     }
 
+    /** Retry a failed complaint → Quality NCR handoff. */
+    public function retryNcr(Request $request, CustomerComplaint $complaint): CustomerComplaintResource
+    {
+        return new CustomerComplaintResource(
+            $this->service->retryNcrHandoff($complaint, $request->user())
+        );
+    }
+
     public function update8D(Request $request, CustomerComplaint $complaint): CustomerComplaintResource
     {
         $request->validate([

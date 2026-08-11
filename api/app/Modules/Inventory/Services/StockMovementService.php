@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Modules\Inventory\Services;
 
 use App\Modules\Inventory\Enums\StockCountSessionStatus;
+use App\Modules\Inventory\Enums\MovementGlHandoffStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Enums\WarehouseZoneType;
 use App\Modules\Inventory\Events\StockMovementCompleted;
+use App\Modules\Inventory\Events\StockMovementGlPostingRequested;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Exceptions\InvalidMovementException;
 use App\Modules\Inventory\Models\StockCountSession;
@@ -16,6 +18,7 @@ use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Support\StockMovementInput;
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\OutboxService;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -144,13 +147,27 @@ class StockMovementService
                 'created_at'       => now(),
             ]);
 
-            // Fire event AFTER commit — listeners (auto-replenishment) run async.
-            DB::afterCommit(fn () => event(new StockMovementCompleted($movement)));
+            // Record the stock-ledger event atomically. Publication waits for
+            // commit, so reorder listeners never observe rolled-back stock.
+            app(OutboxService::class)->record(new StockMovementCompleted($movement));
 
             // F-05 — post the movement's GL entry atomically inside the same
-            // transaction (idempotent, skips non-value-changing types and
-            // unconfigured ledgers; see MovementGlPostingService).
+            // transaction. Expected Accounting setup gaps leave the stock
+            // movement committed with a narrow, replayable GL handoff rather
+            // than disappearing into a log line.
             $this->glPosting->postFor($movement);
+
+            $movement = $movement->fresh();
+            if ($movement?->gl_handoff_status === MovementGlHandoffStatus::ManualRequired) {
+                app(OutboxService::class)->recordForChain(
+                    new StockMovementGlPostingRequested($movement),
+                    $movement,
+                    'inventory',
+                    'stock_movement',
+                    'gl_handoff',
+                    'stock-movement-gl-request:'.$movement->id,
+                );
+            }
 
             return $movement;
         });

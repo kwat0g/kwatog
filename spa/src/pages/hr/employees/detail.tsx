@@ -21,6 +21,8 @@ import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { formatTime } from '@/lib/formatDate';
 import { Modal, ModalFooter } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import type { EmployeeDocument } from '@/types/hr';
 import { Panel } from '@/components/ui/Panel';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -488,6 +490,9 @@ function DocumentsTab({ employee }: { employee: any }) {
   const qc = useQueryClient();
   const employeeId = employee.id;
   const [showUpload, setShowUpload] = useState(false);
+  // These files back final-pay computation and clearance, so deletion goes
+  // through a real confirmation that names the file — not a bare confirm().
+  const [deleteTarget, setDeleteTarget] = useState<EmployeeDocument | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const {
@@ -591,13 +596,7 @@ function DocumentsTab({ employee }: { employee: any }) {
                 <Td mono>{formatDateTime(d.uploaded_at)}</Td>
                 <Td>
                   {can('hr.employees.edit') && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        if (confirm('Delete this document?')) deleteMutation.mutate(d.id);
-                      }}
-                    >
+                    <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(d)}>
                       Delete
                     </Button>
                   )}
@@ -656,6 +655,28 @@ function DocumentsTab({ employee }: { employee: any }) {
           </div>
         </Modal>
       )}
+
+      <ConfirmDialog
+        isOpen={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        title="Delete this document?"
+        description={
+          deleteTarget && (
+            <>
+              <span className="font-mono">{deleteTarget.file_name}</span> (
+              {deleteTarget.document_type}) will be permanently removed. Employee documents back
+              final-pay computation and clearance, so deleting one may affect those records.
+            </>
+          )
+        }
+        confirmLabel="Delete document"
+        variant="danger"
+        pending={deleteMutation.isPending}
+        onConfirm={() => {
+          if (!deleteTarget) return;
+          deleteMutation.mutate(deleteTarget.id, { onSuccess: () => setDeleteTarget(null) });
+        }}
+      />
     </Panel>
   );
 }

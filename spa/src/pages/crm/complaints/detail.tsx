@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
-import { Check, Ban, FileDown, Lock, Search } from 'lucide-react';
+import { AlertTriangle, Check, Ban, FileDown, Lock, RefreshCw, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { AxiosError } from 'axios';
 import { complaintsApi, type EightDPatch } from '@/api/crm/complaints';
@@ -127,6 +127,17 @@ export default function ComplaintDetailPage() {
  onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed'),
  });
 
+ const retryNcrMut = useMutation({
+  mutationFn: () => complaintsApi.retryNcr(id),
+  onSuccess: (updated) => {
+   qc.invalidateQueries({ queryKey: ['crm', 'complaints', id] });
+   toast.success(updated.ncr_handoff?.status === 'manual_required'
+    ? 'NCR handoff still needs attention.'
+    : 'NCR opened for complaint.');
+  },
+  onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed to retry NCR handoff'),
+ });
+
  if (isLoading && !data) return <SkeletonDetail />;
  if (isError || !data) {
  return (
@@ -191,6 +202,17 @@ export default function ComplaintDetailPage() {
  ]}
  actions={
  <div className="flex items-center gap-2">
+ {canManage && data.ncr_handoff?.status === 'manual_required' && (
+  <Button
+   variant="secondary"
+   size="sm"
+   icon={<RefreshCw size={14} className={retryNcrMut.isPending ? 'animate-spin' : ''} />}
+   loading={retryNcrMut.isPending}
+   onClick={() => retryNcrMut.mutate()}
+  >
+   Retry NCR handoff
+  </Button>
+ )}
  <Link to="/quality/traceability">
  <Button variant="secondary" size="sm" icon={<Search size={14} />}>
  Trace
@@ -264,6 +286,29 @@ export default function ComplaintDetailPage() {
  </div>
  </dl>
  </Panel>
+
+ {data.ncr_handoff?.status === 'manual_required' && (
+  <div className="flex items-start gap-3 rounded-md border border-warning/40 bg-warning-bg/10 px-4 py-3 text-sm">
+   <AlertTriangle size={16} className="mt-0.5 shrink-0 text-warning-fg" />
+   <div className="flex-1">
+    <div className="font-medium">Quality NCR handoff needs attention</div>
+    <div className="text-muted">
+     {data.ncr_handoff.message || 'The complaint cannot be resolved or closed until an NCR is linked.'}
+    </div>
+   </div>
+   {canManage && (
+    <Button
+     variant="secondary"
+     size="sm"
+     icon={<RefreshCw size={13} />}
+     loading={retryNcrMut.isPending}
+     onClick={() => retryNcrMut.mutate()}
+    >
+     Retry
+    </Button>
+   )}
+  </div>
+ )}
 
  {data.ncr && (
  <Panel title="Linked NCR">

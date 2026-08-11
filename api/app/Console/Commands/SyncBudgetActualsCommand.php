@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
-use App\Modules\Accounting\Jobs\SyncBudgetActuals;
+use App\Modules\Accounting\Services\BudgetActualsSyncService;
 use Illuminate\Console\Command;
 
 /**
@@ -20,16 +20,16 @@ class SyncBudgetActualsCommand extends Command
 
     protected $description = 'Sync GL actuals from posted journal entries into budget line items.';
 
-    public function handle(): int
+    public function handle(BudgetActualsSyncService $actualsSync): int
     {
         $fiscalYearId = $this->option('fiscal-year');
         $fiscalYearId = $fiscalYearId !== null ? (int) $fiscalYearId : null;
 
-        SyncBudgetActuals::dispatch($fiscalYearId);
+        $outbox = $actualsSync->request($fiscalYearId);
 
         $msg = $fiscalYearId
-            ? "Dispatched SyncBudgetActuals for fiscal year {$fiscalYearId}."
-            : 'Dispatched SyncBudgetActuals for the current active fiscal year.';
+            ? "Staged durable budget actuals sync for fiscal year {$fiscalYearId} (outbox {$outbox->getKey()})."
+            : "Staged durable budget actuals sync for the current active fiscal year (outbox {$outbox->getKey()}).";
 
         $this->info($msg);
 

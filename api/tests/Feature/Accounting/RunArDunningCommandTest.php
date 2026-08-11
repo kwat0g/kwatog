@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Accounting;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Mail\InvoiceDunningMail;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
@@ -30,11 +31,11 @@ class RunArDunningCommandTest extends TestCase
         Mail::fake();
 
         $customer = Customer::factory()->create(['email' => 'pay@example.test']);
-        $invoice  = Invoice::factory()->create([
-            'customer_id'       => $customer->id,
-            'status'            => 'finalized',
-            'due_date'          => Carbon::now()->subDays(8)->toDateString(),
-            'balance'           => 1000,
+        $invoice = Invoice::factory()->create([
+            'customer_id' => $customer->id,
+            'status' => 'finalized',
+            'due_date' => Carbon::now()->subDays(8)->toDateString(),
+            'balance' => 1000,
             'last_dunning_tier' => 0,
         ]);
 
@@ -54,10 +55,10 @@ class RunArDunningCommandTest extends TestCase
 
         $customer = Customer::factory()->create(['email' => 'pay@example.test']);
         Invoice::factory()->create([
-            'customer_id'       => $customer->id,
-            'status'            => 'finalized',
-            'due_date'          => Carbon::now()->subDays(8)->toDateString(),
-            'balance'           => 1000,
+            'customer_id' => $customer->id,
+            'status' => 'finalized',
+            'due_date' => Carbon::now()->subDays(8)->toDateString(),
+            'balance' => 1000,
             'last_dunning_tier' => 30, // already escalated
         ]);
 
@@ -66,16 +67,37 @@ class RunArDunningCommandTest extends TestCase
         Mail::assertNothingQueued();
     }
 
+    public function test_repeated_scan_does_not_enqueue_the_same_tier_twice(): void
+    {
+        Mail::fake();
+
+        $customer = Customer::factory()->create(['email' => 'pay@example.test']);
+        $invoice = Invoice::factory()->create([
+            'customer_id' => $customer->id,
+            'status' => 'finalized',
+            'due_date' => Carbon::now()->subDays(8)->toDateString(),
+            'balance' => 1000,
+            'last_dunning_tier' => 0,
+        ]);
+
+        $service = app(ArDunningService::class);
+        $service->run();
+        $service->run();
+
+        Mail::assertQueued(InvoiceDunningMail::class, 1);
+        $this->assertSame(7, $invoice->fresh()->last_dunning_tier);
+    }
+
     public function test_paid_invoice_is_skipped(): void
     {
         Mail::fake();
 
         $customer = Customer::factory()->create(['email' => 'pay@example.test']);
         Invoice::factory()->create([
-            'customer_id'       => $customer->id,
-            'status'            => 'paid',
-            'due_date'          => Carbon::now()->subDays(40)->toDateString(),
-            'balance'           => 0,
+            'customer_id' => $customer->id,
+            'status' => 'paid',
+            'due_date' => Carbon::now()->subDays(40)->toDateString(),
+            'balance' => 0,
             'last_dunning_tier' => 0,
         ]);
 
@@ -87,16 +109,16 @@ class RunArDunningCommandTest extends TestCase
     public function test_feature_flag_off_disables(): void
     {
         Mail::fake();
-        app(\App\Common\Services\SettingsService::class)
+        app(SettingsService::class)
             ->set('accounting.ar_dunning.enabled', false, 'accounting');
         Cache::forget('settings:accounting.ar_dunning.enabled');
 
         $customer = Customer::factory()->create(['email' => 'pay@example.test']);
         Invoice::factory()->create([
-            'customer_id'       => $customer->id,
-            'status'            => 'finalized',
-            'due_date'          => Carbon::now()->subDays(40)->toDateString(),
-            'balance'           => 1000,
+            'customer_id' => $customer->id,
+            'status' => 'finalized',
+            'due_date' => Carbon::now()->subDays(40)->toDateString(),
+            'balance' => 1000,
             'last_dunning_tier' => 0,
         ]);
 

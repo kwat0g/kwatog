@@ -6,6 +6,7 @@ namespace App\Modules\Quality\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\OutboxService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
 use App\Modules\Auth\Models\User;
@@ -386,8 +387,18 @@ class InspectionService
         }
 
         return DB::transaction(function () use ($inspection, $rows, $by) {
+            // Route-bound inspection models can be stale when a completion or
+            // cancellation races measurement entry. Serialize the lifecycle
+            // on the inspection row before touching its measurements.
+            $lockedInspection = Inspection::query()
+                ->lockForUpdate()
+                ->findOrFail($inspection->id);
+            if ($lockedInspection->status->isTerminal()) {
+                throw new BusinessRuleException('Inspection is already finalised.');
+            }
+
             $measurements = InspectionMeasurement::query()
-                ->where('inspection_id', $inspection->id)
+                ->where('inspection_id', $lockedInspection->id)
                 ->lockForUpdate()
                 ->get()
                 ->keyBy('id');
@@ -421,17 +432,17 @@ class InspectionService
 
             // Recompute defect_count and bump status to in_progress.
             $defects = InspectionMeasurement::query()
-                ->where('inspection_id', $inspection->id)
+                ->where('inspection_id', $lockedInspection->id)
                 ->where('is_pass', false)
                 ->count();
 
-            $inspection->forceFill([
+            $lockedInspection->forceFill([
                 'defect_count' => $defects,
                 'status' => InspectionStatus::InProgress->value,
-                'inspector_id' => $inspection->inspector_id ?? $by->id,
+                'inspector_id' => $lockedInspection->inspector_id ?? $by->id,
             ])->save();
 
-            return $this->show($inspection);
+            return $this->show($lockedInspection->fresh());
         });
     }
 
@@ -449,10 +460,24 @@ class InspectionService
         }
 
         return DB::transaction(function () use ($inspection, $by) {
+            // The caller may hold a stale in-progress model after another
+            // worker has already completed the inspection. Lock and recheck
+            // the authoritative row so terminal outcomes are immutable.
+            $lockedInspection = Inspection::query()
+                ->lockForUpdate()
+                ->findOrFail($inspection->id);
+            if ($lockedInspection->status->isTerminal()) {
+                throw new BusinessRuleException('Inspection is already finalised.');
+            }
+
             $rows = InspectionMeasurement::query()
-                ->where('inspection_id', $inspection->id)
+                ->where('inspection_id', $lockedInspection->id)
                 ->lockForUpdate()
                 ->get();
+
+            if ($rows->isEmpty()) {
+                throw new BusinessRuleException('Cannot complete: inspection has no measurement rows.');
+            }
 
             $unresolved = $rows->whereNull('is_pass')->count();
             if ($unresolved > 0) {
@@ -461,46 +486,42 @@ class InspectionService
 
             $criticalFail = $rows->contains(fn (InspectionMeasurement $r) => $r->is_critical && $r->is_pass === false);
             $defects = $rows->where('is_pass', false)->count();
-            $accept = (int) $inspection->accept_count;
+            $accept = (int) $lockedInspection->accept_count;
 
             $passed = ! $criticalFail && $defects <= $accept;
 
-            $inspection->forceFill([
+            $lockedInspection->forceFill([
                 'status' => $passed ? InspectionStatus::Passed->value : InspectionStatus::Failed->value,
                 'defect_count' => $defects,
                 'completed_at' => now(),
-                'inspector_id' => $inspection->inspector_id ?? $by->id,
+                'inspector_id' => $lockedInspection->inspector_id ?? $by->id,
             ])->save();
+            $eventInspection = $lockedInspection->fresh();
 
             // Sprint 7 Task 61: auto-open an NCR when the inspection failed.
-            // Wrapped in afterCommit so the NCR row is visible to listeners /
-            // dashboards as soon as the inspection commit lands.
+            // Keep the corrective-action record in this transaction: a failed
+            // inspection without its NCR is an IATF traceability gap, and an
+            // afterCommit callback could be lost if the worker dies first.
             if (! $passed) {
-                DB::afterCommit(function () use ($inspection, $by) {
-                    try {
-                        app(NcrService::class)->openFromInspectionFailure(
-                            $inspection->fresh(['measurements']),
-                            $by,
-                        );
-                    } catch (\Throwable $e) {
-                        // Auto-opening the NCR is non-fatal for the inspection,
-                        // but a silent miss is an IATF traceability gap — log it.
-                        Log::warning(
-                            "InspectionService: failed to auto-open NCR for inspection {$inspection->id}: {$e->getMessage()}",
-                            ['inspection_id' => $inspection->id, 'exception' => $e::class]
-                        );
-                    }
-                    // Series C — Task C1/C2. Domain event for chain listeners.
-                    event(new InspectionFailed($inspection->fresh()));
-                });
+                app(NcrService::class)->openFromInspectionFailure(
+                    $eventInspection->load('measurements'),
+                    $by,
+                );
+
+                // The failure cascade is also recorded in this transaction;
+                // queue publication waits for commit and is replayable.
+                app(OutboxService::class)->record(
+                    new InspectionFailed($eventInspection),
+                );
             } else {
-                // Series C — Task C1/C2. Inspection passed → drive the
-                // outgoing-delivery / incoming-bill cascades.
-                DB::afterCommit(fn () => event(new InspectionPassed($inspection->fresh()))
+                // Inspection passed → drive the outgoing-delivery /
+                // incoming-bill cascades through the durable outbox.
+                app(OutboxService::class)->record(
+                    new InspectionPassed($eventInspection),
                 );
             }
 
-            return $this->show($inspection);
+            return $this->show($eventInspection);
         });
     }
 
@@ -509,12 +530,25 @@ class InspectionService
         if ($inspection->status->isTerminal()) {
             throw new BusinessRuleException('Inspection is already finalised.');
         }
-        $inspection->forceFill([
-            'status' => InspectionStatus::Cancelled->value,
-            'completed_at' => now(),
-            'notes' => trim(($inspection->notes ? $inspection->notes."\n" : '').'[cancelled] '.($reason ?: 'no reason given').' — by user#'.$by->id),
-        ])->save();
 
-        return $this->show($inspection);
+        return DB::transaction(function () use ($inspection, $reason, $by) {
+            // Cancellation is also terminal. Apply the same authoritative-row
+            // rule as completion so a stale cancel request cannot undo a pass
+            // or failure that already drove a downstream chain listener.
+            $lockedInspection = Inspection::query()
+                ->lockForUpdate()
+                ->findOrFail($inspection->id);
+            if ($lockedInspection->status->isTerminal()) {
+                throw new BusinessRuleException('Inspection is already finalised.');
+            }
+
+            $lockedInspection->forceFill([
+                'status' => InspectionStatus::Cancelled->value,
+                'completed_at' => now(),
+                'notes' => trim(($lockedInspection->notes ? $lockedInspection->notes."\n" : '').'[cancelled] '.($reason ?: 'no reason given').' — by user#'.$by->id),
+            ])->save();
+
+            return $this->show($lockedInspection->fresh());
+        });
     }
 }

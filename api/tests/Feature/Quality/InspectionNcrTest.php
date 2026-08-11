@@ -29,15 +29,10 @@ use Tests\TestCase;
 /**
  * P2.10 — IATF Traceability: inspection failure → NCR auto-creation.
  *
- * ARCHITECTURE NOTE — afterCommit behavior confirmed working
- * ────────────────────────────────────────────────────────────
- * InspectionService::complete() wraps the NCR creation inside
- * DB::afterCommit(). Under RefreshDatabase with SQLite in-memory,
- * Laravel's DatabaseTransactionsManager fires afterCommit callbacks
- * when the nested savepoint commits (level 2→1), NOT when the outer
- * test transaction rolls back. This means the full traceability loop
- * WORKS correctly end-to-end in tests — calling complete() on a
- * failing inspection creates the NCR automatically.
+ * ARCHITECTURE NOTE — inspection failure and NCR creation share a
+ * transaction. Queue publication is deferred until commit, but the
+ * corrective-action row cannot be lost between the inspection write and the
+ * NCR write.
  *
  * Test strategy
  * ─────────────
@@ -73,9 +68,9 @@ use Tests\TestCase;
  *      auto-creates a WorkOrder and back-fills
  *      replacement_work_order_id.
  *
- * 9. test_complete_on_failing_inspection_auto_creates_ncr_via_aftercommit
+ * 9. test_complete_on_failing_inspection_auto_creates_ncr_transactionally
  *    – End-to-end: complete() on failing inspection → NCR auto-created.
- *      Confirms the afterCommit callback fires correctly.
+ *      Confirms the handoff is part of the lifecycle transaction.
  */
 class InspectionNcrTest extends TestCase
 {
@@ -382,7 +377,8 @@ class InspectionNcrTest extends TestCase
      * Pins InspectionService::complete() decision logic:
      * any critical-parameter failure → status = failed.
      *
-     * This is independent of the afterCommit NCR side-effect.
+     * The NCR handoff is part of the same transaction, but this assertion
+     * focuses only on the inspection status decision.
      */
     public function test_complete_marks_inspection_failed_when_critical_param_fails(): void
     {
@@ -673,31 +669,19 @@ class InspectionNcrTest extends TestCase
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // Test 9: afterCommit gap — NCR not created when complete() called in test
+    // Test 9: failed inspection → NCR is one transaction
     // ──────────────────────────────────────────────────────────────────────────
 
     /**
-     * REVISED FINDING: afterCommit callbacks DO fire under RefreshDatabase
-     * with SQLite in-memory + Laravel's DatabaseTransactionsManager.
-     *
-     * When InspectionService::complete() is called inside a RefreshDatabase
-     * test, the DB::transaction() block creates a savepoint (level 2). On
-     * savepoint commit (level drops to 1), Laravel's DatabaseTransactionsManager
-     * fires afterCommit callbacks immediately because the transaction manager
-     * records the pending callbacks and executes them when the savepoint commits.
-     *
-     * Consequence: the full NCR auto-creation path (inspection fails →
-     * afterCommit → NcrService::openFromInspectionFailure()) WORKS correctly
-     * end-to-end in tests too. There is NO silent traceability gap.
-     *
-     * This test pins that real end-to-end behavior: calling complete() on a
-     * failing inspection via InspectionService creates an NCR row automatically.
+     * This test pins the real end-to-end behavior: calling complete() on a
+     * failing inspection via InspectionService creates an NCR row before the
+     * owning transaction commits.
      */
-    public function test_complete_on_failing_inspection_auto_creates_ncr_via_aftercommit(): void
+    public function test_complete_on_failing_inspection_auto_creates_ncr_transactionally(): void
     {
         $insp = $this->makeFailedViaComplete();
 
-        // complete() sets status=failed AND fires afterCommit → NcrService.
+        // complete() sets status=failed and writes its NCR handoff together.
         $result = $this->inspSvc->complete($insp, $this->user);
 
         // Inspection transitions to failed.
@@ -707,16 +691,14 @@ class InspectionNcrTest extends TestCase
             'complete() must set status=failed when a critical measurement fails',
         );
 
-        // NCR IS created automatically via the afterCommit callback.
-        // afterCommit fires on savepoint commit under RefreshDatabase in SQLite.
+        // NCR is created as part of the same lifecycle transaction.
         $ncrCount = NonConformanceReport::where('inspection_id', $insp->id)->count();
 
         $this->assertSame(
             1,
             $ncrCount,
             'complete() on a failing inspection MUST auto-create exactly one NCR ' .
-            'via DB::afterCommit → NcrService::openFromInspectionFailure(). ' .
-            'The full traceability loop works end-to-end in the test environment.',
+            'before its transaction commits.',
         );
 
         // Verify the auto-created NCR has correct linkage.
@@ -724,6 +706,40 @@ class InspectionNcrTest extends TestCase
         $this->assertSame($insp->id, $ncr->inspection_id);
         $this->assertSame(NcrSource::InspectionFail->value, $ncr->source->value);
         $this->assertTrue($ncr->is_auto_generated);
+    }
+
+    public function test_failed_inspection_and_ncr_roll_back_together(): void
+    {
+        $insp = $this->makeFailedViaComplete();
+        $forcedRollback = false;
+
+        try {
+            DB::transaction(function () use ($insp): void {
+                $this->inspSvc->complete($insp, $this->user);
+
+                $this->assertDatabaseHas('inspections', [
+                    'id' => $insp->id,
+                    'status' => InspectionStatus::Failed->value,
+                ]);
+                $this->assertDatabaseHas('non_conformance_reports', [
+                    'inspection_id' => $insp->id,
+                    'is_auto_generated' => true,
+                ]);
+
+                throw new \RuntimeException('force lifecycle rollback');
+            });
+        } catch (\RuntimeException $e) {
+            $forcedRollback = $e->getMessage() === 'force lifecycle rollback';
+        }
+
+        $this->assertTrue($forcedRollback);
+        $this->assertSame(
+            InspectionStatus::InProgress->value,
+            $insp->fresh()->status->value,
+        );
+        $this->assertDatabaseMissing('non_conformance_reports', [
+            'inspection_id' => $insp->id,
+        ]);
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -830,6 +846,30 @@ class InspectionNcrTest extends TestCase
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessageMatches('/unresolved|no pass\/fail/i');
+
+        $this->inspSvc->complete($insp, $this->user);
+    }
+
+    public function test_complete_throws_when_inspection_has_no_measurements(): void
+    {
+        $insp = Inspection::create([
+            'inspection_number'  => 'QC-EMPTY-' . uniqid(),
+            'stage'              => InspectionStage::Outgoing->value,
+            'status'             => InspectionStatus::Draft->value,
+            'product_id'         => $this->product->id,
+            'inspection_spec_id' => $this->spec->id,
+            'batch_quantity'     => 10,
+            'sample_size'        => 2,
+            'aql_code'           => null,
+            'accept_count'       => 0,
+            'reject_count'       => 1,
+            'defect_count'       => 0,
+            'inspector_id'       => $this->user->id,
+            'started_at'         => now(),
+        ]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/no measurement rows/i');
 
         $this->inspSvc->complete($insp, $this->user);
     }

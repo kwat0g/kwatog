@@ -12,12 +12,22 @@
  *   • A declarative parallax system: `data-parallax="12"` drifts a decorative
  *     layer ±12% of its height across the scroll for quiet depth.
  *
- * Accessibility contract: when `prefers-reduced-motion: reduce` is set we wire
- * up nothing — content is visible by default in the markup, smooth scroll is
- * left native, and ScrollTrigger never hides anything.
+ * Accessibility contract: reveals animate `opacity`/`transform` ONLY — never
+ * `visibility`. GSAP's `autoAlpha` shorthand writes `visibility: hidden` as soon
+ * as opacity reaches 0, which pulls the node out of the accessibility tree
+ * entirely: `textContent` still holds the words but `innerText` is empty and
+ * axe cannot compute an accessible name, so every heading below the fold was
+ * invisible to screen readers until a sighted user scrolled it into view.
+ * Opacity alone animates identically and keeps the text nameable the whole time.
+ *
+ * When `prefers-reduced-motion: reduce` is set we wire up nothing — content is
+ * visible by default in the markup, smooth scroll is left native, and
+ * ScrollTrigger never hides anything. The preference is watched live, so
+ * enabling it mid-session tears the motion layer down and restores every
+ * element rather than leaving reveals stuck part-way.
  */
 
-import { useLayoutEffect, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useState, type RefObject } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import Lenis from 'lenis';
@@ -38,13 +48,36 @@ export function registerScrollTrigger() {
 }
 
 /**
+ * Live `prefers-reduced-motion`, as React state.
+ *
+ * The plain {@link reduceMotion} read happens once at mount; a user who turns
+ * the OS setting on mid-visit would keep a running motion layer. Returning it
+ * as state lets the caller's effect re-run and tear down.
+ */
+function useReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(reduceMotion);
+
+  useEffect(() => {
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const sync = () => setReduced(query.matches);
+    sync();
+    query.addEventListener('change', sync);
+    return () => query.removeEventListener('change', sync);
+  }, []);
+
+  return reduced;
+}
+
+/**
  * Page-level smooth scroll + scroll reveals, scoped to `rootRef`.
  * Call once from the landing page root.
  */
 export function useLandingMotion(rootRef: RefObject<HTMLElement>) {
+  const reduced = useReducedMotion();
+
   useLayoutEffect(() => {
     const root = rootRef.current;
-    if (!root || reduceMotion()) return;
+    if (!root || reduced) return;
 
     registerScrollTrigger();
 
@@ -81,17 +114,24 @@ export function useLandingMotion(rootRef: RefObject<HTMLElement>) {
     // ── Scroll reveals ───────────────────────────────────────────────
     // Each variant is the "from" state; the tween always resolves to the
     // composed/visible value. Keep them gentle — this is precision, not flair.
+    //
+    // `opacity`, never `autoAlpha` — see the accessibility contract at the top
+    // of this file. An element awaiting its reveal is transparent but still
+    // laid out, focusable, and nameable by assistive tech.
     const revealFrom: Record<string, gsap.TweenVars> = {
-      '': { autoAlpha: 0, y: 18 },
-      up: { autoAlpha: 0, y: 18 },
-      left: { autoAlpha: 0, x: -28 },
-      right: { autoAlpha: 0, x: 28 },
-      scale: { autoAlpha: 0, scale: 0.94, y: 14 },
-      clip: { autoAlpha: 0, y: 14, clipPath: 'inset(0 0 100% 0)' },
+      '': { opacity: 0, y: 18 },
+      up: { opacity: 0, y: 18 },
+      left: { opacity: 0, x: -28 },
+      right: { opacity: 0, x: 28 },
+      scale: { opacity: 0, scale: 0.94, y: 14 },
+      clip: { opacity: 0, y: 14, clipPath: 'inset(0 0 100% 0)' },
     };
+
+    let revealEls: HTMLElement[] = [];
 
     const ctx = gsap.context(() => {
       const els = gsap.utils.toArray<HTMLElement>('[data-reveal]');
+      revealEls = els;
       els.forEach((el) => {
         const variant = el.dataset.reveal || '';
         const from = revealFrom[variant] ?? revealFrom[''];
@@ -99,7 +139,7 @@ export function useLandingMotion(rootRef: RefObject<HTMLElement>) {
         // ~0.5s on top of the tween, reading as "late to appear" on fast scroll.
         const delay = Math.min(parseFloat(el.dataset.revealDelay ?? '0') || 0, 0.24);
         gsap.fromTo(el, from, {
-          autoAlpha: 1,
+          opacity: 1,
           x: 0,
           y: 0,
           scale: 1,
@@ -136,6 +176,14 @@ export function useLandingMotion(rootRef: RefObject<HTMLElement>) {
       });
     }, root);
 
+    // Printing does not scroll, so anything still awaiting its reveal would
+    // come off the printer blank. Resolve every pending element up front.
+    function revealAll() {
+      if (revealEls.length === 0) return;
+      gsap.set(revealEls, { opacity: 1, x: 0, y: 0, scale: 1, clipPath: 'none' });
+    }
+    window.addEventListener('beforeprint', revealAll);
+
     // Recalculate once fonts/images settle.
     const refresh = () => ScrollTrigger.refresh();
     const refreshTimer = window.setTimeout(refresh, 350);
@@ -143,11 +191,14 @@ export function useLandingMotion(rootRef: RefObject<HTMLElement>) {
 
     return () => {
       window.clearTimeout(refreshTimer);
+      window.removeEventListener('beforeprint', revealAll);
       root.removeEventListener('click', onAnchorClick);
       gsap.ticker.remove(ticker);
       lenis.destroy();
       delete (window as unknown as { lenis?: Lenis }).lenis;
+      // Restores the inline styles GSAP wrote, so a mid-session switch to
+      // reduced motion leaves every element at its natural, visible state.
       ctx.revert();
     };
-  }, [rootRef]);
+  }, [rootRef, reduced]);
 }

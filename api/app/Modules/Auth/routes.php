@@ -17,6 +17,9 @@ Route::prefix('auth')->group(function (): void {
     Route::post('login', LoginController::class)->middleware('throttle:auth');
     Route::post('forgot-password', ForgotPasswordController::class)->middleware('throttle:auth');
     Route::post('reset-password', ResetPasswordController::class)->middleware('throttle:auth');
+    // Password requirements are safe to expose before authentication because
+    // the reset-password form needs them while the user is still signed out.
+    Route::get('password-policy', [AuthUserController::class, 'passwordPolicy']);
 
     // Authenticated. NOTE: GET /auth/user is intentionally OUTSIDE the
     // `password.expired` gate — the SPA must be able to bootstrap (and the
@@ -29,7 +32,6 @@ Route::prefix('auth')->group(function (): void {
             ->middleware('throttle:sensitive');
 
         Route::get('user', AuthUserController::class);
-        Route::get('password-policy', [AuthUserController::class, 'passwordPolicy']);
 
         // Mutating preference update is gated by password expiry — a user
         // with an expired password should change it before tweaking prefs.

@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Accounting;
 
+use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Models\ChainStepRun;
 use App\Modules\Accounting\Enums\CreditNoteStatus;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\CreditNote;
+use App\Modules\Accounting\Models\CreditNoteApplication;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\Vendor;
@@ -111,12 +114,50 @@ class CreditNoteTest extends TestCase
         $invoice->refresh();
         $this->assertSame('560.00', (string) $invoice->balance, 'Invoice balance must drop by the applied amount');
         $this->assertSame('partial', $invoice->status->value);
+        $this->assertTrue(ChainStepRun::query()
+            ->where('chain', 'o2c')
+            ->where('entity_type', 'invoice')
+            ->where('entity_id', $invoice->id)
+            ->where('step', 'partial')
+            ->exists(), 'Customer credit application must publish the invoice chain step.');
 
         $cn->refresh();
         $this->assertSame('560.00', (string) $cn->applied_amount);
         // CN total = 500 + 12% VAT = 560; fully applied → balance 0, status applied.
         $this->assertSame('0.00', (string) $cn->balance);
         $this->assertSame('applied', $cn->status->value);
+    }
+
+    public function test_applying_a_stale_credit_note_cannot_be_replayed(): void
+    {
+        $by = $this->admin();
+        $customer = Customer::create(['name' => 'Acme', 'payment_terms_days' => 30]);
+        $invoice = Invoice::create([
+            'invoice_number' => 'INV-CN-'.substr(uniqid(), -5), 'customer_id' => $customer->id,
+            'status' => 'finalized', 'subtotal' => '1000.00', 'vat_amount' => '120.00',
+            'total_amount' => '1120.00', 'amount_paid' => '0.00', 'balance' => '1120.00',
+            'date' => now()->toDateString(), 'due_date' => now()->addDays(30)->toDateString(),
+            'created_by' => $by->id,
+        ]);
+
+        $cn = $this->svc->finalize($this->svc->create([
+            'type' => 'customer', 'date' => now()->toDateString(), 'is_vatable' => true,
+            'customer_id' => $customer->id, 'invoice_id' => $invoice->id,
+            'lines' => [['account_id' => $this->revenueAccountId(), 'description' => 'Credit', 'amount' => '500.00']],
+        ], $by), $by);
+        $stale = $cn->fresh();
+
+        $this->svc->apply($cn, ['amount' => '560.00', 'invoice_id' => $invoice->id], $by);
+
+        try {
+            $this->svc->apply($stale, ['amount' => '560.00', 'invoice_id' => $invoice->id], $by);
+            $this->fail('A stale finalized credit note must not be applied twice.');
+        } catch (BusinessRuleException $e) {
+            $this->assertSame('Only a finalized credit note can be applied.', $e->getMessage());
+        }
+
+        $this->assertSame(1, CreditNoteApplication::query()->where('credit_note_id', $cn->id)->count());
+        $this->assertSame('560.00', (string) $invoice->fresh()->balance);
     }
 
     public function test_supplier_credit_reduces_bill_balance(): void

@@ -12,6 +12,28 @@
 # ────────────────────────────────────────────────────────────────────────────
 
 services:
+  # Run schema changes as a one-shot dependency. API/queue/scheduler consumers
+  # cannot start until this exits successfully, so a direct `compose up` cannot
+  # accidentally expose a new image against an old schema.
+  migrate:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile.prod
+    container_name: ogami-migrate
+    restart: "no"
+    working_dir: /var/www
+    env_file: .env
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+    command: php artisan migrate --force --no-interaction
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - appstorage:/var/www/storage/app
+    networks: [ogami-net]
+
   api:
     build:
       context: .
@@ -27,7 +49,9 @@ services:
       db:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     volumes:
       - appstorage:/var/www/storage/app
     networks: [ogami-net]
@@ -36,11 +60,16 @@ services:
     image: nginx:1.27-alpine
     container_name: ogami-nginx
     restart: unless-stopped
+    environment:
+      # The official Nginx entrypoint expands this into the mounted template.
+      # ProductionAssertions applies the same fail-closed requirement to the
+      # API/worker processes, so a missing host cannot look deployable.
+      SERVER_NAME: ${SERVER_NAME:-localhost}
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./docker/nginx/prod.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./docker/nginx/prod.conf:/etc/nginx/templates/default.conf.template:ro
       # Outside conf.d/ on purpose: nginx.conf wildcard-includes conf.d/*.conf
       # at http level, which would apply these headers twice.
       - ./docker/nginx/security-headers-prod.conf:/etc/nginx/security-headers-prod.conf:ro
@@ -63,6 +92,10 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - pgdata:/var/lib/postgresql/data
+      # Host cron/restore runbook path. The backup script is read-only; dumps
+      # survive db-container replacement on the VPS.
+      - ./scripts:/opt/scripts:ro
+      - /var/backups/ogami:/var/backups/ogami
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME}"]
       interval: 10s
@@ -80,6 +113,11 @@ services:
     command: redis-server --appendonly yes --appendfsync everysec
     volumes:
       - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
     networks: [ogami-net]
 
   meilisearch:
@@ -117,17 +155,21 @@ services:
     restart: unless-stopped
     working_dir: /var/www
     env_file: .env
-    command: php artisan queue:work --tries=3 --timeout=120 --sleep=3
+    # 1800s matches the longest durable listener; retry_after is kept above it
+    # so Redis does not redeliver a live long-running job.
+    command: php artisan queue:work --tries=3 --timeout=1800 --sleep=3
     depends_on:
-      - api
-      - redis
+      api:
+        condition: service_started
+      redis:
+        condition: service_healthy
     volumes:
       - appstorage:/var/www/storage/app
     networks: [ogami-net]
 
   # Phase 4 — Scheduler. routes/console.php registers daily/hourly jobs
   # (mrp:run-daily, alerts:run, payroll:auto-create-period,
-  # maintenance:generate-preventive, etc.). Without this container, none
+  # maintenance:request-preventive-generation, etc.). Without this container, none
   # of those cron-style tasks ever fire in production.
   scheduler:
     build:
@@ -137,13 +179,25 @@ services:
     restart: unless-stopped
     working_dir: /var/www
     env_file: .env
-    # Run schedule:run every 60s in a loop. schedule:work would also work
-    # on Laravel 11 but the explicit loop is portable across PHP base images
-    # and keeps process restarts cheap.
-    command: sh -c 'while true; do php artisan schedule:run --no-interaction; sleep 60; done'
+    # Run one truthful scheduler tick every 60s. The wrapper observes
+    # ScheduledTaskFailed because Laravel's native schedule:run catches task
+    # exceptions and otherwise exits 0; a failed tick must restart this
+    # container so the next process can retry the schedule.
+    command: sh -c 'set -eu; while true; do php artisan schedule:run-fail-fast --no-interaction; sleep 60; done'
+    healthcheck:
+      # A loop can remain alive while a task is wedged. The durable heartbeat
+      # probe catches that state so Docker/orchestration can surface or
+      # restart the unhealthy scheduler independently of its own loop.
+      test: ["CMD-SHELL", "php artisan scheduler:health --stale-minutes=15 --no-interaction >/dev/null"]
+      interval: 60s
+      timeout: 20s
+      retries: 3
+      start_period: 90s
     depends_on:
-      - api
-      - redis
+      api:
+        condition: service_started
+      redis:
+        condition: service_healthy
     volumes:
       - appstorage:/var/www/storage/app
     networks: [ogami-net]

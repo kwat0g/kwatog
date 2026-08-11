@@ -69,6 +69,7 @@ if (class_exists(PayrollPeriodController::class)) {
             Route::post('/{period}/compute', [PayrollPeriodController::class, 'compute'])->middleware('permission:payroll.periods.compute');
             Route::patch('/{period}/approve', [PayrollPeriodController::class, 'approve'])->middleware('permission:payroll.periods.approve');
             Route::patch('/{period}/finalize', [PayrollPeriodController::class, 'finalize'])->middleware('permission:payroll.periods.finalize');
+            Route::post('/{period}/retry-gl', [PayrollPeriodController::class, 'retryGl'])->middleware('permission:accounting.journal.post');
             Route::get('/{period}/bank-file/preview', [PayrollPeriodController::class, 'bankFilePreview'])->middleware('permission:payroll.periods.finalize');
             Route::get('/{period}/bank-file', [PayrollPeriodController::class, 'bankFile'])->middleware('permission:payroll.periods.finalize');
             Route::get('/{period}/variance', [PayrollPeriodController::class, 'variance'])->middleware('permission:payroll.periods.view');

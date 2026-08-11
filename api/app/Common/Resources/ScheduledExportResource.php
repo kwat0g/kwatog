@@ -29,6 +29,9 @@ class ScheduledExportResource extends JsonResource
             'time_of_day'  => $this->time_of_day,
             'recipients'   => $this->recipients ?? [],
             'last_run_at'  => optional($this->last_run_at)->toIso8601String(),
+            'last_attempt_at' => optional($this->last_attempt_at)->toIso8601String(),
+            'last_error'   => $this->last_error,
+            'processing'   => $this->processing_until !== null && $this->processing_until->isFuture(),
             'next_run_at'  => optional($this->next_run_at)->toIso8601String(),
             'is_active'    => (bool) $this->is_active,
             'owner'        => $this->whenLoaded('owner', function () {

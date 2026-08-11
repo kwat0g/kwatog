@@ -142,6 +142,9 @@ export default function PurchaseRequestsListPage() {
  { key: 'status', header: 'Status', cell: (r) => (
  <span className="flex items-center gap-1.5">
  <Chip variant={statusVariant[r.status]}>{r.status_label ?? statusLabels.get(r.status) ?? r.status}</Chip>
+ {r.status === 'approved' && r.po_conversion_status === 'manual_required' && (
+ <Chip variant="warning">manual PO</Chip>
+ )}
  {r.has_overdue_approval && (
  <span title={`Approval pending beyond ${requestOptions?.approval_sla_hours ?? 'configured'} hours`}><Chip variant="danger">overdue</Chip></span>
  )}

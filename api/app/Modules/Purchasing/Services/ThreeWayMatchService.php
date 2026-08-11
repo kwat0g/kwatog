@@ -18,11 +18,12 @@ use Illuminate\Support\Facades\Log;
  *
  * Three-way (PO ↔ Bill ↔ GRN). PO-vs-Bill tolerances (qty + price) are
  * settings-driven (`purchasing.three_way_tolerance_qty_pct`,
- * `purchasing.three_way_tolerance_price_pct`). On top of that, Bill qty
- * must not exceed accepted GRN qty by more than the qty tolerance —
- * i.e. you cannot pay for goods that were never received. Override is
- * still available via BillService::create($data + allow_override=true)
- * which bypasses the blocked status (audit trail in three_way_match_snapshot).
+ * `purchasing.three_way_tolerance_price_pct`). A partial receipt is valid:
+ * billing less than the ordered quantity does not create a variance, while
+ * billing above the PO or accepted GRN is still gated by the tolerance. The
+ * received unit cost is also compared with the bill price when available.
+ * Override is still available via BillService::create($data + allow_override=true)
+ * and the draft-post review path, with the decision retained in the snapshot.
  *
  * H-7 + H-6 (2026-06): matchForBill aligns bill lines to PO lines by item_id
  * FK (not by index). Legacy bills without item_id on any line fall back to
@@ -52,16 +53,22 @@ class ThreeWayMatchService
 
         // Index bill lines by item_id (or by description fallback).
         $billByItem = [];
+        $duplicateBillItems = [];
         foreach ($billLines as $bl) {
             $key = isset($bl['item_id']) && $bl['item_id'] ? (string) $bl['item_id'] : 'desc:'.($bl['description'] ?? '');
+            if (array_key_exists($key, $billByItem)) {
+                $duplicateBillItems[$key] = true;
+            }
             $billByItem[$key] = $bl;
         }
 
         $lines = [];
         $overall = 'matched';
+        $poItemKeys = [];
         foreach ($po->items as $poi) {
             $grn = $grnAccepted[$poi->id] ?? null;
             $billKey = (string) $poi->item_id;
+            $poItemKeys[$billKey] = true;
             $bl = $billByItem[$billKey] ?? null;
 
             $billQty = $bl ? (float) $bl['quantity'] : 0.0;
@@ -70,18 +77,31 @@ class ThreeWayMatchService
             $grnCost = $grn ? (float) $grn->avg_cost : (float) $poi->unit_price;
             $poQty = (float) $poi->quantity;
             $poPrice = (float) $poi->unit_price;
+            $billLinePresent = $bl !== null;
 
-            $qtyVar = $poQty > 0 ? abs($billQty - $poQty) / $poQty * 100 : 0.0;
-            $priceVar = $poPrice > 0 ? abs($billPrice - $poPrice) / $poPrice * 100 : 0.0;
+            // Under-billing is a normal partial-receipt state. Only an
+            // overage against the ordered quantity is a quantity variance.
+            // An omitted PO line is different from a present line billed at a
+            // lower quantity: omission is an incomplete bill and must block.
+            $qtyVar = ! $billLinePresent
+                ? 100.0
+                : ($poQty > 0 ? max(0.0, $billQty - $poQty) / $poQty * 100 : 0.0);
+            $poPriceVar = $poPrice > 0 ? abs($billPrice - $poPrice) / $poPrice * 100 : 0.0;
+            $grnPriceVar = $grn && $grnQty > 0 && $grnCost > 0
+                ? abs($billPrice - $grnCost) / $grnCost * 100
+                : 0.0;
+            $priceVar = max($poPriceVar, $grnPriceVar);
 
-            $qtyOk = $qtyVar <= $qtyTol;
+            $qtyOk = $billLinePresent && ($poQty <= 0
+                ? $billQty <= 0
+                : $billQty <= $poQty * (1 + $qtyTol / 100));
             $priceOk = $priceVar <= $priceTol;
 
             // H-6 — Bill qty must not exceed accepted GRN qty beyond the qty
             // tolerance. If there is no GRN at all, any non-zero bill qty is
             // a hard block — you cannot pay for goods that were never received.
             if ($grnQty > 0) {
-                $grnOverPct = ($billQty - $grnQty) / max($grnQty, 0.0001) * 100;
+                $grnOverPct = max(0.0, $billQty - $grnQty) / max($grnQty, 0.0001) * 100;
                 $grnOk = $grnOverPct <= $qtyTol;
             } else {
                 $grnOk = $billQty <= 0;
@@ -117,8 +137,45 @@ class ThreeWayMatchService
                 'bill_total' => number_format($billQty * $billPrice, 2, '.', ''),
                 'quantity_variance_pct' => round($qtyVar, 2),
                 'price_variance_pct' => round($priceVar, 2),
+                'po_price_variance_pct' => round($poPriceVar, 2),
+                'grn_price_variance_pct' => round($grnPriceVar, 2),
                 'status' => $lineStatus,
                 'severity' => $severity,
+            ];
+        }
+
+        // Never let a bill line disappear from the match merely because its
+        // item is absent from the PO (or appears twice). The old implementation
+        // matched only PO-owned rows, so an extra billed item could still post
+        // while the snapshot looked clean.
+        foreach ($billByItem as $key => $bl) {
+            if (isset($poItemKeys[$key]) && ! isset($duplicateBillItems[$key])) {
+                continue;
+            }
+
+            $billQty = (float) ($bl['quantity'] ?? 0);
+            $billPrice = (float) ($bl['unit_price'] ?? 0);
+            $status = isset($poItemKeys[$key]) ? 'duplicate_bill_line' : 'unmatched_bill_line';
+            $overall = 'blocked';
+            $lines[] = [
+                'item_id' => $bl['item_id'] ?? null,
+                'item_code' => null,
+                'description' => (string) ($bl['description'] ?? 'Unmatched bill line'),
+                'po_quantity' => '0.00',
+                'po_unit_price' => '0.00',
+                'po_total' => '0.00',
+                'grn_quantity_accepted' => '0.000',
+                'grn_unit_cost' => '0.0000',
+                'grn_status' => 'short',
+                'bill_quantity' => number_format($billQty, 2, '.', ''),
+                'bill_unit_price' => number_format($billPrice, 2, '.', ''),
+                'bill_total' => number_format($billQty * $billPrice, 2, '.', ''),
+                'quantity_variance_pct' => 100.0,
+                'price_variance_pct' => 100.0,
+                'po_price_variance_pct' => 100.0,
+                'grn_price_variance_pct' => 100.0,
+                'status' => $status,
+                'severity' => 'block',
             ];
         }
 
@@ -158,13 +215,16 @@ class ThreeWayMatchService
         foreach ($bill->items as $bi) {
             if ($bi->item_id) {
                 $anyHasItemId = true;
-                $billLinesByItem[(string) $bi->item_id] = [
-                    'item_id' => $bi->item_id,
-                    'description' => $bi->description,
-                    'quantity' => $bi->quantity,
-                    'unit_price' => $bi->unit_price,
-                ];
             }
+            // Keep every row, including duplicate and null-FK rows. Passing
+            // an associative map here used to overwrite duplicate bill lines
+            // before matchForPo() could flag them.
+            $billLinesByItem[] = [
+                'item_id' => $bi->item_id,
+                'description' => $bi->description,
+                'quantity' => $bi->quantity,
+                'unit_price' => $bi->unit_price,
+            ];
         }
 
         if ($anyHasItemId) {

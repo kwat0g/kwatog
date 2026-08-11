@@ -11,8 +11,10 @@ use App\Common\Services\Export\ExportRunner;
 use App\Common\Services\Export\SpreadsheetExportService;
 use App\Common\Services\SettingsService;
 use Illuminate\Console\Command;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 
 /**
  * Series E (Task E2) — every-5-min scheduler tick. For each due export:
@@ -26,6 +28,8 @@ use Illuminate\Support\Facades\Mail;
  */
 class RunDueScheduledExports extends Command
 {
+    private const LEASE_MINUTES = 30;
+
     protected $signature = 'exports:run-due {--dry-run : List due rows without sending}';
 
     protected $description = 'Run all scheduled exports whose next_run_at has elapsed.';
@@ -40,23 +44,37 @@ class RunDueScheduledExports extends Command
 
     public function handle(): int
     {
-        $due = ScheduledExport::query()->due(now())->with('owner:id,name,email')->get();
+        $scanAt = now();
+        $due = ScheduledExport::query()->due($scanAt)->with('owner:id,name,email')->get();
 
         $this->info("Found {$due->count()} due export(s).");
         if ($due->isEmpty()) {
             return self::SUCCESS;
         }
 
+        $failed = 0;
         foreach ($due as $row) {
+            $token = null;
             try {
                 if ($this->option('dry-run')) {
                     $this->line("DRY: would run {$row->module} for {$row->owner?->email}");
 
                     continue;
                 }
-                $this->runOne($row);
+                $token = (string) Str::uuid();
+                if (! $this->claim($row, $scanAt, $token)) {
+                    $this->line("SKIP {$row->name} — another runner claimed it.");
+
+                    continue;
+                }
+
+                $this->runOne($row, $token, $scanAt);
                 $this->info("OK   {$row->name} ({$row->module})");
             } catch (\Throwable $e) {
+                $failed++;
+                if ($token !== null) {
+                    $this->releaseAfterFailure($row, $token, $e);
+                }
                 Log::error('scheduled-export-failed', [
                     'id' => $row->id,
                     'module' => $row->module,
@@ -66,13 +84,41 @@ class RunDueScheduledExports extends Command
             }
         }
 
-        return self::SUCCESS;
+        return $failed > 0 ? self::FAILURE : self::SUCCESS;
     }
 
-    private function runOne(ScheduledExport $row): void
+    private function claim(ScheduledExport $row, Carbon $scanAt, string $token): bool
+    {
+        $claimed = ScheduledExport::query()
+            ->whereKey($row->getKey())
+            ->where('is_active', true)
+            ->where('next_run_at', '<=', $scanAt)
+            ->where(function ($query) use ($scanAt): void {
+                $query->whereNull('processing_until')
+                    ->orWhere('processing_until', '<=', $scanAt);
+            })
+            ->update([
+                'processing_token' => $token,
+                'processing_started_at' => $scanAt,
+                'processing_until' => $scanAt->copy()->addMinutes(self::LEASE_MINUTES),
+                'last_attempt_at' => $scanAt,
+                'last_error' => null,
+            ]);
+
+        return $claimed === 1;
+    }
+
+    private function runOne(ScheduledExport $row, string $token, Carbon $runAt): void
     {
         $format = $row->format instanceof ExportFormat ? $row->format : ExportFormat::Xlsx;
         $frequency = $row->frequency instanceof ExportFrequency ? $row->frequency : ExportFrequency::Daily;
+        $recipients = array_values(array_filter(
+            (array) ($row->recipients ?? []),
+            static fn (mixed $recipient): bool => is_string($recipient) && filter_var($recipient, FILTER_VALIDATE_EMAIL) !== false,
+        ));
+        if ($recipients === []) {
+            throw new \RuntimeException('Scheduled export has no valid recipients.');
+        }
 
         $exporter = $this->runner->build($row->module, (array) $row->columns, (array) ($row->filters ?? []));
         $filename = sprintf(
@@ -83,7 +129,6 @@ class RunDueScheduledExports extends Command
         );
         $bytes = $this->spreadsheets->render($exporter, $format);
 
-        $recipients = (array) ($row->recipients ?? []);
         $name = $row->name;
         $module = $row->module;
         $company = $this->settings->requiredString('company.legal_name');
@@ -96,13 +141,40 @@ class RunDueScheduledExports extends Command
                 ]);
         });
 
-        $row->last_run_at = now();
-        $row->next_run_at = $frequency->nextRunFrom(
-            now(),
+        $nextRunAt = $frequency->nextRunFrom(
+            $runAt,
             $row->day_of_week,
             $row->day_of_month,
             (string) ($row->time_of_day ?? $this->settings->requiredString('exports.default_time_of_day')),
         );
-        $row->save();
+
+        $updated = ScheduledExport::query()
+            ->whereKey($row->getKey())
+            ->where('processing_token', $token)
+            ->update([
+                'last_run_at' => $runAt,
+                'next_run_at' => $nextRunAt,
+                'last_error' => null,
+                'processing_token' => null,
+                'processing_started_at' => null,
+                'processing_until' => null,
+            ]);
+
+        if ($updated !== 1) {
+            throw new \RuntimeException('Scheduled export lease was lost before completion was recorded.');
+        }
+    }
+
+    private function releaseAfterFailure(ScheduledExport $row, string $token, \Throwable $exception): void
+    {
+        ScheduledExport::query()
+            ->whereKey($row->getKey())
+            ->where('processing_token', $token)
+            ->update([
+                'last_error' => Str::limit($exception->getMessage(), 2000),
+                'processing_token' => null,
+                'processing_started_at' => null,
+                'processing_until' => null,
+            ]);
     }
 }

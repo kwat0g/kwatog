@@ -9,6 +9,7 @@ use App\Common\Traits\HasHashId;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Enums\ComplaintStatus;
+use App\Modules\CRM\Enums\ComplaintNcrHandoffStatus;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Quality\Enums\NcrSeverity;
 use App\Modules\Quality\Models\NonConformanceReport;
@@ -27,6 +28,7 @@ class CustomerComplaint extends Model
         'complaint_number', 'customer_id', 'product_id', 'sales_order_id',
         'received_date', 'severity', 'status', 'description',
         'affected_quantity', 'ncr_id', 'replacement_work_order_id',
+        'ncr_handoff_status', 'ncr_handoff_message', 'ncr_handoff_at',
         'credit_memo_id', 'created_by', 'assigned_to',
         'resolved_at', 'closed_at',
         'd3_due_at', 'd4_due_at', 'finalize_due_at', 'sla_alert_levels',
@@ -35,10 +37,12 @@ class CustomerComplaint extends Model
     protected $casts = [
         'severity'          => NcrSeverity::class,    // shared scale with NCR
         'status'            => ComplaintStatus::class,
+        'ncr_handoff_status' => ComplaintNcrHandoffStatus::class,
         'received_date'     => 'date',
         'affected_quantity' => 'integer',
         'resolved_at'       => 'datetime',
         'closed_at'         => 'datetime',
+        'ncr_handoff_at'    => 'datetime',
         'd3_due_at'         => 'datetime',
         'd4_due_at'         => 'datetime',
         'finalize_due_at'   => 'datetime',

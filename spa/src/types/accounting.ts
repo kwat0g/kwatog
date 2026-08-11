@@ -167,6 +167,7 @@ export interface Bill {
  has_variances?: boolean;
  three_way_overridden?: boolean;
  three_way_override_reason?: string | null;
+ three_way_review_status?: 'not_applicable' | 'matched' | 'within_tolerance' | 'manual_review' | 'overridden';
  /** Endpoint to fetch the full match snapshot; only set when the bill has a PO. */
  three_way_match_url?: string | null;
 }
@@ -187,6 +188,7 @@ export interface CreateBillData {
  purchase_order_id?: string;
  /** REC-02 — post despite blocking variances (audit-trailed). */
  allow_override?: boolean;
+ override_reason?: string;
  date: string;
  due_date?: string;
  is_vatable?: boolean;

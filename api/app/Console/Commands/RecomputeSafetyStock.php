@@ -17,9 +17,9 @@ class RecomputeSafetyStock extends Command
     {
         $result = $service->recomputeAll();
         $this->info(sprintf(
-            'safety-stock recompute: evaluated=%d updated=%d skipped=%d',
-            $result['evaluated'], $result['updated'], $result['skipped'],
+            'safety-stock recompute: evaluated=%d updated=%d skipped=%d failed=%d',
+            $result['evaluated'], $result['updated'], $result['skipped'], $result['failed'],
         ));
-        return self::SUCCESS;
+        return $result['failed'] > 0 ? self::FAILURE : self::SUCCESS;
     }
 }

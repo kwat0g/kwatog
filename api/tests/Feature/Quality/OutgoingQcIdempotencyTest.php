@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Quality;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
@@ -14,7 +15,9 @@ use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Listeners\TriggerOutgoingQC;
 use App\Modules\Quality\Models\Inspection;
+use App\Modules\Quality\Services\InspectionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Mockery;
 use Tests\TestCase;
 
 /**
@@ -247,5 +250,84 @@ class OutgoingQcIdempotencyTest extends TestCase
                 ->count(),
             'One in_process + one outgoing inspection for the same WO must both be storable.'
         );
+    }
+
+    public function test_completed_work_order_with_zero_good_quantity_is_not_silently_skipped(): void
+    {
+        $this->workOrder->forceFill([
+            'quantity_good' => 0,
+            'quantity_produced' => 0,
+        ])->save();
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('positive good/produced quantity');
+
+        $this->listener->handle(new WorkOrderCompleted($this->workOrder));
+    }
+
+    public function test_stale_snapshot_without_product_does_not_override_authoritative_work_order(): void
+    {
+        $staleWo = $this->workOrder->fresh();
+        $staleWo->forceFill(['product_id' => null]);
+
+        $this->listener->handle(new WorkOrderCompleted($staleWo));
+
+        $this->assertSame(1, Inspection::query()
+            ->where('stage', InspectionStage::Outgoing->value)
+            ->where('entity_type', InspectionEntityType::WorkOrder->value)
+            ->where('entity_id', $this->workOrder->id)
+            ->count());
+    }
+
+    public function test_unexpected_inspection_failure_is_rethrown_instead_of_using_fallback(): void
+    {
+        $inspectionService = Mockery::mock(InspectionService::class);
+        $inspectionService->shouldReceive('create')
+            ->once()
+            ->andThrow(new \RuntimeException('inspection database unavailable'));
+        $this->app->instance(InspectionService::class, $inspectionService);
+
+        $listener = app(TriggerOutgoingQC::class);
+
+        try {
+            $listener->handle(new WorkOrderCompleted($this->workOrder));
+            $this->fail('An unexpected inspection failure must be rethrown.');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('inspection database unavailable', $e->getMessage());
+        }
+
+        $this->assertSame(0, Inspection::query()
+            ->where('stage', InspectionStage::Outgoing->value)
+            ->where('entity_type', InspectionEntityType::WorkOrder->value)
+            ->where('entity_id', $this->workOrder->id)
+            ->count());
+    }
+
+    public function test_delayed_completion_event_does_not_create_inspection_after_cancellation(): void
+    {
+        $staleEvent = new WorkOrderCompleted($this->workOrder->fresh());
+        $this->workOrder->update(['status' => 'cancelled']);
+
+        $this->listener->handle($staleEvent);
+
+        $this->assertSame(0, Inspection::query()
+            ->where('stage', InspectionStage::Outgoing->value)
+            ->where('entity_type', InspectionEntityType::WorkOrder->value)
+            ->where('entity_id', $this->workOrder->id)
+            ->count());
+    }
+
+    public function test_delayed_completion_event_still_creates_inspection_after_close(): void
+    {
+        $staleEvent = new WorkOrderCompleted($this->workOrder->fresh());
+        $this->workOrder->update(['status' => 'closed']);
+
+        $this->listener->handle($staleEvent);
+
+        $this->assertSame(1, Inspection::query()
+            ->where('stage', InspectionStage::Outgoing->value)
+            ->where('entity_type', InspectionEntityType::WorkOrder->value)
+            ->where('entity_id', $this->workOrder->id)
+            ->count());
     }
 }

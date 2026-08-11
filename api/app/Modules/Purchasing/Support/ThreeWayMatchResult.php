@@ -23,6 +23,8 @@ final class ThreeWayMatchResult
             'price_variance' => 'Price variance',
             'both' => 'Qty + price',
             'grn_short' => 'GRN short',
+            'unmatched_bill_line' => 'Not on PO',
+            'duplicate_bill_line' => 'Duplicate PO line',
         ];
         return [
             'po_id'          => $this->poId,

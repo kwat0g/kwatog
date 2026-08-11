@@ -10,6 +10,7 @@ export type StockMovementType =
  | 'transfer' | 'adjustment_in' | 'adjustment_out' | 'scrap'
  | 'return_to_vendor' | 'cycle_count';
 export type GrnStatus = 'draft' | 'pending_qc' | 'accepted' | 'partial_accepted' | 'rejected';
+export type IncomingQcHandoffStatus = 'not_started' | 'generated' | 'manual_required' | 'not_required';
 export type MaterialIssueStatus = 'draft' | 'issued' | 'cancelled';
 
 export interface ItemCategory {
@@ -147,6 +148,13 @@ export interface StockMovement {
  quantity: string;
  unit_cost: string;
  total_cost: string;
+ gl_handoff: {
+  status: 'not_started' | 'generated' | 'manual_required' | 'not_required';
+  status_label: string | null;
+  message: string | null;
+  at: string | null;
+  journal_entry?: { id: string; entry_number: string } | null;
+ };
  reference_type: string | null;
  reference_id: number | null;
  remarks: string | null;
@@ -193,6 +201,12 @@ export interface GoodsReceiptNote {
  rejected_reason: string | null;
  remarks: string | null;
  accepted_at: string | null;
+ incoming_qc_handoff?: {
+  status: IncomingQcHandoffStatus | null;
+  status_label?: string | null;
+  message: string | null;
+  at: string | null;
+ };
  vendor: { id: string; name: string } | null;
  purchase_order: {
   id: string;

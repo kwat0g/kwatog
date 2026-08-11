@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Attendance\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
 use App\Modules\Attendance\Enums\OvertimeStatus;
 use App\Modules\Attendance\Events\OvertimeRequestDecided;
@@ -110,7 +111,7 @@ class OvertimeService
             ]);
             // Default DB status is 'pending' — no need to set explicitly.
             $ot->load('employee');
-            event(new OvertimeRequestSubmitted($ot));
+            app(OutboxService::class)->record(new OvertimeRequestSubmitted($ot));
             return $ot;
         });
     }
@@ -157,10 +158,12 @@ class OvertimeService
 
     public function create(array $data): OvertimeRequest
     {
-        $ot = DB::transaction(fn () => OvertimeRequest::create($data + ['status' => OvertimeStatus::Pending->value])
-            ->load('employee'));
-
-        event(new OvertimeRequestSubmitted($ot));
+        $ot = DB::transaction(function () use ($data): OvertimeRequest {
+            $ot = OvertimeRequest::create($data + ['status' => OvertimeStatus::Pending->value])
+                ->load('employee');
+            app(OutboxService::class)->record(new OvertimeRequestSubmitted($ot));
+            return $ot;
+        });
 
         return $ot;
     }
@@ -168,7 +171,12 @@ class OvertimeService
     public function approve(OvertimeRequest $ot, User $approver, ?string $remarks = null): OvertimeRequest
     {
         $result = DB::transaction(function () use ($ot, $approver, $remarks) {
-            if ($ot->status !== OvertimeStatus::Pending) {
+            $authoritative = OvertimeRequest::query()
+                ->lockForUpdate()
+                ->findOrFail($ot->id)
+                ->loadMissing('employee.user');
+
+            if ($authoritative->status !== OvertimeStatus::Pending) {
                 throw new BusinessRuleException('Only pending overtime requests can be approved.');
             }
 
@@ -178,23 +186,25 @@ class OvertimeService
             // employees.user_id column, so resolve the submitter through the
             // relationship rather than a non-existent attribute (OGAMI audit
             // DEFECT-1 — the old $ot->employee?->user_id was always null).
-            $submitterId = $ot->employee?->user?->id;
+            $submitterId = $authoritative->employee?->user?->id;
             if ($submitterId !== null && (int) $submitterId === (int) $approver->id) {
                 throw new BusinessRuleException('You cannot approve your own overtime request.');
             }
 
-            $ot->update([
+            $authoritative->update([
                 'status'      => OvertimeStatus::Approved->value,
                 'approved_by' => $approver->id,
                 'approved_at' => now(),
                 'rejection_reason' => null,
+                'cancelled_by' => null,
+                'cancelled_at' => null,
             ]);
             // Recompute attendance for that day if it exists.
-            $this->attendance->recomputeForEmployeeOnDate($ot->employee_id, $ot->date->toDateString());
-            return $ot->fresh(['employee', 'approver']);
+            $this->attendance->recomputeForEmployeeOnDate($authoritative->employee_id, $authoritative->date->toDateString());
+            $result = $authoritative->fresh(['employee', 'approver']);
+            app(OutboxService::class)->record(new OvertimeRequestDecided($result, true));
+            return $result;
         });
-
-        event(new OvertimeRequestDecided($result, true));
 
         return $result;
     }
@@ -230,19 +240,25 @@ class OvertimeService
     public function reject(OvertimeRequest $ot, User $approver, string $reason): OvertimeRequest
     {
         $result = DB::transaction(function () use ($ot, $approver, $reason) {
-            if ($ot->status !== OvertimeStatus::Pending) {
+            $authoritative = OvertimeRequest::query()
+                ->lockForUpdate()
+                ->findOrFail($ot->id);
+
+            if ($authoritative->status !== OvertimeStatus::Pending) {
                 throw new BusinessRuleException('Only pending overtime requests can be rejected.');
             }
-            $ot->update([
+            $authoritative->update([
                 'status'           => OvertimeStatus::Rejected->value,
                 'approved_by'      => $approver->id,
                 'approved_at'      => now(),
                 'rejection_reason' => $reason,
+                'cancelled_by'     => null,
+                'cancelled_at'     => null,
             ]);
-            return $ot->fresh(['employee', 'approver']);
+            $result = $authoritative->fresh(['employee', 'approver']);
+            app(OutboxService::class)->record(new OvertimeRequestDecided($result, false));
+            return $result;
         });
-
-        event(new OvertimeRequestDecided($result, false));
 
         return $result;
     }
@@ -256,21 +272,61 @@ class OvertimeService
     public function cancel(OvertimeRequest $ot, User $user, string $reason = 'Cancelled.'): OvertimeRequest
     {
         $result = DB::transaction(function () use ($ot, $user, $reason) {
-            if ($ot->status !== OvertimeStatus::Pending) {
+            $authoritative = OvertimeRequest::query()
+                ->lockForUpdate()
+                ->findOrFail($ot->id);
+
+            if ($authoritative->status !== OvertimeStatus::Pending) {
                 throw new BusinessRuleException('Only pending overtime requests can be cancelled.');
             }
-            $ot->update([
+            $authoritative->update([
                 'status'           => OvertimeStatus::Rejected->value,
-                'approved_by'      => $user->id,
-                'approved_at'      => now(),
+                'approved_by'      => null,
+                'approved_at'      => null,
                 'rejection_reason' => $reason,
+                'cancelled_by'     => $user->id,
+                'cancelled_at'     => now(),
             ]);
-            return $ot->fresh(['employee', 'approver']);
+            $result = $authoritative->fresh(['employee', 'approver']);
+            app(OutboxService::class)->record(new OvertimeRequestDecided($result, false));
+            return $result;
         });
 
-        event(new OvertimeRequestDecided($result, false));
-
         return $result;
+    }
+
+    /**
+     * Reopen only a request that this same employee explicitly cancelled.
+     * An approver's rejection is intentionally not restorable from self-service.
+     */
+    public function restore(OvertimeRequest $ot, User $user): OvertimeRequest
+    {
+        return DB::transaction(function () use ($ot, $user): OvertimeRequest {
+            $authoritative = OvertimeRequest::query()
+                ->lockForUpdate()
+                ->findOrFail($ot->id);
+
+            if ($authoritative->status !== OvertimeStatus::Rejected
+                || $authoritative->cancelled_at === null
+                || (int) $authoritative->cancelled_by !== (int) $user->id
+                || (int) $authoritative->employee_id !== (int) $user->employee_id) {
+                throw new BusinessRuleException('Only your own cancelled overtime request can be restored.');
+            }
+
+            $authoritative->update([
+                'status'           => OvertimeStatus::Pending->value,
+                'approved_by'      => null,
+                'approved_at'      => null,
+                'rejection_reason' => null,
+                'cancelled_by'     => null,
+                'cancelled_at'     => null,
+            ]);
+
+            $result = $authoritative->fresh(['employee', 'approver']);
+            app(OutboxService::class)->record(new OvertimeRequestSubmitted($result));
+
+            return $result;
+        });
     }
 
     /**

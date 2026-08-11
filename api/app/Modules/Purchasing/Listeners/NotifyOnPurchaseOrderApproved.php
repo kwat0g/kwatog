@@ -35,6 +35,7 @@ class NotifyOnPurchaseOrderApproved implements ShouldQueue
             ]);
         } catch (\Throwable $e) {
             Log::warning('NotifyOnPurchaseOrderApproved failed', ['error' => $e->getMessage()]);
+            throw $e;
         }
     }
 }

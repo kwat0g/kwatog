@@ -8,6 +8,7 @@ import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Th, Td, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { DashboardShell, KpiGrid, PanelRow } from '@/components/dashboard/DashboardShell';
+import { PeriodNote } from '@/components/dashboard/period';
 import { financeDashboardApi } from '@/api/accounting/dashboard';
 import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
@@ -82,9 +83,15 @@ export default function FinanceDashboardPage() {
 
  {/* Row 3 — Payroll pipeline + unposted JEs + AP due this week. */}
  <PanelRow cols={3}>
- <PayrollPipelinePanel pipeline={data.payroll_pipeline} />
+ <PayrollPipelinePanel
+ pipeline={data.payroll_pipeline}
+ historyDays={data.payroll_pipeline_history_days}
+ />
  <UnpostedJesPanel data={data.unposted_jes} />
- <ApDueThisWeekPanel data={data.ap_due_this_week} />
+ <ApDuePanel
+ data={data.ap_due_this_week}
+ horizonDays={data.ap_due_horizon_days}
+ />
  </PanelRow>
 
  {/* Row 4 — Budget vs Actual + Recent JEs. */}
@@ -229,13 +236,20 @@ function AgingPanel({
 
 function PayrollPipelinePanel({
  pipeline,
+ historyDays,
 }: {
  pipeline: NonNullable<import('@/types/accounting').FinanceDashboardSummary['payroll_pipeline']> | undefined;
+ /**
+  * Server-reported window. The title hardcoded "90", which silently started
+  * lying the moment an operator retuned
+  * `dashboard.finance.payroll_pipeline_history_days`.
+  */
+ historyDays?: number;
 }) {
  if (!pipeline || pipeline.total === 0) {
  return (
- <Panel title="Payroll pipeline (last 90 days)">
- <EmptyState size="compact" icon="calendar" title="No payroll runs" description="No payroll periods in the last 90 days." />
+ <Panel title="Payroll pipeline" meta={<PeriodNote days={historyDays} />}>
+ <EmptyState size="compact" icon="calendar" title="No payroll runs" description="No payroll periods in this window." />
  </Panel>
  );
  }
@@ -248,7 +262,8 @@ function PayrollPipelinePanel({
  ];
  return (
  <Panel
- title="Payroll pipeline (last 90 days)"
+ title="Payroll pipeline"
+ meta={<PeriodNote days={historyDays} />}
  actions={<Link className="text-xs text-link hover:underline" to="/payroll/periods">Open →</Link>}
  >
  <div className="space-y-2">
@@ -294,15 +309,24 @@ function UnpostedJesPanel({
  );
 }
 
-function ApDueThisWeekPanel({
+function ApDuePanel({
  data,
+ horizonDays,
 }: {
  data: NonNullable<import('@/types/accounting').FinanceDashboardSummary['ap_due_this_week']> | undefined;
+ /**
+  * `dashboard.widgets.ap_due_horizon_days` as the server applied it. Seeded 7,
+  * which is where the old "this week" title came from — but it is an operator
+  * setting, and a payables clerk deciding what to release this afternoon needs
+  * the real horizon, not last quarter's default.
+  */
+ horizonDays?: number;
 }) {
  const items = data?.items ?? [];
  return (
  <Panel
- title="AP due this week"
+ title="AP due"
+ meta={<PeriodNote days={horizonDays} prefix="Due within" direction="future" />}
  actions={<Link className="text-xs text-link hover:underline" to="/accounting/bills">Open bills →</Link>}
  >
  <div className="flex items-baseline justify-between mb-2">

@@ -65,6 +65,8 @@ Route::middleware(['auth:sanctum', 'feature:crm'])->prefix('crm')->group(functio
         ->middleware('permission:crm.complaints.manage');
     Route::post('/complaints',                             [ComplaintController::class, 'store'])
         ->middleware('permission:crm.complaints.manage');
+    Route::post('/complaints/{complaint}/retry-ncr',       [ComplaintController::class, 'retryNcr'])
+        ->middleware('permission:crm.complaints.manage');
     Route::patch('/complaints/{complaint}/8d',             [ComplaintController::class, 'update8D'])
         ->middleware('permission:crm.complaints.manage');
     Route::post('/complaints/{complaint}/8d/finalize',     [ComplaintController::class, 'finalize8D'])

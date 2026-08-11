@@ -41,6 +41,7 @@ final class ChainDefinitions
         'in_production'      => 'in_production',
         'partial_production' => 'in_production',
         'ready_for_delivery' => 'ready_for_delivery',
+        'partially_delivered' => 'delivered',
         'partial_delivered'  => 'delivered',
         'delivered'          => 'delivered',
         'invoiced'           => 'invoiced',
@@ -62,6 +63,7 @@ final class ChainDefinitions
 
     private const STATUS_MAP_WORK_ORDER = [
         'draft'       => 'draft',
+        'planned'     => 'draft',
         'confirmed'   => 'confirmed',
         'in_progress' => 'in_progress',
         'paused'      => 'paused',
@@ -86,6 +88,7 @@ final class ChainDefinitions
         'pending_approval'  => 'pending_approval',
         'approved'          => 'approved',
         'sent'              => 'sent',
+        'partially_received' => 'partial_received',
         'partial_received'  => 'partial_received',
         'received'          => 'received',
         'fully_received'    => 'received',
@@ -96,6 +99,7 @@ final class ChainDefinitions
     /** @var array<int,string> Delivery (Chain 1, late stages). */
     private const STEPS_DELIVERY = [
         'scheduled',
+        'loading',
         'in_transit',
         'delivered',
         'confirmed',
@@ -103,6 +107,7 @@ final class ChainDefinitions
 
     private const STATUS_MAP_DELIVERY = [
         'scheduled'  => 'scheduled',
+        'loading'    => 'loading',
         'in_transit' => 'in_transit',
         'delivered'  => 'delivered',
         'confirmed'  => 'confirmed',
@@ -160,6 +165,7 @@ final class ChainDefinitions
         'inspecting' => 'qc_incoming',
         'pending_qc' => 'qc_incoming',
         'accepted'   => 'accepted',
+        'partial_accepted' => 'accepted',
         'rejected'   => 'closed',
         'closed'     => 'closed',
     ];
@@ -194,11 +200,50 @@ final class ChainDefinitions
             }
         }
 
-        // Code is the source of truth for chain definitions: any chain added
-        // in defaults() must resolve even when a pre-existing settings row
-        // (seeded before the chain existed) is stale. Admin overrides for
-        // known types still win because they come first in the merge.
-        return array_merge(self::defaults(), $valid);
+        // Code is the source of truth for chain definitions: any chain or
+        // status added in defaults() must resolve even when a pre-existing
+        // settings row (seeded before that status existed) is stale. Keep
+        // explicit admin mappings authoritative, while backfilling missing
+        // mappings from the current code contract.
+        $defaults = self::defaults();
+        foreach ($valid as $type => &$definition) {
+            if (isset($defaults[$type])) {
+                // A settings row can predate a newly added lifecycle step.
+                // Preserve any administrator-defined ordering and custom
+                // steps, but insert code-defined steps at their canonical
+                // position so an old cached/configured definition cannot
+                // collapse a real status back onto an earlier step.
+                $configuredSteps = array_values($definition['steps']);
+                foreach ($defaults[$type]['steps'] as $defaultIndex => $defaultStep) {
+                    if (in_array($defaultStep, $configuredSteps, true)) {
+                        continue;
+                    }
+
+                    $insertAt = count($configuredSteps);
+                    foreach ($configuredSteps as $configuredIndex => $configuredStep) {
+                        $configuredDefaultIndex = array_search(
+                            $configuredStep,
+                            $defaults[$type]['steps'],
+                            true,
+                        );
+                        if ($configuredDefaultIndex !== false && $configuredDefaultIndex > $defaultIndex) {
+                            $insertAt = $configuredIndex;
+                            break;
+                        }
+                    }
+
+                    array_splice($configuredSteps, $insertAt, 0, [$defaultStep]);
+                }
+                $definition['steps'] = $configuredSteps;
+                $definition['status_map'] = array_merge(
+                    $defaults[$type]['status_map'],
+                    $definition['status_map'],
+                );
+            }
+        }
+        unset($definition);
+
+        return array_merge($defaults, $valid);
     }
 
     /**
@@ -215,6 +260,41 @@ final class ChainDefinitions
         $completed = $idx === false ? [] : array_slice($steps, 0, (int) $idx);
 
         return [$active, $completed];
+    }
+
+    /**
+     * Resolve a status for a durable write-side chain event.
+     *
+     * The read-side resolver intentionally falls back to the first step so a
+     * legacy record can still render. A write must fail closed instead: an
+     * unmapped status is a contract drift that would otherwise publish false
+     * chain evidence.
+     *
+     * @return array{0: string, 1: array<int,string>}
+     */
+    public static function resolveStrict(string $entityType, string $status): array
+    {
+        $definition = self::configured()[$entityType] ?? null;
+        if ($definition === null) {
+            throw new \InvalidArgumentException("Unknown chain entity type [{$entityType}].");
+        }
+
+        $statusMap = $definition['status_map'];
+        if (! array_key_exists($status, $statusMap)) {
+            throw new \InvalidArgumentException(
+                "Status [{$status}] is not mapped for chain entity type [{$entityType}].",
+            );
+        }
+
+        $active = $statusMap[$status];
+        $idx = array_search($active, $definition['steps'], true);
+        if ($idx === false) {
+            throw new \InvalidArgumentException(
+                "Chain step [{$active}] for [{$entityType}] is not present in its ordered definition.",
+            );
+        }
+
+        return [$active, array_slice($definition['steps'], 0, (int) $idx)];
     }
 
     /** @return array<int,string> */
@@ -234,6 +314,9 @@ final class ChainDefinitions
             'grn'            => 'inventory.view',
             'bill'           => 'accounting.bills.view',
             'invoice'        => 'accounting.invoices.view',
+            'stock_movement' => 'accounting.journal.view',
+            'return_request' => 'return_management.view',
+            'customer_complaint' => 'crm.complaints.manage',
             default          => 'dashboard.view_bottlenecks', // fallback (unused; defensive)
         };
     }

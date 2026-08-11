@@ -28,6 +28,7 @@ const ScorecardPage = lazy(() => import('@/pages/dashboard/scorecard'));
 const CalendarPage = lazy(() => import('@/pages/calendar'));
 const ApprovalsBoardPage = lazy(() => import('@/pages/approvals'));
 const ChainTrackerPage = lazy(() => import('@/pages/chains'));
+const ChainRecoveryPage = lazy(() => import('@/pages/chains/recovery'));
 const NotificationsListPage = lazy(() => import('@/pages/notifications'));
 const ActionCenterPage = lazy(() => import('@/pages/action-center'));
 // /exceptions page file kept (scope-cut 2026-08-08) — reachable as the
@@ -86,6 +87,10 @@ export const dashboardRoutes = (
  />
 
  {/* Chain Tracker — cross-module order-to-cash journey view */}
+ <Route
+ path="/chains/recovery"
+ element={<PermissionGuard permission="dashboard.chain_recovery.view"><Suspense fallback={<SkeletonDashboard />}><ChainRecoveryPage /></Suspense></PermissionGuard>}
+ />
  <Route
  path="/chains"
  element={<PermissionGuard permission="crm.sales_orders.view"><Suspense fallback={<SkeletonDashboard />}><ChainTrackerPage /></Suspense></PermissionGuard>}

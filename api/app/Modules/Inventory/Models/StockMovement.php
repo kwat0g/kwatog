@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Modules\Inventory\Models;
 
 use App\Common\Traits\HasHashId;
+use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Auth\Models\User;
+use App\Modules\Inventory\Enums\MovementGlHandoffStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -21,6 +23,7 @@ class StockMovement extends Model
         'item_id', 'from_location_id', 'to_location_id',
         'movement_type', 'quantity', 'unit_cost', 'total_cost',
         'reference_type', 'reference_id', 'remarks', 'created_by', 'created_at',
+        'journal_entry_id', 'gl_handoff_status', 'gl_handoff_message', 'gl_handoff_at',
         // OGAMI-012 — lot/batch traceability (null-safe; optional).
         'lot_number', 'expiry_date',
     ];
@@ -30,8 +33,11 @@ class StockMovement extends Model
         'unit_cost'     => 'decimal:4',
         'total_cost'    => 'decimal:2',
         'movement_type' => StockMovementType::class,
+        'gl_handoff_status' => MovementGlHandoffStatus::class,
         'reference_id'  => 'integer',
+        'journal_entry_id' => 'integer',
         'created_at'    => 'datetime',
+        'gl_handoff_at' => 'datetime',
         'expiry_date'   => 'date',
     ];
 
@@ -53,5 +59,10 @@ class StockMovement extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function journalEntry(): BelongsTo
+    {
+        return $this->belongsTo(JournalEntry::class, 'journal_entry_id');
     }
 }

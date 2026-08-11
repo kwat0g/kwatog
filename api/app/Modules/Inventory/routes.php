@@ -88,6 +88,7 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
     Route::get('/stock-levels', [StockLevelController::class, 'index'])->middleware('permission:inventory.view');
     Route::get('/stock-movements/options', [StockMovementController::class, 'options'])->middleware('permission:inventory.view');
     Route::get('/stock-movements', [StockMovementController::class, 'index'])->middleware('permission:inventory.view');
+    Route::post('/stock-movements/{stockMovement}/retry-gl', [StockMovementController::class, 'retryGlHandoff'])->middleware('permission:accounting.journal.post');
     Route::post('/scan/resolve', [WarehouseScanController::class, 'resolve'])->middleware('permission:inventory.view');
     Route::get('/scan/options', [WarehouseScanController::class, 'options'])->middleware('permission:inventory.view');
     Route::get('/stock-adjustments/options', [StockAdjustmentController::class, 'options'])->middleware('permission:inventory.view');
@@ -132,6 +133,8 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
     Route::get('/grn/options', [GoodsReceiptNoteController::class, 'options'])->middleware('permission:inventory.view');
     Route::get('/grn', [GoodsReceiptNoteController::class, 'index'])->middleware('permission:inventory.view');
     Route::get('/grn/{grn}', [GoodsReceiptNoteController::class, 'show'])->middleware('permission:inventory.view');
+    Route::post('/grn/{grn}/retry-incoming-qc', [GoodsReceiptNoteController::class, 'retryIncomingQc'])
+        ->middleware('permission:quality.inspections.manage');
     Route::post('/grn', [GoodsReceiptNoteController::class, 'store'])->middleware('permission:inventory.grn.create');
     Route::patch('/grn/{grn}/finalize', [GoodsReceiptNoteController::class, 'finalize'])->middleware('permission:inventory.grn.create');
     Route::patch('/grn/{grn}/accept', [GoodsReceiptNoteController::class, 'accept'])->middleware('permission:inventory.grn.create');

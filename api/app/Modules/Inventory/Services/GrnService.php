@@ -7,6 +7,7 @@ namespace App\Modules\Inventory\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\ChainBroadcaster;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\OutboxService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Vendor;
@@ -14,6 +15,7 @@ use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
 use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Enums\ItemType;
+use App\Modules\Inventory\Enums\IncomingQcHandoffStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Events\GoodsReceiptNoteAccepted;
 use App\Modules\Inventory\Events\GoodsReceiptNoteCreated;
@@ -109,6 +111,15 @@ class GrnService
         }
 
         return DB::transaction(function () use ($po, $items, $meta, $by) {
+            $po = PurchaseOrder::query()->whereKey($po->id)->lockForUpdate()->firstOrFail();
+            if (! in_array($po->status, [
+                PurchaseOrderStatus::Approved,
+                PurchaseOrderStatus::Sent,
+                PurchaseOrderStatus::PartiallyReceived,
+            ], true)) {
+                throw new BusinessRuleException("PO {$po->po_number} is not open for receiving (status={$po->status->value}).");
+            }
+
             $grn = GoodsReceiptNote::create([
                 'grn_number' => $this->sequences->generate('grn'),
                 'purchase_order_id' => $po->id,
@@ -116,6 +127,8 @@ class GrnService
                 'received_date' => $meta['received_date'] ?? now()->toDateString(),
                 'received_by' => $by->id,
                 'status' => GrnStatus::PendingQc,
+                'incoming_qc_handoff_status' => IncomingQcHandoffStatus::NotStarted,
+                'incoming_qc_handoff_at' => now(),
                 'remarks' => $meta['remarks'] ?? null,
             ]);
 
@@ -146,9 +159,19 @@ class GrnService
                 // configured conversion for that line — is a follow-up. Until
                 // then the PO quantity is treated as already being in base uom.
                 $qtyReceived = (string) $row['quantity_received'];
+                if (! is_numeric($qtyReceived) || bccomp($qtyReceived, '0', 3) <= 0) {
+                    throw new BusinessRuleException(
+                        "PO line {$poi->id} must have a positive received quantity."
+                    );
+                }
                 if (! empty($row['received_uom_code'])) {
                     $item = Item::query()->findOrFail($itemId);
                     $qtyReceived = $item->convertToBase($qtyReceived, (string) $row['received_uom_code']);
+                }
+                if (! is_numeric($qtyReceived) || bccomp($qtyReceived, '0', 3) <= 0) {
+                    throw new BusinessRuleException(
+                        "PO line {$poi->id} converts to a non-positive base received quantity."
+                    );
                 }
 
                 $remaining = bcsub((string) $poi->quantity, (string) $poi->quantity_received, 3);
@@ -199,7 +222,7 @@ class GrnService
                 $poi->save();
             }
 
-            $this->refreshPoStatus($po);
+            $this->refreshPoStatus($po, $by);
 
             // F-06 — create incoming-QC inspections SYNCHRONOUSLY so the QC
             // gate can never fail open when the queue worker is down or the
@@ -209,18 +232,29 @@ class GrnService
             try {
                 app(TriggerIncomingQC::class)->handle(new GoodsReceiptNoteCreated($grn->fresh()));
             } catch (\Throwable $e) {
+                $this->markIncomingQcHandoffPending(
+                    $grn->id,
+                    'Incoming QC trigger is waiting for queue replay: '.$e->getMessage(),
+                );
                 Log::warning('Synchronous incoming-QC trigger failed', [
                     'grn_id' => $grn->id,
                     'error' => $e->getMessage(),
                 ]);
             }
 
-            // Series C — Task C2. Domain event for chain listeners
-            // (TriggerIncomingQC). Fires after commit so the row is visible.
-            DB::afterCommit(fn () => event(new GoodsReceiptNoteCreated($grn->fresh()))
+            // Durable event publication is recorded with the GRN write. The
+            // outbox dispatcher publishes after commit and safely replays the
+            // idempotent incoming-QC listener if the queue is unavailable.
+            $fresh = $grn->fresh();
+            app(OutboxService::class)->recordForChain(
+                new GoodsReceiptNoteCreated($fresh),
+                $fresh,
+                'p2p',
+                'grn',
+                'received',
             );
 
-            return $this->show($grn->fresh());
+            return $this->show($fresh);
         });
     }
 
@@ -236,33 +270,45 @@ class GrnService
      */
     public function createDraftForPo(PurchaseOrder $po, ?User $by = null): ?GoodsReceiptNote
     {
-        $existingDraft = GoodsReceiptNote::query()
-            ->where('purchase_order_id', $po->id)
-            ->where('status', GrnStatus::Draft->value)
-            ->first();
-        if ($existingDraft) {
-            return $existingDraft;
-        }
-        if (GoodsReceiptNote::query()
-            ->where('purchase_order_id', $po->id)
-            ->where('status', '!=', GrnStatus::Draft->value)
-            ->exists()) {
-            return null; // already received — no expectation needed
-        }
-
         return DB::transaction(function () use ($po, $by) {
+            // The PO is the serialization point for expected-receipt staging.
+            // The old read-then-create sequence allowed two replayed
+            // PurchaseOrderSent events to both observe no draft and create two
+            // expectations. It also trusted the event's serialized status, so a
+            // delayed sent event could stage a draft after cancellation.
+            $lockedPo = PurchaseOrder::query()
+                ->lockForUpdate()
+                ->find($po->id);
+            if (! $lockedPo || $lockedPo->status !== PurchaseOrderStatus::Sent) {
+                return null;
+            }
+
+            $existingDraft = GoodsReceiptNote::query()
+                ->where('purchase_order_id', $lockedPo->id)
+                ->where('status', GrnStatus::Draft->value)
+                ->first();
+            if ($existingDraft) {
+                return $existingDraft;
+            }
+            if (GoodsReceiptNote::query()
+                ->where('purchase_order_id', $lockedPo->id)
+                ->where('status', '!=', GrnStatus::Draft->value)
+                ->exists()) {
+                return null; // already received — no expectation needed
+            }
+
             $grn = GoodsReceiptNote::create([
                 'grn_number'         => $this->sequences->generate('grn'),
-                'purchase_order_id'  => $po->id,
-                'vendor_id'          => $po->vendor_id,
+                'purchase_order_id'  => $lockedPo->id,
+                'vendor_id'          => $lockedPo->vendor_id,
                 'received_date'      => null,
                 'received_by'        => $by?->id,
                 'status'             => GrnStatus::Draft,
                 'remarks'            => 'Expected receipt — auto-created when the PO was sent to the supplier.',
             ]);
 
-            $po->loadMissing('items');
-            foreach ($po->items as $line) {
+            $lockedPo->load('items');
+            foreach ($lockedPo->items as $line) {
                 GrnItem::create([
                     'goods_receipt_note_id'  => $grn->id,
                     'purchase_order_item_id' => $line->id,
@@ -294,9 +340,16 @@ class GrnService
         }
 
         return DB::transaction(function () use ($grn, $items, $by) {
-            $po = $grn->purchaseOrder;
-            $grn->loadMissing('items');
-            $draftLineById = $grn->items->keyBy('purchase_order_item_id');
+            $lockedGrn = GoodsReceiptNote::query()->whereKey($grn->id)->lockForUpdate()->firstOrFail();
+            if ($lockedGrn->status !== GrnStatus::Draft) {
+                throw new BusinessRuleException('Only draft GRNs can be finalized.');
+            }
+            $po = PurchaseOrder::query()
+                ->whereKey($lockedGrn->purchase_order_id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $lockedGrn->loadMissing('items');
+            $draftLineById = $lockedGrn->items->keyBy('purchase_order_item_id');
 
             foreach ($items as $row) {
                 $poiId = HashIdFilter::decode($row['purchase_order_item_id'], PurchaseOrderItem::class)
@@ -313,6 +366,11 @@ class GrnService
                 $locationId = HashIdFilter::decode($row['location_id'], WarehouseLocation::class)
                     ?? (int) $row['location_id'];
                 $qtyReceived = (string) $row['quantity_received'];
+                if (! is_numeric($qtyReceived) || bccomp($qtyReceived, '0', 3) <= 0) {
+                    throw new BusinessRuleException(
+                        "PO line {$poi->id} must have a positive received quantity."
+                    );
+                }
 
                 // Same over-receipt guard as create(): what was already
                 // received (from earlier GRNs) caps what this line may take.
@@ -340,68 +398,137 @@ class GrnService
                 $poi->save();
             }
 
-            $this->refreshPoStatus($po);
+            $this->refreshPoStatus($po, $by);
 
-            $grn->update([
+            $lockedGrn->update([
                 'status'        => GrnStatus::PendingQc,
                 'received_date' => now()->toDateString(),
                 'received_by'   => $by->id,
+                'incoming_qc_handoff_status' => IncomingQcHandoffStatus::NotStarted,
+                'incoming_qc_handoff_message' => null,
+                'incoming_qc_handoff_at' => now(),
             ]);
-            $fresh = $grn->fresh();
+            $fresh = $lockedGrn->fresh();
 
             // Same chain wiring as create(): incoming QC synchronously, then
             // the async event for retry/idempotent listeners.
             try {
                 app(TriggerIncomingQC::class)->handle(new GoodsReceiptNoteCreated($fresh));
             } catch (\Throwable $e) {
+                $this->markIncomingQcHandoffPending(
+                    $lockedGrn->id,
+                    'Incoming QC trigger is waiting for queue replay: '.$e->getMessage(),
+                );
                 Log::warning('Synchronous incoming-QC trigger failed on GRN finalize', [
-                    'grn_id' => $grn->id,
+                    'grn_id' => $lockedGrn->id,
                     'error' => $e->getMessage(),
                 ]);
             }
-            DB::afterCommit(fn () => event(new GoodsReceiptNoteCreated($fresh)));
+            app(OutboxService::class)->recordForChain(
+                new GoodsReceiptNoteCreated($fresh),
+                $fresh,
+                'p2p',
+                'grn',
+                'received',
+            );
 
             return $this->show($fresh);
         });
     }
 
+    /** Retry only the GRN → Quality incoming-QC handoff. */
+    public function retryIncomingQcHandoff(GoodsReceiptNote $grn): GoodsReceiptNote
+    {
+        return DB::transaction(function () use ($grn): GoodsReceiptNote {
+            $locked = GoodsReceiptNote::query()
+                ->whereKey($grn->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            if ($locked->status !== GrnStatus::PendingQc) {
+                throw new BusinessRuleException(
+                    'Only pending_qc GRNs can retry the incoming Quality handoff.'
+                );
+            }
+
+            app(TriggerIncomingQC::class)->handle(new GoodsReceiptNoteCreated($locked->fresh()));
+
+            return $this->show($locked->fresh());
+        });
+    }
+
+    public function markIncomingQcHandoffGenerated(int $grnId): void
+    {
+        GoodsReceiptNote::query()->whereKey($grnId)->update([
+            'incoming_qc_handoff_status' => IncomingQcHandoffStatus::Generated->value,
+            'incoming_qc_handoff_message' => null,
+            'incoming_qc_handoff_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    public function markIncomingQcHandoffNotRequired(int $grnId): void
+    {
+        GoodsReceiptNote::query()->whereKey($grnId)->update([
+            'incoming_qc_handoff_status' => IncomingQcHandoffStatus::NotRequired->value,
+            'incoming_qc_handoff_message' => null,
+            'incoming_qc_handoff_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    public function markIncomingQcHandoffManual(int $grnId, ?string $message = null): void
+    {
+        GoodsReceiptNote::query()->whereKey($grnId)->update([
+            'incoming_qc_handoff_status' => IncomingQcHandoffStatus::ManualRequired->value,
+            'incoming_qc_handoff_message' => $message ?: 'Incoming QC trigger requires manual action.',
+            'incoming_qc_handoff_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    public function markIncomingQcHandoffPending(int $grnId, ?string $message = null): void
+    {
+        GoodsReceiptNote::query()->whereKey($grnId)->update([
+            'incoming_qc_handoff_status' => IncomingQcHandoffStatus::NotStarted->value,
+            'incoming_qc_handoff_message' => $message,
+            'incoming_qc_handoff_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
     /** Accept the entire GRN — moves stock for every line at full quantity_received. */
     public function accept(GoodsReceiptNote $grn, User $by): GoodsReceiptNote
     {
-        if ($grn->status !== GrnStatus::PendingQc) {
-            throw new BusinessRuleException('Only pending_qc GRNs can be accepted.');
-        }
-        $this->assertQcGate($grn);
-
         return DB::transaction(function () use ($grn, $by) {
-            foreach ($grn->items as $row) {
+            $lockedGrn = GoodsReceiptNote::query()
+                ->whereKey($grn->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            if ($lockedGrn->status !== GrnStatus::PendingQc) {
+                throw new BusinessRuleException('Only pending_qc GRNs can be accepted.');
+            }
+            $this->assertQcGate($lockedGrn);
+
+            $rows = GrnItem::query()
+                ->where('goods_receipt_note_id', $lockedGrn->id)
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($rows as $row) {
+                $delta = bcsub((string) $row->quantity_received, (string) $row->quantity_accepted, 3);
+                if (bccomp($delta, '0', 3) < 0) {
+                    throw new BusinessRuleException("Accepted quantity exceeds received for line {$row->id}.");
+                }
                 $row->quantity_accepted = $row->quantity_received;
                 $row->save();
-                $mvmt = $this->movements->move(new StockMovementInput(
-                    type: StockMovementType::GrnReceipt,
-                    itemId: $row->item_id,
-                    fromLocationId: null,
-                    toLocationId: $row->location_id,
-                    quantity: (string) $row->quantity_received,
-                    unitCost: (string) $row->unit_cost,
-                    referenceType: 'goods_receipt_note',
-                    referenceId: $grn->id,
-                    remarks: "GRN {$grn->grn_number}",
-                    createdBy: $by->id,
-                ));
-                // OGAMI-012 — propagate the captured lot/expiry onto the ledger.
-                $this->movements->stampLot(
-                    $mvmt,
-                    $row->material_lot_number,
-                    $row->expiry_date?->toDateString(),
-                );
+                $this->moveAcceptedQuantity($row, $delta, $by, "GRN {$lockedGrn->grn_number}");
             }
-            $grn->update([
+            $lockedGrn->update([
                 'status' => GrnStatus::Accepted,
                 'accepted_by' => $by->id,
                 'accepted_at' => now(),
             ]);
-            $fresh = $grn->fresh();
+            $fresh = $lockedGrn->fresh();
 
             // Keep inventory and accounting atomic. When Accounting is disabled
             // post() intentionally returns null; when it is enabled, a missing
@@ -409,14 +536,18 @@ class GrnService
             $this->gl->post($fresh);
             $fresh = $fresh->fresh();
 
-            // Series C — Task C4. Real-time chain progress for the GRN
-            // detail page on the SPA, plus the auto-bill chain (draft
-            // supplier bill pre-created for the payables team).
-            DB::afterCommit(function () use ($fresh, $by): void {
-                app(ChainBroadcaster::class)
-                    ->broadcastFor($fresh, GrnStatus::Accepted->value, $by);
-                event(new GoodsReceiptNoteAccepted($fresh));
-            });
+            app(OutboxService::class)->recordForChain(
+                new GoodsReceiptNoteAccepted($fresh),
+                $fresh,
+                'p2p',
+                'grn',
+                GrnStatus::Accepted->value,
+            );
+
+            // Series C — Task C4. Stage real-time chain progress with the
+            // acceptance; the outbox dispatch itself waits for commit.
+            app(ChainBroadcaster::class)
+                ->broadcastFor($fresh, GrnStatus::Accepted->value, $by);
 
             return $fresh;
         });
@@ -425,104 +556,105 @@ class GrnService
     /** Partially accept — caller supplies quantity_accepted per grn_item id. */
     public function partialAccept(GoodsReceiptNote $grn, array $itemAcceptedMap, User $by): GoodsReceiptNote
     {
-        if ($grn->status !== GrnStatus::PendingQc) {
-            throw new BusinessRuleException('Only pending_qc GRNs can be partially accepted.');
-        }
-        $this->assertQcGate($grn);
-
-        $hasNonZero = false;
-        foreach ($itemAcceptedMap as $qty) {
-            if (bccomp((string) ($qty ?? '0'), '0', 3) > 0) {
-                $hasNonZero = true;
-                break;
-            }
-        }
-        if (! $hasNonZero) {
-            throw new BusinessRuleException('At least one line must have a non-zero accepted quantity.');
-        }
-
         $result = DB::transaction(function () use ($grn, $itemAcceptedMap, $by) {
+            $lockedGrn = GoodsReceiptNote::query()
+                ->whereKey($grn->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            if (! in_array($lockedGrn->status, [GrnStatus::PendingQc, GrnStatus::PartialAccepted], true)) {
+                throw new BusinessRuleException('Only pending_qc or partial_accepted GRNs can be accepted.');
+            }
+            $this->assertQcGate($lockedGrn);
+
+            $rows = GrnItem::query()
+                ->where('goods_receipt_note_id', $lockedGrn->id)
+                ->lockForUpdate()
+                ->get();
             $allFull = true;
-            foreach ($grn->items as $row) {
-                $accepted = (string) ($itemAcceptedMap[$row->id] ?? '0');
+            $hasDelta = false;
+            foreach ($rows as $row) {
+                $accepted = array_key_exists($row->id, $itemAcceptedMap)
+                    ? (string) $itemAcceptedMap[$row->id]
+                    : (string) $row->quantity_accepted;
+                if (! is_numeric($accepted) || bccomp($accepted, '0', 3) < 0) {
+                    throw new BusinessRuleException("Accepted quantity for line {$row->id} must be a non-negative number.");
+                }
+                $current = (string) $row->quantity_accepted;
+                if (bccomp($accepted, $current, 3) < 0) {
+                    throw new BusinessRuleException("Accepted quantity for line {$row->id} cannot be reduced after stock was posted.");
+                }
                 if (bccomp($accepted, (string) $row->quantity_received, 3) > 0) {
                     throw new BusinessRuleException("Accepted quantity exceeds received for line {$row->id}.");
                 }
                 if (bccomp($accepted, (string) $row->quantity_received, 3) < 0) {
                     $allFull = false;
                 }
+                $delta = bcsub($accepted, $current, 3);
+                if (bccomp($delta, '0', 3) > 0) {
+                    $hasDelta = true;
+                }
                 $row->quantity_accepted = $accepted;
                 $row->save();
-                if (bccomp($accepted, '0', 3) > 0) {
-                    $mvmt = $this->movements->move(new StockMovementInput(
-                        type: StockMovementType::GrnReceipt,
-                        itemId: $row->item_id,
-                        fromLocationId: null,
-                        toLocationId: $row->location_id,
-                        quantity: $accepted,
-                        unitCost: (string) $row->unit_cost,
-                        referenceType: 'goods_receipt_note',
-                        referenceId: $grn->id,
-                        remarks: "GRN {$grn->grn_number} (partial)",
-                        createdBy: $by->id,
-                    ));
-                    $this->movements->stampLot(
-                        $mvmt,
-                        $row->material_lot_number,
-                        $row->expiry_date?->toDateString(),
-                    );
-                }
+                $this->moveAcceptedQuantity($row, $delta, $by, "GRN {$lockedGrn->grn_number} (acceptance delta)");
             }
-            $grn->update([
+            if (! $hasDelta) {
+                throw new BusinessRuleException('Increase at least one accepted quantity before submitting.');
+            }
+            $lockedGrn->update([
                 'status' => $allFull ? GrnStatus::Accepted : GrnStatus::PartialAccepted,
                 'accepted_by' => $by->id,
                 'accepted_at' => now(),
             ]);
-            $fresh = $grn->fresh();
+            $fresh = $lockedGrn->fresh();
 
             $this->gl->post($fresh);
             $fresh = $fresh->fresh();
 
+            if ($allFull) {
+                app(OutboxService::class)->recordForChain(
+                    new GoodsReceiptNoteAccepted($fresh),
+                    $fresh,
+                    'p2p',
+                    'grn',
+                    GrnStatus::Accepted->value,
+                );
+            }
+
+            app(ChainBroadcaster::class)->broadcastFor(
+                $fresh,
+                $allFull ? GrnStatus::Accepted->value : GrnStatus::PartialAccepted->value,
+                $by,
+            );
+
             return $fresh;
         });
-
-        // A partial accept that ends up covering every line transitions to
-        // Accepted — fire the same chain event as accept() so the auto-bill
-        // listener stages the draft supplier bill.
-        if ($result->status === GrnStatus::Accepted) {
-            DB::afterCommit(function () use ($result, $by): void {
-                app(ChainBroadcaster::class)
-                    ->broadcastFor($result, GrnStatus::Accepted->value, $by);
-                event(new GoodsReceiptNoteAccepted($result));
-            });
-        }
-
         return $result;
     }
 
     public function reject(GoodsReceiptNote $grn, string $reason, User $by): GoodsReceiptNote
     {
-        if ($grn->status !== GrnStatus::PendingQc) {
-            throw new BusinessRuleException('Only pending_qc GRNs can be rejected.');
-        }
         $result = DB::transaction(function () use ($grn, $reason, $by) {
-            $grn->update([
+            $lockedGrn = GoodsReceiptNote::query()
+                ->whereKey($grn->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            if ($lockedGrn->status !== GrnStatus::PendingQc) {
+                throw new BusinessRuleException('Only pending_qc GRNs can be rejected.');
+            }
+            $this->reversePoReceipt($lockedGrn, $by);
+            $lockedGrn->update([
                 'status' => GrnStatus::Rejected,
                 'rejected_reason' => $reason,
                 'accepted_by' => $by->id,
                 'accepted_at' => now(),
             ]);
 
-            return $grn->fresh();
+            $fresh = $lockedGrn->fresh();
+            app(ChainBroadcaster::class)
+                ->broadcastFor($fresh, GrnStatus::Rejected->value, $by);
+
+            return $fresh;
         });
-
-        // Series C — Task C4. Real-time chain progress.
-        app(ChainBroadcaster::class)->broadcastFor(
-            $result,
-            GrnStatus::Rejected->value,
-            $by,
-        );
-
         return $result;
     }
 
@@ -541,6 +673,7 @@ class GrnService
     private function assertQcGate(GoodsReceiptNote $grn): void
     {
         $statuses = DB::table('inspections')
+            ->where('stage', 'incoming')
             ->where('entity_type', 'grn')
             ->where('entity_id', $grn->id)
             ->pluck('status');
@@ -554,7 +687,10 @@ class GrnService
             return;
         }
         if ($statuses->isEmpty()) {
-            $statuses = collect([DB::table('inspections')->where('id', $grn->qc_inspection_id)->value('status')]);
+            $statuses = collect([DB::table('inspections')
+                ->where('stage', 'incoming')
+                ->where('id', $grn->qc_inspection_id)
+                ->value('status')]);
         }
         // F-12 — a cancelled inspection (logistics rejection, P3.6) is a
         // completed decision; it must not block acceptance forever.
@@ -792,11 +928,15 @@ class GrnService
         // invariant as the standalone accept endpoint.
         $this->gl->post($fresh);
         $fresh = $fresh->fresh();
-        DB::afterCommit(function () use ($fresh, $by): void {
-            app(ChainBroadcaster::class)
-                ->broadcastFor($fresh, GrnStatus::Accepted->value, $by);
-            event(new GoodsReceiptNoteAccepted($fresh));
-        });
+        app(OutboxService::class)->recordForChain(
+            new GoodsReceiptNoteAccepted($fresh),
+            $fresh,
+            'p2p',
+            'grn',
+            GrnStatus::Accepted->value,
+        );
+        app(ChainBroadcaster::class)
+            ->broadcastFor($fresh, GrnStatus::Accepted->value, $by);
 
         return $fresh;
     }
@@ -806,6 +946,7 @@ class GrnService
      */
     private function rejectInternal(GoodsReceiptNote $grn, string $reason, User $by): GoodsReceiptNote
     {
+        $this->reversePoReceipt($grn, $by);
         $grn->update([
             'status' => GrnStatus::Rejected,
             'rejected_reason' => $reason,
@@ -814,11 +955,75 @@ class GrnService
         ]);
 
         $fresh = $grn->fresh();
-        DB::afterCommit(fn () => app(ChainBroadcaster::class)
-            ->broadcastFor($fresh, GrnStatus::Rejected->value, $by)
-        );
+        app(ChainBroadcaster::class)
+            ->broadcastFor($fresh, GrnStatus::Rejected->value, $by);
 
         return $fresh;
+    }
+
+    /**
+     * Reverse the pre-QC PO receipt created by create()/finalizeDraft().
+     *
+     * The PO running total represents physically received goods, so a GRN
+     * rejection must remove exactly this GRN's quantities. Locks prevent a
+     * concurrent receipt or return from producing a negative or stale total.
+     */
+    private function reversePoReceipt(GoodsReceiptNote $grn, ?User $by = null): void
+    {
+        $po = PurchaseOrder::query()
+            ->whereKey($grn->purchase_order_id)
+            ->lockForUpdate()
+            ->firstOrFail();
+        $rows = GrnItem::query()
+            ->where('goods_receipt_note_id', $grn->id)
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($rows as $row) {
+            $poItem = PurchaseOrderItem::query()->whereKey($row->purchase_order_item_id)->lockForUpdate()->firstOrFail();
+            if (bccomp((string) $poItem->quantity_received, (string) $row->quantity_received, 3) < 0) {
+                throw new BusinessRuleException(
+                    "Cannot reject GRN {$grn->grn_number}: PO line {$poItem->id} is already below the receipt quantity."
+                );
+            }
+            $poItem->quantity_received = bcsub(
+                (string) $poItem->quantity_received,
+                (string) $row->quantity_received,
+                3,
+            );
+            $poItem->save();
+        }
+
+        $zeroStatus = $po->sent_to_supplier_at
+            ? PurchaseOrderStatus::Sent
+            : PurchaseOrderStatus::Approved;
+        $this->refreshPoStatus($po, $by, $zeroStatus);
+    }
+
+    /** Move only a newly accepted delta into inventory. */
+    private function moveAcceptedQuantity(GrnItem $row, string $quantity, User $by, string $remarks): void
+    {
+        if (bccomp($quantity, '0', 3) <= 0) {
+            return;
+        }
+        $mvmt = $this->movements->move(new StockMovementInput(
+            type: StockMovementType::GrnReceipt,
+            itemId: $row->item_id,
+            fromLocationId: null,
+            toLocationId: $row->location_id,
+            quantity: $quantity,
+            unitCost: (string) $row->unit_cost,
+            referenceType: 'goods_receipt_note',
+            referenceId: $row->goods_receipt_note_id,
+            remarks: $remarks,
+            createdBy: $by->id,
+        ));
+        // OGAMI-012 — propagate the captured lot/expiry onto the ledger.
+        $this->movements->stampLot(
+            $mvmt,
+            $row->material_lot_number,
+            $row->expiry_date?->toDateString(),
+        );
     }
 
     /**
@@ -829,7 +1034,7 @@ class GrnService
      * When $isQualityFailure is false (a logistics rejection — e.g. wrong
      * part number, short shipment) the inspection is cancelled instead of
      * force-completed as failed. This prevents InspectionService::complete()
-     * from triggering the afterCommit → NcrService::openFromInspectionFailure()
+     * from triggering the transactional NcrService::openFromInspectionFailure()
      * path, which would pollute the NCR queue with non-quality events.
      *
      * @param  bool  $isQualityFailure  true (default) = genuine QC failure,
@@ -882,10 +1087,18 @@ class GrnService
         return class_exists($cls) ? app($cls) : null;
     }
 
-    private function refreshPoStatus(PurchaseOrder $po): void
+    private function refreshPoStatus(
+        PurchaseOrder $po,
+        ?User $by = null,
+        ?PurchaseOrderStatus $zeroStatus = null,
+    ): void
     {
+        $previousStatus = $po->status instanceof PurchaseOrderStatus
+            ? $po->status->value
+            : (string) $po->status;
+
         $po->load('items');
-        $allReceived = $po->items->every(
+        $allReceived = $po->items->isNotEmpty() && $po->items->every(
             fn ($l) => bccomp((string) $l->quantity_received, (string) $l->quantity, 3) >= 0
         );
         $anyReceived = $po->items->contains(
@@ -895,7 +1108,26 @@ class GrnService
             $po->status = PurchaseOrderStatus::Received;
         } elseif ($anyReceived) {
             $po->status = PurchaseOrderStatus::PartiallyReceived;
+        } elseif ($zeroStatus !== null) {
+            $po->status = $zeroStatus;
         }
         $po->save();
+
+        $currentStatus = $po->status instanceof PurchaseOrderStatus
+            ? $po->status->value
+            : (string) $po->status;
+
+        if ($currentStatus !== $previousStatus) {
+            $fresh = $po->fresh();
+            if ($fresh) {
+                app(ChainBroadcaster::class)->broadcastFor(
+                    $fresh,
+                    $fresh->status instanceof PurchaseOrderStatus
+                        ? $fresh->status->value
+                        : (string) $fresh->status,
+                    $by,
+                );
+            }
+        }
     }
 }

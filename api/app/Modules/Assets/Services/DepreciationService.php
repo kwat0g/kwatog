@@ -36,6 +36,12 @@ class DepreciationService
             $assets = Asset::query()
                 ->whereIn('status', [AssetStatus::Active->value, AssetStatus::UnderMaintenance->value])
                 ->where('acquisition_date', '<=', CarbonImmutable::create($year, $month, 1)->endOfMonth())
+                // A manual backfill and the scheduled period can overlap.
+                // Serialize asset reads/writes in id order so two periods
+                // cannot calculate the same accumulated balance and then
+                // overwrite each other's result.
+                ->orderBy('id')
+                ->lockForUpdate()
                 ->get();
 
             $rows = [];
@@ -50,14 +56,18 @@ class DepreciationService
                 }
 
                 $monthly = (float) $asset->monthly_depreciation;
-                if ($monthly <= 0) continue;
+                if ($monthly <= 0) {
+                    continue;
+                }
 
                 // Cap so we don't depreciate beyond cost - salvage
-                $depreciable    = max(0.0, (float) $asset->acquisition_cost - (float) $asset->salvage_value);
-                $alreadyAccum   = (float) $asset->accumulated_depreciation;
-                $remaining      = max(0.0, $depreciable - $alreadyAccum);
-                $thisMonth      = min($monthly, $remaining);
-                if ($thisMonth <= 0) continue;
+                $depreciable = max(0.0, (float) $asset->acquisition_cost - (float) $asset->salvage_value);
+                $alreadyAccum = (float) $asset->accumulated_depreciation;
+                $remaining = max(0.0, $depreciable - $alreadyAccum);
+                $thisMonth = min($monthly, $remaining);
+                if ($thisMonth <= 0) {
+                    continue;
+                }
 
                 $newAccum = $alreadyAccum + $thisMonth;
                 $rows[] = [
@@ -73,19 +83,19 @@ class DepreciationService
             }
 
             // Post one consolidated JE for the period
-            $depExp  = Account::where('code', $this->settings->requiredString('accounting.accounts.depreciation_expense_code'))->firstOrFail();
-            $accDep  = Account::where('code', $this->settings->requiredString('accounting.accounts.asset_accumulated_depreciation_code'))->firstOrFail();
+            $depExp = Account::where('code', $this->settings->requiredString('accounting.accounts.depreciation_expense_code'))->firstOrFail();
+            $accDep = Account::where('code', $this->settings->requiredString('accounting.accounts.asset_accumulated_depreciation_code'))->firstOrFail();
             $lines = [
-                ['account_id' => $depExp->id, 'debit'  => number_format($totalAmount, 2, '.', ''), 'credit' => '0.00', 'description' => 'Monthly depreciation'],
-                ['account_id' => $accDep->id, 'debit'  => '0.00', 'credit' => number_format($totalAmount, 2, '.', ''),  'description' => 'Monthly depreciation'],
+                ['account_id' => $depExp->id, 'debit' => number_format($totalAmount, 2, '.', ''), 'credit' => '0.00', 'description' => 'Monthly depreciation'],
+                ['account_id' => $accDep->id, 'debit' => '0.00', 'credit' => number_format($totalAmount, 2, '.', ''),  'description' => 'Monthly depreciation'],
             ];
             $periodLabel = sprintf('%04d-%02d', $year, $month);
             $je = $this->journals->create([
-                'date'           => CarbonImmutable::create($year, $month, 1)->endOfMonth()->toDateString(),
-                'description'    => 'Asset depreciation — '.$periodLabel,
+                'date' => CarbonImmutable::create($year, $month, 1)->endOfMonth()->toDateString(),
+                'description' => 'Asset depreciation — '.$periodLabel,
                 'reference_type' => 'asset_depreciation',
-                'reference_id'   => null,
-                'lines'          => $lines,
+                'reference_id' => null,
+                'lines' => $lines,
             ], $by);
             $this->journals->post($je, $by);
 
@@ -94,20 +104,20 @@ class DepreciationService
                 /** @var Asset $asset */
                 $asset = $row['asset'];
                 AssetDepreciation::create([
-                    'asset_id'             => $asset->id,
-                    'period_year'          => $year,
-                    'period_month'         => $month,
-                    'depreciation_amount'  => number_format($row['amount'], 2, '.', ''),
-                    'accumulated_after'    => number_format($row['accumulated_after'], 2, '.', ''),
-                    'journal_entry_id'     => $je->id,
-                    'created_at'           => now(),
+                    'asset_id' => $asset->id,
+                    'period_year' => $year,
+                    'period_month' => $month,
+                    'depreciation_amount' => number_format($row['amount'], 2, '.', ''),
+                    'accumulated_after' => number_format($row['accumulated_after'], 2, '.', ''),
+                    'journal_entry_id' => $je->id,
+                    'created_at' => now(),
                 ]);
                 $asset->forceFill(['accumulated_depreciation' => number_format($row['accumulated_after'], 2, '.', '')])->save();
             }
 
             return [
-                'posted_count'     => count($rows),
-                'total_amount'     => number_format($totalAmount, 2, '.', ''),
+                'posted_count' => count($rows),
+                'total_amount' => number_format($totalAmount, 2, '.', ''),
                 'journal_entry_id' => $je->id,
             ];
         });

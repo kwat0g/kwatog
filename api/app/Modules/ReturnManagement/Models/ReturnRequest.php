@@ -16,6 +16,7 @@ use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\NonConformanceReport;
+use App\Modules\ReturnManagement\Enums\ReturnInspectionHandoffStatus;
 use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
 use App\Modules\ReturnManagement\Enums\ReturnRequestType;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -51,6 +52,9 @@ class ReturnRequest extends Model
         'refund_amount',
         'stock_movement_id',
         'inspection_id',
+        'inspection_handoff_status',
+        'inspection_handoff_message',
+        'inspection_handoff_at',
         'ncr_id',
         'return_date',
         'approved_at',
@@ -67,11 +71,13 @@ class ReturnRequest extends Model
     protected $casts = [
         'type'         => ReturnRequestType::class,
         'status'       => ReturnRequestStatus::class,
+        'inspection_handoff_status' => ReturnInspectionHandoffStatus::class,
         'return_date'  => 'date',
         'refund_amount' => 'decimal:2',
         'approved_at'  => 'datetime',
         'received_at'  => 'datetime',
         'inspected_at' => 'datetime',
+        'inspection_handoff_at' => 'datetime',
         'completed_at' => 'datetime',
         'rejected_at'  => 'datetime',
         'cancelled_at' => 'datetime',

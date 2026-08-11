@@ -81,7 +81,7 @@ export default function LandingPage() {
   return (
     <div
       ref={rootRef}
-      className="min-h-screen bg-canvas font-sans text-primary antialiased"
+      className="min-h-screen overflow-x-clip bg-canvas font-sans text-primary antialiased"
     >
       <ScrollProgress />
       <a

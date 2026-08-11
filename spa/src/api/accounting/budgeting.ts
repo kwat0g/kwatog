@@ -74,6 +74,11 @@ export const budgetingApi = {
  budgetVsActual: (fiscalYearId?: number) =>
  client.get<{ data: BudgetVsActual }>('/budgets/budget-vs-actual', { params: { fiscal_year_id: fiscalYearId } }).then((r) => r.data.data),
 
+ syncActuals: (fiscalYearId?: number) =>
+ client.post<{ data: { dispatched: boolean; outbox_id: string; status: string } }>('/budgets/sync-actuals', {
+ fiscal_year_id: fiscalYearId,
+ }).then((r) => r.data.data),
+
  // Budget Enforcement
  checkAvailability: (departmentId: number, amount: number, fiscalYearId?: number) =>
  client.get<{ data: BudgetCheckAvailability }>('/budgets/check-availability', {

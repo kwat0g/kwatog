@@ -8,6 +8,7 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\ApprovalService;
 use App\Common\Services\BusinessPolicyService;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
 use App\Common\Services\TaxPolicyService;
 use App\Common\Support\HashIdFilter;
@@ -18,7 +19,11 @@ use App\Modules\Accounting\Services\BudgetEnforcementService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
+use App\Modules\Purchasing\Enums\PurchaseRequestConversionStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
+use App\Modules\Purchasing\Events\PurchaseOrderApproved;
+use App\Modules\Purchasing\Events\PurchaseOrderCancelled;
+use App\Modules\Purchasing\Events\PurchaseOrderSent;
 use App\Modules\Purchasing\Models\ApprovedSupplier;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
@@ -37,6 +42,7 @@ class PurchaseOrderService
         private readonly BudgetEnforcementService $budget,
         private readonly TaxPolicyService $taxPolicy,
         private readonly SettingsService $settings,
+        private readonly SupplierDispatchService $supplierDispatches,
     ) {}
 
     private function resolveDepartmentId(array $data): ?int
@@ -59,6 +65,7 @@ class PurchaseOrderService
             'vendor:id,name', 'creator:id,name,role_id',
             'purchaseRequest:id,pr_number',
             'approvalRecords',
+            'supplierDispatch',
         ]);
         TrashedFilter::apply($q, $filters);
 
@@ -121,6 +128,7 @@ class PurchaseOrderService
             'approvalRecords.approver:id,name',
             'goodsReceiptNotes:id,grn_number,received_date,status,purchase_order_id',
             'bills:id,bill_number,total_amount,balance,status,purchase_order_id',
+            'supplierDispatch',
             'creator:id,name,role_id', 'approver:id,name,role_id',
         ]);
     }
@@ -135,17 +143,25 @@ class PurchaseOrderService
     public function create(array $data, User $by, bool $systemGenerated = false): PurchaseOrder
     {
         return DB::transaction(function () use ($data, $by, $systemGenerated) {
-            $prId = null;
+            // System-generated orders may be standalone (critical-stock or
+            // replacement POs) or may still be sourced from a PR (the approved
+            // PR auto-converter). Preserve a supplied source link in both
+            // cases; only the manual path requires the PR to be approved here.
+            $prId = ! empty($data['purchase_request_id'])
+                ? (is_int($data['purchase_request_id'])
+                    ? $data['purchase_request_id']
+                    : HashIdFilter::decode($data['purchase_request_id'], PurchaseRequest::class))
+                : null;
             if (! $systemGenerated) {
-                $prId = ! empty($data['purchase_request_id'])
-                    ? (is_int($data['purchase_request_id'])
-                        ? $data['purchase_request_id']
-                        : HashIdFilter::decode($data['purchase_request_id'], PurchaseRequest::class))
-                    : null;
                 if ($prId === null) {
                     throw new BusinessRuleException('A purchase order must be created from a purchase request (PR).');
                 }
-                $pr = PurchaseRequest::find($prId);
+                // Serialize direct/manual PO creation with the approved-PR
+                // converter. The PR intentionally permits multiple POs by
+                // vendor, so the source row is the idempotency boundary.
+                $pr = PurchaseRequest::query()
+                    ->lockForUpdate()
+                    ->find($prId);
                 if (! $pr || $pr->status !== PurchaseRequestStatus::Approved) {
                     throw new BusinessRuleException('Only approved purchase requests can be converted to purchase orders.');
                 }
@@ -190,15 +206,46 @@ class PurchaseOrderService
     }
 
     /** Convert an approved PR into one or more POs (grouped by vendor). */
-    public function convertFromPr(PurchaseRequest $pr, array $vendorMap, User $by): array
+    public function convertFromPr(PurchaseRequest $pr, array $vendorMap, User $by, bool $systemGenerated = false): array
     {
-        if ($pr->status !== PurchaseRequestStatus::Approved) {
-            throw new BusinessRuleException('Only approved PRs can be converted to POs.');
-        }
         // vendorMap: { pr_item_id => vendor_id }
-        return DB::transaction(function () use ($pr, $vendorMap, $by) {
+        return DB::transaction(function () use ($pr, $vendorMap, $by, $systemGenerated): array {
+            // The queued auto-converter and the manual conversion endpoint can
+            // receive the same approved PR at the same time. Lock the PR before
+            // reading its status or creating any PO. The PR intentionally allows
+            // multiple POs (one per vendor), so a unique index cannot protect
+            // this boundary.
+            $lockedPr = PurchaseRequest::query()
+                ->lockForUpdate()
+                ->find($pr->id);
+            if (! $lockedPr) {
+                throw new BusinessRuleException('The purchase request no longer exists.');
+            }
+
+            $livePos = $lockedPr->purchaseOrders()
+                ->where('status', '!=', PurchaseOrderStatus::Cancelled->value)
+                ->withoutTrashed()
+                ->get();
+
+            // A retry after the first conversion committed is an idempotent
+            // read, not a second conversion. The approved+live-PO case covers
+            // legacy/manual rows that predate this lock as well.
+            if ($lockedPr->status === PurchaseRequestStatus::Converted && $livePos->isNotEmpty()) {
+                return $livePos->all();
+            }
+            if ($lockedPr->status !== PurchaseRequestStatus::Approved) {
+                throw new BusinessRuleException('Only approved PRs can be converted to POs.');
+            }
+            if ($livePos->isNotEmpty()) {
+                if ($lockedPr->po_conversion_status === PurchaseRequestConversionStatus::Pending) {
+                    $lockedPr->markPoConversionConverted();
+                }
+                return $livePos->all();
+            }
+
+            $lockedPr->load('items');
             $byVendor = [];
-            foreach ($pr->items as $line) {
+            foreach ($lockedPr->items as $line) {
                 $vendorId = $vendorMap[$line->id] ?? null;
                 if (! $vendorId) {
                     throw new BusinessRuleException("PR line {$line->id} has no vendor assignment.");
@@ -226,13 +273,18 @@ class PurchaseOrderService
                     'vendor_id'           => $vendorId,
                     'date'                => now()->toDateString(),
                     'is_vatable'          => $this->taxPolicy->isVatRegistered(),
-                    'remarks'             => "Auto-converted from PR {$pr->pr_number}",
+                    'remarks'             => "Auto-converted from PR {$lockedPr->pr_number}",
                     'items'               => $itemPayload,
-                    'purchase_request_id' => $pr->id,
-                ], $by);
+                    'purchase_request_id' => $lockedPr->id,
+                ], $by, $systemGenerated);
                 $created[] = $po;
             }
-            $pr->forceFill(['status' => PurchaseRequestStatus::Converted])->save();
+            $lockedPr->forceFill([
+                'status' => PurchaseRequestStatus::Converted,
+                'po_conversion_status' => PurchaseRequestConversionStatus::Converted,
+                'po_conversion_note' => null,
+                'po_conversion_at' => now(),
+            ])->save();
             return $created;
         });
     }
@@ -340,15 +392,19 @@ class PurchaseOrderService
             if ($becameApproved) {
                 // Series C — Task C2. Domain event for chain listeners
                 // (NotifyOnPurchaseOrderApproved + future SendPOToSupplier).
-                DB::afterCommit(fn () =>
-                    event(new \App\Modules\Purchasing\Events\PurchaseOrderApproved($fresh))
+                app(OutboxService::class)->recordForChain(
+                    new PurchaseOrderApproved($fresh),
+                    $fresh,
+                    'p2p',
+                    'purchase_order',
+                    PurchaseOrderStatus::Approved->value,
                 );
             }
+            // Series C — Task C4. Stage chain progress with the approval
+            // transaction; publication remains post-commit via the outbox.
+            $this->broadcastChain($fresh, $by);
             return $fresh;
         });
-
-        // Series C — Task C4. Real-time chain progress.
-        $this->broadcastChain($result, $by);
         return $result;
     }
 
@@ -397,64 +453,119 @@ class PurchaseOrderService
             // status is non-fillable; service-only.
             $po->forceFill(['status' => PurchaseOrderStatus::Cancelled])->save();
             $fresh = $po->fresh();
+            $this->supplierDispatches->cancelForPurchaseOrder(
+                $fresh,
+                'Purchase order was rejected; supplier dispatch is no longer actionable.',
+            );
             $this->reopenSourcePrIfLastLink($fresh);
+            // Rejection is a cancellation from the downstream chain's point
+            // of view. Keep it on the same durable outbox path as an explicit
+            // cancellation so future listeners cannot miss this transition.
+            app(OutboxService::class)->recordForChain(
+                new PurchaseOrderCancelled($fresh),
+                $fresh,
+                'p2p',
+                'purchase_order',
+                PurchaseOrderStatus::Cancelled->value,
+            );
+            $this->broadcastChain($fresh, $by);
             return $fresh;
         });
-        $this->broadcastChain($result, $by);
         return $result;
     }
 
-    public function markAsSent(PurchaseOrder $po): PurchaseOrder
+    public function markAsSent(PurchaseOrder $po, ?string $dispatchChannel = null): PurchaseOrder
     {
-        if ($po->status !== PurchaseOrderStatus::Approved) {
-            throw new BusinessRuleException('Only approved POs can be marked as sent.');
-        }
-        $po->forceFill(['status' => PurchaseOrderStatus::Sent, 'sent_to_supplier_at' => now()])->save();
-        $fresh = $po->fresh();
-        // 2026-08-08 — stage the expected GRN (draft) when the PO goes out.
-        DB::afterCommit(fn () =>
-            event(new \App\Modules\Purchasing\Events\PurchaseOrderSent($fresh))
-        );
-        $this->broadcastChain($fresh, null);
-        return $fresh;
+        return DB::transaction(function () use ($po, $dispatchChannel) {
+            // The controller's route-bound model may be stale when an approval
+            // or cancellation races the send request. Re-read and lock before
+            // validating the transition or publishing the GRN trigger.
+            $row = PurchaseOrder::query()->lockForUpdate()->findOrFail($po->id);
+            if ($row->status !== PurchaseOrderStatus::Approved) {
+                throw new BusinessRuleException('Only approved POs can be marked as sent.');
+            }
+
+            $row->forceFill([
+                'status' => PurchaseOrderStatus::Sent,
+                'sent_to_supplier_at' => now(),
+            ])->save();
+            $fresh = $row->fresh();
+
+            // Record the proof boundary atomically with the PO transition.
+            // This does not send a document; it records that the operator
+            // confirmed the external transmission before changing the PO to
+            // `sent`.
+            $this->supplierDispatches->confirmSent($fresh, $dispatchChannel);
+
+            // Stage the expected GRN through the durable outbox. It is
+            // recorded atomically with the sent transition and published after
+            // commit; the listener remains idempotent on replay.
+            app(OutboxService::class)->recordForChain(
+                new PurchaseOrderSent($fresh),
+                $fresh,
+                'p2p',
+                'purchase_order',
+                PurchaseOrderStatus::Sent->value,
+            );
+            $this->broadcastChain($fresh, null);
+
+            return $fresh;
+        });
     }
 
     public function cancel(PurchaseOrder $po, string $reason): PurchaseOrder
     {
-        if (in_array($po->status, [PurchaseOrderStatus::Received, PurchaseOrderStatus::Closed], true)) {
-            throw new BusinessRuleException('Cannot cancel a fully received or closed PO.');
-        }
-        if ($po->goodsReceiptNotes()->exists()) {
-            throw new BusinessRuleException('Cannot cancel a PO with GRNs.');
-        }
         $fresh = DB::transaction(function () use ($po, $reason) {
+            // Route-bound models may be stale when receiving or closing races
+            // cancellation. Re-read and lock the authoritative row before
+            // evaluating guards or applying the terminal transition.
+            $row = PurchaseOrder::query()->lockForUpdate()->findOrFail($po->id);
+            if (in_array($row->status, [PurchaseOrderStatus::Received, PurchaseOrderStatus::Closed], true)) {
+                throw new BusinessRuleException('Cannot cancel a fully received or closed PO.');
+            }
+            if ($row->goodsReceiptNotes()->exists()) {
+                throw new BusinessRuleException('Cannot cancel a PO with GRNs.');
+            }
+
             // Single save → single audit row for one logical action.
-            $po->fill(['remarks' => trim(($po->remarks ? $po->remarks."\n" : '').'Cancelled: '.$reason)]);
-            $po->status = PurchaseOrderStatus::Cancelled;
-            $po->save();
-            $fresh = $po->fresh();
-            $this->reopenSourcePrIfLastLink($fresh);
-            DB::afterCommit(fn () =>
-                event(new \App\Modules\Purchasing\Events\PurchaseOrderCancelled($fresh))
+            $row->fill(['remarks' => trim(($row->remarks ? $row->remarks."\n" : '').'Cancelled: '.$reason)]);
+            $row->status = PurchaseOrderStatus::Cancelled;
+            $row->save();
+            $fresh = $row->fresh();
+            $this->supplierDispatches->cancelForPurchaseOrder(
+                $fresh,
+                'Purchase order was cancelled: '.$reason,
             );
+            $this->reopenSourcePrIfLastLink($fresh);
+            app(OutboxService::class)->recordForChain(
+                new PurchaseOrderCancelled($fresh),
+                $fresh,
+                'p2p',
+                'purchase_order',
+                PurchaseOrderStatus::Cancelled->value,
+            );
+            $this->broadcastChain($fresh, null);
             return $fresh;
         });
-        $this->broadcastChain($fresh, null);
         return $fresh;
     }
 
     public function close(PurchaseOrder $po): PurchaseOrder
     {
-        if ($po->status !== PurchaseOrderStatus::Received) {
-            throw new BusinessRuleException('Only fully received POs can be closed.');
-        }
-        $po->forceFill(['status' => PurchaseOrderStatus::Closed])->save();
-        $fresh = $po->fresh();
-        $this->broadcastChain($fresh, null);
-        return $fresh;
+        return DB::transaction(function () use ($po): PurchaseOrder {
+            $row = PurchaseOrder::query()->lockForUpdate()->findOrFail($po->id);
+            if ($row->status !== PurchaseOrderStatus::Received) {
+                throw new BusinessRuleException('Only fully received POs can be closed.');
+            }
+            $row->forceFill(['status' => PurchaseOrderStatus::Closed])->save();
+            $fresh = $row->fresh();
+            $this->broadcastChain($fresh, null);
+
+            return $fresh;
+        });
     }
 
-    /** Series C — Task C4. */
+    /** Series C — Task C4. Stage durable chain progress for the owning write. */
     private function broadcastChain(PurchaseOrder $po, ?User $actor): void
     {
         app(\App\Common\Services\ChainBroadcaster::class)
@@ -491,7 +602,12 @@ class PurchaseOrderService
 
     private function reopenSourcePrIfLastLinkFor(int $prId): void
     {
-        $pr = PurchaseRequest::query()->find($prId);
+        // Cancellation, rejection, and deletion call this inside their
+        // transaction. Lock the source PR so it cannot be reopened between
+        // the converter's status check and PO creation.
+        $pr = PurchaseRequest::query()
+            ->lockForUpdate()
+            ->find($prId);
         if (! $pr || $pr->status !== PurchaseRequestStatus::Converted) {
             return;
         }
@@ -508,7 +624,12 @@ class PurchaseOrderService
             return;
         }
 
-        $pr->forceFill(['status' => PurchaseRequestStatus::Approved])->save();
+        $pr->forceFill([
+            'status' => PurchaseRequestStatus::Approved,
+            'po_conversion_status' => PurchaseRequestConversionStatus::NotStarted,
+            'po_conversion_note' => null,
+            'po_conversion_at' => null,
+        ])->save();
     }
 
     /**

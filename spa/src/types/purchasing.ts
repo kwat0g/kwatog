@@ -2,10 +2,14 @@
 
 export type PurchaseRequestStatus =
  | 'draft' | 'pending' | 'approved' | 'rejected' | 'converted' | 'cancelled';
+export type PurchaseRequestConversionStatus =
+ | 'not_started' | 'pending' | 'manual_required' | 'converted';
 export type PurchaseRequestPriority = 'normal' | 'urgent' | 'critical';
 export type PurchaseOrderStatus =
  | 'draft' | 'pending_approval' | 'approved' | 'sent'
  | 'partially_received' | 'received' | 'closed' | 'cancelled';
+export type SupplierDispatchStatus =
+ | 'pending' | 'portal_available' | 'manual_required' | 'confirmed' | 'failed' | 'cancelled';
 
 export interface ApprovalRecord {
  step_order: number;
@@ -41,6 +45,10 @@ export interface PurchaseRequest {
  priority_label?: string;
  status: PurchaseRequestStatus;
  status_label?: string;
+ po_conversion_status: PurchaseRequestConversionStatus;
+ po_conversion_status_label?: string;
+ po_conversion_note: string | null;
+ po_conversion_at: string | null;
  is_auto_generated: boolean;
  auto_generated_reason: string | null;
  is_urgent: boolean;
@@ -131,6 +139,19 @@ export interface PurchaseOrder {
  current_approval_step: number;
  approved_at: string | null;
  sent_to_supplier_at: string | null;
+ supplier_dispatch?: {
+  status: SupplierDispatchStatus;
+  status_label?: string;
+  channel: string | null;
+  attempts: number;
+  recipient_count: number;
+  queued_at: string | null;
+  last_attempt_at: string | null;
+  published_at: string | null;
+  confirmed_at: string | null;
+  last_error?: string | null;
+  metadata?: Record<string, unknown> | null;
+ } | null;
  budget_warning_level?: string | null;
  budget_warning_message?: string | null;
  budget_acknowledged_at?: string | null;
@@ -216,8 +237,10 @@ export interface ThreeWayMatchResult {
  bill_total: string;
  quantity_variance_pct: number;
  price_variance_pct: number;
+ po_price_variance_pct?: number;
+ grn_price_variance_pct?: number;
  // H-6 added 'grn_short' to flag a bill line that exceeds accepted GRN qty.
- status: 'matched' | 'qty_variance' | 'price_variance' | 'both' | 'grn_short';
+ status: 'matched' | 'qty_variance' | 'price_variance' | 'both' | 'grn_short' | 'unmatched_bill_line' | 'duplicate_bill_line';
  status_label?: string;
  severity: 'ok' | 'block';
  // H-6 — present from the API when the GRN gate fired.

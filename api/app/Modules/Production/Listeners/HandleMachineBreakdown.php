@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace App\Modules\Production\Listeners;
 
+use App\Common\Services\ChainListenerRunService;
+use App\Common\Services\OutboxService;
 use App\Modules\MRP\Enums\MachineStatus;
 use App\Modules\MRP\Events\MachineStatusChanged;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\Production\Enums\MachineDowntimeCategory;
 use App\Modules\Production\Enums\WorkOrderStatus;
+use App\Modules\Production\Events\MachineBreakdownDetected;
+use App\Modules\Production\Models\MachineDowntime;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Services\WorkOrderService;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -49,72 +53,144 @@ class HandleMachineBreakdown implements ShouldQueue
             && in_array($to, [MachineStatus::Idle->value, MachineStatus::Running->value], true)
         ) {
             $this->handleRestoration($event);
+            return;
         }
+
+        app(ChainListenerRunService::class)->recordOutcome(
+            'skipped',
+            'machine_transition_not_actionable',
+        );
     }
 
     private function handleEnteringBreakdown(MachineStatusChanged $event): void
     {
-        $machine = Machine::find($event->machine->id);
-        if (! $machine) return;
-
+        $machine = null;
         $pausedWo = null;
+        $candidates = [];
+        $outcomeCode = 'machine_missing_or_not_in_breakdown';
 
-        DB::transaction(function () use ($machine, $event, &$pausedWo) {
+        DB::transaction(function () use ($event, &$machine, &$pausedWo, &$candidates, &$outcomeCode): void {
+            $machine = Machine::query()
+                ->lockForUpdate()
+                ->find($event->machine->id);
+            if (! $machine) return;
+
+            // The event may have waited in the queue while an operator
+            // restored or reassigned the machine. Only the authoritative
+            // breakdown state may pause the current work order.
+            if ($machine->status !== MachineStatus::Breakdown) return;
+            $outcomeCode = 'breakdown_published_without_running_work_order';
+
             $woId = $machine->current_work_order_id;
             if ($woId) {
-                $wo = WorkOrder::find($woId);
+                $wo = WorkOrder::query()->lockForUpdate()->find($woId);
                 if ($wo && $wo->status === WorkOrderStatus::InProgress) {
                     $this->workOrders->pause(
                         $wo,
                         $event->reason ?? 'Machine breakdown',
                         MachineDowntimeCategory::Breakdown,
                     );
+
+                    // WorkOrderService::pause releases a machine to idle for
+                    // ordinary pauses. A breakdown must remain unavailable
+                    // until the explicit restoration transition closes its
+                    // downtime row.
+                    $machine->refresh();
+                    $machine->update([
+                        'status' => MachineStatus::Breakdown->value,
+                    ]);
                     $pausedWo = $wo->fresh();
+                    $outcomeCode = 'work_order_paused_for_breakdown';
                 }
             }
+
+            // Surface compatible idle machines in the same transaction as the
+            // pause, then persist the broadcast event in the outbox. The
+            // dashboard alert can now be replayed after a worker outage.
+            if ($pausedWo && $pausedWo->mold_id) {
+                $candidates = Machine::where('status', 'idle')
+                    ->whereHas('compatibleMolds', fn ($q) => $q->where('id', $pausedWo->mold_id))
+                    ->get(['id', 'machine_code', 'name'])
+                    ->map(fn ($m) => [
+                        'id'           => $m->hash_id,
+                        'machine_code' => $m->machine_code,
+                        'name'         => $m->name,
+                    ])
+                    ->values()
+                    ->all();
+            }
+
+            app(OutboxService::class)->record(
+                new MachineBreakdownDetected(
+                    $machine->fresh(),
+                    $pausedWo,
+                    $candidates,
+                    $event->reason,
+                ),
+            );
+
+            $outcomeCode .= '_and_alert_staged';
         });
 
-        // Sprint 6 audit §1.8: surface candidate machines and broadcast the
-        // breakdown event so the dashboard's BreakdownAlertCard updates and
-        // PPC heads can drag a paused WO to a different machine.
-        $candidates = [];
-        if ($pausedWo && $pausedWo->mold_id) {
-            $candidates = Machine::where('status', 'idle')
-                ->whereHas('compatibleMolds', fn ($q) => $q->where('id', $pausedWo->mold_id))
-                ->get(['id', 'machine_code', 'name'])
-                ->map(fn ($m) => [
-                    'id'           => $m->hash_id,
-                    'machine_code' => $m->machine_code,
-                    'name'         => $m->name,
-                ])
-                ->values()
-                ->all();
+        if (! $machine || $outcomeCode === 'machine_missing_or_not_in_breakdown') {
+            app(ChainListenerRunService::class)->recordOutcome('skipped', $outcomeCode);
+            return;
         }
 
-        DB::afterCommit(function () use ($machine, $pausedWo, $candidates, $event) {
-            event(new \App\Modules\Production\Events\MachineBreakdownDetected(
-                $machine->fresh(),
-                $pausedWo,
-                $candidates,
-                $event->reason,
-            ));
-        });
+        app(ChainListenerRunService::class)->recordOutcome(
+            'completed',
+            $outcomeCode,
+            $pausedWo
+                ? "Paused work order {$pausedWo->wo_number} for machine breakdown."
+                : 'Recorded machine breakdown and staged the recovery alert.',
+        );
     }
 
     private function handleRestoration(MachineStatusChanged $event): void
     {
-        DB::transaction(function () use ($event) {
+        $machine = null;
+        $closed = 0;
+        DB::transaction(function () use ($event, &$machine, &$closed): void {
+            $machine = Machine::query()
+                ->lockForUpdate()
+                ->find($event->machine->id);
+            if (! $machine) return;
+
+            // A restoration event can be stale by the time a worker handles
+            // it. Do not close a downtime row while the machine is still in
+            // breakdown/maintenance (or has moved to another state).
+            if (! in_array($machine->status, [MachineStatus::Idle, MachineStatus::Running], true)) {
+                return;
+            }
+
             // Close any open downtime rows for this machine.
-            \App\Modules\Production\Models\MachineDowntime::where('machine_id', $event->machine->id)
+            MachineDowntime::where('machine_id', $machine->id)
                 ->whereNull('end_time')
+                ->lockForUpdate()
                 ->get()
-                ->each(function ($row) {
+                ->each(function ($row) use (&$closed): void {
                     $end = now();
                     $row->update([
                         'end_time'         => $end,
-                        'duration_minutes' => max(0, $row->start_time->diffInMinutes($end)),
+                        'duration_minutes' => (int) max(0, $row->start_time->diffInMinutes($end)),
                     ]);
+                    $closed++;
                 });
         });
+
+        if (! $machine) {
+            app(ChainListenerRunService::class)->recordOutcome('skipped', 'machine_missing');
+            return;
+        }
+        if ($closed === 0) {
+            app(ChainListenerRunService::class)->recordOutcome('skipped', 'no_open_machine_downtime');
+            return;
+        }
+
+        app(ChainListenerRunService::class)->recordOutcome(
+            'completed',
+            'machine_downtime_closed',
+            "Closed {$closed} machine downtime row(s) after restoration.",
+        );
     }
 }

@@ -10,6 +10,7 @@ return [
     'seed_reference_data' => (bool) env('SEED_REFERENCE_DATA', false),
     'url' => env('APP_URL', 'http://localhost'),
     'frontend_url' => env('FRONTEND_URL', env('APP_URL', 'http://localhost')),
+    'server_name' => env('SERVER_NAME', ''),
 
     'timezone' => env('APP_TIMEZONE', 'Asia/Manila'),
     'locale' => env('APP_LOCALE', 'en'),

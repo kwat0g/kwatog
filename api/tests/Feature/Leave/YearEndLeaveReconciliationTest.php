@@ -148,7 +148,7 @@ class YearEndLeaveReconciliationTest extends TestCase
         $this->assertSame(1, YearEndLeaveDisposition::where('employee_id', $emp->id)->count());
     }
 
-    public function test_reset_without_disposition_falls_back_without_crashing(): void
+    public function test_reset_without_disposition_fails_closed_without_mutating_balances(): void
     {
         $emp = Employee::factory()->create(['pay_type' => 'monthly', 'basic_monthly_salary' => '22000.00']);
         $lt = LeaveType::create([
@@ -159,11 +159,13 @@ class YearEndLeaveReconciliationTest extends TestCase
         // Prior-year balance exists but year-end job NEVER ran (no disposition).
         $this->balance($emp, $lt, 2025, remaining: 4.0, credits: 10.0);
 
-        Artisan::call('hr:reset-leave-balances', ['--year' => 2026]);
+        $exitCode = Artisan::call('hr:reset-leave-balances', ['--year' => 2026]);
 
-        // Fallback carries the raw remaining (4) onto default (10) = 14, sane.
-        $new = EmployeeLeaveBalance::where(['employee_id' => $emp->id, 'leave_type_id' => $lt->id, 'year' => 2026])->first();
-        $this->assertNotNull($new);
-        $this->assertSame('14.0', (string) $new->total_credits);
+        $this->assertSame(1, $exitCode);
+        $this->assertDatabaseMissing('employee_leave_balances', [
+            'employee_id' => $emp->id,
+            'leave_type_id' => $lt->id,
+            'year' => 2026,
+        ]);
     }
 }

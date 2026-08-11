@@ -90,6 +90,29 @@ class Bill extends Model
         return $q->whereIn('status', [BillStatus::Unpaid, BillStatus::Partial]);
     }
 
+    /**
+     * Derived workflow state for a PO-linked bill. Keeping this derived from
+     * the persisted match snapshot avoids another mutable status column while
+     * making the manual-review transition explicit to API consumers.
+     */
+    public function threeWayReviewStatus(): string
+    {
+        if (! $this->purchase_order_id) {
+            return 'not_applicable';
+        }
+        if ($this->three_way_overridden) {
+            return 'overridden';
+        }
+        if (data_get($this->three_way_match_snapshot, 'overall_status') === 'blocked') {
+            return 'manual_review';
+        }
+        if ($this->has_variances) {
+            return 'within_tolerance';
+        }
+
+        return 'matched';
+    }
+
     public function isOverdue(): bool
     {
         if ($this->status === BillStatus::Paid || $this->status === BillStatus::Cancelled || $this->status === BillStatus::Draft) return false;

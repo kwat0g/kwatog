@@ -9,6 +9,7 @@ use App\Modules\HR\Events\SeparationInitiated;
 use App\Modules\Inventory\Events\GoodsReceiptNoteAccepted;
 use App\Modules\Inventory\Events\GoodsReceiptNoteCreated;
 use App\Modules\Payroll\Events\PayrollPeriodFinalized;
+use App\Modules\Payroll\Events\PayrollGlPostingRequested;
 use App\Modules\Production\Events\WorkOrderCompleted;
 use App\Modules\Purchasing\Events\PurchaseOrderApproved;
 use App\Modules\Quality\Events\InspectionFailed;
@@ -37,6 +38,7 @@ class ChainEventDispatchTest extends TestCase
             EmployeeCreated::class,
             SeparationInitiated::class,
             PayrollPeriodFinalized::class,
+            PayrollGlPostingRequested::class,
             \App\Modules\HR\Events\ClearanceFullySigned::class,
             \App\Modules\Purchasing\Events\PurchaseRequestApproved::class,
             \App\Modules\Purchasing\Events\PurchaseOrderSent::class,

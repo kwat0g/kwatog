@@ -32,6 +32,7 @@ class NotifyOnLeaveRejected implements ShouldQueue
             ]);
         } catch (\Throwable $e) {
             Log::warning('NotifyOnLeaveRejected failed', ['error' => $e->getMessage()]);
+            throw $e;
         }
     }
 }

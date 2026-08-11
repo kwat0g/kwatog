@@ -43,6 +43,7 @@ class NotifyOnMachineBreakdown implements ShouldQueue
             ]);
         } catch (\Throwable $e) {
             Log::warning('NotifyOnMachineBreakdown failed', ['error' => $e->getMessage()]);
+            throw $e;
         }
     }
 }

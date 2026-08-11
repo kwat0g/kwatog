@@ -43,9 +43,23 @@ class ComputeMonthlyKpis extends Command
 
         $this->info("Computing KPI snapshots for {$target->format('Y-m')}...");
 
-        $service->computeAll($target->year, $target->month);
+        $result = $service->computeAll($target->year, $target->month);
 
-        $this->info("KPI snapshots computed for {$target->format('Y-m')}.");
+        $this->info(sprintf(
+            'KPI snapshots for %s: computed=%d no_data=%d failed=%d.',
+            $target->format('Y-m'),
+            $result['computed'],
+            $result['no_data'],
+            count($result['failed']),
+        ));
+
+        if ($result['failed'] !== []) {
+            foreach ($result['failed'] as $failure) {
+                $this->error("KPI {$failure['code']} failed: {$failure['error']}");
+            }
+
+            return self::FAILURE;
+        }
 
         return self::SUCCESS;
     }

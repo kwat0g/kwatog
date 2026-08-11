@@ -7,6 +7,7 @@ namespace App\Modules\Leave\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\ApprovalService;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\OutboxService;
 use App\Modules\Attendance\Enums\AttendanceStatus;
 use App\Modules\Attendance\Models\Attendance;
 use App\Modules\Auth\Models\User;
@@ -176,7 +177,9 @@ class LeaveRequestService
 
             $this->approvals->submit($req, 'leave_request');
 
-            DB::afterCommit(fn () => LeaveRequestSubmitted::dispatch($req->fresh(['employee', 'employee.department', 'leaveType'])));
+            app(OutboxService::class)->record(
+                new LeaveRequestSubmitted($req->fresh(['employee', 'employee.department', 'leaveType'])),
+            );
 
             return $req->load(['employee', 'employee.department', 'leaveType']);
         });
@@ -196,7 +199,9 @@ class LeaveRequestService
                 'dept_approved_at' => now(),
             ])->save();
 
-            DB::afterCommit(fn () => LeaveRequestPendingHR::dispatch($req->fresh(['employee', 'employee.department', 'leaveType'])));
+            app(OutboxService::class)->record(
+                new LeaveRequestPendingHR($req->fresh(['employee', 'employee.department', 'leaveType'])),
+            );
 
             return $req->fresh(['employee', 'employee.department', 'leaveType', 'deptApprover']);
         });
@@ -223,7 +228,9 @@ class LeaveRequestService
             // Side effect 2: mark attendance days as on_leave.
             $this->markAttendance($req);
 
-            DB::afterCommit(fn () => LeaveRequestApproved::dispatch($req->fresh(['employee', 'employee.department', 'leaveType'])));
+            app(OutboxService::class)->record(
+                new LeaveRequestApproved($req->fresh(['employee', 'employee.department', 'leaveType'])),
+            );
 
             return $req->fresh(['employee', 'employee.department', 'leaveType', 'deptApprover', 'hrApprover']);
         });
@@ -295,7 +302,9 @@ class LeaveRequestService
                 'rejection_reason' => $reason,
             ])->save();
 
-            DB::afterCommit(fn () => LeaveRequestRejected::dispatch($req->fresh(['employee', 'employee.department', 'leaveType'])));
+            app(OutboxService::class)->record(
+                new LeaveRequestRejected($req->fresh(['employee', 'employee.department', 'leaveType'])),
+            );
 
             return $req->fresh(['employee', 'employee.department', 'leaveType']);
         });

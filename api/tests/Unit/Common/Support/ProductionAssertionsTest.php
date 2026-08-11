@@ -25,6 +25,7 @@ class ProductionAssertionsTest extends TestCase
         config()->set('app.debug', false);
         config()->set('hashids.connections.main.salt', 'real-random-salt-1234567890abcdef');
         config()->set('app.key', 'base64:'.base64_encode(random_bytes(32)));
+        config()->set('app.server_name', 'erp.ogami.test');
     }
 
     public function test_no_throw_in_local_environment_even_with_dev_defaults(): void
@@ -129,12 +130,25 @@ class ProductionAssertionsTest extends TestCase
         ProductionAssertions::assertSafeOrFail();
     }
 
+    public function test_throws_when_server_name_is_missing_or_localhost(): void
+    {
+        $this->asProduction();
+        $this->setSafeDefaults();
+        config()->set('app.server_name', 'localhost');
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessageMatches('/SERVER_NAME/');
+
+        ProductionAssertions::assertSafeOrFail();
+    }
+
     public function test_aggregates_multiple_failures_into_one_message(): void
     {
         $this->asProduction();
         config()->set('app.debug', true);
         config()->set('hashids.connections.main.salt', 'change_me');
         config()->set('app.key', '');
+        config()->set('app.server_name', 'localhost');
 
         try {
             ProductionAssertions::assertSafeOrFail();
@@ -143,6 +157,7 @@ class ProductionAssertionsTest extends TestCase
             $this->assertStringContainsString('APP_DEBUG', $e->getMessage());
             $this->assertStringContainsString('HASHIDS_SALT', $e->getMessage());
             $this->assertStringContainsString('APP_KEY', $e->getMessage());
+            $this->assertStringContainsString('SERVER_NAME', $e->getMessage());
         }
     }
 }

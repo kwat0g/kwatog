@@ -215,7 +215,7 @@ export default function SelfServiceProfilePage() {
 
  {/* ─── Right rail ─── */}
  <div className="space-y-4">
- <IdentityPanel profile={profile} email={user?.email ?? profile.email} />
+ <IdentityPanel profile={profile} email={user?.email || profile.email} />
  <UpdateRequestsPanel requests={requests ?? []} pendingCount={pendingCount} />
  <PreferencesPanel />
  </div>

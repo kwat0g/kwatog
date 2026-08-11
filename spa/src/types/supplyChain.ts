@@ -73,6 +73,12 @@ export interface Delivery {
  confirmed_at: string | null;
  receipt_photo_url: string | null;
  notes: string | null;
+ invoice_handoff?: {
+  status: 'not_started' | 'generated' | 'manual_required';
+  status_label?: string | null;
+  message: string | null;
+  attempted_at: string | null;
+ };
  /** ADV7 — Proof of Delivery receiver fields. */
  receiver_name: string | null;
  receiver_position: string | null;

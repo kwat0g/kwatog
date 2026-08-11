@@ -4,15 +4,17 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Payroll;
 
+use App\Common\Jobs\DispatchOutboxMessage;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
-use App\Modules\Payroll\Jobs\ProcessPayrollJob;
+use App\Modules\Payroll\Events\PayrollComputationRequested;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Payroll\Services\PayrollPeriodService;
 use Database\Seeders\GovernmentTableSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
@@ -68,7 +70,19 @@ class PayrollComputeLifecycleTest extends TestCase
             ->assertJsonPath('data.status', PayrollPeriodStatus::Processing->value);
 
         $this->assertSame(PayrollPeriodStatus::Processing, $period->fresh()->status);
-        Queue::assertPushed(ProcessPayrollJob::class, 1);
+        $outboxId = DB::table('event_outbox')
+            ->where('event_type', PayrollComputationRequested::class)
+            ->value('id');
+        Queue::assertPushed(DispatchOutboxMessage::class, fn (DispatchOutboxMessage $job): bool => $job->outboxId === $outboxId);
+        $this->assertDatabaseHas('event_outbox', [
+            'event_type' => PayrollComputationRequested::class,
+        ]);
+        $this->assertDatabaseHas('chain_step_runs', [
+            'chain' => 'h2r',
+            'entity_type' => 'payroll_period',
+            'entity_id' => $period->id,
+            'step' => 'compute',
+        ]);
     }
 
     public function test_second_compute_click_is_rejected_while_a_run_is_in_flight(): void
@@ -87,7 +101,9 @@ class PayrollComputeLifecycleTest extends TestCase
             ->assertStatus(422)
             ->assertJsonPath('message', 'This period is already being computed. Wait for the current run to finish.');
 
-        Queue::assertPushed(ProcessPayrollJob::class, 1);
+        $this->assertSame(1, DB::table('event_outbox')
+            ->where('event_type', PayrollComputationRequested::class)
+            ->count());
     }
 
     public function test_compute_is_refused_once_the_period_is_approved(): void
@@ -101,7 +117,9 @@ class PayrollComputeLifecycleTest extends TestCase
             ->assertStatus(422);
 
         $this->assertSame(PayrollPeriodStatus::Approved, $period->fresh()->status);
-        Queue::assertNotPushed(ProcessPayrollJob::class);
+        $this->assertSame(0, DB::table('event_outbox')
+            ->where('event_type', PayrollComputationRequested::class)
+            ->count());
     }
 
     /** Finalized / Disbursed / Voided payroll must never be recomputable. */
@@ -124,7 +142,9 @@ class PayrollComputeLifecycleTest extends TestCase
             $this->assertSame($status, $period->fresh()->status);
         }
 
-        Queue::assertNotPushed(ProcessPayrollJob::class);
+        $this->assertSame(0, DB::table('event_outbox')
+            ->where('event_type', PayrollComputationRequested::class)
+            ->count());
     }
 
     /** A computed period may be recomputed — that is the sanctioned re-run. */
@@ -139,7 +159,9 @@ class PayrollComputeLifecycleTest extends TestCase
             ->assertStatus(202)
             ->assertJsonPath('data.status', PayrollPeriodStatus::Processing->value);
 
-        Queue::assertPushed(ProcessPayrollJob::class, 1);
+        $this->assertSame(1, DB::table('event_outbox')
+            ->where('event_type', PayrollComputationRequested::class)
+            ->count());
     }
 
     public function test_claim_stamps_the_maker_for_maker_checker(): void

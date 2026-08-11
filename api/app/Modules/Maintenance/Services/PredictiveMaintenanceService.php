@@ -245,19 +245,35 @@ class PredictiveMaintenanceService
 
     private function createCorrectiveWorkOrder(int $machineId, string $reason, \App\Modules\Auth\Models\User $by): MaintenanceWorkOrder
     {
-        $machine = Machine::find($machineId);
-        $description = sprintf(
-            '[Predictive] %s — Auto-generated from condition monitoring.',
-            $reason,
-        );
+        return DB::transaction(function () use ($machineId, $reason, $by): MaintenanceWorkOrder {
+            Machine::query()->lockForUpdate()->findOrFail($machineId);
 
-        return $this->workOrders->create([
-            'maintainable_type' => 'machine',
-            'maintainable_id'   => $machineId,
-            'type'              => MaintenanceWorkOrderType::Corrective->value,
-            'priority'          => MaintenancePriority::High->value,
-            'description'       => $description,
-        ], $by);
+            // Re-check after taking the machine lock. Two queue deliveries
+            // can both pass the earlier read, but only one may open a
+            // predictive corrective WO for the same machine.
+            $existing = MaintenanceWorkOrder::query()
+                ->where('maintainable_type', 'machine')
+                ->where('maintainable_id', $machineId)
+                ->where('type', MaintenanceWorkOrderType::Corrective->value)
+                ->whereIn('status', ['open', 'assigned', 'in_progress'])
+                ->where('description', 'like', '%predictive%')
+                ->orderByDesc('id')
+                ->first();
+            if ($existing) {
+                return $existing;
+            }
+
+            return $this->workOrders->create([
+                'maintainable_type' => 'machine',
+                'maintainable_id'   => $machineId,
+                'type'              => MaintenanceWorkOrderType::Corrective->value,
+                'priority'          => MaintenancePriority::High->value,
+                'description'       => sprintf(
+                    '[Predictive] %s — Auto-generated from condition monitoring.',
+                    $reason,
+                ),
+            ], $by);
+        });
     }
 
     private function metricUnit(string $metric): string

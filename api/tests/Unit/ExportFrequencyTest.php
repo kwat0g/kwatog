@@ -25,12 +25,20 @@ class ExportFrequencyTest extends TestCase
         $this->assertSame('2026-05-07 06:00:00', $next->format('Y-m-d H:i:s'));
     }
 
-    public function test_monthly_clamps_to_28_to_avoid_february_overflow(): void
+    public function test_monthly_uses_the_last_valid_day_for_short_months(): void
     {
         $now = CarbonImmutable::create(2026, 1, 31, 12, 0, 0);
         // Asking for "31" should clamp to 28 to avoid Feb skip.
         $next = ExportFrequency::Monthly->nextRunFrom($now, null, 31, '06:00');
         $this->assertSame(28, $next->day);
+    }
+
+    public function test_monthly_preserves_day_31_when_the_next_month_supports_it(): void
+    {
+        $now = CarbonImmutable::create(2026, 2, 28, 12, 0, 0);
+        $next = ExportFrequency::Monthly->nextRunFrom($now, null, 31, '06:00');
+
+        $this->assertSame('2026-03-31 06:00:00', $next->format('Y-m-d H:i:s'));
     }
 
     public function test_weekly_lands_on_target_dow(): void

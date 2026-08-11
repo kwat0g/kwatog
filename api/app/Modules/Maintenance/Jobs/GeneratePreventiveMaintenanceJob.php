@@ -15,11 +15,13 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 /**
  * ADV8 — Maintenance Automation.
- * Daily cron that materialises preventive WOs from schedules AND evaluates
- * predictive-maintenance thresholds for all machines.
+ * Execution primitive for the durable daily request that materialises
+ * preventive WOs from schedules AND evaluates predictive-maintenance
+ * thresholds for all machines.
  *
  * Runs:
  *   - All active hours/days schedules whose next_due_at <= now without an open WO.
@@ -35,7 +37,14 @@ class GeneratePreventiveMaintenanceJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $tries = 1;
+    public const TIMEOUT_SECONDS = 120;
+
+    public int $tries = 3;
+
+    /** @var array<int, int> */
+    public array $backoff = [60, 300, 900];
+
+    public int $timeout = self::TIMEOUT_SECONDS;
 
     public function handle(
         MaintenanceScheduleService $schedules,
@@ -46,11 +55,11 @@ class GeneratePreventiveMaintenanceJob implements ShouldQueue
         $roles = array_values(array_filter((array) $settings->get('system.automation.actor_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
         $systemUser = $roles === [] ? null : User::query()
             ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
+            ->where('is_active', true)
             ->orderBy('id')
             ->first();
         if (! $systemUser) {
-            Log::warning('GeneratePreventiveMaintenanceJob: no configured automation actor found; aborting.');
-            return;
+            throw new \RuntimeException('GeneratePreventiveMaintenanceJob: no configured automation actor found.');
         }
 
         // 1. Time-based (calendar hours / days)
@@ -74,5 +83,12 @@ class GeneratePreventiveMaintenanceJob implements ShouldQueue
         if ($triggeredCount > 0) {
             Log::info("GeneratePreventiveMaintenanceJob: predictive triggers created {$triggeredCount} corrective WOs.");
         }
+    }
+
+    public function failed(Throwable $exception): void
+    {
+        Log::error('GeneratePreventiveMaintenanceJob failed permanently.', [
+            'error' => $exception->getMessage(),
+        ]);
     }
 }

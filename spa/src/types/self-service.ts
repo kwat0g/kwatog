@@ -128,6 +128,8 @@ export interface SelfServiceOvertimeRequest {
  status: OvertimeStatus | null;
  status_label?: string | null;
  rejection_reason: string | null;
+ cancelled_at: string | null;
+ can_restore: boolean;
  approver: string | null;
  created_at: string | null;
 }

@@ -242,6 +242,7 @@ class SettingsSeeder extends Seeder
             // ── Cross-module business defaults ───────────────
             ['key' => 'sales.default_customer_payment_terms_days', 'value' => 30, 'group' => 'sales', 'label' => 'Default Customer Payment Terms', 'description' => 'Default payment terms for new customers when no explicit value is supplied.'],
             ['key' => 'purchasing.default_vendor_payment_terms_days', 'value' => 30, 'group' => 'purchasing', 'label' => 'Default Vendor Payment Terms', 'description' => 'Default payment terms for new vendors when no explicit value is supplied.'],
+            ['key' => 'purchasing.supplier_dispatch.stale_after_minutes', 'value' => 10, 'group' => 'purchasing', 'label' => 'Supplier Dispatch Stale Age (minutes)', 'description' => 'Minutes after which an unconfirmed supplier dispatch may be reclaimed by the recovery job.'],
             ['key' => 'sales.default_delivery_lead_days', 'value' => 30, 'group' => 'sales', 'label' => 'Default Sales Delivery Lead Days', 'description' => 'Delivery lead time used when converting a quote without a valid-until date.'],
 
             // ── HR ───────────────────────────────────────────
@@ -411,7 +412,7 @@ class SettingsSeeder extends Seeder
             'company.logo_path', 'company.certification', 'company.public_url',
             'company.latitude', 'company.longitude', 'company.employee_email_domain',
             'pdf.footer_disclaimer', 'quality.coc.manager_name', 'quality.coc.manager_role',
-            'accounting.functional_currency_code',
+            'accounting.functional_currency_code', 'tax.ph.vat_rate',
         ];
 
         foreach ($rows as $row) {

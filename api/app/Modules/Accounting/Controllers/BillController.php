@@ -11,6 +11,7 @@ use App\Modules\Accounting\Requests\StoreBillRequest;
 use App\Modules\Accounting\Resources\BillPaymentResource;
 use App\Modules\Accounting\Resources\BillResource;
 use App\Modules\Accounting\Services\BillService;
+use App\Modules\Purchasing\Exceptions\ThreeWayMatchException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -58,8 +59,23 @@ class BillController
     /** 2026-08-08 — post an auto-created draft bill (builds + posts the JE, flips to unpaid). */
     public function postDraft(Request $request, Bill $bill): BillResource|JsonResponse
     {
+        $request->validate([
+            'allow_override' => ['nullable', 'boolean'],
+            'override_reason' => ['nullable', 'string', 'max:1000'],
+        ]);
         try {
-            $bill = $this->service->postDraft($bill, $request->user());
+            $bill = $this->service->postDraft(
+                $bill,
+                $request->user(),
+                $request->boolean('allow_override'),
+                $request->input('override_reason'),
+            );
+        } catch (ThreeWayMatchException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'code' => 'three_way_match_blocked',
+                'three_way_match' => $e->details,
+            ], 422);
         } catch (\Throwable $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }

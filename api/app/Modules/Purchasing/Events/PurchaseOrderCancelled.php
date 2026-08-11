@@ -9,8 +9,8 @@ use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
 /**
- * Phase 3 M-12. Fired by PurchaseOrderService::cancel() once the PO is
- * marked Cancelled. Mirrors PurchaseOrderApproved so future listeners
+ * Phase 3 M-12. Fired by PurchaseOrderService::cancel() or reject() once the
+ * PO is marked Cancelled. Mirrors PurchaseOrderApproved so future listeners
  * (e.g. notify supplier, free reservations) can subscribe without the
  * service knowing about them.
  */

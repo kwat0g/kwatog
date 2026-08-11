@@ -27,7 +27,8 @@ use Illuminate\Support\Facades\DB;
  */
 class ResetLeaveBalancesForYear extends Command
 {
-    protected $signature   = 'hr:reset-leave-balances {--year= : Target year (default: current)}';
+    protected $signature = 'hr:reset-leave-balances {--year= : Target year (default: current)}';
+
     protected $description = 'Reset / roll over leave balances for the given year (Series C — Task C3)';
 
     public function handle(): int
@@ -40,11 +41,45 @@ class ResetLeaveBalancesForYear extends Command
 
         if (! class_exists(LeaveType::class) || ! class_exists(Employee::class)) {
             $this->warn('Leave / HR module not booted — skipping.');
+
             return self::SUCCESS;
         }
 
-        $types     = LeaveType::query()->where('is_active', true)->get();
+        $types = LeaveType::query()->where('is_active', true)->get();
         $employees = Employee::query()->where('status', 'active')->get(['id']);
+
+        // A rollover without a year-end disposition is not safe: the raw
+        // remaining balance may already have been converted/forfeited by a
+        // partially completed run, and carrying it again can double-handle
+        // leave. Refuse the whole rollover until the durable year-end request
+        // is recovered, so the January retry window can safely run it first.
+        $missingDispositionBalances = DB::table('employee_leave_balances as balances')
+            ->join('employees', 'employees.id', '=', 'balances.employee_id')
+            ->where('employees.status', 'active')
+            ->where('balances.year', $prior)
+            ->where('balances.remaining', '>', 0)
+            ->whereIn('balances.leave_type_id', $types->pluck('id'))
+            ->whereNotExists(function ($query) use ($prior): void {
+                $query->selectRaw('1')
+                    ->from('year_end_leave_dispositions as dispositions')
+                    ->whereColumn('dispositions.employee_id', 'balances.employee_id')
+                    ->whereColumn('dispositions.leave_type_id', 'balances.leave_type_id')
+                    ->where('dispositions.year', $prior);
+            })
+            ->select(['balances.employee_id', 'balances.leave_type_id'])
+            ->limit(25)
+            ->get();
+
+        if ($missingDispositionBalances->isNotEmpty()) {
+            $this->error(sprintf(
+                'Cannot roll leave balances to %d: %d or more positive prior-year balance(s) have no year-end disposition. Recover `leave:process-year-end --year=%d` first.',
+                $year,
+                $missingDispositionBalances->count(),
+                $prior,
+            ));
+
+            return self::FAILURE;
+        }
 
         DB::transaction(function () use ($year, $prior, $types, $employees, &$created) {
             foreach ($employees as $emp) {
@@ -63,26 +98,15 @@ class ResetLeaveBalancesForYear extends Command
                     if ($disp) {
                         $carried = (float) $disp->days_carried;
                     } else {
-                        // Fallback: the year-end job never ran for this
-                        // (employee, type, prior year). Carry the raw remaining
-                        // so balances aren't silently lost, but warn loudly —
-                        // this path risks the pre-REC-10 double-handling and
-                        // should not happen when the Dec-31 job succeeds.
+                        // A zero/missing prior balance has nothing to carry.
+                        // Positive balances were rejected by the preflight
+                        // guard above when they lacked a disposition.
                         $priorRow = EmployeeLeaveBalance::query()
                             ->where('employee_id', $emp->id)
                             ->where('leave_type_id', $lt->id)
                             ->where('year', $prior)
                             ->first();
                         $carried = 0.0;
-                        if ($priorRow && (float) $priorRow->remaining > 0) {
-                            $carried = (float) $priorRow->remaining
-                                * ($lt->is_convertible_year_end ? (float) ($lt->conversion_rate ?: 1.0) : 1.0);
-                            \Illuminate\Support\Facades\Log::warning(
-                                'ResetLeaveBalancesForYear: no year-end disposition found; '
-                                .'falling back to raw remaining carry-forward.',
-                                ['employee_id' => $emp->id, 'leave_type_id' => $lt->id, 'prior_year' => $prior]
-                            );
-                        }
                     }
 
                     $total = (float) $lt->default_balance + $carried;
@@ -94,25 +118,28 @@ class ResetLeaveBalancesForYear extends Command
 
                     EmployeeLeaveBalance::query()->updateOrInsert(
                         [
-                            'employee_id'   => $emp->id,
+                            'employee_id' => $emp->id,
                             'leave_type_id' => $lt->id,
-                            'year'          => $year,
+                            'year' => $year,
                         ],
                         [
                             'total_credits' => round($total, 1),
-                            'used'          => 0,
-                            'remaining'     => round($total, 1),
-                            'updated_at'    => Carbon::now(),
-                            'created_at'    => Carbon::now(),
+                            'used' => 0,
+                            'remaining' => round($total, 1),
+                            'updated_at' => Carbon::now(),
+                            'created_at' => Carbon::now(),
                         ]
                     );
-                    if (! $existed) $created++;
+                    if (! $existed) {
+                        $created++;
+                    }
                 }
             }
         });
 
         $ms = (int) round((microtime(true) - $start) * 1000);
         $this->info("Leave balances rolled over to {$year} in {$ms}ms — created {$created} new rows.");
+
         return self::SUCCESS;
     }
 }

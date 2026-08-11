@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -22,6 +22,7 @@ import { payrollsApi, type PayrollListParams } from '@/api/payroll/payrolls';
 import type { PayrollVarianceReport } from '@/types/payroll';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { Chip, type ChipVariant } from '@/components/ui/Chip';
 import { DataTable, NumCell, StackedCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -38,12 +39,13 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { usePermission } from '@/hooks/usePermission';
 import { useEcho } from '@/hooks/useEcho';
-import { formatPeso } from '@/lib/formatNumber';
+import { formatInt, formatPeso } from '@/lib/formatNumber';
 import { formatDate, formatRelative } from '@/lib/formatDate';
 import type {
   DisbursementProof,
   Payroll,
   PayrollPeriod,
+  PayrollPeriodSummary,
   PayrollProgressEventPayload,
 } from '@/types/payroll';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
@@ -71,6 +73,31 @@ const periodStatusVariant = (status: string | null | undefined): ChipVariant => 
       return 'neutral';
   }
 };
+
+/**
+ * "Jul 16 – Jul 31, 2026" — the cutoff the operator is actually committing.
+ * `period.label` is a display string owned by the API and may be seasonal
+ * ("13th Month 2026"), so the confirmations name the real dates instead of
+ * trusting it to contain them.
+ */
+const cutoffRange = (period: PayrollPeriod): string =>
+  `${formatDate(period.period_start)} – ${formatDate(period.period_end)}`;
+
+/**
+ * The figures a high-stakes payroll confirmation must state: how many people
+ * and how much money. Returns null while the summary is still in flight, which
+ * the callers treat as "not safe to confirm yet" rather than printing
+ * "undefined employees".
+ */
+function PayrollStakes({ summary }: { summary: PayrollPeriodSummary | null | undefined }) {
+  if (!summary) return null;
+  return (
+    <span className="font-mono tabular-nums text-primary">
+      {formatInt(summary.employee_count)} employee{summary.employee_count === 1 ? '' : 's'} ·{' '}
+      {formatPeso(summary.total_net)} net
+    </span>
+  );
+}
 
 export default function PayrollPeriodDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -227,6 +254,15 @@ export default function PayrollPeriodDetailPage() {
     onError: (err: { response?: { data?: { message?: string } } }) =>
       toast.error(err.response?.data?.message ?? 'Failed to finalize period.'),
   });
+  const retryGlMutation = useMutation({
+    mutationFn: () => periodsApi.retryGl(id!),
+    onSuccess: () => {
+      toast.success('GL handoff retry queued.');
+      qc.invalidateQueries({ queryKey: ['payroll-period', id] });
+    },
+    onError: (err: { response?: { data?: { message?: string } } }) =>
+      toast.error(err.response?.data?.message ?? 'Failed to retry the GL handoff.'),
+  });
 
   // ADV1 — Disbursement proof
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -246,10 +282,16 @@ export default function PayrollPeriodDetailPage() {
   });
 
   // H-8 — Force-unlock for periods stuck at Processing because the worker crashed.
+  // The reason is written to the audit trail, so it is collected through
+  // ReasonDialog (styled, length-validated) rather than window.prompt — which
+  // could be neither, and shipped with a pre-filled answer the operator could
+  // accept without reading.
+  const [showForceUnlockDialog, setShowForceUnlockDialog] = useState(false);
   const forceUnlockMutation = useMutation({
     mutationFn: (reason: string) => periodsApi.forceUnlock(id!, reason),
     onSuccess: () => {
       toast.success('Period unlocked — you can re-run compute.');
+      setShowForceUnlockDialog(false);
       qc.invalidateQueries({ queryKey: ['payroll-period', id] });
     },
     onError: (err: { response?: { data?: { message?: string } } }) =>
@@ -319,6 +361,9 @@ export default function PayrollPeriodDetailPage() {
 
   const summary = period.summary;
   const chainSteps = period.lifecycle_steps ?? [];
+  // Shared by every high-stakes confirmation below. Null until the summary
+  // lands, which those dialogs treat as "not safe to confirm yet".
+  const stakes = summary ? <PayrollStakes summary={summary} /> : null;
 
   // Compute (first run) and Recompute (replace an existing run) are separate
   // affordances. Recompute is destructive — it rewrites every payroll row, so it
@@ -337,6 +382,10 @@ export default function PayrollPeriodDetailPage() {
     can('payroll.periods.finalize') &&
     (period.status === 'finalized' || period.status === 'disbursed');
   const canDisburse = can('payroll.periods.finalize') && period.status === 'finalized';
+  const canRetryGl =
+    can('accounting.journal.post') &&
+    (period.status === 'finalized' || period.status === 'disbursed') &&
+    (period.gl_handoff_status === 'manual_required' || period.gl_handoff_status === 'not_required');
   const canUploadProof =
     can('payroll.periods.finalize') &&
     (period.status === 'finalized' || period.status === 'disbursed');
@@ -526,6 +575,18 @@ export default function PayrollPeriodDetailPage() {
                 Finalize
               </Button>
             )}
+            {canRetryGl && (
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<RefreshCw size={14} />}
+                onClick={() => retryGlMutation.mutate()}
+                disabled={retryGlMutation.isPending}
+                loading={retryGlMutation.isPending}
+              >
+                Retry GL
+              </Button>
+            )}
             {canBankFile && (
               <span className="inline-flex items-end gap-2">
                 <Select
@@ -635,14 +696,7 @@ export default function PayrollPeriodDetailPage() {
               onRetry={() => computeMutation.mutate()}
               retryPending={computeMutation.isPending}
               canForceUnlock={canForceUnlock}
-              onForceUnlock={() => {
-                const reason = window.prompt(
-                  'Reason for force-unlock (audit trail):',
-                  'Worker crashed; rerunning compute.',
-                );
-                if (reason === null) return;
-                forceUnlockMutation.mutate(reason);
-              }}
+              onForceUnlock={() => setShowForceUnlockDialog(true)}
               forceUnlockPending={forceUnlockMutation.isPending}
             />
           )}
@@ -650,9 +704,78 @@ export default function PayrollPeriodDetailPage() {
           <div className="grid grid-cols-4 gap-3 mb-5">
             <StatCard label="Employees" value={summary ? summary.employee_count : '—'} />
             <StatCard label="Total Gross" value={summary ? formatPeso(summary.total_gross) : '—'} />
-            <StatCard label="Total Deductions" value={summary ? formatPeso(summary.total_deductions) : '—'} />
+            <StatCard
+              label="Total Deductions"
+              value={summary ? formatPeso(summary.total_deductions) : '—'}
+            />
             <StatCard label="Total Net" value={summary ? formatPeso(summary.total_net) : '—'} />
           </div>
+
+          {period.bank_file_status === 'pending' && (
+            <div className="flex items-start gap-2 px-3 py-2 mb-4 bg-info-bg text-info-fg rounded-md text-xs">
+              <AlertCircle size={14} className="mt-0.5 shrink-0" />
+              <div>
+                <span className="font-medium">Bank file generation is pending.</span>{' '}
+                The finalized payroll is queued for automatic generation. If it remains pending,
+                use the Bank file action after verifying the payroll totals.
+              </div>
+            </div>
+          )}
+
+          {period.bank_file_status === 'manual_required' && (
+            <div className="flex items-start gap-2 px-3 py-2 mb-4 bg-warning-bg text-warning-fg rounded-md text-xs">
+              <AlertCircle size={14} className="mt-0.5 shrink-0" />
+              <div>
+                <span className="font-medium">Manual bank file generation required.</span>{' '}
+                {period.bank_file_note ?? 'Automatic generation did not produce a bank file.'}{' '}
+                Fix the issue, then use the Bank file action to generate and review the artifact.
+              </div>
+            </div>
+          )}
+
+          {period.gl_handoff_status === 'pending' && (
+            <div className="flex items-start gap-2 px-3 py-2 mb-4 bg-info-bg text-info-fg rounded-md text-xs">
+              <AlertCircle size={14} className="mt-0.5 shrink-0" />
+              <div>
+                <span className="font-medium">GL posting is pending.</span>{' '}
+                The finalized payroll is queued for Accounting. The payroll rows are already locked;
+                this handoff can be replayed independently if the worker needs recovery.
+              </div>
+            </div>
+          )}
+
+          {period.gl_handoff_status === 'manual_required' && (
+            <div className="flex items-start gap-2 px-3 py-2 mb-4 bg-warning-bg text-warning-fg rounded-md text-xs">
+              <AlertCircle size={14} className="mt-0.5 shrink-0" />
+              <div>
+                <span className="font-medium">Manual GL recovery required.</span>{' '}
+                {period.gl_handoff_note ?? 'Automatic posting did not produce a journal entry.'}{' '}
+                Fix the Accounting setup or posting period, then use Retry GL.
+              </div>
+            </div>
+          )}
+
+          {period.gl_handoff_status === 'not_required' && (
+            <div className="flex items-start gap-2 px-3 py-2 mb-4 bg-warning-bg text-warning-fg rounded-md text-xs">
+              <AlertCircle size={14} className="mt-0.5 shrink-0" />
+              <div>
+                <span className="font-medium">GL posting was not required.</span>{' '}
+                Accounting was disabled when this handoff ran. Enable Accounting, then use Retry GL
+                if this payroll must be represented in the ledger.
+              </div>
+            </div>
+          )}
+
+          {period.gl_handoff_status === 'posted' && period.gl_entry_number && (
+            <div className="flex items-start gap-2 px-3 py-2 mb-4 bg-success-bg text-success-fg rounded-md text-xs">
+              <CheckCircle2 size={14} className="mt-0.5 shrink-0" />
+              <div>
+                <span className="font-medium">Posted to the General Ledger.</span>{' '}
+                Entry <span className="font-mono">{period.gl_entry_number}</span> is linked to this
+                payroll period.
+              </div>
+            </div>
+          )}
 
           {period.status === 'voided' && (
             <div className="flex items-start gap-2 px-3 py-2 mb-4 bg-danger-bg text-danger-fg rounded-md text-xs">
@@ -851,12 +974,25 @@ export default function PayrollPeriodDetailPage() {
           approveMutation.mutate();
           setShowApproveDialog(false);
         }}
-        title="Approve payroll period?"
-        description="This marks the period as reviewed and approved."
+        title={`Approve ${cutoffRange(period)}?`}
+        description={
+          stakes ? (
+            <>
+              {stakes} — you are signing off on this run as reviewed. Finalize, which locks the
+              period, is the next and irreversible step.
+            </>
+          ) : (
+            'Employee count and net total are still loading. Wait for the figures before approving.'
+          )
+        }
         variant="warning"
         confirmLabel="Approve"
-        pending={approveMutation.isPending}
+        pending={approveMutation.isPending || !summary}
       />
+      {/* Finalize is the point of no return: CLAUDE.md is explicit that a
+ finalized period is never unlocked — corrections go in the next period.
+ The copy therefore names the cutoff, the headcount and the peso total,
+ the same specificity the Recompute dialog above already had. */}
       <ConfirmDialog
         isOpen={showFinalizeDialog}
         onClose={() => setShowFinalizeDialog(false)}
@@ -864,11 +1000,20 @@ export default function PayrollPeriodDetailPage() {
           finalizeMutation.mutate();
           setShowFinalizeDialog(false);
         }}
-        title="Finalize payroll period?"
-        description="This will lock the period. Payslips will be generated and no further changes can be made."
+        title={`Finalize ${cutoffRange(period)}?`}
+        description={
+          stakes ? (
+            <>
+              {stakes}. Payslips generate and the period locks. Finalized payroll is never reopened
+              — any correction has to be raised as an adjustment in the next period.
+            </>
+          ) : (
+            'Employee count and net total are still loading. Wait for the figures before finalizing.'
+          )
+        }
         variant="danger"
         confirmLabel="Finalize"
-        pending={finalizeMutation.isPending}
+        pending={finalizeMutation.isPending || !summary}
       />
       <ConfirmDialog
         isOpen={showDisbursedDialog}
@@ -877,11 +1022,43 @@ export default function PayrollPeriodDetailPage() {
           markDisbursedMutation.mutate();
           setShowDisbursedDialog(false);
         }}
-        title="Mark as disbursed?"
-        description="This confirms that salaries have been transferred to employee bank accounts."
+        title={`Mark ${cutoffRange(period)} as disbursed?`}
+        description={
+          stakes ? (
+            <>
+              {stakes} — confirm only once that money has actually left the company account and
+              reached employee bank accounts. This closes the period.
+            </>
+          ) : (
+            'Employee count and net total are still loading. Wait for the figures before confirming.'
+          )
+        }
         variant="warning"
         confirmLabel="Mark Disbursed"
-        pending={markDisbursedMutation.isPending}
+        pending={markDisbursedMutation.isPending || !summary}
+      />
+
+      {/* H-8 — Force-unlock. Same 5-character floor VoidPeriodModal enforces,
+ because this reason lands in the same audit trail. */}
+      <ReasonDialog
+        isOpen={showForceUnlockDialog}
+        onClose={() => setShowForceUnlockDialog(false)}
+        onConfirm={(reason) => forceUnlockMutation.mutate(reason)}
+        title="Force-unlock this period?"
+        description={
+          <>
+            The run for <span className="font-mono">{cutoffRange(period)}</span> is still claimed by
+            a worker. Unlocking releases that claim so compute can be re-run. Only do this when the
+            worker is genuinely dead — unlocking a live run lets two computations write the same
+            payroll rows.
+          </>
+        }
+        reasonLabel="Reason for force-unlock"
+        reasonPlaceholder="e.g. Queue worker OOM-killed at 14:20, job never resumed"
+        minLength={5}
+        confirmLabel="Force-unlock"
+        variant="warning"
+        pending={forceUnlockMutation.isPending}
       />
 
       {/* REC-01 — Void modal: requires a reason (min 5 chars) for the audit trail. */}
@@ -891,6 +1068,8 @@ export default function PayrollPeriodDetailPage() {
         onConfirm={(reason) => voidMutation.mutate(reason)}
         pending={voidMutation.isPending}
         hasGlPosting={!!period.gl_entry_number}
+        cutoff={cutoffRange(period)}
+        stakes={stakes}
       />
     </div>
   );
@@ -912,7 +1091,8 @@ function VariancePanel({
   isLoading: boolean;
 }) {
   const fmt = (n: number | string) => formatPeso(n);
-  const deltaColor = (n: number) => (n > 0 ? 'text-success-fg' : n < 0 ? 'text-danger-fg' : 'text-muted');
+  const deltaColor = (n: number) =>
+    n > 0 ? 'text-success-fg' : n < 0 ? 'text-danger-fg' : 'text-muted';
   const pctFmt = (n: number | null) => (n === null ? '—' : `${n > 0 ? '+' : ''}${n.toFixed(1)}%`);
 
   return (
@@ -1283,12 +1463,16 @@ function VoidPeriodModal({
   onConfirm,
   pending,
   hasGlPosting,
+  cutoff,
+  stakes,
 }: {
   open: boolean;
   onClose: () => void;
   onConfirm: (reason: string) => void;
   pending: boolean;
   hasGlPosting: boolean;
+  cutoff: string;
+  stakes: ReactNode;
 }) {
   const [reason, setReason] = useState('');
 
@@ -1300,8 +1484,9 @@ function VoidPeriodModal({
   const tooShort = reason.trim().length < 5;
 
   return (
-    <Modal isOpen={open} onClose={onClose} size="md" title="Void payroll period">
+    <Modal isOpen={open} onClose={onClose} size="md" title={`Void ${cutoff}`}>
       <div className="space-y-3 py-3">
+        {stakes && <div className="text-sm text-muted">Voiding {stakes}.</div>}
         <div className="flex items-start gap-2 px-3 py-2 bg-danger-bg text-danger-fg rounded-md text-xs">
           <Ban size={14} className="mt-0.5 shrink-0" />
           <span>

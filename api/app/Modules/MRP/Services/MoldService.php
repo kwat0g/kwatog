@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace App\Modules\MRP\Services;
 
+use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
 use App\Modules\CRM\Models\Product;
 use App\Modules\MRP\Enums\MoldEventType;
 use App\Modules\MRP\Enums\MoldStatus;
+use App\Modules\MRP\Events\MoldShotLimitNearing;
+use App\Modules\MRP\Events\MoldShotLimitReached;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
 use App\Modules\MRP\Models\MoldHistory;
@@ -127,25 +130,18 @@ class MoldService
             $row->save();
             $row->refresh();
 
-            // Pass back the row + the previous percentage so the caller can
-            // decide which broadcast events to dispatch *after* commit.
+            $warningRatio = $this->settings->requiredFloat('alerts.mold.warning_ratio', 0, 1) * 100;
+            if ($beforePct < $warningRatio && $row->shot_percentage >= $warningRatio) {
+                app(OutboxService::class)->record(new MoldShotLimitNearing($row));
+            }
+            if ($row->current_shot_count >= $row->max_shots_before_maintenance) {
+                app(OutboxService::class)->record(new MoldShotLimitReached($row));
+            }
+
             return [$row, $beforePct];
         });
 
         [$row, $beforePct] = $fresh;
-        $afterPct = $row->shot_percentage;
-
-        // Crossing the configured warning threshold (forward-only). Use after-commit hook so
-        // listeners and broadcasters see the persisted row.
-        DB::afterCommit(function () use ($row, $beforePct, $afterPct) {
-            $warningRatio = $this->settings->requiredFloat('alerts.mold.warning_ratio', 0, 1) * 100;
-            if ($beforePct < $warningRatio && $afterPct >= $warningRatio) {
-                event(new \App\Modules\MRP\Events\MoldShotLimitNearing($row));
-            }
-            if ($row->current_shot_count >= $row->max_shots_before_maintenance) {
-                event(new \App\Modules\MRP\Events\MoldShotLimitReached($row));
-            }
-        });
 
         return $row;
     }

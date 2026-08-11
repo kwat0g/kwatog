@@ -45,4 +45,6 @@ export const workOrdersApi = {
  }).then((r) => r.data.data),
  listOutputs: (id: string) =>
  client.get<{ data: WorkOrderOutput[] }>(`/production/work-orders/${id}/outputs`).then((r) => r.data.data),
+ retryProductionReceipt: (workOrderId: string, outputId: string) =>
+ client.post<ApiSuccess<WorkOrderOutput>>(`/production/work-orders/${workOrderId}/outputs/${outputId}/retry-receipt`).then((r) => r.data.data),
 };

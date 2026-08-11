@@ -36,6 +36,13 @@ class ChainDefinitionsTest extends TestCase
         $this->assertSame(['draft', 'confirmed'], $completed);
     }
 
+    public function test_actual_sales_order_partial_delivery_status_resolves(): void
+    {
+        [$active, $completed] = ChainDefinitions::resolve('sales_order', 'partially_delivered');
+        $this->assertSame('delivered', $active);
+        $this->assertContains('ready_for_delivery', $completed);
+    }
+
     public function test_unknown_status_falls_back_to_first_step(): void
     {
         [$active, $completed] = ChainDefinitions::resolve('sales_order', 'wat');
@@ -51,6 +58,29 @@ class ChainDefinitionsTest extends TestCase
         $this->assertContains('in_progress', $completed);
     }
 
+    public function test_delivery_loading_status_is_not_collapsed_to_scheduled(): void
+    {
+        [$active, $completed] = ChainDefinitions::resolve('delivery', 'loading');
+
+        $this->assertSame('loading', $active);
+        $this->assertSame(['scheduled'], $completed);
+    }
+
+    public function test_delivery_in_transit_completes_loading_step(): void
+    {
+        [$active, $completed] = ChainDefinitions::resolve('delivery', 'in_transit');
+
+        $this->assertSame('in_transit', $active);
+        $this->assertSame(['scheduled', 'loading'], $completed);
+    }
+
+    public function test_actual_work_order_planned_status_resolves_to_draft(): void
+    {
+        [$active, $completed] = ChainDefinitions::resolve('work_order', 'planned');
+        $this->assertSame('draft', $active);
+        $this->assertSame([], $completed);
+    }
+
     public function test_grn_pending_qc_maps_to_qc_incoming(): void
     {
         [$active, $completed] = ChainDefinitions::resolve('grn', 'pending_qc');
@@ -63,6 +93,20 @@ class ChainDefinitionsTest extends TestCase
         [$active, $completed] = ChainDefinitions::resolve('purchase_order', 'fully_received');
         $this->assertSame('received', $active);
         $this->assertContains('approved', $completed);
+    }
+
+    public function test_actual_purchase_order_partial_received_status_resolves(): void
+    {
+        [$active, $completed] = ChainDefinitions::resolve('purchase_order', 'partially_received');
+        $this->assertSame('partial_received', $active);
+        $this->assertContains('sent', $completed);
+    }
+
+    public function test_actual_grn_partial_accepted_status_resolves(): void
+    {
+        [$active, $completed] = ChainDefinitions::resolve('grn', 'partial_accepted');
+        $this->assertSame('accepted', $active);
+        $this->assertContains('qc_incoming', $completed);
     }
 
     public function test_unknown_entity_type_returns_unknown(): void

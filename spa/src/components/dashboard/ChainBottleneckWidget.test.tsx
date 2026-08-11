@@ -94,14 +94,17 @@ describe('ChainBottleneckWidget', () => {
 
  const { container } = renderWithClient(<ChainBottleneckWidget hideWhenEmpty />);
 
- // Wait until the loading skeleton (which always renders an
- // animate-pulse skeleton) is gone — at that point the widget should
- // have unmounted itself due to hideWhenEmpty.
+ // Wait for the widget to unmount itself. This previously waited on
+ // `.animate-pulse` disappearing, which coupled the test to a class name
+ // SkeletonBlock no longer emits — `animate-pulse animate-shimmer` set the CSS
+ // `animation` property twice, so the pulse was dead weight and was removed.
+ // With the selector never matching, `waitFor` resolved on the first tick,
+ // before the query settled, and the assertion below saw the loading Panel.
+ // Waiting on the actual condition under test cannot rot that way.
  await waitFor(() => {
- expect(container.querySelector('.animate-pulse')).toBeNull();
+ expect(container.firstChild).toBeNull();
  });
  expect(screen.queryByText(/No bottlenecks/i)).not.toBeInTheDocument();
- expect(container.firstChild).toBeNull();
  });
 
  it('renders the error state with a retry button when fetch fails', async () => {
@@ -113,5 +116,35 @@ describe('ChainBottleneckWidget', () => {
  expect(screen.getByText(/Failed to load bottlenecks/i)).toBeInTheDocument();
  });
  expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
+ });
+
+ it('surfaces manual listener handoffs even when no business bottleneck rows exist', async () => {
+ const data: ChainBottlenecks = {
+ total: 0,
+ groups: [],
+ automation: {
+ status: 'attention',
+ outbox: {
+ available: true, total: 0, pending: 0, processing: 0, published: 0,
+ failed: 0, stale_pending: 0, stale_processing: 0, oldest_pending_at: null, oldest_failure_at: null,
+ },
+ listeners: {
+ available: true, total: 2, processing: 0, retrying: 0, completed: 2,
+ failed: 0, stale_processing: 0, oldest_failure_at: null, oldest_active_at: null,
+ outcomes: {
+ available: true, total: 2, completed: 1, skipped: 0,
+ manual_required: 1, failed: 0, unclassified: 0,
+ },
+ },
+ failed_jobs: { available: true, total: 0, oldest_at: null },
+ },
+ };
+ vi.spyOn(chainApiModule.chainApi, 'bottlenecks').mockResolvedValue(data);
+
+ renderWithClient(<ChainBottleneckWidget />);
+
+ await waitFor(() => {
+ expect(screen.getByText(/1 manual handoff/i)).toBeInTheDocument();
+ });
  });
 });

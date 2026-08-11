@@ -46,7 +46,10 @@ function todayIso(): string {
  return new Date(d.getTime() - off).toISOString().slice(0, 10);
 }
 
-function requestColumns(onCancel?: (id: string) => void): Column<SelfServiceOvertimeRequest>[] {
+function requestColumns(
+ onCancel?: (id: string) => void,
+ onRestore?: (id: string) => void,
+): Column<SelfServiceOvertimeRequest>[] {
  return [
  {
  key: 'date',
@@ -108,6 +111,27 @@ function requestColumns(onCancel?: (id: string) => void): Column<SelfServiceOver
  },
  ]
  : []),
+ ...(onRestore
+ ? [
+ {
+ key: 'restore-actions',
+ header: '',
+ align: 'right' as const,
+ cell: (r: SelfServiceOvertimeRequest) =>
+ r.can_restore ? (
+ <Button
+ variant="ghost"
+ size="sm"
+ className="text-accent-fg hover:bg-accent-bg"
+ onClick={() => onRestore(r.id)}
+ aria-label="Restore this cancelled overtime request"
+ >
+ Restore
+ </Button>
+ ) : null,
+ },
+ ]
+ : []),
  ];
 }
 
@@ -128,6 +152,15 @@ export default function SelfServiceOvertimePage() {
  queryClient.invalidateQueries({ queryKey: ['self-service', 'overtime'] });
  },
  onError: () => toast.error('Failed to cancel request.'),
+ });
+
+ const restore = useMutation({
+ mutationFn: (id: string) => selfServiceApi.restoreOvertime(id),
+ onSuccess: () => {
+ toast.success('Overtime request restored and resubmitted.');
+ queryClient.invalidateQueries({ queryKey: ['self-service', 'overtime'] });
+ },
+ onError: () => toast.error('Only a request you cancelled can be restored.'),
  });
 
  return (
@@ -196,7 +229,11 @@ export default function SelfServiceOvertimePage() {
  <h2 className="text-2xs uppercase tracking-wider text-muted font-medium mb-2">
  History · {data.history.length}
  </h2>
- <DataTable columns={requestColumns()} data={data.history} stickyHeader={false} />
+ <DataTable
+ columns={requestColumns(undefined, (id) => restore.mutate(id))}
+ data={data.history}
+ stickyHeader={false}
+ />
  </section>
  )}
 

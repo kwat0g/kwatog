@@ -2,6 +2,8 @@
 // 'draft' now strictly means "never computed" — the two used to share 'draft',
 // which is why the Compute button never disabled after a successful run.
 export type PayrollPeriodStatus = 'draft' | 'processing' | 'computed' | 'approved' | 'finalized' | 'disbursed' | 'voided';
+export type PayrollGlHandoffStatus = 'not_started' | 'pending' | 'manual_required' | 'posted' | 'not_required';
+export type BankFileGenerationStatus = 'not_started' | 'pending' | 'manual_required' | 'generated';
 export type DisbursementStatus = 'pending' | 'partially_disbursed' | 'disbursed';
 export type ProofType = 'deposit_slip' | 'bank_confirmation' | 'transfer_receipt' | 'other';
 export type PayrollAdjustmentType = 'underpayment' | 'overpayment';
@@ -66,7 +68,15 @@ export interface PayrollPeriod {
  creator?: { id: string; name: string };
  summary?: PayrollPeriodSummary | null;
  gl_entry_number?: string | null;
+ gl_handoff_status?: PayrollGlHandoffStatus;
+ gl_handoff_status_label?: string;
+ gl_handoff_note?: string | null;
+ gl_handoff_at?: string | null;
  bank_files?: BankFileRef[];
+ bank_file_status?: BankFileGenerationStatus;
+ bank_file_status_label?: string;
+ bank_file_note?: string | null;
+ bank_file_at?: string | null;
  adjustment_counts?: {
  pending: number;
  approved: number;

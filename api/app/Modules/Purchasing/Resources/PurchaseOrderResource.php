@@ -36,6 +36,32 @@ class PurchaseOrderResource extends JsonResource
                 : false,
             'approved_at'            => optional($this->approved_at)->toIso8601String(),
             'sent_to_supplier_at'    => optional($this->sent_to_supplier_at)->toIso8601String(),
+            'supplier_dispatch'     => $this->whenLoaded('supplierDispatch', function () use ($request): ?array {
+                $dispatch = $this->supplierDispatch;
+                if ($dispatch === null) {
+                    return null;
+                }
+                $data = [
+                    'status'           => $dispatch->status?->value,
+                    'status_label'     => $dispatch->status?->label() ?? (string) $dispatch->status,
+                    'channel'          => $dispatch->channel,
+                    'attempts'         => (int) $dispatch->attempts,
+                    'recipient_count'  => (int) $dispatch->recipient_count,
+                    'queued_at'        => optional($dispatch->queued_at)->toIso8601String(),
+                    'last_attempt_at'  => optional($dispatch->last_attempt_at)->toIso8601String(),
+                    'published_at'     => optional($dispatch->published_at)->toIso8601String(),
+                    'confirmed_at'     => optional($dispatch->confirmed_at)->toIso8601String(),
+                ];
+
+                // The portal may consume this resource too; keep internal
+                // provider errors out of the supplier-facing response.
+                if (! $request->is('api/v1/b2b/supplier/*')) {
+                    $data['last_error'] = $dispatch->last_error;
+                    $data['metadata'] = $dispatch->metadata;
+                }
+
+                return $data;
+            }),
             'budget_warning_level'   => $this->budget_warning_level,
             'budget_warning_message' => $this->budget_warning_message,
             'budget_acknowledged_at' => optional($this->budget_acknowledged_at)->toIso8601String(),
@@ -70,6 +96,7 @@ class PurchaseOrderResource extends JsonResource
                 'due_date'     => optional($b->due_date)->toDateString(),
                 'has_variances' => (bool) $b->has_variances,
                 'three_way_overridden' => (bool) $b->three_way_overridden,
+                'three_way_review_status' => method_exists($b, 'threeWayReviewStatus') ? $b->threeWayReviewStatus() : null,
             ])->all()),
             'approval_records'       => $this->whenLoaded('approvalRecords', fn () => $this->approvalRecords->map(fn ($r) => [
                 'step_order'    => (int) $r->step_order,

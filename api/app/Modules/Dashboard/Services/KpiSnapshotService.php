@@ -27,16 +27,46 @@ class KpiSnapshotService
         'inventory' => 'dashboard.warehouse.view',
     ];
 
-    public function computeAll(int $year, int $month): void
+    /**
+     * Compute every active definition while preserving per-definition
+     * isolation. A partial result is still a failed process from an
+     * operator's perspective, so callers receive the exact failed codes and
+     * can make the scheduled command non-zero instead of reporting success.
+     *
+     * @return array{computed:int,no_data:int,failed:array<int,array{code:string,error:string}>}
+     */
+    public function computeAll(int $year, int $month): array
     {
         $definitions = KpiDefinition::active()->orderBy('display_order')->get();
+        $computed = 0;
+        $noData = 0;
+        $failed = [];
+
         foreach ($definitions as $def) {
             try {
-                $this->computeKpi($def, $year, $month);
+                if ($this->computeKpi($def, $year, $month) === null) {
+                    $noData++;
+                } else {
+                    $computed++;
+                }
             } catch (\Throwable $e) {
-                Log::warning("KPI compute failed: {$def->code}", ['error' => $e->getMessage()]);
+                $failed[] = [
+                    'code' => (string) $def->code,
+                    'error' => $e->getMessage(),
+                ];
+                Log::error("KPI compute failed: {$def->code}", [
+                    'year' => $year,
+                    'month' => $month,
+                    'error' => $e->getMessage(),
+                ]);
             }
         }
+
+        return [
+            'computed' => $computed,
+            'no_data' => $noData,
+            'failed' => $failed,
+        ];
     }
 
     public function computeKpi(KpiDefinition $def, int $year, int $month): ?KpiSnapshot

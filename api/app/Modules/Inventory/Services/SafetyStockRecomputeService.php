@@ -29,7 +29,7 @@ class SafetyStockRecomputeService
     /**
      * Recompute every active, unlocked item. Returns counts.
      *
-     * @return array{evaluated:int, updated:int, skipped:int}
+     * @return array{evaluated:int, updated:int, skipped:int, failed:int}
      */
     public function recomputeAll(): array
     {
@@ -38,13 +38,14 @@ class SafetyStockRecomputeService
             throw new BusinessRuleException('Required business setting inventory.safety_stock.enabled is missing or invalid.');
         }
         if (! $enabled) {
-            return ['evaluated' => 0, 'updated' => 0, 'skipped' => 0];
+            return ['evaluated' => 0, 'updated' => 0, 'skipped' => 0, 'failed' => 0];
         }
 
         $opts = $this->loadOpts();
         $evaluated = 0;
         $updated   = 0;
         $skipped   = 0;
+        $failed    = 0;
 
         $items = Item::query()
             ->where('is_active', true)
@@ -67,7 +68,7 @@ class SafetyStockRecomputeService
                 ])->saveQuietly();
                 $updated++;
             } catch (\Throwable $e) {
-                $skipped++;
+                $failed++;
                 Log::warning('SafetyStockRecompute failed for item', [
                     'item_id' => $item->id,
                     'error'   => $e->getMessage(),
@@ -75,7 +76,7 @@ class SafetyStockRecomputeService
             }
         }
 
-        return compact('evaluated', 'updated', 'skipped');
+        return compact('evaluated', 'updated', 'skipped', 'failed');
     }
 
     /**

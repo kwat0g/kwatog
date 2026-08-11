@@ -11,6 +11,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use RuntimeException;
 use Tests\TestCase;
 
 /**
@@ -25,33 +26,33 @@ class NotificationDigestServiceTest extends TestCase
     private function optIn(User $user, string $type = '*'): void
     {
         DB::table('notification_preferences')->insert([
-            'user_id'           => $user->id,
+            'user_id' => $user->id,
             'notification_type' => $type,
-            'channel'           => 'digest',
-            'enabled'           => true,
-            'created_at'        => now(),
-            'updated_at'        => now(),
+            'channel' => 'digest',
+            'enabled' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
     }
 
     private function notify(User $user, bool $read = false, string $title = 'Unread item'): void
     {
         DB::table('notifications')->insert([
-            'id'              => (string) Str::uuid(),
-            'type'            => 'test.digest',
+            'id' => (string) Str::uuid(),
+            'type' => 'test.digest',
             'notifiable_type' => User::class,
-            'notifiable_id'   => $user->id,
-            'data'            => json_encode(['title' => $title, 'message' => 'body']),
-            'read_at'         => $read ? now() : null,
-            'created_at'      => now(),
-            'updated_at'      => now(),
+            'notifiable_id' => $user->id,
+            'data' => json_encode(['title' => $title, 'message' => 'body']),
+            'read_at' => $read ? now() : null,
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
     }
 
     public function test_only_opted_in_users_are_emailed(): void
     {
         $subscriber = User::factory()->create(['email' => 'sub@ogami.test']);
-        $bystander  = User::factory()->create(['email' => 'nope@ogami.test']);
+        $bystander = User::factory()->create(['email' => 'nope@ogami.test']);
 
         $this->optIn($subscriber);
         $this->notify($subscriber);
@@ -59,7 +60,7 @@ class NotificationDigestServiceTest extends TestCase
 
         Mail::fake();
 
-        $result = (new NotificationDigestService())->run();
+        $result = (new NotificationDigestService)->run();
 
         Mail::assertQueued(NotificationDigestMail::class, 1);
         $this->assertSame(1, $result['emails_sent']);
@@ -75,7 +76,7 @@ class NotificationDigestServiceTest extends TestCase
         DB::flushQueryLog();
         DB::enableQueryLog();
 
-        $result = (new NotificationDigestService())->run();
+        $result = (new NotificationDigestService)->run();
 
         $queries = DB::getQueryLog();
         DB::disableQueryLog();
@@ -99,7 +100,7 @@ class NotificationDigestServiceTest extends TestCase
 
         Mail::fake();
 
-        $result = (new NotificationDigestService())->run();
+        $result = (new NotificationDigestService)->run();
 
         Mail::assertNothingQueued();
         $this->assertSame(0, $result['emails_sent']);
@@ -112,7 +113,7 @@ class NotificationDigestServiceTest extends TestCase
         $this->notify($user);
 
         Mail::fake();
-        (new NotificationDigestService())->run();
+        (new NotificationDigestService)->run();
 
         $this->assertSame(
             1,
@@ -149,7 +150,7 @@ class NotificationDigestServiceTest extends TestCase
 
         Mail::fake();
 
-        $result = (new NotificationDigestService())->run();
+        $result = (new NotificationDigestService)->run();
 
         Mail::assertNothingQueued();
         $this->assertSame(0, $result['emails_sent']);
@@ -164,7 +165,7 @@ class NotificationDigestServiceTest extends TestCase
 
         Mail::fake();
 
-        (new NotificationDigestService())->run();
+        (new NotificationDigestService)->run();
 
         Mail::assertNothingQueued();
     }
@@ -173,19 +174,36 @@ class NotificationDigestServiceTest extends TestCase
     {
         $user = User::factory()->create(['email' => 'sub@ogami.test']);
         DB::table('notification_preferences')->insert([
-            'user_id'           => $user->id,
+            'user_id' => $user->id,
             'notification_type' => '*',
-            'channel'           => 'digest',
-            'enabled'           => false,
-            'created_at'        => now(),
-            'updated_at'        => now(),
+            'channel' => 'digest',
+            'enabled' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
         $this->notify($user);
 
         Mail::fake();
 
-        (new NotificationDigestService())->run();
+        (new NotificationDigestService)->run();
 
         Mail::assertNothingQueued();
+    }
+
+    public function test_mail_enqueue_failure_is_reported_for_scheduler_recovery(): void
+    {
+        $user = User::factory()->create(['email' => 'sub@ogami.test']);
+        $this->optIn($user);
+        $this->notify($user);
+
+        Mail::shouldReceive('to')
+            ->once()
+            ->andThrow(new RuntimeException('queue unavailable'));
+
+        $result = (new NotificationDigestService)->run();
+
+        $this->assertSame(1, $result['failures']);
+        $this->assertSame(0, $result['emails_sent']);
+        $this->assertSame(1, $result['users_evaluated']);
     }
 }

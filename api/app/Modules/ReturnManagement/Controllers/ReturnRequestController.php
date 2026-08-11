@@ -121,6 +121,7 @@ class ReturnRequestController extends Controller
             'creditNote',
             'replacementPurchaseOrder',
             'creditMemo',
+            'inspection',
             'stockMovement.toLocation',
             'stockMovement.fromLocation',
             'creator:id,name',
@@ -183,6 +184,14 @@ class ReturnRequestController extends Controller
 
         $rma = $this->service->inspect($returnRequest, $validated['internal_notes'] ?? null, $request->user());
         return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor']));
+    }
+
+    /** Retry a failed RMA → Quality inspection handoff. */
+    public function retryInspection(Request $request, ReturnRequest $returnRequest): ReturnRequestResource
+    {
+        $rma = $this->service->retryInspectionHandoff($returnRequest, $request->user());
+
+        return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor', 'inspection']));
     }
 
     /**

@@ -6,6 +6,7 @@ namespace App\Modules\Payroll\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\AuditLog;
+use App\Common\Services\OutboxService;
 use App\Modules\Accounting\Enums\JournalEntryStatus;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Services\JournalEntryService;
@@ -14,9 +15,13 @@ use App\Modules\HR\Enums\EmployeeStatus;
 use App\Modules\HR\Enums\EmploymentType;
 use App\Modules\HR\Enums\PayType;
 use App\Modules\HR\Models\Employee;
+use App\Modules\Payroll\Enums\BankFileGenerationStatus;
+use App\Modules\Payroll\Enums\PayrollGlHandoffStatus;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use App\Modules\Payroll\Events\PayrollPeriodDisbursed;
 use App\Modules\Payroll\Events\PayrollPeriodFinalized;
+use App\Modules\Payroll\Events\PayrollComputationRequested;
+use App\Modules\Payroll\Events\PayrollGlPostingRequested;
 use App\Modules\Payroll\Events\PayrollPeriodVoided;
 use App\Modules\Payroll\Jobs\ProcessPayrollJob;
 use App\Modules\Payroll\Models\DisbursementProof;
@@ -25,6 +30,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class PayrollPeriodService
 {
@@ -804,44 +810,82 @@ class PayrollPeriodService
         return $fresh;
     }
 
+    /**
+     * Atomically claim a period and stage the durable compute request.
+     *
+     * A direct queue dispatch after claim leaves a failure window where the
+     * period is durably Processing but no work item exists. Keeping the claim
+     * and outbox row in one transaction makes the scheduled outbox dispatcher
+     * the recovery path for both the HTTP and automatic payroll entrypoints.
+     */
+    public function claimForComputeAndStage(PayrollPeriod $period, ?User $actor = null): PayrollPeriod
+    {
+        return DB::transaction(function () use ($period, $actor): PayrollPeriod {
+            $claimed = $this->claimForCompute($period, $actor);
+            $fresh = $claimed->fresh();
+
+            app(OutboxService::class)->recordForChain(
+                new PayrollComputationRequested(
+                    $fresh,
+                    $actor?->id,
+                    (string) Str::uuid(),
+                ),
+                $fresh,
+                'h2r',
+                'payroll_period',
+                'compute',
+            );
+
+            return $fresh;
+        });
+    }
+
     public function approve(PayrollPeriod $period, User $actor): PayrollPeriod
     {
-        // Approve follows a completed compute run. Draft is NOT approvable: it
-        // means the period was never computed, and approving it used to lock in
-        // an empty ₱0 payroll that could then be finalized and posted to the GL.
-        if ($period->status !== PayrollPeriodStatus::Computed) {
-            throw new BusinessRuleException(
-                $period->status === PayrollPeriodStatus::Draft
-                    ? 'This period has not been computed yet. Run Compute before approving.'
-                    : 'Only computed periods can be approved.',
-            );
-        }
-        // Refuse to approve a run with no payroll rows at all.
-        if ($period->payrolls()->count() === 0) {
-            throw new BusinessRuleException('Cannot approve: this period has no payroll rows.');
-        }
-        // Block approval if there are still failed batch rows.
-        $failed = $period->payrolls()->whereNotNull('error_message')->count();
-        if ($failed > 0) {
-            throw new BusinessRuleException("Cannot approve: {$failed} employee(s) failed computation. Resolve first.");
-        }
-
-        // REC-04 — maker-checker Segregation of Duties. The HR user who computed
-        // this run (computed_by, stamped by ProcessPayrollJob) may NOT also
-        // approve it — a second set of eyes is required on a ₱-material batch.
-        // system_admin (and any holder of self_approve_override) may bypass.
-        if ($period->computed_by !== null
-            && $period->computed_by === $actor->id
-            && ! $actor->hasPermission('payroll.periods.self_approve_override')) {
-            throw new BusinessRuleException('Maker-checker: the person who computed this payroll cannot also approve it. A different approver is required.');
-        }
-
         return DB::transaction(function () use ($period, $actor) {
-            $previous = $period->status?->value;
+            // All approval guards must inspect the authoritative row while it is
+            // locked. A stale route-bound model must not approve a period that a
+            // concurrent request has already finalized, voided, or re-computed.
+            $locked = PayrollPeriod::query()->lockForUpdate()->find($period->id);
+            if (! $locked) {
+                throw new BusinessRuleException('Payroll period not found.');
+            }
+
+            // Approve follows a completed compute run. Draft is NOT approvable:
+            // it means the period was never computed, and approving it used to
+            // lock in an empty ₱0 payroll that could then be finalized and posted
+            // to the GL.
+            if ($locked->status !== PayrollPeriodStatus::Computed) {
+                throw new BusinessRuleException(
+                    $locked->status === PayrollPeriodStatus::Draft
+                        ? 'This period has not been computed yet. Run Compute before approving.'
+                        : 'Only computed periods can be approved.',
+                );
+            }
+
+            if ($locked->payrolls()->count() === 0) {
+                throw new BusinessRuleException('Cannot approve: this period has no payroll rows.');
+            }
+
+            $failed = $locked->payrolls()->whereNotNull('error_message')->count();
+            if ($failed > 0) {
+                throw new BusinessRuleException("Cannot approve: {$failed} employee(s) failed computation. Resolve first.");
+            }
+
+            // REC-04 — maker-checker Segregation of Duties. The HR user who
+            // computed this run may not also approve it unless explicitly
+            // overridden.
+            if ($locked->computed_by !== null
+                && $locked->computed_by === $actor->id
+                && ! $actor->hasPermission('payroll.periods.self_approve_override')) {
+                throw new BusinessRuleException('Maker-checker: the person who computed this payroll cannot also approve it. A different approver is required.');
+            }
+
+            $previous = $locked->status?->value;
 
             // status + attribution columns are non-fillable / service-only.
             // Single save() → one audit row per the repo's audit-hygiene rule.
-            $period->forceFill([
+            $locked->forceFill([
                 'status'      => PayrollPeriodStatus::Approved->value,
                 'approved_by' => $actor->id,
                 'approved_at' => now(),
@@ -851,7 +895,7 @@ class PayrollPeriodService
                 'user_id'    => $actor->id,
                 'action'     => 'payroll.period.approve',
                 'model_type' => PayrollPeriod::class,
-                'model_id'   => $period->id,
+                'model_id'   => $locked->id,
                 'old_values' => ['status' => $previous],
                 'new_values' => ['status' => PayrollPeriodStatus::Approved->value, 'approved_by' => $actor->id],
                 'ip_address' => request()?->ip(),
@@ -859,36 +903,38 @@ class PayrollPeriodService
                 'created_at' => now(),
             ]);
 
-            return $period->fresh();
+            return $locked->fresh();
         });
     }
 
     public function markDisbursed(PayrollPeriod $period, User $user): PayrollPeriod
     {
-        if ($period->status !== PayrollPeriodStatus::Finalized) {
-            throw new BusinessRuleException('Only finalized periods can be marked as disbursed.');
-        }
-
         // P3.4 — capture the result so we can fire the event AFTER the
         // transaction commits (avoids listeners seeing uncommitted state).
         $fresh = DB::transaction(function () use ($period, $user) {
-            $proofCount = $period->disbursementProofs()->count();
+            $locked = PayrollPeriod::query()->lockForUpdate()->find($period->id);
+            if (! $locked) {
+                throw new BusinessRuleException('Payroll period not found.');
+            }
+            if ($locked->status !== PayrollPeriodStatus::Finalized) {
+                throw new BusinessRuleException('Only finalized periods can be marked as disbursed.');
+            }
+
+            $proofCount = $locked->disbursementProofs()->count();
             if ($proofCount === 0) {
                 throw new BusinessRuleException('At least one disbursement proof must be uploaded before marking the period as disbursed.');
             }
 
-            $period->status = PayrollPeriodStatus::Disbursed;
-            $period->disbursement_status = 'disbursed';
-            $period->disbursed_at = now();
-            $period->disbursed_by = $user->id;
-            $period->save();
+            $locked->status = PayrollPeriodStatus::Disbursed;
+            $locked->disbursement_status = 'disbursed';
+            $locked->disbursed_at = now();
+            $locked->disbursed_by = $user->id;
+            $locked->save();
 
-            return $period->fresh()->load('disburser', 'disbursementProofs.uploader');
+            $fresh = $locked->fresh()->load('disburser', 'disbursementProofs.uploader');
+            app(OutboxService::class)->record(new PayrollPeriodDisbursed($fresh));
+            return $fresh;
         });
-
-        // P3.4 — fire PayrollPeriodDisbursed (not PayrollPeriodFinalized) so
-        // employees do NOT receive a second "payslip ready" notification.
-        event(new PayrollPeriodDisbursed($fresh));
 
         return $fresh;
     }
@@ -1002,31 +1048,45 @@ class PayrollPeriodService
 
     public function finalize(PayrollPeriod $period, User $actor): PayrollPeriod
     {
-        if ($period->status !== PayrollPeriodStatus::Approved) {
-            throw new BusinessRuleException('Only approved periods can be finalized.');
-        }
-
-        // Task A9 — block finalization while unresolved anomaly flags exist.
-        $unresolved = \App\Modules\Payroll\Models\PayrollAnomalyFlag::query()
-            ->where('payroll_period_id', $period->id)
-            ->where('is_resolved', false)
-            ->count();
-        if ($unresolved > 0) {
-            throw new BusinessRuleException("Cannot finalize: {$unresolved} unresolved payroll anomaly flag(s). Review and resolve them first.");
-        }
-
         // P3.5 — wrap the status mutation in a transaction so any DB write
         // that throws rolls back atomically, matching other lifecycle methods.
         // The event is fired AFTER commit so listeners see persisted state.
         // REC-04 — no self-approve block here (approve() already enforced the
         // second set of eyes); we only record the finalizer for attribution.
         $fresh = DB::transaction(function () use ($period, $actor) {
-            $previous = $period->status?->value;
+            // Finalization is the H2R handoff into bank-file generation and GL
+            // posting. Re-read and lock the period before checking guards so a
+            // stale request cannot finalize a period that has since been voided
+            // or disbursed.
+            $locked = PayrollPeriod::query()->lockForUpdate()->find($period->id);
+            if (! $locked) {
+                throw new BusinessRuleException('Payroll period not found.');
+            }
+            if ($locked->status !== PayrollPeriodStatus::Approved) {
+                throw new BusinessRuleException('Only approved periods can be finalized.');
+            }
 
-            $period->forceFill([
-                'status'       => PayrollPeriodStatus::Finalized->value,
-                'finalized_by' => $actor->id,
-                'finalized_at' => now(),
+            // Task A9 — block finalization while unresolved anomaly flags exist.
+            $unresolved = \App\Modules\Payroll\Models\PayrollAnomalyFlag::query()
+                ->where('payroll_period_id', $locked->id)
+                ->where('is_resolved', false)
+                ->count();
+            if ($unresolved > 0) {
+                throw new BusinessRuleException("Cannot finalize: {$unresolved} unresolved payroll anomaly flag(s). Review and resolve them first.");
+            }
+
+            $previous = $locked->status?->value;
+
+            $locked->forceFill([
+                'status'            => PayrollPeriodStatus::Finalized->value,
+                'finalized_by'      => $actor->id,
+                'finalized_at'      => now(),
+                'bank_file_status'  => BankFileGenerationStatus::Pending,
+                'bank_file_note'    => null,
+                'bank_file_at'      => now(),
+                'gl_handoff_status' => PayrollGlHandoffStatus::Pending,
+                'gl_handoff_note'   => null,
+                'gl_handoff_at'     => now(),
             ])->save();
 
             // A 13th-month run recognises payment HERE, not at compute time.
@@ -1037,13 +1097,13 @@ class PayrollPeriodService
             // via a queued listener, which swallows its own failures) because a
             // finalized 13th-month period whose accruals are still unpaid would
             // be re-payable by the next run.
-            app(ThirteenthMonthService::class)->markAccrualsPaidOnFinalize($period);
+            app(ThirteenthMonthService::class)->markAccrualsPaidOnFinalize($locked);
 
             AuditLog::create([
                 'user_id'    => $actor->id,
                 'action'     => 'payroll.period.finalize',
                 'model_type' => PayrollPeriod::class,
-                'model_id'   => $period->id,
+                'model_id'   => $locked->id,
                 'old_values' => ['status' => $previous],
                 'new_values' => ['status' => PayrollPeriodStatus::Finalized->value, 'finalized_by' => $actor->id],
                 'ip_address' => request()?->ip(),
@@ -1051,16 +1111,59 @@ class PayrollPeriodService
                 'created_at' => now(),
             ]);
 
-            return $period->fresh();
+            $fresh = $locked->fresh();
+            app(OutboxService::class)->recordForChain(
+                new PayrollPeriodFinalized($fresh),
+                $fresh,
+                'h2r',
+                'payroll_period',
+                PayrollPeriodStatus::Finalized->value,
+            );
+            app(OutboxService::class)->recordForChain(
+                new PayrollGlPostingRequested($fresh, 'payroll_finalized'),
+                $fresh,
+                'h2r',
+                'payroll_period',
+                'gl_handoff',
+                'payroll-gl-finalize:'.$fresh->id,
+            );
+
+            return $fresh;
         });
 
-        // Series C — Task C3. Domain event for chain listeners
-        // (NotifyEmployeesOnPayrollFinalized + future per-employee payslip
-        // PDF dispatch). Best-effort dispatch is fine here — the period is
-        // already finalized regardless of listener health.
-        event(new PayrollPeriodFinalized($fresh));
-
         return $fresh;
+    }
+
+    /** Queue a single durable retry for a failed or skipped payroll → GL handoff. */
+    public function retryGlPosting(PayrollPeriod $period): PayrollPeriod
+    {
+        return DB::transaction(function () use ($period): PayrollPeriod {
+            $locked = PayrollPeriod::query()
+                ->lockForUpdate()
+                ->find($period->id);
+            if (! $locked) {
+                throw new BusinessRuleException('Payroll period not found.');
+            }
+            if (! in_array($locked->status, [PayrollPeriodStatus::Finalized, PayrollPeriodStatus::Disbursed], true)) {
+                throw new BusinessRuleException('Only finalized or disbursed periods can retry the GL handoff.');
+            }
+            if ($locked->journal_entry_id !== null) {
+                return $locked->fresh();
+            }
+
+            $locked->markGlPending();
+            $fresh = $locked->fresh();
+            app(OutboxService::class)->recordForChain(
+                new PayrollGlPostingRequested($fresh, 'operator_retry'),
+                $fresh,
+                'h2r',
+                'payroll_period',
+                'gl_handoff',
+                'payroll-gl-retry:'.$fresh->id.':'.Str::uuid(),
+            );
+
+            return $fresh;
+        });
     }
 
     /**
@@ -1118,23 +1221,28 @@ class PayrollPeriodService
      */
     public function void(PayrollPeriod $period, User $actor, string $reason): PayrollPeriod
     {
-        if ($period->status !== PayrollPeriodStatus::Finalized) {
-            throw new BusinessRuleException('Only finalized periods can be voided.');
-        }
         if (trim($reason) === '') {
             throw new BusinessRuleException('A void reason is required.');
         }
 
         [$fresh, $reversalId] = DB::transaction(function () use ($period, $actor, $reason) {
-            $previousStatus = $period->status?->value;
+            $locked = PayrollPeriod::query()->lockForUpdate()->find($period->id);
+            if (! $locked) {
+                throw new BusinessRuleException('Payroll period not found.');
+            }
+            if ($locked->status !== PayrollPeriodStatus::Finalized) {
+                throw new BusinessRuleException('Only finalized periods can be voided.');
+            }
+
+            $previousStatus = $locked->status?->value;
             $reversalId = null;
 
             // Reverse the GL posting if one exists and the accounting tables
             // are present. JournalEntryService::reverse() posts a balanced
             // mirror entry and flags the original as reversed.
-            if ($period->journal_entry_id
+            if ($locked->journal_entry_id
                 && \Illuminate\Support\Facades\Schema::hasTable('journal_entries')) {
-                $je = JournalEntry::find($period->journal_entry_id);
+                $je = JournalEntry::find($locked->journal_entry_id);
                 if ($je && $je->status === JournalEntryStatus::Posted && $je->reversed_by_entry_id === null) {
                     $reversal = app(JournalEntryService::class)->reverse($je, $actor);
                     $reversalId = $reversal->id;
@@ -1142,12 +1250,15 @@ class PayrollPeriodService
                 // If the JE is already reversed/missing we leave it — idempotent.
             }
 
-            $period->forceFill([
+            $locked->forceFill([
                 'status'      => PayrollPeriodStatus::Voided->value,
                 'voided_at'   => now(),
                 'voided_by'   => $actor->id,
                 'void_reason' => $reason,
             ])->save();
+            if ($locked->journal_entry_id === null) {
+                $locked->markGlNotRequired('period_voided');
+            }
 
             // Release this run's pay-cycle claims. A voided period has been
             // withdrawn, so its employees must be payable again by the
@@ -1155,15 +1266,15 @@ class PayrollPeriodService
             // correction it exists to make possible. The payroll rows stay put
             // (history is never deleted); only the claim on the cycle is freed.
             \App\Modules\Payroll\Models\PayrollCycleClaim::query()
-                ->where('payroll_period_id', $period->id)
+                ->where('payroll_period_id', $locked->id)
                 ->delete();
 
             // Voiding a 13th-month run must also un-recognise the payment, or the
             // accruals stay marked paid and the replacement run pays nobody:
             // computeAndPay() only picks up accruals where is_paid = false.
-            if ($period->is_thirteenth_month) {
+            if ($locked->is_thirteenth_month) {
                 \App\Modules\Payroll\Models\ThirteenthMonthAccrual::query()
-                    ->whereIn('payroll_id', $period->payrolls()->select('id'))
+                    ->whereIn('payroll_id', $locked->payrolls()->select('id'))
                     ->update(['is_paid' => false, 'paid_date' => null, 'updated_at' => now()]);
             }
 
@@ -1171,19 +1282,19 @@ class PayrollPeriodService
                 'user_id'    => $actor->id,
                 'action'     => 'payroll.period.void',
                 'model_type' => PayrollPeriod::class,
-                'model_id'   => $period->id,
-                'old_values' => ['status' => $previousStatus, 'journal_entry_id' => $period->journal_entry_id],
+                'model_id'   => $locked->id,
+                'old_values' => ['status' => $previousStatus, 'journal_entry_id' => $locked->journal_entry_id],
                 'new_values' => ['status' => PayrollPeriodStatus::Voided->value, 'reason' => $reason, 'reversal_journal_entry_id' => $reversalId],
                 'ip_address' => request()?->ip(),
                 'user_agent' => request()?->userAgent(),
                 'created_at' => now(),
             ]);
 
-            return [$period->fresh(), $reversalId];
-        });
+            $fresh = $locked->fresh();
+            app(OutboxService::class)->record(new PayrollPeriodVoided($fresh, $reversalId));
 
-        // Fire AFTER commit so listeners see persisted state.
-        event(new PayrollPeriodVoided($fresh, $reversalId));
+            return [$fresh, $reversalId];
+        });
 
         return $fresh;
     }

@@ -6,14 +6,14 @@ namespace Tests\Feature\Payroll;
 
 use App\Modules\HR\Models\Employee;
 use App\Modules\Payroll\Events\PayrollPeriodFinalized;
+use App\Modules\Payroll\Jobs\SendPayslipEmailJob;
 use App\Modules\Payroll\Listeners\EmailPayslipPdfOnPayrollFinalized;
-use App\Modules\Payroll\Mail\PayslipMail;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Payroll\Services\PayslipPdfService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class EmailPayslipOnFinalizeTest extends TestCase
@@ -35,7 +35,7 @@ class EmailPayslipOnFinalizeTest extends TestCase
 
     public function test_listener_queues_email_for_each_payroll_with_employee_email(): void
     {
-        Mail::fake();
+        Queue::fake();
 
         $period = PayrollPeriod::factory()->create();
         $employeeA = Employee::factory()->create(['email' => 'a@example.test']);
@@ -51,14 +51,15 @@ class EmailPayslipOnFinalizeTest extends TestCase
 
         app(EmailPayslipPdfOnPayrollFinalized::class)->handle(new PayrollPeriodFinalized($period));
 
-        Mail::assertQueued(PayslipMail::class, 1);
-        Mail::assertQueued(PayslipMail::class, fn (PayslipMail $m) => $m->hasTo('a@example.test'));
-        $this->assertNotNull($payrollA->fresh()->payslip_emailed_at);
+        Queue::assertPushed(SendPayslipEmailJob::class, 1);
+        Queue::assertPushed(SendPayslipEmailJob::class, fn (SendPayslipEmailJob $job) => $job->payrollId === $payrollA->id);
+        $this->assertNull($payrollA->fresh()->payslip_emailed_at);
+        $this->assertSame(Payroll::EMAIL_QUEUED, $payrollA->fresh()->payslip_email_status);
     }
 
     public function test_listener_is_idempotent_via_payslip_emailed_at(): void
     {
-        Mail::fake();
+        Queue::fake();
 
         $period = PayrollPeriod::factory()->create();
         $employee = Employee::factory()->create(['email' => 'x@example.test']);
@@ -70,12 +71,12 @@ class EmailPayslipOnFinalizeTest extends TestCase
 
         app(EmailPayslipPdfOnPayrollFinalized::class)->handle(new PayrollPeriodFinalized($period));
 
-        Mail::assertNothingQueued();
+        Queue::assertNotPushed(SendPayslipEmailJob::class);
     }
 
     public function test_feature_flag_off_disables_emailing(): void
     {
-        Mail::fake();
+        Queue::fake();
         app(\App\Common\Services\SettingsService::class)
             ->set('payroll.payslip_email.enabled', false, 'payroll');
         Cache::forget('settings:payroll.payslip_email.enabled');
@@ -89,6 +90,6 @@ class EmailPayslipOnFinalizeTest extends TestCase
 
         app(EmailPayslipPdfOnPayrollFinalized::class)->handle(new PayrollPeriodFinalized($period));
 
-        Mail::assertNothingQueued();
+        Queue::assertNotPushed(SendPayslipEmailJob::class);
     }
 }

@@ -15,6 +15,7 @@
  *   • Unmount / context loss      → geometry, material, renderer disposed.
  *   • Drag-to-rotate              → fine pointer only; inertial spin + decay.
  *   • Scroll-velocity tint        → reads window.lenis.velocity each frame.
+ *   • Theme switch                → line colour re-read from `--text-primary`.
  */
 
 import { useEffect, useRef } from 'react';
@@ -85,6 +86,19 @@ export function HeroCanvas() {
     const isFinePntr = window.matchMedia('(pointer:fine)').matches;
     const pixelRatio = Math.min(window.devicePixelRatio || 1, isMobile ? 1.5 : 1.75);
 
+    // Ink colour from the live theme, exactly as PartShowcase3D does it. These
+    // were two hardcoded hexes (#18181b / #1c1917) — Tailwind-default zinc and
+    // stone, not Atelier's espresso — so the part stayed near-black on the dark
+    // and floor palettes where the paper goes dark too. The token resolves to
+    // whichever `--text-primary` the active theme defines.
+    function readInk(): Color {
+      const value = getComputedStyle(container!).getPropertyValue('--text-primary').trim();
+      // The literal is the light-palette `--text-primary` from tokens.css, used
+      // only if the variable is somehow unresolvable (it never is in practice).
+      return new Color(value || '#1f1b16');
+    }
+    const ink = readInk();
+
     // ── Scene & camera ──────────────────────────────────────────────
     const scene = new Scene();
     const camera = new PerspectiveCamera(40, 1, 0.1, 100);
@@ -100,7 +114,7 @@ export function HeroCanvas() {
     // Surface wireframe — faint ink mesh.
     const wire = new WireframeGeometry(lathe);
     const wireMat = new LineBasicMaterial({
-      color: new Color('#18181b'),
+      color: ink.clone(),
       transparent: true,
       opacity: isMobile ? 0.16 : 0.2,
     });
@@ -109,7 +123,7 @@ export function HeroCanvas() {
     // Feature edges — crisp espresso outline of the silhouette/creases.
     const edges = new EdgesGeometry(lathe, 22);
     const edgeMat = new LineBasicMaterial({
-      color: new Color('#1c1917'),
+      color: ink.clone(),
       transparent: true,
       opacity: 0.85,
     });
@@ -124,11 +138,29 @@ export function HeroCanvas() {
     group.position.y = 0.375;
     scene.add(group);
 
+    // `<html data-theme>` can flip while this page is mounted — a `system`-mode
+    // user whose OS goes dark, or a session restore. Re-read the token and
+    // recolour the materials; the next rendered frame picks it up.
+    const themeObserver = new MutationObserver(() => {
+      const next = readInk();
+      wireMat.color.copy(next);
+      edgeMat.color.copy(next);
+    });
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme'],
+    });
+
     // ── Renderer ────────────────────────────────────────────────────
     let renderer: WebGLRenderer;
     try {
-      renderer = new WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+      renderer = new WebGLRenderer({
+        antialias: true,
+        alpha: true,
+        powerPreference: 'high-performance',
+      });
     } catch {
+      themeObserver.disconnect();
       lathe.dispose();
       wire.dispose();
       edges.dispose();
@@ -255,7 +287,8 @@ export function HeroCanvas() {
       turntableAngle = t * 0.5;
 
       // Scroll-velocity tint — tiny nudge proportional to Lenis scroll speed
-      const lVelocity = (window as unknown as { lenis?: { velocity?: number } }).lenis?.velocity ?? 0;
+      const lVelocity =
+        (window as unknown as { lenis?: { velocity?: number } }).lenis?.velocity ?? 0;
       const scrollSpin = lVelocity * 0.0015;
 
       // Inertial drag spin: decay toward zero, then ease drag offset toward 0
@@ -283,6 +316,7 @@ export function HeroCanvas() {
     return () => {
       stop();
       resizeObserver.disconnect();
+      themeObserver.disconnect();
       io.disconnect();
       window.removeEventListener('pointermove', onPointerMove);
       document.removeEventListener('visibilitychange', onVisibility);

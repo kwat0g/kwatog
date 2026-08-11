@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Accounting;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Accounting\Models\Bill;
@@ -18,6 +19,7 @@ use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Services\GrnService;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
+use App\Modules\Purchasing\Exceptions\ThreeWayMatchException;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use Database\Seeders\ChartOfAccountsSeeder;
@@ -206,18 +208,39 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
         $accepted = $grn->fresh();
 
         // Wipe the default-expense-account setting so createDraftForGrn()
-        // throws — the listener must swallow it (log + continue), never
-        // kill the queue job, and leave no half-written bill behind.
+        // throws — the listener must expose the stateful failure to the queue
+        // worker for retry/failed-job handling and leave no half-written bill.
         app(SettingsService::class)->set('accounting.default_expense_account_code', '');
 
         $listener = app(\App\Modules\Accounting\Listeners\AutoCreateBillOnGrnAccepted::class);
-        $listener->handle(new GoodsReceiptNoteAccepted($accepted));
+        try {
+            $listener->handle(new GoodsReceiptNoteAccepted($accepted));
+            $this->fail('A missing default expense account must fail the stateful chain step.');
+        } catch (BusinessRuleException $e) {
+            $this->assertStringContainsString('default expense account', strtolower($e->getMessage()));
+        }
 
         $this->assertSame(
             0,
             Bill::where('goods_receipt_note_id', $accepted->id)->count(),
-            'a misconfigured expense account must not crash the listener or create a bill',
+            'a misconfigured expense account must not create a partial bill',
         );
+    }
+
+    public function test_missing_automation_actor_fails_the_stateful_chain_step(): void
+    {
+        $grn = $this->makePendingGrn();
+        $grn->update([
+            'status' => GrnStatus::Accepted,
+            'accepted_at' => now(),
+        ]);
+        app(SettingsService::class)->set('system.automation.actor_roles', ['missing-role']);
+
+        $listener = app(\App\Modules\Accounting\Listeners\AutoCreateBillOnGrnAccepted::class);
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('no active automation actor');
+        $listener->handle(new GoodsReceiptNoteAccepted($grn->fresh()));
     }
 
     public function test_post_draft_posts_the_je_and_flips_bill_to_unpaid(): void
@@ -244,6 +267,47 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
         $je = $posted->journalEntry;
         $this->assertSame('posted', $je->status->value);
         $this->assertSame((string) $je->total_debit, (string) $je->total_credit, 'JE must be balanced');
+    }
+
+    public function test_post_draft_rechecks_match_and_requires_an_audited_override(): void
+    {
+        $grn = $this->makePendingGrn();
+        \App\Modules\Quality\Models\Inspection::query()
+            ->where('entity_type', 'grn')
+            ->where('entity_id', $grn->id)
+            ->update(['status' => 'passed']);
+        $accepted = $this->grnSvc->accept($grn->fresh(), $this->user);
+
+        $bill = Bill::where('goods_receipt_note_id', $accepted->id)->firstOrFail();
+        PurchaseOrder::query()
+            ->findOrFail($accepted->purchase_order_id)
+            ->items()
+            ->firstOrFail()
+            ->update(['unit_price' => '30.00']);
+
+        try {
+            $this->billSvc->postDraft($bill->fresh(), $this->user);
+            $this->fail('A changed PO price must block draft posting.');
+        } catch (ThreeWayMatchException $e) {
+            $this->assertSame('blocked', $e->details['overall_status']);
+        }
+
+        $reviewed = $bill->fresh();
+        $this->assertSame(BillStatus::Draft, $reviewed->status);
+        $this->assertSame('manual_review', $reviewed->threeWayReviewStatus());
+        $this->assertNull($reviewed->journal_entry_id);
+
+        $posted = $this->billSvc->postDraft(
+            $reviewed,
+            $this->user,
+            allowOverride: true,
+            overrideReason: 'Purchasing confirmed the approved price change against the supplier invoice.',
+        );
+
+        $this->assertSame(BillStatus::Unpaid, $posted->status);
+        $this->assertTrue((bool) $posted->three_way_overridden);
+        $this->assertSame('overridden', $posted->threeWayReviewStatus());
+        $this->assertNotNull($posted->journal_entry_id);
     }
 
     public function test_auto_bill_uses_vendor_terms_for_due_date(): void

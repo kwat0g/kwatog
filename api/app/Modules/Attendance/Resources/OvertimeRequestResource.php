@@ -29,6 +29,7 @@ class OvertimeRequestResource extends JsonResource
             ] : null),
             'approved_at'     => optional($this->approved_at)->toIso8601String(),
             'rejection_reason'=> $this->rejection_reason,
+            'cancelled_at'    => optional($this->cancelled_at)->toIso8601String(),
             'is_auto_detected'=> (bool) $this->is_auto_detected,
             'created_at'      => optional($this->created_at)->toIso8601String(),
             'updated_at'      => optional($this->updated_at)->toIso8601String(),

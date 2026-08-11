@@ -8,6 +8,7 @@ use App\Common\Enums\PermissionOverrideType;
 use App\Common\Events\PermissionOverrideChanged;
 use App\Common\Models\AuditLog;
 use App\Common\Services\NotificationService;
+use App\Common\Services\OutboxService;
 use App\Modules\Admin\Models\UserPermissionOverride;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\User;
@@ -58,7 +59,7 @@ class UserPermissionOverrideService
             ->where('permission_id', $permission->id)
             ->first();
 
-        $override = DB::transaction(function () use ($user, $actor, $permission, $type, $reason, $expiresAt, $existing) {
+        $override = DB::transaction(function () use ($user, $actor, $permission, $permissionSlug, $type, $reason, $expiresAt, $existing) {
             $override = UserPermissionOverride::updateOrCreate(
                 [
                     'user_id'       => $user->id,
@@ -102,11 +103,7 @@ class UserPermissionOverrideService
 
             $user->flushPermissionsCache();
 
-            return $override;
-        });
-
-        DB::afterCommit(function () use ($user, $permissionSlug, $existing, $type, $reason) {
-            event(new PermissionOverrideChanged(
+            app(OutboxService::class)->record(new PermissionOverrideChanged(
                 $user->id,
                 $permissionSlug,
                 $existing ? $existing->type : null,
@@ -114,6 +111,10 @@ class UserPermissionOverrideService
                 $reason,
             ));
 
+            return $override;
+        });
+
+        DB::afterCommit(function () use ($user, $permissionSlug, $existing, $type, $reason) {
             $this->notifications->send($user, 'permission.override', [
                 'title' => $existing ? 'Permission Override Updated' : 'Permission Override Applied',
                 'message' => $existing
@@ -135,7 +136,7 @@ class UserPermissionOverrideService
         $reason = $override->reason;
         $user = $override->user;
 
-        DB::transaction(function () use ($override, $user) {
+        DB::transaction(function () use ($override, $user, $userId, $permissionSlug, $oldType, $reason) {
             AuditLog::create([
                 'user_id'    => Auth::id(),
                 'action'     => 'deleted',
@@ -160,19 +161,17 @@ class UserPermissionOverrideService
             if ($user) {
                 $user->flushPermissionsCache();
             }
+
+            app(OutboxService::class)->record(new PermissionOverrideChanged(
+                $userId,
+                $permissionSlug,
+                $oldType,
+                null,
+                $reason,
+            ));
         });
 
         DB::afterCommit(function () use ($userId, $permissionSlug, $oldType, $reason, $user) {
-            if ($userId) {
-                event(new PermissionOverrideChanged(
-                    $userId,
-                    $permissionSlug,
-                    $oldType,
-                    null,
-                    $reason,
-                ));
-            }
-
             if ($user) {
                 $this->notifications->send($user, 'permission.override', [
                     'title' => 'Permission Override Removed',

@@ -10,6 +10,7 @@ use App\Modules\Auth\Notifications\WelcomeNotification;
 use App\Modules\HR\Events\EmployeeCreated;
 use App\Modules\HR\Listeners\AutoProvisionUserOnEmployeeHire;
 use App\Modules\HR\Models\Employee;
+use App\Modules\HR\Services\UserProvisioningService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
@@ -61,6 +62,23 @@ class AutoProvisionUserOnHireTest extends TestCase
         // No duplicate user, no welcome email.
         $this->assertSame(1, User::where('employee_id', $employee->id)->count());
         Notification::assertNothingSent();
+    }
+
+    public function test_listener_rethrows_unclassified_domain_failures(): void
+    {
+        $employee = Employee::factory()->create();
+        $provisioning = \Mockery::mock(UserProvisioningService::class);
+        $provisioning
+            ->shouldReceive('provisionForEmployee')
+            ->once()
+            ->with($employee)
+            ->andThrow(new \DomainException('Provisioning invariant failed.'));
+        $this->app->instance(UserProvisioningService::class, $provisioning);
+
+        $this->expectException(\DomainException::class);
+        $this->expectExceptionMessage('Provisioning invariant failed.');
+
+        app(AutoProvisionUserOnEmployeeHire::class)->handle(new EmployeeCreated($employee));
     }
 
     public function test_feature_flag_off_disables_provisioning(): void

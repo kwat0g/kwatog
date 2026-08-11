@@ -35,6 +35,7 @@ class NotifyOnOvertimeDecided implements ShouldQueue
             ]);
         } catch (\Throwable $e) {
             Log::warning('NotifyOnOvertimeDecided failed', ['error' => $e->getMessage()]);
+            throw $e;
         }
     }
 }

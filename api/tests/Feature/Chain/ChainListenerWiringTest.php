@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Tests\Feature\Chain;
 
 use App\Modules\CRM\Events\SalesOrderConfirmed;
+use App\Modules\CRM\Events\ComplaintNcrRequested;
+use App\Modules\CRM\Listeners\CreateNcrOnComplaintRequested;
 use App\Modules\CRM\Listeners\NotifyOnSalesOrderConfirmed;
 use App\Modules\HR\Events\ClearanceFullySigned;
 use App\Modules\HR\Events\EmployeeCreated;
@@ -15,14 +17,23 @@ use App\Modules\HR\Listeners\NotifyOnSeparationInitiated;
 use App\Modules\Accounting\Listeners\AutoCreateBillOnGrnAccepted;
 use App\Modules\Inventory\Events\GoodsReceiptNoteAccepted;
 use App\Modules\Inventory\Events\GoodsReceiptNoteCreated;
+use App\Modules\Inventory\Events\StockMovementGlPostingRequested;
 use App\Modules\Inventory\Listeners\CreateDraftGrnOnPoSent;
+use App\Modules\Inventory\Listeners\PostStockMovementToGlOnRequested;
+use App\Modules\ReturnManagement\Events\ReturnInspectionRequested;
+use App\Modules\ReturnManagement\Listeners\CreateReturnInspectionOnRequested;
 use App\Modules\Payroll\Events\PayrollPeriodFinalized;
+use App\Modules\Payroll\Events\PayrollGlPostingRequested;
 use App\Modules\Payroll\Listeners\NotifyEmployeesOnPayrollFinalized;
+use App\Modules\Payroll\Listeners\PostPayrollToGlOnRequested;
 use App\Modules\Production\Events\WorkOrderCompleted;
+use App\Modules\Production\Events\ProductionReceiptRequested;
+use App\Modules\Production\Listeners\CreateProductionReceiptOnOutputRequested;
 use App\Modules\Purchasing\Events\PurchaseOrderApproved;
 use App\Modules\Purchasing\Events\PurchaseOrderSent;
 use App\Modules\Purchasing\Events\PurchaseRequestApproved;
 use App\Modules\Purchasing\Listeners\ConsolidatePurchaseOrders;
+use App\Modules\Purchasing\Listeners\CloseSupplierDispatchOnPurchaseOrderCancelled;
 use App\Modules\Purchasing\Listeners\NotifyOnPurchaseOrderApproved;
 use App\Modules\Purchasing\Listeners\NotifyOnPurchaseRequestApproved;
 use App\Modules\Quality\Events\InspectionFailed;
@@ -31,6 +42,8 @@ use App\Modules\Quality\Listeners\CreateDeliveryDraftOnQcPass;
 use App\Modules\Quality\Listeners\RejectGRNOnQcFail;
 use App\Modules\Quality\Listeners\TriggerIncomingQC;
 use App\Modules\Quality\Listeners\TriggerOutgoingQC;
+use App\Modules\SupplyChain\Events\DeliveryInvoiceRequested;
+use App\Modules\SupplyChain\Listeners\CreateDraftInvoiceOnDeliveryInvoiceRequested;
 use Illuminate\Support\Facades\Event;
 use Tests\TestCase;
 
@@ -48,8 +61,13 @@ class ChainListenerWiringTest extends TestCase
     public function test_c1_o2c_listeners_are_bound(): void
     {
         $this->assertTrue(Event::hasListeners(SalesOrderConfirmed::class));
+        $this->assertTrue(Event::hasListeners(ComplaintNcrRequested::class));
         $this->assertTrue(Event::hasListeners(WorkOrderCompleted::class));
         $this->assertTrue(Event::hasListeners(InspectionPassed::class));
+        $this->assertTrue(Event::hasListeners(DeliveryInvoiceRequested::class));
+        $this->assertTrue(Event::hasListeners(ProductionReceiptRequested::class));
+        $this->assertTrue(Event::hasListeners(StockMovementGlPostingRequested::class));
+        $this->assertTrue(Event::hasListeners(ReturnInspectionRequested::class));
     }
 
     public function test_c2_p2p_listeners_are_bound(): void
@@ -59,6 +77,7 @@ class ChainListenerWiringTest extends TestCase
         $this->assertTrue(Event::hasListeners(PurchaseRequestApproved::class));
         $this->assertTrue(Event::hasListeners(PurchaseOrderApproved::class));
         $this->assertTrue(Event::hasListeners(PurchaseOrderSent::class));
+        $this->assertTrue(Event::hasListeners(\App\Modules\Purchasing\Events\PurchaseOrderCancelled::class));
         $this->assertTrue(Event::hasListeners(InspectionFailed::class));
     }
 
@@ -68,6 +87,7 @@ class ChainListenerWiringTest extends TestCase
         $this->assertTrue(Event::hasListeners(SeparationInitiated::class));
         $this->assertTrue(Event::hasListeners(ClearanceFullySigned::class));
         $this->assertTrue(Event::hasListeners(PayrollPeriodFinalized::class));
+        $this->assertTrue(Event::hasListeners(PayrollGlPostingRequested::class));
     }
 
     public function test_listener_classes_resolve_from_container(): void
@@ -77,12 +97,18 @@ class ChainListenerWiringTest extends TestCase
         // pointing at a removed class) before they explode at runtime.
         $listeners = [
             NotifyOnSalesOrderConfirmed::class,
+            CreateNcrOnComplaintRequested::class,
+            CreateDraftInvoiceOnDeliveryInvoiceRequested::class,
+            CreateProductionReceiptOnOutputRequested::class,
+            PostStockMovementToGlOnRequested::class,
+            CreateReturnInspectionOnRequested::class,
             TriggerOutgoingQC::class,
             CreateDeliveryDraftOnQcPass::class,
             TriggerIncomingQC::class,
             NotifyOnPurchaseRequestApproved::class,
             NotifyOnPurchaseOrderApproved::class,
             ConsolidatePurchaseOrders::class,
+            CloseSupplierDispatchOnPurchaseOrderCancelled::class,
             CreateDraftGrnOnPoSent::class,
             AutoCreateBillOnGrnAccepted::class,
             RejectGRNOnQcFail::class,
@@ -90,6 +116,7 @@ class ChainListenerWiringTest extends TestCase
             NotifyOnSeparationInitiated::class,
             DeactivateAccountOnClearanceComplete::class,
             NotifyEmployeesOnPayrollFinalized::class,
+            PostPayrollToGlOnRequested::class,
         ];
         foreach ($listeners as $cls) {
             $this->assertNotNull(app($cls), "Listener {$cls} should resolve from container");

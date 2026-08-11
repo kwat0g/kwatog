@@ -30,6 +30,8 @@ export const returnManagementApi = {
 
  inspect: (id: string, internalNotes?: string) =>
  client.post(`/return-management/return-requests/${id}/inspect`, { internal_notes: internalNotes }).then((r) => r.data.data as ReturnRequest), // 2026-08-08 — restock lines are received back into stock at dispose time,
+ retryInspection: (id: string) =>
+  client.post(`/return-management/return-requests/${id}/retry-inspection`).then((r) => r.data.data as ReturnRequest),
  // so customer-return disposals carry the destination warehouse location.
  dispose: (id: string, dispositions: DispositionPayload[], createReplacementPo?: boolean, locationId?: string) =>
   client.post<{ data: ReturnRequest }>(`/return-management/return-requests/${id}/dispose`, { dispositions, create_replacement_po: createReplacementPo, location_id: locationId }).then((r) => r.data.data), // Customer-return restock lines already moved at dispose — complete() only

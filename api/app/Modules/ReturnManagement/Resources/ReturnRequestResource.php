@@ -20,6 +20,12 @@ class ReturnRequestResource extends JsonResource
             'status_label'         => $this->status?->label(),
             'is_editable'          => $this->is_editable,
             'disposition_status'   => $this->disposition_status,
+            'inspection_handoff'   => [
+                'status'       => $this->inspection_handoff_status?->value,
+                'status_label' => $this->inspection_handoff_status?->label(),
+                'message'      => $this->inspection_handoff_message,
+                'at'           => optional($this->inspection_handoff_at)->toIso8601String(),
+            ],
 
             'reason_code'          => $this->reason_code,
             'reason_description'   => $this->reason_description,

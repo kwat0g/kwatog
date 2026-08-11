@@ -45,6 +45,16 @@ class GoodsReceiptNoteController
         return new GoodsReceiptNoteResource($this->service->show($grn));
     }
 
+    /** Retry a failed GRN → Quality incoming-QC handoff without changing receipt facts. */
+    public function retryIncomingQc(GoodsReceiptNote $grn): GoodsReceiptNoteResource
+    {
+        try {
+            return new GoodsReceiptNoteResource($this->service->retryIncomingQcHandoff($grn));
+        } catch (RuntimeException $e) {
+            abort(422, $e->getMessage());
+        }
+    }
+
     public function store(StoreGrnRequest $request): JsonResponse
     {
         $data = $request->validated();

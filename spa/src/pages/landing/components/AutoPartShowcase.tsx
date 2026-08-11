@@ -69,7 +69,11 @@ export function AutoPartShowcase({ className }: AutoPartShowcaseProps) {
       window.matchMedia('(min-width: 1024px)').matches,
   ).current;
   const part = PARTS[index];
-  const { data: content } = useQuery({ queryKey: ['landing', 'content'], queryFn: landingApi.content, staleTime: 300_000 });
+  const { data: content } = useQuery({
+    queryKey: ['landing', 'content'],
+    queryFn: landingApi.content,
+    staleTime: 300_000,
+  });
   const liveSpec = content?.part_specs?.find((candidate) => candidate.id === part.id);
   const displayPart = liveSpec ? { ...part, ...liveSpec } : part;
 
@@ -79,10 +83,7 @@ export function AutoPartShowcase({ className }: AutoPartShowcaseProps) {
     setExploded(false);
     const t1 = window.setTimeout(() => setExploded(true), DWELL);
     const t2 = window.setTimeout(() => setExploded(false), DWELL + EXPLODE);
-    const t3 = window.setTimeout(
-      () => setIndex((i) => (i + 1) % PARTS.length),
-      CYCLE,
-    );
+    const t3 = window.setTimeout(() => setIndex((i) => (i + 1) % PARTS.length), CYCLE);
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
@@ -101,16 +102,16 @@ export function AutoPartShowcase({ className }: AutoPartShowcaseProps) {
 
       {/* ghosted cross-section base */}
       <div className="absolute inset-0 flex items-center justify-center p-5">
-        <ProfileSilhouette part={displayPart} className={motionOK ? 'opacity-[0.28]' : 'opacity-90'} />
+        <ProfileSilhouette
+          part={displayPart}
+          className={motionOK ? 'opacity-[0.28]' : 'opacity-90'}
+        />
       </div>
 
       {/* live 3D model */}
       {motionOK && <PartShowcase3D part={displayPart} exploded={exploded} />}
 
-      {/* corner callouts */}
-      <span className="absolute left-5 top-5 z-20 font-mono text-[10px] uppercase tracking-[0.16em] text-accent">
-        REV · A
-      </span>
+      {/* live dimension callout */}
       <span className="absolute right-5 top-5 z-20 font-mono text-[10px] uppercase tracking-[0.16em] text-accent">
         <ScrambleText key={`tol-${part.id}`} text={displayPart.tolerance || '—'} trigger="mount" />
       </span>
@@ -125,7 +126,7 @@ export function AutoPartShowcase({ className }: AutoPartShowcaseProps) {
             aria-current={i === index}
             onClick={() => setIndex(i)}
             className={cn(
-              'h-1.5 rounded-full transition-all duration-300',
+              'h-1.5 rounded-full transition-[width] duration-300',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
               i === index ? 'w-5 bg-accent' : 'w-1.5 bg-strong hover:bg-muted',
             )}
@@ -134,7 +135,7 @@ export function AutoPartShowcase({ className }: AutoPartShowcaseProps) {
       </div>
 
       {/* title block — live spec readout */}
-      <div className="absolute inset-x-3 bottom-3 z-20 grid grid-cols-3 overflow-hidden rounded-md border border-default bg-canvas/85 font-mono text-[9px] uppercase tracking-[0.12em] text-muted backdrop-blur-sm sm:text-[10px]">
+      <div className="absolute inset-x-3 bottom-3 z-20 grid grid-cols-3 overflow-hidden rounded-md border border-default bg-canvas font-mono text-[9px] uppercase tracking-[0.12em] text-muted sm:text-[10px]">
         <span className="border-r border-default px-3 py-2">
           <span className="block text-text-subtle">Part</span>
           <span className="block truncate text-primary">
@@ -144,7 +145,11 @@ export function AutoPartShowcase({ className }: AutoPartShowcaseProps) {
         <span className="border-r border-default px-3 py-2">
           <span className="block text-text-subtle">Material</span>
           <span className="block truncate text-primary">
-            <ScrambleText key={`mat-${part.id}`} text={displayPart.material || '—'} trigger="mount" />
+            <ScrambleText
+              key={`mat-${part.id}`}
+              text={displayPart.material || '—'}
+              trigger="mount"
+            />
           </span>
         </span>
         <span className="px-3 py-2">

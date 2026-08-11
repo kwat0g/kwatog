@@ -6,7 +6,6 @@ namespace App\Modules\Accounting\Controllers;
 
 use App\Common\Support\HashIdFilter;
 use App\Common\Services\SettingsService;
-use App\Modules\Accounting\Jobs\SyncBudgetActuals;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Budget;
 use App\Modules\Accounting\Models\FiscalYear;
@@ -15,6 +14,7 @@ use App\Modules\Accounting\Enums\BudgetStatus;
 use App\Modules\Accounting\Resources\BudgetResource;
 use App\Modules\Accounting\Resources\FiscalYearResource;
 use App\Modules\Accounting\Services\BudgetEnforcementService;
+use App\Modules\Accounting\Services\BudgetActualsSyncService;
 use App\Modules\Accounting\Services\BudgetService;
 use App\Modules\HR\Models\Department;
 use Illuminate\Http\JsonResponse;
@@ -27,6 +27,7 @@ class BudgetController extends Controller
     public function __construct(
         private readonly BudgetService $budgetService,
         private readonly BudgetEnforcementService $enforcementService,
+        private readonly BudgetActualsSyncService $actualsSync,
         private readonly SettingsService $settings,
     ) {}
 
@@ -330,11 +331,15 @@ class BudgetController extends Controller
             $fiscalYearId = null;
         }
 
-        SyncBudgetActuals::dispatch($fiscalYearId);
+        $outbox = $this->actualsSync->request($fiscalYearId);
 
         return response()->json([
             'success' => true,
-            'data'    => ['dispatched' => true],
+            'data'    => [
+                'dispatched' => true,
+                'outbox_id' => (string) $outbox->getKey(),
+                'status' => $outbox->status,
+            ],
             'error'   => null,
             'meta'    => null,
         ], 202);

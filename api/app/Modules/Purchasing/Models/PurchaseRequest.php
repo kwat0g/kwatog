@@ -10,6 +10,7 @@ use App\Common\Traits\HasHashId;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
 use App\Modules\Purchasing\Enums\PurchaseRequestPriority;
+use App\Modules\Purchasing\Enums\PurchaseRequestConversionStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -17,6 +18,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 
 class PurchaseRequest extends Model
 {
@@ -45,6 +47,8 @@ class PurchaseRequest extends Model
         'is_urgent'             => 'boolean',
         'current_approval_step' => 'integer',
         'priority'              => PurchaseRequestPriority::class,
+        'po_conversion_status'  => PurchaseRequestConversionStatus::class,
+        'po_conversion_at'      => 'datetime',
         'status'                => PurchaseRequestStatus::class,
     ];
 
@@ -93,5 +97,61 @@ class PurchaseRequest extends Model
             ->selectRaw('COALESCE(SUM(quantity * estimated_unit_price), 0) as total')
             ->value('total');
         return number_format($total, 2, '.', '');
+    }
+
+    public function markPoConversionPending(): bool
+    {
+        return DB::transaction(function (): bool {
+            $locked = static::query()->lockForUpdate()->find($this->getKey());
+            if (! $locked || $locked->status !== PurchaseRequestStatus::Approved) {
+                return false;
+            }
+
+            $attributes = [
+                'po_conversion_status' => PurchaseRequestConversionStatus::Pending->value,
+                'po_conversion_note' => null,
+                'po_conversion_at' => now(),
+            ];
+            $locked->forceFill($attributes)->save();
+            $this->forceFill($attributes);
+
+            return true;
+        });
+    }
+
+    /**
+     * Persist the operator handoff without making the queued listener retry a
+     * condition that is expected to be fixed manually.
+     *
+     * @return bool true when the durable outcome changed and a notification
+     * should be emitted.
+     */
+    public function markPoConversionManualRequired(string $note): bool
+    {
+        return DB::transaction(function () use ($note): bool {
+            $locked = static::query()->lockForUpdate()->find($this->getKey());
+            if (! $locked || $locked->status !== PurchaseRequestStatus::Approved) {
+                return false;
+            }
+
+            $changed = $locked->po_conversion_status !== PurchaseRequestConversionStatus::ManualRequired
+                || (string) $locked->po_conversion_note !== $note;
+            $locked->forceFill([
+                'po_conversion_status' => PurchaseRequestConversionStatus::ManualRequired->value,
+                'po_conversion_note' => $note,
+                'po_conversion_at' => $changed ? now() : $locked->po_conversion_at,
+            ])->save();
+
+            return $changed;
+        });
+    }
+
+    public function markPoConversionConverted(): void
+    {
+        $this->forceFill([
+            'po_conversion_status' => PurchaseRequestConversionStatus::Converted,
+            'po_conversion_note' => null,
+            'po_conversion_at' => now(),
+        ])->save();
     }
 }

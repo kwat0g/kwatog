@@ -17,6 +17,7 @@ import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import type { ChipVariant } from '@/components/ui/Chip';import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Panel } from '@/components/ui/Panel';
@@ -44,9 +45,9 @@ const paymentSchema = z.object({
 type PaymentFormValues = z.infer<typeof paymentSchema>;
 
 // REC-02 — 3-way match per-line status → visual chip variant.
-type MatchLineStatus = 'matched' | 'qty_variance' | 'price_variance' | 'both' | 'grn_short';
+type MatchLineStatus = 'matched' | 'qty_variance' | 'price_variance' | 'both' | 'grn_short' | 'unmatched_bill_line' | 'duplicate_bill_line';
 const MATCH_LINE_VARIANT: Record<MatchLineStatus, ChipVariant> = {
- matched: 'success', qty_variance: 'warning', price_variance: 'warning', both: 'warning', grn_short: 'danger',
+ matched: 'success', qty_variance: 'warning', price_variance: 'warning', both: 'warning', grn_short: 'danger', unmatched_bill_line: 'danger', duplicate_bill_line: 'danger',
 };
 
 export default function BillDetailPage() {
@@ -55,7 +56,9 @@ export default function BillDetailPage() {
  const { can } = usePermission();
  const [showPay, setShowPay] = useState(false);
  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
- const [showPostConfirm, setShowPostConfirm] = useState(false); const { data: bill, isLoading, isError, refetch } = useQuery({
+ const [showPostConfirm, setShowPostConfirm] = useState(false);
+ const [showPostOverride, setShowPostOverride] = useState(false);
+ const { data: bill, isLoading, isError, refetch } = useQuery({
   queryKey: ['accounting', 'bills', id],
   queryFn: () => billsApi.show(id),
   enabled: !!id,
@@ -93,11 +96,12 @@ export default function BillDetailPage() {
  onError: (e: Error & { response?: { data?: { message?: string } } }) => toast.error(e.response?.data?.message ?? 'Failed to cancel.'),
  });
  const postMut = useMutation({
- mutationFn: () => billsApi.postDraft(id),
+ mutationFn: (data?: { allow_override?: boolean; override_reason?: string }) => billsApi.postDraft(id, data),
  onSuccess: () => {
   toast.success('Draft bill posted to AP + GL.');
   qc.invalidateQueries({ queryKey: ['accounting', 'bills'] });
   setShowPostConfirm(false);
+  setShowPostOverride(false);
  },
  onError: (e: Error & { response?: { data?: { message?: string } } }) => toast.error(e.response?.data?.message ?? 'Failed to post bill.'),
  });
@@ -150,8 +154,19 @@ export default function BillDetailPage() {
  ]}  actions={
    <div className="flex gap-1.5">
    <Button variant="secondary" size="sm" icon={<Printer size={14} />} onClick={() => void downloadAuthenticatedFile(billsApi.pdfUrl(bill.id), { openInNewTab: true, errorMessage: 'Failed to generate bill PDF.' })}>Print</Button>
-   {bill.status === 'draft' && can('accounting.bills.create') && (
-    <Button variant="primary" size="sm" icon={<Send size={14} />} onClick={() => setShowPostConfirm(true)}>Post bill</Button>
+ {bill.status === 'draft' && can('accounting.bills.create') && (
+    <Button
+     variant="primary"
+     size="sm"
+     icon={<Send size={14} />}
+     onClick={() => {
+      if (bill.three_way_review_status === 'manual_review' || match?.overall_status === 'blocked') {
+       setShowPostOverride(true);
+      } else {
+       setShowPostConfirm(true);
+      }
+     }}
+    >Post bill</Button>
    )}
    {isOpen && can('accounting.bills.pay') && (
  <Button variant="primary" size="sm" icon={<Receipt size={14} />} onClick={() => setShowPay(true)}>Record payment</Button>
@@ -265,6 +280,11 @@ export default function BillDetailPage() {
 
  {hasMatch && (
  <Panel title="3-way match" className="col-span-3">
+ {bill.three_way_review_status === 'manual_review' && (
+  <div className="mb-3 rounded-md border border-danger/40 bg-danger-bg/20 px-3 py-2 text-sm text-danger-fg">
+   Manual review is required before this draft can post. Confirm the variance against the supplier documents; an override requires an audit reason.
+  </div>
+ )}
  {matchLoading ? (
  <p className="text-sm text-muted">Loading match snapshot…</p>
  ) : matchError ? (
@@ -340,11 +360,25 @@ export default function BillDetailPage() {
  <ConfirmDialog
  isOpen={showPostConfirm}
  onClose={() => setShowPostConfirm(false)}
- onConfirm={() => postMut.mutate()}
+ onConfirm={() => postMut.mutate({})}
  title={`Post draft bill ${bill.bill_number}?`}
  description="Posting records the payable: it builds and posts the AP/expense journal entry (debit expense + VAT input, credit AP) and flips the bill to Unpaid. Review the auto-created amounts before posting."
  confirmLabel="Post bill"
  variant="primary"
+ pending={postMut.isPending}
+ />
+
+ <ReasonDialog
+ isOpen={showPostOverride}
+ onClose={() => setShowPostOverride(false)}
+ onConfirm={(reason) => postMut.mutate({ allow_override: true, override_reason: reason })}
+ title={`Override 3-way match for ${bill.bill_number}?`}
+ description="This posts the payable despite a blocking PO, GRN, or supplier-price variance. The reason and your account will be recorded in the bill audit trail."
+ reasonLabel="Override reason"
+ reasonPlaceholder="e.g. Purchasing approved the documented supplier price change."
+ minLength={10}
+ confirmLabel="Post with override"
+ variant="warning"
  pending={postMut.isPending}
  />
 

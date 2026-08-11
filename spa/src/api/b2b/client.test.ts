@@ -7,6 +7,8 @@ describe('createPortalClient', () => {
  it('attaches and clears the bearer token', () => {
  const { client, setToken } = createPortalClient();
 
+ expect(client.defaults.timeout).toBe(30_000);
+
  setToken('portal-token');
  expect(client.defaults.headers.common.Authorization).toBe('Bearer portal-token');
 

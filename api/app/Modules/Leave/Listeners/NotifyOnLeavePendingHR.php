@@ -36,6 +36,7 @@ class NotifyOnLeavePendingHR implements ShouldQueue
             ]);
         } catch (\Throwable $e) {
             Log::warning('NotifyOnLeavePendingHR failed', ['error' => $e->getMessage()]);
+            throw $e;
         }
     }
 }

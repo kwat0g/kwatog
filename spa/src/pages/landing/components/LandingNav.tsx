@@ -34,8 +34,16 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const isLanding = location.pathname === '/';
-  const { data: contact } = useQuery({ queryKey: ['landing', 'contact'], queryFn: landingApi.contact, staleTime: 300_000 });
-  const { data: content } = useQuery({ queryKey: ['landing', 'content'], queryFn: landingApi.content, staleTime: 300_000 });
+  const { data: contact } = useQuery({
+    queryKey: ['landing', 'contact'],
+    queryFn: landingApi.contact,
+    staleTime: 300_000,
+  });
+  const { data: content } = useQuery({
+    queryKey: ['landing', 'content'],
+    queryFn: landingApi.content,
+    staleTime: 300_000,
+  });
   const navLinks = useMemo(
     () => content?.section_copy?.nav_links ?? [],
     [content?.section_copy?.nav_links],
@@ -143,14 +151,16 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
       className={cn(
         'fixed inset-x-0 top-0 z-50 transition-colors duration-300',
         scrolled || open
-          ? 'border-b border-default bg-canvas/80 backdrop-blur-xl'
+          ? 'border-b border-default bg-canvas'
           : 'border-b border-transparent bg-transparent',
       )}
     >
-      <nav className={cn(
-        "mx-auto flex h-16 w-full items-center justify-between transition-all duration-500 ease-out",
-        scrolled ? "max-w-full px-4 sm:px-8 lg:px-12" : "max-w-[1440px] px-5 sm:px-5"
-      )}>
+      <nav
+        className={cn(
+          'mx-auto flex h-16 w-full items-center justify-between transition-all duration-500 ease-out',
+          scrolled ? 'max-w-full px-4 sm:px-8 lg:px-12' : 'max-w-[1440px] px-5 sm:px-5',
+        )}
+      >
         {/* Brand */}
         <a
           href={isLanding ? '#top' : '/'}
@@ -162,7 +172,10 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
           }}
           className="group flex shrink-0 items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
         >
-          <BrandLogo alt={legalName} className="h-9 shrink-0 transition-transform duration-500 group-hover:scale-105" />
+          <BrandLogo
+            alt={legalName}
+            className="h-9 shrink-0 transition-transform duration-500 group-hover:scale-105"
+          />
           <div className="hidden flex-col text-left sm:flex">
             <span className="font-display text-sm font-semibold tracking-tight text-primary leading-tight whitespace-nowrap">
               {legalName}
@@ -216,7 +229,10 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas',
             )}
           >
-            <LogIn size={15} className="transition-transform duration-300 group-hover:translate-x-0.5" />
+            <LogIn
+              size={15}
+              className="transition-transform duration-300 group-hover:translate-x-0.5"
+            />
             Login
           </button>
 
@@ -240,7 +256,7 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
         id="landing-mobile-menu"
         ref={sheetRef}
         className={cn(
-          'overflow-hidden border-default bg-canvas/95 backdrop-blur-xl transition-[max-height] duration-300 lg:hidden',
+          'overflow-hidden border-default bg-canvas transition-[max-height] duration-300 lg:hidden',
           open ? 'max-h-96 border-t' : 'max-h-0',
         )}
       >

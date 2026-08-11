@@ -6,6 +6,7 @@ namespace App\Modules\Production\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use App\Modules\Production\Enums\ProductionReceiptHandoffStatus;
 use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Production\Services\WorkOrderService;
 
@@ -83,6 +84,16 @@ class WorkOrderResource extends JsonResource
                     'shift' => $o->shift,
                     'batch_code' => $o->batch_code,
                     'remarks' => $o->remarks,
+                    'production_receipt_handoff' => [
+                        'status' => $o->production_receipt_handoff_status instanceof ProductionReceiptHandoffStatus
+                            ? $o->production_receipt_handoff_status->value
+                            : (string) $o->production_receipt_handoff_status,
+                        'status_label' => ($handoff = $o->production_receipt_handoff_status instanceof ProductionReceiptHandoffStatus
+                            ? $o->production_receipt_handoff_status
+                            : ProductionReceiptHandoffStatus::tryFrom((string) $o->production_receipt_handoff_status))?->label(),
+                        'message' => $o->production_receipt_handoff_message,
+                        'at' => optional($o->production_receipt_handoff_at)->toIso8601String(),
+                    ],
                     'recorder' => $o->relationLoaded('recorder') && $o->recorder ? [
                         'id' => $o->recorder->hash_id, 'name' => $o->recorder->name,
                     ] : null,

@@ -80,8 +80,10 @@ export function PartShowcase3D({ part, exploded }: PartShowcase3DProps) {
     const segments = isMobile ? 72 : 130;
 
     // Ink colour from the live theme so the part reads on light or dark paper.
+    // The literal is the light-palette `--text-primary` from tokens.css, used
+    // only if the variable is somehow unresolvable (it never is in practice).
     const inkStr =
-      getComputedStyle(container).getPropertyValue('--text-primary').trim() || '#1c1917';
+      getComputedStyle(container).getPropertyValue('--text-primary').trim() || '#1f1b16';
     const ink = new Color(inkStr);
 
     // ── Scene & camera ──────────────────────────────────────────────
@@ -92,7 +94,11 @@ export function PartShowcase3D({ part, exploded }: PartShowcase3DProps) {
 
     let renderer: WebGLRenderer;
     try {
-      renderer = new WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+      renderer = new WebGLRenderer({
+        antialias: true,
+        alpha: true,
+        powerPreference: 'high-performance',
+      });
     } catch {
       return;
     }
@@ -145,10 +151,7 @@ export function PartShowcase3D({ part, exploded }: PartShowcase3DProps) {
 
         const wireMat = new LineBasicMaterial({ color: ink, transparent: true, opacity: 0 });
         const edgeMat = new LineBasicMaterial({ color: ink, transparent: true, opacity: 0 });
-        mats.push(
-          { mat: wireMat, target: isMobile ? 0.14 : 0.18 },
-          { mat: edgeMat, target: 0.9 },
-        );
+        mats.push({ mat: wireMat, target: isMobile ? 0.14 : 0.18 }, { mat: edgeMat, target: 0.9 });
 
         const sectionGroup = new Group();
         sectionGroup.add(new LineSegments(wireGeo, wireMat));
@@ -259,7 +262,8 @@ export function PartShowcase3D({ part, exploded }: PartShowcase3DProps) {
       const now = performance.now();
       const t = (now - start) / 1000;
 
-      const lVelocity = (window as unknown as { lenis?: { velocity?: number } }).lenis?.velocity ?? 0;
+      const lVelocity =
+        (window as unknown as { lenis?: { velocity?: number } }).lenis?.velocity ?? 0;
       const scrollSpin = lVelocity * 0.0012;
 
       if (!isDragging) {

@@ -108,11 +108,14 @@ class NcrService
                 'assigned_to'       => $data['assigned_to'] ?? null,
                 'is_auto_generated' => (bool) ($data['is_auto_generated'] ?? false),
             ]);
-            return $this->show($ncr);
-        });
+            $fresh = $this->show($ncr);
 
-        \Illuminate\Support\Facades\DB::afterCommit(function () use ($ncr) {
-            app(NcrRecurrenceDetector::class)->scan($ncr->fresh());
+            // Recurrence is part of the NCR's persisted lineage. Run it while
+            // the new row is still in the owning transaction so a crash cannot
+            // leave an unlinked NCR after the create has committed.
+            app(NcrRecurrenceDetector::class)->scan($fresh->fresh());
+
+            return $fresh->fresh();
         });
 
         return $ncr;

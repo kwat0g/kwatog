@@ -38,6 +38,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
 
@@ -714,6 +715,13 @@ class GoldenPathDemoSeeder extends Seeder
             ->select('isi.id', 's.product_id')
             ->orderBy('isi.id')
             ->first();
+        // SPC control-chart tables were intentionally removed in the current
+        // quality scope cut. Keep this optional fixture additive so a fresh
+        // seed still completes when that archived surface is absent.
+        if (! Schema::hasTable('spc_control_charts')) {
+            $this->command?->info('  SPC control charts are out of scope; skipping fixture.');
+            return;
+        }
         if (! $specItem) {
             throw new \RuntimeException('An inspection specification item is required for the SPC route fixture.');
         }

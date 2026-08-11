@@ -34,9 +34,22 @@ class RecomputeSupplierPerformance extends Command
 
         $this->info("Recomputing supplier performance for {$year}-".str_pad((string) $month, 2, '0', STR_PAD_LEFT).'…');
 
-        $count = $service->recomputeAll($year, $month);
+        $result = $service->recomputeAll($year, $month);
 
-        $this->info("Computed {$count} vendor snapshot(s).");
+        $this->info(sprintf(
+            'Supplier snapshots: computed=%d failed=%d.',
+            $result['computed'],
+            count($result['failed']),
+        ));
+
+        if ($result['failed'] !== []) {
+            foreach ($result['failed'] as $failure) {
+                $this->error("Vendor {$failure['vendor_id']} failed: {$failure['error']}");
+            }
+
+            return self::FAILURE;
+        }
+
         return self::SUCCESS;
     }
 }

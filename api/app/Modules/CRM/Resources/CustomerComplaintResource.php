@@ -21,6 +21,12 @@ class CustomerComplaintResource extends JsonResource
             'status_label'      => Str::headline((string) ($this->status instanceof \BackedEnum ? $this->status->value : $this->status)),
             'description'       => $this->description,
             'affected_quantity' => (int) $this->affected_quantity,
+            'ncr_handoff'      => [
+                'status'       => $this->ncr_handoff_status?->value,
+                'status_label' => $this->ncr_handoff_status?->label(),
+                'message'      => $this->ncr_handoff_message,
+                'at'           => optional($this->ncr_handoff_at)->toIso8601String(),
+            ],
             'received_date'     => optional($this->received_date)?->toDateString(),
             'resolved_at'       => optional($this->resolved_at)?->toISOString(),
             'closed_at'         => optional($this->closed_at)?->toISOString(),

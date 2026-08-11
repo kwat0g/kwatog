@@ -37,6 +37,7 @@ class NotifyOnWorkOrderCompleted implements ShouldQueue
             ]);
         } catch (\Throwable $e) {
             Log::warning('NotifyOnWorkOrderCompleted failed', ['error' => $e->getMessage()]);
+            throw $e;
         }
     }
 }

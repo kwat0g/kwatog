@@ -39,10 +39,15 @@ export function PageHeader({
 
   const handleBackClick = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (window.history.state && window.history.state.idx > 0) {
-      navigate(-1);
-    } else if (backTo) {
+    // The label states where the link goes ("Back to Employees"), so it has to
+    // go there. This preferred `navigate(-1)` whenever history had depth, which
+    // meant arriving from a dashboard drill-down or a command-palette jump sent
+    // the user somewhere the label never mentioned. `backTo` wins when supplied;
+    // history is only the fallback for headers that declare no destination.
+    if (backTo) {
       navigate(backTo);
+    } else if (window.history.state && window.history.state.idx > 0) {
+      navigate(-1);
     }
   };
 

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\B2B\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Support\HashIdFilter;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Enums\InvoiceStatus;
@@ -13,6 +15,7 @@ use App\Modules\CRM\Models\CustomerComplaint;
 use App\Modules\CRM\Enums\ComplaintStatus;
 use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\CRM\Services\ComplaintService;
 use App\Modules\CRM\Services\SalesOrderService;
 use App\Common\Services\SystemUserResolver;
 use App\Modules\SupplyChain\Enums\DeliveryStatus;
@@ -34,6 +37,7 @@ class CustomerPortalService
 {
     public function __construct(
         private readonly SalesOrderService $salesOrderService,
+        private readonly ComplaintService $complaintService,
         private readonly StatementOfAccountService $soa,
         private readonly SystemUserResolver $systemUser,
     ) {}
@@ -202,20 +206,34 @@ class CustomerPortalService
 
     public function createComplaint(int $customerId, array $data): CustomerComplaint
     {
+        $salesOrderId = null;
+        if (($data['order_id'] ?? null) !== null && ($data['order_id'] ?? '') !== '') {
+            $salesOrderId = HashIdFilter::decode($data['order_id'], SalesOrder::class);
+
+            $belongsToCustomer = $salesOrderId !== null
+                && SalesOrder::query()
+                    ->whereKey($salesOrderId)
+                    ->where('customer_id', $customerId)
+                    ->exists();
+
+            if (! $belongsToCustomer) {
+                throw new BusinessRuleException('The selected order does not belong to this customer.');
+            }
+        }
+
         // Portal users are not internal users — impersonate a system user so
-        // HasAuditLog writes a valid users.id into audit_logs.user_id.
-        return $this->systemUser->impersonate(function () use ($customerId, $data) {
-            return CustomerComplaint::create([
+        // HasAuditLog writes a valid users.id into audit_logs.user_id. Route
+        // the write through CRM so the 8D record and durable NCR handoff are
+        // identical to the internal complaint workflow.
+        return $this->systemUser->impersonate(function () use ($customerId, $data, $salesOrderId) {
+            return $this->complaintService->create([
                 'customer_id' => $customerId,
-                'sales_order_id' => $data['order_id'] ?? null,
+                'sales_order_id' => $salesOrderId,
+                'received_date' => now()->toDateString(),
                 'severity' => $data['severity'],
                 'description' => $data['description'],
                 'affected_quantity' => $data['affected_quantity'],
-                'status' => 'open',
-                'complaint_number' => 'CC-'.strtoupper(uniqid()),
-                'received_date' => now(),
-                'created_by' => $this->systemUser->id(),
-            ]);
+            ], $this->systemUser->user());
         });
     }
 

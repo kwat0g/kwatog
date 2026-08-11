@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\MRP\Services;
 
+use App\Common\Services\OutboxService;
 use App\Common\Support\SearchOperator;
 use App\Common\Support\TrashedFilter;
 use App\Modules\MRP\Enums\MachineStatus;
+use App\Modules\MRP\Events\MachineStatusChanged;
 use App\Modules\MRP\Exceptions\IllegalStatusTransitionException;
 use App\Modules\MRP\Models\Machine;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -85,16 +87,29 @@ class MachineService
 
     public function transitionStatus(Machine $m, MachineStatus $to, ?string $reason = null): Machine
     {
-        $from = $m->status?->value ?? 'idle';
-        $allowed = self::allowedTransitions()[$from] ?? [];
-        if (! in_array($to->value, $allowed, true)) {
-            throw new IllegalStatusTransitionException($from, $to->value);
-        }
-        return DB::transaction(function () use ($m, $from, $to, $reason) {
-            $m->update(['status' => $to->value]);
-            // Sprint 6 Task 56: HandleMachineBreakdown listens here.
-            \App\Modules\MRP\Events\MachineStatusChanged::dispatch($m->fresh(), $from, $to->value, $reason);
-            return $m->fresh();
+        return DB::transaction(function () use ($m, $to, $reason) {
+            // Route model binding may have happened before another request
+            // changed the machine. Re-read and lock the row before validating
+            // the transition so scheduler/resource changes cannot race this
+            // lifecycle boundary.
+            $row = Machine::query()->lockForUpdate()->findOrFail($m->id);
+            $from = $row->status?->value ?? 'idle';
+            $allowed = self::allowedTransitions()[$from] ?? [];
+            if (! in_array($to->value, $allowed, true)) {
+                throw new IllegalStatusTransitionException($from, $to->value);
+            }
+
+            $row->update(['status' => $to->value]);
+            $changed = $row->fresh();
+
+            // Durable publication is recorded with the status mutation. The
+            // breakdown listener cannot be lost between commit and Redis
+            // enqueue, and replay remains safe because it locks/rechecks.
+            app(OutboxService::class)->record(
+                new MachineStatusChanged($changed, $from, $to->value, $reason),
+            );
+
+            return $changed;
         });
     }
 }

@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
+import { RefreshCw } from 'lucide-react';
 import { budgetingApi } from '@/api/accounting/budgeting';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { Button } from '@/components/ui/Button';
 import { Panel } from '@/components/ui/Panel';
 import { StatCard } from '@/components/ui/StatCard';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
@@ -11,13 +13,26 @@ import { formatPeso, formatCompactCurrency } from '@/lib/formatNumber';
 import type { BudgetVsActual, BudgetVsActualRow } from '@/types/budgeting';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { usePermission } from '@/hooks/usePermission';
+import toast from 'react-hot-toast';
 
 export default function BudgetVsActualPage() {
  const [groupBy, setGroupBy] = useState<string>('department');
+ const { can } = usePermission();
+ const queryClient = useQueryClient();
 
  const { data, isLoading, error } = useQuery<BudgetVsActual>({
  queryKey: ['budget-vs-actual'],
  queryFn: () => budgetingApi.budgetVsActual(),
+ });
+
+ const syncActuals = useMutation({
+ mutationFn: () => budgetingApi.syncActuals(),
+ onSuccess: () => {
+ toast.success('Budget actuals rebuild queued.');
+ queryClient.invalidateQueries({ queryKey: ['budget-vs-actual'] });
+ },
+ onError: () => toast.error('Failed to queue the budget actuals rebuild.'),
  });
 
  // Top 10 rows by absolute variance for chart (keep chart readable)
@@ -60,6 +75,18 @@ export default function BudgetVsActualPage() {
  breadcrumbs={[{ label: 'Budgeting', href: '/budgeting' }, { label: 'Budget vs Actual' }]}
  actions={
  <div className="flex items-center gap-2">
+ {can('budgeting.manage') && (
+ <Button
+ variant="secondary"
+ size="xs"
+ icon={<RefreshCw size={13} />}
+ onClick={() => syncActuals.mutate()}
+ disabled={syncActuals.isPending}
+ loading={syncActuals.isPending}
+ >
+ {syncActuals.isPending ? 'Queuing…' : 'Rebuild actuals'}
+ </Button>
+ )}
  <span className="text-xs text-muted">Group by</span>
  <SegmentedControl
  size="sm"

@@ -52,7 +52,11 @@ class KpiScorecardTest extends TestCase
         $user = User::factory()->create(['role_id' => $role->id]);
 
         $this->mock(KpiSnapshotService::class, function (MockInterface $mock): void {
-            $mock->shouldReceive('computeAll')->once()->with(2025, 12);
+            $mock->shouldReceive('computeAll')->once()->with(2025, 12)->andReturn([
+                'computed' => 0,
+                'no_data' => 0,
+                'failed' => [],
+            ]);
         });
 
         $this->actingAs($user, 'sanctum')

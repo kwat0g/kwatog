@@ -16,7 +16,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { returnManagementApi } from '@/api/returnManagement';
 import { creditNotesApi } from '@/api/accounting/credit-notes';
-import { FileText, PackageCheck } from 'lucide-react';
+import { AlertTriangle, FileText, PackageCheck, RefreshCw } from 'lucide-react';
 import { warehouseApi } from '@/api/inventory/warehouse';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
@@ -123,8 +123,25 @@ export default function ReturnRequestDetailPage() {
 
  const inspectMut = useMutation({
  mutationFn: () => returnManagementApi.inspect(id!),
- onSuccess: () => { invalidate(); toast.success('Inspection completed.'); setConfirm(null); },
+ onSuccess: (updated) => {
+  invalidate();
+  toast.success(updated.inspection_handoff?.status === 'manual_required'
+   ? 'Quality inspection needs attention.'
+   : 'Quality inspection staged.');
+  setConfirm(null);
+ },
  onError: (e) => toast.error(errMsg(e, 'Failed to complete inspection.')),
+ });
+
+ const retryInspectionMut = useMutation({
+  mutationFn: () => returnManagementApi.retryInspection(id!),
+  onSuccess: (updated) => {
+   invalidate();
+   toast.success(updated.inspection_handoff?.status === 'manual_required'
+    ? 'Quality handoff still needs attention.'
+    : 'Quality inspection staged.');
+  },
+  onError: (e) => toast.error(errMsg(e, 'Failed to retry Quality inspection.')),
  });
 
  const completeMut = useMutation({
@@ -279,6 +296,17 @@ export default function ReturnRequestDetailPage() {
  backLabel="Return Management"
  actions={
  <div className="flex gap-1.5">
+ {rma.inspection_handoff?.status === 'manual_required' && canManage && (
+  <Button
+   size="sm"
+   variant="secondary"
+   icon={<RefreshCw size={13} className={retryInspectionMut.isPending ? 'animate-spin' : ''} />}
+   loading={retryInspectionMut.isPending}
+   onClick={() => retryInspectionMut.mutate()}
+  >
+   Retry Quality handoff
+  </Button>
+ )}
  {actions.map((action) => (
  <Button
  key={action.key}
@@ -376,6 +404,29 @@ export default function ReturnRequestDetailPage() {
  )}
  </Panel>
 
+ {rma.inspection_handoff?.status === 'manual_required' && (
+  <div className="flex items-start gap-3 rounded-md border border-warning/40 bg-warning-bg/10 px-4 py-3 text-sm">
+   <AlertTriangle size={16} className="mt-0.5 shrink-0 text-warning-fg" />
+   <div className="flex-1">
+    <div className="font-medium">Quality inspection handoff needs attention</div>
+    <div className="text-muted">
+     {rma.inspection_handoff.message || 'The return cannot be disposed or completed until Quality inspection staging succeeds.'}
+    </div>
+   </div>
+   {canManage && (
+    <Button
+     variant="secondary"
+     size="sm"
+     icon={<RefreshCw size={13} />}
+     loading={retryInspectionMut.isPending}
+     onClick={() => retryInspectionMut.mutate()}
+    >
+     Retry
+    </Button>
+   )}
+  </div>
+ )}
+
  {/* Items */}
  <Panel title={`Items (${rma.items?.length ?? 0})`}>
  {!rma.items || rma.items.length === 0 ? (
@@ -447,7 +498,7 @@ export default function ReturnRequestDetailPage() {
  {/* Outcome — the documents disposition produced. These were returned by
      the API but never rendered, so there was no way to tell from the UI
      whether a customer had actually been credited. */}
- {(rma.credit_note || rma.replacement_purchase_order || rma.inspection || rma.disposition_status) && (
+ {(rma.credit_note || rma.replacement_purchase_order || rma.inspection || rma.disposition_status || rma.inspection_handoff) && (
  <>
  {/* 2026-08-08 — auto-credit chain: dispose() stages a draft customer credit
   note from the returned lines; review and finalize it here (mirrors the
@@ -533,6 +584,14 @@ export default function ReturnRequestDetailPage() {
  </Link>
  ) : <span className="text-muted">—</span>}
  </dd>
+ </div>
+ <div>
+  <dt className="text-2xs uppercase tracking-wider text-muted">Quality handoff</dt>
+  <dd>
+   <Chip variant={rma.inspection_handoff?.status === 'manual_required' ? 'warning' : rma.inspection_handoff?.status === 'generated' ? 'success' : 'neutral'}>
+    {rma.inspection_handoff?.status_label ?? rma.inspection_handoff?.status ?? '—'}
+   </Chip>
+  </dd>
  </div>
  </dl>
  </Panel>

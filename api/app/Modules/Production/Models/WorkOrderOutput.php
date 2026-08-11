@@ -6,6 +6,8 @@ namespace App\Modules\Production\Models;
 
 use App\Common\Traits\HasHashId;
 use App\Modules\Auth\Models\User;
+use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Production\Enums\ProductionReceiptHandoffStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -20,12 +22,17 @@ class WorkOrderOutput extends Model
     protected $fillable = [
         'work_order_id', 'recorded_by', 'recorded_at',
         'good_count', 'reject_count', 'shift', 'batch_code', 'remarks',
+        'production_receipt_handoff_status', 'production_receipt_handoff_message',
+        'production_receipt_handoff_at', 'production_receipt_movement_id',
     ];
 
     protected $casts = [
         'recorded_at'  => 'datetime',
         'good_count'   => 'integer',
         'reject_count' => 'integer',
+        'production_receipt_handoff_status' => ProductionReceiptHandoffStatus::class,
+        'production_receipt_handoff_at' => 'datetime',
+        'production_receipt_movement_id' => 'integer',
     ];
 
     public function workOrder(): BelongsTo
@@ -41,6 +48,11 @@ class WorkOrderOutput extends Model
     public function defects(): HasMany
     {
         return $this->hasMany(WorkOrderDefect::class, 'output_id');
+    }
+
+    public function productionReceiptMovement(): BelongsTo
+    {
+        return $this->belongsTo(StockMovement::class, 'production_receipt_movement_id');
     }
 
     public function getTotalCountAttribute(): int

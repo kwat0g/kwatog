@@ -53,6 +53,7 @@ class ChainBottleneckController
             'data' => [
                 'total' => $totalCount,
                 'groups' => $groups,
+                'automation' => $this->service->automationSummary(),
             ],
         ]);
     }

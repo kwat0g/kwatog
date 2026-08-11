@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Resources;
 
+use App\Modules\Inventory\Enums\MovementGlHandoffStatus;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Str;
@@ -33,6 +34,20 @@ class StockMovementResource extends JsonResource
             'quantity'       => (string) $this->quantity,
             'unit_cost'      => (string) $this->unit_cost,
             'total_cost'     => (string) $this->total_cost,
+            'gl_handoff'     => [
+                'status' => $this->gl_handoff_status instanceof MovementGlHandoffStatus
+                    ? $this->gl_handoff_status->value
+                    : (string) $this->gl_handoff_status,
+                'status_label' => ($handoff = $this->gl_handoff_status instanceof MovementGlHandoffStatus
+                    ? $this->gl_handoff_status
+                    : MovementGlHandoffStatus::tryFrom((string) $this->gl_handoff_status))?->label(),
+                'message' => $this->gl_handoff_message,
+                'at' => optional($this->gl_handoff_at)->toIso8601String(),
+                'journal_entry' => $this->whenLoaded('journalEntry', fn () => $this->journalEntry ? [
+                    'id' => $this->journalEntry->hash_id,
+                    'entry_number' => $this->journalEntry->entry_number,
+                ] : null),
+            ],
             'reference_type' => $this->reference_type,
             'reference_id'   => $this->reference_id,
             'remarks'        => $this->remarks,

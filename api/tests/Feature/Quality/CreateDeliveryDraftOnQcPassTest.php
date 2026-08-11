@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Quality;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Auth\Models\Role;
@@ -64,6 +65,70 @@ class CreateDeliveryDraftOnQcPassTest extends TestCase
             (string) $item->unit_price,
             'unit_price must be copied from the SalesOrderItem, not hardcoded 0.00.',
         );
+    }
+
+    public function test_auto_draft_does_not_bypass_sales_order_remaining_quantity(): void
+    {
+        [$wo, $inspection] = $this->arrange(unitPrice: '75.00');
+        $soItem = SalesOrderItem::query()->whereKey($wo->sales_order_item_id)->firstOrFail();
+
+        $existing = Delivery::create([
+            'delivery_number' => 'DL-L7-' . substr(uniqid(), -8),
+            'sales_order_id' => $wo->sales_order_id,
+            'status' => 'scheduled',
+            'scheduled_date' => now()->toDateString(),
+            'created_by' => $wo->created_by,
+        ]);
+        DeliveryItem::create([
+            'delivery_id' => $existing->id,
+            'sales_order_item_id' => $soItem->id,
+            'quantity' => '6',
+            'unit_price' => '75.00',
+        ]);
+
+        // The QC event would request 10 more units. The listener must surface
+        // the state error to the queue worker and leave no over-delivery draft.
+        try {
+            (new CreateDeliveryDraftOnQcPass(app(DocumentSequenceService::class)))
+                ->handle(new InspectionPassed($inspection));
+            $this->fail('An over-delivery must fail the stateful chain step.');
+        } catch (BusinessRuleException $e) {
+            $this->assertStringContainsString('exceeds', strtolower($e->getMessage()));
+        }
+
+        $this->assertSame(1, Delivery::query()->count());
+        $this->assertSame(1, DeliveryItem::query()->count());
+    }
+
+    public function test_invalid_work_order_line_does_not_commit_an_empty_delivery(): void
+    {
+        [$wo, $inspection] = $this->arrange(unitPrice: '75.00');
+        $wo->update(['sales_order_item_id' => null]);
+
+        try {
+            (new CreateDeliveryDraftOnQcPass(app(DocumentSequenceService::class)))
+                ->handle(new InspectionPassed($inspection));
+            $this->fail('A WO without an SO line must fail the stateful chain step.');
+        } catch (BusinessRuleException $e) {
+            $this->assertStringContainsString('sales-order line', strtolower($e->getMessage()));
+        }
+
+        $this->assertSame(0, Delivery::query()->count());
+        $this->assertSame(0, DeliveryItem::query()->count());
+    }
+
+    public function test_stale_pass_event_does_not_draft_delivery_for_non_passed_inspection(): void
+    {
+        [$wo, $inspection] = $this->arrange(unitPrice: '75.00');
+        $staleEvent = new InspectionPassed($inspection->fresh());
+        $inspection->update(['status' => InspectionStatus::Failed->value]);
+
+        (new CreateDeliveryDraftOnQcPass(app(DocumentSequenceService::class)))
+            ->handle($staleEvent);
+
+        $this->assertSame(0, Delivery::query()
+            ->where('sales_order_id', $wo->sales_order_id)
+            ->count());
     }
 
     // ─── Helpers ───────────────────────────────────────────────────────────────

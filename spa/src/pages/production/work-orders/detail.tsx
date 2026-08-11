@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, Pause, Play, StopCircle, Ban, Lock, Activity } from 'lucide-react';
+import { Check, Pause, Play, StopCircle, Ban, Lock, Activity, RefreshCw } from 'lucide-react';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { workOrdersApi } from '@/api/production/workOrders';
@@ -126,6 +126,20 @@ export default function WorkOrderDetailPage() {
  onError: (e: AxiosError<{ message?: string }>) => {
  toast.error(e.response?.data?.message ?? 'Action failed.');
  } });
+
+ const retryReceipt = useMutation({
+ mutationFn: (outputId: string) => workOrdersApi.retryProductionReceipt(id!, outputId),
+ onSuccess: (output) => {
+ qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'detail', id] });
+ qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'outputs', id] });
+ toast.success(output.production_receipt_handoff?.status === 'generated'
+ ? 'Finished-goods receipt posted.'
+ : 'Receipt handoff remains pending Inventory setup.');
+ },
+ onError: (error: AxiosError<{ message?: string }>) => {
+ toast.error(error.response?.data?.message ?? 'Finished-goods receipt could not be posted.');
+ },
+ });
 
  if (isLoading) return <div> <PageHeader title="Work order" backTo="/production/work-orders" backLabel="Work orders"
  breadcrumbs={[{ label: 'Production', href: '/production' }, { label: 'Work orders', href: '/production/work-orders' }, { label: 'Loading…' }]} /><SkeletonDetail /></div>;
@@ -316,6 +330,7 @@ export default function WorkOrderDetailPage() {
  <Th>Batch</Th>
  <Th align="right">Good</Th>
  <Th align="right">Reject</Th>
+ <Th>FG receipt</Th>
  <Th>Defects</Th>
  </tr>
  </thead>
@@ -326,6 +341,28 @@ export default function WorkOrderDetailPage() {
  <Td mono>{o.batch_code ?? '—'}</Td>
  <Td align="right" mono>{o.good_count}</Td>
  <Td align="right" mono>{o.reject_count}</Td>
+ <Td>
+ {o.production_receipt_handoff ? (
+ <div className="flex items-center gap-2">
+ <span title={o.production_receipt_handoff.message ?? undefined}>
+ <Chip variant={o.production_receipt_handoff.status === 'generated' || o.production_receipt_handoff.status === 'not_required'
+ ? 'success' : o.production_receipt_handoff.status === 'manual_required' ? 'warning' : 'neutral'}>
+ {o.production_receipt_handoff.status_label ?? o.production_receipt_handoff.status.replace('_', ' ')}
+ </Chip>
+ </span>
+ {canRecord && o.production_receipt_handoff.status === 'manual_required' && (
+ <Button
+ type="button"
+ variant="ghost"
+ size="sm"
+ icon={<RefreshCw size={13} className={retryReceipt.isPending ? 'animate-spin' : ''} />}
+ disabled={retryReceipt.isPending}
+ onClick={() => retryReceipt.mutate(o.id)}
+ >Retry</Button>
+ )}
+ </div>
+ ) : <span className="text-muted">—</span>}
+ </Td>
  <Td className="text-xs">
  {o.defects?.length
  ? o.defects.map((d) => `${d.defect_type?.code} ×${d.count}`).join(', ')

@@ -21,6 +21,12 @@ class GoodsReceiptNoteResource extends JsonResource
             'rejected_reason' => $this->rejected_reason,
             'remarks'         => $this->remarks,
             'accepted_at'     => optional($this->accepted_at)->toIso8601String(),
+            'incoming_qc_handoff' => [
+                'status' => $this->incoming_qc_handoff_status?->value,
+                'status_label' => $this->incoming_qc_handoff_status?->label(),
+                'message' => $this->incoming_qc_handoff_message,
+                'at' => optional($this->incoming_qc_handoff_at)->toIso8601String(),
+            ],
             'vendor'          => $this->whenLoaded('vendor', fn () => [
                 'id'   => $this->vendor->hash_id,
                 'name' => $this->vendor->name,

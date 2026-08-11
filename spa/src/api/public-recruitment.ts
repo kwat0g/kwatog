@@ -4,6 +4,7 @@ import type { PublicJobPosting, TrackingInfo } from '@/types/recruitment';
 
 const publicClient = axios.create({
  baseURL: '/api/v1/public/recruitment',
+ timeout: 30_000,
  headers: { Accept: 'application/json' },
 });
 

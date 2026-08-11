@@ -25,6 +25,12 @@ class RunAlertEngine extends Command
         if (! empty($stats['by_severity'])) {
             $this->line('Recent by severity: '.json_encode($stats['by_severity']));
         }
+
+        if ($stats['failed'] !== []) {
+            $this->error('Alert checks failed: '.implode(', ', $stats['failed']));
+            return self::FAILURE;
+        }
+
         return self::SUCCESS;
     }
 }

@@ -64,6 +64,8 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
     // Employees
     Route::prefix('employees')->group(function () {
         Route::get('/options', [EmployeeController::class, 'options'])->middleware('permission:hr.employees.view');
+        // Literal segment — must stay above the {employee} binding below.
+        Route::get('/status-counts', [EmployeeController::class, 'statusCounts'])->middleware('permission:hr.employees.view');
         Route::get('/', [EmployeeController::class, 'index'])->middleware('permission:hr.employees.view');
         Route::post('/', [EmployeeController::class, 'store'])->middleware('permission:hr.employees.create');
 

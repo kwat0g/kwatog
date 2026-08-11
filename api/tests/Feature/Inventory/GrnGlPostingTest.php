@@ -319,6 +319,49 @@ class GrnGlPostingTest extends TestCase
         $this->assertSame('1100.00', (string) $grniCredit, 'GRNI CR equals only accepted value');
     }
 
+    public function test_partial_accept_can_continue_and_posts_only_the_new_delta(): void
+    {
+        $this->enableAccounting(true);
+
+        $grn = $this->buildGrn([
+            ['item_type' => ItemType::RawMaterial->value, 'quantity' => '100', 'unit_cost' => '10.00'],
+            ['item_type' => ItemType::Packaging->value,   'quantity' => '40',  'unit_cost' => '5.00'],
+        ]);
+
+        $raw = $grn->items->first();
+        $packaging = $grn->items->last();
+        $partial = $this->grnSvc->partialAccept($grn, [
+            $raw->id => '100',
+            $packaging->id => '20',
+        ], $this->user);
+
+        $accepted = $this->grnSvc->partialAccept($partial->fresh(), [
+            $raw->id => '100',
+            $packaging->id => '40',
+        ], $this->user);
+
+        $this->assertSame(GrnStatus::Accepted, $accepted->status);
+        $this->assertSame('40.000', (string) $accepted->items()->whereKey($packaging->id)->value('quantity_accepted'));
+        $this->assertSame(
+            3,
+            DB::table('stock_movements')
+                ->where('reference_type', 'goods_receipt_note')
+                ->where('reference_id', $accepted->id)
+                ->count(),
+            'Continuation must move only the new packaging delta, not re-receive the first acceptance.',
+        );
+
+        $entries = DB::table('journal_entries')
+            ->where('reference_type', 'goods_receipt_note')
+            ->where('reference_id', $accepted->id)
+            ->orderBy('id')
+            ->get();
+        $this->assertCount(2, $entries, 'Initial and incremental acceptance need separate immutable JEs.');
+        $this->assertSame('1100.00', (string) $entries[0]->total_debit);
+        $this->assertSame('100.00', (string) $entries[1]->total_debit);
+        $this->assertSame('1200.00', number_format((float) $entries->sum('total_debit'), 2, '.', ''));
+    }
+
     public function test_gl_post_failure_rolls_back_grn_acceptance_and_stock(): void
     {
         $this->enableAccounting(true);

@@ -62,6 +62,7 @@ Route::middleware(['auth:sanctum', 'feature:production'])->prefix('production')-
     /* ─── Output recording (Task 55) ─── */
     Route::get('/work-orders/{workOrder}/outputs',   [WorkOrderController::class, 'listOutputs'])->middleware('permission:production.work_orders.view');
     Route::post('/work-orders/{workOrder}/outputs',  [WorkOrderController::class, 'recordOutput'])->middleware('permission:production.wo.record');
+    Route::post('/work-orders/{workOrder}/outputs/{output}/retry-receipt', [WorkOrderController::class, 'retryProductionReceipt'])->middleware('permission:production.wo.record');
 
     /* ─── OEE (Task 57) ─── */
     Route::get('/oee/machine/{machine}', [OeeController::class, 'forMachine'])->middleware('permission:production.dashboard.view');

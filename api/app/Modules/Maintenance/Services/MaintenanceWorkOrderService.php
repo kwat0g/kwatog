@@ -6,6 +6,7 @@ namespace App\Modules\Maintenance\Services;
 
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\NotificationService;
+use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
@@ -87,6 +88,28 @@ class MaintenanceWorkOrderService
     public function create(array $data, User $by, ?MaintenanceSchedule $fromSchedule = null): MaintenanceWorkOrder
     {
         return DB::transaction(function () use ($data, $by, $fromSchedule) {
+            if ($fromSchedule !== null) {
+                // The scheduler query is only a hint. Lock the schedule and
+                // re-check its open WO inside the write transaction so a
+                // duplicate queue delivery cannot materialise two preventive
+                // WOs for the same due schedule.
+                $fromSchedule = MaintenanceSchedule::query()
+                    ->lockForUpdate()
+                    ->findOrFail($fromSchedule->id);
+
+                $existing = MaintenanceWorkOrder::query()
+                    ->where('schedule_id', $fromSchedule->id)
+                    ->whereNotIn('status', [
+                        MaintenanceWorkOrderStatus::Completed->value,
+                        MaintenanceWorkOrderStatus::Cancelled->value,
+                    ])
+                    ->orderByDesc('id')
+                    ->first();
+                if ($existing) {
+                    return $this->show($existing);
+                }
+            }
+
             $type = MaintainableType::from((string) ($fromSchedule?->maintainable_type?->value ?? $data['maintainable_type']));
             $maintainableId = $fromSchedule?->maintainable_id ?? (int) $data['maintainable_id'];
 
@@ -117,9 +140,16 @@ class MaintenanceWorkOrderService
 
             $fresh = $this->show($wo);
 
-            // Sprint 8 — Task 78: broadcast on the maintenance.dashboard channel
-            // so subscribed dashboards refresh without a page reload.
-            event(new MaintenanceWorkOrderCreated($fresh));
+            // Sprint 8 — Task 78: durable publication for the maintenance
+            // dashboard event; the broadcast is still emitted only after the
+            // creation transaction commits.
+            app(OutboxService::class)->recordForChain(
+                new MaintenanceWorkOrderCreated($fresh),
+                $fresh,
+                'maintenance',
+                'maintenance_work_order',
+                'created',
+            );
 
             return $fresh;
         });

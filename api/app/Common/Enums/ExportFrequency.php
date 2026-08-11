@@ -42,10 +42,15 @@ enum ExportFrequency: string
                 return $candidate;
             })(),
             self::Monthly => (function () use ($base, $from, $dayOfMonth) {
-                $target = max(1, min(28, $dayOfMonth ?? 1));
-                $candidate = $base->day($target);
+                $target = max(1, min(31, $dayOfMonth ?? 1));
+                $candidate = $base->day(min($target, $base->daysInMonth));
                 if ($candidate->lessThanOrEqualTo($from)) {
-                    $candidate = $candidate->addMonthNoOverflow()->day($target);
+                    $nextMonth = $candidate->addMonthNoOverflow()->startOfMonth()->setTime(
+                        $base->hour,
+                        $base->minute,
+                        $base->second,
+                    );
+                    $candidate = $nextMonth->day(min($target, $nextMonth->daysInMonth));
                 }
                 return $candidate;
             })(),

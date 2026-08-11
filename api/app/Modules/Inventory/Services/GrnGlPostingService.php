@@ -26,7 +26,10 @@ use RuntimeException;
  * total accepted value. The companion Bill (in BillService::create) later
  * debits 2110 and credits Accounts Payable, closing the GRNI loop.
  *
- * Idempotent: bails when goods_receipt_notes.journal_entry_id is already set.
+ * Idempotent and cumulative: the first accepted quantity posts the initial
+ * GRNI entry; later cumulative acceptance posts only the delta. The GRN's
+ * journal_entry_id remains the primary entry for backwards compatibility,
+ * while all entries are linked through the same document reference.
  *
  * Feature flag: gated behind `modules.accounting`. When the accounting
  * module is disabled (early sprints, or a company that hasn't activated it)
@@ -46,12 +49,20 @@ class GrnGlPostingService
      */
     public function post(GoodsReceiptNote $grn): ?int
     {
+        return DB::transaction(fn () => $this->postLocked($grn));
+    }
+
+    private function postLocked(GoodsReceiptNote $grn): ?int
+    {
         if ($grn->status !== GrnStatus::Accepted && $grn->status !== GrnStatus::PartialAccepted) {
             throw new BusinessRuleException('Only accepted GRNs can be posted to the GL.');
         }
 
-        if ($grn->journal_entry_id) {
-            return (int) $grn->journal_entry_id;
+        // Serialize cumulative posting with acceptance updates. This also
+        // makes a retried queue/job invocation observe the same posted total.
+        $grn = GoodsReceiptNote::query()->lockForUpdate()->findOrFail($grn->id);
+        if ($grn->status !== GrnStatus::Accepted && $grn->status !== GrnStatus::PartialAccepted) {
+            throw new BusinessRuleException('Only accepted GRNs can be posted to the GL.');
         }
 
         $accountingEnabled = $this->settings->requiredBool('modules.accounting');
@@ -67,7 +78,9 @@ class GrnGlPostingService
             return null;
         }
 
-        // Aggregate accepted value by inventory account code.
+        // Aggregate the current cumulative accepted value by inventory account
+        // code. A later partial acceptance is reconciled against the already
+        // posted journal entries below, so it never reposts the first delta.
         $grn->loadMissing('items');
         /** @var array<string, string> $byAccount */
         $byAccount = [];
@@ -94,7 +107,7 @@ class GrnGlPostingService
             Log::info('GrnGlPostingService: no accepted value to post', [
                 'grn_id' => $grn->id,
             ]);
-            return null;
+            return $grn->journal_entry_id ? (int) $grn->journal_entry_id : null;
         }
 
         // Lookup account ids (DR rows + GRNI).
@@ -109,8 +122,62 @@ class GrnGlPostingService
             throw new RuntimeException("GRNI clearing account {$grniCode} missing from chart of accounts.");
         }
 
-        $lines = [];
+        $postedByCode = DB::table('journal_entry_lines as line')
+            ->join('journal_entries as entry', 'entry.id', '=', 'line.journal_entry_id')
+            ->join('accounts as account', 'account.id', '=', 'line.account_id')
+            ->where('entry.reference_type', 'goods_receipt_note')
+            ->where('entry.reference_id', $grn->id)
+            ->where('entry.status', 'posted')
+            ->whereIn('account.code', $codes)
+            ->select([
+                'account.code',
+                DB::raw('COALESCE(SUM(line.debit), 0) as debit'),
+                DB::raw('COALESCE(SUM(line.credit), 0) as credit'),
+            ])
+            ->groupBy('account.code')
+            ->get()
+            ->keyBy('code');
+
+        /** @var array<string,string> $deltaByAccount */
+        $deltaByAccount = [];
         foreach ($byAccount as $code => $amount) {
+            $posted = (string) ($postedByCode->get($code)?->debit ?? '0');
+            if (Money::lt($amount, $posted)) {
+                throw new BusinessRuleException(
+                    "Accepted GRN value for account {$code} cannot decrease below the amount already posted."
+                );
+            }
+            $delta = Money::sub($amount, $posted);
+            if (! Money::isZero($delta)) {
+                $deltaByAccount[$code] = $delta;
+            }
+        }
+
+        $postedGrni = (string) ($postedByCode->get($grniCode)?->credit ?? '0');
+        if (Money::lt($total, $postedGrni)) {
+            throw new BusinessRuleException('Accepted GRN value cannot decrease below the GRNI amount already posted.');
+        }
+        $deltaTotal = Money::sub($total, $postedGrni);
+
+        if (Money::isZero($deltaTotal) && $deltaByAccount === []) {
+            if ($grn->journal_entry_id) {
+                return (int) $grn->journal_entry_id;
+            }
+
+            return DB::table('journal_entries')
+                ->where('reference_type', 'goods_receipt_note')
+                ->where('reference_id', $grn->id)
+                ->where('status', 'posted')
+                ->orderBy('id')
+                ->value('id');
+        }
+
+        if (Money::isZero($deltaTotal) || $deltaByAccount === []) {
+            throw new RuntimeException('GRN inventory and GRNI deltas are out of balance.');
+        }
+
+        $lines = [];
+        foreach ($deltaByAccount as $code => $amount) {
             if (! isset($accountIds[$code])) {
                 Log::error('GrnGlPostingService: configured inventory account missing', [
                     'grn_id' => $grn->id,
@@ -128,7 +195,7 @@ class GrnGlPostingService
         $lines[] = [
             'account_id'  => $accountIds[$grniCode],
             'debit'       => '0.00',
-            'credit'      => $total,
+            'credit'      => $deltaTotal,
             'description' => "GRN {$grn->grn_number} — GRNI clearing",
         ];
 
@@ -137,7 +204,11 @@ class GrnGlPostingService
                 'date'           => $grn->received_date instanceof \DateTimeInterface
                     ? $grn->received_date->format('Y-m-d')
                     : (string) $grn->received_date,
-                'description'    => sprintf('GRN %s — Inventory receipt', $grn->grn_number),
+                'description'    => sprintf(
+                    'GRN %s — %s',
+                    $grn->grn_number,
+                    $grn->journal_entry_id ? 'incremental inventory acceptance' : 'inventory receipt',
+                ),
                 'reference_type' => 'goods_receipt_note',
                 'reference_id'   => $grn->id,
                 'lines'          => $lines,
@@ -155,8 +226,10 @@ class GrnGlPostingService
                 'updated_at' => now(),
             ]);
 
-            $grn->journal_entry_id = $je->id;
-            $grn->save();
+            if (! $grn->journal_entry_id) {
+                $grn->journal_entry_id = $je->id;
+                $grn->save();
+            }
 
             return (int) $je->id;
         });

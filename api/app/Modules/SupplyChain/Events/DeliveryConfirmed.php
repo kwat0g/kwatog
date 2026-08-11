@@ -10,7 +10,9 @@ use Illuminate\Queue\SerializesModels;
 
 /**
  * Task A4 — Fired by DeliveryService::confirm() once the customer has
- * confirmed receipt and the draft invoice has been created.
+ * confirmed receipt. The optional invoice ID is populated when the fast
+ * invoice handoff succeeds; a separate DeliveryInvoiceRequested event is
+ * emitted when Accounting recovery is required.
  */
 class DeliveryConfirmed
 {

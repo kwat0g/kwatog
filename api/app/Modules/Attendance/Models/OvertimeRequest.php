@@ -26,7 +26,7 @@ class OvertimeRequest extends Model
     protected $fillable = [
         'employee_id', 'date', 'hours_requested', 'reason',
         'status', 'approved_by', 'approved_at', 'rejection_reason',
-        'is_auto_detected',
+        'cancelled_by', 'cancelled_at', 'is_auto_detected',
     ];
 
     protected $casts = [
@@ -34,6 +34,7 @@ class OvertimeRequest extends Model
         'hours_requested'  => 'decimal:1',
         'status'           => OvertimeStatus::class,
         'approved_at'      => 'datetime',
+        'cancelled_at'     => 'datetime',
         'is_auto_detected' => 'boolean',
     ];
 
@@ -45,5 +46,10 @@ class OvertimeRequest extends Model
     public function approver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function canceller(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
     }
 }

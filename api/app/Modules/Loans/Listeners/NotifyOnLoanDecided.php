@@ -45,6 +45,7 @@ class NotifyOnLoanDecided implements ShouldQueue
             ]);
         } catch (\Throwable $e) {
             Log::warning('NotifyOnLoanDecided failed', ['error' => $e->getMessage()]);
+            throw $e;
         }
     }
 }

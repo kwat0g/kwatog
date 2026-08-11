@@ -1,8 +1,16 @@
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { useAuthStore } from '@/stores/authStore';
 
 export default function NotFoundPage() {
+ // Sending an anonymous visitor to /dashboard just bounces them through the
+ // auth guard to /login, which reads as a second failure. Send them somewhere
+ // that exists for them.
+ const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+ const destination = isAuthenticated ? '/dashboard' : '/login';
+ const label = isAuthenticated ? 'Return home' : 'Go to sign in';
+
  return (
  <div className="min-h-screen flex items-center justify-center bg-canvas">
  <EmptyState
@@ -10,8 +18,8 @@ export default function NotFoundPage() {
  title="Page not found"
  description="The page you're looking for doesn't exist or has been moved."
  action={
- <Link to="/dashboard">
- <Button variant="primary">Return home</Button>
+ <Link to={destination}>
+ <Button variant="primary">{label}</Button>
  </Link>
  }
  />

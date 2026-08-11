@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Notifications;
 
+use App\Common\Services\NotificationService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Events\LowStockPrCreated;
@@ -13,6 +14,8 @@ use App\Modules\Purchasing\Models\PurchaseRequest;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Mockery;
+use RuntimeException;
 use Tests\TestCase;
 
 class LowStockNotificationTest extends TestCase
@@ -90,6 +93,24 @@ class LowStockNotificationTest extends TestCase
             'notifiable_id' => $inactive->id,
             'type' => 'inventory.low_stock',
         ]);
+    }
+
+    public function test_notification_failure_is_rethrown_for_queue_recovery(): void
+    {
+        $this->userWithRole('purchasing_officer');
+        $item = Item::factory()->create(['reorder_point' => 50]);
+        $pr = PurchaseRequest::factory()->create();
+        $failure = new RuntimeException('notification database unavailable');
+        $notifications = Mockery::mock(NotificationService::class);
+        $notifications->shouldReceive('send')->once()->andThrow($failure);
+        app()->instance(NotificationService::class, $notifications);
+
+        try {
+            app(NotifyOnLowStockPrCreated::class)->handle(new LowStockPrCreated($item, $pr));
+            $this->fail('A queued notification failure must remain retryable.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame($failure, $exception);
+        }
     }
 
     private function userWithRole(string $slug): User

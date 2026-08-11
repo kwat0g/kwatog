@@ -28,22 +28,20 @@ use Throwable;
  * the UI can show + retry individuals.
  *
  * Concurrency: the period is claimed synchronously by
- * PayrollPeriodService::claimForCompute() BEFORE this job is dispatched, so by
- * the time we run the row is already at Processing and no second dispatch can
- * win. ShouldBeUnique is kept as belt-and-braces against a double-dispatch of
- * the same claim. This job never claims the period itself; it verifies it owns
- * one and refuses to touch anything else.
+ * PayrollPeriodService::claimForComputeAndStage() and the durable
+ * PayrollComputationRequested outbox event is committed with that claim. The
+ * RunPayrollComputationOnRequested listener invokes this execution command
+ * under a per-period overlap lock. This command never claims the period itself;
+ * it verifies that it owns a live Processing claim and refuses to touch
+ * anything else.
  *
  * Terminal status is Computed (never Draft) so the UI can tell "computed,
  * awaiting approval" apart from "never computed" — that conflation is what let
  * the Compute button stay live and silently re-run finished payroll.
  *
- * Deliberately NOT ShouldBeUnique. The DB claim above is an atomic conditional
- * UPDATE and therefore a strictly stronger gate. The unique lock added a real
- * failure mode on top of it: a worker killed mid-run leaves the lock behind for
- * uniqueFor seconds, and dispatch() then returns silently without enqueuing
- * anything. The period sat at Processing with no worker and no error — Compute
- * appeared to do nothing at all.
+ * Deliberately NOT ShouldBeUnique. The durable request plus the listener's
+ * per-period overlap lock provide replay safety without making queue dispatch
+ * silently disappear behind a stale unique lock.
  */
 class ProcessPayrollJob implements ShouldQueue
 {

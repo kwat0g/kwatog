@@ -46,8 +46,10 @@ class SchedulerController
         if (! $request->user()->hasPermission('mrp.schedule')) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
-        $newOrder = (int) $request->input('priority_order', 0);
-        $this->service->reorder($schedule->id, $newOrder);
+        $data = $request->validate([
+            'priority_order' => ['required', 'integer', 'min:0', 'max:65535'],
+        ]);
+        $this->service->reorder($schedule->id, (int) $data['priority_order']);
         return response()->json(['message' => 'Reordered.']);
     }
 

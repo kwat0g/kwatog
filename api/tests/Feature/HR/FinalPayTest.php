@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\HR;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Accounting\Enums\JournalEntryStatus;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\JournalEntry;
@@ -18,6 +19,7 @@ use App\Modules\HR\Models\Position;
 use App\Modules\HR\Services\FinalPayService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -572,6 +574,51 @@ class FinalPayTest extends TestCase
         $this->service()->postJournalEntry($clearance, $poster);
     }
 
+    public function test_final_pay_cannot_be_recomputed_after_clearance_is_terminal(): void
+    {
+        $employee = $this->makeEmployee();
+        $clearance = $this->makeClearance($employee, [
+            'status' => ClearanceStatus::Finalized->value,
+            'final_pay_computed' => true,
+            'final_pay_amount' => '100.00',
+            'final_pay_breakdown' => ['net' => '100.00'],
+        ]);
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('closed clearance');
+
+        $this->service()->compute($clearance);
+    }
+
+    public function test_post_journal_entry_is_idempotent_for_one_clearance(): void
+    {
+        $employee = $this->makeEmployee();
+        $clearance = $this->makeClearance($employee, [
+            'final_pay_computed' => true,
+            'final_pay_amount' => '100.00',
+            'final_pay_breakdown' => [
+                'gross_plus' => '100.00',
+                'gross_less' => '0.00',
+                'less_loan_balance' => '0.00',
+                'less_advance' => '0.00',
+                'less_unreturned_property_value' => '0.00',
+                'net' => '100.00',
+            ],
+        ]);
+        $poster = User::factory()->create(['role_id' => Role::query()->orderBy('id')->value('id')]);
+
+        $first = $this->service()->postJournalEntry($clearance, $poster);
+        $second = $this->service()->postJournalEntry($clearance->fresh(), $poster);
+
+        $this->assertSame($first->id, $second->id);
+        $this->assertSame(JournalEntryStatus::Posted, $second->status);
+        $this->assertSame($first->id, $clearance->fresh()->journal_entry_id);
+        $this->assertSame(1, JournalEntry::query()
+            ->where('reference_type', \App\Modules\HR\Models\Clearance::class)
+            ->where('reference_id', $clearance->id)
+            ->count());
+    }
+
     // ──────────────────────────────────────────────────────────────────────
     // 6. Idempotency / state checks
     // ──────────────────────────────────────────────────────────────────────
@@ -683,5 +730,20 @@ class FinalPayTest extends TestCase
 
         $this->assertSame('2000.00', $breakdown['less_unreturned_property_value'],
             'Final pay must sum the persisted replacement value of each lost property item.');
+    }
+
+    public function test_unavailable_property_source_blocks_final_pay_instead_of_becoming_zero(): void
+    {
+        $employee  = $this->makeEmployee(['basic_monthly_salary' => '40000.00', 'pay_type' => 'monthly']);
+        $clearance = $this->makeClearance($employee);
+
+        // This DDL is transactional on the PostgreSQL test connection used by
+        // the suite, so RefreshDatabase restores the table for the next test.
+        Schema::drop('employee_property');
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('employee property records are unavailable');
+
+        $this->service()->compute($clearance);
     }
 }

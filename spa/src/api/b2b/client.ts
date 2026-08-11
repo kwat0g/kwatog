@@ -3,6 +3,7 @@ import axios from 'axios';
 export const createPortalClient = (storageKey?: string) => {
  const client = axios.create({
  baseURL: '/api/v1',
+ timeout: 30_000,
  headers: {
  Accept: 'application/json',
  'X-Requested-With': 'XMLHttpRequest',
@@ -39,4 +40,4 @@ export const createPortalClient = (storageKey?: string) => {
 };
 
 export const getPortalCsrf = () =>
- axios.get('/sanctum/csrf-cookie', { withCredentials: true });
+ axios.get('/sanctum/csrf-cookie', { withCredentials: true, timeout: 30_000 });

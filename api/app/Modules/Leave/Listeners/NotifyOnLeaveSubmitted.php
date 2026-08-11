@@ -44,6 +44,7 @@ class NotifyOnLeaveSubmitted implements ShouldQueue
             ]);
         } catch (\Throwable $e) {
             Log::warning('NotifyOnLeaveSubmitted failed', ['error' => $e->getMessage()]);
+            throw $e;
         }
     }
 }

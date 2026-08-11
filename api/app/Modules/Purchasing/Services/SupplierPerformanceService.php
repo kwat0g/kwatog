@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace App\Modules\Purchasing\Services;
 
 use App\Common\Services\SettingsService;
+use App\Common\Services\OutboxService;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Purchasing\Events\SupplierPerformanceComputed;
 use App\Modules\Purchasing\Models\SupplierPerformanceSnapshot;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Series F — Task F4 / ADV7. Supplier performance computation.
@@ -61,7 +63,7 @@ class SupplierPerformanceService
             $overall = $this->compositeScore($onTime, $quality, $ncrRate, $price, $leadTime);
             $tier    = $this->tierFromScore($overall);
 
-            return SupplierPerformanceSnapshot::updateOrCreate(
+            $snapshot = SupplierPerformanceSnapshot::updateOrCreate(
                 [
                     'vendor_id'    => $vendor->id,
                     'period_year'  => $year,
@@ -83,14 +85,9 @@ class SupplierPerformanceService
                     'computed_at'             => now(),
                 ],
             );
-        });
+            app(OutboxService::class)->record(new SupplierPerformanceComputed($snapshot));
 
-        // T3.3.C — Dispatch afterCommit so listeners (e.g. deterioration alert)
-        // observe the persisted row. In nested-transaction tests the outer
-        // RefreshDatabase rollback still allows the event to fire because the
-        // inner transaction has already committed by this point.
-        DB::afterCommit(function () use ($snapshot) {
-            event(new SupplierPerformanceComputed($snapshot));
+            return $snapshot;
         });
 
         return $snapshot;
@@ -138,17 +135,42 @@ class SupplierPerformanceService
             ->get();
     }
 
-    /** Recompute snapshots for every vendor for the given month. */
-    public function recomputeAll(int $year, int $month): int
+    /**
+     * Recompute snapshots for every vendor for the given month.
+     *
+     * Vendors are isolated so one malformed source record cannot prevent the
+     * remaining vendors from being processed. The returned failure list keeps
+     * the command non-green when the month is only partially complete.
+     *
+     * @return array{computed:int,failed:array<int,array{vendor_id:int,error:string}>}
+     */
+    public function recomputeAll(int $year, int $month): array
     {
         $count = 0;
-        Vendor::query()->orderBy('id')->chunk(100, function ($vendors) use (&$count, $year, $month) {
+        $failed = [];
+        Vendor::query()->orderBy('id')->chunk(100, function ($vendors) use (&$count, &$failed, $year, $month) {
             foreach ($vendors as $vendor) {
-                $this->compute($vendor, $year, $month);
-                $count++;
+                try {
+                    $this->compute($vendor, $year, $month);
+                    $count++;
+                } catch (\Throwable $e) {
+                    // The failure collection is captured by reference below;
+                    // continue so unrelated vendors still receive a snapshot.
+                    $failed[] = [
+                        'vendor_id' => (int) $vendor->id,
+                        'error' => $e->getMessage(),
+                    ];
+                    Log::error('Supplier performance recompute failed for vendor.', [
+                        'vendor_id' => $vendor->id,
+                        'year' => $year,
+                        'month' => $month,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
             }
         });
-        return $count;
+
+        return ['computed' => $count, 'failed' => $failed];
     }
 
     /**

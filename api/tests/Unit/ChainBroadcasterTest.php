@@ -6,6 +6,7 @@ namespace Tests\Unit;
 
 use App\Common\Events\ChainStepAdvanced;
 use App\Common\Services\ChainBroadcaster;
+use App\Common\Services\OutboxService;
 use App\Modules\CRM\Models\SalesOrder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Event;
@@ -39,7 +40,7 @@ class ChainBroadcasterTest extends TestCase
         });
     }
 
-    public function test_returns_false_for_unsupported_model(): void
+    public function test_rejects_unsupported_model_instead_of_silently_losing_chain_evidence(): void
     {
         Event::fake([ChainStepAdvanced::class]);
 
@@ -49,9 +50,38 @@ class ChainBroadcasterTest extends TestCase
         };
 
         $b = app(ChainBroadcaster::class);
-        $ok = $b->broadcastFor($other, 'whatever');
 
-        $this->assertFalse($ok);
+        $this->expectException(\InvalidArgumentException::class);
+        $b->broadcastFor($other, 'whatever');
         Event::assertNotDispatched(ChainStepAdvanced::class);
+    }
+
+    public function test_rejects_an_unmapped_status_instead_of_publishing_false_progress(): void
+    {
+        Event::fake([ChainStepAdvanced::class]);
+
+        $so = new SalesOrder();
+        $so->id = 42;
+        $so->so_number = 'SO-202604-0042';
+
+        $this->expectException(\InvalidArgumentException::class);
+        app(ChainBroadcaster::class)->broadcastFor($so, 'future_status');
+        Event::assertNotDispatched(ChainStepAdvanced::class);
+    }
+
+    public function test_durable_staging_failure_is_rethrown_for_transaction_rollback(): void
+    {
+        $outbox = \Mockery::mock(OutboxService::class);
+        $outbox->shouldReceive('recordForChain')
+            ->once()
+            ->andThrow(new \RuntimeException('outbox unavailable'));
+        $this->app->instance(OutboxService::class, $outbox);
+
+        $so = new SalesOrder();
+        $so->id = 42;
+        $so->so_number = 'SO-202604-0042';
+
+        $this->expectException(\RuntimeException::class);
+        app(ChainBroadcaster::class)->broadcastFor($so, 'confirmed');
     }
 }

@@ -46,12 +46,17 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
+    /* Reduce motion — don't erase it. Looping/entrance animations are
+       collapsed and smooth scroll becomes instant. But transitions are
+       LEFT INTACT: color, opacity, progress-bar width and chip changes
+       communicate state, not decoration, and a reduced-motion user needs
+       that feedback too. Killing transition-duration globally (the old
+       rule) flattened all of it. */
     *,
     *::before,
     *::after {
       animation-duration: 0.01ms !important;
       animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
       scroll-behavior: auto !important;
     }
   }

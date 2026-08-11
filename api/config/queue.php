@@ -8,7 +8,11 @@ return [
             'driver' => 'redis',
             'connection' => env('REDIS_QUEUE_CONNECTION', 'default'),
             'queue' => env('REDIS_QUEUE', 'default'),
-            'retry_after' => 90,
+            // The longest current durable listener timeout is 1800 seconds
+            // (payroll computation).
+            // Keep the Redis lease longer than that timeout so a slow listener
+            // is not redelivered while its original worker is still running.
+            'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', 2400),
             'block_for' => null,
             'after_commit' => false,
         ],

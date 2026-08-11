@@ -10,6 +10,8 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Auth\Notifications\PasswordResetNotification;
 use App\Modules\Auth\Notifications\WelcomeNotification;
+use App\Modules\HR\Exceptions\AccountAlreadyProvisionedException;
+use App\Modules\HR\Exceptions\EmployeeNoLongerExistsException;
 use App\Modules\HR\Models\Employee;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -25,25 +27,32 @@ class UserProvisioningService
     /**
      * @param  array{email?: string, role_id?: int, send_welcome?: bool}  $options
      *
-     * @throws \DomainException when the employee already has an account
+     * @throws AccountAlreadyProvisionedException when the employee already has an account
+     * @throws EmployeeNoLongerExistsException when the employee was removed before the operation ran
      */
     public function provisionForEmployee(Employee $employee, array $options = []): User
     {
-        if ($employee->user()->exists()) {
-            throw new \DomainException('Employee already has a system account.');
-        }
-
         return DB::transaction(function () use ($employee, $options) {
-            $email = $options['email'] ?? $this->generateEmail($employee);
+            $lockedEmployee = Employee::query()
+                ->lockForUpdate()
+                ->find($employee->id);
+            if (! $lockedEmployee) {
+                throw new EmployeeNoLongerExistsException('Employee no longer exists.');
+            }
+            if ($lockedEmployee->user()->exists()) {
+                throw new AccountAlreadyProvisionedException('Employee already has a system account.');
+            }
+
+            $email = $options['email'] ?? $this->generateEmail($lockedEmployee);
             $tempPassword = $this->generateTempPassword();
 
             /** @var User $user */
             $user = User::create([
-                'name'                  => $employee->full_name,
+                'name'                  => $lockedEmployee->full_name,
                 'email'                 => $email,
                 'password'              => Hash::make($tempPassword),
                 'role_id'               => $options['role_id'] ?? $this->defaultRoleIdForEmployee(),
-                'employee_id'           => $employee->id,
+                'employee_id'           => $lockedEmployee->id,
                 'is_active'             => true,
                 'must_change_password'  => true,
                 'password_changed_at'   => null,
@@ -66,13 +75,22 @@ class UserProvisioningService
 
     public function deactivateForEmployee(Employee $employee): void
     {
-        /** @var User|null $user */
-        $user = $employee->user;
-        if (! $user) {
-            return;
-        }
+        DB::transaction(function () use ($employee): void {
+            $lockedEmployee = Employee::query()
+                ->lockForUpdate()
+                ->find($employee->id);
+            if (! $lockedEmployee) {
+                return;
+            }
 
-        DB::transaction(function () use ($user) {
+            /** @var User|null $user */
+            $user = $lockedEmployee->user()
+                ->lockForUpdate()
+                ->first();
+            if (! $user) {
+                return;
+            }
+
             $user->update(['is_active' => false]);
             // Revoke any sanctum tokens (no-op if none).
             if (method_exists($user, 'tokens')) {

@@ -6,7 +6,9 @@
  *
  * Motion path: when motion is allowed, CSS animation is replaced by a GSAP
  * x-tween (xPercent -50 over 36 s, repeat -1) so scroll velocity from Lenis
- * can nudge timeScale each frame for a tactile elastic feel.
+ * can nudge timeScale each frame for a tactile elastic feel. That per-frame
+ * loop is gated on visibility the same way the WebGL canvases are — off screen
+ * or on a hidden tab, both the rAF and the tween stop.
  */
 
 import { useLayoutEffect, useRef } from 'react';
@@ -18,7 +20,11 @@ import { reduceMotion } from '../motion';
 const EMPTY_PARTNERS: string[] = [];
 
 export function MarqueeSection() {
-  const { data: content } = useQuery({ queryKey: ['landing', 'content'], queryFn: landingApi.content, staleTime: 300_000 });
+  const { data: content } = useQuery({
+    queryKey: ['landing', 'content'],
+    queryFn: landingApi.content,
+    staleTime: 300_000,
+  });
   const partners = content?.oem_partners ?? EMPTY_PARTNERS;
   const trustPoints = content?.trust_points ?? [];
   const trustHeading = content?.section_copy?.trust_heading ?? '—';
@@ -51,10 +57,21 @@ export function MarqueeSection() {
     // Single rAF drives both hover-pause and scroll-velocity reactivity by
     // lerping the tween's timeScale toward one target each frame — so the two
     // never fight (a separate gsap.to on timeScale would be overwritten here).
+    //
+    // Gated exactly like the two WebGL canvases (HeroCanvas / PartShowcase3D):
+    // the loop only runs while the band is on screen AND the tab is visible.
+    // Ungated it ticked forever once scrolled past — a permanent wake-up on the
+    // phones this page is actually read on. The tween is paused alongside it so
+    // the row does not silently travel while nobody can see it.
     let rafId = 0;
     let hovered = false;
+    let inView = false;
 
     function tick() {
+      if (document.hidden || !inView) {
+        rafId = 0;
+        return;
+      }
       const velocity =
         (window as unknown as { lenis?: { velocity?: number } }).lenis?.velocity ?? 0;
       const speed = Math.min(Math.abs(velocity) * 0.04, 1.6);
@@ -63,7 +80,37 @@ export function MarqueeSection() {
       tween.timeScale(current + (target - current) * 0.08);
       rafId = requestAnimationFrame(tick);
     }
-    rafId = requestAnimationFrame(tick);
+
+    function start() {
+      if (rafId || document.hidden || !inView) return;
+      tween.play();
+      rafId = requestAnimationFrame(tick);
+    }
+    function stop() {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = 0;
+      tween.pause();
+    }
+
+    // Start paused — the observer starts the loop the moment the band enters
+    // view, so a below-the-fold mount costs nothing.
+    tween.pause();
+
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        inView = entry.isIntersecting;
+        if (inView) start();
+        else stop();
+      },
+      { threshold: 0 },
+    );
+    io.observe(ul);
+
+    function onVisibility() {
+      if (document.hidden) stop();
+      else start();
+    }
+    document.addEventListener('visibilitychange', onVisibility);
 
     // Hover: ease to a stop (and resume) via the shared target above.
     const container = ul.parentElement;
@@ -78,7 +125,9 @@ export function MarqueeSection() {
     container?.addEventListener('pointerleave', onLeave, { passive: true });
 
     return () => {
-      cancelAnimationFrame(rafId);
+      stop();
+      io.disconnect();
+      document.removeEventListener('visibilitychange', onVisibility);
       container?.removeEventListener('pointerenter', onEnter);
       container?.removeEventListener('pointerleave', onLeave);
       tween.kill();
@@ -98,9 +147,7 @@ export function MarqueeSection() {
         {trustHeading}
       </p>
 
-      <div
-        className="group relative flex overflow-hidden [--edge:6%] sm:[--edge:12%] [mask-image:linear-gradient(90deg,transparent,#000_var(--edge),#000_calc(100%-var(--edge)),transparent)] [-webkit-mask-image:linear-gradient(90deg,transparent,#000_var(--edge),#000_calc(100%-var(--edge)),transparent)]"
-      >
+      <div className="group relative flex overflow-hidden [--edge:6%] sm:[--edge:12%] [mask-image:linear-gradient(90deg,transparent,#000_var(--edge),#000_calc(100%-var(--edge)),transparent)] [-webkit-mask-image:linear-gradient(90deg,transparent,#000_var(--edge),#000_calc(100%-var(--edge)),transparent)]">
         <ul
           ref={ulRef}
           className="flex shrink-0 items-center gap-16 pr-16 will-change-transform sm:gap-24 sm:pr-24"
@@ -126,10 +173,12 @@ export function MarqueeSection() {
         {statValue('customers') || '—'} active customers
         <span className="mx-2.5 text-accent/50">·</span>
         {statValue('products') || '—'} active products
-        {trustPoints.length > 0 && <>
-          <span className="mx-2.5 text-accent/50">·</span>
-          {trustPoints[0]}
-        </>}
+        {trustPoints.length > 0 && (
+          <>
+            <span className="mx-2.5 text-accent/50">·</span>
+            {trustPoints[0]}
+          </>
+        )}
       </p>
     </section>
   );

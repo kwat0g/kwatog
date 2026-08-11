@@ -7,8 +7,6 @@ namespace App\Modules\Payroll\Controllers;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
-use App\Modules\Payroll\Jobs\PostPayrollToGlJob;
-use App\Modules\Payroll\Jobs\ProcessPayrollJob;
 use App\Modules\HR\Enums\EmploymentType;
 use App\Modules\HR\Enums\PayType;
 use App\Modules\HR\Models\Department;
@@ -145,15 +143,10 @@ class PayrollPeriodController
     public function compute(PayrollPeriod $period, Request $request): JsonResponse
     {
         try {
-            $claimed = $this->service->claimForCompute($period, $request->user());
+            $claimed = $this->service->claimForComputeAndStage($period, $request->user());
         } catch (RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
-
-        // claimForCompute() commits its own UPDATE (no wrapping transaction), so
-        // the Processing status is already durable and the worker cannot observe
-        // a pre-claim row.
-        ProcessPayrollJob::dispatch($claimed, $request->user()?->id);
 
         return (new PayrollPeriodResource($claimed))
             ->response()
@@ -186,16 +179,24 @@ class PayrollPeriodController
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
-        // Dispatch GL posting job (Task 29). Wrapped in a class_exists check
-        // so this controller still loads if PostPayrollToGlJob hasn't been
-        // created yet.
-        if (class_exists(PostPayrollToGlJob::class)) {
-            PostPayrollToGlJob::dispatch($period);
-        }
-
         return response()->json([
             'data' => (new PayrollPeriodResource($period))->resolve(),
         ]);
+    }
+
+    /** Retry only the durable payroll-period → Accounting GL handoff. */
+    public function retryGl(PayrollPeriod $period): JsonResponse
+    {
+        try {
+            $updated = $this->service->retryGlPosting($period);
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'data' => (new PayrollPeriodResource($updated))->resolve(),
+            'message' => 'GL handoff retry queued.',
+        ], 202);
     }
 
     /**

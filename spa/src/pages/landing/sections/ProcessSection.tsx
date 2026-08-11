@@ -127,7 +127,7 @@ export function ProcessSection() {
                 ref={readoutRef}
                 className="w-[7.5ch] shrink-0 font-mono text-[10px] tabular-nums tracking-[0.18em] text-accent"
               >
-                STEP 01 / 06
+                STEP {processSteps.length > 0 ? '01' : '—'} / {processSteps.length > 0 ? String(processSteps.length).padStart(2, '0') : '—'}
               </span>
               <span className="motion-safe:animate-pulse flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-muted">
                 Scroll to explore

@@ -6,6 +6,7 @@ namespace App\Modules\HR\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\SettingsService;
+use App\Modules\Accounting\Enums\JournalEntryStatus;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Services\JournalEntryService;
@@ -17,8 +18,10 @@ use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use Carbon\CarbonInterface;
+use Closure;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
+use Throwable;
 
 /**
  * Sprint 8 — Task 71. Final pay calculator + JE poster.
@@ -42,13 +45,28 @@ class FinalPayService
     public function compute(Clearance $clearance): Clearance
     {
         return DB::transaction(function () use ($clearance) {
-            $clearance->load('employee');
-            $employee = $clearance->employee;
+            // Final pay is later consumed by finalize(), which locks this
+            // aggregate before posting money. Re-read and lock here too so a
+            // compute request racing with finalization cannot overwrite the
+            // authoritative breakdown after the clearance becomes terminal.
+            $lockedClearance = Clearance::query()
+                ->lockForUpdate()
+                ->find($clearance->id);
+
+            if (! $lockedClearance) {
+                throw new BusinessRuleException('Clearance not found.');
+            }
+            if ($lockedClearance->status?->isTerminal()) {
+                throw new BusinessRuleException('Final pay cannot be recomputed for a closed clearance.');
+            }
+
+            $lockedClearance->load('employee');
+            $employee = $lockedClearance->employee;
             if (! $employee) throw new BusinessRuleException('Clearance has no employee.');
 
-            $lastSalary = $this->lastSalaryProRated($employee, $clearance->separation_date);
+            $lastSalary = $this->lastSalaryProRated($employee, $lockedClearance->separation_date);
             $leaveValue = $this->unusedConvertibleLeaveValue($employee);
-            $thirteenth = $this->proRatedThirteenthMonth($employee, $clearance->separation_date);
+            $thirteenth = $this->proRatedThirteenthMonth($employee, $lockedClearance->separation_date);
             $loanBal    = $this->loanBalances($employee);
             $propertyL  = $this->unreturnedPropertyValue($employee);
             $advance    = $this->openCashAdvance($employee);
@@ -69,13 +87,13 @@ class FinalPayService
                 'net'                             => number_format($net, 2, '.', ''),
             ];
 
-            $clearance->forceFill([
+            $lockedClearance->forceFill([
                 'final_pay_breakdown' => $breakdown,
                 'final_pay_amount'    => number_format($net, 2, '.', ''),
                 'final_pay_computed'  => true,
             ])->save();
 
-            return $clearance->fresh();
+            return $lockedClearance->fresh();
         });
     }
 
@@ -96,47 +114,101 @@ class FinalPayService
      */
     public function postJournalEntry(Clearance $clearance, User $by): JournalEntry
     {
-        if (! $clearance->final_pay_computed || ! $clearance->final_pay_amount) {
-            throw new RuntimeException('Compute final pay before posting JE.');
-        }
-        $b = $clearance->final_pay_breakdown ?? [];
-        $plus = (float) ($b['gross_plus'] ?? 0);
-        $less = (float) ($b['gross_less'] ?? 0);
-        $net  = (float) ($b['net']        ?? 0);
+        return DB::transaction(function () use ($clearance, $by): JournalEntry {
+            // The clearance is the source-of-truth lock for this accounting
+            // side effect. This makes direct/replayed service calls converge
+            // on one journal entry even when the caller is outside
+            // SeparationService::finalize().
+            $lockedClearance = Clearance::query()
+                ->lockForUpdate()
+                ->find($clearance->id);
 
-        $loan      = (float) ($b['less_loan_balance'] ?? 0);
-        $advance   = (float) ($b['less_advance']      ?? 0);
-        $property  = (float) ($b['less_unreturned_property_value'] ?? 0);
+            if (! $lockedClearance) {
+                throw new BusinessRuleException('Clearance not found.');
+            }
+            if (! $lockedClearance->final_pay_computed || ! $lockedClearance->final_pay_amount) {
+                throw new RuntimeException('Compute final pay before posting JE.');
+            }
 
-        $salariesExp = Account::where('code', $this->settings->requiredString('accounting.accounts.final_pay_salary_expense_code'))->firstOrFail();
-        $cashInBank  = Account::where('code', $this->settings->requiredString('accounting.accounts.cash_code'))->firstOrFail();
-        $loansPayable= Account::where('code', $this->settings->requiredString('accounting.accounts.loans_payable_code'))->firstOrFail();
-        $accrued     = Account::where('code', $this->settings->requiredString('accounting.accounts.accrued_expense_code'))->firstOrFail();
+            $existing = null;
+            if ($lockedClearance->journal_entry_id) {
+                $existing = JournalEntry::query()
+                    ->lockForUpdate()
+                    ->find($lockedClearance->journal_entry_id);
 
-        $lines = [
-            ['account_id' => $salariesExp->id, 'debit' => number_format($plus, 2, '.', ''), 'credit' => '0.00', 'description' => 'Final pay components'],
-        ];
-        if ($loan > 0) {
-            $lines[] = ['account_id' => $loansPayable->id, 'debit' => '0.00', 'credit' => number_format($loan, 2, '.', ''), 'description' => 'Settle outstanding loan from final pay'];
-        }
-        if (($advance + $property) > 0) {
-            $lines[] = ['account_id' => $accrued->id, 'debit' => '0.00', 'credit' => number_format($advance + $property, 2, '.', ''), 'description' => 'Settle advance / unreturned property'];
-        }
-        // Only add the cash disbursement line when net > 0. When deductions exactly cancel
-        // earnings (net = 0.00) the JournalEntryService rejects a line with both debit and
-        // credit equal to zero ("exactly one of debit or credit greater than zero").
-        if ($net > 0) {
-            $lines[] = ['account_id' => $cashInBank->id, 'debit' => '0.00', 'credit' => number_format($net, 2, '.', ''), 'description' => 'Final pay disbursement'];
-        }
+                if ($existing && ($existing->reference_type !== Clearance::class
+                    || (int) $existing->reference_id !== (int) $lockedClearance->id)) {
+                    throw new BusinessRuleException('Clearance is linked to an unrelated journal entry.');
+                }
+            }
 
-        $je = $this->journals->create([
-            'date'           => $clearance->separation_date->toDateString(),
-            'description'    => 'Final pay — '.$clearance->clearance_no,
-            'reference_type' => Clearance::class,
-            'reference_id'   => $clearance->id,
-            'lines'          => $lines,
-        ], $by);
-        return $this->journals->post($je, $by);
+            // Recover a draft/posted entry created before the clearance link
+            // was persisted, such as after a worker/request interruption.
+            $existing ??= JournalEntry::query()
+                ->where('reference_type', Clearance::class)
+                ->where('reference_id', $lockedClearance->id)
+                ->whereIn('status', [JournalEntryStatus::Draft, JournalEntryStatus::Posted])
+                ->lockForUpdate()
+                ->latest('id')
+                ->first();
+
+            if ($existing) {
+                if ($existing->status === JournalEntryStatus::Reversed) {
+                    throw new BusinessRuleException(
+                        'The final-pay journal entry has been reversed; resolve it manually before retrying final pay.'
+                    );
+                }
+
+                $posted = $existing->status === JournalEntryStatus::Draft
+                    ? $this->journals->post($existing, $by)
+                    : $existing->fresh(['lines.account']);
+
+                $lockedClearance->forceFill(['journal_entry_id' => $posted->id])->save();
+
+                return $posted;
+            }
+
+            $b = $lockedClearance->final_pay_breakdown ?? [];
+            $plus = (float) ($b['gross_plus'] ?? 0);
+            $net  = (float) ($b['net']        ?? 0);
+
+            $loan      = (float) ($b['less_loan_balance'] ?? 0);
+            $advance   = (float) ($b['less_advance']      ?? 0);
+            $property  = (float) ($b['less_unreturned_property_value'] ?? 0);
+
+            $salariesExp = Account::where('code', $this->settings->requiredString('accounting.accounts.final_pay_salary_expense_code'))->firstOrFail();
+            $cashInBank  = Account::where('code', $this->settings->requiredString('accounting.accounts.cash_code'))->firstOrFail();
+            $loansPayable= Account::where('code', $this->settings->requiredString('accounting.accounts.loans_payable_code'))->firstOrFail();
+            $accrued     = Account::where('code', $this->settings->requiredString('accounting.accounts.accrued_expense_code'))->firstOrFail();
+
+            $lines = [
+                ['account_id' => $salariesExp->id, 'debit' => number_format($plus, 2, '.', ''), 'credit' => '0.00', 'description' => 'Final pay components'],
+            ];
+            if ($loan > 0) {
+                $lines[] = ['account_id' => $loansPayable->id, 'debit' => '0.00', 'credit' => number_format($loan, 2, '.', ''), 'description' => 'Settle outstanding loan from final pay'];
+            }
+            if (($advance + $property) > 0) {
+                $lines[] = ['account_id' => $accrued->id, 'debit' => '0.00', 'credit' => number_format($advance + $property, 2, '.', ''), 'description' => 'Settle advance / unreturned property'];
+            }
+            // Only add the cash disbursement line when net > 0. When deductions
+            // exactly cancel earnings (net = 0.00), the journal validator
+            // rejects a line with both debit and credit equal to zero.
+            if ($net > 0) {
+                $lines[] = ['account_id' => $cashInBank->id, 'debit' => '0.00', 'credit' => number_format($net, 2, '.', ''), 'description' => 'Final pay disbursement'];
+            }
+
+            $je = $this->journals->create([
+                'date'           => $lockedClearance->separation_date->toDateString(),
+                'description'    => 'Final pay — '.$lockedClearance->clearance_no,
+                'reference_type' => Clearance::class,
+                'reference_id'   => $lockedClearance->id,
+                'lines'          => $lines,
+            ], $by);
+            $posted = $this->journals->post($je, $by);
+            $lockedClearance->forceFill(['journal_entry_id' => $posted->id])->save();
+
+            return $posted;
+        });
     }
 
     /* ─── Component helpers ─── */
@@ -266,39 +338,45 @@ class FinalPayService
 
     private function loanBalances(Employee $e): float
     {
-        try {
-            return (float) DB::table('employee_loans')
+        return $this->readFinalPaySource('employee loan balances', fn (): float => (float) DB::table('employee_loans')
                 ->where('employee_id', $e->id)
                 ->whereIn('status', ['active', 'pending'])
                 ->where('loan_type', 'company_loan')
-                ->sum('balance');
-        } catch (\Throwable $ex) {
-            return 0.0;
-        }
+                ->sum('balance'));
     }
 
     private function openCashAdvance(Employee $e): float
     {
-        try {
-            return (float) DB::table('employee_loans')
+        return $this->readFinalPaySource('employee cash-advance balances', fn (): float => (float) DB::table('employee_loans')
                 ->where('employee_id', $e->id)
                 ->whereIn('status', ['active', 'pending'])
                 ->where('loan_type', 'cash_advance')
-                ->sum('balance');
-        } catch (\Throwable $ex) {
-            return 0.0;
-        }
+                ->sum('balance'));
     }
 
     private function unreturnedPropertyValue(Employee $e): float
     {
-        try {
-            return (float) DB::table('employee_property')
+        return $this->readFinalPaySource('employee property records', fn (): float => (float) DB::table('employee_property')
                 ->where('employee_id', $e->id)
                 ->where('status', 'lost')
-                ->sum(DB::raw('quantity * replacement_unit_cost'));
-        } catch (\Throwable $ex) {
-            return 0.0;
+                ->sum(DB::raw('quantity * replacement_unit_cost')));
+    }
+
+    /**
+     * A missing or unavailable cross-module source must block final-pay
+     * computation. Treating a failed loan/property read as zero would create a
+     * valid-looking but financially incomplete clearance.
+     */
+    private function readFinalPaySource(string $source, Closure $query): float
+    {
+        try {
+            return $query();
+        } catch (Throwable $exception) {
+            report($exception);
+
+            throw new BusinessRuleException(
+                "Final pay cannot be computed because {$source} are unavailable. Resolve the source data and retry."
+            );
         }
     }
 }

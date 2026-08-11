@@ -6,18 +6,20 @@ namespace App\Modules\Inventory\Models;
 
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
+use Database\Factories\ItemCategoryFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class ItemCategory extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog, SoftDeletes;
+    use HasAuditLog, HasFactory, HasHashId, SoftDeletes;
 
-    protected static function newFactory(): \Database\Factories\ItemCategoryFactory
+    protected static function newFactory(): ItemCategoryFactory
     {
-        return \Database\Factories\ItemCategoryFactory::new();
+        return ItemCategoryFactory::new();
     }
 
     protected $fillable = ['name', 'parent_id'];
@@ -50,6 +52,7 @@ class ItemCategory extends Model
             $current = $current->parent;
             array_unshift($parts, $current->name);
         }
+
         return implode(' > ', $parts);
     }
 }

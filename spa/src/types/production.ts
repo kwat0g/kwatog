@@ -27,6 +27,17 @@ export interface WorkOrderDefectRow {
  defect_type: { id: string; code: string; name: string } | null;
 }
 
+export type ProductionReceiptHandoffStatus =
+ | 'not_started' | 'generated' | 'manual_required' | 'not_required';
+
+export interface ProductionReceiptHandoff {
+ status: ProductionReceiptHandoffStatus;
+ status_label: string | null;
+ message: string | null;
+ at: string | null;
+ movement_id?: string | null;
+}
+
 export interface WorkOrderOutput {
  id: string;
  recorded_at: string;
@@ -36,6 +47,7 @@ export interface WorkOrderOutput {
  shift: string | null;
  batch_code: string | null;
  remarks: string | null;
+ production_receipt_handoff?: ProductionReceiptHandoff;
  recorder?: { id: string; name: string } | null;
  defects?: WorkOrderDefectRow[];
 }

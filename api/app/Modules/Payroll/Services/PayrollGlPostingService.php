@@ -9,6 +9,7 @@ use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\SettingsService;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Services\AccountingPeriodService;
+use App\Modules\Payroll\Enums\PayrollGlHandoffStatus;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use Illuminate\Support\Facades\DB;
@@ -18,15 +19,14 @@ use Illuminate\Support\Facades\Schema;
 /**
  * Posts a finalized payroll period to the General Ledger as a balanced JE.
  *
- * Idempotency: bails if the period already has a journal_entry_id.
- *
- * Feature flag: gated behind `modules.accounting`. If accounting is disabled
- * (Sprint 4 not yet shipped, or the company hasn't activated it), we skip
- * gracefully and log an audit-friendly message. The period stays finalized;
- * a backfill command can post later when accounting is turned on.
+ * Idempotency: the authoritative payroll-period row is locked before checking
+ * or creating the journal entry. This protects direct calls and replays, not
+ * only the legacy unique queue job.
  */
 class PayrollGlPostingService
 {
+    private const MANUAL_MESSAGE = 'Payroll was finalized but could not be posted to the General Ledger. Fix the Accounting configuration or posting period, then replay the handoff.';
+
     public function __construct(
         private readonly DocumentSequenceService $sequences,
         private readonly SettingsService $settings,
@@ -35,29 +35,95 @@ class PayrollGlPostingService
 
     /**
      * Posts the period's totals to the GL. Returns the journal_entry id (or null
-     * when skipped/disabled).
+     * when the handoff is explicitly not required).
      */
     public function post(PayrollPeriod $period): ?int
     {
-        if ($period->status !== PayrollPeriodStatus::Finalized) {
-            throw new BusinessRuleException('Only finalized periods can be posted to the GL.');
+        return DB::transaction(function () use ($period): ?int {
+            $locked = PayrollPeriod::query()
+                ->lockForUpdate()
+                ->find($period->id);
+            if (! $locked) {
+                throw new BusinessRuleException('The payroll period no longer exists.');
+            }
+
+            return $this->postLocked($locked);
+        });
+    }
+
+    /** Retry only the payroll-period → GL handoff; payroll rows never change. */
+    public function retry(PayrollPeriod $period): PayrollPeriod
+    {
+        try {
+            return DB::transaction(function () use ($period): PayrollPeriod {
+                $locked = PayrollPeriod::query()
+                    ->lockForUpdate()
+                    ->find($period->id);
+                if (! $locked) {
+                    throw new BusinessRuleException('The payroll period no longer exists.');
+                }
+
+                $this->postLocked($locked);
+
+                return $locked->fresh();
+            });
+        } catch (BusinessRuleException $e) {
+            $this->markManual($period->id, $e->getMessage());
+            throw $e;
+        }
+    }
+
+    /** Persist the safe operator-facing state for a failed GL handoff. */
+    public function markManual(int $periodId, ?string $message = null): void
+    {
+        DB::transaction(function () use ($periodId, $message): void {
+            $period = PayrollPeriod::query()
+                ->lockForUpdate()
+                ->find($periodId);
+            if (! $period
+                || $period->journal_entry_id !== null
+                || $period->status === PayrollPeriodStatus::Voided
+                || $period->status === PayrollPeriodStatus::Draft
+                || $period->status === PayrollPeriodStatus::Processing
+                || $period->status === PayrollPeriodStatus::Computed
+                || $period->status === PayrollPeriodStatus::Approved) {
+                return;
+            }
+
+            $period->markGlManualRequired($message ?? self::MANUAL_MESSAGE);
+        });
+    }
+
+    private function postLocked(PayrollPeriod $period): ?int
+    {
+        if (! in_array($period->status, [PayrollPeriodStatus::Finalized, PayrollPeriodStatus::Disbursed], true)) {
+            throw new BusinessRuleException('Only finalized or disbursed periods can be posted to the GL.');
         }
         if ($period->journal_entry_id) {
-            // Already posted — idempotent.
+            // Already posted — idempotent. Repair the handoff state if an older
+            // row was linked before the explicit state column existed.
+            if ($period->gl_handoff_status !== PayrollGlHandoffStatus::Posted) {
+                $period->markGlPosted();
+            }
             return (int) $period->journal_entry_id;
         }
 
-        // Feature flag check.
-        $accountingEnabled = $this->settings->requiredBool('modules.accounting');
-        if (! $accountingEnabled) {
-            Log::info('PayrollGlPostingService: accounting module disabled; skipping GL post', [
+        // Accounting being disabled is an intentional cross-module boundary,
+        // not a failed queue attempt. Persist that distinction so a later
+        // operator retry can re-enter this handoff after Accounting is enabled.
+        if ($this->settings->get('modules.accounting', false) !== true) {
+            $period->markGlNotRequired('accounting_module_disabled');
+            Log::info('PayrollGlPostingService: accounting module disabled; GL handoff not required', [
                 'period_id' => $period->id,
             ]);
             return null;
         }
 
         if (! Schema::hasTable('journal_entries') || ! Schema::hasTable('accounts')) {
-            Log::warning('PayrollGlPostingService: journal_entries / accounts table missing; skipping');
+            $period->markGlManualRequired('Accounting tables are not available yet. Run the migration, then replay this handoff.');
+            Log::warning('PayrollGlPostingService: journal_entries / accounts table missing; manual handoff required', [
+                'period_id' => $period->id,
+            ]);
             return null;
         }
 
@@ -66,9 +132,16 @@ class PayrollGlPostingService
         // to period_end if payroll_date is somehow unset.
         $this->periods->assertPostingAllowed($period->payroll_date ?? $period->period_end);
 
-        return DB::transaction(function () use ($period) {
-            // Aggregate totals from payroll rows.
-            $totals = DB::table('payrolls')
+        // Aggregate totals from payroll rows.
+        $validPayrolls = DB::table('payrolls')
+            ->where('payroll_period_id', $period->id)
+            ->whereNull('error_message');
+        if (! $validPayrolls->exists()) {
+            $period->markGlNotRequired('no_valid_payroll_rows');
+            return null;
+        }
+
+        $totals = $validPayrolls
                 ->where('payroll_period_id', $period->id)
                 ->whereNull('error_message')
                 ->selectRaw('
@@ -115,7 +188,10 @@ class PayrollGlPostingService
             $lineNo = 1;
 
             $debit = function (string $code, string $amount, string $desc) use (&$lines, &$totalDebit, &$lineNo, $accounts) {
-                if (Money::isZero($amount) || ! isset($accounts[$code])) return;
+                if (Money::isZero($amount)) return;
+                if (! isset($accounts[$code])) {
+                    throw new BusinessRuleException("Configured payroll GL account {$code} is missing from the chart of accounts.");
+                }
                 $lines[] = [
                     'account_id' => $accounts[$code],
                     'line_no'    => $lineNo++,
@@ -126,7 +202,10 @@ class PayrollGlPostingService
                 $totalDebit = Money::add($totalDebit, $amount);
             };
             $credit = function (string $code, string $amount, string $desc) use (&$lines, &$totalCredit, &$lineNo, $accounts) {
-                if (Money::isZero($amount) || ! isset($accounts[$code])) return;
+                if (Money::isZero($amount)) return;
+                if (! isset($accounts[$code])) {
+                    throw new BusinessRuleException("Configured payroll GL account {$code} is missing from the chart of accounts.");
+                }
                 $lines[] = [
                     'account_id' => $accounts[$code],
                     'line_no'    => $lineNo++,
@@ -251,10 +330,13 @@ class PayrollGlPostingService
                 ]));
             }
 
-            $period->journal_entry_id = $entryId;
-            $period->save();
+            $period->forceFill([
+                'journal_entry_id' => $entryId,
+                'gl_handoff_status' => PayrollGlHandoffStatus::Posted,
+                'gl_handoff_note' => null,
+                'gl_handoff_at' => now(),
+            ])->save();
 
             return $entryId;
-        });
     }
 }

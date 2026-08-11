@@ -240,6 +240,12 @@ export interface PortalComplaint {
  status_label?: string;
  description: string;
  affected_quantity: number;
+ ncr_handoff?: {
+  status: string;
+  status_label?: string | null;
+  message?: string | null;
+  at?: string | null;
+ };
  received_date: string | null;
  resolved_at: string | null;
  created_at: string;

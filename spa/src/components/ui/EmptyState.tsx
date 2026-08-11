@@ -105,7 +105,12 @@ export type EmptyStateIcon = keyof typeof ICONS;
 interface EmptyStateProps {
   icon?: EmptyStateIcon;
   title: string;
-  description?: string;
+  /**
+   * ReactNode, not string — a denial or error state often needs to set one
+   * token inline (a permission slug, a document number) in monospace so the
+   * user can quote it accurately.
+   */
+  description?: ReactNode;
   action?: ReactNode;
   className?: string;
   /**

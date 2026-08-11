@@ -222,6 +222,27 @@ planned → confirmed → in_progress ⟷ paused → completed → closed
 5. Click **Complete** → status = `completed`
    - **AUTO-TRIGGER:** `WorkOrderCompleted` event fires → **Outgoing QC auto-created** (see Step 6)
 
+**Finished-goods inventory handoff:** Each positive-good output also stages a
+finished-goods receipt. The output and work-order totals are committed first;
+the receipt is then tracked as a separate, correlated handoff:
+
+- `generated` — a `ProductionReceipt` stock movement exists and points back to
+  the exact `work_order_output` row, so multiple output batches cannot be
+  merged accidentally.
+- `not_required` — the output contains rejects only.
+- `manual_required` — the output was recorded, but the finished-good item,
+  active finished-goods location, automation actor, or another expected
+  inventory rule prevented the receipt from being posted. The output is not
+  rolled back and the reason is shown on the work-order detail.
+
+The failed handoff publishes the durable `ProductionReceiptRequested` event.
+Its queued listener retries only the output → inventory step, records a
+business outcome, and is idempotent through the output-level movement
+reference. Authorized production operators can also call
+`POST .../outputs/{output}/retry-receipt` from the work-order detail after
+fixing item/location setup. The `production_output_without_receipt` bottleneck
+uses the output handoff timestamp as its SLA clock and links to the parent WO.
+
 **What happens to SO:** When WO starts, SO status auto-updates to `in_production`
 
 ---
@@ -328,10 +349,18 @@ scheduled → loading → in_transit → delivered → confirmed
 5. Confirm delivery (`POST .../confirm`):
    - **AUTO-TRIGGERS (all in `DeliveryService::confirm()`):**
      - SO status auto-updates to `delivered` (or `partially_delivered` if not all items)
-     - **Draft Invoice auto-created** for the SO
+     - **Draft Invoice auto-created** for the SO when the Accounting handoff succeeds
      - Certificate of Conformance auto-attached
      - `DeliveryConfirmed` event fires → Finance team notified
-     - If auto-invoice fails, Finance gets a notification to create it manually
+     - If auto-invoice fails, the confirmed delivery persists `invoice_handoff.status=manual_required`, Finance gets a notification, and a narrow `DeliveryInvoiceRequested` recovery event is replayable from Chain recovery
+
+The delivery confirmation is not rolled back when Accounting is unavailable.
+The handoff is idempotent: replay first reuses an existing linked or
+delivery-referenced invoice, otherwise it creates one draft and links it to
+the delivery. After four hours, a confirmed delivery without an invoice is
+surfaced as the `delivery_confirmed_without_invoice` Finance bottleneck with
+a direct delivery link. Creating an invoice manually remains valid, but the
+delivery should be linked so the bottleneck clears.
 
 **Driver self-service:** Drivers can update delivery status and upload receipts via `/driver/deliveries` (separate mobile-friendly surface).
 
@@ -486,6 +515,20 @@ draft → pending → approved → converted
                              (cancelled)
 ```
 
+When final approval is recorded, the system queues automatic PO conversion and
+persists its outcome separately from the PR status:
+
+- `pending` — the approved PR is queued for conversion.
+- `converted` — one or more draft POs were created, grouped by supplier.
+- `manual_required` — missing supplier/price/automation attribution or a
+  known conversion rule prevented automation. The PR remains `approved`, the
+  reason is shown on the PR detail/list, and the existing **Convert to PO**
+  action is the recovery path.
+
+The converter locks the PR row before checking status or creating POs. This is
+the idempotency boundary for concurrent queue retries and manual conversion;
+multiple POs remain valid when one PR contains lines for multiple suppliers.
+
 **How to test each source:**
 1. **Manual:** Create PR → Submit → Approve → Convert to PO
 2. **MRP:** Confirm an SO for a product that needs materials not in stock → run MRP → check `/purchasing/purchase-requests` for auto-PR
@@ -501,13 +544,13 @@ draft → pending → approved → converted
 
 **Two ways a PO gets created:**
 
-1. **Convert from approved PR:** `POST /api/v1/purchasing/purchase-requests/{pr}/convert` — auto-populates items from PR
+1. **Convert from approved PR:** `POST /api/v1/purchasing/purchase-requests/{pr}/convert` — auto-populates items from PR; the locked conversion boundary returns existing live POs on a replay instead of creating duplicates
 2. **Create directly:** `POST /api/v1/purchasing/purchase-orders`
 
 **API endpoints:**
 - `POST /api/v1/purchasing/purchase-orders` — create
 - `PATCH .../submit` — submit for approval
-- `PATCH .../approve` — approve (fires `PurchaseOrderApproved` event → notifies)
+- `PATCH .../approve` — approve (records `PurchaseOrderApproved` in the durable outbox)
 - `PATCH .../reject` — reject
 - `PATCH .../send` — mark as sent to vendor
 - `PATCH .../close` — close PO
@@ -524,8 +567,28 @@ draft → pending_approval → approved → sent → partially_received → rece
 1. Convert an approved PR to PO (or create directly)
 2. Submit → `pending_approval`
 3. Approve → `approved`
-4. Send to vendor → `sent` (download PDF to actually send)
-5. Now waiting for goods to arrive
+4. Approve → the queued supplier-dispatch step records one of:
+   - `portal_available` — the approved PO is visible to an active supplier portal user; this does **not** claim an email was sent
+   - `manual_required` — download the PDF, transmit it through an approved channel, then use “Mark as sent”
+   - `failed` — inspect the provider error; stale pending work is reclaimed automatically, while failed retries require the reviewed `supplier:dispatch-recover --retry-failed` command
+5. Send to vendor → `sent` only after the operator or supplier confirms the external transmission
+6. Now waiting for goods to arrive
+
+Supplier-portal acknowledgement uses the same locked `PurchaseOrderService`
+sent transition as the internal action. A stale or cancelled acknowledgement
+returns a business-state error and cannot resurrect the PO or publish a second
+`PurchaseOrderSent` handoff.
+
+Supplier shipment updates use the authoritative locked PO row as well. Carrier,
+tracking number, shipped date, ETA, and supplier notes are appended to the PO's
+shipment remarks without overwriting a concurrent acknowledgement or
+cancellation. Updates against cancelled, received, or closed POs are rejected.
+
+Cancelling or rejecting a PO closes any supplier-dispatch ledger row as
+`cancelled`. Replayed cancellation events are safe and do not reopen a
+dispatch. If the expected-GRN listener cannot resolve an active automation
+actor, it fails into the queue retry/failed-job path instead of reporting a
+completed handoff with no GRN.
 
 **Prerequisites:**
 - Vendor/Supplier must exist (`/accounting/vendors`)
@@ -576,21 +639,29 @@ ordered → shipped → in_transit → customs → cleared → received
 **API endpoints:**
 - `POST /api/v1/inventory/grn` — create GRN against a PO
 - `POST /api/v1/inventory/receive-goods` — single-screen receiving (GRN + QC + inventory in one call)
+- `PATCH .../finalize` — finalize an expected draft GRN with actual quantities and bins
 - `PATCH .../accept` — accept goods into inventory
 - `PATCH .../reject` — reject goods
 
-**Status transitions (no `draft` — GRN starts at `pending_qc`):**
+**Status transitions:**
 ```
-pending_qc → accepted | partial_accepted | rejected
+draft → pending_qc → accepted | partial_accepted | rejected
 ```
 
 **How to test:**
-1. Create GRN — select the PO, enter quantities actually received per item
-2. GRN starts at `pending_qc` — goods are quarantined, not yet in inventory
-3. PO auto-updates: `sent` → `partially_received` (if partial) or `received` (if complete)
-4. **AUTO-TRIGGER:** `GoodsReceiptNoteCreated` event fires:
+1. Create or open the expected draft GRN, then enter a positive quantity for each line actually received
+2. Finalize the GRN — the service rejects zero/negative receipts before it can enter `pending_qc`
+3. GRN enters `pending_qc` — goods are quarantined, not yet in inventory
+4. PO auto-updates: `sent` → `partially_received` (if partial) or `received` (if complete)
+5. **AUTO-TRIGGER:** `GoodsReceiptNoteCreated` event fires:
    - → `TriggerIncomingQC` listener creates an incoming inspection automatically
    - → `NotifyOnGrnReceived` listener notifies relevant users
+
+The GRN also records the cross-module handoff state in
+`incoming_qc_handoff_status` (`not_started`, `generated`, `manual_required`, or
+`not_required`). If Quality setup or inspection staging fails, the GRN remains
+`pending_qc`, the durable event can be replayed, and the GRN detail exposes
+**Retry incoming QC** to a user with `quality.inspections.manage`.
 
 **Single-screen receiving (shortcut):**
 - `POST /api/v1/inventory/receive-goods` — does GRN + QC + inventory acceptance in one API call
@@ -609,18 +680,31 @@ pending_qc → accepted | partial_accepted | rejected
 **How to test:**
 1. After creating the GRN, go to `/quality/inspections`
 2. Find the auto-created incoming inspection (stage = `incoming`, linked to the GRN)
+   - If no inspection was staged, use the warning on the GRN detail or the
+     chain bottleneck **GRN awaiting incoming QC** to retry the handoff before
+     attempting acceptance
 3. Record measurements for each parameter
 4. Complete the inspection:
    - **Passed:**
-     - GRN remains at `pending_qc` — you must now manually accept it
-     - Proceed to Step 6
+     - When every incoming inspection for the GRN has passed, the durable QC listener releases the GRN automatically
+     - A cancelled sibling inspection is treated as an explicit completed logistics decision; unresolved draft, in-progress, or failed siblings still block release
+     - Stock movement, weighted-average cost, and the accepted event happen through the locked GRN acceptance path
+     - Proceed through Step 6, then review the auto-created draft bill and three-way result in Step 7
+     - If no active automation actor is configured, the accepted event remains visible as a failed/retrying listener and no draft bill is staged; fix the actor configuration and replay the listener
    - **Failed:**
      - **AUTO-TRIGGER:** NCR auto-created (from `InspectionService::complete()`)
      - **AUTO-TRIGGER:** GRN auto-rejected (via `RejectGRNOnQcFail` listener)
      - Stock is NOT added to inventory
      - NCR disposition decides next steps: `return_to_supplier` or `use_as_is`
+     - If no active rejection actor is configured, the listener fails into the queue retry/failed-job path and the GRN stays `pending_qc` until the actor configuration is fixed and the event is replayed
 
 ---
+
+The chain listener ledger records the business outcome separately from queue
+execution: a pass can be completed when the GRN is released, skipped while
+another incoming inspection is still unresolved, or skipped when a replay
+finds the GRN already terminal. The automation dashboard exposes these safe
+no-ops and manual handoffs without treating them as false queue failures.
 
 ### Step 6: Inventory Receipt (Accept GRN)
 
@@ -629,19 +713,59 @@ pending_qc → accepted | partial_accepted | rejected
 **API endpoint:** `PATCH /api/v1/inventory/grn/{grn}/accept`
 
 **How to test:**
-1. After incoming QC passes, accept the GRN
-2. **What happens automatically:**
+1. If all incoming inspections pass, verify that the queued acceptance listener moves the GRN out of `pending_qc`
+2. If the automation actor or queue is unavailable, the GRN remains visible as `pending_qc`; resolve the failed listener and replay it rather than bypassing the QC gate
+3. **What happens automatically:**
    - Stock levels increase for each item
    - Weighted average cost recalculated: `new_avg = (old_total + new_total) / (old_qty + new_qty)`
    - Stock movements recorded
    - `StockMovementCompleted` event fires → `CheckReorderPoint` listener runs (evaluates other items)
-3. Verify stock: `GET /api/v1/inventory/stock-levels`
-4. View stock card: `GET /api/v1/inventory/items/{item}/stock-card`
+4. Verify stock: `GET /api/v1/inventory/stock-levels`
+5. View stock card: `GET /api/v1/inventory/items/{item}/stock-card`
 
 **Material Issue (for production):**
 Once materials are in inventory, they can be issued to Work Orders:
 - `POST /api/v1/inventory/material-issues` — issue materials from warehouse to production floor
 - This reduces available stock and links consumption to the WO
+
+### Step 6A: Inventory → Accounting GL handoff
+
+Every value-changing stock movement is also an accounting handoff. The
+movement-level service owns adjustments, cycle counts, material issues, scrap,
+supplier returns, and production receipts. GRN receipts remain owned by the
+GRN posting service so receiving cannot create a duplicate journal entry.
+
+**Handoff states:**
+
+```
+not_started → generated
+           → manual_required
+           → not_required
+```
+
+- `generated` stores the exact `journal_entry_id` on the movement and marks the
+  entry posted.
+- `manual_required` means the physical movement committed but Accounting setup,
+  the chart of accounts, or the posting period blocked the journal. The reason
+  and attempt timestamp are persisted; stock is not silently rolled back.
+- `not_required` is intentional for disabled Accounting, zero-value movements,
+  GRN receipts, transfers, opening balances, and delivery movements whose GL
+  ownership belongs to another process.
+
+**Recovery:** A manual handoff records the durable
+`StockMovementGlPostingRequested` event and `gl_handoff` chain step. Its queued
+listener retries only the movement → GL boundary, records a business outcome,
+and reuses the movement's journal link on duplicate delivery. Finance can also
+use the permission-gated endpoint:
+
+- `POST /api/v1/inventory/stock-movements/{movement}/retry-gl`
+  (`accounting.journal.post`)
+- SPA deep link: `/inventory/stock-levels?view=movements&movement_id={id}`
+
+The `inventory_movement_without_gl` bottleneck exposes manual value-changing
+movements after the four-hour SLA. Fix the Accounting configuration or posting
+period first, then retry or replay the listener; do not create a second manual
+journal for the same movement.
 
 ---
 
@@ -653,6 +777,7 @@ Once materials are in inventory, they can be issued to Work Orders:
 
 **API endpoints:**
 - `POST /api/v1/bills` — create bill linked to PO
+- `POST /api/v1/b2b/supplier/purchase-orders/{purchaseOrder}/submit-invoice` — supplier submits an invoice for a PO
 - `GET /api/v1/purchasing/three-way-match/{bill}` — 3-way match verification
 - `PATCH .../cancel` — cancel bill
 - `POST .../payments` — record payment
@@ -660,16 +785,46 @@ Once materials are in inventory, they can be issued to Work Orders:
 
 **Status transitions:**
 ```
-unpaid → partial → paid
+draft → unpaid → partial → paid
                     ↓
                (cancelled)
 ```
 
+After GRN acceptance, `AutoCreateBillOnGrnAccepted` idempotently stages a
+`draft` supplier bill. The payables reviewer reruns the three-way match before
+posting; quantity/price variances require manual review and an audited
+override reason. Only a successfully posted draft enters the unpaid/partial/
+paid payment lifecycle.
+
+The supplier portal follows the same review boundary: submitting an invoice
+copies the PO lines (including item identity) into an unposted `draft` bill and
+does not create a journal entry. The optional invoice file is stored as a
+document against that bill. Retrying the same vendor bill number for the same
+PO returns the existing bill; reusing that number for another PO is rejected.
+Accounts Payable must review and post the draft before it can enter the
+unpaid/partial/paid payment lifecycle.
+
+Supplier invoice detail and PDF routes are vendor-scoped `Bill` artifacts, not
+customer AR invoices. A supplier can render only its own bill, including a
+draft, and the PDF uses the AP bill template.
+
+**Recovery visibility:** the chain bottleneck view and hourly alert scan expose
+an accepted GRN that has no non-cancelled linked bill after the configured
+four-hour SLA, with a direct link back to the GRN. They also expose a draft
+whose persisted three-way snapshot is `blocked` and has not been overridden,
+with a direct link to the bill. These are recovery signals only: they do not
+post a bill, bypass the QC gate, or infer an accounting override.
+
+The listener ledger also separates a queued bill handoff that staged a draft
+from a safe duplicate/no-op or a manual operator handoff. Queue status answers
+whether Laravel ran the listener; the business outcome answers whether Finance
+received a bill, needs to review it, or can ignore a replay.
+
 **How to test:**
-1. Create bill — link to the PO, enter vendor invoice details
+1. Review the auto-created draft, or create one manually when no automated draft exists
 2. Run 3-way match: compares PO (what we ordered) vs GRN (what we received) vs Bill (what vendor charges)
    - Highlights discrepancies in quantities or prices
-3. Bill starts as `unpaid`
+3. Post only when the match is acceptable; otherwise record the review/override decision
 
 ---
 
@@ -902,6 +1057,7 @@ pending → active → paid
 - `POST .../compute` — compute payroll
 - `PATCH .../approve` — approve
 - `PATCH .../finalize` — finalize (locks)
+- `POST .../{period}/retry-gl` — retry only the payroll-period → Accounting GL handoff
 - `GET .../variance` — compare to previous period
 - `GET .../anomalies` — review flagged anomalies
 - `PATCH .../mark-disbursed` — mark as paid out
@@ -909,7 +1065,7 @@ pending → active → paid
 
 **Status transitions:**
 ```
-draft → processing → approved → finalized → disbursed
+draft → processing → computed → approved → finalized → disbursed
                                                 ↓
                                             (voided)
 ```
@@ -924,13 +1080,37 @@ draft → processing → approved → finalized → disbursed
    - **Deducts:** withholding tax (BIR tables)
    - **Deducts:** active loan payments
    - **Flags anomalies:** payroll spikes, missing DTR, unusual amounts
+   - **Stages durably:** the `Processing` claim and `PayrollComputationRequested`
+     outbox/chain row commit together; a queued listener executes the compute
+     engine and replays safely after a worker or queue outage.
+   - **Auto-created periods:** the scheduler uses a database-backed
+     idempotency key, so concurrent scheduler invocations cannot create the
+     same cutoff twice.
 3. Review anomalies: `GET .../anomalies`
 4. Approve (`PATCH .../approve`)
 5. Finalize (`PATCH .../finalize`) — LOCKED, no more changes
    - **AUTO-TRIGGERS on `PayrollPeriodFinalized` event:**
-     - `GenerateBankFileOnPayrollFinalized` — prepares bank upload file
-     - `EmailPayslipPdfOnPayrollFinalized` — emails payslip PDFs
-     - `NotifyEmployeesOnPayrollFinalized` — notifies employees
+   - `GenerateBankFileOnPayrollFinalized` — prepares bank upload file
+   - `EmailPayslipPdfOnPayrollFinalized` — emails payslip PDFs
+   - `NotifyEmployeesOnPayrollFinalized` — notifies employees
+   - `PayrollGlPostingRequested` → `PostPayrollToGlOnRequested` — posts one balanced
+     journal entry or records an explicit manual/not-required outcome
+
+`GenerateBankFileOnPayrollFinalized` records its outcome on the payroll
+period: `pending` while queued, `generated` after a reconciled private file is
+written, or `manual_required` when the automation actor, bank data, settings,
+or reconciliation prevents generation. A finalized period is never treated as
+having a bank artifact merely because the finalize event was published. The
+period detail shows the reason and the authenticated Bank file action is the
+recovery path. Replayed finalization events do not create a second automatic
+bank file.
+
+The payroll → Accounting boundary is separate from bank-file delivery. Finalize
+sets `gl_handoff_status=pending` and records a durable `gl_handoff` outbox step;
+the listener locks the authoritative period before creating the journal entry.
+The state becomes `posted`, `manual_required`, or `not_required`, and a replay or
+`POST .../{period}/retry-gl` retries only this handoff. A duplicate listener run
+cannot create a second payroll journal entry.
 
 **Payroll corrections:** Never unlock finalized. Create adjustments for next period:
 - `POST /api/v1/payroll-adjustments` → approve → applies to next computation
@@ -947,9 +1127,12 @@ draft → processing → approved → finalized → disbursed
 **How to test:**
 1. Download payslip for any employee in the period
 2. Preview bank file → check amounts and account numbers
-3. Download bank file → upload to bank portal (outside ERP)
-4. Mark disbursed: `PATCH .../mark-disbursed`
-5. Upload disbursement proof: `POST .../disbursement-proofs`
+3. If the period shows `manual_required`, fix the displayed issue first; the
+   bank-file generation action persists the successful artifact and changes
+   the state to `generated`
+4. Download bank file → upload to bank portal (outside ERP)
+5. Mark disbursed: `PATCH .../mark-disbursed`
+6. Upload disbursement proof: `POST .../disbursement-proofs`
 
 **Statutory exports:**
 - `GET /api/v1/payroll/statutory/1601c` — BIR Monthly Remittance
@@ -1008,6 +1191,10 @@ pending → in_progress → completed → finalized
 5. Compute final pay → calculates remaining salary, unused leave cash-out, 13th month pro-rata, minus any outstanding loans
 6. Finalize → `finalized`
 7. **Chain 3 is now complete** — employee fully separated
+
+Final-pay computation fails closed when loan, cash-advance, or employee-property
+source data is unavailable; a failed source read is never treated as a zero
+deduction. Resolve the source data and retry the computation.
 
 ---
 
@@ -1137,21 +1324,24 @@ This is the complete map of events and what they automatically trigger. Understa
 | `WorkOrderStatusChanged` (→ in_progress) | `TriggerInProcessQC` | Auto-creates in-process inspection |
 | `WorkOrderCompleted` | `TriggerOutgoingQC` | Auto-creates outgoing inspection |
 | `WorkOrderCompleted` | `NotifyOnWorkOrderCompleted` | Notifies QC team |
+| `ProductionReceiptRequested` | `CreateProductionReceiptOnOutputRequested` | Retries only the failed good-output → finished-goods receipt handoff; records completed/manual-required outcome |
 | `InspectionPassed` (outgoing) | `CreateDeliveryDraftOnQcPass` | Auto-drafts delivery + notifies warehouse |
 | `DeliveryConfirmed` | `NotifyFinanceOnDeliveryConfirmed` | Notifies finance to invoice |
-| `DeliveryConfirmed` | (inside DeliveryService) | Auto-creates draft invoice, updates SO status |
+| `DeliveryConfirmed` | (inside DeliveryService) | Attempts draft invoice creation and updates SO status |
+| `DeliveryInvoiceRequested` | `CreateDraftInvoiceOnDeliveryInvoiceRequested` | Replays only the failed delivery → invoice handoff; records completed/manual-required outcome |
 
 ### Chain 2 (P2P) Events
 
 | Event | Listener | What Happens |
 |-------|----------|--------------|
-| `GoodsReceiptNoteCreated` | `TriggerIncomingQC` | Auto-creates incoming inspection |
 | `GoodsReceiptNoteCreated` | `NotifyOnGrnReceived` | Notifies QC team |
 | `InspectionFailed` (incoming) | `RejectGRNOnQcFail` | Auto-rejects GRN |
 | `InspectionFailed` | `NotifyOnInspectionFailed` | Notifies QC manager |
 | `PurchaseRequestApproved` | `NotifyOnPurchaseRequestApproved` | Notifies purchasing team |
 | `PurchaseOrderApproved` | `NotifyOnPurchaseOrderApproved` | Notifies supplier coordinator |
 | `StockMovementCompleted` | `CheckReorderPoint` | Auto-creates PR if below reorder point |
+| `StockMovementGlPostingRequested` | `PostStockMovementToGlOnRequested` | Retries only the failed value-changing stock movement → GL handoff; preserves the exact movement journal link and records completed/manual-required outcome |
+| `GoodsReceiptNoteCreated` | `TriggerIncomingQC` | Auto-creates incoming inspection, persists generated/manual-required/not-required handoff state, and remains fail-closed until QC exists |
 | `LowStockPrCreated` | `NotifyOnLowStockPrCreated` | Notifies purchasing of auto-PR |
 | `SupplierPerformanceComputed` | `AlertOnSupplierDeterioration` | Alerts on supplier quality drop |
 
@@ -1163,9 +1353,11 @@ This is the complete map of events and what they automatically trigger. Understa
 | `EmployeeCreated` | `AutoProvisionUserOnEmployeeHire` | Creates system login account |
 | `SeparationInitiated` | `NotifyOnSeparationInitiated` | Notifies HR, dept head, IT |
 | `ClearanceFullySigned` | `DeactivateAccountOnClearanceComplete` | Deactivates system account |
+| `PayrollComputationRequested` | `RunPayrollComputationOnRequested` | Executes a claimed payroll period under a durable, replay-safe queue handoff |
 | `PayrollPeriodFinalized` | `GenerateBankFileOnPayrollFinalized` | Prepares bank upload file |
 | `PayrollPeriodFinalized` | `EmailPayslipPdfOnPayrollFinalized` | Emails payslip PDFs |
 | `PayrollPeriodFinalized` | `NotifyEmployeesOnPayrollFinalized` | Notifies employees |
+| `PayrollGlPostingRequested` | `PostPayrollToGlOnRequested` | Posts or narrowly retries the finalized payroll → Accounting GL handoff; records posted/manual/not-required outcome |
 | `LeaveRequestSubmitted` | `NotifyOnLeaveSubmitted` | Notifies dept head |
 | `LeaveRequestPendingHR` | `NotifyOnLeavePendingHR` | Notifies HR |
 | `LeaveRequestApproved` | `NotifyOnLeaveApproved` | Notifies employee |
@@ -1268,6 +1460,12 @@ SO has 1000 units → Only 500 pass outgoing QC
 
 ```
 Customer files complaint → Complaint created in CRM
+Customer-portal submissions use the same CRM complaint service as internal
+staff, with the portal customer scope and order hash resolved before the
+write
+→ Quality NCR handoff is attempted:
+  NCR generated → continue automatically
+  Quality setup failure → complaint remains open with a durable manual/replay state
 → 8D methodology applied:
   D1: Team formed
   D2: Problem described
@@ -1277,12 +1475,11 @@ Customer files complaint → Complaint created in CRM
   D6: Verified
   D7: Preventive actions
   D8: Team recognized
-→ NCR created from complaint (source: customer_complaint)
 → CAPA effectiveness verified
-→ Complaint resolved/closed
+→ Complaint resolved/closed only after the linked NCR handoff succeeds
 ```
 
-**Routes:** `/crm/complaints` → 8D workflow → close
+**Routes:** `/crm/complaints` or `/api/v1/b2b/customer/complaints` → 8D workflow → close
 
 ### Scenario 8: Machine Breakdown During Production
 
@@ -1347,12 +1544,19 @@ Delivery confirmed → system tries to auto-create invoice
 Customer reports defective product
 → Return Request created (RMA)
 → Goods shipped back
-→ Customer Return inspection (stage: customer_return)
+→ Customer Return inspection handoff (stage: customer_return)
+→ If Quality staging fails: RMA stays received with a durable retry/manual state
 → Disposition: replace, credit memo, or repair
 → NCR auto-linked
 → If replacing: new WO created → production → QC → delivery
 → Credit memo issued if applicable
 ```
+
+RMA lifecycle writes reload and lock the authoritative return row before each
+state transition. A stale submit/approve/receive/inspect/reject/cancel request
+is rejected against the current state, and completion serializes the terminal
+stock, credit, and supplier-return effects so a replay cannot issue inventory
+twice.
 
 **Routes:** `/return-management/...`
 
@@ -1502,3 +1706,22 @@ Customer reports defective product
 | `department_head` | Department-scoped approvals |
 | `employee` | Self-service only |
 | `driver` | Driver delivery surface |
+
+## Process execution guarantees
+
+Cross-module value-changing triggers are recorded in the transactional event
+outbox before they are queued. The minute-level outbox dispatcher, listener
+telemetry, chain bottleneck scan, and recovery actions cover queue outages,
+worker restarts, stale processing, and dead-letter review.
+
+Scheduled rebuilds and exports are rerunnable. Scheduled exports additionally
+use an expiring row lease and expose the latest attempt/error through the admin
+API. A command that finishes only partially now exits non-zero for KPI,
+supplier, safety-stock, alert, dunning, export, and stale-run processes so the
+scheduler cannot treat an incomplete batch as successful.
+
+Production startup applies migrations before API/queue/scheduler consumers.
+The Redis retry lease must exceed the longest job timeout (payroll currently
+30 minutes; shipped default lease 40 minutes). See the [failure-path
+matrix](PROCESS-FAILURE-MATRIX-2026-08-11.md) for the scenario-by-scenario
+recovery map and the remaining external-provider limitations.

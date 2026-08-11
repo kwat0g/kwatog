@@ -9,8 +9,9 @@
 # It encodes the gotchas learned during the first deploy:
 #   • docker/nginx/prod.conf is rendered in-place with envsubst, so a raw
 #     `git pull` would conflict — we reset it before pulling, re-render after.
-#   • api / queue / reverb / scheduler are FOUR separate images that each bake
-#     the source at build time. Code changes need a rebuild, not just a restart.
+#   • api / migrate / queue / reverb / scheduler are separate image consumers
+#     that bake the source at build time. Code changes need a rebuild, not just
+#     a restart.
 #   • `config:cache` must run at RUNTIME with the live .env, never the build-time
 #     placeholder env.
 #   • `docker compose restart` does NOT re-read env_file; only up --force-recreate
@@ -100,18 +101,27 @@ fi
 # ── 2. Pre-migration DB backup ────────────────────────────────────────────────
 if [ "${DO_BACKUP}" -eq 1 ]; then
     log "Pre-migration database backup"
-    DB_CID="$(${COMPOSE} ps -q db 2>/dev/null || true)"
+    DB_CID="$(${COMPOSE} ps -q db 2>/dev/null)"
     if [ -n "${DB_CID}" ] && [ "$(docker inspect -f '{{.State.Running}}' "${DB_CID}" 2>/dev/null)" = "true" ]; then
         mkdir -p "${BACKUP_DIR}" 2>/dev/null || sudo mkdir -p "${BACKUP_DIR}"
         set -a; . "./${ENV_FILE}"; set +a
         TS="$(date +%Y%m%d-%H%M%S)"
         OUT="${BACKUP_DIR}/predeploy-${TS}-${PREV_SHA}.sql.gz"
-        ${COMPOSE} exec -T -e PGPASSWORD="${DB_PASSWORD}" db \
+        TMP="$(mktemp "${BACKUP_DIR}/.predeploy-${TS}.XXXXXX")"
+        if ! ${COMPOSE} exec -T -e PGPASSWORD="${DB_PASSWORD}" db \
             pg_dump --username="${DB_USERNAME}" --dbname="${DB_DATABASE}" \
-            --format=plain --no-owner --no-privileges | gzip > "${OUT}"
+            --format=plain --no-owner --no-privileges | gzip > "${TMP}"; then
+            rm -f "${TMP}"
+            die "Pre-migration database backup failed; deployment stopped before consumers were changed."
+        fi
+        if [ ! -s "${TMP}" ] || ! gzip -t "${TMP}"; then
+            rm -f "${TMP}"
+            die "Pre-migration database backup is empty or corrupt; deployment stopped."
+        fi
+        mv -f "${TMP}" "${OUT}"
         ok "Backup: ${OUT} ($(du -h "${OUT}" | cut -f1))"
     else
-        warn "db container not running yet — skipping pre-migration backup (first deploy?)."
+        die "db container is not running; refusing to deploy without a pre-migration backup. Use --no-backup only for an explicitly approved first bootstrap."
     fi
 fi
 
@@ -143,17 +153,21 @@ SERVER_NAME="${SERVER_NAME}" envsubst '${SERVER_NAME}' < "${NGINX_CONF}" > "${NG
 mv "${NGINX_CONF}.rendered" "${NGINX_CONF}"
 ok "nginx config rendered"
 
-# ── 6. Recreate services ──────────────────────────────────────────────────────
-# --force-recreate so any env_file change is re-injected (restart won't do it).
-log "Recreating services"
-${COMPOSE} up -d --force-recreate
+# ── 6. Replace the API without starting consumers before migration ───────────
+# Queue, scheduler, Reverb, and Nginx must not run the new image (or see a
+# partially migrated schema) while migrations are pending. They are started
+# only after the API has migrated and rebuilt its runtime caches below.
+log "Stopping consumers before migration"
+${COMPOSE} stop nginx reverb queue scheduler
+log "Starting infrastructure and API only"
+${COMPOSE} up -d --force-recreate db redis meilisearch api
 log "Waiting for database to report healthy"
 for i in $(seq 1 30); do
     st="$(docker inspect --format '{{.State.Health.Status}}' ogami-db 2>/dev/null || echo none)"
     [ "${st}" = "healthy" ] && break
     sleep 2
 done
-[ "${st:-none}" = "healthy" ] || warn "db health = ${st:-unknown} (continuing; migrate will surface real errors)."
+[ "${st:-none}" = "healthy" ] || die "db health is ${st:-unknown}; refusing to migrate or start consumers."
 ok "Services up"
 
 # ── 7. Migrate (backwards-compatible only; NEVER migrate:fresh in prod) ───────
@@ -166,14 +180,14 @@ log "Rebuilding framework caches (config/route/view) + storage link"
 ${COMPOSE} exec -T api php artisan config:cache
 ${COMPOSE} exec -T api php artisan route:cache
 ${COMPOSE} exec -T api php artisan view:cache
-${COMPOSE} exec -T api php artisan storage:link 2>/dev/null || true
+${COMPOSE} exec -T api php artisan storage:link
 ok "Caches rebuilt"
 
-# ── 9. Restart workers so they pick up the fresh config cache ─────────────────
-log "Restarting workers (queue reverb scheduler) + flushing queue restart signal"
-${COMPOSE} exec -T api php artisan queue:restart >/dev/null 2>&1 || true
-${COMPOSE} restart queue reverb scheduler >/dev/null
-ok "Workers restarted"
+# ── 9. Start consumers only after migration and cache rebuild ────────────────
+log "Starting consumers (nginx reverb queue scheduler)"
+${COMPOSE} up -d --force-recreate nginx reverb queue scheduler
+${COMPOSE} exec -T api php artisan queue:restart >/dev/null
+ok "Consumers started"
 
 # ── 10. Reload nginx ──────────────────────────────────────────────────────────
 log "Validating + reloading nginx"
@@ -183,13 +197,26 @@ ok "nginx reloaded"
 
 # ── 11. Smoke test ────────────────────────────────────────────────────────────
 log "Smoke test against https://${SERVER_NAME}"
-HEALTH="$(curl -fsS --max-time 15 "https://${SERVER_NAME}/api/v1/health" || echo 'FAILED')"
+if ! HEALTH="$(curl -fsS --max-time 15 "https://${SERVER_NAME}/api/v1/health")"; then
+    die "Health probe failed; deployment is not complete."
+fi
 case "${HEALTH}" in
     *'"status":"ok"'*) ok "Health: ${HEALTH}" ;;
-    *) warn "Health probe did not return ok: ${HEALTH}" ;;
+    *) die "Health probe did not return ok: ${HEALTH}" ;;
 esac
-SPA_CODE="$(curl -fsS -o /dev/null -w '%{http_code}' --max-time 15 "https://${SERVER_NAME}/" || echo 000)"
-[ "${SPA_CODE}" = "200" ] && ok "SPA index: HTTP ${SPA_CODE}" || warn "SPA index returned HTTP ${SPA_CODE}"
+if ! SPA_CODE="$(curl -fsS -o /dev/null -w '%{http_code}' --max-time 15 "https://${SERVER_NAME}/")"; then
+    die "SPA probe failed; deployment is not complete."
+fi
+[ "${SPA_CODE}" = "200" ] || die "SPA index returned HTTP ${SPA_CODE}; deployment is not complete."
+ok "SPA index: HTTP ${SPA_CODE}"
+
+for service in api nginx db redis meilisearch reverb queue scheduler; do
+    cid="$(${COMPOSE} ps -q "${service}")"
+    [ -n "${cid}" ] || die "Expected service ${service} has no container."
+    state="$(docker inspect -f '{{.State.Status}}' "${cid}")"
+    [ "${state}" = "running" ] || die "Expected service ${service} is ${state}, not running."
+done
+ok "All production services are running"
 
 # ── Done ──────────────────────────────────────────────────────────────────────
 ELAPSED=$(( $(date +%s) - START_TS ))

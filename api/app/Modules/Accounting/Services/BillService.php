@@ -103,11 +103,15 @@ class BillService
     }
 
     /**
-     * Create a bill, build a balanced JE, post it immediately, link to bill.
+     * Create a bill and, by default, build/post its balanced AP journal.
+     *
+     * The explicit draft entry point below reuses the same normalization and
+     * 3-way-match snapshot logic while leaving the ledger untouched until a
+     * reviewer calls postDraft().
      */
-    public function create(array $data, User $by): Bill
+    public function create(array $data, User $by, bool $postToLedger = true): Bill
     {
-        return DB::transaction(function () use ($data, $by) {
+        return DB::transaction(function () use ($data, $by, $postToLedger) {
             // OGAMI-001 — block posting/back-dating into a closed period.
             $this->periods->assertPostingAllowed($data['date']);
 
@@ -149,6 +153,8 @@ class BillService
             $poId = null;
             $hasVariances = false;
             $matchSnapshot = null;
+            $allowOverride = false;
+            $overrideReason = null;
             if (! empty($data['purchase_order_id'])) {
                 $poId = HashIdFilter::decode($data['purchase_order_id'], PurchaseOrder::class)
                     ?? (int) $data['purchase_order_id'];
@@ -179,18 +185,17 @@ class BillService
                     // variance — exactly the right behavior.
                     $billLines = [];
                     foreach ($itemsForMatch as $li) {
-                        if (! empty($li['item_id'])) {
-                            $billLines[(string) $li['item_id']] = [
-                                'item_id' => $li['item_id'],
-                                'description' => $li['description'],
-                                'quantity' => $li['quantity'],
-                                'unit_price' => $li['unit_price'],
-                            ];
-                        }
+                        $billLines[] = [
+                            'item_id' => $li['item_id'],
+                            'description' => $li['description'],
+                            'quantity' => $li['quantity'],
+                            'unit_price' => $li['unit_price'],
+                        ];
                     }
                     $result = $this->threeWayMatch->matchForPo($po, array_values($billLines));
                     $allowOverride = (bool) ($data['allow_override'] ?? false);
-                    if ($result->overallStatus === 'blocked' && ! $allowOverride) {
+                    $overrideReason = trim((string) ($data['override_reason'] ?? ''));
+                    if ($result->overallStatus === 'blocked' && $postToLedger && ! $allowOverride) {
                         throw new ThreeWayMatchException('3-way match blocked by variance.', $result->toArray());
                     }
                     $hasVariances = $result->overallStatus !== 'matched';
@@ -213,7 +218,13 @@ class BillService
                 'balance' => $total,
                 'has_variances' => $hasVariances,
                 'three_way_match_snapshot' => $matchSnapshot,
-                'status' => BillStatus::Unpaid,
+                'three_way_overridden' => $allowOverride && $matchSnapshot !== null,
+                'three_way_overridden_by' => $allowOverride && $matchSnapshot !== null ? $by->id : null,
+                'three_way_overridden_at' => $allowOverride && $matchSnapshot !== null ? now() : null,
+                'three_way_override_reason' => $allowOverride && $matchSnapshot !== null
+                    ? ($overrideReason !== '' ? $overrideReason : 'Manual override approved during bill creation.')
+                    : null,
+                'status' => $postToLedger ? BillStatus::Unpaid : BillStatus::Draft,
                 'created_by' => $by->id,
                 'remarks' => $data['remarks'] ?? null,
             ]);
@@ -222,10 +233,22 @@ class BillService
                 BillItem::create(array_merge($row, ['bill_id' => $bill->id]));
             }
 
-            $this->postBillToGl($bill, $vendor, $items, $isVatable, $vat, $total, $by);
+            if ($postToLedger) {
+                $this->postBillToGl($bill, $vendor, $items, $isVatable, $vat, $total, $by);
+            }
 
             return $this->show($bill->fresh());
         });
+    }
+
+    /**
+     * Stage an unposted supplier/AP bill for review. Any 3-way-match variance
+     * is persisted on the draft instead of blocking the supplier submission;
+     * the posting boundary rechecks it and requires an approved override.
+     */
+    public function createDraft(array $data, User $by): Bill
+    {
+        return $this->create($data, $by, postToLedger: false);
     }
 
     /**
@@ -239,20 +262,30 @@ class BillService
     public function createDraftForGrn(GoodsReceiptNote $grn, User $by): ?Bill
     {
         return DB::transaction(function () use ($grn, $by) {
-            if ($grn->status !== \App\Modules\Inventory\Enums\GrnStatus::Accepted) {
+            // Serialize duplicate accepted events against the GRN row. The
+            // goods_receipt_note_id column is indexed for lookup, but legacy
+            // data may not satisfy a unique constraint; the lock keeps the
+            // idempotency check and bill insert atomic for this workflow.
+            $lockedGrn = GoodsReceiptNote::query()
+                ->lockForUpdate()
+                ->find($grn->id);
+            if (! $lockedGrn) {
+                return null;
+            }
+            if ($lockedGrn->status !== \App\Modules\Inventory\Enums\GrnStatus::Accepted) {
                 return null; // only fully-accepted receipts stage a bill
             }
-            if (Bill::query()->where('goods_receipt_note_id', $grn->id)->exists()) {
+            if (Bill::query()->where('goods_receipt_note_id', $lockedGrn->id)->exists()) {
                 return null; // idempotent — one draft per GRN
             }
 
-            $grn->loadMissing(['vendor', 'purchaseOrder', 'items.item', 'items.purchaseOrderItem']);
-            $vendor = $grn->vendor;
-            $po = $grn->purchaseOrder;
+            $lockedGrn->loadMissing(['vendor', 'purchaseOrder', 'items.item', 'items.purchaseOrderItem']);
+            $vendor = $lockedGrn->vendor;
+            $po = $lockedGrn->purchaseOrder;
             if (! $vendor || ! $po) {
                 return null;
             }
-            $billDate = $grn->accepted_at?->toDateString() ?? now()->toDateString();
+            $billDate = $lockedGrn->accepted_at?->toDateString() ?? now()->toDateString();
 
             $expenseAccountId = $this->defaultExpenseAccountId();
             if (! $expenseAccountId) {
@@ -265,7 +298,7 @@ class BillService
             $isVatable = (bool) $po->is_vatable;
             $rows = [];
             $subtotal = Money::zero();
-            foreach ($grn->items as $line) {
+            foreach ($lockedGrn->items as $line) {
                 $qty = Money::round2((string) $line->quantity_accepted);
                 if (Money::lte($qty, '0')) {
                     continue; // rejected lines are not billed
@@ -291,6 +324,22 @@ class BillService
                 return null; // nothing accepted → nothing to bill
             }
 
+            $po->loadMissing(['items.item']);
+            $match = $this->threeWayMatch->matchForPo($po, array_map(
+                static fn (array $row): array => [
+                    'item_id' => $row['item_id'],
+                    'description' => $row['description'],
+                    'quantity' => $row['quantity'],
+                    'unit_price' => $row['unit_price'],
+                ],
+                $rows,
+            ));
+            $hasVariances = $match->overallStatus !== 'matched';
+            $matchSnapshot = $match->toArray();
+            $reviewNote = $match->overallStatus === 'blocked'
+                ? ' 3-way match requires manual review before posting.'
+                : '';
+
             $vat = $isVatable ? Money::mul($subtotal, $this->taxPolicy->requiredVatRate()) : Money::zero();
             $total = Money::add($subtotal, $vat);
 
@@ -298,7 +347,7 @@ class BillService
                 'bill_number' => $this->sequences->generate('bill'),
                 'vendor_id' => $vendor->id,
                 'purchase_order_id' => $po->id,
-                'goods_receipt_note_id' => $grn->id,
+                'goods_receipt_note_id' => $lockedGrn->id,
                 'date' => $billDate,
                 'due_date' => Carbon::parse($billDate)->addDays($vendor->payment_terms_days)->toDateString(),
                 'is_vatable' => $isVatable,
@@ -309,7 +358,9 @@ class BillService
                 'balance' => $total,
                 'status' => BillStatus::Draft,
                 'created_by' => $by->id,
-                'remarks' => "Auto-created from GRN {$grn->grn_number}. Review and post to record the payable.",
+                'has_variances' => $hasVariances,
+                'three_way_match_snapshot' => $matchSnapshot,
+                'remarks' => "Auto-created from GRN {$lockedGrn->grn_number}. Review and post to record the payable.{$reviewNote}",
             ]);
 
             foreach ($rows as $row) {
@@ -325,17 +376,61 @@ class BillService
      * flips the bill to Unpaid. The point of the draft state: nothing touches
      * the ledger until a human reviews the auto-created amounts.
      */
-    public function postDraft(Bill $bill, User $by): Bill
-    {
-        if ($bill->status !== BillStatus::Draft) {
-            throw new BusinessRuleException('Only draft bills can be posted.');
-        }
+    public function postDraft(
+        Bill $bill,
+        User $by,
+        bool $allowOverride = false,
+        ?string $overrideReason = null,
+    ): Bill {
+        $blockedMatch = null;
+        $result = DB::transaction(function () use (&$blockedMatch, $bill, $by, $allowOverride, $overrideReason) {
+            $lockedBill = Bill::query()
+                ->lockForUpdate()
+                ->findOrFail($bill->id);
+            if ($lockedBill->status !== BillStatus::Draft) {
+                throw new BusinessRuleException('Only draft bills can be posted.');
+            }
 
-        return DB::transaction(function () use ($bill, $by) {
-            $this->periods->assertPostingAllowed($bill->date);
+            // Recompute at the point of posting. A GRN, PO, or draft line can
+            // have changed after the bill was staged, and the old snapshot is
+            // not sufficient evidence for a ledger mutation.
+            $match = $this->threeWayMatch->matchForBill($lockedBill);
+            if ($match) {
+                $isBlocked = $match->overallStatus === 'blocked';
+                if ($isBlocked && ! $allowOverride && ! $lockedBill->three_way_overridden) {
+                    // Commit the latest snapshot before returning the error so
+                    // the draft visibly transitions into manual_review. The
+                    // second half of this method never touches the ledger.
+                    $blockedMatch = $match;
+                    $lockedBill->forceFill([
+                        'has_variances' => true,
+                        'three_way_match_snapshot' => $match->toArray(),
+                    ])->save();
+                    return null;
+                }
+                if ($allowOverride) {
+                    $reason = trim((string) $overrideReason);
+                    if ($reason === '') {
+                        throw new BusinessRuleException('A reason is required when overriding a 3-way match.');
+                    }
+                    $lockedBill->forceFill([
+                        'three_way_overridden' => $match->overallStatus !== 'matched',
+                        'three_way_overridden_by' => $by->id,
+                        'three_way_overridden_at' => now(),
+                        'three_way_override_reason' => $reason,
+                    ]);
+                }
+                $lockedBill->forceFill([
+                    'has_variances' => $match->overallStatus !== 'matched',
+                    'three_way_match_snapshot' => $match->toArray(),
+                ])->save();
+            }
 
-            $vendor = $bill->vendor;
-            $items = $bill->items->map(fn (BillItem $item) => [
+            $this->periods->assertPostingAllowed($lockedBill->date);
+
+            $lockedBill->loadMissing(['vendor', 'items']);
+            $vendor = $lockedBill->vendor;
+            $items = $lockedBill->items->map(fn (BillItem $item) => [
                 'expense_account_id' => $item->expense_account_id,
                 'item_id' => $item->item_id,
                 'description' => $item->description,
@@ -346,27 +441,34 @@ class BillService
             ])->all();
 
             $this->postBillToGl(
-                $bill,
+                $lockedBill,
                 $vendor,
                 $items,
-                (bool) $bill->is_vatable,
-                (string) $bill->vat_amount,
-                (string) $bill->total_amount,
+                (bool) $lockedBill->is_vatable,
+                (string) $lockedBill->vat_amount,
+                (string) $lockedBill->total_amount,
                 $by,
             );
 
-            $bill->update(['status' => BillStatus::Unpaid]);
+            $lockedBill->update(['status' => BillStatus::Unpaid]);
 
             // 2026-08-08 — final P2P link: posting a draft bill advances the
             // chain to the 'posted' step in real time (draft → posted → paid).
-            $fresh = $bill->fresh();
-            DB::afterCommit(function () use ($fresh, $by): void {
-                app(ChainBroadcaster::class)
-                    ->broadcastFor($fresh, (string) $fresh->status?->value, $by);
-            });
+            $fresh = $lockedBill->fresh();
+            app(ChainBroadcaster::class)
+                ->broadcastFor($fresh, (string) $fresh->status?->value, $by);
 
-            return $this->show($bill->fresh());
+            return $this->show($lockedBill->fresh());
         });
+
+        if ($blockedMatch !== null) {
+            throw new ThreeWayMatchException(
+                '3-way match blocked by variance; manual review or an approved override is required.',
+                $blockedMatch->toArray(),
+            );
+        }
+
+        return $result;
     }
 
     public function cancel(Bill $bill, User $by): Bill
@@ -460,13 +562,11 @@ class BillService
             // 2026-08-08 — final P2P link: broadcast the chain step so the
             // bill detail page (and any chain view) advances in real time.
             // Partial payments move the chain to 'partial'; the settling
-            // payment completes it ('paid'). Fires after commit so the
-            // updated row is visible to the channel consumer.
+            // payment completes it ('paid'). The outbox dispatcher waits for
+            // commit before publishing to the channel consumer.
             $fresh = $bill->fresh();
-            DB::afterCommit(function () use ($fresh, $by): void {
-                app(ChainBroadcaster::class)
-                    ->broadcastFor($fresh, (string) $fresh->status?->value, $by);
-            });
+            app(ChainBroadcaster::class)
+                ->broadcastFor($fresh, (string) $fresh->status?->value, $by);
 
             return $payment->fresh(['cashAccount']);
         });

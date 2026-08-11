@@ -9,8 +9,10 @@ export const stockLevelsApi = {
 
 export const stockMovementsApi = {
  options: () => client.get<{ data: { movement_types: Array<{ value: string; label: string }> } }>('/inventory/stock-movements/options').then((r) => r.data.data),
- list: (params?: ListParams & { item_id?: string; movement_type?: string; from?: string; to?: string; reference_type?: string }) =>
+ list: (params?: ListParams & { item_id?: string; movement_id?: string; movement_type?: string; from?: string; to?: string; reference_type?: string }) =>
  client.get<PaginatedResponse<StockMovement>>('/inventory/stock-movements', { params }).then((r) => r.data),
+ retryGlHandoff: (movementId: string) =>
+ client.post<ApiSuccess<StockMovement>>(`/inventory/stock-movements/${movementId}/retry-gl`).then((r) => r.data.data),
 };
 
 // `direction` here is the adjustment direction, not a sort order — the backend

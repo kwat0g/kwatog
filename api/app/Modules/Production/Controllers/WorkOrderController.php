@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace App\Modules\Production\Controllers;
 
+use App\Common\Exceptions\BusinessRuleException;
+use App\Modules\Inventory\Exceptions\InvalidMovementException;
 use App\Modules\Production\Enums\MachineDowntimeCategory;
+use App\Modules\Production\Exceptions\ProductionReceiptHandoffException;
 use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Production\Enums\WoOperationStatus;
 use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Production\Models\WorkOrderOutput;
 use App\Modules\Production\Requests\CancelWorkOrderRequest;
 use App\Modules\Production\Requests\ConfirmWorkOrderRequest;
 use App\Modules\Production\Requests\PauseWorkOrderRequest;
@@ -248,6 +252,29 @@ class WorkOrderController
     {
         return \App\Modules\Production\Resources\WorkOrderOutputResource::collection(
             $workOrder->outputs()->with(['recorder:id,name,role_id', 'defects.defectType'])->get()
+        );
+    }
+
+    /** Retry only the finished-goods receipt for one already-recorded output. */
+    public function retryProductionReceipt(
+        WorkOrder $workOrder,
+        WorkOrderOutput $output,
+        \App\Modules\Production\Services\WorkOrderOutputService $outputs,
+    ): \App\Modules\Production\Resources\WorkOrderOutputResource|JsonResponse {
+        if ((int) $output->work_order_id !== (int) $workOrder->id) {
+            abort(404);
+        }
+
+        try {
+            $updated = $outputs->retryProductionReceipt($output, request()->user());
+        } catch (ProductionReceiptHandoffException|BusinessRuleException|InvalidMovementException) {
+            return response()->json([
+                'message' => 'Finished-goods receipt still needs Inventory setup. Fix the prerequisite, then retry again.',
+            ], 422);
+        }
+
+        return new \App\Modules\Production\Resources\WorkOrderOutputResource(
+            $updated->load(['recorder:id,name,role_id', 'defects.defectType']),
         );
     }
 }

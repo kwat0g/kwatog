@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\B2B\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\HashIdFilter;
 use App\Common\Services\SettingsService;
 use App\Common\Services\TaxPolicyService;
@@ -20,6 +21,7 @@ use App\Modules\B2B\Models\PortalShippingDocument;
 use App\Common\Services\SystemUserResolver;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Services\PurchaseOrderService;
 use App\Modules\Quality\Models\PpapSubmission;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\UploadedFile;
@@ -39,6 +41,7 @@ class SupplierPortalService
 {
     public function __construct(
         private readonly BillService $bills,
+        private readonly PurchaseOrderService $purchaseOrders,
         private readonly SystemUserResolver $systemUser,
         private readonly SettingsService $settings,
         private readonly TaxPolicyService $taxPolicy,
@@ -131,21 +134,22 @@ class SupplierPortalService
         abort_if($purchaseOrder->vendor_id !== $vendorId, 403);
 
         return $this->systemUser->impersonate(function () use ($purchaseOrder, $data) {
-            $purchaseOrder->expected_delivery_date = $data['expected_delivery_date'] ?? $purchaseOrder->expected_delivery_date;
-            $purchaseOrder->remarks = $data['notes'] ?? $purchaseOrder->remarks;
-            $purchaseOrder->status = PurchaseOrderStatus::Sent->value;
-            $purchaseOrder->sent_to_supplier_at = now();
-            $purchaseOrder->save();
+            return DB::transaction(function () use ($purchaseOrder, $data): PurchaseOrder {
+                // Route-bound models can be stale when purchasing cancels or
+                // sends the PO concurrently. Re-read and lock before allowing
+                // the portal to cross the sent boundary; the canonical service
+                // owns the durable event, dispatch proof, and GRN trigger.
+                $row = PurchaseOrder::query()->lockForUpdate()->findOrFail($purchaseOrder->id);
+                if ($row->status !== PurchaseOrderStatus::Approved) {
+                    throw new BusinessRuleException('Only approved purchase orders can be acknowledged.');
+                }
 
-            // 2026-08-08 — stage the expected GRN (draft) once the supplier
-            // confirms the PO, mirroring PurchaseOrderService::markAsSent().
-            // The listener is idempotent, so a PO acknowledged twice never
-            // stacks draft GRNs.
-            DB::afterCommit(fn () =>
-                event(new \App\Modules\Purchasing\Events\PurchaseOrderSent($purchaseOrder->fresh()))
-            );
+                $row->expected_delivery_date = $data['expected_delivery_date'] ?? $row->expected_delivery_date;
+                $row->remarks = $data['notes'] ?? $row->remarks;
+                $row->save();
 
-            return $purchaseOrder;
+                return $this->purchaseOrders->markAsSent($row, 'supplier_portal_acknowledgement');
+            });
         });
     }
 
@@ -153,18 +157,46 @@ class SupplierPortalService
     {
         abort_if($purchaseOrder->vendor_id !== $vendorId, 403);
 
-        return $this->systemUser->impersonate(function () use ($purchaseOrder, $data) {
-            $estimatedArrival = $data['estimated_arrival'] ?? $purchaseOrder->expected_delivery_date;
-            $carrier = $data['carrier'] ?? null;
-            $tracking = $data['tracking_number'] ?? null;
-            $prevNotes = $purchaseOrder->remarks ? $purchaseOrder->remarks."\n" : '';
+        return $this->systemUser->impersonate(function () use ($purchaseOrder, $data, $vendorId) {
+            return DB::transaction(function () use ($purchaseOrder, $data, $vendorId): PurchaseOrder {
+                // Shipment updates share the PO row with acknowledgement,
+                // cancellation, and receiving. Re-read and lock the
+                // authoritative row so a stale portal page cannot overwrite a
+                // newer transition or append to an obsolete remarks value.
+                $row = PurchaseOrder::query()->lockForUpdate()->findOrFail($purchaseOrder->id);
+                abort_if((int) $row->vendor_id !== $vendorId, 403);
 
-            $purchaseOrder->expected_delivery_date = $estimatedArrival;
-            $shipment = implode(' / ', array_filter([$carrier, $tracking], static fn ($v) => $v !== null && $v !== ''));
-            $purchaseOrder->remarks = $shipment !== '' ? $prevNotes."Shipment: {$shipment}" : $prevNotes;
-            $purchaseOrder->save();
+                if (in_array($row->status, [
+                    PurchaseOrderStatus::Cancelled,
+                    PurchaseOrderStatus::Received,
+                    PurchaseOrderStatus::Closed,
+                ], true)) {
+                    throw new BusinessRuleException('Shipment updates are not allowed for a cancelled, received, or closed purchase order.');
+                }
 
-            return $purchaseOrder;
+                $estimatedArrival = $data['estimated_arrival'] ?? $row->expected_delivery_date;
+                $shippedDate = $data['shipped_date'] ?? null;
+                $carrier = trim((string) ($data['carrier'] ?? ''));
+                $tracking = trim((string) ($data['tracking_number'] ?? ''));
+                $notes = trim((string) ($data['notes'] ?? ''));
+
+                $shipmentDetails = array_values(array_filter([
+                    $shippedDate !== null && $shippedDate !== '' ? 'Shipped: '.$shippedDate : null,
+                    $carrier !== '' ? 'Carrier: '.$carrier : null,
+                    $tracking !== '' ? 'Tracking: '.$tracking : null,
+                    $notes !== '' ? 'Notes: '.$notes : null,
+                ]));
+
+                $row->expected_delivery_date = $estimatedArrival;
+                if ($shipmentDetails !== []) {
+                    $previousRemarks = trim((string) $row->remarks);
+                    $prefix = $previousRemarks !== '' ? $previousRemarks."\n" : '';
+                    $row->remarks = $prefix.'Shipment update: '.implode(' / ', $shipmentDetails);
+                }
+                $row->save();
+
+                return $row->fresh();
+            });
         });
     }
 
@@ -244,33 +276,63 @@ class SupplierPortalService
     ): array {
         abort_if($purchaseOrder->vendor_id !== $vendorId, 403);
 
-        $purchaseOrder->load(['vendor:id,name', 'items.item']);
-
-        $defaultAccountHashId = $this->defaultExpenseAccountHashId();
-
-        $items = $purchaseOrder->items->map(fn ($poItem) => [
-            'expense_account_id' => $defaultAccountHashId,
-            'description' => $poItem->description,
-            'quantity' => (string) $poItem->quantity,
-            'unit' => $poItem->unit,
-            'unit_price' => (string) $poItem->unit_price,
-        ])->toArray();
-
-        if (empty($items)) {
-            // A supplier hitting this saw a generic 500 "Server Error" page with
-            // no clue what to fix. It is a state violation, not a server fault.
-            throw new \App\Common\Exceptions\BusinessRuleException('This purchase order has no items to bill.');
-        }
-
         $storedPath = null;
         try {
-            return DB::transaction(function () use ($purchaseOrder, $data, $items, $file, $portalUserId, &$storedPath) {
+            return DB::transaction(function () use ($purchaseOrder, $data, $file, $portalUserId, $vendorId, &$storedPath) {
+                // Lock both the source PO and vendor before checking the
+                // supplier bill number. This is the idempotency boundary for
+                // portal double-submit/retry requests.
+                $lockedPurchaseOrder = PurchaseOrder::query()
+                    ->lockForUpdate()
+                    ->with(['vendor:id,name', 'items.item'])
+                    ->findOrFail($purchaseOrder->id);
+                abort_if((int) $lockedPurchaseOrder->vendor_id !== $vendorId, 403);
+                Vendor::query()->lockForUpdate()->findOrFail($vendorId);
+
+                // Resolve the idempotent result before any mutable setup
+                // lookup. A retry must remain safe even if the expense-account
+                // configuration changed after the original draft was staged.
+                $existing = Bill::query()
+                    ->where('vendor_id', $vendorId)
+                    ->where('bill_number', $data['bill_number'])
+                    ->lockForUpdate()
+                    ->first();
+                if ($existing) {
+                    if ((int) $existing->purchase_order_id !== (int) $lockedPurchaseOrder->id) {
+                        throw new BusinessRuleException(
+                            "Bill number '{$data['bill_number']}' is already used for another purchase order."
+                        );
+                    }
+
+                    return [
+                        'bill' => $existing->fresh(),
+                        'message' => 'Invoice was already submitted. The existing bill remains in its current review state.',
+                    ];
+                }
+
+                $defaultAccountHashId = $this->defaultExpenseAccountHashId();
+                $items = $lockedPurchaseOrder->items->map(fn ($poItem) => [
+                    'expense_account_id' => $defaultAccountHashId,
+                    'item_id' => $poItem->item?->hash_id,
+                    'description' => $poItem->description,
+                    'quantity' => (string) $poItem->quantity,
+                    'unit' => $poItem->unit,
+                    'unit_price' => (string) $poItem->unit_price,
+                ])->toArray();
+
+                if (empty($items)) {
+                    // A supplier hitting this saw a generic 500 "Server Error"
+                    // page with no clue what to fix. It is a state violation,
+                    // not a server fault.
+                    throw new BusinessRuleException('This purchase order has no items to bill.');
+                }
+
                 $systemUser = app(SystemUserResolver::class);
 
-                $bill = $systemUser->impersonate(fn () => $this->bills->create([
+                $bill = $systemUser->impersonate(fn () => $this->bills->createDraft([
                     'bill_number' => $data['bill_number'],
-                    'vendor_id' => $purchaseOrder->vendor->hash_id,
-                    'purchase_order_id' => $purchaseOrder->hash_id,
+                    'vendor_id' => $lockedPurchaseOrder->vendor->hash_id,
+                    'purchase_order_id' => $lockedPurchaseOrder->hash_id,
                     'date' => $data['date'],
                     'due_date' => $data['due_date'] ?? $data['date'],
                     'is_vatable' => $data['is_vatable'] ?? $this->taxPolicy->isVatRegistered(),
@@ -286,7 +348,7 @@ class SupplierPortalService
                     }
 
                     PortalShippingDocument::create([
-                        'purchase_order_id' => $purchaseOrder->id,
+                        'purchase_order_id' => $lockedPurchaseOrder->id,
                         'bill_id' => $bill->id,
                         'document_type' => 'supplier_invoice',
                         'file_path' => $storedPath,
@@ -301,7 +363,7 @@ class SupplierPortalService
 
                 return [
                     'bill' => $bill,
-                    'message' => 'Invoice submitted successfully. Bill has been created in Accounts Payable.',
+                    'message' => 'Invoice submitted successfully. A draft bill is waiting for Accounts Payable review.',
                 ];
             });
         } catch (\Throwable $e) {
@@ -319,14 +381,13 @@ class SupplierPortalService
     {
         $account = Account::query()
             ->where('code', $this->settings->requiredString('accounting.default_expense_account_code'))
-            ->orWhere('name', 'like', '%Cost of Goods Sold%')
             ->first();
 
         if (! $account) {
-            // The message is already written for a human ("contact the
-            // administrator"), so render it as a 422 the portal can display
-            // instead of burying it in a 500.
-            throw new \App\Common\Exceptions\BusinessRuleException('No COGS/expense account configured. Please contact the administrator.');
+            // Never infer an account from a display name: chart-of-accounts
+            // labels are deployment data and may vary by tenant or locale.
+            // The configured code is the authoritative mapping.
+            throw new \App\Common\Exceptions\BusinessRuleException('Configured supplier-portal expense account was not found. Please contact the administrator.');
         }
 
         return $account->hash_id;

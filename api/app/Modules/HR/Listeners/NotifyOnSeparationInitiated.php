@@ -38,6 +38,7 @@ class NotifyOnSeparationInitiated implements ShouldQueue
             ]);
         } catch (\Throwable $e) {
             Log::warning('NotifyOnSeparationInitiated failed', ['error' => $e->getMessage()]);
+            throw $e;
         }
     }
 }

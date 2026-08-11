@@ -28,6 +28,8 @@ class ScheduledExport extends Model
         'frequency', 'day_of_week', 'day_of_month', 'time_of_day',
         'recipients',
         'last_run_at', 'next_run_at',
+        'last_attempt_at', 'last_error',
+        'processing_token', 'processing_started_at', 'processing_until',
         'is_active',
     ];
 
@@ -39,6 +41,9 @@ class ScheduledExport extends Model
         'format'       => ExportFormat::class,
         'last_run_at'  => 'datetime',
         'next_run_at'  => 'datetime',
+        'last_attempt_at' => 'datetime',
+        'processing_started_at' => 'datetime',
+        'processing_until' => 'datetime',
         'is_active'    => 'boolean',
         'day_of_week'  => 'integer',
         'day_of_month' => 'integer',

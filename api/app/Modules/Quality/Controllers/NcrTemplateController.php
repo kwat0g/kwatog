@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Controllers;
 
-use App\Modules\Quality\Models\NcrTemplate;
 use App\Modules\Quality\Enums\NcrSeverity;
 use App\Modules\Quality\Enums\NcrSource;
+use App\Modules\Quality\Models\NcrTemplate;
 use App\Modules\Quality\Resources\NcrTemplateResource;
 use App\Modules\Quality\Services\NcrTemplateService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Validation\Rule;
@@ -28,7 +29,7 @@ class NcrTemplateController
         return NcrTemplateResource::collection($this->service->list($request->query()));
     }
 
-    public function options(): \Illuminate\Http\JsonResponse
+    public function options(): JsonResponse
     {
         return response()->json(['data' => [
             'sources' => array_map(
@@ -50,27 +51,29 @@ class NcrTemplateController
     public function store(Request $request): NcrTemplateResource
     {
         $data = $request->validate([
-            'name'               => ['required', 'string', 'max:200'],
-            'source'             => ['required', Rule::enum(NcrSource::class)],
-            'severity'           => ['required', Rule::enum(NcrSeverity::class)],
-            'product_id'         => ['nullable', 'string'],
+            'name' => ['required', 'string', 'max:200'],
+            'source' => ['required', Rule::enum(NcrSource::class)],
+            'severity' => ['required', Rule::enum(NcrSeverity::class)],
+            'product_id' => ['nullable', 'string'],
             'defect_description' => ['nullable', 'string', 'max:5000'],
-            'notes'              => ['nullable', 'string', 'max:2000'],
+            'notes' => ['nullable', 'string', 'max:2000'],
         ]);
+
         return new NcrTemplateResource($this->service->create($data, $request->user()));
     }
 
     public function update(Request $request, NcrTemplate $ncrTemplate): NcrTemplateResource
     {
         $data = $request->validate([
-            'name'               => ['sometimes', 'string', 'max:200'],
-            'source'             => ['sometimes', Rule::enum(NcrSource::class)],
-            'severity'           => ['sometimes', Rule::enum(NcrSeverity::class)],
-            'product_id'         => ['nullable', 'string'],
+            'name' => ['sometimes', 'string', 'max:200'],
+            'source' => ['sometimes', Rule::enum(NcrSource::class)],
+            'severity' => ['sometimes', Rule::enum(NcrSeverity::class)],
+            'product_id' => ['nullable', 'string'],
             'defect_description' => ['nullable', 'string', 'max:5000'],
-            'notes'              => ['nullable', 'string', 'max:2000'],
-            'is_active'          => ['sometimes', 'boolean'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+            'is_active' => ['sometimes', 'boolean'],
         ]);
+
         return new NcrTemplateResource($this->service->update($ncrTemplate, $data));
     }
 
@@ -82,6 +85,7 @@ class NcrTemplateController
     public function restore(NcrTemplate $ncrTemplate): JsonResponse
     {
         $ncrTemplate->restore();
+
         return response()->json(['message' => 'NCR template restored.']);
     }
 

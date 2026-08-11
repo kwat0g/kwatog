@@ -82,6 +82,11 @@ class PurchaseOrder extends Model
         return $this->hasMany(Bill::class);
     }
 
+    public function supplierDispatch(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(SupplierOrderDispatch::class);
+    }
+
     public function approver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'approved_by');

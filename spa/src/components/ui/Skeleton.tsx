@@ -13,7 +13,11 @@ export function SkeletonBlock({ className, style }: BlockProps) {
  return (
  <div
  className={cn(
- 'rounded-md bg-gradient-to-r from-elevated via-surface/80 to-elevated bg-[length:200%_100%] animate-pulse animate-shimmer',
+ // One animation, not two. `animate-pulse animate-shimmer` set the CSS
+ // `animation` property twice, so the later utility won outright and
+ // `animate-pulse` was dead weight in every skeleton in the app. Shimmer is the
+ // one that reads as loading against an opaque warm surface.
+ 'rounded-md bg-gradient-to-r from-elevated via-surface/80 to-elevated bg-[length:200%_100%] animate-shimmer',
  className,
  )}
  style={style}
@@ -27,11 +31,18 @@ interface SkeletonTableProps {
  className?: string;
 }
 
-/** Realistic dynamic table skeleton with header row and staggered column widths. */
+/**
+ * Realistic dynamic table skeleton with header row and staggered column widths.
+ *
+ * Rows use `h-row` (`--row-height`) rather than a hardcoded `h-8`, because
+ * DataTable's rows do. The literal 32px matched the office palettes and was
+ * wrong on the shop floor, where `--row-height` is 48px — so a floor table
+ * jumped 16px per row the moment real data replaced the skeleton.
+ */
 export function SkeletonTable({ columns = 6, rows = 8, className }: SkeletonTableProps) {
  return (
  <div className={cn('border border-default rounded-md overflow-hidden bg-canvas', className)}>
- <div className="h-8 border-b border-default bg-subtle/50 flex items-center px-3 gap-4">
+ <div className="h-row border-b border-default bg-subtle/50 flex items-center px-3 gap-4">
  {Array.from({ length: columns }).map((_, i) => (
  <SkeletonBlock
  key={i}
@@ -41,7 +52,7 @@ export function SkeletonTable({ columns = 6, rows = 8, className }: SkeletonTabl
  ))}
  </div>
  {Array.from({ length: rows }).map((_, i) => (
- <div key={i} className="h-8 border-b border-subtle flex items-center px-3 gap-4 hover:bg-subtle/30">
+ <div key={i} className="h-row border-b border-subtle flex items-center px-3 gap-4 hover:bg-subtle/30">
  {Array.from({ length: columns }).map((_, j) => (
  <SkeletonBlock
  key={j}

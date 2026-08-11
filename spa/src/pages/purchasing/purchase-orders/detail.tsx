@@ -23,12 +23,15 @@ import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import { buildP2pChain } from '@/lib/chains';
 import { fromApprovalRecords } from '@/lib/approvals';
-import type { PurchaseOrderStatus } from '@/types/purchasing';
+import type { PurchaseOrderStatus, SupplierDispatchStatus } from '@/types/purchasing';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const variant: Record<PurchaseOrderStatus, 'neutral' | 'info' | 'warning' | 'success' | 'danger'> = {
  draft: 'neutral', pending_approval: 'info', approved: 'success', sent: 'info',
  partially_received: 'warning', received: 'success', closed: 'neutral', cancelled: 'danger',
+};
+const dispatchVariant: Record<SupplierDispatchStatus, 'neutral' | 'info' | 'warning' | 'success' | 'danger'> = {
+ pending: 'info', portal_available: 'info', manual_required: 'warning', confirmed: 'success', failed: 'danger', cancelled: 'neutral',
 };
 
 export default function PurchaseOrderDetailPage() {
@@ -190,6 +193,35 @@ export default function PurchaseOrderDetailPage() {
  {data.remarks && <div className="col-span-3"><dt className="text-2xs uppercase tracking-wider text-muted">Remarks</dt><dd>{data.remarks}</dd></div>}
  </dl>
  </Panel>
+ {data.supplier_dispatch && (
+ <Panel title="Supplier dispatch">
+ <div className="space-y-2 text-sm">
+ <div className="flex items-center justify-between gap-3">
+ <Chip variant={dispatchVariant[data.supplier_dispatch.status]}>
+ {data.supplier_dispatch.status_label ?? data.supplier_dispatch.status.replace(/_/g, ' ')}
+ </Chip>
+ <span className="text-2xs text-muted">
+ {data.supplier_dispatch.channel ?? '—'} · {data.supplier_dispatch.attempts} attempt{data.supplier_dispatch.attempts === 1 ? '' : 's'}
+ </span>
+ </div>
+ {data.supplier_dispatch.status === 'portal_available' && (
+ <p className="text-muted">The approved PO is visible to active supplier portal users. Confirm only after the supplier has actually been notified.</p>
+ )}
+ {data.supplier_dispatch.status === 'manual_required' && (
+ <p className="text-warning-fg">No active portal recipient exists. Send the PDF through an approved channel, then use “Mark as sent.”</p>
+ )}
+ {data.supplier_dispatch.status === 'failed' && data.supplier_dispatch.last_error && (
+ <p className="text-danger-fg">{data.supplier_dispatch.last_error}</p>
+ )}
+ {data.supplier_dispatch.status === 'confirmed' && data.supplier_dispatch.confirmed_at && (
+ <p className="text-muted">Confirmed {formatDate(data.supplier_dispatch.confirmed_at)}.</p>
+ )}
+ {data.supplier_dispatch.status === 'cancelled' && (
+ <p className="text-muted">The purchase order was cancelled, so no further supplier transmission is actionable.</p>
+ )}
+ </div>
+ </Panel>
+ )}
  <Panel title="Line items">
  <table className={tableCls}>
  <thead><tr className={theadTrCls}>

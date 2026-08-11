@@ -1,8 +1,7 @@
 name: API tests
 
-# Sprint 3 introduction (planned ownership: Sprint 8 / Task 81 will expand this).
-# Scope: just the Laravel PHPUnit suite for now. The SPA side is deliberately
-# excluded until Sprint 8 cleans up the pre-existing Sprint 1/2 type errors.
+# Backend CI: syntax, dependency metadata, PHPStan, and the Laravel PHPUnit
+# suite. SPA checks run in the companion workflow.
 
 on:
   pull_request:
@@ -19,9 +18,33 @@ permissions:
 
 jobs:
   phpunit:
-    name: PHPUnit (Laravel 11 / PHP 8.3 / SQLite)
+    name: PHP quality + PHPUnit (Laravel 12 / PHP 8.3 / PostgreSQL + Redis)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: ogami_test
+          POSTGRES_USER: ogami
+          POSTGRES_PASSWORD: ogami_ci_pw
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ogami -d ogami_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
 
     defaults:
       run:
@@ -34,7 +57,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          extensions: pdo_sqlite, sqlite3, bcmath, mbstring, intl, gd, zip, redis
+          extensions: pdo_pgsql, pgsql, bcmath, mbstring, intl, gd, zip, redis
           coverage: none
           tools: composer:v2
 
@@ -48,19 +71,31 @@ jobs:
       - name: Install dependencies
         run: composer install --prefer-dist --no-progress --no-interaction --optimize-autoloader
 
+      - name: Validate Composer metadata
+        run: composer validate --strict --no-check-publish
+
       - name: Lint PHP files (parallel syntax check)
         run: |
           find app database tests -name '*.php' -print0 \
             | xargs -0 -n1 -P4 php -l > /dev/null
 
+      - name: Run PHPStan
+        run: vendor/bin/phpstan analyse app --memory-limit=1G
+
       - name: Run PHPUnit
         env:
           APP_ENV: testing
           APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
-          DB_CONNECTION: sqlite
-          DB_DATABASE: ':memory:'
+          DB_CONNECTION: pgsql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_DATABASE: ogami_test
+          DB_USERNAME: ogami
+          DB_PASSWORD: ogami_ci_pw
           CACHE_STORE: array
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
           MAIL_MAILER: array
+          REDIS_HOST: 127.0.0.1
+          REDIS_PORT: 6379
         run: vendor/bin/phpunit --colors=always

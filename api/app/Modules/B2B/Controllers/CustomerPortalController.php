@@ -208,7 +208,7 @@ class CustomerPortalController extends Controller
         $complaint = $this->service->createComplaint($user->customer_id, $request->validated());
 
         return response()->json([
-            'data' => $complaint,
+            'data' => new CustomerComplaintResource($complaint),
             'message' => 'Complaint submitted successfully.',
         ], 201);
     }

@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { AxiosError } from 'axios';
-import { KeyRound, CheckCircle } from 'lucide-react';
+import { KeyRound, CheckCircle, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Panel } from '@/components/ui/Panel';
@@ -13,147 +13,181 @@ import { PasswordStrength } from '@/components/ui/PasswordStrength';
 import { authApi } from '@/api/auth';
 import { useQuery } from '@tanstack/react-query';
 import { landingApi } from '@/api/landing';
+import { cn } from '@/lib/cn';
 
 const schema = z
- .object({
- password: z
- .string()
- .min(8, 'Password must be at least 8 characters')
- .regex(/[A-Z]/, 'Password must contain an uppercase letter')
- .regex(/[0-9]/, 'Password must contain a digit')
- .regex(/[^A-Za-z0-9]/, 'Password must contain a special character'),
- password_confirmation: z.string().min(1, 'Confirm your password'),
- })
- .refine((data) => data.password === data.password_confirmation, {
- message: 'Passwords do not match',
- path: ['password_confirmation'],
- });
+  .object({
+    password: z
+      .string()
+      .min(8, 'Password must be at least 8 characters')
+      .regex(/[A-Z]/, 'Password must contain an uppercase letter')
+      .regex(/[0-9]/, 'Password must contain a digit')
+      .regex(/[^A-Za-z0-9]/, 'Password must contain a special character'),
+    password_confirmation: z.string().min(1, 'Confirm your password'),
+  })
+  .refine((data) => data.password === data.password_confirmation, {
+    message: 'Passwords do not match',
+    path: ['password_confirmation'],
+  });
 
 type ResetPasswordForm = z.infer<typeof schema>;
 
 export default function ResetPasswordPage() {
- const navigate = useNavigate();
- const [searchParams] = useSearchParams();
- const token = searchParams.get('token');
- const [done, setDone] = useState(false);
- const { data: contact } = useQuery({
- queryKey: ['landing', 'contact'],
- queryFn: landingApi.contact,
- staleTime: 300_000,
- });
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get('token');
+  const [done, setDone] = useState(false);
+  const { data: contact } = useQuery({
+    queryKey: ['landing', 'contact'],
+    queryFn: landingApi.contact,
+    staleTime: 300_000,
+  });
+  const { data: policy } = useQuery({
+    queryKey: ['auth', 'password-policy'],
+    queryFn: authApi.passwordPolicy,
+    staleTime: 300_000,
+  });
 
- useEffect(() => {
- if (!token) {
- navigate('/login', { replace: true });
- }
- }, [token, navigate]);
+  useEffect(() => {
+    if (!token) {
+      navigate('/login', { replace: true });
+    }
+  }, [token, navigate]);
 
- const {
- register,
- handleSubmit,
- setError,
- watch,
- formState: { errors, isSubmitting },
- } = useForm<ResetPasswordForm>({
- resolver: zodResolver(schema),
- });
+  const {
+    register,
+    handleSubmit,
+    setError,
+    watch,
+    formState: { errors, isSubmitting },
+  } = useForm<ResetPasswordForm>({
+    resolver: zodResolver(schema),
+  });
 
- const passwordValue = watch('password', '');
+  const passwordValue = watch('password', '');
 
- const onSubmit = async (data: ResetPasswordForm) => {
- if (!token) return;
- try {
- await authApi.resetPassword({
- token,
- password: data.password,
- password_confirmation: data.password_confirmation,
- });
- setDone(true);
- } catch (err) {
- const axe = err as AxiosError<{ message?: string; errors?: Record<string, string[]> }>;
- const body = axe.response?.data;
- if (axe.response?.status === 422 && body?.errors) {
- Object.entries(body.errors).forEach(([field, msgs]) => {
- setError(field as keyof ResetPasswordForm, {
- type: 'server',
- message: msgs[0] ?? 'Invalid value.',
- });
- });
- } else {
- setError('root', {
- type: 'server',
- message: body?.message ?? 'Could not reset password. Please try again.',
- });
- }
- }
- };
+  const onSubmit = async (data: ResetPasswordForm) => {
+    if (!token) return;
+    try {
+      await authApi.resetPassword({
+        token,
+        password: data.password,
+        password_confirmation: data.password_confirmation,
+      });
+      setDone(true);
+    } catch (err) {
+      const axe = err as AxiosError<{ message?: string; errors?: Record<string, string[]> }>;
+      const body = axe.response?.data;
+      if (axe.response?.status === 422 && body?.errors) {
+        Object.entries(body.errors).forEach(([field, msgs]) => {
+          setError(field as keyof ResetPasswordForm, {
+            type: 'server',
+            message: msgs[0] ?? 'Invalid value.',
+          });
+        });
+      } else {
+        setError('root', {
+          type: 'server',
+          message: body?.message ?? 'Could not reset password. Please try again.',
+        });
+      }
+    }
+  };
 
- if (!token) return null;
+  if (!token) return null;
 
- return (
- <Panel>
- <div className="mb-6">
- <p className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.2em] text-muted">
- <KeyRound size={12} className="text-accent" />
- New password
- </p>
- <h1 className="mt-3 font-display text-2xl tracking-tight text-primary">
- Choose a new password
- </h1>
- <p className="mt-1.5 text-[13px] text-muted">
- Make it strong — you&apos;ll use it to sign in to {contact?.legal_name ?? 'your ERP'}.
- </p>
- </div>
+  return (
+    <Panel>
+      <div className="mb-6">
+        <p className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.2em] text-muted">
+          <KeyRound size={12} className="text-accent" />
+          New password
+        </p>
+        <h1 className="mt-3 font-display text-2xl tracking-tight text-primary">
+          Choose a new password
+        </h1>
+        <p className="mt-1.5 text-[13px] text-muted">
+          Make it strong — you&apos;ll use it to sign in to {contact?.legal_name ?? 'your ERP'}.
+        </p>
+      </div>
 
- {done ? (
- <div
- role="status"
- className="rounded-md border border-success/30 bg-success-bg/10 p-5 text-center"
- >
- <CheckCircle size={32} className="mx-auto text-success-fg" strokeWidth={1.5} />
- <h2 className="mt-3 font-display text-lg text-primary">
- Password updated
- </h2>
- <p className="mt-1 text-[13px] text-secondary">
- You can now sign in with your new password.
- </p>
- <Link
- to="/login"
- className="mt-4 inline-block text-sm font-medium text-accent hover:underline"
- >
- Go to sign in
- </Link>
- </div>
- ) : (
- <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-3" noValidate>
- <FormErrorSummary errors={errors} />
- <Input
- type="password"
- label="New password"
- autoComplete="new-password"
- {...register('password')}
- error={errors.password?.message}
- />
- <PasswordStrength password={passwordValue} />
- <Input
- type="password"
- label="Confirm new password"
- autoComplete="new-password"
- {...register('password_confirmation')}
- error={errors.password_confirmation?.message}
- />
- <Button
- type="submit"
- variant="primary"
- size="lg"
- loading={isSubmitting}
- disabled={isSubmitting}
- className="mt-2 w-full"
- >
- Reset password
- </Button>
- </form>
- )}
- </Panel>
- );
+      {done ? (
+        <div
+          role="status"
+          className="rounded-md border border-success/30 bg-success-bg/10 p-5 text-center"
+        >
+          <CheckCircle size={32} className="mx-auto text-success-fg" strokeWidth={1.5} />
+          <h2 className="mt-3 font-display text-lg text-primary">Password updated</h2>
+          <p className="mt-1 text-[13px] text-secondary">
+            You can now sign in with your new password.
+          </p>
+          <Link
+            to="/login"
+            className="mt-4 inline-block text-sm font-medium text-accent hover:underline"
+          >
+            Go to sign in
+          </Link>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-3" noValidate>
+          <FormErrorSummary errors={errors} />
+          <Input
+            type="password"
+            label="New password"
+            autoComplete="new-password"
+            {...register('password')}
+            error={errors.password?.message}
+          />
+          <PasswordStrength password={passwordValue} />
+          <ul className="mt-1 space-y-0.5 text-xs">
+            {[
+              {
+                passed: passwordValue.length >= (policy?.minimum_length ?? Number.MAX_SAFE_INTEGER),
+                label: policy
+                  ? `At least ${policy.minimum_length} characters`
+                  : 'Loading password policy…',
+              },
+              ...(policy?.requires_uppercase
+                ? [{ passed: /[A-Z]/.test(passwordValue), label: 'An uppercase letter' }]
+                : []),
+              ...(policy?.requires_digit
+                ? [{ passed: /[0-9]/.test(passwordValue), label: 'A digit' }]
+                : []),
+              ...(policy?.requires_special
+                ? [{ passed: /[^A-Za-z0-9]/.test(passwordValue), label: 'A special character' }]
+                : []),
+            ].map((p) => (
+              <li
+                key={p.label}
+                className={cn(
+                  'flex items-center gap-1.5 transition-colors',
+                  p.passed ? 'text-success-fg' : 'text-muted',
+                )}
+              >
+                {p.passed ? <Check size={12} /> : <X size={12} />}
+                {p.label}
+              </li>
+            ))}
+          </ul>
+          <Input
+            type="password"
+            label="Confirm new password"
+            autoComplete="new-password"
+            {...register('password_confirmation')}
+            error={errors.password_confirmation?.message}
+          />
+          <Button
+            type="submit"
+            variant="primary"
+            size="lg"
+            loading={isSubmitting}
+            disabled={isSubmitting}
+            className="mt-2 w-full"
+          >
+            Reset password
+          </Button>
+        </form>
+      )}
+    </Panel>
+  );
 }

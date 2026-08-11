@@ -10,12 +10,14 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
+use App\Modules\Purchasing\Enums\PurchaseRequestConversionStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Events\PurchaseRequestApproved;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\PurchaseRequestItem;
+use App\Modules\Purchasing\Services\PurchaseOrderService;
 use App\Modules\Purchasing\Services\PurchaseRequestService;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\WorkflowSeeder;
@@ -86,6 +88,7 @@ class ConsolidatePurchaseOrdersTest extends TestCase
 
         // PR flips to converted exactly like the manual flow.
         $this->assertSame(PurchaseRequestStatus::Converted, $pr->fresh()->status);
+        $this->assertSame(PurchaseRequestConversionStatus::Converted, $pr->fresh()->po_conversion_status);
     }
 
     public function test_lines_are_grouped_by_vendor_into_separate_pos(): void
@@ -135,7 +138,10 @@ class ConsolidatePurchaseOrdersTest extends TestCase
         event(new PurchaseRequestApproved($pr));
 
         $this->assertSame(0, PurchaseOrder::where('purchase_request_id', $pr->id)->count());
-        $this->assertSame(PurchaseRequestStatus::Approved, $pr->fresh()->status);
+        $fresh = $pr->fresh();
+        $this->assertSame(PurchaseRequestStatus::Approved, $fresh->status);
+        $this->assertSame(PurchaseRequestConversionStatus::ManualRequired, $fresh->po_conversion_status);
+        $this->assertStringContainsString('preferred supplier', (string) $fresh->po_conversion_note);
     }
 
     public function test_pr_with_a_line_missing_unit_price_is_skipped_whole(): void
@@ -151,7 +157,10 @@ class ConsolidatePurchaseOrdersTest extends TestCase
         event(new PurchaseRequestApproved($pr));
 
         $this->assertSame(0, PurchaseOrder::where('purchase_request_id', $pr->id)->count());
-        $this->assertSame(PurchaseRequestStatus::Approved, $pr->fresh()->status);
+        $fresh = $pr->fresh();
+        $this->assertSame(PurchaseRequestStatus::Approved, $fresh->status);
+        $this->assertSame(PurchaseRequestConversionStatus::ManualRequired, $fresh->po_conversion_status);
+        $this->assertStringContainsString('unit price', (string) $fresh->po_conversion_note);
     }
 
     public function test_dispatching_the_event_twice_never_double_creates(): void
@@ -205,6 +214,98 @@ class ConsolidatePurchaseOrdersTest extends TestCase
         event(new PurchaseRequestApproved($pr));
 
         $this->assertSame(1, PurchaseOrder::where('purchase_request_id', $pr->id)->count());
+    }
+
+    public function test_conversion_service_rechecks_a_live_po_under_the_pr_lock(): void
+    {
+        $vendor = $this->vendor();
+        $item = Item::factory()->create();
+        $pr = $this->makePr([[
+            'item_id'              => $item->id,
+            'suggested_vendor_id'  => $vendor->id,
+            'estimated_unit_price' => '250.00',
+        ]]);
+        $line = $pr->items()->firstOrFail();
+
+        $po = PurchaseOrder::create([
+            'po_number'           => 'PO-'.now()->format('Ym').'-'.fake()->unique()->numerify('####'),
+            'vendor_id'           => $vendor->id,
+            'purchase_request_id' => $pr->id,
+            'date'                => now()->toDateString(),
+            'subtotal'            => '2500.00',
+            'vat_amount'          => '0.00',
+            'total_amount'        => '2500.00',
+            'is_vatable'          => false,
+        ]);
+        PurchaseOrderItem::create([
+            'purchase_order_id'        => $po->id,
+            'purchase_request_item_id' => $line->id,
+            'item_id'                  => $item->id,
+            'description'              => 'Already converted',
+            'quantity'                 => '10.00',
+            'unit'                     => 'pcs',
+            'unit_price'               => '250.00',
+            'total'                    => '2500.00',
+        ]);
+
+        $result = app(\App\Modules\Purchasing\Services\PurchaseOrderService::class)
+            ->convertFromPr($pr, [$line->id => $vendor->id], User::factory()->create());
+
+        $this->assertCount(1, $result);
+        $this->assertSame($po->id, $result[0]->id);
+        $this->assertSame(1, PurchaseOrder::where('purchase_request_id', $pr->id)->count());
+    }
+
+    public function test_stale_approval_does_not_relabel_a_manual_po_as_auto_generated(): void
+    {
+        $vendor = $this->vendor();
+        $item = Item::factory()->create();
+        $pr = $this->makePr([[
+            'item_id'              => $item->id,
+            'suggested_vendor_id'  => $vendor->id,
+            'estimated_unit_price' => '250.00',
+        ]]);
+        $stale = $pr->fresh();
+        $line = $pr->items()->firstOrFail();
+        $manualActor = User::factory()->create();
+
+        $pos = app(PurchaseOrderService::class)->convertFromPr(
+            $pr,
+            [$line->id => $vendor->id],
+            $manualActor,
+        );
+        $this->assertFalse((bool) $pos[0]->is_auto_generated);
+
+        event(new PurchaseRequestApproved($stale));
+
+        $po = PurchaseOrder::where('purchase_request_id', $pr->id)->firstOrFail()->fresh();
+        $this->assertFalse((bool) $po->is_auto_generated);
+        $this->assertSame(PurchaseRequestStatus::Converted, $pr->fresh()->status);
+        $this->assertSame(PurchaseRequestConversionStatus::Converted, $pr->fresh()->po_conversion_status);
+    }
+
+    public function test_missing_actor_records_manual_required_conversion_state(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $this->seed(WorkflowSeeder::class);
+        app(SettingsService::class)->set('system.automation.actor_roles', ['role-that-does-not-exist']);
+
+        $vendor = $this->vendor();
+        $item = Item::factory()->create();
+        $pr = $this->makePr([[
+            'item_id'              => $item->id,
+            'suggested_vendor_id'  => $vendor->id,
+            'estimated_unit_price' => '250.00',
+        ]]);
+        $pr->requester()->firstOrFail()->delete();
+
+        event(new PurchaseRequestApproved($pr));
+
+        $fresh = $pr->fresh();
+        $this->assertSame(PurchaseRequestStatus::Approved, $fresh->status);
+        $this->assertSame(PurchaseRequestConversionStatus::ManualRequired, $fresh->po_conversion_status);
+        $this->assertStringContainsString('actor', strtolower((string) $fresh->po_conversion_note));
+        $this->assertSame(0, PurchaseOrder::where('purchase_request_id', $pr->id)->count());
     }
 
     public function test_system_actor_is_used_when_the_requester_is_gone(): void

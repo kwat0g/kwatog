@@ -17,9 +17,10 @@ class RunArDunning extends Command
     {
         $r = $service->run();
         $this->info(sprintf(
-            'AR dunning: evaluated=%d sent=%d skipped=%d',
-            $r['evaluated'], $r['sent'], $r['skipped'],
+            'AR dunning: evaluated=%d sent=%d skipped=%d blocked=%d failed=%d',
+            $r['evaluated'], $r['sent'], $r['skipped'], $r['blocked'], $r['failed'],
         ));
-        return self::SUCCESS;
+
+        return ($r['blocked'] + $r['failed']) > 0 ? self::FAILURE : self::SUCCESS;
     }
 }

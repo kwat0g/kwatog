@@ -4,7 +4,7 @@
        [
          'role'      => 'Prepared by' | 'Noted by' | 'Checked by'
                         | 'Reviewed by' | 'Approved by',
-         'name'      => 'Maria Reyes'  // null/empty for pending steps
+         'name'      => 'Example Reviewer'  // null/empty for pending steps
          'signed_at' => '2026-04-20'   // null/empty for pending steps
        ]
 

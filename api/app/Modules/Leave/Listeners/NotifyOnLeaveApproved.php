@@ -32,6 +32,7 @@ class NotifyOnLeaveApproved implements ShouldQueue
             ]);
         } catch (\Throwable $e) {
             Log::warning('NotifyOnLeaveApproved failed', ['error' => $e->getMessage()]);
+            throw $e;
         }
     }
 }

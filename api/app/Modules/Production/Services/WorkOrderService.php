@@ -6,6 +6,7 @@ namespace App\Modules\Production\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
@@ -23,8 +24,11 @@ use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
 use App\Modules\MRP\Services\BomService;
 use App\Modules\Production\Enums\MachineDowntimeCategory;
+use App\Modules\Production\Enums\ProductionScheduleStatus;
 use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Production\Exceptions\IllegalLifecycleTransitionException;
+use App\Modules\Production\Events\WorkOrderCompleted;
+use App\Modules\Production\Events\WorkOrderStatusChanged;
 use App\Modules\Production\Models\MachineDowntime;
 use App\Modules\Production\Models\ProductionSchedule;
 use App\Modules\Production\Models\WorkOrder;
@@ -165,10 +169,12 @@ class WorkOrderService
             ];
             $wo = WorkOrder::create($payload);
 
-            // BOM expansion (Task 49 owns BomService::explode). Best-effort: if
-            // no active BOM exists, the WO still saves — supervisor can add
-            // materials manually via a future endpoint (out of scope here).
-            try {
+            // BOM expansion (Task 49 owns BomService::explode). If no active
+            // BOM exists, the WO still saves — supervisor can add materials
+            // manually. Once a BOM exists, however, explosion errors (cycles,
+            // depth limits, or data faults) must roll back instead of being
+            // silently converted into an unmaterialized WO.
+            if ($this->boms->activeForProduct((int) $data['product_id']) !== null) {
                 $rows = $this->boms->explode((int) $data['product_id'], (float) $data['quantity_target']);
                 foreach ($rows as $row) {
                     $wo->materials()->create([
@@ -178,8 +184,6 @@ class WorkOrderService
                         'variance'               => '0',
                     ]);
                 }
-            } catch (RuntimeException $e) {
-                // No active BOM — leave materials empty; PPC can add manually.
             }
 
             return $this->show($wo->fresh());
@@ -200,29 +204,53 @@ class WorkOrderService
         $this->assertTransition($wo, WorkOrderStatus::Confirmed);
         $from = $wo->status?->value ?? 'planned';
 
-        $result = DB::transaction(function () use ($wo, $machineId, $moldId) {
-            $update = ['status' => WorkOrderStatus::Confirmed->value];
-            if ($machineId !== null) $update['machine_id'] = $machineId;
-            if ($moldId    !== null) $update['mold_id']    = $moldId;
-            $wo->update($update);
-            $wo->refresh();
+        $result = DB::transaction(function () use ($wo, $machineId, $moldId, &$from) {
+            // Re-read the WO under a lock. Scheduler confirmation and the
+            // direct WO endpoint can otherwise both pass the outer transition
+            // check against the same stale planned row.
+            $lockedWo = WorkOrder::query()->lockForUpdate()->find($wo->id);
+            if (! $lockedWo) {
+                throw new BusinessRuleException('Work order not found.');
+            }
+            $this->assertTransition($lockedWo, WorkOrderStatus::Confirmed);
+            $from = $lockedWo->status?->value ?? 'planned';
 
-            if (! $wo->machine_id || ! $wo->mold_id) {
+            $targetMachineId = $machineId ?? $lockedWo->machine_id;
+            $targetMoldId = $moldId ?? $lockedWo->mold_id;
+            $machine = $targetMachineId
+                ? Machine::query()->lockForUpdate()->find($targetMachineId)
+                : null;
+            $mold = $targetMoldId
+                ? Mold::query()->lockForUpdate()->find($targetMoldId)
+                : null;
+
+            if (! $machine || ! $mold) {
                 throw new BusinessRuleException('Confirming a work order requires both a machine and a mold.');
             }
+
+            $this->assertAssignmentValid($lockedWo, $machine, $mold);
+
+            $lockedWo->forceFill([
+                'status' => WorkOrderStatus::Confirmed->value,
+                'machine_id' => $machine->id,
+                'mold_id' => $mold->id,
+            ])->save();
+            $lockedWo->refresh();
 
             // OGAMI-015 — machine double-booking guard. A machine already
             // committed to another Confirmed/InProgress work order cannot also
             // take this one. When both this WO and the incumbent carry schedule
             // rows, the conflict is restricted to overlapping time windows;
             // otherwise any other active WO on the same machine blocks confirm.
-            $this->assertMachineAvailable($wo);
+            $this->assertMachineAvailable($lockedWo);
 
-            $this->reserveMaterialsFor($wo);
+            $this->reserveMaterialsFor($lockedWo);
 
-            return $this->show($wo->fresh());
+            $confirmed = $this->show($lockedWo->fresh());
+            $this->recordStatusChange($confirmed, $from, WorkOrderStatus::Confirmed->value);
+
+            return $confirmed;
         });
-        $this->broadcastStatusChange($result, $from, WorkOrderStatus::Confirmed->value);
         return $result;
     }
 
@@ -273,9 +301,16 @@ class WorkOrderService
         $this->assertTransition($wo, WorkOrderStatus::InProgress);
         $from = $wo->status?->value ?? 'confirmed';
 
-        $result = DB::transaction(function () use ($wo) {
-            $machine = $wo->machine_id ? Machine::lockForUpdate()->find($wo->machine_id) : null;
-            $mold    = $wo->mold_id    ? Mold::lockForUpdate()->find($wo->mold_id)       : null;
+        $result = DB::transaction(function () use ($wo, &$from) {
+            $lockedWo = WorkOrder::query()->lockForUpdate()->find($wo->id);
+            if (! $lockedWo) {
+                throw new BusinessRuleException('Work order not found.');
+            }
+            $this->assertTransition($lockedWo, WorkOrderStatus::InProgress);
+            $from = $lockedWo->status?->value ?? 'confirmed';
+
+            $machine = $lockedWo->machine_id ? Machine::lockForUpdate()->find($lockedWo->machine_id) : null;
+            $mold    = $lockedWo->mold_id    ? Mold::lockForUpdate()->find($lockedWo->mold_id)       : null;
             if (! $machine || ! $mold) {
                 throw new BusinessRuleException('Cannot start a work order without an assigned machine and mold.');
             }
@@ -288,41 +323,43 @@ class WorkOrderService
 
             $machine->update([
                 'status'                => MachineStatus::Running->value,
-                'current_work_order_id' => $wo->id,
+                'current_work_order_id' => $lockedWo->id,
             ]);
             $mold->update(['status' => MoldStatus::InUse->value]);
 
             // ADV3 — IATF 16949 traceability: every WO run is a Production Batch.
             // Generate batch_number on first start (assertTransition prevents double-start).
-            $batchNumber = $wo->batch_number ?: $this->sequences->generate('production_batch');
+            $batchNumber = $lockedWo->batch_number ?: $this->sequences->generate('production_batch');
 
-            $wo->update([
+            $lockedWo->update([
                 'status'       => WorkOrderStatus::InProgress->value,
-                'actual_start' => $wo->actual_start ?? Carbon::now(),
+                'actual_start' => $lockedWo->actual_start ?? Carbon::now(),
                 'batch_number' => $batchNumber,
             ]);
 
             // Issue reserved materials. Best-effort: if no reservation exists
             // (e.g. legacy WOs that were confirmed before the audit fix), the
             // WO still starts — material_issue rows just won't be created.
-            $this->issueReservedMaterials($wo, (int) ($wo->creator?->id ?? $wo->created_by));
+            $this->issueReservedMaterials($lockedWo, (int) ($lockedWo->creator?->id ?? $lockedWo->created_by));
 
             // ADV3 — Capture incoming material lot references for backward traceability.
             // Best-effort: queries the latest GRN item with a material_lot_number for
             // each WO material's item_id. If no lot info exists in seeded data, the
             // attribute stays an empty array — the WO still starts cleanly.
-            $this->captureMaterialLotReferences($wo);
+            $this->captureMaterialLotReferences($lockedWo);
 
             // C-2 — Promote the parent SO to in_production. app() lookup avoids
             // a circular dependency on SalesOrderService at construction time.
-            if ($wo->sales_order_id) {
+            if ($lockedWo->sales_order_id) {
                 app(\App\Modules\CRM\Services\SalesOrderService::class)
-                    ->markInProduction((int) $wo->sales_order_id);
+                    ->markInProduction((int) $lockedWo->sales_order_id);
             }
 
-            return $this->show($wo->fresh());
+            $started = $this->show($lockedWo->fresh());
+            $this->recordStatusChange($started, $from, WorkOrderStatus::InProgress->value);
+
+            return $started;
         });
-        $this->broadcastStatusChange($result, $from, WorkOrderStatus::InProgress->value);
         return $result;
     }
 
@@ -331,28 +368,40 @@ class WorkOrderService
         $this->assertTransition($wo, WorkOrderStatus::Paused);
         $from = $wo->status?->value ?? 'in_progress';
 
-        $result = DB::transaction(function () use ($wo, $reason, $category) {
+        $result = DB::transaction(function () use ($wo, $reason, $category, &$from) {
+            $lockedWo = WorkOrder::query()->lockForUpdate()->find($wo->id);
+            if (! $lockedWo) {
+                throw new BusinessRuleException('Work order not found.');
+            }
+            $this->assertTransition($lockedWo, WorkOrderStatus::Paused);
+            $from = $lockedWo->status?->value ?? 'in_progress';
+
             // Open downtime record.
-            if ($wo->machine_id) {
+            $machine = $lockedWo->machine_id
+                ? Machine::query()->lockForUpdate()->find($lockedWo->machine_id)
+                : null;
+            if ($machine) {
                 MachineDowntime::create([
-                    'machine_id'    => $wo->machine_id,
-                    'work_order_id' => $wo->id,
+                    'machine_id'    => $machine->id,
+                    'work_order_id' => $lockedWo->id,
                     'start_time'    => Carbon::now(),
                     'category'      => $category->value,
                     'description'   => $reason,
                 ]);
-                Machine::where('id', $wo->machine_id)->update([
+                $machine->update([
                     'status'                => MachineStatus::Idle->value,
                     'current_work_order_id' => null,
                 ]);
             }
-            $wo->update([
+            $lockedWo->update([
                 'status'       => WorkOrderStatus::Paused->value,
                 'pause_reason' => $reason,
             ]);
-            return $this->show($wo->fresh());
+            $paused = $this->show($lockedWo->fresh());
+            $this->recordStatusChange($paused, $from, WorkOrderStatus::Paused->value, $reason);
+
+            return $paused;
         });
-        $this->broadcastStatusChange($result, $from, WorkOrderStatus::Paused->value, $reason);
         return $result;
     }
 
@@ -361,9 +410,16 @@ class WorkOrderService
         $this->assertTransition($wo, WorkOrderStatus::InProgress);
         $from = $wo->status?->value ?? 'paused';
 
-        $result = DB::transaction(function () use ($wo) {
+        $result = DB::transaction(function () use ($wo, &$from) {
+            $lockedWo = WorkOrder::query()->lockForUpdate()->find($wo->id);
+            if (! $lockedWo) {
+                throw new BusinessRuleException('Work order not found.');
+            }
+            $this->assertTransition($lockedWo, WorkOrderStatus::InProgress);
+            $from = $lockedWo->status?->value ?? 'paused';
+
             // Close any open downtime row for this WO.
-            $open = MachineDowntime::where('work_order_id', $wo->id)
+            $open = MachineDowntime::where('work_order_id', $lockedWo->id)
                 ->whereNull('end_time')->latest()->first();
             if ($open) {
                 $end = Carbon::now();
@@ -372,19 +428,24 @@ class WorkOrderService
                     'duration_minutes' => (int) max(0, $open->start_time->diffInMinutes($end)),
                 ]);
             }
-            if ($wo->machine_id) {
-                Machine::where('id', $wo->machine_id)->update([
+            $machine = $lockedWo->machine_id
+                ? Machine::query()->lockForUpdate()->find($lockedWo->machine_id)
+                : null;
+            if ($machine) {
+                $machine->update([
                     'status'                => MachineStatus::Running->value,
-                    'current_work_order_id' => $wo->id,
+                    'current_work_order_id' => $lockedWo->id,
                 ]);
             }
-            $wo->update([
+            $lockedWo->update([
                 'status'       => WorkOrderStatus::InProgress->value,
                 'pause_reason' => null,
             ]);
-            return $this->show($wo->fresh());
+            $resumed = $this->show($lockedWo->fresh());
+            $this->recordStatusChange($resumed, $from, WorkOrderStatus::InProgress->value);
+
+            return $resumed;
         });
-        $this->broadcastStatusChange($result, $from, WorkOrderStatus::InProgress->value);
         return $result;
     }
 
@@ -393,33 +454,49 @@ class WorkOrderService
         $this->assertTransition($wo, WorkOrderStatus::Completed);
         $from = $wo->status?->value ?? 'in_progress';
 
-        $result = DB::transaction(function () use ($wo) {
-            $produced = (int) $wo->quantity_produced;
-            $rejected = (int) $wo->quantity_rejected;
+        $result = DB::transaction(function () use ($wo, &$from) {
+            $lockedWo = WorkOrder::query()->lockForUpdate()->find($wo->id);
+            if (! $lockedWo) {
+                throw new BusinessRuleException('Work order not found.');
+            }
+            $this->assertTransition($lockedWo, WorkOrderStatus::Completed);
+            $from = $lockedWo->status?->value ?? 'in_progress';
+
+            $produced = (int) $lockedWo->quantity_produced;
+            $rejected = (int) $lockedWo->quantity_rejected;
             $scrap = $produced > 0 ? round(($rejected / $produced) * 100, 2) : 0.0;
-            $wo->update([
+            $lockedWo->update([
                 'status'     => WorkOrderStatus::Completed->value,
                 'actual_end' => Carbon::now(),
                 'scrap_rate' => $scrap,
             ]);
-            if ($wo->machine_id) {
-                Machine::where('id', $wo->machine_id)->update([
+            $machine = $lockedWo->machine_id
+                ? Machine::query()->lockForUpdate()->find($lockedWo->machine_id)
+                : null;
+            if ($machine) {
+                $machine->update([
                     'status'                => MachineStatus::Idle->value,
                     'current_work_order_id' => null,
                 ]);
             }
-            if ($wo->mold_id) {
-                $mold = Mold::find($wo->mold_id);
+            if ($lockedWo->mold_id) {
+                $mold = Mold::query()->lockForUpdate()->find($lockedWo->mold_id);
                 if ($mold && $mold->status !== MoldStatus::Maintenance) {
                     $mold->update(['status' => MoldStatus::Available->value]);
                 }
             }
-            return $this->show($wo->fresh());
+            $completed = $this->show($lockedWo->fresh());
+            app(OutboxService::class)->recordForChain(
+                new WorkOrderCompleted($completed),
+                $completed,
+                'o2c',
+                'work_order',
+                WorkOrderStatus::Completed->value,
+            );
+            $this->recordStatusChange($completed, $from, WorkOrderStatus::Completed->value);
+
+            return $completed;
         });
-        $this->broadcastStatusChange($result, $from, WorkOrderStatus::Completed->value);
-        // Series C — Task C1. Emit a domain event the chain orchestrator
-        // listeners (TriggerOutgoingQC) consume.
-        event(new \App\Modules\Production\Events\WorkOrderCompleted($result));
         return $result;
     }
 
@@ -427,9 +504,20 @@ class WorkOrderService
     {
         $this->assertTransition($wo, WorkOrderStatus::Closed);
         $from = $wo->status?->value ?? 'completed';
-        $wo->update(['status' => WorkOrderStatus::Closed->value]);
-        $result = $this->show($wo->fresh());
-        $this->broadcastStatusChange($result, $from, WorkOrderStatus::Closed->value);
+
+        $result = DB::transaction(function () use ($wo, &$from) {
+            $lockedWo = WorkOrder::query()->lockForUpdate()->find($wo->id);
+            if (! $lockedWo) {
+                throw new BusinessRuleException('Work order not found.');
+            }
+            $this->assertTransition($lockedWo, WorkOrderStatus::Closed);
+            $from = $lockedWo->status?->value ?? 'completed';
+            $lockedWo->update(['status' => WorkOrderStatus::Closed->value]);
+            $closed = $this->show($lockedWo->fresh());
+            $this->recordStatusChange($closed, $from, WorkOrderStatus::Closed->value);
+
+            return $closed;
+        });
         return $result;
     }
 
@@ -438,40 +526,58 @@ class WorkOrderService
         $this->assertTransition($wo, WorkOrderStatus::Cancelled);
         $from = $wo->status?->value ?? 'planned';
 
-        $result = DB::transaction(function () use ($wo, $reason) {
-            $wo->update([
+        $result = DB::transaction(function () use ($wo, $reason, &$from) {
+            $lockedWo = WorkOrder::query()->lockForUpdate()->find($wo->id);
+            if (! $lockedWo) {
+                throw new BusinessRuleException('Work order not found.');
+            }
+            $this->assertTransition($lockedWo, WorkOrderStatus::Cancelled);
+            $from = $lockedWo->status?->value ?? 'planned';
+
+            $lockedWo->update([
                 'status'       => WorkOrderStatus::Cancelled->value,
                 'pause_reason' => $reason,
             ]);
 
             // Sprint 6 audit §1.1: release any reservations held by this WO.
-            $this->releaseReservedMaterials($wo);
+            $this->releaseReservedMaterials($lockedWo);
 
             // Free machine + mold if currently bound.
-            if ($wo->machine_id) {
-                Machine::where('id', $wo->machine_id)->where('current_work_order_id', $wo->id)->update([
+            $machine = $lockedWo->machine_id
+                ? Machine::query()->lockForUpdate()->find($lockedWo->machine_id)
+                : null;
+            if ($machine && (int) $machine->current_work_order_id === (int) $lockedWo->id) {
+                $machine->update([
                     'status'                => MachineStatus::Idle->value,
                     'current_work_order_id' => null,
                 ]);
             }
-            if ($wo->mold_id) {
-                $mold = Mold::find($wo->mold_id);
+            if ($lockedWo->mold_id) {
+                $mold = Mold::query()->lockForUpdate()->find($lockedWo->mold_id);
                 if ($mold && $mold->status === MoldStatus::InUse) {
                     $mold->update(['status' => MoldStatus::Available->value]);
                 }
             }
-            return $this->show($wo->fresh());
+            $cancelled = $this->show($lockedWo->fresh());
+            $this->recordStatusChange($cancelled, $from, WorkOrderStatus::Cancelled->value, $reason);
+
+            return $cancelled;
         });
-        $this->broadcastStatusChange($result, $from, WorkOrderStatus::Cancelled->value, $reason);
         return $result;
     }
 
     public function delete(WorkOrder $wo): void
     {
-        if ($wo->status !== WorkOrderStatus::Planned) {
-            throw new BusinessRuleException('Only planned work orders can be deleted.');
-        }
-        $wo->delete();
+        DB::transaction(function () use ($wo): void {
+            $lockedWo = WorkOrder::query()->lockForUpdate()->find($wo->id);
+            if (! $lockedWo) {
+                throw new BusinessRuleException('Work order not found.');
+            }
+            if ($lockedWo->status !== WorkOrderStatus::Planned) {
+                throw new BusinessRuleException('Only planned work orders can be deleted.');
+            }
+            $lockedWo->delete();
+        });
     }
 
     /**
@@ -508,23 +614,56 @@ class WorkOrderService
     }
 
     /**
-     * Sprint 6 audit §1.7: dispatch the WorkOrderStatusChanged broadcast
-     * event after a successful lifecycle transition. Always invoked from
-     * outside the DB::transaction so listeners and Reverb consumers see
-     * the persisted row.
+     * Stage both cross-module status evidence and canonical chain progress
+     * inside the owning lifecycle transaction. OutboxService registers the
+     * queue dispatch only after the outermost commit, so listeners never see
+     * a rolled-back transition and a process crash cannot lose the event
+     * between the business write and its outbox insert.
      */
-    private function broadcastStatusChange(WorkOrder $wo, string $from, string $to, ?string $reason = null): void
+    private function recordStatusChange(WorkOrder $wo, string $from, string $to, ?string $reason = null): void
     {
-        if ($from === $to) return;
-        event(new \App\Modules\Production\Events\WorkOrderStatusChanged($wo, $from, $to, $reason));
+        if ($from === $to) {
+            return;
+        }
 
-        // Series C — Task C4. Re-broadcast as the canonical chain event so
-        // SPA detail pages can subscribe via a uniform `private-chain.*` channel.
+        app(OutboxService::class)->recordForChain(
+            new WorkOrderStatusChanged($wo, $from, $to, $reason),
+            $wo,
+            'o2c',
+            'work_order',
+            $to,
+        );
+
+        // Series C — Task C4. Stage the canonical chain event in the same
+        // transaction; only its outbox dispatch waits for commit.
         app(\App\Common\Services\ChainBroadcaster::class)->broadcastFor(
             $wo,
             $to,
             auth()->user(),
         );
+    }
+
+    /**
+     * Shared machine/mold assignment gate used by direct WO confirmation and
+     * the capacity scheduler's manual reassignment path.
+     *
+     * The caller should hold row locks on the WO, machine, and mold when the
+     * assignment is being persisted.
+     */
+    public function assertAssignmentValid(WorkOrder $wo, Machine $machine, Mold $mold): void
+    {
+        if ((int) $mold->product_id !== (int) $wo->product_id) {
+            throw new BusinessRuleException('The selected mold is not configured for this work-order product.');
+        }
+        if (! in_array($machine->status, [MachineStatus::Idle, MachineStatus::Running], true)) {
+            throw new BusinessRuleException('The selected machine is not available for scheduling.');
+        }
+        if (! in_array($mold->status, [MoldStatus::Available, MoldStatus::InUse], true)) {
+            throw new BusinessRuleException('The selected mold is not available for scheduling.');
+        }
+        if (! $mold->compatibleMachines()->whereKey($machine->id)->exists()) {
+            throw new BusinessRuleException('The selected machine and mold are not compatible.');
+        }
     }
 
     /**
@@ -560,13 +699,21 @@ class WorkOrderService
         }
 
         // Schedule windows for THIS WO on the target machine (if any).
+        $activeScheduleStatuses = [
+            ProductionScheduleStatus::Pending->value,
+            ProductionScheduleStatus::Confirmed->value,
+            ProductionScheduleStatus::Executed->value,
+        ];
+
         $ownWindows = ProductionSchedule::where('work_order_id', $wo->id)
             ->where('machine_id', $wo->machine_id)
+            ->whereIn('status', $activeScheduleStatuses)
             ->get(['scheduled_start', 'scheduled_end']);
 
         foreach ($candidates as $other) {
             $otherWindows = ProductionSchedule::where('work_order_id', $other->id)
                 ->where('machine_id', $wo->machine_id)
+                ->whereIn('status', $activeScheduleStatuses)
                 ->get(['scheduled_start', 'scheduled_end']);
 
             // Only do the precise time-window comparison when BOTH sides have
@@ -576,7 +723,7 @@ class WorkOrderService
                     foreach ($otherWindows as $cand) {
                         if ($own->scheduled_start < $cand->scheduled_end
                             && $cand->scheduled_start < $own->scheduled_end) {
-                            throw new RuntimeException(
+                            throw new BusinessRuleException(
                                 "Machine is already committed to work order {$other->wo_number} "
                                 . 'over an overlapping schedule window.'
                             );
@@ -587,7 +734,7 @@ class WorkOrderService
                 continue;
             }
 
-            throw new RuntimeException(
+            throw new BusinessRuleException(
                 "Machine is already committed to active work order {$other->wo_number}."
             );
         }

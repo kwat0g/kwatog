@@ -33,6 +33,7 @@ class BillResource extends JsonResource
             'has_variances'  => (bool) $this->has_variances,
             'three_way_overridden' => (bool) $this->three_way_overridden,
             'three_way_override_reason' => $this->three_way_override_reason,
+            'three_way_review_status' => $this->threeWayReviewStatus(),
             'three_way_match_url' => $this->purchase_order_id ? '/api/v1/purchasing/three-way-match/'.$this->hash_id : null,
             'purchase_order' => $this->whenLoaded('purchaseOrder', fn () => $this->purchaseOrder ? [
                 'id'        => $this->purchaseOrder->hash_id,

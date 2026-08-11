@@ -7,14 +7,17 @@ namespace App\Modules\Purchasing\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\ApprovalService;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\TrashedFilter;
 use App\Modules\Accounting\Services\BudgetEnforcementService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Purchasing\Enums\PurchaseRequestConversionStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestPriority;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
+use App\Modules\Purchasing\Events\PurchaseRequestApproved;
 use App\Modules\Purchasing\Models\ApprovedSupplier;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\PurchaseRequestItem;
@@ -249,12 +252,19 @@ class PurchaseRequestService
                 }
                 if ($this->approvals->isFullyApproved($fresh)) {
                     $fresh->forceFill([
-                        'status'      => PurchaseRequestStatus::Approved,
-                        'approved_at' => now(),
+                        'status'               => PurchaseRequestStatus::Approved,
+                        'approved_at'          => now(),
+                        'po_conversion_status' => PurchaseRequestConversionStatus::Pending,
+                        'po_conversion_note'  => null,
+                        'po_conversion_at'    => now(),
                     ])->save();
                     $fresh = $fresh->fresh();
-                    DB::afterCommit(fn () =>
-                        event(new \App\Modules\Purchasing\Events\PurchaseRequestApproved($fresh))
+                    app(OutboxService::class)->recordForChain(
+                        new PurchaseRequestApproved($fresh),
+                        $fresh,
+                        'p2p',
+                        'purchase_request',
+                        PurchaseRequestStatus::Approved->value,
                     );
                 }
             }
@@ -343,15 +353,22 @@ class PurchaseRequestService
             $becameApproved = false;
             if ($this->approvals->isFullyApproved($pr)) {
                 $pr->forceFill([
-                    'status'      => PurchaseRequestStatus::Approved,
-                    'approved_at' => now(),
+                    'status'               => PurchaseRequestStatus::Approved,
+                    'approved_at'          => now(),
+                    'po_conversion_status' => PurchaseRequestConversionStatus::Pending,
+                    'po_conversion_note'  => null,
+                    'po_conversion_at'    => now(),
                 ])->save();
                 $becameApproved = true;
             }
             $fresh = $pr->fresh();
             if ($becameApproved) {
-                DB::afterCommit(fn () =>
-                    event(new \App\Modules\Purchasing\Events\PurchaseRequestApproved($fresh))
+                app(OutboxService::class)->recordForChain(
+                    new PurchaseRequestApproved($fresh),
+                    $fresh,
+                    'p2p',
+                    'purchase_request',
+                    PurchaseRequestStatus::Approved->value,
                 );
             }
             return $fresh;

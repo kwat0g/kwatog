@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, Link } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
-import { CheckCircle2, XCircle, PackageCheck, Send } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, RefreshCw, XCircle, PackageCheck, Send } from 'lucide-react';
 import { billsApi } from '@/api/accounting/bills';
 import { grnApi } from '@/api/inventory/grn';
 import { warehouseApi } from '@/api/inventory/warehouse';
@@ -19,6 +19,7 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { ChainHeader } from '@/components/chain';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
+import { useChainProgress } from '@/hooks/useChainProgress';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import { buildP2pChain } from '@/lib/chains';
@@ -41,6 +42,7 @@ export default function GrnDetailPage() {
  queryFn: () => grnApi.show(id),
  enabled: !!id,
  });
+ useChainProgress('grn', id, ['inventory', 'grn', id]);
  const { data: grnOptions } = useQuery({
  queryKey: ['inventory', 'grn', 'options'],
  queryFn: grnApi.options,
@@ -103,6 +105,15 @@ export default function GrnDetailPage() {
  onError: (e: AxiosError<{ message?: string }>) =>
   toast.error(e.response?.data?.message ?? 'Failed to finalize GRN.'),
  });
+ const retryIncomingQc = useMutation({
+  mutationFn: () => grnApi.retryIncomingQc(id),
+  onSuccess: () => {
+   qc.invalidateQueries({ queryKey: ['inventory', 'grn', id] });
+   toast.success('Incoming QC trigger retried.');
+  },
+  onError: (e: AxiosError<{ message?: string }>) =>
+   toast.error(e.response?.data?.message ?? 'Failed to retry incoming QC.'),
+ });
  // 2026-08-08 — post the auto-created draft bill straight from the receipt.
  const postBill = useMutation({
  mutationFn: () => {
@@ -119,18 +130,25 @@ export default function GrnDetailPage() {
   toast.error(e.response?.data?.message ?? 'Failed to post bill.'),
  });
 
- const isEditable = data?.status === 'pending_qc';
+ const isEditable = data?.status === 'pending_qc' || data?.status === 'partial_accepted';
  const isDraft = data?.status === 'draft';
 
  useEffect(() => {
- // Pre-fill accept qty with received qty when a pending GRN first loads.
- if (isEditable && Object.keys(acceptMap).length === 0) {
+ // Pending GRNs start at zero accepted; continuation is cumulative and starts
+ // from the quantities already posted into inventory.
+ if (isEditable) {
   const initial: Record<string, string> = {};
-  data?.items?.forEach((l) => { initial[l.id] = l.quantity_received; });
+  data?.items?.forEach((l) => {
+   initial[l.id] = data.status === 'partial_accepted' ? l.quantity_accepted : l.quantity_received;
+  });
   setAcceptMap(initial);
+ } else {
+  setAcceptMap({});
  }
+ // This intentionally resets only when the document/status changes, so a
+ // background refetch does not overwrite quantities the operator is editing.
  // eslint-disable-next-line react-hooks/exhaustive-deps
- }, [isEditable, data?.id]);
+ }, [isEditable, data?.id, data?.status]);
 
  if (isLoading) return <SkeletonTable rows={6} columns={5} />;
  if (isError || !data) return (
@@ -139,12 +157,22 @@ export default function GrnDetailPage() {
 
  const hasPartial = isEditable && data.items?.some((l) => {
   const qty = acceptMap[l.id];
-  return qty !== undefined && Number(qty) < Number(l.quantity_received);
+  return data.status === 'pending_qc' && qty !== undefined && Number(qty) < Number(l.quantity_received);
  });
+ const hasAcceptanceIncrease = isEditable && data.items?.some((l) =>
+  Number(acceptMap[l.id] ?? l.quantity_accepted) > Number(l.quantity_accepted),
+ );
+ const acceptanceComplete = isEditable && data.items?.every((l) =>
+  Number(acceptMap[l.id] ?? l.quantity_accepted) >= Number(l.quantity_received),
+ );
  const finalizeReady = isDraft && (data.items ?? []).some((l) => {
   const v = finalizeInput[l.id];
   return !!v?.location_id && Number(v.quantity_received) > 0;
  });
+ const incomingQcNeedsAttention = data.status === 'pending_qc'
+  && data.incoming_qc_handoff
+  && data.incoming_qc_handoff.status !== 'generated'
+  && data.incoming_qc_handoff.status !== 'not_required';
 
  const variant = ({ draft: 'neutral', pending_qc: 'warning', accepted: 'success', partial_accepted: 'info', rejected: 'danger' } as const)[data.status];
 
@@ -157,17 +185,22 @@ export default function GrnDetailPage() {
   actions={
    <div className="flex items-center gap-2">
    <Chip variant={variant}>{grnOptions?.statuses.find((option) => option.value === data.status)?.label ?? data.status}</Chip>
+   {incomingQcNeedsAttention && can('quality.inspections.manage') && (
+    <Button variant="secondary" size="sm" icon={<RefreshCw size={14} />} onClick={() => retryIncomingQc.mutate()} loading={retryIncomingQc.isPending}>
+     Retry incoming QC
+    </Button>
+   )}
    {isDraft && can('inventory.grn.create') && (
     <Button variant="primary" size="sm" icon={<PackageCheck size={14} />}
      onClick={() => setConfirmFinalize(true)} loading={finalize.isPending}
      disabled={!finalizeReady}>Finalize receiving</Button>
    )}
-   {data.status === 'pending_qc' && can('inventory.grn.create') && (
+   {isEditable && can('inventory.grn.create') && (
     <>
-    <Button variant="secondary" size="xs" icon={<XCircle size={14} />} onClick={() => setRejectOpen(true)}>Reject</Button>
-    {hasPartial ? (
+    {data.status === 'pending_qc' && <Button variant="secondary" size="xs" icon={<XCircle size={14} />} onClick={() => setRejectOpen(true)}>Reject</Button>}
+    {data.status === 'partial_accepted' || hasPartial ? (
      <Button variant="primary" size="sm" icon={<CheckCircle2 size={14} />} onClick={() => setConfirmPartial(true)}
-      loading={accept.isPending} disabled={accept.isPending}>Partial accept</Button>
+      loading={accept.isPending} disabled={accept.isPending || !hasAcceptanceIncrease}>{data.status === 'partial_accepted' ? (acceptanceComplete ? 'Accept remaining' : 'Accept additional') : 'Partial accept'}</Button>
     ) : (
      <Button variant="primary" size="sm" icon={<CheckCircle2 size={14} />} onClick={() => setConfirmAccept(true)}
       loading={accept.isPending} disabled={accept.isPending}>Accept</Button>
@@ -189,7 +222,22 @@ export default function GrnDetailPage() {
     </div>
    </div>
    </div>
-  )}  {data.bill && (
+  )}
+  {incomingQcNeedsAttention && (
+   <div className="flex items-center gap-3 rounded-md border border-warning/40 bg-warning-bg/10 px-4 py-3 text-sm">
+    <AlertTriangle size={16} className="shrink-0 text-warning-fg" />
+    <div className="flex-1">
+     <div className="font-medium">Incoming QC handoff needs attention</div>
+     <div className="text-muted">{data.incoming_qc_handoff?.message ?? 'No incoming Quality inspection has been staged yet.'}</div>
+    </div>
+    {can('quality.inspections.manage') && (
+     <Button variant="secondary" size="sm" icon={<RefreshCw size={14} />} onClick={() => retryIncomingQc.mutate()} loading={retryIncomingQc.isPending}>
+      Retry trigger
+     </Button>
+    )}
+   </div>
+  )}
+  {data.bill && (
   <div className="flex items-center gap-3 rounded-md border border-success/40 bg-success-bg/10 px-4 py-3 text-sm">
   <CheckCircle2 size={16} className="shrink-0 text-success-fg" />
   <div className="flex-1">
@@ -286,8 +334,8 @@ export default function GrnDetailPage() {
     {isEditable && (
      <Td align="right">
      <Input
-      type="number" min="0" step="0.001" max={l.quantity_received}
-      value={acceptMap[l.id] ?? l.quantity_received}
+      type="number" min={data.status === 'partial_accepted' ? l.quantity_accepted : '0'} step="0.001" max={l.quantity_received}
+      value={acceptMap[l.id] ?? (data.status === 'partial_accepted' ? l.quantity_accepted : l.quantity_received)}
       onChange={(e) => {
        const v = e.target.value;
        setAcceptMap((m) => ({ ...m, [l.id]: v }));
@@ -333,8 +381,8 @@ export default function GrnDetailPage() {
   onClose={() => setConfirmPartial(false)}
   onConfirm={() => accept.mutate(acceptMap)}
   title="Partially accept this GRN?"
-  description="Lines with a lower accept quantity will move only the accepted amount into inventory; the remainder is excluded. Accepted stock updates weighted-average cost."
-  confirmLabel="Partial accept"
+  description="Acceptance is cumulative. Only the increase since the last decision moves into inventory; previously accepted stock is never duplicated or reduced."
+  confirmLabel={data.status === 'partial_accepted' ? 'Accept quantities' : 'Partial accept'}
   variant="primary"
   pending={accept.isPending}
   />

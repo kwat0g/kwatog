@@ -29,8 +29,16 @@ export function HeroSection() {
 
   const quoteRef = useMagnetic<HTMLAnchorElement>();
   const exploreRef = useMagnetic<HTMLAnchorElement>();
-  const { data: contact } = useQuery({ queryKey: ['landing', 'contact'], queryFn: landingApi.contact, staleTime: 300_000 });
-  const { data: content } = useQuery({ queryKey: ['landing', 'content'], queryFn: landingApi.content, staleTime: 300_000 });
+  const { data: contact } = useQuery({
+    queryKey: ['landing', 'contact'],
+    queryFn: landingApi.contact,
+    staleTime: 300_000,
+  });
+  const { data: content } = useQuery({
+    queryKey: ['landing', 'content'],
+    queryFn: landingApi.content,
+    staleTime: 300_000,
+  });
 
   const legalName = contact?.legal_name ?? '';
   const address = contact?.address ?? '';
@@ -54,14 +62,23 @@ export function HeroSection() {
     if (!root || reduceMotion()) return;
 
     const ctx = gsap.context(() => {
+      // `opacity`, never `autoAlpha`. GSAP's autoAlpha writes
+      // `visibility: hidden` the moment opacity hits 0, which drops the node out
+      // of the accessibility tree — a screen reader landing on the hero mid-intro
+      // would find an empty headline block. Opacity alone animates identically
+      // and keeps every word nameable throughout.
       const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
       tl.from('[data-hero-line] > *', { yPercent: 115, duration: 1.05, stagger: 0.12 })
-        .from('[data-hero="eyebrow"]', { autoAlpha: 0, y: 16, duration: 0.7 }, 0.1)
-        .from('[data-hero="sub"]', { autoAlpha: 0, y: 20, duration: 0.8 }, '-=0.6')
-        .from('[data-hero="cta"]', { autoAlpha: 0, y: 20, duration: 0.7 }, '-=0.55')
-        .from('[data-hero="trust"] > *', { autoAlpha: 0, y: 14, duration: 0.6, stagger: 0.08 }, '-=0.5')
-        .from('[data-hero="frame"]', { autoAlpha: 0, scale: 0.96, duration: 1.1 }, 0.2)
-        .from('[data-hero-dim]', { autoAlpha: 0, duration: 0.6, stagger: 0.12 }, '-=0.5');
+        .from('[data-hero="eyebrow"]', { opacity: 0, y: 16, duration: 0.7 }, 0.1)
+        .from('[data-hero="sub"]', { opacity: 0, y: 20, duration: 0.8 }, '-=0.6')
+        .from('[data-hero="cta"]', { opacity: 0, y: 20, duration: 0.7 }, '-=0.55')
+        .from(
+          '[data-hero="trust"] > *',
+          { opacity: 0, y: 14, duration: 0.6, stagger: 0.08 },
+          '-=0.5',
+        )
+        .from('[data-hero="frame"]', { opacity: 0, scale: 0.96, duration: 1.1 }, 0.2)
+        .from('[data-hero-dim]', { opacity: 0, duration: 0.6, stagger: 0.12 }, '-=0.5');
     }, root);
 
     return () => ctx.revert();
@@ -129,19 +146,37 @@ export function HeroSection() {
             <ScrambleText text={address} trigger="mount" />
           </p>
 
-          {/* Keep the gradient on the actual text boxes. Applying
-              `background-clip:text` to the parent while the headline is split
-              into block spans leaves the child glyphs transparent in Chromium,
-              which made the entire hero headline look deleted. */}
-          <h1 className="mt-8 font-display text-[clamp(3rem,8vw,5.5rem)] font-semibold leading-[0.94] tracking-[-0.04em] text-primary pb-2">
+          {/* Solid ink, not a gradient fill. The old treatment was
+              `from-primary via-primary to-secondary` — two of three stops the
+              same token, so it bought a barely-perceptible tint at the cost of
+              `text-transparent`: if the gradient fails to paint (forced
+              colours, print, an unsupported `background-clip: text`) the whole
+              headline renders invisible. Instrument Serif at this size carries
+              the hierarchy on its own. `pb-2` keeps descenders clear of the
+              per-line `overflow-hidden` that masks the intro slide-up. */}
+          {/* The three lines are separate blocks so each can slide up behind its
+              own `overflow-hidden` mask. Nothing separates them in the DOM, so
+              the computed accessible name ran the lines together — a screen
+              reader announced "Precision theworld trusts,made in the
+              Philippines." An explicit label states the sentence with its
+              spaces; a whitespace text node between the blocks would be at the
+              mercy of the 0.94 line-height. */}
+          <h1
+            aria-label={
+              [heroCopy?.line_one, heroCopy?.line_two, heroCopy?.line_three]
+                .filter(Boolean)
+                .join(' ') || undefined
+            }
+            className="mt-8 font-display text-[clamp(3rem,8vw,5.5rem)] font-semibold leading-[0.94] tracking-[-0.04em] text-primary pb-2"
+          >
             <span data-hero-line className="block overflow-hidden">
-              <span className="block bg-gradient-to-br from-primary via-primary to-secondary bg-clip-text text-transparent">{heroCopy?.line_one ?? '—'}</span>
+              <span className="block">{heroCopy?.line_one ?? '—'}</span>
             </span>
             <span data-hero-line className="block overflow-hidden">
-              <span className="block bg-gradient-to-br from-primary via-primary to-secondary bg-clip-text text-transparent">{heroCopy?.line_two ?? '—'}</span>
+              <span className="block">{heroCopy?.line_two ?? '—'}</span>
             </span>
             <span data-hero-line className="block overflow-hidden">
-              <span className="block bg-gradient-to-br from-primary via-primary to-secondary bg-clip-text text-transparent">{heroCopy?.line_three ?? '—'}</span>
+              <span className="block">{heroCopy?.line_three ?? '—'}</span>
             </span>
           </h1>
 
@@ -160,7 +195,10 @@ export function HeroSection() {
             >
               <span className="relative z-10 flex items-center gap-2">
                 {heroCta?.quote_label ?? '—'}
-                <ArrowRight size={18} className="transition-transform duration-300 group-hover:translate-x-1.5" />
+                <ArrowRight
+                  size={18}
+                  className="transition-transform duration-300 group-hover:translate-x-1.5"
+                />
               </span>
             </a>
             <a
@@ -231,13 +269,7 @@ export function HeroSection() {
               style={{ top: '0%' }}
             />
 
-            {/* dimension callouts */}
-            <span
-              data-hero-dim
-              className="absolute left-5 top-5 font-mono text-[10px] uppercase tracking-[0.16em] text-accent"
-            >
-              REV · A
-            </span>
+            {/* live dimension callouts */}
             <span
               data-hero-dim
               className="absolute right-5 top-5 font-mono text-[10px] uppercase tracking-[0.16em] text-accent"
@@ -248,7 +280,7 @@ export function HeroSection() {
             {/* title block */}
             <figcaption
               data-hero-dim
-              className="absolute inset-x-3 bottom-3 grid grid-cols-3 overflow-hidden rounded-md border border-default bg-canvas/85 font-mono text-[9px] uppercase tracking-[0.12em] text-muted backdrop-blur-sm sm:text-[10px]"
+              className="absolute inset-x-3 bottom-3 grid grid-cols-3 overflow-hidden rounded-md border border-default bg-canvas font-mono text-[9px] uppercase tracking-[0.12em] text-muted sm:text-[10px]"
             >
               <span className="border-r border-default px-3 py-2">
                 <span className="block text-text-subtle">Part</span>

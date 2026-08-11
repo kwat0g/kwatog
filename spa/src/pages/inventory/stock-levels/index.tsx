@@ -18,6 +18,7 @@ export default function StockLevelsPage() {
  const [search] = useSearchParams();
  const itemFilter = search.get('item_id') ?? '';
  const typeFilter = search.get('type') ?? '';
+ const movementFilter = search.get('movement_id') ?? '';
  // Scope cut 2026-08-08: Stock Movements folded into this page as a view toggle.
  // Deep links (item detail "View movements", stock-adjustment back) land on the
  // movements tab via ?view=movements; ?type=transfer filters the movement list.
@@ -77,7 +78,7 @@ export default function StockLevelsPage() {
  }
  />
  {view === 'movements' ? (
- <StockMovementsTab initialItemId={itemFilter || undefined} initialMovementType={typeFilter || undefined} />
+ <StockMovementsTab initialItemId={itemFilter || undefined} initialMovementType={typeFilter || undefined} initialMovementId={movementFilter || undefined} />
  ) : (
  <>
  <FilterBar filters={filterConfig} values={filters}

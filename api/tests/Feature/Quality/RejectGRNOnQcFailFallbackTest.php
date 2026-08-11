@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Quality;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
@@ -86,18 +87,37 @@ class RejectGRNOnQcFailFallbackTest extends TestCase
             'Inspector must be preferred over the system_admin fallback when present.');
     }
 
-    public function test_listener_no_ops_when_no_actor_available(): void
+    public function test_listener_fails_visibly_when_no_actor_available(): void
     {
         // No system_admin user exists; inspection has no inspector either.
-        // The listener must not throw and must leave the GRN at pending_qc.
+        // The listener must expose the blocked handoff to the queue retry and
+        // failed-job paths while leaving the GRN at pending_qc.
         $grn = $this->seedGrn();
         $inspection = $this->seedFailedIncomingInspectionFor($grn, inspectorId: null);
 
         $listener = new RejectGRNOnQcFail(app(GrnService::class));
-        $listener->handle(new InspectionFailed($inspection));
+        try {
+            $listener->handle(new InspectionFailed($inspection));
+            $this->fail('A missing rejection actor must be a visible business-rule failure.');
+        } catch (BusinessRuleException $e) {
+            $this->assertStringContainsString('no active actor', $e->getMessage());
+        }
 
         $this->assertSame(GrnStatus::PendingQc, $grn->fresh()->status,
             'With no actor available the GRN must remain at pending_qc, not be rejected.');
+    }
+
+    public function test_stale_failed_event_does_not_reject_when_inspection_is_no_longer_failed(): void
+    {
+        $grn = $this->seedGrn();
+        $inspection = $this->seedFailedIncomingInspectionFor($grn, inspectorId: null);
+        $staleEvent = new InspectionFailed($inspection->fresh());
+        $inspection->update(['status' => InspectionStatus::Passed->value]);
+
+        $listener = new RejectGRNOnQcFail(app(GrnService::class));
+        $listener->handle($staleEvent);
+
+        $this->assertSame(GrnStatus::PendingQc, $grn->fresh()->status);
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────

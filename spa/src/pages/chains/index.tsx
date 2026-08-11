@@ -55,8 +55,22 @@ function bottleneckHref(row: ChainBottleneckRow): string {
  return `/purchasing/purchase-orders/${row.entity_id}`;
  case 'delivery':
  return `/supply-chain/deliveries/${row.entity_id}`;
+ case 'inspection':
+ return `/quality/inspections/${row.entity_id}`;
+ case 'invoice':
+ return `/accounting/invoices/${row.entity_id}`;
+ case 'purchase_request':
+ return `/purchasing/purchase-requests/${row.entity_id}`;
  case 'grn':
  return `/inventory/grn/${row.entity_id}`;
+ case 'bill':
+ return `/accounting/bills/${row.entity_id}`;
+ case 'stock_movement':
+ return `/inventory/stock-levels?view=movements&movement_id=${row.entity_id}`;
+ case 'return_request':
+ return `/return-management/${row.entity_id}`;
+ case 'customer_complaint':
+ return `/crm/complaints/${row.entity_id}`;
  default:
  return `/chains?id=${row.entity_id}`;
  }

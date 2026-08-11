@@ -109,17 +109,24 @@ class AlertEngineService
     }
 
     /**
-     * @return array{raised:int,by_severity:array<string,int>,by_type:array<string,int>}
+     * @return array{raised:int,by_severity:array<string,int>,by_type:array<string,int>,failed:array<int,string>}
      */
     public function runAllChecks(): array
     {
-        $stats = ['raised' => 0, 'by_severity' => [], 'by_type' => []];
+        $stats = ['raised' => 0, 'by_severity' => [], 'by_type' => [], 'failed' => []];
         $before = Alert::count();
 
-        $this->safe(fn () => $this->checkInventory(), 'inventory');
-        $this->safe(fn () => $this->checkProduction(), 'production');
-        $this->safe(fn () => $this->checkFinance(), 'finance');
-        $this->safe(fn () => $this->checkQuality(), 'quality');
+        foreach ([
+            'inventory' => fn () => $this->checkInventory(),
+            'production' => fn () => $this->checkProduction(),
+            'finance' => fn () => $this->checkFinance(),
+            'quality' => fn () => $this->checkQuality(),
+        ] as $label => $check) {
+            $failure = $this->safe($check, $label);
+            if ($failure !== null) {
+                $stats['failed'][] = $failure;
+            }
+        }
 
         $raised = max(0, Alert::count() - $before);
         $stats['raised'] = $raised;
@@ -132,12 +139,14 @@ class AlertEngineService
         return $stats;
     }
 
-    private function safe(callable $fn, string $label): void
+    private function safe(callable $fn, string $label): ?string
     {
         try {
             $fn();
+            return null;
         } catch (\Throwable $e) {
             Log::warning("AlertEngine: {$label} check failed", ['error' => $e->getMessage()]);
+            return $label;
         }
     }
 

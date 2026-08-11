@@ -15,7 +15,7 @@ import { Chip } from '@/components/ui/Chip';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
-import type { ChainBottleneckGroup, ChainBottleneckRow } from '@/types/chain';
+import type { ChainAutomationSummary, ChainBottleneckGroup, ChainBottleneckRow } from '@/types/chain';
 
 interface Props {
  audience?: string;
@@ -64,17 +64,23 @@ export function ChainBottleneckWidget({ audience, title = 'Chain bottlenecks', h
  }
 
  const groups = (data?.groups ?? []).filter((g): g is ChainBottleneckGroup => g.count > 0);
+ const automation = data?.automation;
+ const automationNeedsAttention = automation?.status === 'attention' || automation?.status === 'unavailable';
 
  // ─── EMPTY (nothing stuck — good news) ───
  if (groups.length === 0) {
- if (hideWhenEmpty) return null;
+ if (hideWhenEmpty && !automationNeedsAttention) return null;
  return (
  <Panel title={title} meta="Refreshes every 60s">
+ {automationNeedsAttention ? (
+ <AutomationStatus summary={automation} />
+ ) : (
  <EmptyState
  icon="inbox"
  title="No bottlenecks"
  description="Every chain step is moving within its SLA."
  />
+ )}
  </Panel>
  );
  }
@@ -117,7 +123,65 @@ export function ChainBottleneckWidget({ audience, title = 'Chain bottlenecks', h
  </li>
  ))}
  </ul>
+ {automation && <AutomationStatus summary={automation} />}
  </Panel>
+ );
+}
+
+function AutomationStatus({ summary }: { summary?: ChainAutomationSummary }) {
+ if (!summary) return null;
+
+ const attention = summary.status === 'attention';
+ const unavailable = summary.status === 'unavailable';
+ const chip = unavailable ? 'neutral' : attention ? 'danger' : 'success';
+ const label = unavailable ? 'Unavailable' : attention ? 'Needs attention' : 'Healthy';
+ const outcomes = summary.listeners.outcomes;
+
+ return (
+ <div className="border-t border-default px-4 py-3 space-y-2" data-testid="chain-automation-status">
+ <div className="flex items-center justify-between gap-3">
+ <div>
+ <div className="text-sm text-primary">Automation health</div>
+ <div className="text-xs text-muted">Outbox, queued listeners, failed jobs, and supplier dispatch</div>
+ </div>
+ <Chip variant={chip}>{label}</Chip>
+ </div>
+ <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-muted">
+ <div>
+ Outbox: <span className="text-primary">{summary.outbox.pending} pending</span>
+ {summary.outbox.stale_pending > 0 && <span className="text-danger"> · {summary.outbox.stale_pending} stale</span>}
+ {summary.outbox.failed > 0 && <span className="text-danger"> · {summary.outbox.failed} failed</span>}
+ </div>
+ <div>
+ Queue: <span className="text-primary">{summary.failed_jobs.total} failed jobs</span>
+ </div>
+ <div>
+ Listeners: <span className="text-primary">{summary.listeners.processing} active</span>
+ {summary.listeners.retrying > 0 && <span className="text-warning-fg"> · {summary.listeners.retrying} retrying</span>}
+ {summary.listeners.failed > 0 && <span className="text-danger"> · {summary.listeners.failed} failed</span>}
+ {outcomes && outcomes.failed > 0 && <span className="text-danger"> · {outcomes.failed} business failures</span>}
+ {outcomes && outcomes.manual_required > 0 && <span className="text-warning-fg"> · {outcomes.manual_required} manual handoff{outcomes.manual_required === 1 ? '' : 's'}</span>}
+ {outcomes && outcomes.skipped > 0 && <span className="text-muted"> · {outcomes.skipped} safely skipped</span>}
+ </div>
+ {summary.supplier_dispatch && (
+ <div className="sm:col-span-2">
+ Supplier dispatch: <span className="text-primary">{summary.supplier_dispatch.confirmed} confirmed</span>
+ {summary.supplier_dispatch.portal_available > 0 && <span className="text-warning-fg"> · {summary.supplier_dispatch.portal_available} awaiting send confirmation</span>}
+ {summary.supplier_dispatch.manual_required > 0 && <span className="text-warning-fg"> · {summary.supplier_dispatch.manual_required} manual</span>}
+ {summary.supplier_dispatch.failed > 0 && <span className="text-danger"> · {summary.supplier_dispatch.failed} failed</span>}
+ {summary.supplier_dispatch.stale_pending > 0 && <span className="text-danger"> · {summary.supplier_dispatch.stale_pending} stale</span>}
+ </div>
+ )}
+ </div>
+ {attention && (
+ <p className="text-xs text-danger">
+ Review failed queue jobs and business handoffs; retry outbox publication with <code>outbox:dispatch --retry-failed</code>, retry failed listener jobs from the queue worker, run <code>supplier:dispatch-recover --retry-failed</code> only after reviewing provider errors, and resolve supplier dispatch rows awaiting confirmation.
+ </p>
+ )}
+ {unavailable && (
+ <p className="text-xs text-muted">The automation ledger is unavailable, so chain completion cannot be fully verified.</p>
+ )}
+ </div>
  );
 }
 
@@ -135,6 +199,9 @@ function destinationFor(row: ChainBottleneckRow | undefined): string {
  case 'invoice': return `/accounting/invoices/${row.entity_id}`;
  case 'purchase_request': return `/purchasing/purchase-requests/${row.entity_id}`;
  case 'bill': return `/accounting/bills/${row.entity_id}`;
+ case 'stock_movement': return `/inventory/stock-levels?view=movements&movement_id=${row.entity_id}`;
+ case 'return_request': return `/return-management/${row.entity_id}`;
+ case 'customer_complaint': return `/crm/complaints/${row.entity_id}`;
  default: return '#';
  }
 }

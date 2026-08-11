@@ -7,8 +7,10 @@ namespace Tests\Feature\Payroll;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
+use App\Modules\Payroll\Enums\BankFileGenerationStatus;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use App\Modules\Payroll\Events\PayrollPeriodFinalized;
+use App\Modules\Payroll\Events\PayrollGlPostingRequested;
 use App\Modules\Payroll\Listeners\GenerateBankFileOnPayrollFinalized;
 use App\Modules\Payroll\Models\BankFileRecord;
 use App\Modules\Payroll\Models\Payroll;
@@ -34,14 +36,11 @@ class BankFileAutoGenerationTest extends TestCase
         $this->seed(RolePermissionSeeder::class);
         $this->seed(GovernmentTableSeeder::class);
 
-        // Isolate from the unrelated NotifyEmployeesOnPayrollFinalized listener.
-        // That listener queries employees.user_id (a known pre-existing schema
-        // mismatch — the FK actually lives on users.employee_id). Its catch
-        // swallows the PHP exception, but on PostgreSQL the bad SQL aborts the
-        // outer RefreshDatabase transaction, which then poisons every query
-        // our listener tries to run. Re-register only our listener for the
-        // duration of this test class.
+        // Isolate this bank-file unit from the other finalization listeners.
+        // The GL handoff has its own focused tests and should not change the
+        // log assertions for this artifact-specific suite.
         Event::forget(PayrollPeriodFinalized::class);
+        Event::forget(PayrollGlPostingRequested::class);
         Event::listen(
             PayrollPeriodFinalized::class,
             [GenerateBankFileOnPayrollFinalized::class, 'handle'],
@@ -105,6 +104,7 @@ class BankFileAutoGenerationTest extends TestCase
         $this->assertGreaterThan(0, (float) $record->total_amount);
         $this->assertStringStartsWith('bank-files', $record->file_path);
         Storage::disk('local')->assertExists($record->file_path);
+        $this->assertSame(BankFileGenerationStatus::Generated, $period->fresh()->bank_file_status);
     }
 
     public function test_listener_skips_when_no_system_admin_exists(): void
@@ -134,7 +134,11 @@ class BankFileAutoGenerationTest extends TestCase
         $svc = app(PayrollPeriodService::class);
         $svc->finalize($period, $actor);
 
-        $logSpy->shouldHaveReceived('channel')->with('stack');
+        $logSpy->shouldHaveReceived('warning')->once();
+
+        $fresh = $period->fresh();
+        $this->assertSame(BankFileGenerationStatus::ManualRequired, $fresh->bank_file_status);
+        $this->assertStringContainsString('automation actor', strtolower((string) $fresh->bank_file_note));
     }
 
     public function test_listener_swallows_bank_file_failure(): void
@@ -161,5 +165,24 @@ class BankFileAutoGenerationTest extends TestCase
         $this->assertSame(PayrollPeriodStatus::Finalized, $finalized->status);
         $this->assertNull(BankFileRecord::where('payroll_period_id', $period->id)->first());
         $logSpy->shouldHaveReceived('error')->once();
+        $this->assertSame(BankFileGenerationStatus::ManualRequired, $period->fresh()->bank_file_status);
+        $this->assertStringContainsString('failed', strtolower((string) $period->fresh()->bank_file_note));
+    }
+
+    public function test_replayed_finalization_event_does_not_create_a_second_bank_file(): void
+    {
+        Storage::fake('local');
+        $this->makeSystemAdmin();
+        $period = $this->makeApprovedPeriodWithBankedPayroll();
+
+        /** @var PayrollPeriodService $svc */
+        $svc = app(PayrollPeriodService::class);
+        $finalized = $svc->finalize($period, $this->makeSystemAdmin());
+        $listener = app(GenerateBankFileOnPayrollFinalized::class);
+
+        $listener->handle(new PayrollPeriodFinalized($finalized->fresh()));
+
+        $this->assertSame(1, BankFileRecord::where('payroll_period_id', $period->id)->count());
+        $this->assertSame(BankFileGenerationStatus::Generated, $period->fresh()->bank_file_status);
     }
 }

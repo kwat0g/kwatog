@@ -6,6 +6,7 @@ namespace Tests\Feature\HR;
 
 use App\Modules\Auth\Notifications\PasswordResetNotification;
 use App\Modules\Auth\Notifications\WelcomeNotification;
+use App\Modules\HR\Exceptions\AccountAlreadyProvisionedException;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\Position;
@@ -68,14 +69,14 @@ class UserProvisioningTest extends TestCase
         $this->assertSame($user->id, $employee->fresh()->user->id);
     }
 
-    public function test_provision_twice_throws_domain_exception(): void
+    public function test_provision_twice_throws_account_already_provisioned_exception(): void
     {
         /** @var UserProvisioningService $svc */
         $svc = app(UserProvisioningService::class);
         $employee = $this->makeEmployee();
         $svc->provisionForEmployee($employee);
 
-        $this->expectException(\DomainException::class);
+        $this->expectException(AccountAlreadyProvisionedException::class);
         $svc->provisionForEmployee($employee->fresh());
     }
 

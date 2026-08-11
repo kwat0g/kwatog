@@ -66,6 +66,7 @@ class ReapStalePayrollRuns extends Command
         }
 
         $reaped = 0;
+        $errors = 0;
 
         foreach ($stale as $period) {
             try {
@@ -80,6 +81,7 @@ class ReapStalePayrollRuns extends Command
                 ));
                 $reaped++;
             } catch (\Throwable $e) {
+                $errors++;
                 // One bad row must not abort the sweep.
                 Log::warning('payroll:reap-stale-runs — failed to release claim', [
                     'period_id' => $period->id,
@@ -90,6 +92,6 @@ class ReapStalePayrollRuns extends Command
 
         $this->info("Released {$reaped} stale payroll compute claim(s) older than {$minutes} minute(s).");
 
-        return self::SUCCESS;
+        return $errors > 0 ? self::FAILURE : self::SUCCESS;
     }
 }

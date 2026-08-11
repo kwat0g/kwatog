@@ -7,6 +7,8 @@ namespace Tests\Feature\SupplyChain;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
+use App\Common\Models\ChainListenerRun;
+use App\Common\Services\OutboxEventCodec;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -16,6 +18,9 @@ use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\DeliveryItem;
 use App\Modules\SupplyChain\Models\DeliveryProof;
+use App\Modules\SupplyChain\Enums\DeliveryInvoiceHandoffStatus;
+use App\Modules\SupplyChain\Events\DeliveryInvoiceRequested;
+use App\Modules\SupplyChain\Listeners\CreateDraftInvoiceOnDeliveryInvoiceRequested;
 use App\Modules\SupplyChain\Services\DeliveryService;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
@@ -71,6 +76,7 @@ class AutoInvoiceOnDeliveryConfirmTest extends TestCase
 
         $delivery = $delivery->fresh();
         $this->assertNotNull($delivery->invoice_id, 'Delivery.invoice_id must be linked.');
+        $this->assertSame(DeliveryInvoiceHandoffStatus::Generated, $delivery->invoice_handoff_status);
 
         $invoice = Invoice::with('items')->find($delivery->invoice_id);
         $this->assertNotNull($invoice);
@@ -138,8 +144,28 @@ class AutoInvoiceOnDeliveryConfirmTest extends TestCase
             'Delivery must still confirm even when auto-invoice fails.');
         $this->assertNull($confirmed->fresh()->invoice_id,
             'No invoice should be linked when the default account is misconfigured.');
+        $this->assertSame(
+            DeliveryInvoiceHandoffStatus::ManualRequired,
+            $confirmed->fresh()->invoice_handoff_status,
+            'The failed invoice handoff must remain visible on the confirmed delivery.',
+        );
         $this->assertSame($invoicesBefore, Invoice::count(),
             'No invoice row should have been created.');
+
+        $request = DB::table('event_outbox')
+            ->where('event_type', DeliveryInvoiceRequested::class)
+            ->first();
+        $this->assertNotNull($request, 'A failed invoice handoff must create a durable recovery request.');
+        $this->assertSame('published', $request->status);
+        $this->assertDatabaseHas('chain_step_runs', [
+            'outbox_id' => $request->id,
+            'step' => 'invoice_handoff',
+        ]);
+        $this->assertDatabaseHas('chain_listener_runs', [
+            'outbox_id' => $request->id,
+            'listener_class' => CreateDraftInvoiceOnDeliveryInvoiceRequested::class,
+            'outcome_status' => ChainListenerRun::OUTCOME_MANUAL_REQUIRED,
+        ]);
 
         $note = DB::table('notifications')
             ->where('type', 'invoice.auto_failed')
@@ -150,6 +176,48 @@ class AutoInvoiceOnDeliveryConfirmTest extends TestCase
         $data = json_decode($note->data, true);
         $this->assertStringContainsString($confirmed->delivery_number, (string) $data['title']);
         $this->assertNotEmpty($data['message']);
+    }
+
+    public function test_invoice_handoff_replay_recovers_after_accounting_is_fixed_without_duplication(): void
+    {
+        DB::table('settings')->where('key', 'accounting.default_sales_revenue_account_code')->delete();
+        DB::table('accounts')->where('code', '4010')->delete();
+
+        $user = $this->makeUser();
+        [$delivery] = $this->seedDeliveryWithLine(
+            $user,
+            productRevenueAccountId: null,
+            qty: '3',
+            price: '40.00',
+        );
+        $this->addProof($delivery, $user);
+        $confirmed = $this->svc->confirm($delivery, $user);
+
+        $request = DB::table('event_outbox')
+            ->where('event_type', DeliveryInvoiceRequested::class)
+            ->latest('created_at')
+            ->firstOrFail();
+
+        // Restore the exact accounting prerequisites that the original
+        // attempt was missing, then replay only the handoff listener.
+        $this->seed(ChartOfAccountsSeeder::class);
+        $this->seed(SettingsSeeder::class);
+
+        $event = app(OutboxEventCodec::class)->decode(
+            (string) $request->event_type,
+            json_decode((string) $request->payload, true, 512, JSON_THROW_ON_ERROR),
+        );
+        $listener = app(CreateDraftInvoiceOnDeliveryInvoiceRequested::class);
+        $listener->handle($event);
+
+        $recovered = $confirmed->fresh();
+        $this->assertNotNull($recovered->invoice_id);
+        $this->assertSame(DeliveryInvoiceHandoffStatus::Generated, $recovered->invoice_handoff_status);
+        $invoiceCount = Invoice::count();
+
+        // A second replay observes the link and must not create another draft.
+        $listener->handle($event);
+        $this->assertSame($invoiceCount, Invoice::count());
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────

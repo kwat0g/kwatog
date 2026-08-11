@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\SupplyChain\Resources;
 
 use App\Modules\SupplyChain\Enums\DeliveryStatus;
+use App\Modules\SupplyChain\Enums\DeliveryInvoiceHandoffStatus;
 use App\Modules\Quality\Enums\InspectionStatus;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -25,6 +26,16 @@ class DeliveryResource extends JsonResource
             'departed_at'         => optional($this->departed_at)?->toISOString(),
             'delivered_at'        => optional($this->delivered_at)?->toISOString(),
             'confirmed_at'        => optional($this->confirmed_at)?->toISOString(),
+            'invoice_handoff'     => [
+                'status' => $this->invoice_handoff_status instanceof DeliveryInvoiceHandoffStatus
+                    ? $this->invoice_handoff_status->value
+                    : (string) $this->invoice_handoff_status,
+                'status_label' => ($handoff = $this->invoice_handoff_status instanceof DeliveryInvoiceHandoffStatus
+                    ? $this->invoice_handoff_status
+                    : DeliveryInvoiceHandoffStatus::tryFrom((string) $this->invoice_handoff_status))?->label(),
+                'message' => $this->invoice_handoff_message,
+                'attempted_at' => optional($this->invoice_handoff_at)?->toISOString(),
+            ],
             'receipt_photo_url'   => $this->receipt_photo_path ? "/api/v1/supply-chain/deliveries/{$this->hash_id}/receipt-photo" : null,
             'notes'               => $this->notes,
             // ADV7 — Proof of Delivery receiver capture fields.

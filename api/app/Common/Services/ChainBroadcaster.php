@@ -14,13 +14,15 @@ use Illuminate\Support\Facades\Log;
  * Series C — Task C4. Central helper for broadcasting chain step advances.
  *
  * Every domain service (SalesOrderService, WorkOrderService, GrnService,
- * DeliveryService, …) calls broadcastFor() after committing a status
- * change. The mapping between Eloquent class and chain entity-type slug
- * lives here so individual services don't need to know the slug.
+ * DeliveryService, …) calls broadcastFor() while its status transaction is
+ * still open. The mapping between Eloquent class and chain entity-type slug
+ * lives here so individual services don't need to know the slug. OutboxService
+ * defers queue publication until the outermost commit.
  *
- * Failures are swallowed and logged: a broken broadcast must never roll
- * back a successful business transaction. Reverb may be down, queue may
- * be paused, etc. — none of those should block confirming a sales order.
+ * Durable staging failures are logged and rethrown: a status mutation must
+ * not commit without its canonical chain evidence. Queue/Reverb outages do
+ * not reach this boundary — OutboxService only attempts queue publication
+ * after commit and leaves the row recoverable when delivery is unavailable.
  */
 class ChainBroadcaster
 {
@@ -47,9 +49,13 @@ class ChainBroadcaster
     ];
 
     /**
-     * Fire a ChainStepAdvanced event for $entity transitioning to $newStatus.
+     * Stage a ChainStepAdvanced event for $entity transitioning to $newStatus.
+     * Call this from the transaction that owns the status mutation; the
+     * durable outbox row is then committed atomically and published later.
      *
-     * Returns true on dispatch, false on swallowed failure.
+     * Returns true when the durable row is staged. Unsupported model classes
+     * and outbox/database failures throw so the owning transaction can roll
+     * back rather than commit an untracked chain transition.
      */
     public function broadcastFor(Model $entity, string $newStatus, ?User $actor = null): bool
     {
@@ -57,8 +63,9 @@ class ChainBroadcaster
             $cls = $entity::class;
             $type = self::CLASS_TO_TYPE[$cls] ?? null;
             if ($type === null) {
-                Log::debug('ChainBroadcaster: unsupported model class', ['class' => $cls]);
-                return false;
+                throw new \InvalidArgumentException(
+                    "ChainBroadcaster does not support model class {$cls}."
+                );
             }
 
             $hashId = method_exists($entity, 'getHashIdAttribute')
@@ -70,9 +77,9 @@ class ChainBroadcaster
                 ? (string) ($entity->{$docField} ?? '')
                 : (string) $entity->getKey();
 
-            [$active, $completed] = ChainDefinitions::resolve($type, $newStatus);
+            [$active, $completed] = ChainDefinitions::resolveStrict($type, $newStatus);
 
-            event(new ChainStepAdvanced(
+            $event = new ChainStepAdvanced(
                 entityType:     $type,
                 entityHashId:   $hashId,
                 docNumber:      $docNumber,
@@ -80,16 +87,37 @@ class ChainBroadcaster
                 activeStep:     $active,
                 completedSteps: $completed,
                 actorName:      $actor?->name,
-            ));
+            );
+
+            $chain = in_array($type, ['purchase_order', 'grn', 'bill'], true)
+                ? 'p2p'
+                : 'o2c';
+            $version = (string) ($entity->getRawOriginal('updated_at') ?? microtime(true));
+            $dedupeKey = 'chain-step:'.hash(
+                'sha256',
+                implode('|', [$type, (string) $entity->getKey(), $newStatus, $version]),
+            );
+
+            // Realtime delivery is now durable too. If Reverb is unavailable,
+            // the outbox worker retries the broadcast without affecting the
+            // already-committed business transition.
+            app(OutboxService::class)->recordForChain(
+                $event,
+                $entity,
+                $chain,
+                $type,
+                $active,
+                $dedupeKey,
+            );
 
             return true;
         } catch (\Throwable $e) {
-            Log::warning('ChainBroadcaster failed', [
+            Log::error('ChainBroadcaster durable staging failed', [
                 'class'      => $entity::class,
                 'new_status' => $newStatus,
                 'error'      => $e->getMessage(),
             ]);
-            return false;
+            throw $e;
         }
     }
 }

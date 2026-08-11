@@ -148,6 +148,7 @@ class UpdateSettingRequest extends FormRequest
             'purchasing.supplier_score.price_variance_target' => ['value' => ['required', 'numeric', 'min:0']],
             'purchasing.supplier_score.lead_time_variance_target' => ['value' => ['required', 'numeric', 'min:0']],
             'purchasing.supplier_score.trend_months' => ['value' => ['required', 'integer', 'min:1', 'max:36']],
+            'purchasing.supplier_dispatch.stale_after_minutes' => ['value' => ['required', 'integer', 'min:1', 'max:1440']],
             'hr.training_expiry.t30_days' => ['value' => ['required', 'integer', 'min:1', 'max:3650']],
             'hr.training_expiry.t14_days' => ['value' => ['required', 'integer', 'min:1', 'max:3650']],
             'hr.training_expiry.t7_days' => ['value' => ['required', 'integer', 'min:1', 'max:3650']],

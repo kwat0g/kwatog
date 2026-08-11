@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Payroll\Services;
 
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
-use App\Modules\Payroll\Jobs\ProcessPayrollJob;
 use App\Modules\Payroll\Models\PayrollPeriod;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -34,27 +34,43 @@ class AutoPayrollPeriodService
     public function createForSecondHalfOfCurrentMonth(?Carbon $now = null): ?PayrollPeriod
     {
         $now ??= Carbon::now();
-        $start = $now->copy()->day(16)->startOfDay();
-        $end   = $now->copy()->endOfMonth()->startOfDay();
-        $payDate = $now->copy()->endOfMonth()->startOfDay();
 
-        return $this->createPeriod($start, $end, $payDate, isFirstHalf: false);
+        return $this->createForSecondHalfOfMonth($now->year, $now->month);
     }
 
     public function createForFirstHalfOfNextMonth(?Carbon $now = null): ?PayrollPeriod
     {
         $now ??= Carbon::now();
-        $start = $now->copy()->addMonth()->day(1)->startOfDay();
-        $end   = $now->copy()->addMonth()->day(15)->startOfDay();
-        $payDate = $end->copy();
 
-        return $this->createPeriod($start, $end, $payDate, isFirstHalf: true);
+        $target = $now->copy()->addMonthNoOverflow();
+
+        return $this->createForFirstHalfOfMonth($target->year, $target->month);
+    }
+
+    public function createForSecondHalfOfMonth(int $year, int $month): ?PayrollPeriod
+    {
+        $target = $this->targetMonth($year, $month);
+        $start = $target->copy()->day(16)->startOfDay();
+        $end = $target->copy()->endOfMonth()->startOfDay();
+
+        return $this->createPeriod($start, $end, $end->copy(), isFirstHalf: false);
+    }
+
+    public function createForFirstHalfOfMonth(int $year, int $month): ?PayrollPeriod
+    {
+        $start = $this->targetMonth($year, $month);
+        $end = $start->copy()->day(15)->startOfDay();
+
+        return $this->createPeriod($start, $end, $end->copy(), isFirstHalf: true);
     }
 
     private function createPeriod(Carbon $start, Carbon $end, Carbon $payDate, bool $isFirstHalf): ?PayrollPeriod
     {
+        $autoKey = $this->autoIdempotencyKey($start);
+
         if (PayrollPeriod::where('period_start', $start->toDateString())->exists()) {
             Log::info('AutoPayrollPeriodService: period already exists, skipping', ['period_start' => $start->toDateString()]);
+
             return null;
         }
 
@@ -70,52 +86,86 @@ class AutoPayrollPeriodService
 
         if ($overlapping) {
             Log::warning('AutoPayrollPeriodService: an existing period overlaps this window; skipping auto-creation', [
-                'period_start'        => $start->toDateString(),
-                'period_end'          => $end->toDateString(),
-                'existing_period_id'  => $overlapping->id,
-                'existing_label'      => $overlapping->label(),
+                'period_start' => $start->toDateString(),
+                'period_end' => $end->toDateString(),
+                'existing_period_id' => $overlapping->id,
+                'existing_label' => $overlapping->label(),
             ]);
+
             return null;
         }
 
-        $period = DB::transaction(function () use ($start, $end, $payDate, $isFirstHalf) {
-            $period = PayrollPeriod::create([
-                'period_start'        => $start->toDateString(),
-                'period_end'          => $end->toDateString(),
-                'payroll_date'        => $payDate->toDateString(),
-                'is_first_half'       => $isFirstHalf,
-                'is_thirteenth_month' => false,
-                'created_by'          => null,
-                'is_auto_created'     => true,
-                'auto_created_at'     => now(),
+        try {
+            $period = DB::transaction(function () use ($start, $end, $payDate, $isFirstHalf, $autoKey) {
+                $period = PayrollPeriod::create([
+                    'period_start' => $start->toDateString(),
+                    'period_end' => $end->toDateString(),
+                    'payroll_date' => $payDate->toDateString(),
+                    'is_first_half' => $isFirstHalf,
+                    'is_thirteenth_month' => false,
+                    'created_by' => null,
+                    'is_auto_created' => true,
+                    'auto_created_at' => now(),
+                    'auto_idempotency_key' => $autoKey,
+                ]);
+                $period->forceFill(['status' => PayrollPeriodStatus::Draft->value])->save();
+
+                return $period;
+            });
+        } catch (QueryException $e) {
+            if (! $this->isAutoKeyConflict($e)) {
+                throw $e;
+            }
+
+            Log::info('AutoPayrollPeriodService: concurrent auto-period creation lost the idempotency race; skipping', [
+                'auto_idempotency_key' => $autoKey,
             ]);
-            $period->forceFill(['status' => PayrollPeriodStatus::Draft->value])->save();
 
-            return $period;
-        });
+            return null;
+        }
 
-        // Claim BEFORE dispatching. ProcessPayrollJob refuses to touch a period
-        // that is not already Processing (it verifies it owns a claim rather
-        // than making one), so dispatching a Draft period queued a job that
-        // logged "no longer claimed" and returned without computing anything —
-        // auto-payroll silently produced nothing at all.
+        // Claim and stage the durable compute request together. ProcessPayrollJob
+        // refuses to touch a period that is not already Processing (it verifies
+        // it owns a claim rather than making one), so a Draft period must never
+        // produce a compute request.
         //
         // Claiming can legitimately fail (e.g. the scope matches nobody), so a
         // failure is logged and the period is left at Draft for HR to handle by
         // hand rather than throwing out of a scheduled command.
         try {
-            $claimed = $this->periods->claimForCompute($period);
+            $claimed = $this->periods->claimForComputeAndStage($period);
         } catch (\Throwable $e) {
             Log::warning('AutoPayrollPeriodService: period created but compute could not be claimed', [
                 'period_id' => $period->id,
-                'error'     => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
 
             return $period;
         }
 
-        ProcessPayrollJob::dispatch($claimed, null);
-
         return $claimed;
+    }
+
+    private function autoIdempotencyKey(Carbon $start): string
+    {
+        return $start->toDateString().':regular';
+    }
+
+    private function targetMonth(int $year, int $month): Carbon
+    {
+        if ($year < 2000 || $year > 2100 || $month < 1 || $month > 12) {
+            throw new \InvalidArgumentException('Payroll period target must be a year from 2000..2100 and a month from 1..12.');
+        }
+
+        return Carbon::create($year, $month, 1)->startOfDay();
+    }
+
+    private function isAutoKeyConflict(QueryException $exception): bool
+    {
+        $message = strtolower($exception->getMessage());
+
+        return in_array((string) $exception->getCode(), ['23505', '23000'], true)
+            && (str_contains($message, 'auto_idempotency_key')
+                || str_contains($message, 'payroll_periods_auto_idempotency_unique'));
     }
 }

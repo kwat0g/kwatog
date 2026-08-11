@@ -15,6 +15,7 @@ import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Th, Td, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { DashboardShell, KpiGrid, PanelRow } from '@/components/dashboard/DashboardShell';
+import { PeriodNote } from '@/components/dashboard/period';
 import { ForecastPanel } from '@/components/dashboard/ForecastPanel';
 import { DonutBreakdown, BarComparison } from '@/components/charts';
 import { KpiStrip } from '@/components/dashboard/KpiStrip';
@@ -250,7 +251,10 @@ function QcChainCoveragePanel({ coverage, policy }: { coverage: QualityDashboard
  }
 
  return (
- <Panel title="QC Chain Coverage (This Week)">
+ <Panel
+ title="QC Chain Coverage"
+ meta={<PeriodNote fallback="current calendar week" />}
+ >
  <ul className="space-y-3">
  {stages.map((s) => (
  <li key={s.key}>

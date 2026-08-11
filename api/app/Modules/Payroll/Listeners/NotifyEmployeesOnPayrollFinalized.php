@@ -40,6 +40,7 @@ class NotifyEmployeesOnPayrollFinalized implements ShouldQueue
             ]);
         } catch (\Throwable $e) {
             Log::warning('NotifyEmployeesOnPayrollFinalized failed', ['error' => $e->getMessage()]);
+            throw $e;
         }
     }
 

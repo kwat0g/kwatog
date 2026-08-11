@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Quality;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
@@ -114,6 +115,58 @@ class InProcessQcTriggerTest extends TestCase
     {
         $this->listener->handle($this->event());
         $this->listener->handle($this->event());
+
+        $this->assertSame(1, Inspection::query()
+            ->where('stage', InspectionStage::InProcess->value)
+            ->where('entity_type', InspectionEntityType::WorkOrder->value)
+            ->where('entity_id', $this->wo->id)
+            ->count());
+    }
+
+    public function test_started_work_order_with_zero_target_is_not_silently_skipped(): void
+    {
+        $this->wo->forceFill(['quantity_target' => 0])->save();
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('positive target quantity');
+
+        $this->listener->handle($this->event());
+    }
+
+    public function test_stale_snapshot_without_product_does_not_override_authoritative_work_order(): void
+    {
+        $staleWo = $this->wo->fresh();
+        $staleWo->forceFill(['product_id' => null]);
+
+        $this->listener->handle(new WorkOrderStatusChanged($staleWo, 'confirmed', 'in_progress'));
+
+        $this->assertSame(1, Inspection::query()
+            ->where('stage', InspectionStage::InProcess->value)
+            ->where('entity_type', InspectionEntityType::WorkOrder->value)
+            ->where('entity_id', $this->wo->id)
+            ->count());
+    }
+
+    public function test_delayed_start_event_does_not_create_inspection_after_cancellation(): void
+    {
+        $staleEvent = new WorkOrderStatusChanged($this->wo->fresh(), 'confirmed', 'in_progress');
+        $this->wo->update(['status' => 'cancelled']);
+
+        $this->listener->handle($staleEvent);
+
+        $this->assertSame(0, Inspection::query()
+            ->where('stage', InspectionStage::InProcess->value)
+            ->where('entity_type', InspectionEntityType::WorkOrder->value)
+            ->where('entity_id', $this->wo->id)
+            ->count());
+    }
+
+    public function test_delayed_start_event_still_creates_inspection_after_pause(): void
+    {
+        $staleEvent = new WorkOrderStatusChanged($this->wo->fresh(), 'confirmed', 'in_progress');
+        $this->wo->update(['status' => 'paused']);
+
+        $this->listener->handle($staleEvent);
 
         $this->assertSame(1, Inspection::query()
             ->where('stage', InspectionStage::InProcess->value)

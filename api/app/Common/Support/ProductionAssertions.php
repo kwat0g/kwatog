@@ -35,6 +35,11 @@ class ProductionAssertions
             $errors[] = 'APP_KEY must be a real generated key (php artisan key:generate).';
         }
 
+        $serverName = strtolower(trim((string) config('app.server_name', '')));
+        if ($serverName === '' || in_array($serverName, ['localhost', '127.0.0.1', '::1', '_'], true)) {
+            $errors[] = 'SERVER_NAME must identify the real production host.';
+        }
+
         if (! empty($errors)) {
             throw new RuntimeException('Production boot blocked: '.implode(' ', $errors));
         }

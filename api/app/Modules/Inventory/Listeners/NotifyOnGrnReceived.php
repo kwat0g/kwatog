@@ -37,6 +37,7 @@ class NotifyOnGrnReceived implements ShouldQueue
             ]);
         } catch (\Throwable $e) {
             Log::warning('NotifyOnGrnReceived failed', ['error' => $e->getMessage()]);
+            throw $e;
         }
     }
 }

@@ -107,6 +107,8 @@ Run against a **throwaway / staging** database, never production.
 | Date | Dump file | RTO | Pass/Fail | Notes / signer |
 |------|-----------|-----|-----------|----------------|
 | _2026-06-16_ | _example — fill on first real drill_ | _–_ | _–_ | _–_ |
+| 2026-08-11 | `backups/ogami-20260810-211704.sql.gz` | ~10s | Partial pass | Disposable PostgreSQL restore completed with `ON_ERROR_STOP`; `users=14`, `event_outbox=0`. App-container login/health checks still require staging. |
+| 2026-08-11 | `backups/ogami-20260810-214257.sql.gz` | ~10s | Partial pass | Fresh backup restored into disposable PostgreSQL with `ON_ERROR_STOP`; `users=14`, `event_outbox=0`. App-container login/health checks and VPS freshness/off-site checks still require staging. |
 
 ---
 

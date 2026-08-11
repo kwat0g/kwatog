@@ -10,6 +10,7 @@ use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\SupplyChain\Enums\DeliveryStatus;
+use App\Modules\SupplyChain\Enums\DeliveryInvoiceHandoffStatus;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -27,6 +28,7 @@ class Delivery extends Model
         'status', 'scheduled_date', 'departed_at', 'delivered_at',
         'confirmed_at', 'confirmed_by', 'receipt_photo_path',
         'invoice_id', 'notes', 'created_by',
+        'invoice_handoff_status', 'invoice_handoff_message', 'invoice_handoff_at',
         // ADV7 — Proof of Delivery receiver capture.
         'receiver_name', 'receiver_position', 'received_at', 'delivery_remarks',
     ];
@@ -37,6 +39,8 @@ class Delivery extends Model
         'departed_at'    => 'datetime',
         'delivered_at'   => 'datetime',
         'confirmed_at'   => 'datetime',
+        'invoice_handoff_status' => DeliveryInvoiceHandoffStatus::class,
+        'invoice_handoff_at' => 'datetime',
         'received_at'    => 'datetime',
     ];
 

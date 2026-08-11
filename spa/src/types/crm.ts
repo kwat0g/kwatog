@@ -171,6 +171,12 @@ export interface CustomerComplaint {
  status_label?: string;
  description: string;
  affected_quantity: number;
+ ncr_handoff?: {
+  status: 'not_started' | 'generated' | 'manual_required' | string;
+  status_label?: string | null;
+  message?: string | null;
+  at?: string | null;
+ };
  received_date: string | null;
  resolved_at: string | null;
  closed_at: string | null;

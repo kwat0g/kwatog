@@ -1,5 +1,8 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { AxiosError } from 'axios';
+import { RefreshCw } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { stockMovementsApi } from '@/api/inventory/stock';
 import { Chip } from '@/components/ui/Chip';
 import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
@@ -10,6 +13,7 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { formatDateTime } from '@/lib/formatDate';
 import type { ListParams } from '@/types';
 import type { StockMovement } from '@/types/inventory';
+import { usePermission } from '@/hooks/usePermission';
 
 const chip = (t: string): 'success' | 'info' | 'warning' | 'danger' | 'neutral' => {
   if (['grn_receipt', 'production_receipt', 'adjustment_in'].includes(t)) return 'success';
@@ -21,6 +25,7 @@ const chip = (t: string): 'success' | 'info' | 'warning' | 'danger' | 'neutral' 
 
 interface StockMovementListParams extends ListParams {
   item_id?: string;
+  movement_id?: string;
   movement_type?: string;
   type?: string;
   pending?: boolean | string;
@@ -36,15 +41,20 @@ const DEFAULT_FILTERS: StockMovementListParams = {
 export function StockMovementsTab({
   initialItemId,
   initialMovementType,
+  initialMovementId,
 }: {
   initialItemId?: string;
   initialMovementType?: string;
+  initialMovementId?: string;
 }) {
-  const [filters, setFilters] = useState<StockMovementListParams>({
-    ...DEFAULT_FILTERS,
-    item_id: initialItemId || undefined,
-    movement_type: initialMovementType || undefined,
-  });
+ const qc = useQueryClient();
+ const { can } = usePermission();
+ const [filters, setFilters] = useState<StockMovementListParams>({
+ ...DEFAULT_FILTERS,
+ item_id: initialItemId || undefined,
+ movement_type: initialMovementType || undefined,
+ movement_id: initialMovementId || undefined,
+ });
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['inventory', 'movements', filters],
@@ -57,6 +67,38 @@ export function StockMovementsTab({
  staleTime: 5 * 60 * 1000,
  });
  const labels = new Map((movementOptions?.movement_types ?? []).map((option) => [option.value, option.label]));
+ const retryGl = useMutation({
+ mutationFn: (movementId: string) => stockMovementsApi.retryGlHandoff(movementId),
+ onSuccess: (movement) => {
+ qc.invalidateQueries({ queryKey: ['inventory', 'movements'] });
+ toast.success(movement.gl_handoff.status === 'generated' ? 'Journal entry posted.' : 'GL handoff still needs Accounting setup.');
+ },
+ onError: (error: AxiosError<{ message?: string }>) => {
+ toast.error(error.response?.data?.message ?? 'The stock movement could not be posted to the General Ledger.');
+ },
+ });
+
+ const glChip = (movement: StockMovement) => {
+ const handoff = movement.gl_handoff;
+ if (!handoff) return <span className="text-muted">—</span>;
+ const variant = handoff.status === 'generated' || handoff.status === 'not_required'
+ ? 'success' : handoff.status === 'manual_required' ? 'warning' : 'neutral';
+ return <div className="flex items-center gap-2">
+ <span title={handoff.message ?? undefined}>
+ <Chip variant={variant}>{handoff.status_label ?? handoff.status.replace('_', ' ')}</Chip>
+ </span>
+ {can('accounting.journal.post') && handoff.status === 'manual_required' && (
+ <Button
+ type="button"
+ variant="ghost"
+ size="sm"
+ icon={<RefreshCw size={13} className={retryGl.isPending ? 'animate-spin' : ''} />}
+ disabled={retryGl.isPending}
+ onClick={() => retryGl.mutate(movement.id)}
+ >Retry</Button>
+ )}
+ </div>;
+ };
 
  const columns: Column<StockMovement>[] = [
  { key: 'created_at', header: 'When', cell: (r) => <span className="font-mono">{formatDateTime(r.created_at)}</span> },
@@ -72,6 +114,7 @@ export function StockMovementsTab({
  { key: 'qty', header: 'Qty', align: 'right', cell: (r) => <NumCell>{Number(r.quantity).toFixed(3)}</NumCell> },
  { key: 'cost', header: 'Unit cost', align: 'right', cell: (r) => <NumCell>{Number(r.unit_cost).toFixed(4)}</NumCell> },
  { key: 'total', header: 'Total cost', align: 'right', cell: (r) => <NumCell className="font-medium">{Number(r.total_cost).toFixed(2)}</NumCell> },
+ { key: 'gl', header: 'GL', cell: glChip },
  { key: 'ref', header: 'Reference', cell: (r) => r.reference_type ? <span className="text-xs">{r.reference_type} #{r.reference_id}</span> : '—' },
  ];
 
@@ -88,7 +131,7 @@ export function StockMovementsTab({
  onSearch={() => undefined}
  onFilter={(k, v) => setFilters(f => ({ ...f, [k]: v, page: 1 }))}
  searchPlaceholder="" />
- {isLoading && !data && <SkeletonTable columns={9} rows={10} />}
+ {isLoading && !data && <SkeletonTable columns={10} rows={10} />}
  {isError && <EmptyState icon="alert-circle" title="Failed to load movements" action={<Button onClick={() => refetch()}>Retry</Button>} />}
  {data && data.data.length === 0 && <EmptyState icon="inbox" title="No movements yet" />}
  {data && data.data.length > 0 && (

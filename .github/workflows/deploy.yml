@@ -28,6 +28,9 @@ on:
         description: 'Git ref to deploy (default: main)'
         required: false
         default: 'main'
+      server_name:
+        description: 'Production DNS name (must match SERVER_NAME in .env)'
+        required: true
 
 permissions:
   contents: read
@@ -46,6 +49,17 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref }}
+
+      - name: Validate deployment host input
+        env:
+          SERVER_NAME: ${{ inputs.server_name }}
+        run: |
+          case "$SERVER_NAME" in
+            ''|*[!A-Za-z0-9.-]*)
+              echo 'server_name must contain only DNS-safe letters, digits, dots, and hyphens'
+              exit 1
+              ;;
+          esac
 
       - name: Set up SSH agent
         uses: webfactory/ssh-agent@v0.9.0
@@ -114,25 +128,53 @@ jobs:
       - name: Bring containers up against new release
         run: |
           ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
-            "cd ${{ secrets.DEPLOY_PATH }}/current && docker compose -f docker-compose.prod.yml up -d --build"
-
-      - name: Run migrations
-        run: |
-          ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
-            "cd ${{ secrets.DEPLOY_PATH }}/current && docker compose -f docker-compose.prod.yml exec -T api php artisan migrate --force"
+            bash -se -- "${{ inputs.server_name }}" <<'EOF'
+            set -euo pipefail
+            EXPECTED_SERVER_NAME="$1"
+            cd "${{ secrets.DEPLOY_PATH }}/current"
+            grep -Fqx -- "SERVER_NAME=$EXPECTED_SERVER_NAME" .env
+            docker compose -f docker-compose.prod.yml build --pull
+            docker compose -f docker-compose.prod.yml up -d db redis meilisearch
+            set -a
+            . ./.env
+            set +a
+            STATUS=missing
+            for i in $(seq 1 60); do
+              STATUS=$(docker inspect -f '{{.State.Health.Status}}' ogami-db 2>/dev/null || true)
+              [ "$STATUS" = healthy ] && break
+              sleep 2
+            done
+            [ "$STATUS" = healthy ] || { echo 'database did not become healthy'; exit 1; }
+            DB_CONTAINER=ogami-db \
+            CONTAINER_BACKUP_DIR=/var/backups/ogami \
+            HOST_BACKUP_DIR=/var/backups/ogami \
+            DB_USERNAME="$DB_USERNAME" DB_PASSWORD="$DB_PASSWORD" DB_DATABASE="$DB_DATABASE" \
+            BACKUP_KEEP="${BACKUP_KEEP:-30}" BACKUP_S3_BUCKET="${BACKUP_S3_BUCKET:-}" \
+            BACKUP_S3_PREFIX="${BACKUP_S3_PREFIX:-}" \
+            ./scripts/db-backup-cron.sh
+            # The one-shot service is the only migration entry point for this
+            # release; API and consumers depend on its successful completion.
+            docker compose -f docker-compose.prod.yml up migrate
+            docker compose -f docker-compose.prod.yml up -d api nginx reverb queue scheduler
+          EOF
 
       - name: Cache config + routes
         run: |
           ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
-            "cd ${{ secrets.DEPLOY_PATH }}/current && docker compose -f docker-compose.prod.yml exec -T api php artisan config:cache && docker compose -f docker-compose.prod.yml exec -T api php artisan route:cache"
+            "set -e; cd ${{ secrets.DEPLOY_PATH }}/current && docker compose -f docker-compose.prod.yml exec -T api php artisan config:cache && docker compose -f docker-compose.prod.yml exec -T api php artisan route:cache && docker compose -f docker-compose.prod.yml exec -T api php artisan view:cache"
 
       - name: Smoke test /api/v1/health
         run: |
           ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
             "set -e; for i in 1 2 3 4 5; do
-               STATUS=\$(curl -ks -o /dev/null -w '%{http_code}' http://localhost/api/v1/health || true)
+               STATUS=\$(curl -ksS -o /dev/null -w '%{http_code}' https://localhost/api/v1/health || true)
                echo \"healthcheck attempt \$i: \$STATUS\"
                [ \"\$STATUS\" = \"200\" ] && exit 0
                sleep 5
              done
              echo 'healthcheck never returned 200 — investigate'; exit 1"
+
+      - name: Smoke test SPA and service state
+        run: |
+          ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+            "set -e; cd ${{ secrets.DEPLOY_PATH }}/current; CODE=\$(curl -ksS -o /dev/null -w '%{http_code}' https://localhost/); echo \"SPA HTTP \$CODE\"; [ \"\$CODE\" = 200 ]; for service in api nginx db redis meilisearch reverb queue scheduler; do cid=\$(docker compose -f docker-compose.prod.yml ps -q \"\$service\"); [ -n \"\$cid\" ]; state=\$(docker inspect -f '{{.State.Status}}' \"\$cid\"); [ \"\$state\" = running ]; done"

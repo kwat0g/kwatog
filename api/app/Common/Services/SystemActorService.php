@@ -30,6 +30,7 @@ class SystemActorService
 
         return User::query()
             ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
+            ->where('is_active', true)
             ->orderBy('id')
             ->first();
     }

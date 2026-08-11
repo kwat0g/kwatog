@@ -34,8 +34,11 @@ class KpiController
         $year = (int) $request->input('year', (string) $previousMonth->year);
         $month = (int) $request->input('month', (string) $previousMonth->month);
 
-        $this->service->computeAll($year, $month);
+        $result = $this->service->computeAll($year, $month);
 
-        return response()->json(['message' => "KPIs computed for $year-$month"]);
+        return response()->json([
+            'message' => "KPIs computed for $year-$month",
+            'summary' => $result,
+        ], $result['failed'] === [] ? 200 : 422);
     }
 }

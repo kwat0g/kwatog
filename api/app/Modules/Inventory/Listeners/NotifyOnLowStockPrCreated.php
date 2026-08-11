@@ -41,6 +41,7 @@ class NotifyOnLowStockPrCreated implements ShouldQueue
             ]);
         } catch (\Throwable $e) {
             Log::warning('NotifyOnLowStockPrCreated failed', ['error' => $e->getMessage()]);
+            throw $e;
         }
     }
 }

@@ -119,6 +119,23 @@ class DraftGrnOnPoSentTest extends TestCase
         $this->assertSame('0.00', (string) $po->fresh()->items()->first()->quantity_received);
     }
 
+    public function test_mark_as_sent_revalidates_a_stale_po_before_transition(): void
+    {
+        $po = PurchaseOrder::factory()->create([
+            'status' => PurchaseOrderStatus::Approved->value,
+        ]);
+        $stale = $po->fresh();
+
+        PurchaseOrder::query()->whereKey($po->id)->update([
+            'status' => PurchaseOrderStatus::Cancelled->value,
+        ]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Only approved POs can be marked as sent.');
+
+        app(PurchaseOrderService::class)->markAsSent($stale);
+    }
+
     public function test_draft_grn_is_idempotent_for_a_repeated_send_event(): void
     {
         $po = $this->makeSentPo();
@@ -127,6 +144,32 @@ class DraftGrnOnPoSentTest extends TestCase
         event(new PurchaseOrderSent($po->fresh()));
 
         $this->assertSame(1, GoodsReceiptNote::where('purchase_order_id', $po->id)->count());
+    }
+
+    public function test_stale_sent_event_after_cancellation_does_not_stage_a_draft_grn(): void
+    {
+        $po = $this->makeSentPo();
+        $stale = $po->fresh();
+
+        $po->forceFill(['status' => PurchaseOrderStatus::Cancelled->value])->save();
+
+        event(new PurchaseOrderSent($stale));
+
+        $this->assertSame(0, GoodsReceiptNote::where('purchase_order_id', $po->id)->count());
+    }
+
+    public function test_missing_automation_actor_fails_instead_of_silently_skipping_expected_grn(): void
+    {
+        $po = $this->makeSentPo();
+        app(SettingsService::class)->set('system.automation.actor_roles', ['missing-role']);
+
+        $listener = app(\App\Modules\Inventory\Listeners\CreateDraftGrnOnPoSent::class);
+
+        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->expectExceptionMessage('no active automation actor');
+        $listener->handle(new PurchaseOrderSent($po->fresh()));
+
+        $this->assertSame(0, GoodsReceiptNote::where('purchase_order_id', $po->id)->count());
     }
 
     public function test_finalize_draft_turns_it_pending_qc_and_triggers_incoming_qc(): void
@@ -177,5 +220,31 @@ class DraftGrnOnPoSentTest extends TestCase
             $this->assertStringContainsString('only 100', $e->getMessage());
         }
         $this->assertSame(GrnStatus::Draft, $grn->fresh()->status);
+    }
+
+    public function test_finalize_rejects_non_positive_quantity_before_entering_qc(): void
+    {
+        $po = $this->makeSentPo();
+        event(new PurchaseOrderSent($po->fresh()));
+        $grn = GoodsReceiptNote::where('purchase_order_id', $po->id)->firstOrFail();
+        $grnItem = $grn->items()->firstOrFail();
+        $location = WarehouseLocation::factory()->create();
+
+        $by = User::factory()->create();
+
+        try {
+            app(GrnService::class)->finalizeDraft($grn, [[
+                'purchase_order_item_id' => $grnItem->purchase_order_item_id,
+                'location_id'            => $location->id,
+                'quantity_received'      => '0.000',
+            ]], $by);
+            $this->fail('A zero receipt must not enter pending_qc.');
+        } catch (\App\Common\Exceptions\BusinessRuleException $e) {
+            $this->assertStringContainsString('positive received quantity', $e->getMessage());
+        }
+
+        $this->assertSame(GrnStatus::Draft, $grn->fresh()->status);
+        $this->assertSame(0, Inspection::where('entity_type', 'grn')
+            ->where('entity_id', $grn->id)->count());
     }
 }

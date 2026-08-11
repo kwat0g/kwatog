@@ -7,6 +7,8 @@ namespace App\Modules\Payroll\Models;
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Auth\Models\User;
+use App\Modules\Payroll\Enums\BankFileGenerationStatus;
+use App\Modules\Payroll\Enums\PayrollGlHandoffStatus;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -32,6 +34,7 @@ class PayrollPeriod extends Model
         'created_by',
         'is_auto_created',
         'auto_created_at',
+        'auto_idempotency_key',
         // Scope filters — which slice of the workforce this run pays.
         // Empty/null on both = company-wide (the historical behaviour).
         'scope_employment_types',
@@ -50,6 +53,10 @@ class PayrollPeriod extends Model
         'scope_department_ids'   => 'array',
         'scope_pay_types'        => 'array',
         'status'              => PayrollPeriodStatus::class,
+        'bank_file_status'    => BankFileGenerationStatus::class,
+        'gl_handoff_status'   => PayrollGlHandoffStatus::class,
+        'bank_file_at'        => 'datetime',
+        'gl_handoff_at'       => 'datetime',
         'disbursement_status' => 'string',
         'disbursed_at'        => 'datetime',
         'is_auto_created'     => 'boolean',
@@ -149,6 +156,94 @@ class PayrollPeriod extends Model
         $scope = $this->scopeLabel();
 
         return $scope === null ? $label : "{$label} · {$scope}";
+    }
+
+    public function markBankFilePending(): void
+    {
+        $this->forceFill([
+            'bank_file_status' => BankFileGenerationStatus::Pending,
+            'bank_file_note' => null,
+            'bank_file_at' => now(),
+        ])->save();
+    }
+
+    /**
+     * Persist a human-actionable generation handoff without pretending that a
+     * finalized payroll produced a bank artifact.
+     *
+     * @return bool true when the durable reason changed
+     */
+    public function markBankFileManualRequired(string $note): bool
+    {
+        $changed = $this->bank_file_status !== BankFileGenerationStatus::ManualRequired
+            || (string) $this->bank_file_note !== $note;
+
+        $this->forceFill([
+            'bank_file_status' => BankFileGenerationStatus::ManualRequired,
+            'bank_file_note' => $note,
+            'bank_file_at' => $changed ? now() : $this->bank_file_at,
+        ])->save();
+
+        return $changed;
+    }
+
+    public function markBankFileGenerated(): void
+    {
+        $this->forceFill([
+            'bank_file_status' => BankFileGenerationStatus::Generated,
+            'bank_file_note' => null,
+            'bank_file_at' => now(),
+        ])->save();
+    }
+
+    public function markGlPending(): void
+    {
+        $this->forceFill([
+            'gl_handoff_status' => PayrollGlHandoffStatus::Pending,
+            'gl_handoff_note' => null,
+            'gl_handoff_at' => now(),
+        ])->save();
+    }
+
+    /**
+     * Persist a human-actionable GL handoff without changing payroll rows.
+     *
+     * @return bool true when the durable reason changed
+     */
+    public function markGlManualRequired(string $note): bool
+    {
+        $changed = $this->gl_handoff_status !== PayrollGlHandoffStatus::ManualRequired
+            || (string) $this->gl_handoff_note !== $note;
+
+        $this->forceFill([
+            'gl_handoff_status' => PayrollGlHandoffStatus::ManualRequired,
+            'gl_handoff_note' => $note,
+            'gl_handoff_at' => $changed ? now() : $this->gl_handoff_at,
+        ])->save();
+
+        return $changed;
+    }
+
+    public function markGlPosted(): void
+    {
+        $this->forceFill([
+            'gl_handoff_status' => PayrollGlHandoffStatus::Posted,
+            'gl_handoff_note' => null,
+            'gl_handoff_at' => now(),
+        ])->save();
+    }
+
+    public function markGlNotRequired(string $reason): void
+    {
+        if ($this->journal_entry_id !== null) {
+            return;
+        }
+
+        $this->forceFill([
+            'gl_handoff_status' => PayrollGlHandoffStatus::NotRequired,
+            'gl_handoff_note' => null,
+            'gl_handoff_at' => now(),
+        ])->save();
     }
 
     /**

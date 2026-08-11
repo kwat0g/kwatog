@@ -15,8 +15,8 @@ use Illuminate\Support\Collection;
  * `pdf._components.approval_signatures` blade partial:
  *
  *   [
- *     ['role' => 'Prepared by', 'name' => 'Juan Cruz',  'signed_at' => 'Apr 20, 2026'],
- *     ['role' => 'Noted by',    'name' => 'Maria Reyes','signed_at' => 'Apr 20, 2026'],
+ *     ['role' => 'Prepared by', 'name' => 'Example User', 'signed_at' => '2026-04-20'],
+ *     ['role' => 'Noted by',    'name' => 'Example Reviewer', 'signed_at' => '2026-04-20'],
  *     ['role' => 'Checked by',  'name' => null,         'signed_at' => null], // pending
  *     ['role' => 'Approved by', 'name' => null,         'signed_at' => null],
  *   ]

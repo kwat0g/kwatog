@@ -31,6 +31,9 @@ export interface ScheduledExport {
  time_of_day: string | null;
  recipients: string[];
  last_run_at: string | null;
+ last_attempt_at: string | null;
+ last_error: string | null;
+ processing: boolean;
  next_run_at: string | null;
  is_active: boolean;
  owner: { id: string; name: string } | null;

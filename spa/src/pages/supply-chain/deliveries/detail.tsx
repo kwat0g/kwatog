@@ -2,7 +2,7 @@
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams , useNavigate} from 'react-router-dom';
-import { Camera, Check, ArrowRight, Tag, Trash2, FileText, Image as ImageIcon, ShieldCheck, ArchiveRestore } from 'lucide-react';
+import { Camera, Check, ArrowRight, Tag, Trash2, FileText, Image as ImageIcon, ShieldCheck, ArchiveRestore, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { AxiosError } from 'axios';
 import { downloadAuthenticatedFile } from '@/api/download';
@@ -131,7 +131,13 @@ const removeProof = useMutation({
  delivery_remarks: confirmRemarks.trim() || undefined,
  }),
  onSuccess: (d) => {
- toast.success(d.invoice ? `Confirmed; draft invoice ${d.invoice.invoice_number} created` : 'Delivery confirmed');
+ toast.success(
+ d.invoice
+ ? `Confirmed; draft invoice ${d.invoice.invoice_number} created`
+ : d.invoice_handoff?.status === 'manual_required'
+ ? 'Confirmed; Finance action is required for the customer invoice'
+ : 'Delivery confirmed',
+ );
  setConfirmModalOpen(false);
  qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries', id] });
  },
@@ -471,6 +477,17 @@ const removeProof = useMutation({
  <Button variant="secondary" size="sm" icon={<Check size={14} />}
  onClick={() => setFinalizeInvoiceId(data.invoice!.id)} loading={finalizeInvoice.isPending}>Finalize</Button>
  )}
+ {data.invoice_handoff?.status === 'manual_required' && !data.invoice && (
+ <div className="flex items-start gap-3 rounded-md border border-warning/40 bg-warning-bg/10 px-4 py-3 text-sm" role="alert">
+ <AlertTriangle size={16} className="mt-0.5 shrink-0 text-warning-fg" />
+ <div>
+ <div className="font-medium">Customer invoice needs Finance action</div>
+ <div className="text-muted">
+ Delivery confirmation succeeded, but the draft AR invoice was not staged. Fix the accounting setup and replay the invoice handoff from Chain recovery, or create the invoice manually.
+ </div>
+ </div>
+ </div>
+ )}
  </div>
  )}
  {data.invoice && (
@@ -593,7 +610,7 @@ const removeProof = useMutation({
  <div className="space-y-3">
  <p className="text-sm text-muted">
  {hasProof
- ? `${proofs.length} proof file${proofs.length === 1 ? '' : 's'} attached. Capture the receiver's details to finalize the delivery and create a draft invoice.`
+ ? `${proofs.length} proof file${proofs.length === 1 ? '' : 's'} attached. Capture the receiver's details to finalize the delivery and attempt to create a draft invoice.`
  : 'At least one proof must be uploaded first.'}
  </p>
  <Input

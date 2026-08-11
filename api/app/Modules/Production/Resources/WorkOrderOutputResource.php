@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Production\Resources;
 
+use App\Modules\Production\Enums\ProductionReceiptHandoffStatus;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -27,6 +28,21 @@ class WorkOrderOutputResource extends JsonResource
             'shift'        => $this->shift,
             'batch_code'   => $this->batch_code,
             'remarks'      => $this->remarks,
+            'production_receipt_handoff' => [
+                'status' => $this->production_receipt_handoff_status instanceof ProductionReceiptHandoffStatus
+                    ? $this->production_receipt_handoff_status->value
+                    : (string) $this->production_receipt_handoff_status,
+                'status_label' => ($handoff = $this->production_receipt_handoff_status instanceof ProductionReceiptHandoffStatus
+                    ? $this->production_receipt_handoff_status
+                    : ProductionReceiptHandoffStatus::tryFrom((string) $this->production_receipt_handoff_status))?->label(),
+                'message' => $this->production_receipt_handoff_message,
+                'at' => optional($this->production_receipt_handoff_at)->toIso8601String(),
+                'movement_id' => $this->when($this->production_receipt_movement_id !== null, fn () =>
+                    $this->relationLoaded('productionReceiptMovement') && $this->productionReceiptMovement
+                        ? $this->productionReceiptMovement->hash_id
+                        : null
+                ),
+            ],
             'recorder'     => $this->whenLoaded('recorder', fn () => $this->recorder ? [
                 'id'   => $this->recorder->hash_id,
                 'name' => $this->recorder->name,

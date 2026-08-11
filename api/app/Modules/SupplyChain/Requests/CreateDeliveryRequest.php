@@ -53,7 +53,10 @@ class CreateDeliveryRequest extends FormRequest
             'notes'                       => ['nullable', 'string', 'max:2000'],
             'items'                       => ['required', 'array', 'min:1'],
             'items.*.sales_order_item_id' => ['required', 'integer', 'exists:sales_order_items,id'],
-            'items.*.quantity'            => ['required', 'numeric', 'gt:0'],
+            // Sales-order quantities and quantity_delivered are stored to two
+            // decimal places; keep the delivery input at the same precision so
+            // reconciliation cannot silently round a shipment line.
+            'items.*.quantity'            => ['required', 'decimal:0,2', 'min:0.01'],
             'items.*.inspection_id'       => ['nullable', 'integer', 'exists:inspections,id'],
         ];
     }

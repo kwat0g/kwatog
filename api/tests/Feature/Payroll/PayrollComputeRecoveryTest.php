@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Payroll;
 
+use App\Common\Jobs\DispatchOutboxMessage;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\Position;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
+use App\Modules\Payroll\Events\PayrollComputationRequested;
 use App\Modules\Payroll\Events\PayrollProgressEvent;
 use App\Modules\Payroll\Jobs\ProcessPayrollJob;
 use App\Modules\Payroll\Models\Payroll;
@@ -19,10 +21,10 @@ use App\Modules\Payroll\Services\PayrollPeriodService;
 use App\Modules\Payroll\Services\PayrollProgressTracker;
 use Database\Seeders\GovernmentTableSeeder;
 use Database\Seeders\RolePermissionSeeder;
-use Illuminate\Bus\UniqueLock;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
@@ -95,7 +97,9 @@ class PayrollComputeRecoveryTest extends TestCase
             ->assertStatus(422)
             ->assertJsonPath('message', 'This period is already being computed. Wait for the current run to finish.');
 
-        Queue::assertNotPushed(ProcessPayrollJob::class);
+        $this->assertSame(0, DB::table('event_outbox')
+            ->where('event_type', PayrollComputationRequested::class)
+            ->count());
     }
 
     /**
@@ -119,7 +123,9 @@ class PayrollComputeRecoveryTest extends TestCase
         $fresh = $period->fresh();
         $this->assertSame($hr->id, $fresh->computed_by);
         $this->assertTrue($fresh->processing_started_at->greaterThan(now()->subMinutes(5)));
-        Queue::assertPushed(ProcessPayrollJob::class, 1);
+        $this->assertSame(1, DB::table('event_outbox')
+            ->where('event_type', PayrollComputationRequested::class)
+            ->count());
     }
 
     /** A Processing row with no stamp at all predates claim tracking. */
@@ -185,28 +191,29 @@ class PayrollComputeRecoveryTest extends TestCase
         $this->assertSame(PayrollPeriodStatus::Processing, $period->fresh()->status);
     }
 
-    /* ── 2. Silent dispatch drop ─────────────────────────────────── */
+    /* ── 2. Durable compute request ──────────────────────────────── */
 
     /**
-     * With ShouldBeUnique, a lock left behind by a killed worker made
-     * dispatch() return silently without enqueuing anything — the period stayed
-     * at Processing with no worker and no error. The DB claim is an atomic
-     * conditional UPDATE and a strictly stronger gate, so the lock was pure
-     * downside.
+     * The compute claim and its outbox request are committed together. A queue
+     * outage can delay publication, but it cannot leave a Processing period
+     * without a durable request that the scheduler can replay.
      */
-    public function test_dispatch_survives_a_lock_left_behind_by_a_killed_worker(): void
+    public function test_compute_request_is_durable_when_the_worker_queue_is_not_consumed(): void
     {
         Queue::fake();
         $hr     = $this->userWithRole('hr_officer');
         $period = $this->period();
 
-        Cache::lock(UniqueLock::getKey(new ProcessPayrollJob($period, null)), 1800)->get();
-
         $this->actingAs($hr)
             ->postJson("/api/v1/payroll-periods/{$period->hash_id}/compute")
             ->assertStatus(202);
 
-        Queue::assertPushed(ProcessPayrollJob::class, 1);
+        $this->assertSame(1, DB::table('event_outbox')
+            ->where('event_type', PayrollComputationRequested::class)
+            ->count());
+        $this->assertDatabaseHas('event_outbox', [
+            'event_type' => PayrollComputationRequested::class,
+        ]);
     }
 
     /* ── 3. Maker-checker bypass on single-employee recompute ────── */

@@ -16,6 +16,43 @@ const PALETTE =
 const HEX = /#[0-9a-fA-F]{6}\b/;
 
 /**
+ * Hardcoded neutrals — the hole this gate had until 2026-08-10.
+ *
+ * PALETTE above only catches Tailwind's numbered ramps (`text-red-500`), and
+ * `white` / `black` carry no number, so they sailed through. That is how
+ * `bg-danger-bg text-white` shipped as the destructive CTA in Button.tsx: a
+ * token background paired with a hardcoded foreground. Neither this gate nor
+ * styles/__tests__/palette-contrast.test.ts could see it — the test compares
+ * token against token, and `white` is not a token. It rendered at 1.23:1 in the
+ * office palette, in the 63 files that use ConfirmDialog plus 113 direct
+ * `variant="danger"` call sites.
+ *
+ * `white` and `black` are palette-invariant by definition, so any component
+ * using one has opted out of theming: it cannot follow :root → dark → floor.
+ * Use --accent-fg (paper-on-ink, declared per palette) for ink on a saturated
+ * fill, or --text-primary / --bg-canvas for ordinary surfaces.
+ */
+const HARDCODED_NEUTRAL =
+  /\b(?:text|bg|border|ring|fill|stroke|divide|outline|from|to|via|decoration|caret|shadow|accent|placeholder)-(?:white|black)(?:\/\d{1,3})?\b/;
+
+/**
+ * The one documented exception: a modal scrim.
+ *
+ * `bg-black/<alpha>` is the overlay wash behind Modal, BottomSheet,
+ * CommandPalette and the mobile Sidebar. It is deliberately palette-invariant
+ * for the same reason as --plant-map-*: a scrim must darken the page under
+ * every theme, so a token that inverts in dark mode would wash the backdrop
+ * OUT instead of down. Alpha over an unknown backdrop is also uncontrastable
+ * by construction, and no text ever sits directly on a scrim.
+ *
+ * Narrow on purpose — background only, black only, alpha REQUIRED. An opaque
+ * `bg-black`, any `bg-white`, and every `text-*` / `border-*` neutral stay
+ * violations, because those are the ones that pair with a token and break
+ * contrast.
+ */
+const SCRIM_EXCEPTION = /\bbg-black\/\d{1,3}\b/;
+
+/**
  * Retired namespace. `--landing-*` was landing's parallel palette; it is gone,
  * and a stale `var(--landing-canvas)` resolves to nothing rather than erroring,
  * so a leftover reference is invisible at runtime — the element just renders
@@ -70,6 +107,12 @@ for (const file of files) {
     if (hex) violations.push(`${rel}:${i + 1}  hex literal  ${hex[0]}`);
     const retired = RETIRED.exec(line);
     if (retired) violations.push(`${rel}:${i + 1}  retired token  ${retired[1]}`);
+    // Matched globally, then filtered — one line can hold both a scrim and a
+    // real violation, so exempting the whole line would reopen the hole.
+    for (const m of line.matchAll(new RegExp(HARDCODED_NEUTRAL, 'g'))) {
+      if (SCRIM_EXCEPTION.test(m[0])) continue;
+      violations.push(`${rel}:${i + 1}  hardcoded neutral  ${m[0]}`);
+    }
   });
 }
 
@@ -79,6 +122,9 @@ if (violations.length > 0) {
   console.error(
     '\nUse a semantic token instead (bg-accent, text-danger, border-default).' +
       '\nColour values belong only in src/styles/tokens.css.' +
+      '\ntext-white / bg-black etc. are palette-invariant: use --accent-fg for ink' +
+      '\non a saturated fill, --text-primary / --bg-canvas otherwise. Only a modal' +
+      '\nscrim (bg-black/<alpha>) is exempt.' +
       '\n--landing-* is retired: use the shared Atelier tokens, or --blueprint-*' +
       '\nfor line-work and --plant-map-* for map chrome.\n',
   );

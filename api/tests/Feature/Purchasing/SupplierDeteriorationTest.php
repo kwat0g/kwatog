@@ -137,7 +137,7 @@ class SupplierDeteriorationTest extends TestCase
             ->handle(new SupplierPerformanceComputed($current));
     }
 
-    public function test_listener_swallows_throwables(): void
+    public function test_listener_rethrows_throwables_for_queue_recovery(): void
     {
         $vendor = Vendor::factory()->create();
         $current = SupplierPerformanceSnapshot::create([
@@ -154,10 +154,10 @@ class SupplierDeteriorationTest extends TestCase
         $notifications = Mockery::mock(NotificationService::class);
         $notifications->shouldReceive('send')->andThrow(new \RuntimeException('boom'));
 
-        // Must NOT bubble.
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('boom');
+
         (new AlertOnSupplierDeterioration($notifications, app(\App\Common\Services\SettingsService::class)))
             ->handle(new SupplierPerformanceComputed($current));
-
-        $this->assertTrue(true);
     }
 }
