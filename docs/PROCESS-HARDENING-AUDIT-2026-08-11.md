@@ -377,7 +377,7 @@ are dismissed here rather than enumerated.
 | ID | Process | Class | Domains | Entry point | Trigger | Blast | Disposition |
 |---|---|---|---|---|---|---|---|
 | P01 | Payroll finalize → bank file + payslip email + employee notify | cross-module | Payroll, Accounting | `api/app/Modules/Payroll/Controllers/PayrollPeriodController.php:174` | HTTP + event | money | **traced** (§3.0) — 3 findings: P01-01 PROVEN, P01-02 PROVEN, P01-03 ARGUED |
-| P02 | Payroll GL posting handoff + retry (raw `journal_entries` insert) | cross-module | Payroll, Accounting | `api/app/Modules/Payroll/Services/PayrollGlPostingService.php:313` | event + job + HTTP | money | |
+| P02 | Payroll GL posting handoff + retry (raw `journal_entries` insert) | cross-module | Payroll, Accounting | `api/app/Modules/Payroll/Services/PayrollGlPostingService.php:313` | event + job + HTTP | money | **traced** (§3.0) — 2 findings: P02-01 PROVEN, P02-02 PROVEN |
 | P03 | Payroll compute → loan deduction + loan balance write | cross-module | Payroll, Loans | `api/app/Modules/Payroll/Controllers/PayrollPeriodController.php:143` | HTTP + event + job | money | |
 | P04 | Payroll period void → GL reversal + cycle-claim release | cross-module | Payroll, Accounting | `api/app/Modules/Payroll/Controllers/PayrollPeriodController.php:275` | HTTP | money | |
 | P05 | Final pay compute → GL | cross-module | HR, Accounting | `api/app/Modules/HR/Controllers/SeparationController.php:80` | HTTP | money | |
@@ -708,6 +708,168 @@ but that file already imports it at `:12`, so the import graph saw it; all other
 - **P01-03** — employee payslip notification has no dedupe. **ARGUED.**
   Non-idempotent → 3.4.
 
+#### P02 — Payroll GL posting handoff + retry (raw `journal_entries` insert)
+
+Entry point `api/app/Modules/Payroll/Services/PayrollGlPostingService.php:313`
+(the raw insert recovered in §2.2). The process has three doors into one
+private method: `post()` `:40`, `retry()` `:55`, both delegating to
+`postLocked()` `:97`; and `markManual()` `:77` for the failure state.
+
+`post()` has **no production caller**. Every live path enters through
+`retry()`: the listener at `Listeners/PostPayrollToGlOnRequested.php:60` and the
+legacy job adapter at `Jobs/PostPayrollToGlJob.php:42`. `post()` is reached only
+from tests. Both doors share `postLocked`, so behaviour is identical; the fact
+is recorded for accuracy, not as a finding.
+
+**Field 1 — steps and owning class**
+
+| # | Step | Owner | Line |
+|---|---|---|---|
+| 1 | Re-read + `lockForUpdate` the period | `PayrollGlPostingService` | `:43-45` (`post`), `:59-61` (`retry`) |
+| 2 | Guard: status ∈ {Finalized, Disbursed} | `postLocked` | `:99` |
+| 3 | Guard: `journal_entry_id` already set → return existing id, repair handoff state | `postLocked` | `:102-109` |
+| 4 | Branch: accounting module disabled → `markGlNotRequired` | `postLocked` | `:114-120` |
+| 5 | Branch: accounting tables absent → `markGlManualRequired` | `postLocked` | `:122-128` |
+| 6 | Guard: accounting period not closed for `payroll_date` | `AccountingPeriodService::assertPostingAllowed` | `:133` |
+| 7 | Branch: no valid payroll rows → `markGlNotRequired` | `postLocked` | `:139-142` |
+| 8 | Aggregate 18 sums over `payrolls` | `postLocked` | `:144-167` |
+| 9 | Resolve 13 configured account codes | `SettingsService::requiredString` | `:172-182` |
+| 10 | Build balanced debit/credit lines | `postLocked` | `:190-303` |
+| 11 | Guard: debits === credits, else throw | `postLocked` | `:305-310` |
+| 12 | Generate `entry_number` from sequence | `DocumentSequenceService::generate` | `:312` |
+| 13 | **Raw insert** `journal_entries` | `postLocked` | `:313-325` |
+| 14 | **Raw insert** `journal_entry_lines`, one per line | `postLocked` | `:327-331` |
+| 15 | Link `journal_entry_id` + `gl_handoff_status=Posted` on the period | `postLocked` | `:333-338` |
+
+Steps 13–15 are the effect. There is no outbox row and no event here — P02 is
+the *consumer* end of P01's step 8.
+
+**Field 2 — transaction boundary**
+
+One `DB::transaction` per door, enclosing steps 1–15 in full: `:42` for `post`,
+`:58` for `retry`. The lock at step 1 is taken inside that boundary, so steps
+2–3 read the authoritative row — the pattern P01-01 found missing in
+`forceUnlock`. `markManual` `:79` opens its **own** transaction and is invoked
+only from the catch at `:70-73`, i.e. after the enclosing transaction has
+already rolled back. That ordering is correct: the failure state survives the
+rollback that erased the attempt.
+
+**Field 3 — step N succeeds, N+1 fails**
+
+| Crossing | Behavior | Evidence |
+|---|---|---|
+| 13 → 14 (JE inserted, lines fail) | Rollback. Both inserts are inside one boundary, so no headerless JE can persist | `:42`/`:58` enclose `:313`, `:327` |
+| 14 → 15 (lines inserted, link fails) | Rollback. No orphan JE with an unlinked period | same boundary, `:333` |
+| 11 (unbalanced) | Throws before any insert; `BusinessRuleException` → `markManual` in its own transaction | `:306`, `:71`, `:79` |
+| 6 (closed period) | `ClosedPeriodException` → `markManual`, period stays Finalized and recoverable | `:133`, `AccountingPeriodService` `assertPostingAllowed` |
+| listener → `retry` throws non-BusinessRule | Rethrown, job retries under `$tries=3` | `PostPayrollToGlOnRequested.php:74-80` |
+
+Compensation is present: every terminal failure lands on a persisted
+`gl_handoff_status` the operator can act on, and `markManual` is called twice on
+the BusinessRule path (once by `retry`'s catch `:71`, once by the listener's
+`:67`) — redundant but idempotent, both writing the same state.
+
+**Field 4 — sync vs async handoff**
+
+| Edge | Kind | Retry budget | Out-of-order |
+|---|---|---|---|
+| finalize → `PayrollGlPostingRequested` | async via outbox | outbox `$tries=3`, `backoff [10,60,300]`; scheduled recovery every minute (`routes/console.php:163`) | Lease-fenced (`OutboxDispatcher.php:119-139`) |
+| event → `PostPayrollToGlOnRequested` | queued listener | `$tries=3`, `backoff [60,300,900]` | `:21-24`; guards on live status `:39` and `journal_entry_id` `:51` |
+| operator retry → outbox | async, key `payroll-gl-retry:{id}:{uuid}` | fresh row per click | `PayrollPeriodService.php:1162` |
+| legacy `PostPayrollToGlJob` | queued, `ShouldBeUnique`, `uniqueFor=600` | delegates to `retryGlPosting` | `Jobs/PostPayrollToGlJob.php:24-42` |
+
+Boundary-vs-dispatch (plan step 2): **no event is dispatched inside a
+transaction anywhere on this process.** `PayrollGlPostingService` dispatches
+nothing (grep for `dispatch(`/`event(` over the file returns zero). The only
+producer is `finalize`, which records through `OutboxService`, and that joins
+the caller's open transaction (`OutboxService.php:59-61`) and defers the queue
+push to `DB::afterCommit` (`:65-74`). Neither the naked-dispatch-in-transaction
+defect nor a non-`afterCommit` push exists here.
+
+**Field 5 — idempotency under replay**
+
+| Effect | Dedupe mechanism | Enforced by | Verdict |
+|---|---|---|---|
+| Journal entry insert | `journal_entry_id !== null` early return, read on the **locked** row | `:102` after lock at `:43`/`:59` | idempotent — replay returns the existing id |
+| Concurrent double post | row lock on `payroll_periods`, not on `journal_entries` | `:43-45`, `:59-61` | serialized; second caller sees the link and returns |
+| `entry_number` collision | `SELECT … FOR UPDATE` on `document_sequences` per (type, year, month) | `DocumentSequenceService.php:62-88` | unique index `journal_entries.entry_number` (`0039:…unique()`) never reached |
+| Duplicate JE for one period | **none at the database level** — `(reference_type, reference_id)` carries an `index`, not a `unique` | `0039_create_journal_entries_table.php` index line | relies wholly on the period-row lock + `journal_entry_id`; sound while that link is honest, see P02-02 |
+| Operator retry rows | `Str::uuid()` suffix → every click stages a new row | `PayrollPeriodService.php:1162` | **deliberately not deduped**; effect still single (below) |
+| `markManual` | writes the same state; `$changed` only gates the timestamp | `PayrollPeriod.php:213-225` | idempotent |
+
+On the brief's question about the retry path's UUID: it does create unbounded
+*requests* — 5 clicks produced 5 outbox rows in probe 6 — but not unbounded
+*effects*. `retryGlPosting` refuses to stage anything once `journal_entry_id` is
+set (`PayrollPeriodService.php:1150-1152`), so rows accumulate only while the
+handoff is genuinely unposted, which is precisely when a retry is warranted.
+Deliveries that lose the race skip at `PostPayrollToGlOnRequested.php:51` and
+again under lock at `:102`. The UUID discriminator is the correct choice here
+and is **not** a finding; the missing discriminator on the *finalize* key
+(P01-02) remains one.
+
+**Field 6 — guard reachability (mechanical enumeration)**
+
+Grep 1 anchored on `JournalEntryStatus::` yields 19 hits, of which only four are
+writes: `JournalEntryService.php:122` (Draft), `:214` (Posted), `:289`
+(reversal Posted), `:308` (original → Reversed).
+
+**Grep 1 is incomplete here, and this is the inherited protocol gap firing.**
+Three further writers set the JE status as a plain string and are invisible to
+an enum-anchored grep. Grep 2 (`DB::table('journal_entries')`) is what recovers
+them:
+
+| # | Writer | Status written | Form | Guard | Reads locked row |
+|---|---|---|---|---|---|
+| 1 | `JournalEntryService::create` `:114-124` | `Draft` | enum | new row | n/a |
+| 2 | `JournalEntryService::post` `:213-219` | `Posted` | enum | `status !== Draft` throw `:182`; balance re-check `:198`; maker-checker `:211` | **no** — guard at `:182` reads the route-bound model *before* the transaction at `:186` |
+| 3 | `JournalEntryService::reverse` `:281-293` | `Posted` (mirror) | enum | `status !== Posted` `:270`, `reversed_by_entry_id !== null` `:273` | **no** — both guards precede the transaction at `:277` |
+| 4 | `JournalEntryService::reverse` `:307-310` | `Reversed` | enum | same as 3 | **no** |
+| 5 | **`PayrollGlPostingService:313-325`** | **`'posted'` (string)** | **raw insert** | period status `:99` + `journal_entry_id` `:102` | **yes** — locked at `:43`/`:59` |
+| 6 | `GrnGlPostingService:223-225` | `'posted'` (string) | raw update | (P15, not traced here) | — |
+| 7 | `MovementGlPostingService:201-203` | `'posted'` (string) | raw update | (P16, not traced here) | — |
+
+Writers 2–4 guard on an unlocked, pre-transaction read — the same shape as
+P01-01. They are Accounting-owned and belong to P17/P18/P20, so they are
+recorded here as enumerated-and-flagged rather than verdicted; the note is
+carried to §5 so those traces inherit it instead of re-deriving it.
+
+Grep 3 (`JournalEntry::query()` mass `update`/`delete`) returns zero. Grep 4
+(FQN container resolution over the traced files) returns only
+`ChainListenerRunService` and same-module services — no unseen cross-module
+edge. P02's declared domains (Payroll, Accounting) are correct.
+
+**Field 7 — audit attribution**
+
+| Step | Audit row | Actor |
+|---|---|---|
+| JE insert (step 13) | **none** | **none — `created_by` and `posted_by` are absent from the insert array** `:314-324` |
+| JE lines (step 14) | none | n/a |
+| period link (step 15) | none (`forceFill`+`save` on a model without `HasAuditLog`) | n/a |
+| `markManual` / `markGlNotRequired` | none | n/a |
+| listener outcome | `chain_step_runs` row via `ChainListenerRunService::recordOutcome` | system |
+| operator retry | no audit row; only the outbox + chain-step row | `PayrollPeriodService.php:1156-1163` |
+
+This is P02-01. `JournalEntry` carries `HasAuditLog`
+(`Modules/Accounting/Models/JournalEntry.php:20`), which registers Eloquent
+model-event hooks (`Common/Traits/HasAuditLog.php:20-22`). A query-builder
+insert fires no model events, so the trait never runs.
+
+**Field 8 — verdict**
+
+Two findings.
+
+- **P02-01** — the payroll journal entry is written with no actor and no audit
+  row. **PROVEN.** Bypassable → 3.3.
+- **P02-02** — a voided period keeps `journal_entry_id`, so every re-post path
+  permanently no-ops while reporting success. **PROVEN.** Silent failure → 3.2.
+
+Sound on this process, recorded so the clean parts are visible: the lock-then-check
+ordering (`:43`/`:99`/`:102`), full-boundary atomicity of the three writes
+(`:313`, `:327`, `:333`), the balance assertion before any insert (`:305`), the
+closed-period guard on `payroll_date` (`:133`), sequence-generator concurrency
+(`DocumentSequenceService.php:62-88`), and the retry UUID discriminator
+(`PayrollPeriodService.php:1162`).
+
 ### 3.1 Data-corrupting
 
 #### P01-01 — `forceUnlock` demotes a Finalized period to Computed (PROVEN)
@@ -816,7 +978,125 @@ responds "you can recompute or create a replacement period"
 (`PayrollPeriodController.php:285`), and the first half of that sentence is
 false. Only the "replacement period" half is achievable.
 
+#### P02-02 — a voided period keeps `journal_entry_id`, so every re-post path silently no-ops (PROVEN)
+
+`void` reverses the journal entry via a balanced mirror
+(`PayrollPeriodService.php:1247`) and marks the original `Reversed`
+(`JournalEntryService.php:307-310`), but it **never clears
+`journal_entry_id` on the period**. The write at `:1253-1258` sets `status`,
+`voided_at`, `voided_by`, `void_reason` and nothing else; `:1259` only touches
+`gl_handoff_status` when the id is already null. So a voided period still points
+at a reversed JE, and `gl_handoff_status` stays `posted`.
+
+Every re-post path treats a non-null `journal_entry_id` as proof that a live
+entry exists:
+
+| Path | Guard | Line |
+|---|---|---|
+| `retryGlPosting` | `journal_entry_id !== null` → return without staging | `PayrollPeriodService.php:1150-1152` |
+| `PostPayrollToGlOnRequested` | `journal_entry_id !== null` → record `skipped` | `Listeners/PostPayrollToGlOnRequested.php:51-57` |
+| `postLocked` | `journal_entry_id` → return the existing id as success | `PayrollGlPostingService.php:102-109` |
+| `markGlNotRequired` | early return when the id is set | `Models/PayrollPeriod.php:236-239` |
+
+The stale link therefore disables the GL handoff for that period permanently.
+Nothing throws and nothing warns: `retryGlPosting` returns the period, the
+controller answers `202 GL handoff retry queued.`
+(`PayrollPeriodController.php:198`) for a retry that was never staged, and
+`postLocked` returns the id of the *reversed* entry as though it had just posted
+— then calls `markGlPosted()` at `:106` if the handoff state had drifted,
+actively re-asserting a posting that no longer exists.
+
+On the sanctioned path a voided period is terminal, so this is latent. It goes
+live by the same composition as P01-02: force-unlock the voided-then-resurrected
+period (P01-01), recompute, approve, finalize. The period is then Finalized,
+carrying real payroll and a `journal_entry_id` pointing at a reversed entry whose
+net ledger effect is zero — and every path that would post the replacement entry
+refuses, reporting success. Finalized payroll, employees paid from the bank file,
+no ledger entry.
+
+**Probe (PROVEN).** Throwaway PHPUnit test, deleted after the run. Posted a real
+period to the GL, voided it, then drove both re-post doors:
+
+```
+[PROBE5a] after void: period status=voided journal_entry_id=2 gl_handoff_status='posted' | original JE status=reversed reversed_by=3
+[PROBE5b] retryGlPosting staged outbox rows: before=4 after=4 (delta=0) | post() returned=2 (original=2) | payroll_period JEs=1
+```
+
+The void left `journal_entry_id=2` and `gl_handoff_status='posted'` on a period
+whose JE is `reversed`. `retryGlPosting` staged **zero** outbox rows while
+returning normally, and `post()` returned the reversed entry's own id, `2`,
+rather than creating a replacement — one `payroll_period` JE total, and that one
+reversed to nil.
+
+**Probe 6, same run — the retry UUID is bounded.** Five consecutive
+`retryGlPosting` calls on an unposted period staged five outbox rows
+(`[PROBE6] … before=3 after=8 (delta=5)`), confirming the brief's suspicion of
+unbounded *requests*. The effect stays single: each delivery re-checks
+`journal_entry_id` under lock (`PayrollGlPostingService.php:102`), so the first
+to win posts and the rest skip. Requests are cheap rows in `event_outbox`; the
+alternative (a stable key) is what P01-02 punishes. Not filed as a finding.
+
 ### 3.3 Bypassable
+
+#### P02-01 — payroll's journal entry bypasses actor attribution and the audit log (PROVEN)
+
+`PayrollGlPostingService::postLocked` writes the ledger with the query builder:
+
+```php
+$entryId = DB::table('journal_entries')->insertGetId([
+    'entry_number' => $entryNumber,          // :314
+    ...
+    'status'       => 'posted',              // :321 — plain string, not the enum
+    'posted_at'    => now(),                 // :322
+    // no 'posted_by', no 'created_by'
+]);
+```
+
+Three controls that apply to every other posted journal entry do not apply to
+this one.
+
+1. **No actor.** `posted_by` and `created_by` are nullable FKs to `users`
+   (`0039_create_journal_entries_table.php`) and both are omitted from the insert
+   array (`:313-325`), so the largest recurring entry in the ledger records
+   nobody. Contrast `JournalEntryService::post`, which stamps
+   `'posted_by' => $by->id` (`Modules/Accounting/Services/JournalEntryService.php:215`),
+   and `reverse`, which stamps both (`:291-292`). The information exists on the
+   period — `finalized_by` (`PayrollPeriodService.php:1082`) — and is not
+   threaded through, the same shape as P01's bank-file attribution gap but on a
+   financial row rather than a file.
+2. **No audit row.** `JournalEntry` uses `HasAuditLog`
+   (`Modules/Accounting/Models/JournalEntry.php:20`), which hooks
+   `static::created` / `updated` / `deleted`
+   (`Common/Traits/HasAuditLog.php:20-22`). Query-builder inserts fire no
+   Eloquent model events, so no `audit_logs` row is written for the JE or its
+   lines. Nothing else on the path compensates: step 15's period write is a
+   `forceFill`+`save` on `PayrollPeriod`, and the only audit row anywhere near
+   this process is `payroll.period.finalize`, written by a different method in a
+   different transaction (`PayrollPeriodService.php:1102-1112`).
+3. **No maker-checker.** `JournalEntryService::post` enforces segregation of
+   duties at `:211` → `assertNotSelfPosting` `:235-262`. The raw insert never
+   calls it. This one is *by design* and correctly so — `assertNotSelfPosting`
+   itself exempts any entry carrying a `reference_type` (`:247-249`), and payroll
+   sets `reference_type = 'payroll_period'` (`:317`). SoD is enforced upstream at
+   payroll approve. Recorded to show the exemption is deliberate, not incidental.
+
+Items 1 and 2 are the finding. A ledger entry for a full payroll cycle is
+unattributable: no `posted_by`, no `created_by`, and no `audit_logs` row naming
+who or what created it. The `status` write is also the plain-string form
+(`'posted'` at `:321`) rather than `JournalEntryStatus::Posted`, which is what
+made this writer invisible to the protocol's enum-anchored grep 1 (field 6).
+
+**Probe (PROVEN).** Throwaway PHPUnit test, deleted after the run. Enabled the
+accounting module, computed and finalized a real period, then called
+`PayrollGlPostingService::post`. Inspected the inserted row and counted
+`audit_logs` rows for `model_type = JournalEntry` before and after:
+
+```
+[PROBE4] je status=posted posted_by=NULL created_by=NULL total_debit=12560.00 | JE audit rows before=0 after=0
+```
+
+A balanced ₱12,560.00 entry posted itself into the general ledger with no actor
+and no audit trail.
 
 ### 3.4 Non-idempotent
 
