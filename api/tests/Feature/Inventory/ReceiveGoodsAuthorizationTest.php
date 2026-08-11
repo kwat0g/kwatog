@@ -96,23 +96,27 @@ class ReceiveGoodsAuthorizationTest extends TestCase
     {
         [$po, $poItem, $item, $location] = $this->makeOpenPurchaseOrder();
 
-        $this->expectException(BusinessRuleException::class);
-        $this->expectExceptionMessage('quality.inspections.manage');
+        $blocked = false;
+        try {
+            app(GrnService::class)->receiveWithQc(
+                $po,
+                [[
+                    'purchase_order_item_id' => $poItem->id,
+                    'item_id' => $item->id,
+                    'location_id' => $location->id,
+                    'quantity_received' => '10.000',
+                    'unit_cost' => '10.00',
+                ]],
+                ['received_date' => now()->toDateString()],
+                ['result' => 'passed'],
+                $this->receiver,
+            );
+        } catch (BusinessRuleException $e) {
+            $blocked = true;
+            $this->assertStringContainsString('quality.inspections.manage', $e->getMessage());
+        }
 
-        app(GrnService::class)->receiveWithQc(
-            $po,
-            [[
-                'purchase_order_item_id' => $poItem->id,
-                'item_id' => $item->id,
-                'location_id' => $location->id,
-                'quantity_received' => '10.000',
-                'unit_cost' => '10.00',
-            ]],
-            ['received_date' => now()->toDateString()],
-            ['result' => 'passed'],
-            $this->receiver,
-        );
-
+        $this->assertTrue($blocked);
         $this->assertSame(0, GoodsReceiptNote::query()->where('purchase_order_id', $po->id)->count());
     }
 
