@@ -378,7 +378,7 @@ are dismissed here rather than enumerated.
 |---|---|---|---|---|---|---|---|
 | P01 | Payroll finalize → bank file + payslip email + employee notify | cross-module | Payroll, Accounting | `api/app/Modules/Payroll/Controllers/PayrollPeriodController.php:174` | HTTP + event | money | **traced** (§3.0) — 3 findings: P01-01 PROVEN, P01-02 PROVEN, P01-03 ARGUED |
 | P02 | Payroll GL posting handoff + retry (raw `journal_entries` insert) | cross-module | Payroll, Accounting | `api/app/Modules/Payroll/Services/PayrollGlPostingService.php:313` | event + job + HTTP | money | **traced** (§3.0) — 2 findings: P02-01 PROVEN, P02-02 PROVEN |
-| P03 | Payroll compute → loan deduction + loan balance write | cross-module | Payroll, Loans | `api/app/Modules/Payroll/Controllers/PayrollPeriodController.php:143` | HTTP + event + job | money | |
+| P03 | Payroll compute → loan deduction + loan balance write | cross-module | Payroll, Loans | `api/app/Modules/Payroll/Controllers/PayrollPeriodController.php:143` | HTTP + event + job | money | **traced** (§3.0) — 1 finding: P03-01 PROVEN |
 | P04 | Payroll period void → GL reversal + cycle-claim release | cross-module | Payroll, Accounting | `api/app/Modules/Payroll/Controllers/PayrollPeriodController.php:275` | HTTP | money | |
 | P05 | Final pay compute → GL | cross-module | HR, Accounting | `api/app/Modules/HR/Controllers/SeparationController.php:80` | HTTP | money | |
 | P06 | Delivery confirm → SO marked delivered + draft invoice | cross-module | SupplyChain, CRM, Accounting | `api/app/Modules/SupplyChain/Controllers/DeliveryController.php:79` | HTTP + event | money | |
@@ -870,6 +870,176 @@ closed-period guard on `payroll_date` (`:133`), sequence-generator concurrency
 (`DocumentSequenceService.php:62-88`), and the retry UUID discriminator
 (`PayrollPeriodService.php:1162`).
 
+#### P03 — Payroll compute → loan deduction + loan balance write
+
+Entry point `api/app/Modules/Payroll/Controllers/PayrollPeriodController.php:143`
+→ `PayrollPeriodService::claimForComputeAndStage()` at `:821`. The money write
+this process is named for is four hops away, in another module:
+`PayrollCalculatorService::applyLoanDeductions()` at `:818`, writing
+`employee_loans` (Loans) from Payroll.
+
+**Field 1 — steps and owning class**
+
+| # | Step | Owner | Line |
+|---|---|---|---|
+| 1 | Pre-flight guards: not Processing-unless-stale, computable, not 13th-month, scope non-empty | `PayrollPeriodService::claimForCompute` | `:734-773` |
+| 2 | **Conditional UPDATE** to `Processing` — the claim | `claimForCompute` | `:773-790` |
+| 3 | Lost-race branch: affected rows 0 → 422 naming the winner | `claimForCompute` | `:792-802` |
+| 4 | **Record intent** — outbox row for `PayrollComputationRequested` (no dedupe key) | `claimForComputeAndStage` | `:827-837` |
+| 5 | Guard: period still `Processing` on delivery | `RunPayrollComputationOnRequested` | `:64-72` |
+| 6 | Per-employee loop | `ProcessPayrollJob::handle` | `:99-152` |
+| 7 | Wipe prior payroll row, reverse its loan payments, release its adjustments, reverse 13th accrual | `PayrollCalculatorService::computeForEmployee` | `:118-151` |
+| 8 | Create the `Payroll` row | `computeForEmployee` | `:251` |
+| 9 | **Claim the pay cycle** — UNIQUE `(employee_id, cycle_key)` | `claimCycle` | `:289` → `:351-401` |
+| 10 | **Deduct loans**: `PayrollDeductionDetail` + `LoanPayment` + loan balance/status write | `applyLoanDeductions` | `:306` → `:818-873` |
+| 11 | Apply approved adjustments | `applyApprovedAdjustments` | `:309` → `:925` |
+| 12 | Release the claim → `Computed` or `Draft` | `releaseClaim` via `finally` | `ProcessPayrollJob.php:162` → `:691-701` |
+| 13 | Anomaly detection | `PayrollAnomalyService::detect` | `ProcessPayrollJob.php:170` |
+
+Step 9 before step 10 is deliberate and correct: the double-pay guard fires
+before any loan is touched, so a rejected employee never reaches the loan write.
+
+**Field 2 — transaction boundary**
+
+Three separate boundaries, none spanning the whole process.
+
+| Boundary | Encloses | Line |
+|---|---|---|
+| `claimForComputeAndStage` | steps 1–4 — claim and outbox row together | `:823` |
+| `computeForEmployee` | steps 7–11 for **one employee** | `:115` |
+| `markManual`-style recovery | n/a on this process | — |
+
+Step 12 (`releaseClaim`) runs in the job's `finally` with **no** transaction
+(`ProcessPayrollJob.php:154-162`), and step 13 in its own try/catch. The
+per-employee boundary is the important one: a failure at employee 120 of 200
+rolls back only that employee, leaves 119 committed payroll rows, and the loop
+stamps a ₱0 `error_message` marker row (`ProcessPayrollJob.php:137-150`) that
+`approve` refuses to sign off on. That is a deliberate partial-progress design,
+not a gap.
+
+**Field 3 — step N succeeds, N+1 fails**
+
+| Crossing | Behavior | Evidence |
+|---|---|---|
+| 2 → 4 (claim taken, outbox insert fails) | Rollback — both in one boundary. This is the stated reason the two were merged | `:823`, docblock `:814-820` |
+| 4 → 5 (outbox row exists, worker never runs) | No orphan effect; period sits at `Processing` and the stale reaper reclaims it after `staleAfterMinutes()` | `Console/Commands/ReapStalePayrollRuns.php:53`, `:73`; `routes/console.php:91` |
+| 9 → 10 (cycle claimed, loan write fails) | Rollback of that employee only; claim row goes with it (same boundary) | `:115` encloses `:289` and `:306` |
+| 10 → 11 (loans deducted, adjustments fail) | Rollback of that employee; loan balance restored by rollback, not by compensation | same boundary |
+| 6 → 12 (loop throws) | `finally` still releases the claim, so no period wedges at `Processing` | `ProcessPayrollJob.php:154-162` |
+| 7 (recompute) | `reverseLoanDeductions` restores balances **before** `LoanPayment` rows are deleted — ordering is load-bearing and correct, with the prior defect documented in-line | `:123-131`, `:903-918` |
+
+**Field 4 — sync vs async handoff**
+
+| Edge | Kind | Retry budget | Out-of-order |
+|---|---|---|---|
+| HTTP → claim | **sync** — the 202 already carries `status=processing` | n/a | n/a; conditional UPDATE is the serialization point |
+| claim → compute run | async via outbox | listener `$tries=3`, `backoff [60,300,900]`, `timeout` = `ProcessPayrollJob::TIMEOUT_SECONDS` (`RunPayrollComputationOnRequested.php:30-35`) | `WithoutOverlapping("payroll-period-compute:{id}")`, `releaseAfter(30)` (`:38-45`) |
+| compute → loan write | **sync**, in-transaction, cross-module | n/a — rolls back | **no serialization on the loan row** — see P03-01 |
+| progress broadcast | `PayrollProgressEvent::dispatch` | none | fire-and-forget UI signal |
+
+Boundary-vs-dispatch (plan step 2): the compute request goes through the outbox,
+which joins the caller's transaction and defers the queue push to
+`DB::afterCommit` (`OutboxService.php:59-74`) — correct. One event on this
+process is dispatched **outside** the outbox: `PayrollProgressEvent::dispatch` at
+`ProcessPayrollJob.php:106`. It is dispatched from `$emit()`, which is called
+between per-employee transactions rather than inside one
+(`:107`, `:148`, `:164`), so it cannot observe an uncommitted payroll row. It
+carries no state change — progress counters for the SPA — so a lost or
+out-of-order delivery costs a stale progress bar. Not a finding, recorded because
+the check was applied.
+
+`PayrollComputationRequested` is staged with **no explicit dedupe key**
+(`:827-837`, five arguments — the sixth is omitted). `OutboxService::record` then
+falls back to a content hash of the payload (`OutboxService.php:32`). That is
+safe *only* because the event carries `Str::uuid()` as `requestId`
+(`:831`, `Events/PayrollComputationRequested.php:25`) and the codec reflects
+every constructor parameter into the payload
+(`OutboxEventCodec.php:139-148`), so each request hashes differently. Remove the
+UUID and this becomes P01-02 exactly. Sound as written, and worth naming because
+the safety is non-obvious and load-bearing.
+
+**Field 5 — idempotency under replay**
+
+| Effect | Dedupe mechanism | Enforced by | Verdict |
+|---|---|---|---|
+| The claim | conditional `UPDATE … WHERE status IN (draft,computed) OR stale`; affected-row count decides the winner | `:773-790`, `:792` | idempotent — loser 422s |
+| Compute run | `status === Processing` re-check on delivery + per-period overlap lock | `RunPayrollComputationOnRequested.php:64`, `:41`; `ProcessPayrollJob.php:79` | idempotent — replay after release is a no-op |
+| Payroll row | prior row deleted and rebuilt inside one transaction | `:118-151`, `:251` | idempotent per employee |
+| Double pay across periods | **UNIQUE `(employee_id, cycle_key)`** | `0439_create_payroll_cycle_claims_table.php:55`; insert `:378`, violation caught `:384-399` | idempotent — race-proof at the DB |
+| Loan deduction on recompute | `reverseLoanDeductions` reads `loan_payments` then deletes each row | `:903-918` | idempotent **sequentially**; see P03-01 for concurrent |
+| Loan balance under concurrency | **none** — no row lock, no `WHERE balance = ?`, no version column | `:822-825` read, `:862-870` blind write | **not safe** → P03-01 |
+| Adjustments on recompute | `releaseAppliedAdjustments` resets `applied_at`/`status` | `:886-898` | idempotent |
+| 13th accrual on recompute | `reverseAccrual` | `:137` | idempotent |
+
+**Field 6 — guard reachability (mechanical enumeration)**
+
+Two targets: the period status (enumerated in full at P01 field 6, nine writers,
+unchanged) and `employee_loans`, enumerated here.
+
+Grep 1 (`LoanStatus::` outside tests) yields 22 hits, 7 of them writes. Grep 2
+(`DB::table('employee_loans')`) returns three sites, **all reads**
+(`Modules/HR/Services/FinalPayService.php:341`, `:350`,
+`Modules/HR/Services/SelfServiceHomeService.php:99`) — no raw write to this
+table. Grep 3 (`EmployeeLoan::query()` mass `update`/`delete`) returns zero.
+
+| # | Writer | Writes | Guard | Reads locked row |
+|---|---|---|---|---|
+| 1 | `LoanService::request` `:197` | `status=Pending`, new row | limits check `:113`; locks the **employee** `:142` | n/a (new row) |
+| 2 | `LoanService::approve` `:221-222` | `status=Active`, `start_date` | `status !== Pending` `:213` | **yes** `:212` |
+| 3 | `LoanService::reject` `:267` | `status=Rejected` | `status !== Pending` `:263` | **yes** `:262` |
+| 4 | `LoanService::cancel` `:283` | `status=Cancelled` | not in {Pending, Active} `:280` | **yes** `:279` |
+| 5 | `LoanService::recordPayment` `:307-324` | **`balance`, `total_paid`, `pay_periods_remaining`, `status`** | `status !== Active` `:296` | **no** — no lock anywhere in the method |
+| 6 | `PayrollCalculatorService::applyLoanDeductions` `:862-870` | **`balance`, `total_paid`, `pay_periods_remaining`, `status`** | `status=Active` + `pay_periods_remaining > 0` in the **read** query `:826-827` | **no** — plain `get()` at `:822-825` |
+| 7 | `PayrollCalculatorService::reverseLoanDeductions` `:908-916` | **`balance`, `total_paid`, `pay_periods_remaining`, `status`** | none — driven by `loan_payments` rows | **no** — `EmployeeLoan::find()` `:907` |
+
+The split in this table is the finding. Writers 2–4 change only `status` and all
+three take `lockForUpdate` first. Writers 5–7 are the three that change **money**
+and not one of them locks. The Loans module therefore serializes its state
+machine and leaves its ledger unserialized, and the guard on writer 6 is a
+`WHERE` on the *read* query, which selects rows but does not hold them.
+
+Grep 4 (FQN resolution over the traced files) finds
+`app(\App\Modules\Payroll\Services\DeMinimisService::class)` at
+`PayrollCalculatorService.php:772` (same module),
+`app(\App\Modules\Payroll\Services\PayrollAnomalyService::class)` at
+`ProcessPayrollJob.php:170` (same module), and `ChainListenerRunService` /
+`PayrollPeriodService` (Common, same module). No unseen cross-module edge. P03's
+declared domains (Payroll, Loans) are correct.
+
+**Field 7 — audit attribution**
+
+| Step | Audit row | Actor |
+|---|---|---|
+| claim (step 2) | none — bare `->update()` on a query builder | `computed_by = $actor?->id` `:787` |
+| payroll row create | `HasAuditLog` on `Payroll` | job context |
+| cycle claim | **none, deliberately** — documented on the model as bookkeeping derived from the audited payroll row | `Models/PayrollCycleClaim.php:19-22` |
+| loan balance write | `HasAuditLog` on `EmployeeLoan` (`Models/EmployeeLoan.php:20`) → one `updated` row per `save()` | **no user** — the queued job has no authenticated actor |
+| `LoanPayment` create | `remarks = 'Auto-deduction from payroll'` | `:853-858` |
+| release claim | none | `force_unlocked_by` only on the force-unlock path |
+
+The loan write does produce an audit row, unlike P02's raw insert. Attribution is
+system-level rather than user-level, which is correct for a queued batch, and the
+`LoanPayment` row carries both `payroll_id` and a human-readable `remarks`, so the
+deduction is traceable back to the run. No finding here.
+
+**Field 8 — verdict**
+
+One finding.
+
+- **P03-01** — loan balance is an unlocked read-modify-write on all three money
+  writers; a concurrent write silently loses one deduction. **PROVEN.**
+  Data-corrupting → 3.1.
+
+Sound on this process, recorded so the clean parts are visible: the claim is a
+conditional UPDATE whose affected-row count decides the winner (`:773-792`), the
+claim and its outbox row share one transaction (`:823`), the compute listener
+re-checks live status and holds a per-period overlap lock
+(`RunPayrollComputationOnRequested.php:41`, `:64`), the pay-cycle guard is a real
+UNIQUE index with the violation caught and explained (`:378-399`), `claimCycle`
+runs before any loan write (`:289` before `:306`), recompute reverses loan
+payments before deleting them (`:123-131`), and the missing dedupe key on the
+compute request is covered by a UUID inside the event payload (`:831`).
+
 ### 3.1 Data-corrupting
 
 #### P01-01 — `forceUnlock` demotes a Finalized period to Computed (PROVEN)
@@ -918,6 +1088,104 @@ periods that have been sitting at Processing, so an operator opening the period
 list, then finalizing in another tab (or another operator finalizing after the
 reaper released the claim at `Console/Commands/ReapStalePayrollRuns.php:73`),
 reproduces it without contrivance.
+
+#### P03-01 — loan balance is an unlocked read-modify-write; a concurrent write loses a deduction (PROVEN)
+
+All three writers that change `employee_loans.balance` read the row without a
+lock, compute the new figure in PHP, and write it back as a literal. None uses
+`lockForUpdate`, an atomic `balance = balance - ?` expression, or a version
+column.
+
+The payroll path:
+
+```php
+$loans = EmployeeLoan::query()
+    ->where('employee_id', $employee->id)
+    ->where('status', LoanStatus::Active->value)
+    ->where('pay_periods_remaining', '>', 0)
+    ->get();                                            // :822-825 — no lock
+...
+$loan->total_paid = Money::add((string) $loan->total_paid, $deduction);  // :862
+$loan->balance    = Money::sub((string) $loan->balance,    $deduction);  // :863
+$loan->save();                                                          // :870
+```
+
+`save()` emits `UPDATE employee_loans SET total_paid = ?, balance = ?, … WHERE id = ?`
+— a blind write of a value computed from a stale read. Two readers that both saw
+`balance = 10000.00` both write `7500.00`, and the second silently discards the
+first.
+
+Three writers, one shape (field 6, writers 5–7):
+
+| Writer | Line | Locks? |
+|---|---|---|
+| `PayrollCalculatorService::applyLoanDeductions` | `:822-825` read, `:862-870` write | no |
+| `PayrollCalculatorService::reverseLoanDeductions` | `:907` read, `:908-916` write | no |
+| `LoanService::recordPayment` | `:288` entry, `:307-324` write | no |
+
+The contrast inside `LoanService` itself is the sharpest evidence that this is an
+oversight rather than a considered trade-off: `approve` `:212`, `reject` `:262`
+and `cancel` `:279` each open with
+`EmployeeLoan::query()->lockForUpdate()->findOrFail(...)`. The module locks for
+its three *status* transitions and does not lock for either of its *money*
+transitions.
+
+**Reachable interleavings.** Nothing serializes two writers against one loan:
+
+1. **Two payroll periods computing at once.** The overlap lock is keyed per
+   period — `WithoutOverlapping("payroll-period-compute:{$event->period->id}")`
+   (`RunPayrollComputationOnRequested.php:41`) — so two different periods run in
+   parallel by design. The pay-cycle UNIQUE stops the same employee being paid
+   twice for the same *cycle*, but H1 and H2 of one month are different
+   `cycle_key`s (`0439:…:26-33`), and a company loan is deducted in **both**
+   halves by design — "Company loan: half the monthly amortization per
+   semi-monthly period" (`:832-835`). Computing two cutoffs concurrently, e.g.
+   during a backfill, puts two unlocked writers on one loan row.
+2. **Payroll compute racing a manual payment.** `recordPayment` is reachable from
+   the Loans UI while the scheduled 23:00 compute runs
+   (`routes/console.php:71`, `:75`).
+3. **Recompute racing anything.** `reverseLoanDeductions` restores a balance from
+   the same unlocked read.
+
+**Consequence.** The employee is deducted twice — two `LoanPayment` rows, two
+payroll rows, two amounts withheld from take-home pay — while the loan is
+credited once. The employee pays money the loan ledger never receives. It is also
+the one direction that will not self-correct: `total_paid` under-counts, so the
+loan stays `Active` for longer and keeps deducting past settlement, and
+`FinalPayService` reads `employee_loans.balance` verbatim when computing a
+leaver's final pay (`Modules/HR/Services/FinalPayService.php:341`), so the
+inflated balance is deducted again at separation.
+
+**Probe (PROVEN).** Throwaway PHPUnit test, deleted after the run. Loaded two
+`EmployeeLoan` instances before either wrote — which is exactly what two
+concurrent transactions read, since no path locks — then drove the real
+production writer `LoanService::recordPayment` twice, ₱2,500.00 each, against a
+₱10,000.00 balance:
+
+```
+[PROBE7] both readers see balance=10000.00 total_paid=0.00
+[PROBE7] loan_payments rows=2 totalling 5000.00 withheld | loan.total_paid=2500.00 loan.balance=7500.00 (expected total_paid=5000.00 balance=5000.00)
+[PROBE7] LOST: 2500.00 withheld from the employee but never credited to the loan
+```
+
+A second probe captured the SQL to confirm no lock is taken:
+
+```
+[PROBE8] employee_loans queries during recordPayment=2, of which FOR UPDATE=0
+[PROBE8]   select * from "employee_loans" where "employee_loans"."id" = ? limit 1
+[PROBE8]   update "employee_loans" set "total_paid" = ?, "balance" = ?, "pay_periods_remaining" = ?, "updated_at" = ? whe…
+```
+
+**What the probe proves and what it does not.** It proves the mechanism on a
+production writer of the same column: an unlocked read-modify-write on
+`employee_loans.balance` loses money, and no `FOR UPDATE` is issued. It does
+*not* independently drive `applyLoanDeductions` under true concurrency —
+`applyLoanDeductions` is private and re-queries inside its own transaction, so
+interleaving it needs two live DB connections, which under `RefreshDatabase`'s
+enclosing transaction is a harness change Phase 1 forbids. Writer 6 is therefore
+argued from identical code shape (`:822-825` / `:862-870`) plus the per-period
+overlap key, while writers 5–7's shared defect is proven. Flagged in §5 so Phase 2
+can drive the payroll-path variant rather than inherit this bound.
 
 ### 3.2 Silent failure
 
