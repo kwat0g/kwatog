@@ -124,10 +124,24 @@ claim while it seeds.
 Seeding is additive: stable natural keys, `firstOrCreate`, no truncation, no
 `migrate:fresh`, no `db:wipe`, no reset.
 
-**Carve-out:** the three orphan invoices and their fabricated `paid`/`partial` statuses
-must be superseded, because they assert money movement no `collections` row supports.
-This is an explicit, logged, reviewed data repair — backup first, executed by the user,
-never by an agent.
+**Carve-out — decided: repair, not leave-in-place.** The three orphan invoices and their
+fabricated `paid`/`partial` statuses are replaced, because they assert money movement no
+`collections` row supports. Leaving them and seeding correct invoices alongside was
+considered and rejected: a panelist sorting the invoice list by date still reaches the
+bad rows, and AR is money at the tail of Chain 1.
+
+Repair procedure, in order:
+
+1. User takes and validates a backup (`scripts/db-backup.sh`).
+2. The replacement chain is built and proven in an isolated test database first: a
+   confirmed delivery → `InvoiceService::finalize()` → `recordCollection()` for the paid
+   and partial cases, producing real `invoice_items`, `collections`, and
+   `journal_entry_id` links.
+3. The three fabricated rows are voided or removed by a reviewed, logged repair — the one
+   non-additive operation in this plan.
+4. User executes against the demo database; no agent runs it.
+5. `demo:verify` confirms zero orphan invoices remain and every `paid`/`partial` status
+   is backed by a `collections` row.
 
 ---
 
@@ -140,13 +154,46 @@ never by an agent.
 3. Seed every empty headline surface from §1.1 additively, via domain services.
 4. Sweep all 234 routes × 13 roles for dead ends; fix by frequency.
 5. Clear the 4 `failed_jobs`.
-6. Deploy to VPS with a tagged rollback point; rehearse there.
+6. **MRP rerun safety** (§3.1) — in scope because the trigger is a visible button.
+7. Deploy to VPS with a tagged rollback point; rehearse there.
+
+### 3.1 MRP rerun safety — why this is in scope
+
+`spa/src/pages/mrp/plans/index.tsx:108` renders a **"Run MRP now"** button. It POSTs to
+`/api/v1/mrp/runs` (`MrpRunController::store`), which calls
+`MrpEngineService::runForAllActiveSalesOrders` — every active SO, not one. Permission is
+`mrp.runs.trigger`, held by PPC Head and system_admin. The same engine also runs daily at
+06:00 via `mrp:run-daily`.
+
+`MrpEngineService::runForSalesOrder` (`:203-260`) creates one consolidated draft PR plus
+one draft WO per SO line on **every** invocation. It supersedes the prior plan
+(`:74-79`) but never reuses or cancels that plan's children. There is no guard against
+repeated presses.
+
+Current state: 12 sales orders (3 confirmed, 9 draft), 5 purchase requests, 3 work
+orders. Two presses during a free-click demo put visibly duplicated draft PRs in the
+purchasing queue and duplicated planned WOs in production — the exact
+"duplicated/stuck process" failure the demo is meant to disprove, behind the most
+tempting button on the MRP page.
+
+This reverses an earlier deferral. The original reasoning — "a rerun is not reachable by
+hand-clicking" — was factually wrong.
+
+**Scope note:** the prior plan's Round 2 Task 5 targeted `runForSalesOrder`. The button
+reaches it through `runForAllActiveSalesOrders`, so the fix belongs in
+`runForSalesOrder` (covering both entry points) but the regression test must exercise
+the button's path — repeated `POST /api/v1/mrp/runs` — not just the per-SO method.
+
+**Fix shape:** reconcile new requirements against only the superseded plan's
+`is_auto_generated=true, status=draft` PRs and `status=planned` WOs — reuse compatible
+rows, cancel eligible surplus, create only what is missing. Never repoint, cancel, or
+rewrite PRs or WOs that have progressed (submitted, approved, released, in-progress,
+completed) or that were created manually.
 
 ### Deferred, with reasoning
 
 | Deferred | Why it is safe to defer for a hand-clicked demo |
 |---|---|
-| Round 2 MRP rerun safety | Requires an SO MRP rerun; hand-clicking will not produce accumulating duplicate plans in one session |
 | Round 2 WO cache-key namespacing | Requires an idempotency-token collision across two WOs; not reachable by clicking |
 | Full Playwright suite repair | The targeted sweep (§4) covers the demo surface |
 | Repository-wide Pint (1,531 issues / 2,165 files) | Style only; mass-formatting an unrelated dirty surface adds risk |
@@ -212,7 +259,7 @@ specification for the second.
 - **Matrix track.** Build and run Layer 1. Output: the 3,042-cell expected-access grid
   plus the orphan-route list.
 
-### Wednesday — three parallel tracks
+### Wednesday — four parallel tracks
 
 - **Track A (audit).** Layer 2 API sweep → the broken-vs-empty baseline report. This is
   the input every other track prioritizes against.
@@ -222,9 +269,28 @@ specification for the second.
   the 200 employees behind the 22,069 attendance rows.
 - **Track C (seeding).** Additive `DemoDataSeeder` covering the §1.1 table list.
 
+- **Track D (MRP rerun safety).** Implement §3.1 TDD-first: a RED test that presses
+  `POST /api/v1/mrp/runs` twice and asserts no accumulating draft auto-PRs or planned WOs,
+  plus a mixed-children test proving progressed and manual documents are untouched. Code
+  only — `MrpEngineService.php` and its tests. No table writes, so it runs freely
+  alongside B and C.
+
 **Concurrency guard:** B and C both write. Table ownership is disjoint — B owns AR,
 leave, and shift tables; C owns everything else. Both are built and tested against an
-isolated test database, never the demo database.
+isolated test database, never the demo database. Track D writes no data.
+
+**Ordering note:** Track D must land before Track C seeds anything MRP-derived, otherwise
+seeding a plan and then fixing the engine can leave inconsistent children. If D slips,
+C seeds MRP last.
+
+### Wednesday night — throwaway VPS deploy (decided: yes)
+
+Deploy the current state to the VPS end-to-end, purely to prove the path. This converts
+Thursday's deploy from a first attempt into a second attempt, on the only day there is
+still time to react. The VPS has never been exercised at this data volume, and a deploy
+that fails for the first time on Thursday night before a Friday defense has no recovery
+window. The cost is roughly an hour; the alternative is discovering a migration,
+env, or asset-build problem with no slack left.
 
 ### Thursday morning
 
@@ -259,7 +325,9 @@ decisions from the critical path.
 | Risk | Consequence | Mitigation |
 |---|---|---|
 | Wednesday seeding is the critical path | If Track C slips, Thursday's sweep runs against partial data and its verdicts get noisy | Track C is mechanical and parallelizable; start it first Wednesday morning |
-| VPS never exercised at this data volume | Thursday-PM deploy leaves one evening to react | Throwaway deploy Wednesday night to prove the path end-to-end |
+| VPS never exercised at this data volume | Thursday-PM deploy leaves one evening to react | Throwaway deploy Wednesday night (adopted, §5) |
+| "Run MRP now" pressed during the demo | Duplicated draft PRs and planned WOs appear live, in the purchasing and production queues | Track D fixes the engine (§3.1); rehearse pressing it twice on the VPS before Friday |
+| Wednesday now carries four tracks, not three | Track D competes with seeding for attention | D is code-only with no data writes, so it can slip to Thursday morning if C is at risk; C then seeds MRP last |
 | Provenance repair touches money rows | Wrong repair corrupts AR | Backup first; drive real services; user executes, not an agent; `demo:verify` afterward |
 | `/tmp` worktrees not reboot-safe | Round 1 worktree metadata lost | Merge to `main` Tuesday evening — branches in `.git` are already safe |
 | Seeding via services triggers real events/outbox | Unexpected queue or notification volume | Seed against an isolated test DB first; inspect `event_outbox` and `failed_jobs` before applying to demo |
@@ -280,8 +348,11 @@ Friday-ready means all of:
 5. The 3,042-cell matrix is computed; every pair is classified reachable / expected-403 /
    defect; every defect is fixed or explicitly accepted in writing.
 6. `failed_jobs` = 0.
-7. Full backend suite green; SPA lint, typecheck, test, build, and token audit green.
-8. VPS deployed from a tagged commit with a proven rollback path, rehearsed on the VPS.
+7. Pressing **"Run MRP now"** twice in a row produces no additional draft auto-PRs or
+   planned WOs, and leaves every progressed or manually created PR/WO untouched —
+   verified on the VPS, not only in tests.
+8. Full backend suite green; SPA lint, typecheck, test, build, and token audit green.
+9. VPS deployed from a tagged commit with a proven rollback path, rehearsed on the VPS.
 
 **Reported honestly, not implied:** any role-route pair the sweep could not visit is
 listed as unvisited rather than counted as passing.
