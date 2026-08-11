@@ -85,7 +85,7 @@ export default function SeparationDetailPage() {
  backTo="/hr/separations"
  backLabel="Separations"
  breadcrumbs={[
- { label: 'HR', href: '/hr' },
+ { label: 'HR', href: '/hr/employees' },
  { label: 'Separations', href: '/hr/separations' },
  { label: data.clearance_no },
  ]}

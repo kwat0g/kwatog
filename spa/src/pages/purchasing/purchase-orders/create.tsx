@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useFieldArray, useForm } from 'react-hook-form';
@@ -21,8 +21,12 @@ import { Select } from '@/components/ui/Select';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { Switch } from '@/components/ui/Switch';
 import { Textarea } from '@/components/ui/Textarea';
+import { DraftRestoreBanner } from '@/components/ui/DraftRestoreBanner';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
+import { useFormDraftAutosave } from '@/hooks/useFormDraftAutosave';
+import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
+import { useAuthStore } from '@/stores/authStore';
 import { formatPeso } from '@/lib/formatNumber';
 import { numberInputProps } from '@/lib/numberInput';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
@@ -59,6 +63,7 @@ type V = z.infer<typeof schema>;
 
 export default function CreatePurchaseOrderPage() {
   const nav = useNavigate();
+  const userId = useAuthStore((s) => s.user?.id);
   const [search] = useSearchParams();
   const prId = search.get('pr_id');
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -100,7 +105,8 @@ export default function CreatePurchaseOrderPage() {
     control,
     watch,
     reset,
-    formState: { errors, isSubmitting },
+    getValues,
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<V>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -186,6 +192,18 @@ export default function CreatePurchaseOrderPage() {
     },
   });
 
+  const applyDraft = useCallback((data: Record<string, unknown>) => {
+    reset(data as V);
+  }, [reset]);
+  const draft = useFormDraftAutosave({
+    formKey: `purchasing.purchase-orders.create.${prId ?? 'new'}`,
+    getValues,
+    setValues: applyDraft,
+    userId,
+    enabled: Boolean(prId) && !create.isSuccess,
+  });
+  useUnsavedChangesGuard(isDirty && !create.isSuccess);
+
   return (
     <div>
       <PageHeader
@@ -248,6 +266,13 @@ export default function CreatePurchaseOrderPage() {
         }, onFormInvalid<V>())}
         className="max-w-5xl mx-auto px-5 py-4 space-y-4"
       >
+        {draft.hasDraft && (
+          <DraftRestoreBanner
+            ageMs={draft.draftAge}
+            onRestore={draft.restore}
+            onDiscard={draft.discard}
+          />
+        )}
         <Panel title="Header">
           <div className="grid grid-cols-3 gap-3">
             <Select

@@ -82,7 +82,7 @@ function AppLayoutInner() {
  <div className="flex flex-1">
  <Sidebar permissions={permissions} features={features} roleSlug={user?.role?.slug} />
  <main id="main-content" tabIndex={-1} className="flex-1 min-w-0">
- {/* Series X / Task X5 — 150 ms fade between routed page content. */}
+ {/* Route content stays immediate; RouteTransition is a semantic wrapper only. */}
  <RouteTransition>
  <Outlet />
  </RouteTransition>

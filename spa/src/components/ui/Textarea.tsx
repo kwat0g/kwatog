@@ -76,7 +76,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
         />
         <div className="flex items-center justify-between">
           {error ? (
-            <span id={`${taId}-error`} className="text-xs text-danger-fg">
+            <span id={`${taId}-error`} role="alert" className="text-xs text-danger-fg">
               {error}
             </span>
           ) : helper ? (

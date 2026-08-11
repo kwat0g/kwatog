@@ -92,7 +92,7 @@ export default function ApplicationsListPage() {
  title="Applications"
  subtitle={data ? `${data.meta?.total ?? 0} applications` : undefined}
  breadcrumbs={[
- { label: 'HR', href: '/hr' },
+ { label: 'HR', href: '/hr/employees' },
  { label: 'Recruitment', href: '/hr/recruitment' },
  { label: 'Applications' },
  ]}

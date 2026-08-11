@@ -123,7 +123,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           )}
         </div>
         {error ? (
-          <span id={`${inputId}-error`} className="text-xs text-danger-fg">
+          <span id={`${inputId}-error`} role="alert" className="text-xs text-danger-fg">
             {error}
           </span>
         ) : helper ? (

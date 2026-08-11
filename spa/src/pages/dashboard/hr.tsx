@@ -656,7 +656,7 @@ function PayrollSummaryPanel({
           <div className="text-xs text-muted">Pending Salary Adjustments</div>
           <div className="text-lg font-mono tabular-nums mt-0.5">
             {data.pending_salary_adjustments > 0 ? (
-              <Link to="/hr/salary-adjustments" className="text-link hover:underline">
+              <Link to="/hr/employees" className="text-link hover:underline">
                 {data.pending_salary_adjustments}
               </Link>
             ) : (

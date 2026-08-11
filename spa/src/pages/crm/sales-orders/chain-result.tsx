@@ -239,12 +239,12 @@ export function ChainErrorPanel({ error, onDismiss }: ChainErrorPanelProps) {
 
  <div className="flex gap-2 ml-6">
  {isMissingBom && (
- <Button size="sm" variant="secondary" onClick={() => navigate('/mrp/bom')}>
+ <Button size="sm" variant="secondary" onClick={() => navigate('/mrp/boms')}>
  Manage BOMs
  </Button>
  )}
  {isNoSupplier && (
- <Button size="sm" variant="secondary" onClick={() => navigate('/purchasing/vendors')}>
+ <Button size="sm" variant="secondary" onClick={() => navigate('/accounting/vendors')}>
  Manage Suppliers
  </Button>
  )}

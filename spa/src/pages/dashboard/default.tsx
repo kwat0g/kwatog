@@ -36,8 +36,8 @@ export default function DashboardDefaultPage() {
  const canResetLayout = can('dashboard.layout.reset');
 
  const layout = useQuery({
- queryKey: ['dashboard', 'layout'],
- queryFn: () => dashboardLayoutApi.layout(),
+ queryKey: ['dashboard', 'layout', { rich: true }],
+ queryFn: () => dashboardLayoutApi.layout({ rich: true }),
  });
 
  const widgetKeys = layout.data?.map((widget) => widget.key) ?? [];

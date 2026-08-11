@@ -2,6 +2,15 @@ import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { client } from './client';
 
+// A protected download is a side effect, not an idempotent query. Keep a
+// module-level guard so two rapid clicks cannot create duplicate files even in
+// callers that have not yet adopted a visible pending state.
+const activeDownloads = new Set<string>();
+
+export function isDownloadActive(url: string): boolean {
+ return activeDownloads.has(url);
+}
+
 function apiPath(url: string): string {
  return url.startsWith('/api/v1') ? url.slice('/api/v1'.length) || '/' : url;
 }
@@ -32,6 +41,9 @@ export async function downloadAuthenticatedFile(
  url: string,
  options: { filename?: string; openInNewTab?: boolean; errorMessage?: string } = {},
 ): Promise<boolean> {
+ if (activeDownloads.has(url)) return false;
+ activeDownloads.add(url);
+
  const popup = options.openInNewTab ? window.open('', '_blank') : null;
  if (popup) popup.opener = null;
 
@@ -67,5 +79,7 @@ export async function downloadAuthenticatedFile(
  );
  }
  return false;
+ } finally {
+ activeDownloads.delete(url);
  }
 }

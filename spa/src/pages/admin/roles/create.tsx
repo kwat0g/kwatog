@@ -132,7 +132,7 @@ export default function CreateRolePage() {
  backTo="/admin/roles"
  backLabel="Roles"
  breadcrumbs={[
- { label: 'Admin', href: '/admin' },
+ { label: 'Admin', href: '/admin/users' },
  { label: 'Roles', href: '/admin/roles' },
  { label: 'New Role' },
  ]}

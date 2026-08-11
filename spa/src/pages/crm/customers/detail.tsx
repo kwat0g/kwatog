@@ -222,7 +222,7 @@ export default function CrmCustomerDetailPage() {
  {tab === 'orders' && (
  <div>
  {!can('crm.sales_orders.view') ? (
- <EmptyState icon="lock" title="No permission to view sales orders" />
+ <EmptyState icon="file-question" title="Not found" />
  ) : !ordersData ? (
  <SkeletonTable columns={5} rows={5} />
  ) : ordersData.data.length === 0 ? (
@@ -242,7 +242,7 @@ export default function CrmCustomerDetailPage() {
  {tab === 'complaints' && (
  <div>
  {!can('crm.complaints.manage') ? (
- <EmptyState icon="lock" title="No permission to view complaints" />
+ <EmptyState icon="file-question" title="Not found" />
  ) : !complaintsData ? (
  <SkeletonTable columns={5} rows={5} />
  ) : complaintsData.data.length === 0 ? (
@@ -262,7 +262,7 @@ export default function CrmCustomerDetailPage() {
  {tab === 'prices' && (
  <div>
  {!can('crm.price_agreements.view') ? (
- <EmptyState icon="lock" title="No permission to view price agreements" />
+ <EmptyState icon="file-question" title="Not found" />
  ) : !priceAgreements ? (
  <SkeletonTable columns={5} rows={5} />
  ) : priceAgreements.length === 0 ? (

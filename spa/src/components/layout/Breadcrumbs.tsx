@@ -47,6 +47,33 @@ const MODULE_LABELS: Record<string, string> = {
  'self-service': 'Self-service',
 };
 
+// Several module roots are redirects or have no standalone index route. Point
+// the global breadcrumb at the supported entry surface so every ancestor is a
+// real destination instead of generating dead links such as /hr or /admin.
+const MODULE_PATHS: Record<string, string> = {
+ dashboard: '/dashboard',
+ 'action-center': '/action-center',
+ exceptions: '/exceptions',
+ alerts: '/alerts',
+ calendar: '/calendar',
+ approvals: '/approvals',
+ notifications: '/notifications',
+ crm: '/crm',
+ mrp: '/mrp',
+ production: '/production',
+ 'supply-chain': '/supply-chain',
+ purchasing: '/purchasing',
+ inventory: '/inventory',
+ quality: '/quality',
+ accounting: '/accounting',
+ hr: '/hr/employees',
+ payroll: '/payroll/periods',
+ maintenance: '/maintenance',
+ assets: '/assets',
+ admin: '/admin/users',
+ 'self-service': '/self-service',
+};
+
 const TITLE_OVERRIDES: Record<string, string> = {
  hr: 'HR',
  mrp: 'MRP',
@@ -84,7 +111,9 @@ export function Breadcrumbs() {
 
  const crumbs = segments.map((segment, i) => ({
  label: i === 0 && MODULE_LABELS[segment] ? MODULE_LABELS[segment] : titleize(segment),
- to: '/' + segments.slice(0, i + 1).join('/'),
+ to: i === 0 && MODULE_PATHS[segment]
+ ? MODULE_PATHS[segment]
+ : '/' + segments.slice(0, i + 1).join('/'),
  }));
 
  return (

@@ -102,9 +102,8 @@ export default function ApplicationDetailPage() {
  if (isError || !application) {
  return (
  <EmptyState
- icon="alert-circle"
+ icon="file-question"
  title="Application not found"
- description="The record may have been deleted or you don't have access."
  action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
  />
  );
@@ -129,7 +128,7 @@ export default function ApplicationDetailPage() {
  backTo="/hr/recruitment/applications"
  backLabel="Applications"
  breadcrumbs={[
- { label: 'HR', href: '/hr' },
+ { label: 'HR', href: '/hr/employees' },
  { label: 'Recruitment', href: '/hr/recruitment' },
  { label: 'Applications', href: '/hr/recruitment/applications' },
  { label: application.full_name },

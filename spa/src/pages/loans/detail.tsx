@@ -76,7 +76,7 @@ export default function LoanDetailPage() {
  backTo="/hr/loans"
  backLabel="Loans"
  breadcrumbs={[
- { label: 'HR', href: '/hr' },
+ { label: 'HR', href: '/hr/employees' },
  { label: 'Loans', href: '/hr/loans' },
  { label: loan.loan_no },
  ]}

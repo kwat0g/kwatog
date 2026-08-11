@@ -119,11 +119,11 @@ export function LeaveTypesManager() {
  key: 'actions', header: '',
  cell: (r: LeaveType) => can('leave.types.manage') ? (
  <div className="flex gap-1">
- <Button variant="ghost" size="xs" icon={<Pencil size={12} />} onClick={(e) => { e.stopPropagation(); openEdit(r); }} />
+ <Button variant="ghost" size="xs" iconOnly aria-label={`Edit ${r.name}`} icon={<Pencil size={12} />} onClick={(e) => { e.stopPropagation(); openEdit(r); }} />
  {scope === 'only' ? (
- <Button variant="ghost" size="xs" icon={<ArchiveRestore size={12} />} onClick={(e) => { e.stopPropagation(); restoreMutation.mutate(r.id); }} />
+ <Button variant="ghost" size="xs" iconOnly aria-label={`Restore ${r.name}`} icon={<ArchiveRestore size={12} />} onClick={(e) => { e.stopPropagation(); restoreMutation.mutate(r.id); }} />
  ) : (
- <Button variant="ghost" size="xs" icon={<Trash2 size={12} />} onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(r.id); }} />
+ <Button variant="ghost" size="xs" iconOnly aria-label={`Archive ${r.name}`} icon={<Trash2 size={12} />} onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(r.id); }} />
  )}
  </div>
  ) : null,

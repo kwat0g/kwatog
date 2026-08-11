@@ -119,6 +119,27 @@ export async function mockAuth(page: Page, user: MockUser): Promise<void> {
   await page.route('**/api/v1/dashboard/kpi/scorecard?*', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) });
   });
+  await page.route('**/api/v1/business-policies', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: {
+          customer_payment_terms_days: 30,
+          vendor_payment_terms_days: 30,
+          sales_delivery_lead_days: 7,
+          mrp_default_lead_time_days: 7,
+          mrp_work_order_normal_priority: 3,
+          purchase_order_vp_threshold: 100000,
+          functional_currency_code: 'PHP',
+          reporting_currency_code: 'PHP',
+          translation_adjustment_account_code: '7999',
+          vat_rate: '12.00',
+          vat_status: 'registered',
+        },
+      }),
+    });
+  });
   await page.route('**/api/v1/dashboard/layout', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) });
   });

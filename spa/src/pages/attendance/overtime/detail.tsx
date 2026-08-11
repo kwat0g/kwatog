@@ -93,7 +93,7 @@ export default function OvertimeDetailPage() {
  backTo="/hr/attendance/overtime"
  backLabel="Overtime"
  breadcrumbs={[
- { label: 'HR', href: '/hr' },
+ { label: 'HR', href: '/hr/employees' },
  { label: 'Attendance', href: '/hr/attendance' },
  { label: 'Overtime', href: '/hr/attendance/overtime' },
  { label: formatDate(ot.date) },

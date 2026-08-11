@@ -57,7 +57,7 @@ const [deleteTarget, setDeleteTarget] = useState<Training | null>(null);
  });
 
  const columns = [
- { key: 'name', header: 'Name', sortable: true, cell: (row: Training) => <span className="font-medium">{row.name}</span> },
+ { key: 'name', header: 'Name', cell: (row: Training) => <span className="font-medium">{row.name}</span> },
  {
  key: 'department', header: 'Department',
  cell: (row: Training) => row.department?.name ?? '—',
@@ -76,11 +76,11 @@ const [deleteTarget, setDeleteTarget] = useState<Training | null>(null);
   key: 'actions', header: '',
   cell: (row: Training) => (
   <div className="flex gap-1">
-  <Button variant="ghost" size="xs" icon={<Pencil size={12} />} onClick={(e) => { e.stopPropagation(); navigate(`/hr/trainings/${row.id}/edit`); }} />
+  <Button variant="ghost" size="xs" iconOnly aria-label={`Edit ${row.name}`} icon={<Pencil size={12} />} onClick={(e) => { e.stopPropagation(); navigate(`/hr/trainings/${row.id}/edit`); }} />
   {scope === 'only' ? (
-  <Button variant="ghost" size="xs" icon={<ArchiveRestore size={12} />} onClick={(e) => { e.stopPropagation(); setRestoreTarget(row); }} />
+  <Button variant="ghost" size="xs" iconOnly aria-label={`Restore ${row.name}`} icon={<ArchiveRestore size={12} />} onClick={(e) => { e.stopPropagation(); setRestoreTarget(row); }} />
   ) : (
-  <Button variant="ghost" size="xs" icon={<Trash2 size={12} />} onClick={(e) => { e.stopPropagation(); setDeleteTarget(row); }} />
+  <Button variant="ghost" size="xs" iconOnly aria-label={`Archive ${row.name}`} icon={<Trash2 size={12} />} onClick={(e) => { e.stopPropagation(); setDeleteTarget(row); }} />
   )}
   </div>
   ),

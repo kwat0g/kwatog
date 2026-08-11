@@ -106,7 +106,7 @@ export default function CompareRolesPage() {
  backTo="/admin/roles"
  backLabel="Roles"
  breadcrumbs={[
- { label: 'Admin', href: '/admin' },
+ { label: 'Admin', href: '/admin/users' },
  { label: 'Roles', href: '/admin/roles' },
  { label: 'Compare' },
  ]}

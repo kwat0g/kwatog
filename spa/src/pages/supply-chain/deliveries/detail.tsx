@@ -315,9 +315,11 @@ const removeProof = useMutation({
  )}
 
  {!hasProof && (
- <div className="text-xs text-muted mb-3 px-3 py-2 bg-subtle rounded-md border border-warning/30">
- ⚠ No proof uploaded yet. After delivering the goods, upload the signed delivery
+ <div className="text-xs text-muted mb-3 px-3 py-2 bg-subtle rounded-md border border-warning/30 flex items-start gap-2">
+ <AlertTriangle size={14} className="mt-0.5 shrink-0 text-warning-fg" aria-hidden="true" />
+ <span>No proof uploaded yet. After delivering the goods, upload the signed delivery
  receipt or a photo here. <strong>Required</strong> before the delivery can be confirmed.
+ </span>
  </div>
  )}
 

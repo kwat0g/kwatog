@@ -99,7 +99,7 @@ export default function LeaveDetailPage() {
  backTo="/hr/leaves"
  backLabel="Leaves"
  breadcrumbs={[
- { label: 'HR', href: '/hr' },
+ { label: 'HR', href: '/hr/employees' },
  { label: 'Leaves', href: '/hr/leaves' },
  { label: req.leave_request_no },
  ]}

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { Modal } from './Modal';
 import { Button } from './Button';
@@ -39,6 +39,7 @@ export function ConfirmDialog({
  pending = false,
 }: ConfirmDialogProps) {
  const [busy, setBusy] = useState(false);
+ const titleId = useId();
  const isPending = pending || busy;
 
  const handleConfirm = async () => {
@@ -65,6 +66,7 @@ export function ConfirmDialog({
  onClose={isPending ? () => undefined : onClose}
  size="sm"
  closeOnOverlayClick={!isPending}
+ ariaLabelledBy={titleId}
  >
  <div className="pt-2">
  <div className="flex gap-4">
@@ -72,7 +74,7 @@ export function ConfirmDialog({
  <AlertTriangle size={24} />
  </div>
  <div className="space-y-2 mt-1">
- <h2 className="text-lg font-medium tracking-tight text-primary">{title}</h2>
+ <h2 id={titleId} className="text-lg font-medium tracking-tight text-primary">{title}</h2>
  {description && (
  <div className="text-base text-muted leading-relaxed">{description}</div>
  )}

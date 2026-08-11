@@ -35,10 +35,25 @@ function collectMessages(errors: Record<string, unknown>): string[] {
  return [...new Set(msgs)];
 }
 
+function focusFirstInvalidField(): void {
+ if (typeof document === 'undefined') return;
+
+ // RHF updates aria-invalid before invoking the invalid callback. Deferring a
+ // frame lets the browser see the new attributes and keeps keyboard users at
+ // the first field that needs attention instead of leaving focus on Submit.
+ window.setTimeout(() => {
+ const firstInvalid = document.querySelector<HTMLElement>(
+ '[aria-invalid="true"]:not([disabled])',
+ );
+ firstInvalid?.focus({ preventScroll: false });
+ }, 0);
+}
+
 export function onFormInvalid<T extends FieldValues>(
  _labels?: Partial<Record<keyof T & string, string>>,
 ): (errors: FieldErrors<T>) => void {
  return (errors) => {
+ focusFirstInvalidField();
  const messages = collectMessages(errors as Record<string, unknown>);
 
  if (messages.length === 0) {

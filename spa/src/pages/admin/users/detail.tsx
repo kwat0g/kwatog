@@ -111,7 +111,7 @@ export default function AdminUserDetailPage() {
  backTo="/admin/users"
  backLabel="Users"
  breadcrumbs={[
- { label: 'Admin', href: '/admin' },
+ { label: 'Admin', href: '/admin/users' },
  { label: 'Users', href: '/admin/users' },
  { label: user.name },
  ]}

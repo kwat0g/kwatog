@@ -82,9 +82,8 @@ export default function EmployeeDetailPage() {
   if (isError || !employee) {
     return (
       <EmptyState
-        icon="alert-circle"
+        icon="file-question"
         title="Employee not found"
-        description="The record may have been deleted or you don't have access."
         action={
           <Button variant="secondary" onClick={() => refetch()}>
             Retry
@@ -113,7 +112,7 @@ export default function EmployeeDetailPage() {
         backTo="/hr/employees"
         backLabel="Employees"
         breadcrumbs={[
-          { label: 'HR', href: '/hr' },
+          { label: 'HR', href: '/hr/employees' },
           { label: 'Employees', href: '/hr/employees' },
           { label: employee.full_name },
         ]}

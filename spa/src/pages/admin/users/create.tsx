@@ -74,7 +74,7 @@ export default function AdminCreateUserPage() {
 
  return (
  <div>
- <PageHeader title="Create User" backTo="/admin/users" backLabel="Users" breadcrumbs={[{ label: 'Admin', href: '/admin' }, { label: 'Users', href: '/admin/users' }, { label: 'New User' }]} />
+ <PageHeader title="Create User" backTo="/admin/users" backLabel="Users" breadcrumbs={[{ label: 'Admin' }, { label: 'Users', href: '/admin/users' }, { label: 'New User' }]} />
 
  <form
  onSubmit={handleSubmit((v) => mutation.mutate(v))}

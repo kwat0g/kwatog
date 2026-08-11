@@ -108,7 +108,7 @@ export default function PostingsListPage() {
  title="Job Postings"
  subtitle={data ? `${data.meta?.total ?? 0} postings` : undefined}
  breadcrumbs={[
- { label: 'HR', href: '/hr' },
+ { label: 'HR', href: '/hr/employees' },
  { label: 'Recruitment', href: '/hr/recruitment' },
  { label: 'Postings' },
  ]}

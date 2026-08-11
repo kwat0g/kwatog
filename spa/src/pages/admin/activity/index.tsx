@@ -149,6 +149,14 @@ export default function AdminActivityFeedPage() {
  <li
  key={e.id}
  onClick={() => e.link && navigate(e.link)}
+ role={e.link ? 'link' : undefined}
+ tabIndex={e.link ? 0 : undefined}
+ onKeyDown={(event) => {
+ if (e.link && (event.key === 'Enter' || event.key === ' ')) {
+ event.preventDefault();
+ navigate(e.link);
+ }
+ }}
  className={cn(
  'flex items-start gap-3 px-3 py-2.5',
  e.link ? 'cursor-pointer hover:bg-subtle' : '',

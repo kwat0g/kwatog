@@ -7,6 +7,7 @@ import { cn } from '@/lib/cn';
 import { supplierPortalApi } from '@/api/b2b/supplier';
 import { customerPortalApi } from '@/api/b2b/customer';
 import { setFunctionalCurrency } from '@/lib/runtimeCurrency';
+import { OfflineBanner } from '@/components/ui/OfflineBanner';
 import {
  LayoutDashboard,
  FileText,
@@ -141,6 +142,7 @@ export default function PortalLayout({ type, user, onLogout, title, subtitle, ch
  </div>
  </div>
  </header>
+ <OfflineBanner placement="in-header" />
 
  {/* Content — no padding here. Portal pages own the same anatomy as app
  pages: a full-bleed <PageHeader /> followed by a `px-5 py-4` body. */}

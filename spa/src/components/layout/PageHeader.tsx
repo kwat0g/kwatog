@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import { type ReactNode } from 'react';
+import { isValidElement, useEffect, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { RefreshingIndicator } from './RefreshingIndicator';
 import { Breadcrumb, type BreadcrumbSegment } from '@/components/ui/Breadcrumb';
@@ -24,6 +24,15 @@ interface PageHeaderProps {
   refreshingQueryKey?: readonly unknown[];
 }
 
+function textFromNode(node: ReactNode): string {
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map(textFromNode).join(' ');
+  if (isValidElement(node)) {
+    return textFromNode((node.props as { children?: ReactNode }).children);
+  }
+  return '';
+}
+
 export function PageHeader({
   title,
   subtitle,
@@ -36,6 +45,13 @@ export function PageHeader({
   refreshingQueryKey,
 }: PageHeaderProps) {
   const navigate = useNavigate();
+  const documentTitle = textFromNode(title).replace(/\s+/g, ' ').trim();
+
+  useEffect(() => {
+    if (documentTitle) {
+      document.title = `${documentTitle} · ERP`;
+    }
+  }, [documentTitle]);
 
   const handleBackClick = (e: React.MouseEvent) => {
     e.preventDefault();

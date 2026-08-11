@@ -97,7 +97,7 @@ export default function CreateEmployeePage() {
  backTo="/hr/employees"
  backLabel="Employees"
  breadcrumbs={[
- { label: 'HR', href: '/hr' },
+ { label: 'HR', href: '/hr/employees' },
  { label: 'Employees', href: '/hr/employees' },
  { label: fromApplication ? 'Convert Applicant' : 'New Employee' },
  ]}

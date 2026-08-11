@@ -10,7 +10,7 @@ import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { AxiosError } from 'axios';
-import { Plus, Trash2 } from 'lucide-react';
+import { AlertTriangle, Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { onFormInvalid } from '@/lib/formErrors';
 import { workOrdersApi } from '@/api/production/workOrders';
@@ -102,7 +102,7 @@ export default function RecordOutputPage() {
  },
  onSuccess: (output) => {
  if (output.production_receipt_handoff?.status === 'manual_required') {
- toast(`Output ${output.batch_code ?? ''} recorded. Finished-goods receipt needs Inventory attention.`, { icon: '⚠️' });
+ toast(`Output ${output.batch_code ?? ''} recorded. Finished-goods receipt needs Inventory attention.`, { icon: <AlertTriangle size={16} aria-hidden="true" /> });
  } else {
  toast.success(`Output ${output.batch_code ?? ''} recorded.`);
  }

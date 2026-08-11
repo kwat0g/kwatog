@@ -67,8 +67,9 @@ export function TouchShell({
   useEffect(() => {
     const { pushOverride, popOverride } = useThemeStore.getState();
     pushOverride('floor');
+    document.title = `${eyebrow} · ERP`;
     return () => popOverride();
-  }, []);
+  }, [eyebrow]);
 
   const hasTabs = Boolean(tabs?.length);
 

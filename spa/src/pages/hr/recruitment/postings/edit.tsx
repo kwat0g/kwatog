@@ -171,7 +171,7 @@ export default function PostingEditPage() {
  backTo={`/hr/recruitment/postings/${id}`}
  backLabel="Posting"
  breadcrumbs={[
- { label: 'HR', href: '/hr' },
+ { label: 'HR', href: '/hr/employees' },
  { label: 'Recruitment', href: '/hr/recruitment' },
  { label: 'Postings', href: '/hr/recruitment/postings' },
  { label: posting?.title ?? 'Edit' },

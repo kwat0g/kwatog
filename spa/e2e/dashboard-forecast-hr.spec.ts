@@ -146,7 +146,7 @@ test.describe('HR Dashboard — Headcount Forecast Panel', () => {
     await mockDashboardApi(page, API_URL, {}, { hang: true });
 
     await page.goto(PAGE_URL);
-    await expect(page.locator('.animate-pulse').first()).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.animate-shimmer').first()).toBeVisible({ timeout: 5000 });
   });
 
 });

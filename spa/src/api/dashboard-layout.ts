@@ -5,12 +5,54 @@ import type { ApiSuccess } from '@/types';
  * Series R — Task R4 — dashboard layout endpoints.
  */
 
+/** How a widget draws itself. Mirrors the backend RenderKind enum. */
+export type WidgetRenderKind = 'scalar' | 'breakdown' | 'trend' | 'table' | 'gauge';
+
+export type WidgetSegmentTone = 'neutral' | 'success' | 'warning' | 'danger' | 'info';
+
+export interface WidgetBreakdownData {
+ total: number;
+ segments: Array<{ label: string; value: number; tone: WidgetSegmentTone }>;
+}
+
+export interface WidgetTrendData {
+ points: Array<{ label: string; value: number }>;
+ delta: number | null;
+ kind: DashboardWidgetSummary['kind'];
+}
+
+export interface WidgetTableData {
+ columns: Array<{ key: string; label: string; numeric?: boolean }>;
+ rows: Array<Record<string, string | number | null>>;
+ total_count: number;
+}
+
+export interface WidgetGaugeData {
+ value: number;
+ target: number | null;
+ min: number;
+ max: number;
+ kind: DashboardWidgetSummary['kind'];
+}
+
+/**
+ * Discriminated by the sibling `render_kind`, not by a field on the payload —
+ * the backend keys the shape off the widget row, so a widget can change how it
+ * draws without its data contract moving.
+ */
+export type WidgetData =
+ | WidgetBreakdownData
+ | WidgetTrendData
+ | WidgetTableData
+ | WidgetGaugeData;
+
 export interface DashboardWidgetMeta {
  key: string;
  name: string;
  description: string | null;
  module: string;
  permission: string | null;
+ render_kind: WidgetRenderKind;
  default_w: number;
  default_h: number;
 }
@@ -21,6 +63,9 @@ export interface DashboardLayoutItem {
  description: string | null;
  module: string;
  permission: string | null;
+ render_kind: WidgetRenderKind;
+ /** Only populated when the layout was fetched with `{ rich: true }`. */
+ data: WidgetData | null;
  x: number;
  y: number;
  w: number;
@@ -76,9 +121,16 @@ export const dashboardLayoutApi = {
  .get<ApiSuccess<DashboardDispatch>>('/dashboard/dispatch')
  .then((r) => r.data.data),
 
- layout: () =>
+ /**
+  * `rich: true` asks the server to attach each widget's rich payload
+  * (breakdown / trend / table / gauge). Without it every `data` is null and
+  * tiles render from the scalar `widget-data` endpoint as before.
+  */
+ layout: (opts?: { rich?: boolean }) =>
  client
- .get<ApiSuccess<DashboardLayoutItem[]>>('/dashboard/layout')
+ .get<ApiSuccess<DashboardLayoutItem[]>>('/dashboard/layout', {
+ params: opts?.rich ? { rich: 1 } : undefined,
+ })
  .then((r) => r.data.data),
 
  data: (keys: string[]) =>

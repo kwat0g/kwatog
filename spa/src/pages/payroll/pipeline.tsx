@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Circle, CircleDot, LoaderCircle, Minus } from 'lucide-react';
 import { periodsApi } from '@/api/payroll/periods';
 import { Button } from '@/components/ui/Button';
 import { Chip, type ChipVariant } from '@/components/ui/Chip';
@@ -28,18 +28,20 @@ const statusVariant = (status: PipelinePeriod['status']): ChipVariant => {
  }
 };
 
-const statusIcon = (status: PipelinePeriod['status']): string => {
+const statusIcon = (status: PipelinePeriod['status']) => {
+ let icon;
  switch (status) {
- case 'disbursed': return '✅';
- case 'finalized': return '✅';
- case 'approved': return '✅';
- case 'computed': return '◑';
- case 'processing': return '⌛';
- case 'draft': return '⚠';
- case 'scheduled': return '○';
- case 'not_created': return '—';
- default: return '○';
+ case 'disbursed':
+ case 'finalized':
+ case 'approved': icon = <CheckCircle2 size={14} />; break;
+ case 'computed': icon = <CircleDot size={14} />; break;
+ case 'processing': icon = <LoaderCircle size={14} className="animate-spin" />; break;
+ case 'draft': icon = <AlertTriangle size={14} />; break;
+ case 'scheduled': icon = <Circle size={14} />; break;
+ case 'not_created': icon = <Minus size={14} />; break;
+ default: icon = <Circle size={14} />;
  }
+ return <span aria-hidden="true" className="inline-flex text-muted">{icon}</span>;
 };
 
 export default function PayrollPipelinePage() {

@@ -14,7 +14,7 @@
 
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, type CSSProperties } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Outlet, Link } from 'react-router-dom';
+import { Outlet, Link, useLocation } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { useThemeStore } from '@/stores/themeStore';
 import { reduceMotion } from '@/lib/motionPrefs';
@@ -44,6 +44,7 @@ const GRID_BG: CSSProperties = {
 };
 
 export function AuthLayout() {
+  const location = useLocation();
   const { data: contact } = useQuery({
     queryKey: ['landing', 'contact'],
     queryFn: landingApi.contact,
@@ -62,6 +63,16 @@ export function AuthLayout() {
       initTheme('light');
     }
   }, [initTheme]);
+
+  useEffect(() => {
+    const labels: Record<string, string> = {
+      '/login': 'Sign in',
+      '/forgot-password': 'Forgot password',
+      '/reset-password': 'Reset password',
+      '/change-password': 'Change password',
+    };
+    document.title = `${labels[location.pathname] ?? 'Account'} · ERP`;
+  }, [location.pathname]);
 
   const asideRef = useRef<HTMLElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);

@@ -81,7 +81,7 @@ export default function RecruitmentDashboard() {
  title="Recruitment"
  subtitle="Manage job postings and applications"
  breadcrumbs={[
- { label: 'HR', href: '/hr' },
+ { label: 'HR', href: '/hr/employees' },
  { label: 'Recruitment' },
  ]}
  actions={

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
+import { StickyActionBar } from '@/components/ui/StickyActionBar';
 import { TouchConfirmSheet, useTouchSubmitLabel } from '@/components/layout/TouchShell';
 import type { WorkOrderOutput } from '@/types/production';
 import { formatTime } from '@/lib/formatDate';
@@ -162,16 +163,18 @@ export default function RecordOutput() {
           className="resize-none"
         />
 
-        <Button
-          type="submit"
-          variant="primary"
-          size="touch"
-          className="w-full"
-          disabled={!canSubmit}
-          loading={mutation.isPending}
-        >
-          {submitLabel}
-        </Button>
+        <StickyActionBar>
+          <Button
+            type="submit"
+            variant="primary"
+            size="touch"
+            className="w-full"
+            disabled={!canSubmit}
+            loading={mutation.isPending}
+          >
+            {submitLabel}
+          </Button>
+        </StickyActionBar>
       </form>
 
       <TouchConfirmSheet

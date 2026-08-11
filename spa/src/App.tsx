@@ -35,6 +35,7 @@ const NotFoundPage = lazy(() => import('@/pages/error/NotFound'));
 export default function App() {
  return (
  <Suspense fallback={<TopLoadingBar />}>
+ <ErrorBoundary>
  <Routes>
  {/* Public landing page */}
  {landingRoutes}
@@ -47,9 +48,7 @@ export default function App() {
  <Route
  element={
  <AuthGuard>
- <ErrorBoundary>
  <AppLayout />
- </ErrorBoundary>
  </AuthGuard>
  }
  >
@@ -97,6 +96,7 @@ export default function App() {
  {/* 404 */}
  <Route path="*" element={<NotFoundPage />} />
  </Routes>
+ </ErrorBoundary>
  </Suspense>
  );
 }

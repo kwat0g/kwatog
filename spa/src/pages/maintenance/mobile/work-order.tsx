@@ -12,6 +12,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
+import { StickyActionBar } from '@/components/ui/StickyActionBar';
 import {
   TouchCardSkeleton,
   TouchConfirmSheet,
@@ -332,16 +333,18 @@ export default function MobileWorkOrderDetail() {
             className="text-center font-mono tabular-nums"
           />
 
-          <Button
-            type="submit"
-            variant="primary"
-            size="touch"
-            className="w-full"
-            icon={<CheckCircle2 className="w-5 h-5" />}
-            loading={completeMutation.isPending}
-          >
-            {completeLabel || 'Complete work order'}
-          </Button>
+          <StickyActionBar>
+            <Button
+              type="submit"
+              variant="primary"
+              size="touch"
+              className="w-full"
+              icon={<CheckCircle2 className="w-5 h-5" />}
+              loading={completeMutation.isPending}
+            >
+              {completeLabel || 'Complete work order'}
+            </Button>
+          </StickyActionBar>
         </form>
       )}
 

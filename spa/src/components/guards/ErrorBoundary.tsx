@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 
 interface Props {
@@ -43,7 +44,7 @@ export class ErrorBoundary extends Component<Props, State> {
  if (this.props.fallback) return this.props.fallback;
  return (
  <div className="flex flex-col items-center justify-center min-h-[400px] px-5 text-center">
- <div className="text-2xl mb-3">⚠</div>
+ <AlertTriangle className="w-6 h-6 text-warning-fg mb-3" aria-hidden="true" />
  <h2 className="text-lg font-medium text-primary mb-1">Something went wrong</h2>
  <p className="text-sm text-muted mb-2 max-w-md">
  This screen failed to load. Your work elsewhere is unaffected. If it keeps

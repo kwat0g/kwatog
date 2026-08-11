@@ -133,7 +133,7 @@ export default function PostingCreatePage() {
  backTo="/hr/recruitment/postings"
  backLabel="Postings"
  breadcrumbs={[
- { label: 'HR', href: '/hr' },
+ { label: 'HR', href: '/hr/employees' },
  { label: 'Recruitment', href: '/hr/recruitment' },
  { label: 'Postings', href: '/hr/recruitment/postings' },
  { label: 'Create' },

@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react';
 import { usePermission } from '@/hooks/usePermission';
-import { EmptyState } from '@/components/ui/EmptyState';
+import { NotFoundState } from '@/pages/error/NotFound';
 
 interface PermissionGuardProps {
  permission?: string;
@@ -13,29 +13,10 @@ export function PermissionGuard({ permission, anyOf, children }: PermissionGuard
  const allowed = permission ? can(permission) : Boolean(anyOf?.some(can));
 
  if (!allowed) {
- // A denial in a 72-item permission-gated nav is the most common failure in
- // the product, and "Forbidden" alone gives the user no next step. Name the
- // permission so they can quote it, and say who grants it.
- const required = permission ?? anyOf?.join(' or ');
- return (
- <div className="px-5 py-10">
- <EmptyState
- icon="lock"
- title="You don't have access to this page"
- description={
- <>
- Ask your department head or a system administrator to grant it.
- {required && (
- <>
- {' '}
- Required permission: <span className="font-mono text-secondary">{required}</span>
- </>
- )}
- </>
- }
- />
- </div>
- );
+ // The backend deliberately answers permission middleware with 403, but a
+ // page the current user cannot discover must not reveal whether the route or
+ // its records exist. Keep page-level denial visually identical to a 404.
+ return <NotFoundState fullPage={false} />;
  }
 
  return <>{children}</>;

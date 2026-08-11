@@ -64,7 +64,7 @@ export default function PermissionSearchPage() {
  title="Permission Search"
  subtitle="Find which roles have a specific permission"
  breadcrumbs={[
- { label: 'Admin', href: '/admin' },
+ { label: 'Admin', href: '/admin/users' },
  { label: 'Roles', href: '/admin/roles' },
  { label: 'Permission Search' },
  ]}

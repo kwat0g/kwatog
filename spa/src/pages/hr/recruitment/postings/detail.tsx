@@ -102,9 +102,8 @@ export default function PostingDetailPage() {
  if (isError || !posting) {
  return (
  <EmptyState
- icon="alert-circle"
+ icon="file-question"
  title="Posting not found"
- description="The record may have been deleted or you don't have access."
  action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
  />
  );
@@ -123,7 +122,7 @@ export default function PostingDetailPage() {
  backTo="/hr/recruitment/postings"
  backLabel="Postings"
  breadcrumbs={[
- { label: 'HR', href: '/hr' },
+ { label: 'HR', href: '/hr/employees' },
  { label: 'Recruitment', href: '/hr/recruitment' },
  { label: 'Postings', href: '/hr/recruitment/postings' },
  { label: posting.title },

@@ -31,6 +31,7 @@ export function ColumnSelectorModal({
  const [selected, setSelected] = useState<Set<string>>(new Set());
  const [format, setFormat] = useState<ExportFormat>(defaultFormat);
  const [saveDefaults, setSaveDefaults] = useState(true);
+ const [isDownloading, setIsDownloading] = useState(false);
 
  const { data, isLoading, isError } = useQuery({
  queryKey: ['exports.columns', module],
@@ -63,11 +64,14 @@ export function ColumnSelectorModal({
  };
 
  const handleDownload = async () => {
+ if (isDownloading || saveMutation.isPending) return;
  const cols = ordered.map((c) => c.key).filter((k) => selected.has(k));
  if (cols.length === 0) {
  toast.error('Select at least one column to export.');
  return;
  }
+ setIsDownloading(true);
+ try {
  if (saveDefaults) {
  try {
  await saveMutation.mutateAsync(cols);
@@ -80,10 +84,18 @@ export function ColumnSelectorModal({
  toast.success(`${format.toUpperCase()} export downloaded.`);
  onClose();
  }
+ } finally {
+ setIsDownloading(false);
+ }
  };
 
  return (
- <Modal isOpen={isOpen} onClose={onClose} size="md" title="Export options">
+ <Modal
+ isOpen={isOpen}
+ onClose={isDownloading || saveMutation.isPending ? () => undefined : onClose}
+ size="md"
+ title="Export options"
+ >
  {isLoading && (
  <div className="text-sm text-muted py-4 text-center">Loading columns…</div>
  )}
@@ -143,14 +155,14 @@ export function ColumnSelectorModal({
  )}
 
  <div className="flex justify-end gap-2 pt-3 border-t border-default">
- <Button variant="secondary" onClick={onClose} disabled={saveMutation.isPending}>
+ <Button variant="secondary" onClick={onClose} disabled={isDownloading || saveMutation.isPending}>
  Cancel
  </Button>
  <Button
  variant="primary"
  onClick={handleDownload}
- disabled={isLoading || isError || selected.size === 0 || saveMutation.isPending}
- loading={saveMutation.isPending}
+ disabled={isLoading || isError || selected.size === 0 || saveMutation.isPending || isDownloading}
+ loading={saveMutation.isPending || isDownloading}
  >
  Download
  </Button>

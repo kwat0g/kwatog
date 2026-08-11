@@ -8,6 +8,9 @@ interface ModalProps {
  isOpen: boolean;
  onClose: () => void;
  title?: ReactNode;
+ /** ID of a title rendered by the caller when Modal's built-in title is not used. */
+ ariaLabelledBy?: string;
+ ariaDescribedBy?: string;
  size?: Size;
  closeOnOverlayClick?: boolean;
  children: ReactNode;
@@ -91,6 +94,8 @@ export function Modal({
  isOpen,
  onClose,
  title,
+ ariaLabelledBy,
+ ariaDescribedBy,
  size = 'md',
  closeOnOverlayClick = true,
  children,
@@ -146,7 +151,8 @@ export function Modal({
   className="fixed inset-0 z-50 flex items-center justify-center px-4 sm:px-6"
   role="dialog"
   aria-modal="true"
-  aria-labelledby={title ? titleId : undefined}
+  aria-labelledby={title ? titleId : ariaLabelledBy}
+  aria-describedby={ariaDescribedBy}
   onMouseDown={(e) => {
   if (closeOnOverlayClick && e.target === e.currentTarget) onClose();
   }}
