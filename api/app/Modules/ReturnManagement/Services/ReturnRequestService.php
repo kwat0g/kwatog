@@ -18,6 +18,7 @@ use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\Purchasing\Services\PurchaseOrderService;
 use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionStage;
+use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Services\InspectionService;
 use App\Modules\Quality\Services\NcrService;
@@ -453,6 +454,7 @@ class ReturnRequestService
             }
 
             $rma->load(['items', 'bill.items', 'purchaseOrder.items']);
+            $this->ensureReturnInspectionsPassed($rma);
 
             // Fail fast: movement lines (restock/rework for customer,
             // return_to_supplier for supplier) need a warehouse location BEFORE
@@ -1138,6 +1140,61 @@ class ReturnRequestService
         if ($rma->inspection_handoff_status === ReturnInspectionHandoffStatus::ManualRequired) {
             throw new BusinessRuleException(
                 'Quality inspection staging is incomplete. Fix the Quality setup and retry the handoff before disposing or completing this RMA.'
+            );
+        }
+    }
+
+    /**
+     * Require Quality's authoritative return-stage verdict for every product
+     * represented by the RMA before any disposition side effect runs.
+     *
+     * Item-only lines have no product inspection specification and retain the
+     * existing item-only lifecycle. Cancelled inspection rows are not active
+     * evidence; if no replacement active row exists, the product is treated as
+     * missing and remains blocked.
+     */
+    private function ensureReturnInspectionsPassed(ReturnRequest $rma): void
+    {
+        $requiredProductIds = $rma->items
+            ->pluck('product_id')
+            ->filter()
+            ->map(static fn ($id): int => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($requiredProductIds->isEmpty()) {
+            return;
+        }
+
+        $stage = $rma->type === ReturnRequestType::SupplierReturn
+            ? InspectionStage::SupplierReturn
+            : InspectionStage::CustomerReturn;
+
+        $activeInspections = Inspection::query()
+            ->where('entity_type', InspectionEntityType::ReturnRequest->value)
+            ->where('entity_id', $rma->id)
+            ->where('stage', $stage->value)
+            ->whereIn('product_id', $requiredProductIds->all())
+            ->where('status', '<>', InspectionStatus::Cancelled->value)
+            ->get(['product_id', 'status']);
+
+        $unresolvedProductIds = $requiredProductIds->filter(function (int $productId) use ($activeInspections): bool {
+            $productInspections = $activeInspections->where('product_id', $productId);
+
+            return $productInspections->isEmpty()
+                || $productInspections->contains(function (Inspection $inspection): bool {
+                    $status = $inspection->status instanceof InspectionStatus
+                        ? $inspection->status->value
+                        : (string) $inspection->status;
+
+                    return $status !== InspectionStatus::Passed->value;
+                });
+        });
+
+        if ($unresolvedProductIds->isNotEmpty()) {
+            throw new BusinessRuleException(
+                'Every product-linked return inspection must be passed before disposition. '
+                .'Unresolved product IDs: '.implode(', ', $unresolvedProductIds->all()).'.'
             );
         }
     }

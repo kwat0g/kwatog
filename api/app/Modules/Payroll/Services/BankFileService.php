@@ -171,8 +171,10 @@ class BankFileService
                     bin2hex(random_bytes(4)),
                 );
                 $relative = $dir.DIRECTORY_SEPARATOR.$filename;
-                $disk->put($relative, $csv);
                 $writtenPath = $relative;
+                if ($disk->put($relative, $csv) !== true) {
+                    throw new RuntimeException("Unable to write bank file to {$relative}.");
+                }
 
                 $record = BankFileRecord::create([
                     'payroll_period_id' => $lockedPeriod->id,

@@ -103,6 +103,7 @@ class ChainListenerRunService
             $updated = DB::table('chain_listener_runs')
                 ->where('job_uuid', $context['job_uuid'])
                 ->where('outbox_id', $context['outbox_id'])
+                ->where('status', '!=', ChainListenerRun::STATUS_FAILED)
                 ->update($attributes);
 
             if ($updated > 0) {
@@ -139,6 +140,19 @@ class ChainListenerRunService
     {
         $metadata = $this->metadata($job);
         if ($metadata === null) {
+            return;
+        }
+
+        // Laravel can emit JobFailed before JobExceptionOccurred when the
+        // worker exhausts a job's attempts. A failed run is a terminal
+        // execution fact: retry/processed callbacks from the same queue job
+        // must never reopen it or erase the failure details operators need.
+        $terminal = DB::table('chain_listener_runs')
+            ->where('job_uuid', $metadata['job_uuid'])
+            ->where('outbox_id', $metadata['outbox_id'])
+            ->where('status', ChainListenerRun::STATUS_FAILED)
+            ->exists();
+        if ($terminal && $status !== ChainListenerRun::STATUS_PROCESSING) {
             return;
         }
 
@@ -222,15 +236,23 @@ class ChainListenerRunService
             ];
         }
 
-        DB::table('chain_listener_runs')
+        $update = DB::table('chain_listener_runs')
             ->where('job_uuid', $metadata['job_uuid'])
             ->where('outbox_id', $metadata['outbox_id'])
-            ->update($attributes);
+            // A queue:retry reuses the UUID and must reopen a terminal row on
+            // its next JobProcessing event. Other late lifecycle callbacks
+            // must not erase the terminal failure if it wins the race.
+            ->when(
+                $status !== ChainListenerRun::STATUS_PROCESSING,
+                fn ($query) => $query->where('status', '!=', ChainListenerRun::STATUS_FAILED),
+            );
+        $update->update($attributes);
 
         if ($status === ChainListenerRun::STATUS_COMPLETED) {
             DB::table('chain_listener_runs')
                 ->where('job_uuid', $metadata['job_uuid'])
                 ->where('outbox_id', $metadata['outbox_id'])
+                ->where('status', '!=', ChainListenerRun::STATUS_FAILED)
                 ->whereNull('outcome_status')
                 ->update([
                     'outcome_status' => ChainListenerRun::OUTCOME_COMPLETED,
@@ -239,6 +261,7 @@ class ChainListenerRunService
                     'updated_at' => $now,
                 ]);
         }
+
     }
 
     /** @param array{outbox_id: string, job_uuid: string, event_type: string, listener_class: string, listener_method: string, replayed_from_id: string|null}|null $metadata */
@@ -301,6 +324,13 @@ class ChainListenerRunService
         $outboxId = $payload['outbox_id'] ?? null;
         $eventType = $payload['outbox_event_type'] ?? null;
         $jobUuid = $payload['uuid'] ?? null;
+        // The queue contract exposes the UUID separately from the decoded
+        // payload. Use it when a legacy/custom job payload omitted the UUID so
+        // an existing failed_jobs.uuid can still be correlated safely.
+        if (! is_string($jobUuid) || $jobUuid === '') {
+            $queueUuid = $job->uuid();
+            $jobUuid = is_string($queueUuid) && $queueUuid !== '' ? $queueUuid : null;
+        }
         $listenerClass = $payload['displayName'] ?? null;
         $replayedFromId = $payload['chain_replayed_from_id'] ?? null;
 

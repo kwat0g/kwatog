@@ -8,7 +8,9 @@ use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Enums\JournalEntryStatus;
 use App\Modules\Accounting\Enums\PaymentMethod;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\Collection as InvoiceCollection;
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Services\InvoiceService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -16,6 +18,7 @@ use Carbon\Carbon;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -217,6 +220,76 @@ class InvoiceCollectionTest extends TestCase
             'amount'          => '100.00',
             'payment_method'  => PaymentMethod::Cash->value,
         ], $user);
+    }
+
+    public function test_record_collection_rejects_a_stale_open_invoice_after_it_is_paid(): void
+    {
+        $user     = $this->newUser();
+        $customer = Customer::create(['name' => 'Stale Suzuki PH', 'payment_terms_days' => 30]);
+        $svc      = app(InvoiceService::class);
+        $cashId   = $this->accountHashId('1010');
+        $invoice  = $this->makeFinalizedInvoice($svc, $user, $customer, '1000.00', false);
+
+        // The service receives the old finalized object, but the persisted row
+        // has already been settled by another writer.
+        DB::table('invoices')->where('id', $invoice->id)->update([
+            'status'      => InvoiceStatus::Paid->value,
+            'amount_paid' => '10000.00',
+            'balance'     => '0.00',
+        ]);
+
+        $exception = null;
+        try {
+            $svc->recordCollection($invoice, [
+                'cash_account_id' => $cashId,
+                'collection_date' => '2026-04-15',
+                'amount'          => '1000.00',
+                'payment_method'  => PaymentMethod::Cash->value,
+            ], $user);
+        } catch (RuntimeException $e) {
+            $exception = $e;
+        }
+        $this->assertNotNull($exception, 'A stale open invoice must not accept a collection after the persisted row is paid.');
+        $this->assertSame('Cannot record a collection while invoice status is paid.', $exception->getMessage());
+
+        $row = DB::table('invoices')->where('id', $invoice->id)->first();
+        $this->assertSame(InvoiceStatus::Paid->value, $row->status);
+        $this->assertSame('10000.00', $row->amount_paid);
+        $this->assertSame('0.00', $row->balance);
+        $this->assertSame(0, InvoiceCollection::query()->where('invoice_id', $invoice->id)->count());
+        $this->assertSame(0, JournalEntry::query()->where('reference_type', 'collection')->count());
+    }
+
+    public function test_record_collection_uses_the_locked_balance_when_caller_is_stale(): void
+    {
+        $user     = $this->newUser();
+        $customer = Customer::create(['name' => 'Authoritative Honda PH', 'payment_terms_days' => 30]);
+        $svc      = app(InvoiceService::class);
+        $cashId   = $this->accountHashId('1010');
+        $invoice  = $this->makeFinalizedInvoice($svc, $user, $customer, '1000.00', false);
+
+        // Another collection has changed the aggregate; the caller still has
+        // amount_paid=0 and balance=10000 in memory.
+        DB::table('invoices')->where('id', $invoice->id)->update([
+            'status'      => InvoiceStatus::Partial->value,
+            'amount_paid' => '4000.00',
+            'balance'     => '6000.00',
+        ]);
+
+        $collection = $svc->recordCollection($invoice, [
+            'cash_account_id' => $cashId,
+            'collection_date' => '2026-04-15',
+            'amount'          => '6000.00',
+            'payment_method'  => PaymentMethod::Cash->value,
+        ], $user);
+
+        $row = DB::table('invoices')->where('id', $invoice->id)->first();
+        $this->assertSame('10000.00', $row->amount_paid);
+        $this->assertSame('0.00', $row->balance);
+        $this->assertSame(InvoiceStatus::Paid->value, $row->status);
+        $this->assertSame('6000.00', (string) $collection->amount);
+        $this->assertSame(1, InvoiceCollection::query()->where('invoice_id', $invoice->id)->count());
+        $this->assertSame(1, JournalEntry::query()->where('reference_type', 'collection')->count());
     }
 
     // ─── Test 5: Aging buckets ────────────────────────────────────────────────

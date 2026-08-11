@@ -14,6 +14,8 @@ use App\Modules\Auth\Models\User;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use RuntimeException;
 use Tests\TestCase;
 
 class BillServiceTest extends TestCase
@@ -118,6 +120,82 @@ class BillServiceTest extends TestCase
             'amount'          => '101.00',
             'payment_method'  => PaymentMethod::Cash->value,
         ], $user);
+    }
+
+    public function test_record_payment_rejects_a_stale_open_bill_after_it_is_paid(): void
+    {
+        $user      = $this->newUser();
+        $vendor    = Vendor::create(['name' => 'Stale Vendor']);
+        $expenseId = Account::query()->where('code', '5010')->firstOrFail()->hash_id;
+        $cashId    = Account::query()->where('code', '1020')->firstOrFail()->hash_id;
+        $svc       = app(BillService::class);
+        $bill      = $svc->create([
+            'bill_number' => 'B-STALE-1', 'vendor_id' => $vendor->hash_id,
+            'date' => '2026-04-10', 'is_vatable' => false,
+            'items' => [['expense_account_id' => $expenseId, 'description' => 'Resin', 'quantity' => '1', 'unit_price' => '100.00']],
+        ], $user);
+
+        DB::table('bills')->where('id', $bill->id)->update([
+            'status'      => BillStatus::Paid->value,
+            'amount_paid' => '100.00',
+            'balance'     => '0.00',
+        ]);
+
+        $exception = null;
+        try {
+            $svc->recordPayment($bill, [
+                'cash_account_id' => $cashId,
+                'payment_date'    => '2026-04-11',
+                'amount'          => '10.00',
+                'payment_method'  => PaymentMethod::Cash->value,
+            ], $user);
+        } catch (RuntimeException $e) {
+            $exception = $e;
+        }
+        $this->assertNotNull($exception, 'A stale open bill must not accept payment after the persisted row is paid.');
+        $this->assertSame('Bill is already fully paid.', $exception->getMessage());
+
+        $row = DB::table('bills')->where('id', $bill->id)->first();
+        $this->assertSame(BillStatus::Paid->value, $row->status);
+        $this->assertSame('100.00', $row->amount_paid);
+        $this->assertSame('0.00', $row->balance);
+        $this->assertSame(0, DB::table('bill_payments')->where('bill_id', $bill->id)->count());
+        $this->assertSame(0, DB::table('journal_entries')->where('reference_type', 'bill_payment')->count());
+    }
+
+    public function test_record_payment_uses_the_locked_balance_when_caller_is_stale(): void
+    {
+        $user      = $this->newUser();
+        $vendor    = Vendor::create(['name' => 'Authoritative Vendor']);
+        $expenseId = Account::query()->where('code', '5010')->firstOrFail()->hash_id;
+        $cashId    = Account::query()->where('code', '1020')->firstOrFail()->hash_id;
+        $svc       = app(BillService::class);
+        $bill      = $svc->create([
+            'bill_number' => 'B-LOCKED-1', 'vendor_id' => $vendor->hash_id,
+            'date' => '2026-04-10', 'is_vatable' => false,
+            'items' => [['expense_account_id' => $expenseId, 'description' => 'Resin', 'quantity' => '1', 'unit_price' => '100.00']],
+        ], $user);
+
+        DB::table('bills')->where('id', $bill->id)->update([
+            'status'      => BillStatus::Partial->value,
+            'amount_paid' => '60.00',
+            'balance'     => '40.00',
+        ]);
+
+        $payment = $svc->recordPayment($bill, [
+            'cash_account_id' => $cashId,
+            'payment_date'    => '2026-04-11',
+            'amount'          => '40.00',
+            'payment_method'  => PaymentMethod::Cash->value,
+        ], $user);
+
+        $row = DB::table('bills')->where('id', $bill->id)->first();
+        $this->assertSame('100.00', $row->amount_paid);
+        $this->assertSame('0.00', $row->balance);
+        $this->assertSame(BillStatus::Paid->value, $row->status);
+        $this->assertSame('40.00', (string) $payment->amount);
+        $this->assertSame(1, DB::table('bill_payments')->where('bill_id', $bill->id)->count());
+        $this->assertSame(1, DB::table('journal_entries')->where('reference_type', 'bill_payment')->count());
     }
 
     public function test_cannot_bill_against_cancelled_po(): void

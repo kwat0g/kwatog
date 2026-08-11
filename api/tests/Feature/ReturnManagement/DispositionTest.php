@@ -22,6 +22,9 @@ use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
+use App\Modules\Quality\Enums\InspectionEntityType;
+use App\Modules\Quality\Enums\InspectionStage;
+use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
 use App\Modules\ReturnManagement\Enums\ReturnRequestType;
@@ -109,6 +112,23 @@ class DispositionTest extends TestCase
             'reason'            => 'defective',
             'condition'         => 'damaged',
         ]);
+
+        if ($product) {
+            Inspection::create([
+                'inspection_number' => 'QC-RMA-'.substr(uniqid(), -8),
+                'stage'             => InspectionStage::CustomerReturn->value,
+                'status'            => 'passed',
+                'product_id'        => $product->id,
+                'entity_type'       => InspectionEntityType::ReturnRequest->value,
+                'entity_id'         => $rma->id,
+                'batch_quantity'    => 8,
+                'sample_size'       => 8,
+                'accept_count'      => 0,
+                'reject_count'      => 1,
+                'defect_count'      => 0,
+                'inspector_id'      => $by->id,
+            ]);
+        }
 
         return $rma->load('items');
     }
@@ -225,6 +245,46 @@ class DispositionTest extends TestCase
         $this->expectExceptionMessage('Expected status inspected, got received.');
 
         $svc->dispose($rma, [], $by);
+    }
+
+    public function test_dispose_requires_a_passed_return_inspection_before_side_effects(): void
+    {
+        foreach (['draft', 'in_progress', 'failed', 'cancelled', null] as $status) {
+            $by = $this->makeUser();
+            $customer = $this->makeCustomer();
+            $product = $this->makeProduct();
+            $rma = $this->makeInspectedRma($by, $customer, product: $product);
+            $inspection = Inspection::query()
+                ->where('entity_type', InspectionEntityType::ReturnRequest->value)
+                ->where('entity_id', $rma->id)
+                ->where('product_id', $product->id)
+                ->firstOrFail();
+
+            if ($status === null) {
+                $inspection->delete();
+            } else {
+                $inspection->update(['status' => $status]);
+            }
+
+            $blocked = false;
+            try {
+                app(ReturnRequestService::class)->dispose($rma, [[
+                    'item_id'     => $rma->items->first()->hash_id,
+                    'disposition' => 'scrap',
+                ]], $by);
+            } catch (RuntimeException $e) {
+                $blocked = true;
+                $this->assertStringContainsString('passed', strtolower($e->getMessage()));
+            }
+
+            $this->assertTrue($blocked, "A {$status} or missing return inspection must block disposition.");
+
+            $this->assertNull($rma->fresh()->disposition_status);
+            $this->assertNull($rma->items->first()->fresh()->disposition);
+            $this->assertSame(0, NonConformanceReport::query()
+                ->where('product_id', $product->id)
+                ->count());
+        }
     }
 
     public function test_dispose_creates_ncr_for_rework_items(): void

@@ -736,6 +736,15 @@ class GrnService
         User $by,
     ): array {
         return DB::transaction(function () use ($po, $items, $meta, $qcData, $by) {
+            if (
+                in_array($qcData['result'] ?? null, ['passed', 'passed_with_remarks', 'failed'], true)
+                && ! $by->hasPermission('quality.inspections.manage')
+            ) {
+                throw new BusinessRuleException(
+                    'The quality.inspections.manage permission is required to submit a terminal QC result.'
+                );
+            }
+
             // 1. Create GRN (pending_qc)
             $grn = $this->create($po, $items, $meta, $by);
 

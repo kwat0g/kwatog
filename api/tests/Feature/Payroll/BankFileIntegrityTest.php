@@ -10,6 +10,7 @@ use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\Position;
+use App\Modules\Payroll\Enums\BankFileGenerationStatus;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Payroll\Services\BankFileService;
@@ -274,5 +275,27 @@ class BankFileIntegrityTest extends TestCase
 
         $this->assertSame(1, $record->record_count);
         $this->assertSame('10000.00', (string) $record->total_amount);
+    }
+
+    public function test_a_false_storage_write_fails_closed_before_success_is_persisted(): void
+    {
+        $this->payrollFor('10000.00');
+        $generator = $this->actor();
+
+        $disk = \Mockery::mock(Storage::disk('local'))->makePartial();
+        $disk->shouldReceive('put')->once()->andReturnFalse();
+        Storage::shouldReceive('disk')->with('local')->andReturn($disk);
+
+        try {
+            $this->svc->generate($this->period, $generator, 'generic');
+            $this->fail('A false storage write must be treated as a generation failure.');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('write', strtolower($e->getMessage()));
+        }
+
+        $period = $this->period->fresh();
+        $this->assertSame(0, $period->bankFileRecords()->count());
+        $this->assertSame(BankFileGenerationStatus::ManualRequired, $period->bank_file_status);
+        $this->assertSame('finalized', $period->status->value);
     }
 }

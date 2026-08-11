@@ -147,6 +147,17 @@ class GoodsReceiptNoteController
             'qc.disposition'                     => ['nullable', 'string', 'in:return_to_supplier,use_under_concession,partial_accept'],
         ]);
 
+        // Receiving and Quality are separate responsibilities. Inventory may
+        // stage a receipt as pending_qc, but only Quality may submit a
+        // terminal verdict that completes an inspection or changes stock.
+        if (in_array($request->input('qc.result'), ['passed', 'passed_with_remarks', 'failed'], true)) {
+            abort_unless(
+                $request->user()?->hasPermission('quality.inspections.manage'),
+                403,
+                'Only Quality may submit a terminal QC result.',
+            );
+        }
+
         $poId = HashIdFilter::decode(
             $request->input('purchase_order_id'),
             PurchaseOrder::class,

@@ -267,25 +267,30 @@ class JournalEntryService
      */
     public function reverse(JournalEntry $je, User $by, ?Carbon $reverseDate = null): JournalEntry
     {
-        if ($je->status !== JournalEntryStatus::Posted) {
-            throw new BusinessRuleException('Only posted entries can be reversed.');
-        }
-        if ($je->reversed_by_entry_id !== null) {
-            throw new BusinessRuleException('This entry has already been reversed.');
-        }
-
         return DB::transaction(function () use ($je, $by, $reverseDate) {
-            $je->loadMissing('lines');
+            // Re-check the authoritative entry while holding its row lock. A
+            // posted model can be stale by the time a reversal is requested.
+            $lockedJe = JournalEntry::query()
+                ->lockForUpdate()
+                ->findOrFail($je->getKey());
+            if ($lockedJe->status !== JournalEntryStatus::Posted) {
+                throw new BusinessRuleException('Only posted entries can be reversed.');
+            }
+            if ($lockedJe->reversed_by_entry_id !== null) {
+                throw new BusinessRuleException('This entry has already been reversed.');
+            }
+
+            $lockedJe->loadMissing('lines');
             $entryNumber = $this->sequences->generate('journal_entry');
 
             $reversal = JournalEntry::create([
                 'entry_number'   => $entryNumber,
                 'date'           => $reverseDate ?? now()->toDateString(),
-                'description'    => "REVERSAL of {$je->entry_number}: {$je->description}",
+                'description'    => "REVERSAL of {$lockedJe->entry_number}: {$lockedJe->description}",
                 'reference_type' => 'journal_entry_reversal',
-                'reference_id'   => $je->id,
-                'total_debit'    => $je->total_credit,
-                'total_credit'   => $je->total_debit,
+                'reference_id'   => $lockedJe->id,
+                'total_debit'    => $lockedJe->total_credit,
+                'total_credit'   => $lockedJe->total_debit,
                 'status'         => JournalEntryStatus::Posted,
                 'posted_at'      => now(),
                 'posted_by'      => $by->id,
@@ -293,7 +298,7 @@ class JournalEntryService
             ]);
 
             $lineNo = 1;
-            foreach ($je->lines as $orig) {
+            foreach ($lockedJe->lines as $orig) {
                 JournalEntryLine::insert([
                     'journal_entry_id' => $reversal->id,
                     'account_id'       => $orig->account_id,
@@ -304,7 +309,7 @@ class JournalEntryService
                 ]);
             }
 
-            $je->update([
+            $lockedJe->update([
                 'status'               => JournalEntryStatus::Reversed,
                 'reversed_by_entry_id' => $reversal->id,
             ]);
