@@ -6,8 +6,6 @@ namespace App\Console\Commands;
 
 use App\Modules\MRP\Enums\MrpRunStatus;
 use App\Modules\MRP\Models\MrpRun;
-use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
-use App\Modules\Purchasing\Models\PurchaseRequest;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -22,12 +20,11 @@ use Illuminate\Support\Facades\Log;
  * stays Running forever — blocking dashboards and leaving orphan draft auto-PRs
  * spawned mid-run.
  *
- * This command marks any Running row whose started_at is older than the
- * threshold (default 120 minutes) as Failed, and cancels the orphan draft
- * auto-generated purchase requests that were created during the dead run's
- * window (created_at >= started_at, still status=draft). Idempotent: rows
- * already Failed/Completed are ignored, and PRs already approved/converted are
- * left untouched.
+ * This command marks any Running row whose last heartbeat is older than the
+ * threshold (default 120 minutes) as Failed. Purchase requests are deliberately
+ * not cancelled here: the run-to-PR ownership is not durable, so a time-window
+ * cleanup can cancel a legitimate draft from another overlapping run. The next
+ * MRP run reconciles superseded draft auto-PRs safely.
  *
  * Scheduled hourly in routes/console.php (withoutOverlapping + onOneServer).
  */
@@ -43,14 +40,7 @@ class ReapStaleMrpRuns extends Command
 
         $stale = MrpRun::query()
             ->where('status', MrpRunStatus::Running->value)
-            ->where(function ($q) use ($threshold) {
-                // Prefer started_at; fall back to run_at for legacy rows that
-                // predate the OGAMI-015 columns.
-                $q->where('started_at', '<', $threshold)
-                  ->orWhere(function ($qq) use ($threshold) {
-                      $qq->whereNull('started_at')->where('run_at', '<', $threshold);
-                  });
-            })
+            ->whereRaw('COALESCE(heartbeat_at, started_at, run_at) < ?', [$threshold])
             ->get();
 
         if ($stale->isEmpty()) {
@@ -59,27 +49,11 @@ class ReapStaleMrpRuns extends Command
         }
 
         $reaped       = 0;
-        $prsCancelled = 0;
         $errors       = 0;
 
         foreach ($stale as $run) {
             try {
-                DB::transaction(function () use ($run, &$prsCancelled) {
-                    $since = $run->started_at ?? $run->run_at;
-
-                    $cancelled = PurchaseRequest::query()
-                        ->where('is_auto_generated', true)
-                        ->where('status', PurchaseRequestStatus::Draft->value)
-                        ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
-                        ->lockForUpdate()
-                        ->get();
-
-                    foreach ($cancelled as $pr) {
-                        // status is service-only / non-fillable — force it.
-                        $pr->forceFill(['status' => PurchaseRequestStatus::Cancelled->value])->save();
-                        $prsCancelled++;
-                    }
-
+                DB::transaction(function () use ($run) {
                     $run->forceFill([
                         'status'        => MrpRunStatus::Failed->value,
                         'error_message' => 'Reaped by mrp:reap-stale-runs — run exceeded the stale threshold without completing.',
@@ -96,7 +70,7 @@ class ReapStaleMrpRuns extends Command
             }
         }
 
-        $this->info("Reaped {$reaped} stale MRP run(s); cancelled {$prsCancelled} orphan draft auto-PR(s).");
+        $this->info("Reaped {$reaped} stale MRP run(s); draft auto-PRs were left untouched for safe reconciliation.");
         return $errors > 0 ? self::FAILURE : self::SUCCESS;
     }
 }

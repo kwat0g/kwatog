@@ -14,7 +14,7 @@ import { useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { AxiosError } from 'axios';
-import { Plus, Trash2 } from 'lucide-react';
+import { LuPlus, LuTrash2 } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { onFormInvalid } from '@/lib/formErrors';
 import { uomsApi } from '@/api/inventory/uoms';
@@ -52,7 +52,7 @@ export default function CreateBomPage() {
  });
  const items = useQuery({
  queryKey: ['inventory', 'items', 'lookup'],
- queryFn: () => itemsApi.list({ per_page: 200 }),
+ queryFn: () => itemsApi.list({ per_page: 200, is_active: 'true' }),
  });
 
  const { data: uoms = [] } = useQuery({ queryKey: ['inventory', 'uoms'], queryFn: uomsApi.list, staleTime: 300_000 });
@@ -194,7 +194,7 @@ export default function CreateBomPage() {
  variant="ghost"
  size="sm"
  iconOnly
- icon={<Trash2 size={14} />}
+ icon={<LuTrash2 size={14} />}
  aria-label="Remove line"
  onClick={() => remove(i)}
  disabled={fields.length === 1}
@@ -212,7 +212,7 @@ export default function CreateBomPage() {
  type="button"
  variant="secondary"
  size="sm"
- icon={<Plus size={14} />}
+ icon={<LuPlus size={14} />}
  onClick={() => append({ item_id: '', quantity_per_unit: '', unit: '', waste_factor: '' })}
  >
  Add line

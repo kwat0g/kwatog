@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { LuPlus } from '@/lib/icons';
 import { bomsApi, type BomListParams } from '@/api/mrp/boms';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { formatPeso } from '@/lib/formatNumber';
 import type { Bom } from '@/types/mrp';
 
 export default function BomsListPage() {
@@ -34,6 +35,7 @@ export default function BomsListPage() {
  : '—' },
  { key: 'version', header: 'Version', align: 'right', cell: (r) => <NumCell>v{r.version}</NumCell> },
  { key: 'lines', header: 'Lines', align: 'right', cell: (r) => <NumCell>{r.item_count}</NumCell> },
+ { key: 'material_cost', header: 'Material cost', align: 'right', cell: (r) => <NumCell>{formatPeso(r.material_cost)}</NumCell> },
  {
  key: 'active', header: 'Status',
  cell: (r) => r.is_active ? <Chip variant="success">Active</Chip> : <Chip variant="neutral">Archived</Chip> },
@@ -52,7 +54,7 @@ export default function BomsListPage() {
  title="Bills of materials"
  subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'BOM' : 'BOMs'}` : undefined}
  actions={can('mrp.boms.manage') ? (
- <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/mrp/boms/create')}>
+ <Button variant="primary" size="sm" icon={<LuPlus size={14} />} onClick={() => navigate('/mrp/boms/create')}>
  Add BOM
  </Button>
  ) : undefined}

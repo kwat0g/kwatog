@@ -9,6 +9,8 @@ use App\Modules\CRM\Models\Product;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\ItemUomConversion;
 use App\Modules\Inventory\Models\Uom;
+use App\Modules\MRP\Models\Bom;
+use App\Modules\MRP\Models\BomItem;
 use App\Modules\MRP\Services\BomService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -105,5 +107,30 @@ class BomCostingTest extends TestCase
             'unit' => 'BAG',
             'waste_factor' => '0.00',
         ]]);
+    }
+
+    public function test_existing_bom_can_be_recosted_after_item_cost_changes(): void
+    {
+        $product = Product::factory()->create();
+        $material = Item::factory()->create(['standard_cost' => '10.0000']);
+        $bom = Bom::create([
+            'product_id' => $product->id,
+            'version' => 1,
+            'is_active' => true,
+        ]);
+        BomItem::create([
+            'bom_id' => $bom->id,
+            'item_id' => $material->id,
+            'quantity_per_unit' => '2.0000',
+            'unit' => 'pcs',
+            'waste_factor' => '0.00',
+            'sort_order' => 0,
+        ]);
+
+        $material->update(['standard_cost' => '11.2500']);
+        $recosted = $this->service->recalculate($bom);
+
+        $this->assertSame('22.50', (string) $recosted->material_cost);
+        $this->assertSame('11.2500', (string) $recosted->items->first()->unit_cost);
     }
 }

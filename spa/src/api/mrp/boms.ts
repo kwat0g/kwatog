@@ -33,7 +33,9 @@ export const bomsApi = {
  create: (data: CreateBomData) =>
  client.post<ApiSuccess<Bom>>('/mrp/boms', data).then((r) => r.data.data),
  update: (id: string, data: CreateBomData) =>
- client.put<ApiSuccess<Bom>>(`/mrp/boms/${id}`, data).then((r) => r.data.data),
+  client.put<ApiSuccess<Bom>>(`/mrp/boms/${id}`, data).then((r) => r.data.data),
+ recalculate: (id: string) =>
+  client.post<ApiSuccess<Bom>>(`/mrp/boms/${id}/recalculate-cost`).then((r) => r.data.data),
  delete: (id: string) =>
   client.delete(`/mrp/boms/${id}`),
  restore: (id: string) =>

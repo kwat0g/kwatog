@@ -35,7 +35,16 @@ export interface BomItem {
  unit: string;
  waste_factor: string;
  effective_quantity: string;
+ cost_quantity: string | null;
+ unit_cost: string | null;
+ extended_cost: string | null;
  sort_order: number;
+}
+
+export interface BomCostWarning {
+ type: string;
+ item_code: string;
+ message: string;
 }
 
 export interface Bom {
@@ -44,7 +53,12 @@ export interface Bom {
  version: number;
  is_active: boolean;
  item_count: number;
+ material_cost: string | null;
+ cost_basis: string | null;
+ costed_at: string | null;
+ cost_warnings: BomCostWarning[];
  items?: BomItem[];
+ deleted_at?: string | null;
  created_at: string;
  updated_at: string;
 }
@@ -90,7 +104,7 @@ export interface Mold {
  updated_at: string;
 }
 
-export interface MrpPlanDiagnostic {
+export interface MrpMaterialDiagnostic {
  item_id: number;
  item_code: string;
  gross: number;
@@ -103,6 +117,16 @@ export interface MrpPlanDiagnostic {
  priority?: string;
  lead_time_days?: number;
 }
+
+export interface MrpPlanWarningDiagnostic {
+ kind: 'warning';
+ type: string;
+ product_id: number;
+ sales_order_line_id: number;
+ message: string;
+}
+
+export type MrpPlanDiagnostic = MrpMaterialDiagnostic | MrpPlanWarningDiagnostic;
 
 export interface MrpPlan {
  id: string;

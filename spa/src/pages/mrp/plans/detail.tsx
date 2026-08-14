@@ -1,7 +1,7 @@
 import { useParams, Link } from 'react-router-dom';
 import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { RefreshCw } from 'lucide-react';
+import { LuRefreshCw } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { mrpPlansApi } from '@/api/mrp/mrpPlans';
 import { Button } from '@/components/ui/Button';
@@ -12,6 +12,10 @@ import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import type { MrpMaterialDiagnostic, MrpPlanDiagnostic, MrpPlanWarningDiagnostic } from '@/types/mrp';
+
+const isWarningDiagnostic = (row: MrpPlanDiagnostic): row is MrpPlanWarningDiagnostic =>
+ 'kind' in row && row.kind === 'warning';
 
 export default function MrpPlanDetailPage() {
  const { id } = useParams<{ id: string }>();
@@ -35,7 +39,7 @@ export default function MrpPlanDetailPage() {
 
  const summary = useMemo(() => {
  if (!data) return null;
- const d = data.diagnostics;
+ const d = data.diagnostics.filter((row): row is MrpMaterialDiagnostic => !isWarningDiagnostic(row));
  return {
  totalDemand: d.reduce((s, r) => s + r.gross, 0),
  shortageCount: d.filter((r) => r.net > 0).length,
@@ -70,7 +74,7 @@ export default function MrpPlanDetailPage() {
  backLabel="Plans"
  breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'Plans', href: '/mrp/plans' }, { label: data.mrp_plan_no }]}
  actions={can('mrp.plans.run') ? (
- <Button variant="primary" size="sm" icon={<RefreshCw size={14} />}
+ <Button variant="primary" size="sm" icon={<LuRefreshCw size={14} />}
  onClick={() => rerun.mutate()} loading={rerun.isPending}>
  Re-run
  </Button>
@@ -118,7 +122,14 @@ export default function MrpPlanDetailPage() {
  </tr>
  </thead>
  <tbody>
- {data.diagnostics.map((d) => (
+ {data.diagnostics.map((d, index) => (
+ isWarningDiagnostic(d) ? (
+ <tr key={`warning-${d.sales_order_line_id}-${index}`} className={trCls}>
+ <Td colSpan={7}>
+ <div className="text-warning-fg">{d.message}</div>
+ </Td>
+ </tr>
+ ) : (
  <tr key={d.item_id} className={trCls}>
  <Td mono>{d.item_code}</Td>
  <Td align="right" mono>{d.gross.toFixed(3)}</Td>
@@ -132,6 +143,7 @@ export default function MrpPlanDetailPage() {
  : <Chip variant="success">sufficient</Chip>}
  </Td>
  </tr>
+ )
  ))}
  </tbody>
  </table>

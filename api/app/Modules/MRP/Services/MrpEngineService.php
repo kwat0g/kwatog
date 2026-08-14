@@ -17,7 +17,10 @@ use App\Modules\MRP\Enums\MrpRunStatus;
 use App\Modules\MRP\Enums\MrpRunTrigger;
 use App\Modules\MRP\Models\MrpPlan;
 use App\Modules\MRP\Models\MrpRun;
+use App\Modules\Production\Enums\WorkOrderStatus;
+use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Services\WorkOrderService;
+use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Models\ApprovedSupplier;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\PurchaseRequestItem;
@@ -41,11 +44,12 @@ use Illuminate\Support\Facades\Log;
  *    WorkOrderService::createDraft().
  *
  * Net-requirement math (per material):
- *   gross      = Σ over SO lines: bom.quantity_per_unit * (1 + waste_factor/100) * line.quantity
+ *   gross      = Σ over SO lines: bom.quantity_per_unit * (1 + waste_factor/100) * remaining line.quantity
  *   on_hand    = Σ stock_levels.quantity over all locations
  *   reserved   = Σ stock_levels.reserved_quantity over all locations
  *   in_transit = Σ purchase_order_items.(quantity - quantity_received) for POs in approved/sent/partial
- *   net        = max(0, gross - on_hand + reserved - in_transit)
+ *   open_pr    = pending/approved PR quantity already linked to this SO
+ *   net        = max(0, gross - open_pr - on_hand + reserved - in_transit)
  *
  * Lead time + safety buffer:
  *   order_by_date = earliest_so_line.delivery_date - max(approved_supplier.lead_time, items.lead_time_days) - 2 days
@@ -65,9 +69,12 @@ class MrpEngineService
      * Run MRP for a confirmed sales order. Idempotent at the per-run level;
      * re-running supersedes the prior active plan for this SO.
      */
-    public function runForSalesOrder(SalesOrder $so): MrpPlan
+    public function runForSalesOrder(SalesOrder $so, ?array &$sharedSupply = null): MrpPlan
     {
-        return DB::transaction(function () use ($so) {
+        $sharedSupplyBeforeRun = $sharedSupply;
+
+        try {
+            return DB::transaction(function () use ($so, &$sharedSupply) {
             // Lock + supersede prior active plan.
             $previous = MrpPlan::where('sales_order_id', $so->id)
                 ->where('status', MrpPlanStatus::Active->value)
@@ -90,11 +97,16 @@ class MrpEngineService
             // into the diagnostics array built below.
             $diagnostics = [];
 
+            $remainingQuantityByLine = [];
+
             foreach ($lines as $line) {
-                $exploded = collect();
-                try {
-                    $exploded = $this->boms->explode((int) $line->product_id, (float) $line->quantity);
-                } catch (\Throwable $e) {
+                $remainingQuantity = max(0.0, (float) $line->quantity - (float) $line->quantity_delivered);
+                $remainingQuantityByLine[$line->id] = $remainingQuantity;
+                if ($remainingQuantity <= 0.000001) {
+                    continue;
+                }
+
+                if ($this->boms->activeForProduct((int) $line->product_id) === null) {
                     // L-32 — No active BOM. Skip the demand explosion (the WO
                     // side still produces a planned WO so PPC can act), but
                     // record a warning row so the plan detail page surfaces
@@ -108,6 +120,10 @@ class MrpEngineService
                     ];
                     continue;
                 }
+                // Invalid BOM data (cycles, depth overflow, or missing UOM
+                // conversions) must fail the run rather than being mislabeled
+                // as a missing BOM and silently under-planning demand.
+                $exploded = $this->boms->explode((int) $line->product_id, $remainingQuantity);
                 foreach ($exploded as $row) {
                     $iid = (int) $row['item_id'];
                     $grossPerItem[$iid] = ($grossPerItem[$iid] ?? 0.0) + (float) $row['gross_quantity'];
@@ -146,31 +162,56 @@ class MrpEngineService
                 // reserved quantities. Order by id for deterministic locking.
                 // F-02 — quarantine/scrap-zone stock is held or scrapped and
                 // must not satisfy gross requirements.
-                $levels = StockLevel::where('item_id', $itemId)
-                    ->whereHas('location.zone', function ($q) {
-                        $q->whereNotIn('zone_type', [
-                            \App\Modules\Inventory\Enums\WarehouseZoneType::Quarantine->value,
-                            \App\Modules\Inventory\Enums\WarehouseZoneType::Scrap->value,
-                        ]);
-                    })
-                    ->orderBy('location_id')
-                    ->lockForUpdate()
-                    ->get();
-                $onHand    = (float) $levels->sum('quantity');
-                // "reserved by OTHER active WOs" — for this run, treat all current
-                // reservations as already-consumed availability.
-                $reserved  = (float) $levels->sum('reserved_quantity');
-                $inTransit = $this->inTransit($itemId);
+                if ($sharedSupply !== null && isset($sharedSupply[$itemId])) {
+                    $supply = $sharedSupply[$itemId];
+                } else {
+                    $levels = StockLevel::where('item_id', $itemId)
+                        ->whereHas('location.zone', function ($q) {
+                            $q->whereNotIn('zone_type', [
+                                \App\Modules\Inventory\Enums\WarehouseZoneType::Quarantine->value,
+                                \App\Modules\Inventory\Enums\WarehouseZoneType::Scrap->value,
+                            ]);
+                        })
+                        ->orderBy('location_id')
+                        ->lockForUpdate()
+                        ->get();
+                    $onHand    = (float) $levels->sum('quantity');
+                    // "reserved by OTHER active WOs" — for this run, treat all current
+                    // reservations as already-consumed availability.
+                    $reserved  = (float) $levels->sum('reserved_quantity');
+                    $inTransit = $this->inTransit($itemId);
+                    $supply = [
+                        'on_hand'    => $onHand,
+                        'reserved'   => $reserved,
+                        'in_transit' => $inTransit,
+                        'available'  => max(0.0, $onHand - $reserved + $inTransit),
+                    ];
+                    if ($sharedSupply !== null) {
+                        $sharedSupply[$itemId] = $supply;
+                    }
+                }
 
-                $net = max(0.0, $gross - $onHand + $reserved - $inTransit);
+                // Pending/approved auto-PRs already represent supply committed
+                // to this SO. Count them before creating another shortage, while
+                // keeping them isolated from other SOs in an all-SO run.
+                $openPurchaseRequests = $this->openPurchaseRequestQuantity((int) $so->id, (int) $itemId);
+                $grossAfterOpenRequests = max(0.0, $gross - $openPurchaseRequests);
+                $availableBeforeAllocation = max(0.0, (float) $supply['available']);
+                $consumedFromSharedSupply = min($grossAfterOpenRequests, $availableBeforeAllocation);
+                $net = max(0.0, $grossAfterOpenRequests - $availableBeforeAllocation);
+
+                if ($sharedSupply !== null) {
+                    $sharedSupply[$itemId]['available'] = $availableBeforeAllocation - $consumedFromSharedSupply;
+                }
 
                 $entry = [
                     'item_id'    => $itemId,
                     'item_code'  => $item->code,
                     'gross'      => round($gross, 3),
-                    'on_hand'    => round($onHand, 3),
-                    'reserved'   => round($reserved, 3),
-                    'in_transit' => round($inTransit, 3),
+                    'on_hand'    => round((float) $supply['on_hand'], 3),
+                    'reserved'   => round((float) $supply['reserved'], 3),
+                    'in_transit' => round((float) $supply['in_transit'], 3),
+                    'open_purchase_requests' => round($openPurchaseRequests, 3),
                     'net'        => round($net, 3),
                     'action'     => 'sufficient',
                 ];
@@ -201,53 +242,156 @@ class MrpEngineService
                 $diagnostics[] = $entry;
             }
 
-            // Create one consolidated draft PR for all shortages.
+            // Create one consolidated draft PR for all shortages — reconciled
+            // against the superseded plan's children so a re-run reuses rather
+            // than duplicates (Round 2 — MRP rerun safety). Only
+            // is_auto_generated + draft rows are eligible; progressed PRs
+            // (pending, approved, …) and manual PRs are never touched.
             $autoPrCount = 0;
             if (! empty($shortages)) {
-                $pr = PurchaseRequest::create([
-                    'pr_number'         => $this->sequences->generate('pr'),
-                    'requested_by'      => $so->created_by,
-                    'department_id'     => null, // SO creator's dept; resolved at submit time
-                    'mrp_plan_id'       => $plan->id,
-                    'date'              => Carbon::today(),
-                    'reason'            => "Auto-generated from MRP plan {$plan->mrp_plan_no} for SO {$so->so_number}.",
-                    'priority'          => collect($shortages)->contains(fn ($s) => $s['priority'] === 'urgent') ? 'urgent' : 'normal',
-                    'is_auto_generated' => true,
-                ]);
-                // status non-fillable; service-only.
-                $pr->forceFill(['status' => 'draft'])->save();
+                $priorDraftAutoPrs = PurchaseRequest::query()
+                    ->where('is_auto_generated', true)
+                    ->where('status', PurchaseRequestStatus::Draft->value)
+                    ->whereHas('mrpPlan', fn ($q) => $q
+                        ->where('sales_order_id', $so->id)
+                        ->where('id', '!=', $plan->id))
+                    ->orderByDesc('id')
+                    ->get();
+
+                // Reuse the latest eligible draft auto-PR, refreshed to current
+                // requirements; cancel any older surplus drafts.
+                $pr = $priorDraftAutoPrs->shift();
+                foreach ($priorDraftAutoPrs as $surplus) {
+                    $surplus->forceFill(['status' => PurchaseRequestStatus::Cancelled->value])->save();
+                }
+
+                if ($pr === null) {
+                    $pr = PurchaseRequest::create([
+                        'pr_number'         => $this->sequences->generate('pr'),
+                        'requested_by'      => $so->created_by,
+                        'department_id'     => null, // SO creator's dept; resolved at submit time
+                        'mrp_plan_id'       => $plan->id,
+                        'date'              => Carbon::today(),
+                        'reason'            => "Auto-generated from MRP plan {$plan->mrp_plan_no} for SO {$so->so_number}.",
+                        'priority'          => collect($shortages)->contains(fn ($s) => $s['priority'] === 'urgent') ? 'urgent' : 'normal',
+                        'is_auto_generated' => true,
+                    ]);
+                } else {
+                    // status non-fillable; service-only. Repoint the reused PR
+                    // to the current plan and refresh its lines.
+                    $pr->forceFill([
+                        'status'      => PurchaseRequestStatus::Draft->value,
+                        'mrp_plan_id' => $plan->id,
+                        'date'        => Carbon::today(),
+                        'reason'      => "Auto-generated from MRP plan {$plan->mrp_plan_no} for SO {$so->so_number}.",
+                        'priority'    => collect($shortages)->contains(fn ($s) => $s['priority'] === 'urgent') ? 'urgent' : 'normal',
+                    ])->save();
+                    $pr->items()->delete();
+                }
 
                 foreach ($shortages as $itemId => $s) {
                     PurchaseRequestItem::create([
                         'purchase_request_id'  => $pr->id,
                         'item_id'              => $itemId,
                         'description'          => $s['name'],
-                        'quantity'             => round($s['net'], 2),
+                        // Purchase-request quantities have two decimal places;
+                        // round shortages upward so precision loss cannot
+                        // under-order a fractional BOM requirement.
+                        'quantity'             => number_format(ceil(max(0.0, (float) $s['net']) * 100 - 0.000000001) / 100, 2, '.', ''),
                         'unit'                 => $s['unit'],
                         'estimated_unit_price' => round($s['estimated_unit_price'], 2),
                         'purpose'              => "MRP demand for SO {$so->so_number}",
                     ]);
                 }
                 $autoPrCount = 1; // one consolidated PR per run
+            } else {
+                // No shortages on this run — retire leftover draft auto-PRs so
+                // the purchasing queue never shows demand that no longer exists.
+                PurchaseRequest::query()
+                    ->where('is_auto_generated', true)
+                    ->where('status', PurchaseRequestStatus::Draft->value)
+                    ->whereHas('mrpPlan', fn ($q) => $q
+                        ->where('sales_order_id', $so->id)
+                        ->where('id', '!=', $plan->id))
+                    ->update([
+                        'status'     => PurchaseRequestStatus::Cancelled->value,
+                        'updated_at' => now(),
+                    ]);
             }
 
-            // Create one draft WO per SO line.
+            // Create one draft WO per SO line — reusing a prior plan's planned
+            // WO for the same line instead of duplicating (Round 2 — MRP rerun
+            // safety). Progressed WOs (confirmed and beyond) and manual WOs
+            // (no mrp_plan_id) are never repointed or cancelled.
             $draftWoCount = 0;
             $urgentDeliveryDays = $this->settings->requiredInt('mrp.work_order.urgent_delivery_days', 0, 3650);
             $urgentPriority = $this->settings->requiredInt('mrp.work_order.urgent_priority', 0, 255);
             $normalPriority = $this->settings->requiredInt('mrp.work_order.normal_priority', 0, 255);
             foreach ($lines as $line) {
+                $remainingQuantity = $remainingQuantityByLine[$line->id] ?? 0.0;
+                if ($remainingQuantity <= 0.000001) {
+                    continue;
+                }
+
+                $plannedStart = $line->delivery_date->copy()->subDays(2)->toDateTimeString();
+                $plannedEnd   = $line->delivery_date->copy()->subDay()->toDateTimeString();
+                $priority     = $line->delivery_date->diffInDays(Carbon::now()) <= $urgentDeliveryDays
+                    ? $urgentPriority
+                    : $normalPriority;
+
+                $progressedWos = WorkOrder::query()
+                    ->where('sales_order_item_id', $line->id)
+                    ->whereIn('status', [
+                        WorkOrderStatus::Confirmed->value,
+                        WorkOrderStatus::InProgress->value,
+                        WorkOrderStatus::Paused->value,
+                    ])
+                    ->get(['quantity_target', 'quantity_produced']);
+                $openProduction = $progressedWos->sum(function (WorkOrder $workOrder): float {
+                    return max(0.0, (float) $workOrder->quantity_target - (float) $workOrder->quantity_produced);
+                });
+
+                $priorPlanned = WorkOrder::query()
+                    ->where('sales_order_item_id', $line->id)
+                    ->whereNotNull('mrp_plan_id')
+                    ->where('mrp_plan_id', '!=', $plan->id)
+                    ->where('status', WorkOrderStatus::Planned->value)
+                    ->orderByDesc('id')
+                    ->get();
+
+                if ($openProduction >= $remainingQuantity) {
+                    foreach ($priorPlanned as $surplus) {
+                        $surplus->forceFill(['status' => WorkOrderStatus::Cancelled->value])->save();
+                    }
+                    continue;
+                }
+                $workOrderQuantity = max(0.0, $remainingQuantity - $openProduction);
+
+                if ($priorPlanned->isNotEmpty()) {
+                    $reuse = $priorPlanned->shift();
+                    $reuse->forceFill([
+                        'mrp_plan_id'     => $plan->id,
+                        'quantity_target' => (int) ceil($workOrderQuantity),
+                        'planned_start'   => $plannedStart,
+                        'planned_end'     => $plannedEnd,
+                        'priority'        => $priority,
+                    ])->save();
+                    foreach ($priorPlanned as $surplus) {
+                        $surplus->forceFill(['status' => WorkOrderStatus::Cancelled->value])->save();
+                    }
+                    $draftWoCount++;
+                    continue;
+                }
+
                 $this->workOrders->createDraft([
                     'product_id'          => $line->product_id,
                     'sales_order_id'      => $so->id,
                     'sales_order_item_id' => $line->id,
                     'mrp_plan_id'         => $plan->id,
-                    'quantity_target'     => (int) $line->quantity,
-                    'planned_start'       => $line->delivery_date->copy()->subDays(2)->toDateTimeString(),
-                    'planned_end'         => $line->delivery_date->copy()->subDay()->toDateTimeString(),
-                    'priority'            => $line->delivery_date->diffInDays(Carbon::now()) <= $urgentDeliveryDays
-                        ? $urgentPriority
-                        : $normalPriority,
+                    'quantity_target'     => (int) ceil($workOrderQuantity),
+                    'planned_start'       => $plannedStart,
+                    'planned_end'         => $plannedEnd,
+                    'priority'            => $priority,
                     'created_by'          => $so->created_by,
                 ]);
                 $draftWoCount++;
@@ -274,7 +418,14 @@ class MrpEngineService
             );
 
             return $this->show($finalPlan);
-        });
+            });
+        } catch (\Throwable $e) {
+            if ($sharedSupply !== null) {
+                $sharedSupply = $sharedSupplyBeforeRun;
+            }
+
+            throw $e;
+        }
     }
 
     public function rerun(MrpPlan $plan): MrpPlan
@@ -290,9 +441,9 @@ class MrpEngineService
      * Active = confirmed | in_production | partially_delivered.
      *
      * Idempotency: each runForSalesOrder() supersedes the prior plan and
-     * creates a new consolidated PR. To prevent unbounded duplication,
-     * the cleanup pass below cancels any draft auto-PR from the previous
-     * (now superseded) plan whose lines mirror the new plan's PR.
+     * reconciles its draft auto-PR/planned WO children. Progressed purchasing
+     * and production records remain authoritative and are included in the
+     * next net-requirement calculation.
      */
     public function runForAllActiveSalesOrders(MrpRunTrigger $trigger, ?int $userId = null): MrpRun
     {
@@ -317,15 +468,18 @@ class MrpEngineService
             $prsUpdated     = 0;
             $plansGenerated = 0;
             $perSo          = [];
+            $sharedSupply   = [];
 
             foreach ($sos as $so) {
                 try {
+                    $run->forceFill(['heartbeat_at' => now()])->saveQuietly();
+
                     $beforeAutoPrs = PurchaseRequest::where('is_auto_generated', true)
                         ->whereHas('mrpPlan', fn ($q) => $q->where('sales_order_id', $so->id))
                         ->where('status', 'draft')
                         ->count();
 
-                    $plan = $this->runForSalesOrder($so);
+                    $plan = $this->runForSalesOrder($so, $sharedSupply);
                     $plansGenerated++;
                     $shortagesTotal += (int) $plan->shortages_found;
 
@@ -347,6 +501,7 @@ class MrpEngineService
                         'shortages_found' => (int) $plan->shortages_found,
                         'plan_no'         => $plan->mrp_plan_no,
                     ];
+                    $run->forceFill(['heartbeat_at' => now()])->saveQuietly();
                 } catch (\Throwable $inner) {
                     Log::warning('MRP run: SO failed', [
                         'so_id'   => $so->id,
@@ -358,6 +513,7 @@ class MrpEngineService
                         'so_number' => $so->so_number,
                         'error'     => $inner->getMessage(),
                     ];
+                    $run->forceFill(['heartbeat_at' => now()])->saveQuietly();
                 }
             }
 
@@ -408,6 +564,28 @@ class MrpEngineService
             'workOrders:id,wo_number,product_id,quantity_target,status,planned_start,mrp_plan_id',
             'purchaseRequests:id,pr_number,priority,status,is_auto_generated,date,mrp_plan_id',
         ]);
+    }
+
+    /**
+     * Quantity already covered by open purchase requests for one SO/item.
+     * Draft requests are intentionally excluded because this service owns and
+     * reconciles those rows on the current run; pending/approved requests have
+     * crossed the purchasing handoff and must not be duplicated.
+     */
+    private function openPurchaseRequestQuantity(int $salesOrderId, int $itemId): float
+    {
+        $row = PurchaseRequestItem::query()
+            ->where('item_id', $itemId)
+            ->whereHas('purchaseRequest', function ($q) use ($salesOrderId): void {
+                $q->whereIn('status', [
+                    PurchaseRequestStatus::Pending->value,
+                    PurchaseRequestStatus::Approved->value,
+                ])->whereHas('mrpPlan', fn ($plan) => $plan->where('sales_order_id', $salesOrderId));
+            })
+            ->selectRaw('COALESCE(SUM(quantity), 0) as quantity')
+            ->first();
+
+        return (float) ($row->quantity ?? 0);
     }
 
     /**

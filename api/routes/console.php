@@ -43,8 +43,8 @@ Schedule::command('mrp:run-daily')
     ->onOneServer();
 
 // OGAMI-015 — Hourly reaper for hung Running MRP runs. Marks runs whose
-// started_at is older than 2h as Failed and cancels their orphan draft
-// auto-PRs. Idempotent, so re-runs are safe no-ops.
+// whose heartbeat is older than 2h as Failed. Draft auto-PRs are reconciled by
+// the next MRP run because ownership is not safe to infer from timestamps.
 Schedule::command('mrp:reap-stale-runs')
     ->hourly()
     ->withoutOverlapping(120)
@@ -148,6 +148,13 @@ Schedule::command('production:send-weekly-summary')
 Schedule::command('hr:onboarding-reminders')
     ->dailyAt('09:00')
     ->withoutOverlapping(120)
+    ->onOneServer();
+
+// Recruitment lifecycle recovery — hourly scan for applications, interviews,
+// and postings that can wait indefinitely without an operator prompt.
+Schedule::command('recruitment:check-bottlenecks')
+    ->hourly()
+    ->withoutOverlapping(10)
     ->onOneServer();
 
 // Series C — Task C5. Chain bottleneck scan, hourly. Idempotent (24h

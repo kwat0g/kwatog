@@ -47,7 +47,9 @@ class RunDailyMrp extends Command
             app(NotificationService::class)->send($ppcHeads, 'mrp_run_completed', [
                 'title'           => 'Daily MRP run finished',
                 'message'         => "Daily MRP complete. {$run->shortages_found} shortages found. {$run->prs_created} PRs created, {$run->prs_updated} updated.",
-                'link_to'         => "/mrp/runs/{$run->hash_id}",
+                // There is no run-detail route; send operators to the existing
+                // MRP plans/run history surface instead of a dead URL.
+                'link_to'         => '/mrp/plans',
                 'entity_type'     => 'mrp_run',
                 'entity_id'       => $run->hash_id,
                 'shortages_found' => $run->shortages_found,

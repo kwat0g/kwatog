@@ -270,8 +270,10 @@ class BomService
             if ($row->item && ! empty($row->unit)) {
                 try {
                     $grossStr = $row->item->convertToBase($grossStr, (string) $row->unit);
-                } catch (RuntimeException) {
-                    // No conversion configured — leave authored quantity as-is.
+                } catch (RuntimeException $e) {
+                    throw new BusinessRuleException(
+                        "Cannot explode item {$row->item->code}: {$e->getMessage()}"
+                    );
                 }
             }
             $grossFloat = (float) $grossStr;
