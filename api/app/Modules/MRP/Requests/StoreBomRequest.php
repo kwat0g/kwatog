@@ -8,6 +8,7 @@ use App\Common\Concerns\ResolvesHashIds;
 use App\Modules\CRM\Models\Product;
 use App\Modules\Inventory\Models\Item;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreBomRequest extends FormRequest
 {
@@ -29,9 +30,22 @@ class StoreBomRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'product_id'                => ['required', 'integer', 'exists:products,id'],
+            'product_id'                => [
+                'required',
+                'integer',
+                Rule::exists('products', 'id')->where(fn ($query) => $query
+                    ->where('is_active', true)
+                    ->whereNull('deleted_at')),
+            ],
             'items'                     => ['required', 'array', 'min:1'],
-            'items.*.item_id'           => ['required', 'integer', 'exists:items,id'],
+            'items.*.item_id'           => [
+                'required',
+                'integer',
+                'distinct',
+                Rule::exists('items', 'id')->where(fn ($query) => $query
+                    ->where('is_active', true)
+                    ->whereNull('deleted_at')),
+            ],
             'items.*.quantity_per_unit' => ['required', 'decimal:0,4', 'min:0.0001'],
             'items.*.unit'              => ['required', 'string', 'max:20'],
             'items.*.waste_factor'      => ['nullable', 'decimal:0,2', 'min:0', 'max:50'],

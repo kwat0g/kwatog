@@ -43,6 +43,11 @@ class BomController
         return new BomResource($next);
     }
 
+    public function recalculate(Bom $bom): BomResource
+    {
+        return new BomResource($this->service->recalculate($bom));
+    }
+
     public function destroy(Bom $bom): JsonResponse
     {
         try {
@@ -55,8 +60,9 @@ class BomController
 
     public function restore(Bom $bom): JsonResponse
     {
-        $bom->restore();
-        return response()->json(['message' => 'BOM restored.']);
+        return response()->json([
+            'data' => new BomResource($this->service->restore($bom)),
+        ]);
     }
 
     /** GET /products/{product}/bom — used by product detail page. */

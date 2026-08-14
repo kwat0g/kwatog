@@ -7,10 +7,12 @@ namespace App\Modules\MRP\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
+use App\Common\Support\SearchOperator;
+use App\Common\Support\TrashedFilter;
 use App\Modules\CRM\Models\Product;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\Uom;
 use App\Modules\MRP\Models\Bom;
-use App\Common\Support\TrashedFilter;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -18,7 +20,10 @@ use RuntimeException;
 
 class BomService
 {
-    public function __construct(private readonly SettingsService $settings) {}
+    public function __construct(
+        private readonly SettingsService $settings,
+        private readonly BomCostingService $costing,
+    ) {}
 
     public function list(array $filters): LengthAwarePaginator
     {
@@ -34,6 +39,12 @@ class BomService
         }
         if (isset($filters['is_active']) && $filters['is_active'] !== '') {
             $q->where('is_active', filter_var($filters['is_active'], FILTER_VALIDATE_BOOLEAN));
+        }
+        if (! empty($filters['search'])) {
+            $term = (string) $filters['search'];
+            $q->whereHas('product', fn ($product) => $product
+                ->where('part_number', SearchOperator::like(), "%{$term}%")
+                ->orWhere('name', SearchOperator::like(), "%{$term}%"));
         }
 
         return $q->orderByDesc('is_active')
@@ -61,6 +72,7 @@ class BomService
     public function create(int $productId, array $itemRows): Bom
     {
         return DB::transaction(function () use ($productId, $itemRows) {
+            $this->validateDefinition($productId, $itemRows);
             $previous = Bom::where('product_id', $productId)->lockForUpdate()->orderByDesc('version')->first();
 
             if ($previous && $previous->is_active) {
@@ -83,7 +95,7 @@ class BomService
                 ]);
             }
 
-            return $this->show($bom->fresh());
+            return $this->show($this->costing->recalculate($bom->fresh()));
         });
     }
 
@@ -93,6 +105,34 @@ class BomService
         return $this->create($bom->product_id, $itemRows);
     }
 
+    public function recalculate(Bom $bom): Bom
+    {
+        return $this->show($this->costing->recalculate($bom));
+    }
+
+    public function restore(Bom $bom): Bom
+    {
+        return DB::transaction(function () use ($bom): Bom {
+            $row = Bom::withTrashed()->lockForUpdate()->findOrFail($bom->id);
+            if (! $row->trashed()) {
+                return $this->show($row);
+            }
+
+            $active = Bom::where('product_id', $row->product_id)
+                ->active()
+                ->lockForUpdate()
+                ->first();
+            if ($active !== null && $active->id !== $row->id && $row->is_active) {
+                throw new BusinessRuleException(
+                    'Cannot restore this active BOM version while another active version exists.'
+                );
+            }
+
+            $row->restore();
+            return $this->show($row->fresh());
+        });
+    }
+
     public function delete(Bom $bom): void
     {
         // Preserve audit trail — only allow deleting inactive (historical) versions.
@@ -100,6 +140,62 @@ class BomService
             throw new BusinessRuleException('Cannot delete the active BOM. Archive it by creating a new version instead.');
         }
         $bom->delete();
+    }
+
+    /**
+     * Validate the invariant that makes a BOM safe to explode and cost.
+     * Request validation remains useful for field-level errors, but this
+     * service guard also protects imports, seeders, and direct callers.
+     */
+    private function validateDefinition(int $productId, array $itemRows): void
+    {
+        $product = Product::query()->active()->find($productId);
+        if ($product === null) {
+            throw new BusinessRuleException('The finished-good product is missing or inactive.');
+        }
+
+        $itemIds = array_map(static fn (array $row): int => (int) ($row['item_id'] ?? 0), $itemRows);
+        if (count($itemIds) !== count(array_unique($itemIds))) {
+            throw new BusinessRuleException('A BOM may contain each component item only once.');
+        }
+
+        $items = Item::query()->whereIn('id', $itemIds)->get()->keyBy('id');
+        if ($items->count() !== count($itemIds)) {
+            throw new BusinessRuleException('Every BOM component must reference an existing item.');
+        }
+
+        foreach ($itemRows as $row) {
+            $item = $items->get((int) $row['item_id']);
+            if (! $item->is_active) {
+                throw new BusinessRuleException("Item {$item->code} is inactive and cannot be added to a BOM.");
+            }
+
+            $unit = trim((string) ($row['unit'] ?? ''));
+            if ($unit === '') {
+                throw new BusinessRuleException("Item {$item->code} requires a unit of measure.");
+            }
+
+            if (strcasecmp($unit, (string) $item->unit_of_measure) !== 0) {
+                $knownUom = Uom::query()
+                    ->whereRaw('UPPER(code) = ?', [strtoupper($unit)])
+                    ->exists();
+                if (! $knownUom) {
+                    throw new BusinessRuleException("Unknown unit of measure '{$unit}' for item {$item->code}.");
+                }
+
+                try {
+                    $item->convertToBase('1', $unit);
+                } catch (RuntimeException $e) {
+                    throw new BusinessRuleException("Item {$item->code} has no configured conversion for {$unit}.");
+                }
+            }
+
+            if (strcasecmp((string) $item->code, (string) $product->part_number) === 0) {
+                throw new BusinessRuleException(
+                    "Item {$item->code} cannot be used in its own BOM because it creates a circular BOM."
+                );
+            }
+        }
     }
 
     /**

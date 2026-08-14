@@ -23,7 +23,8 @@ Route::middleware(['auth:sanctum', 'feature:mrp'])->prefix('mrp')->group(functio
     Route::post('/boms',                  [BomController::class, 'store']) ->middleware('permission:mrp.boms.manage');
     Route::put('/boms/{bom}',             [BomController::class, 'update'])->middleware('permission:mrp.boms.manage');
     Route::delete('/boms/{bom}',          [BomController::class, 'destroy'])->middleware('permission:mrp.boms.manage');
-    Route::patch('/boms/{bom}/restore',   [BomController::class, 'restore'])->middleware('permission:mrp.boms.manage');
+    Route::post('/boms/{bom}/recalculate-cost', [BomController::class, 'recalculate'])->middleware('permission:mrp.boms.manage');
+    Route::patch('/boms/{bom}/restore',   [BomController::class, 'restore'])->middleware('permission:mrp.boms.manage')->withTrashed();
 
     Route::get('/products/{product}/bom', [BomController::class, 'forProduct'])->middleware('permission:mrp.boms.view');
 

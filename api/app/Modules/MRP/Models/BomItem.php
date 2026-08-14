@@ -18,11 +18,15 @@ class BomItem extends Model
 
     protected $fillable = [
         'bom_id', 'item_id', 'quantity_per_unit', 'unit', 'waste_factor', 'sort_order',
+        'cost_quantity', 'unit_cost', 'extended_cost',
     ];
 
     protected $casts = [
         'quantity_per_unit' => 'decimal:4',
         'waste_factor'      => 'decimal:2',
+        'cost_quantity'     => 'decimal:6',
+        'unit_cost'         => 'decimal:4',
+        'extended_cost'     => 'decimal:2',
         'sort_order'        => 'integer',
     ];
 
@@ -41,8 +45,16 @@ class BomItem extends Model
      */
     public function getEffectiveQuantityAttribute(): string
     {
-        $base  = (float) $this->quantity_per_unit;
-        $waste = (float) $this->waste_factor;
-        return number_format($base * (1 + $waste / 100), 4, '.', '');
+        $wasteMultiplier = bcadd(
+            '1',
+            bcdiv((string) $this->waste_factor, '100', 8),
+            8,
+        );
+
+        return bcadd(
+            bcmul((string) $this->quantity_per_unit, $wasteMultiplier, 8),
+            '0',
+            6,
+        );
     }
 }
