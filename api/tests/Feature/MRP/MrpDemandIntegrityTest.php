@@ -125,6 +125,22 @@ class MrpDemandIntegrityTest extends TestCase
         $this->assertSame(PurchaseRequestStatus::Pending->value, $existing->fresh()->status->value);
     }
 
+    public function test_fractional_shortage_rounds_purchase_quantity_up(): void
+    {
+        BomItem::query()->where('bom_id', Bom::query()->where('product_id', $this->product->id)->value('id'))
+            ->update(['quantity_per_unit' => '0.0010']);
+        $this->salesOrder(1);
+
+        $this->engine->runForSalesOrder(SalesOrder::query()->latest('id')->firstOrFail());
+
+        $this->assertSame('0.01', (string) PurchaseRequest::query()
+            ->where('is_auto_generated', true)
+            ->firstOrFail()
+            ->items()
+            ->firstOrFail()
+            ->quantity);
+    }
+
     private function salesOrder(int $quantity, int $delivered = 0): SalesOrder
     {
         $user = User::factory()->create();
