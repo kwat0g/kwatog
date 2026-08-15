@@ -38,6 +38,7 @@ const itemSchema = z.object({
 });
 
 const schema = z.object({
+ cost_batch_size: z.string().regex(/^\d+(\.\d{1,3})?$/, 'Use a positive batch size').refine((v) => Number(v) >= 1, 'Must be at least 1'),
  items: z.array(itemSchema).min(1, 'Add at least one material line'),
 });
 
@@ -67,6 +68,7 @@ export default function EditBomPage() {
  resolver: zodResolver(schema),
  values: data
  ? {
+ cost_batch_size: data.cost_batch_size ?? '1',
  items: (data.items ?? []).map((m, i) => ({
  item_id: m.item?.id ?? '',
  quantity_per_unit: m.quantity_per_unit,
@@ -87,6 +89,7 @@ export default function EditBomPage() {
  mutationFn: (values: FormValues) => {
  const payload: CreateBomData = {
  product_id: data!.product!.id,
+ cost_batch_size: values.cost_batch_size,
  items: values.items.map((row, i) => ({
  item_id: row.item_id,
  quantity_per_unit: row.quantity_per_unit,
@@ -167,6 +170,17 @@ export default function EditBomPage() {
  <span className="font-mono">{data.product?.part_number}</span>
  <span className="ml-2 text-muted">{data.product?.name}</span>
  <span className="ml-3 text-xs text-muted">(product cannot be changed — create a new BOM to reassign)</span>
+ </div>
+
+ <div className="mb-6 max-w-xs">
+ <Input
+ label="Cost batch size"
+ required
+ {...register('cost_batch_size')}
+ error={errors.cost_batch_size?.message}
+ className="font-mono"
+ />
+ <p className="mt-1 text-xs text-muted">Setup time is allocated across this many units for per-unit costing.</p>
  </div>
 
  <fieldset className="mb-8">

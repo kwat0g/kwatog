@@ -31,7 +31,11 @@ class BomController
     public function store(StoreBomRequest $request): JsonResponse
     {
         $payload = $request->validated();
-        $bom = $this->service->create((int) $payload['product_id'], $payload['items']);
+        $bom = $this->service->create(
+            (int) $payload['product_id'],
+            $payload['items'],
+            (string) ($payload['cost_batch_size'] ?? '1'),
+        );
         return (new BomResource($bom))->response()->setStatusCode(201);
     }
 
@@ -39,7 +43,11 @@ class BomController
     public function update(StoreBomRequest $request, Bom $bom): BomResource
     {
         $payload = $request->validated();
-        $next = $this->service->update($bom, $payload['items']);
+        $next = $this->service->update(
+            $bom,
+            $payload['items'],
+            (string) ($payload['cost_batch_size'] ?? $bom->cost_batch_size ?? '1'),
+        );
         return new BomResource($next);
     }
 

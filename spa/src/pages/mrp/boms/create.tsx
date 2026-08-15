@@ -37,6 +37,7 @@ const itemSchema = z.object({
 
 const schema = z.object({
  product_id: z.string().min(1, 'Product is required'),
+ cost_batch_size: z.string().regex(/^\d+(\.\d{1,3})?$/, 'Use a positive batch size').refine((v) => Number(v) >= 1, 'Must be at least 1'),
  items: z.array(itemSchema).min(1, 'Add at least one material line'),
 });
 
@@ -64,6 +65,7 @@ export default function CreateBomPage() {
  resolver: zodResolver(schema),
  defaultValues: {
  product_id: '',
+ cost_batch_size: '1',
  items: [{ item_id: '', quantity_per_unit: '', unit: '', waste_factor: '' }],
  },
  });
@@ -75,6 +77,7 @@ export default function CreateBomPage() {
  mutationFn: (values: FormValues) => {
  const payload: CreateBomData = {
  product_id: values.product_id,
+ cost_batch_size: values.cost_batch_size,
  items: values.items.map((row, i) => ({
  item_id: row.item_id,
  quantity_per_unit: row.quantity_per_unit,
@@ -127,8 +130,16 @@ export default function CreateBomPage() {
  <option key={p.id} value={p.id}>{p.part_number} — {p.name}</option>
  ))}
  </Select>
+ <Input
+ label="Cost batch size"
+ required
+ {...register('cost_batch_size')}
+ error={errors.cost_batch_size?.message}
+ placeholder="1"
+ className="font-mono"
+ />
  <div className="text-xs text-muted self-end pb-2">
- Saving creates a new BOM version. Any prior active BOM for this product is automatically archived.
+ Setup time is allocated across this many units when calculating per-unit cost. Saving creates a new BOM version.
  </div>
  </div>
  </fieldset>

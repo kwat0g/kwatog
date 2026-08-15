@@ -106,7 +106,7 @@ class BomCostingService
             $materialCost = Money::add($materialCost, $extendedCost);
         }
 
-        $conversionCosts = $this->routingCosts($productId);
+        $conversionCosts = $this->routingCosts($productId, $bom);
         $totalCost = Money::add(
             $materialCost,
             $conversionCosts['labor_cost'],
@@ -151,7 +151,7 @@ class BomCostingService
      *
      * @return array{labor_cost:string, machine_cost:string, overhead_cost:string, has_routing:bool}
      */
-    private function routingCosts(int $productId): array
+    private function routingCosts(int $productId, Bom $bom): array
     {
         $routing = ProductRouting::query()
             ->where('product_id', $productId)
@@ -172,17 +172,32 @@ class BomCostingService
 
         foreach ($routing->operations as $operation) {
             $hours = bcdiv((string) $operation->cycle_time_minutes, '60', 8);
+            $setupHours = bcdiv((string) $operation->setup_time_minutes, '60', 8);
+            $batchSize = max('1.000', (string) $bom->cost_batch_size);
+            $allocatedSetupHours = bcdiv($setupHours, $batchSize, 8);
             $costs['labor_cost'] = Money::add(
                 $costs['labor_cost'],
-                bcmul($hours, (string) $operation->labor_rate_per_hour, 8),
+                bcadd(
+                    bcmul($hours, (string) $operation->labor_rate_per_hour, 8),
+                    bcmul($allocatedSetupHours, (string) $operation->labor_rate_per_hour, 8),
+                    8,
+                ),
             );
             $costs['machine_cost'] = Money::add(
                 $costs['machine_cost'],
-                bcmul($hours, (string) $operation->machine_rate_per_hour, 8),
+                bcadd(
+                    bcmul($hours, (string) $operation->machine_rate_per_hour, 8),
+                    bcmul($allocatedSetupHours, (string) $operation->machine_rate_per_hour, 8),
+                    8,
+                ),
             );
             $costs['overhead_cost'] = Money::add(
                 $costs['overhead_cost'],
-                bcmul($hours, (string) $operation->overhead_rate_per_hour, 8),
+                bcadd(
+                    bcmul($hours, (string) $operation->overhead_rate_per_hour, 8),
+                    bcmul($allocatedSetupHours, (string) $operation->overhead_rate_per_hour, 8),
+                    8,
+                ),
             );
         }
 

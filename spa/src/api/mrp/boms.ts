@@ -17,6 +17,7 @@ export interface CreateBomItemRow {
 
 export interface CreateBomData {
  product_id: string;
+ cost_batch_size?: string;
  items: CreateBomItemRow[];
 }
 

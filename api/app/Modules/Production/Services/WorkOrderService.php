@@ -9,6 +9,7 @@ use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
+use App\Common\Support\Money;
 use App\Common\Support\SearchOperator;
 use App\Common\Support\TrashedFilter;
 use App\Modules\CRM\Models\SalesOrder;
@@ -188,7 +189,11 @@ class WorkOrderService
                     $wo->materials()->create([
                         'item_id'                => (int) $row['item_id'],
                         'bom_quantity'           => (string) $row['gross_quantity'],
+                        'standard_unit_cost'     => (string) $row['standard_unit_cost'],
+                        'standard_cost'          => (string) $row['standard_cost'],
                         'actual_quantity_issued' => '0',
+                        'actual_cost'            => '0',
+                        'cost_variance'          => Money::sub('0.00', (string) $row['standard_cost']),
                         'variance'               => '0',
                     ]);
                 }
@@ -919,7 +924,7 @@ class WorkOrderService
             // freed stock as on-hand-available.
             $this->stock->release((int) $res->item_id, (int) $res->location_id, $qty);
 
-            $this->stock->move(new StockMovementInput(
+            $movement = $this->stock->move(new StockMovementInput(
                 type:           StockMovementType::MaterialIssue,
                 itemId:         (int) $res->item_id,
                 fromLocationId: (int) $res->location_id,
@@ -937,15 +942,19 @@ class WorkOrderService
             ]);
 
             // Bump the matching work_order_materials counter.
-            WorkOrderMaterial::where('work_order_id', $wo->id)
+            $material = WorkOrderMaterial::where('work_order_id', $wo->id)
                 ->where('item_id', $res->item_id)
                 ->orderBy('id')
-                ->limit(1)
-                ->each(function (WorkOrderMaterial $row) use ($qty) {
-                    $row->actual_quantity_issued = bcadd((string) $row->actual_quantity_issued, $qty, 3);
-                    $row->variance = bcsub((string) $row->actual_quantity_issued, (string) $row->bom_quantity, 3);
-                    $row->save();
-                });
+                ->lockForUpdate()
+                ->first();
+            if ($material !== null) {
+                $actualCost = Money::add((string) $material->actual_cost, (string) $movement->total_cost);
+                $material->actual_quantity_issued = bcadd((string) $material->actual_quantity_issued, $qty, 3);
+                $material->actual_cost = $actualCost;
+                $material->cost_variance = Money::sub($actualCost, (string) $material->standard_cost);
+                $material->variance = bcsub((string) $material->actual_quantity_issued, (string) $material->bom_quantity, 3);
+                $material->save();
+            }
         }
     }
 

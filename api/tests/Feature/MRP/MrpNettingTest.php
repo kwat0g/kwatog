@@ -499,6 +499,29 @@ class MrpNettingTest extends TestCase
         $this->assertSame('2.00', $prItem->quantity, 'PR item qty must reflect waste-factor-inflated gross (2)');
     }
 
+    public function test_mrp_plan_persists_bom_cost_summary_and_material_cost_diagnostics(): void
+    {
+        $bom = $this->createBom(2.0);
+        $bom->forceFill([
+            'material_cost' => '10.00',
+            'labor_cost' => '5.00',
+            'machine_cost' => '10.00',
+            'overhead_cost' => '2.50',
+            'total_cost' => '27.50',
+        ])->save();
+
+        $plan = $this->engine->runForSalesOrder($this->createConfirmedSo(10));
+        $diagnostic = collect($plan->diagnostics)->firstWhere('item_id', $this->material->id);
+
+        $this->assertSame('275.00', $plan->cost_summary['planned_production_cost']);
+        $this->assertSame('100.00', $plan->cost_summary['material_cost']);
+        $this->assertSame('50.00', $plan->cost_summary['labor_cost']);
+        $this->assertSame('100.00', $plan->cost_summary['machine_cost']);
+        $this->assertSame('25.00', $plan->cost_summary['overhead_cost']);
+        $this->assertSame('100.00', $diagnostic['gross_cost']);
+        $this->assertSame('100.00', $diagnostic['net_cost']);
+    }
+
     // ════════════════════════════════════════════════════════════════════════
     // Test 6 — Partially received in-transit PO: only outstanding qty counts
     // ════════════════════════════════════════════════════════════════════════

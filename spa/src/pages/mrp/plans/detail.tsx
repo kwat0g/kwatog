@@ -11,6 +11,7 @@ import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
+import { formatPeso } from '@/lib/formatNumber';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import type { MrpMaterialDiagnostic, MrpPlanDiagnostic, MrpPlanWarningDiagnostic } from '@/types/mrp';
 
@@ -44,6 +45,7 @@ export default function MrpPlanDetailPage() {
  totalDemand: d.reduce((s, r) => s + r.gross, 0),
  shortageCount: d.filter((r) => r.net > 0).length,
  autoPrCount: data.auto_pr_count ?? 0,
+ plannedCost: data.cost_summary?.planned_production_cost ?? null,
  };
  }, [data]);
 
@@ -85,7 +87,7 @@ export default function MrpPlanDetailPage() {
  <div className="lg:col-span-2 space-y-4">
  {/* Summary cards */}
  {summary && (
- <div className="grid grid-cols-3 gap-3">
+ <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
  <div className="rounded-md border border-default bg-canvas p-3">
  <div className="text-2xs uppercase tracking-wider text-muted mb-1">Total demand</div>
  <div className="text-lg font-mono tabular-nums font-medium">{summary.totalDemand.toFixed(0)}</div>
@@ -103,7 +105,22 @@ export default function MrpPlanDetailPage() {
  <div className="text-lg font-mono tabular-nums font-medium">{summary.autoPrCount}</div>
  <div className="text-2xs text-muted mt-0.5">generated</div>
  </div>
+ <div className={`rounded-md border p-3 ${summary.plannedCost ? 'border-success/30 bg-success-bg/5' : 'border-default bg-canvas'}`}>
+ <div className="text-2xs uppercase tracking-wider text-muted mb-1">Planned cost</div>
+ <div className="text-lg font-mono tabular-nums font-medium">{formatPeso(summary.plannedCost)}</div>
+ <div className="text-2xs text-muted mt-0.5">remaining production</div>
  </div>
+ </div>
+ )}
+ {data.cost_summary && (
+ <Panel title="Cost estimate">
+ <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+ <div><div className="text-2xs uppercase text-muted">Material</div><div className="font-mono mt-1">{formatPeso(data.cost_summary.material_cost)}</div></div>
+ <div><div className="text-2xs uppercase text-muted">Labor</div><div className="font-mono mt-1">{formatPeso(data.cost_summary.labor_cost)}</div></div>
+ <div><div className="text-2xs uppercase text-muted">Machine</div><div className="font-mono mt-1">{formatPeso(data.cost_summary.machine_cost)}</div></div>
+ <div><div className="text-2xs uppercase text-muted">Overhead</div><div className="font-mono mt-1">{formatPeso(data.cost_summary.overhead_cost)}</div></div>
+ </div>
+ </Panel>
  )}
  <Panel title="Diagnostics" meta={`${data.diagnostics.length} materials`} noPadding>
  {data.diagnostics.length === 0 ? (
@@ -117,7 +134,9 @@ export default function MrpPlanDetailPage() {
  <Th align="right">On hand</Th>
  <Th align="right">Reserved</Th>
  <Th align="right">In transit</Th>
+ <Th align="right">Unit cost</Th>
  <Th align="right">Net</Th>
+ <Th align="right">Net cost</Th>
  <Th>Action</Th>
  </tr>
  </thead>
@@ -125,7 +144,7 @@ export default function MrpPlanDetailPage() {
  {data.diagnostics.map((d, index) => (
  isWarningDiagnostic(d) ? (
  <tr key={`warning-${d.sales_order_line_id}-${index}`} className={trCls}>
- <Td colSpan={7}>
+ <Td colSpan={10}>
  <div className="text-warning-fg">{d.message}</div>
  </Td>
  </tr>
@@ -136,7 +155,9 @@ export default function MrpPlanDetailPage() {
  <Td align="right" mono>{d.on_hand.toFixed(3)}</Td>
  <Td align="right" mono>{d.reserved.toFixed(3)}</Td>
  <Td align="right" mono>{d.in_transit.toFixed(3)}</Td>
+ <Td align="right" mono>{formatPeso(d.standard_unit_cost)}</Td>
  <Td align="right" mono className="font-medium">{d.net.toFixed(3)}</Td>
+ <Td align="right" mono>{formatPeso(d.net_cost)}</Td>
  <Td>
  {d.action === 'pr_created'
  ? <Chip variant={d.priority === 'urgent' ? 'danger' : 'info'}>PR · {d.priority}</Chip>

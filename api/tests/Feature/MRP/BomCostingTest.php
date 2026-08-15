@@ -214,6 +214,44 @@ class BomCostingTest extends TestCase
         $this->assertSame('standard_cost+routing', $bom->cost_basis);
     }
 
+    public function test_setup_cost_is_allocated_across_the_bom_cost_batch_size(): void
+    {
+        $product = Product::factory()->create();
+        $material = Item::factory()->create([
+            'standard_cost' => '10.0000',
+            'unit_of_measure' => 'pcs',
+        ]);
+        $routing = ProductRouting::create([
+            'product_id' => $product->id,
+            'version' => 1,
+            'is_active' => true,
+            'total_cycle_time' => '30.00',
+        ]);
+        RoutingOperation::create([
+            'routing_id' => $routing->id,
+            'sequence' => 10,
+            'operation_name' => 'Assembly',
+            'setup_time_minutes' => '60.00',
+            'cycle_time_minutes' => '30.00',
+            'labor_rate_per_hour' => '10.0000',
+            'machine_rate_per_hour' => '20.0000',
+            'overhead_rate_per_hour' => '5.0000',
+        ]);
+
+        $bom = $this->service->create($product->id, [[
+            'item_id' => $material->id,
+            'quantity_per_unit' => '1.0000',
+            'unit' => 'pcs',
+            'waste_factor' => '0.00',
+        ]], '10');
+
+        $this->assertSame('10.000', (string) $bom->cost_batch_size);
+        $this->assertSame('6.00', (string) $bom->labor_cost);
+        $this->assertSame('12.00', (string) $bom->machine_cost);
+        $this->assertSame('3.00', (string) $bom->overhead_cost);
+        $this->assertSame('31.00', (string) $bom->total_cost);
+    }
+
     public function test_routing_changes_recalculate_the_active_bom_snapshot(): void
     {
         $product = Product::factory()->create();

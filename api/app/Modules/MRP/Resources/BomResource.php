@@ -13,6 +13,7 @@ class BomResource extends JsonResource
     {
         return [
             'id'         => $this->hash_id,
+            'cost_batch_size' => $this->cost_batch_size !== null ? (string) $this->cost_batch_size : '1.000',
             'product'    => $this->whenLoaded('product', fn () => [
                 'id'              => $this->product->hash_id,
                 'part_number'     => $this->product->part_number,

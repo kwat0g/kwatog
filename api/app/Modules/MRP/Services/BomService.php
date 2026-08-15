@@ -8,6 +8,7 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
+use App\Common\Support\Money;
 use App\Common\Support\SearchOperator;
 use App\Common\Support\TrashedFilter;
 use App\Modules\CRM\Models\Product;
@@ -72,9 +73,13 @@ class BomService
      * Create a new BOM version. Deactivates the previous active BOM for the
      * same product (preserved for history). Wrapped in a transaction.
      */
-    public function create(int $productId, array $itemRows): Bom
+    public function create(int $productId, array $itemRows, string|int|float $costBatchSize = '1'): Bom
     {
-        $bom = DB::transaction(function () use ($productId, $itemRows) {
+        if (! is_numeric($costBatchSize) || bccomp((string) $costBatchSize, '1', 3) < 0) {
+            throw new BusinessRuleException('Cost batch size must be at least 1.');
+        }
+
+        $bom = DB::transaction(function () use ($productId, $itemRows, $costBatchSize) {
             $this->validateDefinition($productId, $itemRows);
             $previous = Bom::where('product_id', $productId)->lockForUpdate()->orderByDesc('version')->first();
 
@@ -83,9 +88,10 @@ class BomService
             }
 
             $bom = Bom::create([
-                'product_id' => $productId,
-                'version'    => $previous ? $previous->version + 1 : 1,
-                'is_active'  => true,
+                'product_id'      => $productId,
+                'cost_batch_size' => $costBatchSize,
+                'version'         => $previous ? $previous->version + 1 : 1,
+                'is_active'       => true,
             ]);
 
             foreach (array_values($itemRows) as $idx => $row) {
@@ -107,9 +113,13 @@ class BomService
     }
 
     /** "Edit" creates a new version. Old version stays archived. */
-    public function update(Bom $bom, array $itemRows): Bom
+    public function update(Bom $bom, array $itemRows, string|int|float|null $costBatchSize = null): Bom
     {
-        return $this->create($bom->product_id, $itemRows);
+        return $this->create(
+            $bom->product_id,
+            $itemRows,
+            $costBatchSize ?? (string) ($bom->cost_batch_size ?: '1'),
+        );
     }
 
     public function recalculate(Bom $bom): Bom
@@ -265,7 +275,7 @@ class BomService
      * subassembly therefore remains a material on its parent WO, while its
      * own raw materials are attached to the child WO.
      *
-     * @return Collection<int, array{item_id:int, item_code:string, item_name:string, gross_quantity:string}>
+     * @return Collection<int, array{item_id:int, item_code:string, item_name:string, gross_quantity:string, standard_unit_cost:string, standard_cost:string}>
      */
     public function directRequirements(int $productId, float $finishedQuantity): Collection
     {
@@ -279,6 +289,12 @@ class BomService
             'item_code'      => (string) $row->item?->code,
             'item_name'      => (string) $row->item?->name,
             'gross_quantity' => number_format($this->grossQuantityForLine($row, $finishedQuantity), 3, '.', ''),
+            'standard_unit_cost' => (string) ($row->unit_cost ?? $row->item?->standard_cost ?? '0.00'),
+            'standard_cost' => Money::round2(bcmul(
+                (string) $this->grossQuantityForLine($row, $finishedQuantity),
+                (string) ($row->unit_cost ?? $row->item?->standard_cost ?? '0.00'),
+                8,
+            )),
         ]);
     }
 

@@ -11,7 +11,7 @@ An active BOM stores a per-unit cost snapshot with these components:
 
 Each BOM line stores its calculated quantity, unit cost, extended cost, and source (`standard_cost` or `bom_rollup`). A zero standard cost is retained as a warning instead of being silently replaced.
 
-Routing cycle time is treated as per-unit time. Setup time is not included because allocating setup cost requires a production batch-size policy; charging it to every unit would overstate the BOM cost.
+Routing cycle time is treated as per-unit time. Setup time is allocated across the BOM's configured cost batch size, so charging setup to every unit is avoided while the assumption remains visible and editable.
 
 ## Freshness and safety
 

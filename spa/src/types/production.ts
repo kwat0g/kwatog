@@ -17,7 +17,11 @@ export interface WorkOrderMaterial {
  id: string;
  item: { id: string; code: string; name: string; unit_of_measure: string } | null;
  bom_quantity: string;
+ standard_unit_cost: string;
+ standard_cost: string;
  actual_quantity_issued: string;
+ actual_cost: string;
+ cost_variance: string;
  variance: string;
 }
 
@@ -110,6 +114,11 @@ export interface WorkOrder {
  priority: number;
  creator?: { id: string; name: string } | null;
  materials?: WorkOrderMaterial[];
+ material_cost_summary?: {
+  standard_cost: string;
+  actual_cost: string;
+  cost_variance: string;
+ } | null;
  outputs?: WorkOrderOutput[];
  inspections?: Array<{
  id: string;

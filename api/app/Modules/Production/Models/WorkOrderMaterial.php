@@ -17,13 +17,17 @@ class WorkOrderMaterial extends Model
     public $timestamps = false;
 
     protected $fillable = [
-        'work_order_id', 'item_id', 'bom_quantity',
-        'actual_quantity_issued', 'variance',
+        'work_order_id', 'item_id', 'bom_quantity', 'standard_unit_cost',
+        'standard_cost', 'actual_quantity_issued', 'actual_cost', 'cost_variance', 'variance',
     ];
 
     protected $casts = [
         'bom_quantity'           => 'decimal:3',
+        'standard_unit_cost'     => 'decimal:4',
+        'standard_cost'          => 'decimal:2',
         'actual_quantity_issued' => 'decimal:3',
+        'actual_cost'            => 'decimal:2',
+        'cost_variance'          => 'decimal:2',
         'variance'               => 'decimal:3',
     ];
 

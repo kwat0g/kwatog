@@ -53,6 +53,7 @@ export interface Bom {
  product?: { id: string; part_number: string; name: string; unit_of_measure: string };
  version: number;
  is_active: boolean;
+ cost_batch_size: string;
  item_count: number;
  material_cost: string | null;
  labor_cost: string | null;
@@ -116,6 +117,9 @@ export interface MrpMaterialDiagnostic {
  on_hand: number;
  reserved: number;
  in_transit: number;
+ standard_unit_cost?: number;
+ gross_cost?: string;
+ net_cost?: string;
  net: number;
  action: 'sufficient' | 'pr_created';
  order_by?: string;
@@ -133,6 +137,22 @@ export interface MrpPlanWarningDiagnostic {
 
 export type MrpPlanDiagnostic = MrpMaterialDiagnostic | MrpPlanWarningDiagnostic;
 
+export interface MrpPlanCostSummary {
+ material_cost: string;
+ labor_cost: string;
+ machine_cost: string;
+ overhead_cost: string;
+ planned_production_cost: string;
+ products?: Array<{
+  product_id: number;
+  part_number: string;
+  name: string;
+  quantity: number;
+  unit_cost: string;
+  extended_cost: string;
+ }>;
+}
+
 export interface MrpPlan {
  id: string;
  mrp_plan_no: string;
@@ -145,6 +165,7 @@ export interface MrpPlan {
  auto_pr_count: number;
  draft_wo_count: number;
  diagnostics: MrpPlanDiagnostic[];
+ cost_summary: MrpPlanCostSummary | null;
  generator?: { id: string; name: string };
  work_orders?: Array<{
   id: string;

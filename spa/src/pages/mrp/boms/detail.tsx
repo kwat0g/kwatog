@@ -146,6 +146,10 @@ actions={
  <div className="mt-1 text-sm">{data.cost_basis ?? '—'}</div>
  </div>
  <div>
+ <div className="text-xs uppercase tracking-wider text-muted">Cost batch size</div>
+ <div className="mt-1 text-sm font-mono">{data.cost_batch_size ?? '1.000'} units</div>
+ </div>
+ <div>
  <div className="text-xs uppercase tracking-wider text-muted">Warnings</div>
  <div className="mt-1 text-sm">{data.cost_warnings?.length ? `${data.cost_warnings.length} item${data.cost_warnings.length === 1 ? '' : 's'} at zero cost` : 'None'}</div>
  </div>

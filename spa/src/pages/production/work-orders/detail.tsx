@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, Pause, Play, StopCircle, Ban, Lock, Activity, RefreshCw } from 'lucide-react';
+import { LuCheck, LuPause, LuPlay, LuCircleStop, LuBan, LuLock, LuActivity, LuRefreshCw } from '@/lib/icons';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { workOrdersApi } from '@/api/production/workOrders';
@@ -22,7 +22,7 @@ import { ChainHeader, LinkedRecords, ActivityStream } from '@/components/chain';
 import { useEcho } from '@/hooks/useEcho';
 import { useChainProgress } from '@/hooks/useChainProgress';
 import { usePermission } from '@/hooks/usePermission';
-import { formatInt } from '@/lib/formatNumber';
+import { formatInt, formatPeso } from '@/lib/formatNumber';
 import { workOrderStatusVariant as variant } from '@/lib/statusVariants';
 import type { MachineDowntimeCategory } from '@/types/production';
 import type { WoOperationStatus } from '@/types/production/routing';
@@ -176,18 +176,18 @@ export default function WorkOrderDetailPage() {
  breadcrumbs={[{ label: 'Production', href: '/production' }, { label: 'Work orders', href: '/production/work-orders' }, { label: data.wo_number }]}
  actions={
  <div className="flex gap-1.5">
- {showConfirm && <Button size="sm" variant="primary" icon={<Check size={14} />} onClick={() => {
+ {showConfirm && <Button size="sm" variant="primary" icon={<LuCheck size={14} />} onClick={() => {
  setSelectedMachineId(data.machine?.id ?? '');
  setSelectedMoldId(data.mold?.id ?? '');
  setShowConfirmDialog(true);
  }}>Confirm</Button>}
- {showStart && <Button size="sm" variant="primary" icon={<Play size={14} />} onClick={() => setConfirmAction('start')}>Start</Button>}
- {showPause && <Button size="sm" variant="secondary" icon={<Pause size={14} />} onClick={() => setShowPauseDialog(true)}>Pause</Button>}
- {showResume && <Button size="sm" variant="primary" icon={<Play size={14} />} onClick={() => setConfirmAction('resume')}>Resume</Button>}
- {showRecord && <Button size="sm" variant="primary" icon={<Activity size={14} />} onClick={() => navigate(`/production/work-orders/${data.id}/record-output`)}>Record output</Button>}
- {showComplete && <Button size="sm" variant="secondary" icon={<StopCircle size={14} />} onClick={() => setConfirmAction('complete')}>Complete</Button>}
- {showClose && <Button size="sm" variant="secondary" icon={<Lock size={14} />} onClick={() => setConfirmAction('close')}>Close</Button>}
- {showCancel && <Button size="sm" variant="secondary" icon={<Ban size={14} />} onClick={() => setConfirmAction('cancel')}>Cancel</Button>}
+ {showStart && <Button size="sm" variant="primary" icon={<LuPlay size={14} />} onClick={() => setConfirmAction('start')}>Start</Button>}
+ {showPause && <Button size="sm" variant="secondary" icon={<LuPause size={14} />} onClick={() => setShowPauseDialog(true)}>Pause</Button>}
+ {showResume && <Button size="sm" variant="primary" icon={<LuPlay size={14} />} onClick={() => setConfirmAction('resume')}>Resume</Button>}
+ {showRecord && <Button size="sm" variant="primary" icon={<LuActivity size={14} />} onClick={() => navigate(`/production/work-orders/${data.id}/record-output`)}>Record output</Button>}
+ {showComplete && <Button size="sm" variant="secondary" icon={<LuCircleStop size={14} />} onClick={() => setConfirmAction('complete')}>Complete</Button>}
+ {showClose && <Button size="sm" variant="secondary" icon={<LuLock size={14} />} onClick={() => setConfirmAction('close')}>Close</Button>}
+ {showCancel && <Button size="sm" variant="secondary" icon={<LuBan size={14} />} onClick={() => setConfirmAction('cancel')}>Cancel</Button>}
  </div>
  }
  bottom={chain.data ? <ChainHeader steps={chain.data} className="mt-2" /> : null}
@@ -229,7 +229,8 @@ export default function WorkOrderDetailPage() {
  <div className="text-2xs uppercase tracking-wider text-muted font-medium mb-2">
  Material lots used
  </div>
- <table className={tableCls}>
+ <div className="overflow-x-auto">
+ <table className={`${tableCls} min-w-[640px]`}>
  <thead>
  <tr className={theadTrCls}>
  <Th>Item</Th>
@@ -252,6 +253,7 @@ export default function WorkOrderDetailPage() {
  ))}
  </tbody>
  </table>
+ </div>
  </div>
  )}
  <div className="mt-3 text-xs">
@@ -304,14 +306,25 @@ export default function WorkOrderDetailPage() {
  </Panel>
 
  <Panel title="Materials" meta={`${data.materials?.length ?? 0} lines`} noPadding>
+ {data.material_cost_summary && (
+ <div className="grid grid-cols-3 gap-3 border-b border-default px-4 py-3 text-sm">
+ <div><div className="text-2xs uppercase text-muted">Standard</div><div className="mt-1 font-mono">{formatPeso(data.material_cost_summary.standard_cost)}</div></div>
+ <div><div className="text-2xs uppercase text-muted">Actual issued</div><div className="mt-1 font-mono">{formatPeso(data.material_cost_summary.actual_cost)}</div></div>
+ <div><div className="text-2xs uppercase text-muted">Cost variance</div><div className={`mt-1 font-mono ${Number(data.material_cost_summary.cost_variance) > 0 ? 'text-danger-fg' : 'text-success-fg'}`}>{formatPeso(data.material_cost_summary.cost_variance)}</div></div>
+ </div>
+ )}
  {data.materials?.length ? (
- <table className={tableCls}>
+ <div className="overflow-x-auto">
+ <table className={`${tableCls} min-w-[520px]`}>
  <thead>
  <tr className={theadTrCls}>
  <Th>Item</Th>
  <Th align="right">BOM qty</Th>
  <Th align="right">Issued</Th>
  <Th align="right">Variance</Th>
+ <Th align="right">Standard</Th>
+ <Th align="right">Actual</Th>
+ <Th align="right">Cost variance</Th>
  </tr>
  </thead>
  <tbody>
@@ -324,10 +337,14 @@ export default function WorkOrderDetailPage() {
  <Td align="right" mono>{Number(m.bom_quantity).toFixed(3)}</Td>
  <Td align="right" mono>{Number(m.actual_quantity_issued).toFixed(3)}</Td>
  <Td align="right" mono>{Number(m.variance).toFixed(3)}</Td>
+ <Td align="right" mono>{formatPeso(m.standard_cost)}</Td>
+ <Td align="right" mono>{formatPeso(m.actual_cost)}</Td>
+ <Td align="right" mono className={Number(m.cost_variance) > 0 ? 'text-danger-fg' : 'text-success-fg'}>{formatPeso(m.cost_variance)}</Td>
  </tr>
  ))}
  </tbody>
  </table>
+ </div>
  ) : (
  <div className="p-4 text-sm text-muted">No materials defined (no active BOM).</div>
  )}
@@ -335,7 +352,8 @@ export default function WorkOrderDetailPage() {
 
  <Panel title="Recent outputs" meta={`${data.outputs?.length ?? 0} entries`} noPadding>
  {data.outputs?.length ? (
- <table className={tableCls}>
+ <div className="overflow-x-auto">
+ <table className={`${tableCls} min-w-[760px]`}>
  <thead>
  <tr className={theadTrCls}>
  <Th>Recorded</Th>
@@ -367,7 +385,7 @@ export default function WorkOrderDetailPage() {
  type="button"
  variant="ghost"
  size="sm"
- icon={<RefreshCw size={13} className={retryReceipt.isPending ? 'animate-spin' : ''} />}
+ icon={<LuRefreshCw size={13} className={retryReceipt.isPending ? 'animate-spin' : ''} />}
  disabled={retryReceipt.isPending}
  onClick={() => retryReceipt.mutate(o.id)}
  >Retry</Button>
@@ -384,6 +402,7 @@ export default function WorkOrderDetailPage() {
  ))}
  </tbody>
  </table>
+ </div>
  ) : (
  <div className="p-4 text-sm text-muted">No output recorded yet.</div>
  )}
@@ -565,7 +584,7 @@ export default function WorkOrderDetailPage() {
  <Button variant="secondary" onClick={() => setShowConfirmDialog(false)}>Cancel</Button>
  <Button
  variant="primary"
- icon={<Check size={14} />}
+ icon={<LuCheck size={14} />}
  disabled={!selectedMachineId || !selectedMoldId || mut.isPending}
  onClick={() => mut.mutate('confirm')}
  >
@@ -612,7 +631,7 @@ export default function WorkOrderDetailPage() {
  <Button variant="secondary" onClick={() => setShowPauseDialog(false)}>Cancel</Button>
  <Button
  variant="primary"
- icon={<Pause size={14} />}
+ icon={<LuPause size={14} />}
  disabled={!pauseCategory || !pauseReason.trim() || mut.isPending || downtimeCategories.isError}
  onClick={() => mut.mutate('pause')}
  >

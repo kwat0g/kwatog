@@ -8,6 +8,7 @@ use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Support\Money;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\Inventory\Models\Item;
@@ -97,6 +98,14 @@ class MrpEngineService
             // into the diagnostics array built below.
             $diagnostics = [];
             $productionNodesByLine = [];
+            $costSummary = [
+                'material_cost' => Money::zero(),
+                'labor_cost' => Money::zero(),
+                'machine_cost' => Money::zero(),
+                'overhead_cost' => Money::zero(),
+                'planned_production_cost' => Money::zero(),
+                'products' => [],
+            ];
             $planningSupply = $sharedSupply ?? [];
 
             $quantityToManufacture = function (
@@ -116,7 +125,8 @@ class MrpEngineService
                     continue;
                 }
 
-                if ($this->boms->activeForProduct((int) $line->product_id) === null) {
+                $activeBom = $this->boms->activeForProduct((int) $line->product_id);
+                if ($activeBom === null) {
                     // L-32 — No active BOM. Skip the demand explosion (the WO
                     // side still produces a planned WO so PPC can act), but
                     // record a warning row so the plan detail page surfaces
@@ -130,6 +140,40 @@ class MrpEngineService
                     ];
                     continue;
                 }
+
+                $unitMaterialCost = (string) ($activeBom->material_cost ?? '0.00');
+                $unitLaborCost = (string) ($activeBom->labor_cost ?? '0.00');
+                $unitMachineCost = (string) ($activeBom->machine_cost ?? '0.00');
+                $unitOverheadCost = (string) ($activeBom->overhead_cost ?? '0.00');
+                $unitTotalCost = (string) ($activeBom->total_cost ?? $line->product?->standard_cost ?? '0.00');
+                $costSummary['material_cost'] = Money::add(
+                    $costSummary['material_cost'],
+                    bcmul((string) $remainingQuantity, $unitMaterialCost, 8),
+                );
+                $costSummary['labor_cost'] = Money::add(
+                    $costSummary['labor_cost'],
+                    bcmul((string) $remainingQuantity, $unitLaborCost, 8),
+                );
+                $costSummary['machine_cost'] = Money::add(
+                    $costSummary['machine_cost'],
+                    bcmul((string) $remainingQuantity, $unitMachineCost, 8),
+                );
+                $costSummary['overhead_cost'] = Money::add(
+                    $costSummary['overhead_cost'],
+                    bcmul((string) $remainingQuantity, $unitOverheadCost, 8),
+                );
+                $costSummary['planned_production_cost'] = Money::add(
+                    $costSummary['planned_production_cost'],
+                    bcmul((string) $remainingQuantity, $unitTotalCost, 8),
+                );
+                $costSummary['products'][] = [
+                    'product_id' => (int) $line->product_id,
+                    'part_number' => (string) $line->product?->part_number,
+                    'name' => (string) $line->product?->name,
+                    'quantity' => round($remainingQuantity, 3),
+                    'unit_cost' => $unitTotalCost,
+                    'extended_cost' => Money::round2(bcmul((string) $remainingQuantity, $unitTotalCost, 8)),
+                ];
                 // Invalid BOM data (cycles, depth overflow, or missing UOM
                 // conversions) must fail the run rather than being mislabeled
                 // as a missing BOM and silently under-planning demand.
@@ -161,6 +205,7 @@ class MrpEngineService
                 'auto_pr_count'   => 0,
                 'draft_wo_count'  => 0,
                 'diagnostics'     => [],
+                'cost_summary'    => [],
                 'generated_at'    => Carbon::now(),
             ]);
 
@@ -198,6 +243,9 @@ class MrpEngineService
                     'reserved'   => round((float) $supply['reserved'], 3),
                     'in_transit' => round((float) $supply['in_transit'], 3),
                     'open_purchase_requests' => round($openPurchaseRequests, 3),
+                    'standard_unit_cost' => round((float) $item->standard_cost, 4),
+                    'gross_cost' => Money::round2(bcmul((string) $gross, (string) $item->standard_cost, 8)),
+                    'net_cost' => Money::round2(bcmul((string) $net, (string) $item->standard_cost, 8)),
                     'net'        => round($net, 3),
                     'action'     => 'sufficient',
                 ];
@@ -411,6 +459,7 @@ class MrpEngineService
                 'auto_pr_count'   => $autoPrCount,
                 'draft_wo_count'  => $draftWoCount,
                 'diagnostics'     => $diagnostics,
+                'cost_summary'    => $costSummary,
             ]);
 
             // Link the SO to this plan.

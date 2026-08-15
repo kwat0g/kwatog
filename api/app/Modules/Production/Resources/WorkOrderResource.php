@@ -90,10 +90,28 @@ class WorkOrderResource extends JsonResource
                         'name' => $m->item->name, 'unit_of_measure' => $m->item->unit_of_measure,
                     ] : null,
                     'bom_quantity' => (string) $m->bom_quantity,
+                    'standard_unit_cost' => (string) $m->standard_unit_cost,
+                    'standard_cost' => (string) $m->standard_cost,
                     'actual_quantity_issued' => (string) $m->actual_quantity_issued,
+                    'actual_cost' => (string) $m->actual_cost,
+                    'cost_variance' => (string) $m->cost_variance,
                     'variance' => (string) $m->variance,
                 ])
             ),
+            'material_cost_summary' => $this->whenLoaded('materials', function (): array {
+                $standard = '0.00';
+                $actual = '0.00';
+                foreach ($this->materials as $material) {
+                    $standard = \App\Common\Support\Money::add($standard, (string) $material->standard_cost);
+                    $actual = \App\Common\Support\Money::add($actual, (string) $material->actual_cost);
+                }
+
+                return [
+                    'standard_cost' => $standard,
+                    'actual_cost' => $actual,
+                    'cost_variance' => \App\Common\Support\Money::sub($actual, $standard),
+                ];
+            }),
             'outputs'             => $this->whenLoaded('outputs', fn () =>
                 $this->outputs->map(fn ($o) => [
                     'id' => $o->hash_id,

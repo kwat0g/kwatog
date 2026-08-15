@@ -37,6 +37,7 @@ class StoreBomRequest extends FormRequest
                     ->where('is_active', true)
                     ->whereNull('deleted_at')),
             ],
+            'cost_batch_size'           => ['nullable', 'numeric', 'min:1', 'max:1000000'],
             'items'                     => ['required', 'array', 'min:1'],
             'items.*.item_id'           => [
                 'required',

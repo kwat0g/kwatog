@@ -33,6 +33,7 @@ class MrpPlanResource extends JsonResource
             'auto_pr_count'   => (int) $this->auto_pr_count,
             'draft_wo_count'  => (int) $this->draft_wo_count,
             'diagnostics'     => $this->diagnostics ?? [],
+            'cost_summary'    => $this->cost_summary,
             'generator'       => $this->whenLoaded('generator', fn () => $this->generator ? [
                 'id' => $this->generator->hash_id, 'name' => $this->generator->name,
             ] : null),

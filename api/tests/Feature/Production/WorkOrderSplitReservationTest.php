@@ -12,6 +12,7 @@ use App\Modules\Inventory\Models\MaterialReservation;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\MRP\Models\Mold;
+use App\Modules\MRP\Services\BomService;
 use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderMaterial;
@@ -142,6 +143,46 @@ class WorkOrderSplitReservationTest extends TestCase
                 ->first();
             $this->assertSame((string) $res->quantity, (string) $level->reserved_quantity);
         }
+    }
+
+    public function test_work_order_material_snapshots_standard_cost_and_accumulates_actual_issue_cost(): void
+    {
+        $this->item->forceFill(['standard_cost' => '10.0000'])->save();
+        app(BomService::class)->create($this->product->id, [[
+            'item_id' => $this->item->id,
+            'quantity_per_unit' => '2.0000',
+            'unit' => $this->item->unit_of_measure,
+            'waste_factor' => '0.00',
+        ]]);
+
+        $wo = app(WorkOrderService::class)->createDraft([
+            'product_id' => $this->product->id,
+            'quantity_target' => 15,
+            'planned_start' => Carbon::today()->addDay()->toDateTimeString(),
+            'planned_end' => Carbon::today()->addDays(2)->toDateTimeString(),
+            'created_by' => $this->user->id,
+        ]);
+
+        $material = $wo->materials->firstOrFail();
+        $this->assertSame('10.0000', (string) $material->standard_unit_cost);
+        $this->assertSame('300.00', (string) $material->standard_cost);
+        $this->assertSame('-300.00', (string) $material->cost_variance);
+
+        $this->seedStock($this->locA->id, '30.000');
+        StockLevel::query()->where('item_id', $this->item->id)->where('location_id', $this->locA->id)->update([
+            'weighted_avg_cost' => '12.0000',
+        ]);
+        $machine = $this->machine();
+        $mold = $this->mold();
+        $mold->compatibleMachines()->syncWithoutDetaching([$machine->id]);
+
+        $confirmed = app(WorkOrderService::class)->confirm($wo, $machine->id, $mold->id);
+        app(WorkOrderService::class)->start($confirmed);
+
+        $material = $wo->materials()->firstOrFail()->fresh();
+        $this->assertSame('30.000', (string) $material->actual_quantity_issued);
+        $this->assertSame('360.00', (string) $material->actual_cost);
+        $this->assertSame('60.00', (string) $material->cost_variance);
     }
 
     public function test_confirm_uses_single_location_when_it_covers_demand(): void

@@ -23,7 +23,7 @@ class MrpPlan extends Model
     protected $fillable = [
         'mrp_plan_no', 'sales_order_id', 'version', 'status',
         'generated_by', 'total_lines', 'shortages_found',
-        'auto_pr_count', 'draft_wo_count', 'diagnostics', 'generated_at',
+        'auto_pr_count', 'draft_wo_count', 'diagnostics', 'cost_summary', 'generated_at',
     ];
 
     protected $casts = [
@@ -34,6 +34,7 @@ class MrpPlan extends Model
         'auto_pr_count'   => 'integer',
         'draft_wo_count'  => 'integer',
         'diagnostics'     => 'array',
+        'cost_summary'    => 'array',
         'generated_at'    => 'datetime',
     ];
 
