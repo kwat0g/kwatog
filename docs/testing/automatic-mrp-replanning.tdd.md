@@ -21,6 +21,13 @@
 - SPA TypeScript: `npm run typecheck` passed.
 - Targeted PHPStan analysis of all changed API files: no errors.
 
+## Run-status visibility evidence
+
+- `spa/src/components/mrp/MrpRunStatusPanel.test.tsx`: 2 tests cover automatic trigger context, trigger reason, shortages, scheduling conflicts, and failed-run errors.
+- MRP plans now polls the latest run while it is running, refreshes recent run history, and shows the existing manual trigger as the recovery action.
+- SPA regression after the status-panel change: 31 files, 219 tests passed; `npm run typecheck` and `npm run lint` passed.
+- Production bundle passed with `npx vite build --outDir /tmp/ogami-spa-dist-codex`; the normal `npm run build` reached bundle generation but could not replace the root-owned `spa/dist/assets` directory left by an earlier container build.
+
 ## Coverage
 
 `phpunit --coverage-text tests/Feature/MRP/MrpAutomationTest.php` passed the tests but PHPUnit reported that no code-coverage driver is installed in the container.

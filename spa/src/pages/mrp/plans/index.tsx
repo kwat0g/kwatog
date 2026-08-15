@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
-import { Play, Loader2, Activity } from 'lucide-react';
+import { Play, Loader2 } from 'lucide-react';
 import { mrpPlansApi, type MrpPlanListParams } from '@/api/mrp/mrpPlans';
 import { mrpRunsApi } from '@/api/mrp-runs';
 import { Button } from '@/components/ui/Button';
@@ -10,11 +10,11 @@ import { Chip } from '@/components/ui/Chip';
 import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
+import { MrpRunStatusPanel } from '@/components/mrp/MrpRunStatusPanel';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
-import { formatDateTime } from '@/lib/formatDate';
 import type { MrpPlan, MrpPlanStatus } from '@/types/mrp';
 
 const variant: Record<MrpPlanStatus, 'success' | 'neutral' | 'danger'> = {
@@ -42,17 +42,26 @@ export default function MrpPlansListPage() {
  staleTime: 5 * 60 * 1000 });
  const statusLabels = new Map((planOptions?.statuses ?? []).map((option) => [option.value, option.label]));
 
- const lastRun = useQuery({
+ const latestRun = useQuery({
  queryKey: ['mrp', 'runs', 'latest'],
  queryFn: () => mrpRunsApi.latest(),
  enabled: can('mrp.runs.view'),
- staleTime: 30_000 });
+ staleTime: 5_000,
+ refetchInterval: (query) => query.state.data?.status === 'running' ? 3_000 : 15_000 });
+ const runHistory = useQuery({
+ queryKey: ['mrp', 'runs', 'history'],
+ queryFn: () => mrpRunsApi.list({ per_page: 8, page: 1 }),
+ enabled: can('mrp.runs.view'),
+ staleTime: 5_000,
+ refetchInterval: 15_000 });
+ const latestVisibleRun = latestRun.data ?? runHistory.data?.data[0];
 
  const triggerRun = useMutation({
  mutationFn: () => mrpRunsApi.trigger(),
  onSuccess: () => {
  toast.success('MRP run started — refresh in a moment for results');
  queryClient.invalidateQueries({ queryKey: ['mrp', 'runs', 'latest'] });
+ queryClient.invalidateQueries({ queryKey: ['mrp', 'runs', 'history'] });
  queryClient.invalidateQueries({ queryKey: ['mrp', 'plans'] });
  },
  onError: (e) => {
@@ -109,40 +118,8 @@ export default function MrpPlansListPage() {
  </Button>
  ) : undefined}
  />
- {can('mrp.runs.view') && lastRun.data && (
- <div className="px-5 pb-3">
- <div className="flex items-center justify-between gap-4 rounded-md border border-subtle bg-subtle px-3 py-2 text-xs">
- <div className="flex items-center gap-3">
- <Activity size={14} className="text-muted" />
- <div className="flex items-center gap-3">
- <span className="text-muted">Last MRP run</span>
- <span className="font-mono tabular-nums text-primary">{formatDateTime(lastRun.data.run_at)}</span>
- <Chip variant={lastRun.data.triggered_by === 'scheduled' ? 'info' : 'neutral'}>
- {lastRun.data.triggered_by_label ?? lastRun.data.triggered_by}
- </Chip>
- <Chip
- variant={
- lastRun.data.status === 'completed'
- ? 'success'
- : lastRun.data.status === 'failed'
- ? 'danger'
- : 'warning'
- }
- >
- {lastRun.data.status_label ?? lastRun.data.status}
- </Chip>
- </div>
- </div>
- <div className="flex items-center gap-4 font-mono tabular-nums text-muted">
- <span><span className="text-primary">{lastRun.data.shortages_found}</span> shortages</span>
- <span><span className="text-primary">{lastRun.data.prs_created}</span> PRs created</span>
- <span><span className="text-primary">{lastRun.data.prs_updated}</span> PRs updated</span>
- {lastRun.data.duration_ms != null && (
- <span className="text-text-subtle">{(lastRun.data.duration_ms / 1000).toFixed(1)}s</span>
- )}
- </div>
- </div>
- </div>
+ {can('mrp.runs.view') && (
+ <MrpRunStatusPanel latest={latestVisibleRun} recent={runHistory.data?.data} />
  )}
  <FilterBar
  filters={filterConfig} values={filters}

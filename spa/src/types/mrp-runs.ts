@@ -5,6 +5,22 @@
 export type MrpRunTrigger = 'scheduled' | 'manual' | 'automatic';
 export type MrpRunStatus = 'running' | 'completed' | 'failed';
 
+export interface MrpRunConflict {
+ work_order_id: string;
+ wo_number: string;
+ reasons: string[];
+}
+
+export interface MrpRunSchedulingSummary {
+ scheduled: Array<Record<string, unknown>>;
+ conflicts: MrpRunConflict[];
+}
+
+export interface MrpRunSummary extends Record<string, unknown> {
+ trigger_reason?: string;
+ scheduling?: MrpRunSchedulingSummary;
+}
+
 export interface MrpRun {
  id: string; // hash_id
  run_at: string;
@@ -20,6 +36,6 @@ export interface MrpRun {
  status: MrpRunStatus;
  status_label?: string;
  error_message: string | null;
- summary: Record<string, unknown>;
+ summary: MrpRunSummary;
  created_at: string;
 }
