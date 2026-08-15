@@ -68,17 +68,21 @@ class EmailBrandingService
         return 'data:'.$mime.';base64,'.base64_encode($contents);
     }
 
+    /**
+     * Settings row, then hardcoded default. There is deliberately no env()
+     * tier: production runs `php artisan config:cache`
+     * (docker/php/prod-entrypoint.sh:15), after which env() returns null, so
+     * an env tier fires only in development and silently diverges from
+     * production. Every branding key is seeded into settings from env at
+     * migrate/seed time — migration 0123 for the company.* keys,
+     * SettingsSeeder for email.brand_name and company.sales_inbox_email —
+     * which is where environment values legitimately enter the system.
+     */
     private function value(string $key, string $fallback): string
     {
         $configured = $this->settings->get($key);
         if (is_string($configured) && trim($configured) !== '') {
             return trim($configured);
-        }
-
-        $envKey = strtoupper(str_replace(['.', '-'], '_', $key));
-        $environment = env($envKey);
-        if (is_string($environment) && trim($environment) !== '') {
-            return trim($environment);
         }
 
         return $fallback;
