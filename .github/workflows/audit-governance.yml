@@ -1,0 +1,29 @@
+name: Audit governance
+
+on:
+  pull_request:
+    paths:
+      - 'docs/SYSTEM-AUDIT-FINDING-LIFECYCLE.json'
+      - 'docs/SYSTEM-AUDIT-FINDINGS-2026-08-13.md'
+      - 'scripts/verify-audit-finding-lifecycle.mjs'
+      - 'docs/AUDIT-ACCEPTANCE-MANIFEST-2026-08-13.json'
+      - 'scripts/verify-audit-acceptance-manifest.mjs'
+      - '.github/workflows/audit-governance.yml'
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  finding-lifecycle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Validate finding lifecycle coverage and metadata
+        run: node scripts/verify-audit-finding-lifecycle.mjs
+      - name: Validate acceptance gates for all findings
+        run: node scripts/verify-audit-acceptance-manifest.mjs

@@ -40,7 +40,20 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Contract-only on GitHub: a real evidence run must receive a supplied dump
+  # and an explicitly isolated scratch target, never infer production access.
+  release-evidence-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - name: Validate release-evidence harness
+        run: scripts/release-evidence.sh --contract
+
   deploy:
+    needs: release-evidence-contract
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment: production
@@ -77,7 +90,7 @@ jobs:
           # Use whatever node version the SPA expects; nvm is not assumed in CI.
           # Re-install instead of cache because deploy is rare and predictable >
           # cache freshness.
-          npm ci --no-audit --no-fund
+          npm ci --no-fund
           npm run build
 
       - name: Package release tarball
@@ -116,6 +129,9 @@ jobs:
             ln -sfn "$ROOT/shared/storage"        "$ROOT/releases/$REL/api/storage"
 
             # Atomic swap.
+            MARKER="$ROOT/.deploy-swap-${{ github.run_id }}"
+            PREVIOUS="$(readlink -f "$ROOT/current" 2>/dev/null || true)"
+            printf '%s\n%s\n' "$PREVIOUS" "$ROOT/releases/$REL" > "$MARKER"
             ln -sfn "$ROOT/releases/$REL" "$ROOT/current.new"
             mv -Tf "$ROOT/current.new" "$ROOT/current"
 
@@ -178,3 +194,35 @@ jobs:
         run: |
           ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
             "set -e; cd ${{ secrets.DEPLOY_PATH }}/current; CODE=\$(curl -ksS -o /dev/null -w '%{http_code}' https://localhost/); echo \"SPA HTTP \$CODE\"; [ \"\$CODE\" = 200 ]; for service in api nginx db redis meilisearch reverb queue scheduler; do cid=\$(docker compose -f docker-compose.prod.yml ps -q \"\$service\"); [ -n \"\$cid\" ]; state=\$(docker inspect -f '{{.State.Status}}' \"\$cid\"); [ \"\$state\" = running ]; done"
+
+      - name: Roll back failed release
+        if: failure()
+        run: |
+          ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" bash -se <<'EOF'
+            set -euo pipefail
+            ROOT="${{ secrets.DEPLOY_PATH }}"
+            MARKER="$ROOT/.deploy-swap-${{ github.run_id }}"
+            if [ ! -f "$MARKER" ]; then
+              echo 'This run did not swap current; rollback is not applicable.'
+              exit 0
+            fi
+            PREVIOUS="$(sed -n '1p' "$MARKER")"
+            FAILED="$(sed -n '2p' "$MARKER")"
+            case "$PREVIOUS" in
+              "$ROOT/releases"/release-*) ;;
+              *) echo 'No validated previous release; manual recovery required' >&2; exit 1 ;;
+            esac
+            case "$FAILED" in
+              "$ROOT/releases"/release-*) ;;
+              *) echo 'Invalid failed-release marker; manual recovery required' >&2; exit 1 ;;
+            esac
+            test -d "$PREVIOUS"
+            test "$(readlink -f "$ROOT/current")" = "$FAILED"
+            ln -sfn "$PREVIOUS" "$ROOT/current.new"
+            mv -Tf "$ROOT/current.new" "$ROOT/current"
+            cd "$ROOT/current"
+            docker compose -f docker-compose.prod.yml up -d db redis meilisearch
+            docker compose -f docker-compose.prod.yml up -d api nginx reverb queue scheduler
+            rm -f "$MARKER"
+            echo "Rolled back to $PREVIOUS; investigate the failed release before retrying."
+          EOF

@@ -71,6 +71,9 @@ jobs:
       - name: Install dependencies
         run: composer install --prefer-dist --no-progress --no-interaction --optimize-autoloader
 
+      - name: Audit Composer dependencies
+        run: composer audit --locked --no-interaction
+
       - name: Validate Composer metadata
         run: composer validate --strict --no-check-publish
 
