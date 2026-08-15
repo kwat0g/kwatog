@@ -10,6 +10,8 @@ use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\StockLevel;
+use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\MRP\Enums\MrpRunTrigger;
 use App\Modules\MRP\Events\MrpPlanGenerated;
 use App\Modules\MRP\Models\Bom;
@@ -139,6 +141,58 @@ class SubassemblyWorkOrderTest extends TestCase
             ->where('product_id', $this->subassembly->id)
             ->where('status', 'cancelled')
             ->count());
+    }
+
+    public function test_available_subassembly_stock_suppresses_child_production(): void
+    {
+        $location = WarehouseLocation::factory()->create();
+        StockLevel::create([
+            'item_id' => $this->subassemblyItem->id,
+            'location_id' => $location->id,
+            'quantity' => '20.000',
+            'reserved_quantity' => '0.000',
+            'weighted_avg_cost' => '8.0000',
+            'lock_version' => 0,
+        ]);
+
+        $salesOrder = $this->salesOrder(10);
+        $plan = $this->engine->runForSalesOrder($salesOrder);
+
+        $this->assertSame(1, WorkOrder::query()
+            ->where('sales_order_id', $salesOrder->id)
+            ->where('status', 'planned')
+            ->count());
+        $this->assertSame(0, $plan->shortages_found);
+        $this->assertSame(1, $plan->draft_wo_count);
+    }
+
+    public function test_partial_subassembly_stock_reduces_child_and_raw_material_demand(): void
+    {
+        $location = WarehouseLocation::factory()->create();
+        StockLevel::create([
+            'item_id' => $this->subassemblyItem->id,
+            'location_id' => $location->id,
+            'quantity' => '5.000',
+            'reserved_quantity' => '0.000',
+            'weighted_avg_cost' => '8.0000',
+            'lock_version' => 0,
+        ]);
+
+        $salesOrder = $this->salesOrder(10);
+        $plan = $this->engine->runForSalesOrder($salesOrder);
+        $workOrders = WorkOrder::query()
+            ->where('sales_order_id', $salesOrder->id)
+            ->where('status', 'planned')
+            ->orderBy('id')
+            ->get();
+        $child = $workOrders->firstWhere('product_id', $this->subassembly->id);
+
+        $this->assertCount(2, $workOrders);
+        $this->assertNotNull($child);
+        $this->assertSame('15', (string) $child->quantity_target);
+        $this->assertSame('45.000', (string) $child->materials()->firstOrFail()->bom_quantity);
+        $diagnostic = collect($plan->diagnostics)->firstWhere('item_id', $this->rawMaterial->id);
+        $this->assertSame(45.0, (float) $diagnostic['gross']);
     }
 
     private function product(string $partNumber): Product
