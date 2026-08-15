@@ -20,7 +20,9 @@ produced identical results every time — 1 failed, 30 passed, 253 assertions,
 the F-041 failure alone. No F-number is assigned; a retracted observation is not
 a finding. Recorded so it is not re-investigated.
 
-**Non-defect — `SeparationService.php:297`.** larastan reports "Called 'count'
+**Non-defect — `api/app/Modules/HR/Services/SeparationService.php:291-297`.** larastan
+anchors the report at the `EmployeeLoan::query()` chain start on :291; the `->count()` it
+objects to is on :297. It reports "Called 'count'
 on Laravel collection, but could have been retrieved as a query." The code is
 `->lockForUpdate()->get(['id'])->count()`. PostgreSQL rejects `FOR UPDATE`
 combined with aggregate functions, so `->count()` cannot carry the row lock and
@@ -41,7 +43,7 @@ exists to prevent. Suppressed in `api/phpstan.neon` with that reason inline.
 - **Ideal Process:** Static analysis understands the framework it analyses, so every reported error is actionable and the gate is trusted.
 - **New Feature/Module Required:** No. Configuration only.
 - **Cross-Module Impact:** Analysis coverage across all of `api/app`.
-- **Evidence:** `api/composer.json` (`larastan/larastan ^3.10` under `require-dev`); `.github/workflows/api-tests.yml:86`; absence of any `phpstan.neon`; measured error counts on `app/` (1,376 files) — without larastan: 1 / 3,327 / 8,410 / 9,681 at levels 0 / 1 / 3 / 5; with larastan: 2 / 2,107 / 3,892 / 5,151. `php artisan recruitment:check-bottlenecks` exits 0, proving the reported error is not a runtime fault.
+- **Evidence:** `api/composer.json` (`larastan/larastan ^3.10` under `require-dev`); `.github/workflows/api-tests.yml:86`; absence of any `phpstan.neon`; measured error counts on `app/` (1,376 files) — without larastan: 1 / 3,327 / 8,410 / 9,681 at levels 0 / 1 / 3 / 5; with larastan: 2 / 2,107 / 3,892 / 5,151. That sweep was measured **before** this tranche's fixes; Task 2 removed one of the two level-0 items, so today's tree reports **1** at level 0 with larastan active (the `SeparationService` locked-count item alone), which the single documented suppression takes to 0. `php artisan recruitment:check-bottlenecks` exits 0, proving the reported error is not a runtime fault.
 - **Priority:** P1.
 - **Impact:** CI blocked; real defects undetected.
 - **Complexity:** S.
