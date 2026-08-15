@@ -1,6 +1,9 @@
 {
   "schema_version": 1,
-  "finding_source": "docs/SYSTEM-AUDIT-FINDINGS-2026-08-13.md",
+  "finding_sources": [
+    "docs/SYSTEM-AUDIT-FINDINGS-2026-08-13.md",
+    "docs/SYSTEM-AUDIT-FINDINGS-2026-08-16.md"
+  ],
   "gates": [
     {"id":"F-001","type":"focused_test","command":"cd api && php artisan test --filter=ApprovalDelegation"},
     {"id":"F-002","type":"focused_test","command":"cd api && php artisan test --filter=Loan"},
@@ -39,6 +42,10 @@
     {"id":"F-035","type":"ci_contract","command":"node scripts/verify-audit-acceptance-manifest.mjs"},
     {"id":"F-036","type":"static_audit","command":"node scripts/verify-audit-finding-lifecycle.mjs"},
     {"id":"F-037","type":"focused_test","command":"cd api && php artisan test --filter=ModuleRegistration"},
-    {"id":"F-038","type":"focused_test","command":"cd api && php artisan test --filter=BIR"}
+    {"id":"F-038","type":"focused_test","command":"cd api && php artisan test --filter=BIR"},
+    {"id":"F-039","type":"static_audit","command":"cd api && vendor/bin/phpstan analyse app --memory-limit=1G"},
+    {"id":"F-040","type":"focused_test","command":"cd api && php artisan test --filter=EmailBranding"},
+    {"id":"F-041","type":"focused_test","command":"cd api && php artisan test --filter=BadgeControllerTest"},
+    {"id":"F-042","type":"static_audit","command":"cd api && grep -qE 'APP_ENV.+force' phpunit.xml"}
   ]
 }
