@@ -26,6 +26,19 @@ services:
       - APP_ENV=local
       # Stack traces render .env values. Fine on seed data, never on real data.
       - APP_DEBUG=true
+    # The image's php-fpm runs as uid 1000 ("www"), which on this host is the
+    # OTHER human account (reymarkbungubung) — the exact ownership confusion
+    # this whole setup exists to avoid. Rather than override `user:` (php-fpm
+    # needs to start as root to setuid its pool), grant the container kwat0g's
+    # group (gid 1004) so it can read .env and write storage/ on files that
+    # stay owned by kwat0g on the host.
+    group_add: ["1004"]
+
+  queue:
+    group_add: ["1004"]
+
+  reverb:
+    group_add: ["1004"]
 
   spa:
     environment:
