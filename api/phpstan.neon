@@ -1,0 +1,23 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    paths:
+        - app
+
+    # Level 0 matches what CI already effectively ran. This commit changes the
+    # analyser's knowledge of Laravel, not its strictness, so the diff stays
+    # reviewable. Level 1 reports 2,107 errors with larastan active and needs a
+    # baseline plus a burn-down plan — its own tranche, deliberately not here.
+    level: 0
+
+    ignoreErrors:
+        # SeparationService locks the loan rows it counts, then decides whether
+        # clearance may finalize. PostgreSQL rejects FOR UPDATE combined with
+        # aggregate functions, so ->count() cannot carry the lock; rewriting
+        # this would drop the lock and reintroduce the settlement race the
+        # preceding comment exists to prevent. Suppressed, not fixed.
+        -
+            message: "#^Called 'count' on Laravel collection, but could have been retrieved as a query\\.$#"
+            path: app/Modules/HR/Services/SeparationService.php
+            count: 1

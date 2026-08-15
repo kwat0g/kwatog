@@ -14,6 +14,7 @@ use App\Modules\HR\Models\JobApplication;
 use App\Modules\HR\Models\JobPosting;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Finds recruitment records that can remain waiting forever without a
@@ -185,7 +186,7 @@ class CheckRecruitmentBottlenecks extends Command
 
     private function alreadyRaised(string $dedupeKey, int $dedupHours): bool
     {
-        return \DB::table('notifications')
+        return DB::table('notifications')
             ->where('type', 'recruitment.bottleneck')
             ->where('created_at', '>=', now()->subHours($dedupHours))
             ->whereJsonContains('data->dedupe_key', $dedupeKey)
