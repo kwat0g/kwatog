@@ -27,14 +27,24 @@ use Tests\TestCase;
  * WHY THE SENTINEL IS WRITTEN TO ALL THREE SOURCES. Laravel's Env repository
  * reads adapters in order: ServerConstAdapter ($_SERVER), EnvConstAdapter
  * ($_ENV), then PutenvAdapter (getenv()). A putenv()-only sentinel is
- * therefore shadowed by any value already sitting in $_SERVER. That is not
- * hypothetical here: docker-compose.yml:11 injects APP_ENV=local into the
- * container and phpunit.xml declares APP_ENV=testing without force="true", so
- * PHPUnit cannot override it and Laravel loads the dev .env for the whole
- * suite. .env pins every company.* branding variable to a string byte-
- * identical to its hardcoded fallback, which makes tier 2 and tier 3
- * indistinguishable for those keys. Writing all three sources removes this
- * test's dependence on the probe variable happening to be absent from .env.
+ * therefore shadowed by any value already sitting in $_SERVER. Writing all
+ * three sources removes this test's dependence on the probe variable happening
+ * to be absent from every earlier adapter.
+ *
+ * PRECEDENCE, MEASURED. The order is process env > phpunit.xml > .env, not the
+ * reverse. PHPUnit applies each non-forced <env> before Laravel boots, and
+ * Laravel's Dotenv is immutable — it will not overwrite a variable that is
+ * already set. So api/phpunit.xml's <env> values do take effect and do outrank
+ * api/.env; pre-setting DB_DATABASE and COMPANY_LEGAL_NAME the way PHPUnit does
+ * and then booting the framework yields the pre-set value, not the .env one.
+ * The single exception is APP_ENV: docker-compose.yml:11 injects APP_ENV=local
+ * into the container's real process environment, which outranks
+ * api/phpunit.xml:35's non-forced declaration, so app()->environment() returns
+ * 'local' for the whole suite (F-042). That does not redirect which .env loads
+ * for the keys this test cares about — api/.env supplies only the keys
+ * phpunit.xml never declares, COMPANY_EMAIL_BRAND_NAME among them, and it pins
+ * several of those to a string byte-identical to its hardcoded fallback, which
+ * makes tier 2 and tier 3 indistinguishable for them. Hence the sentinel.
  */
 class EmailBrandingResolutionTest extends TestCase
 {
@@ -45,11 +55,16 @@ class EmailBrandingResolutionTest extends TestCase
     private const FALLBACK = 'Ogami Philippines';
     private const SENTINEL = 'ENV-LEAK-SENTINEL';
 
-    private string|false $originalServer;
+    // Default to false (the "was absent" state) so tearDown stays safe even if
+    // parent::setUp() throws before the capture below runs. Without the
+    // initialisers, a RefreshDatabase migration failure surfaces as
+    // "must not be accessed before initialization" from tearDown and buries the
+    // real cause.
+    private string|false $originalServer = false;
 
-    private string|false $originalEnv;
+    private string|false $originalEnv = false;
 
-    private string|false $originalPutenv;
+    private string|false $originalPutenv = false;
 
     protected function setUp(): void
     {

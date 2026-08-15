@@ -1,7 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+    failOnEmptyTestSuite: PHPUnit exits 0 when a filter matches no tests,
+    printing only "INFO  No tests found." An acceptance gate of the form
+    `php artisan test [filter=SomeClass]` therefore passes having run no test at
+    all, so a typo or a renamed class silently turns the gate into a no-op. 32
+    of the 42 gates in docs/AUDIT-ACCEPTANCE-MANIFEST-2026-08-13.json are that
+    shape. This attribute changes behaviour only in the zero-test case, and
+    every PHPUnit invocation in .github/workflows/, Makefile and scripts/ is
+    unfiltered, so it cannot fail a suite that actually has tests.
+
+    Note for editors: XML forbids a double hyphen inside a comment, which is why
+    the filter option is spelled without its leading dashes above. Break that
+    rule and SimpleXML, DOMDocument and PHPUnit all reject this file outright.
+-->
 <phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
          bootstrap="vendor/autoload.php"
+         failOnEmptyTestSuite="true"
          colors="true">
     <testsuites>
         <testsuite name="Unit">
