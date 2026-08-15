@@ -141,7 +141,16 @@ export interface MrpPlan {
  draft_wo_count: number;
  diagnostics: MrpPlanDiagnostic[];
  generator?: { id: string; name: string };
- work_orders?: Array<{ id: string; wo_number: string; quantity_target: number; status: string; status_label?: string; planned_start: string }>;
+ work_orders?: Array<{
+  id: string;
+  wo_number: string;
+  product_id: number;
+  quantity_target: number;
+  status: string;
+  status_label?: string;
+  planned_start: string;
+  parent?: { id: string; wo_number: string } | null;
+ }>;
  purchase_requests?: Array<{ id: string; pr_number: string; priority: string; priority_label?: string; status: string; status_label?: string; is_auto_generated: boolean; date: string }>;
  generated_at: string;
  created_at: string;

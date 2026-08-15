@@ -71,6 +71,14 @@ export interface WorkOrder {
  /** ADV3 — Snapshot of the supplier lots used by this batch. */
  material_lot_references: WorkOrderMaterialLotReference[];
  product?: { id: string; part_number: string; name: string };
+ parent?: { id: string; wo_number: string } | null;
+ children?: Array<{
+  id: string;
+  wo_number: string;
+  product_id: number;
+  quantity_target: number;
+  status: WorkOrderStatus;
+ }>;
  sales_order?: { id: string; so_number: string } | null;
  machine?: { id: string; machine_code: string; name: string } | null;
  mold?: { id: string; mold_code: string; name: string } | null;

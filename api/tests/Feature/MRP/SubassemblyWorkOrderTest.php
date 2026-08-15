@@ -112,6 +112,35 @@ class SubassemblyWorkOrderTest extends TestCase
             ->count());
     }
 
+    public function test_rerun_cancels_stale_planned_children_when_bom_no_longer_requires_them(): void
+    {
+        $salesOrder = $this->salesOrder(10);
+        $this->engine->runForSalesOrder($salesOrder);
+
+        $replacement = Item::factory()->create([
+            'code' => 'RM-HIER-002',
+            'unit_of_measure' => 'pcs',
+            'standard_cost' => '2.0000',
+        ]);
+        Bom::query()
+            ->where('product_id', $this->finishedGood->id)
+            ->where('is_active', true)
+            ->update(['is_active' => false]);
+        $this->bom($this->finishedGood, [[$replacement, '1.0000']], 2);
+
+        $this->engine->runForSalesOrder($salesOrder->fresh());
+
+        $this->assertSame(1, WorkOrder::query()
+            ->where('sales_order_id', $salesOrder->id)
+            ->where('status', 'planned')
+            ->count());
+        $this->assertSame(1, WorkOrder::query()
+            ->where('sales_order_id', $salesOrder->id)
+            ->where('product_id', $this->subassembly->id)
+            ->where('status', 'cancelled')
+            ->count());
+    }
+
     private function product(string $partNumber): Product
     {
         return Product::factory()->create([
@@ -123,11 +152,11 @@ class SubassemblyWorkOrderTest extends TestCase
     }
 
     /** @param array<int, array{0: Item, 1: string}> $lines */
-    private function bom(Product $product, array $lines): Bom
+    private function bom(Product $product, array $lines, int $version = 1): Bom
     {
         $bom = Bom::create([
             'product_id' => $product->id,
-            'version' => 1,
+            'version' => $version,
             'is_active' => true,
         ]);
 

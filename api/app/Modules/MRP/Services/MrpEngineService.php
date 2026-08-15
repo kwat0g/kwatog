@@ -39,9 +39,9 @@ use Illuminate\Support\Facades\Log;
  *    consolidating all material lines for the SO; each line is one
  *    purchase_request_items row). is_auto_generated=true, priority is set
  *    to 'urgent' when order_by_date <= today, else 'normal'.
- *  - Draft work_orders (status='planned') — one per SO line. Each WO
- *    auto-explodes its product's BOM into work_order_materials via
- *    WorkOrderService::createDraft().
+ *  - Draft work_orders (status='planned') — one root per SO line plus one
+ *    linked child per manufactured subassembly. Each WO receives only its
+ *    immediate BOM components via WorkOrderService::createDraft().
  *
  * Net-requirement math (per material):
  *   gross      = Σ over SO lines: bom.quantity_per_unit * (1 + waste_factor/100) * remaining line.quantity
@@ -365,6 +365,7 @@ class MrpEngineService
                     foreach ($priorPlanned as $surplus) {
                         $surplus->forceFill(['status' => WorkOrderStatus::Cancelled->value])->save();
                     }
+                    $this->cancelStalePlannedChildWorkOrders($line->id, $plan->id);
                     continue;
                 }
                 $workOrderQuantity = max(0.0, $remainingQuantity - $openProduction);
@@ -410,6 +411,7 @@ class MrpEngineService
                         $priority,
                     );
                 }
+                $this->cancelStalePlannedChildWorkOrders($line->id, $plan->id);
             }
 
             // Finalise plan totals.
@@ -577,6 +579,7 @@ class MrpEngineService
             'salesOrder.customer:id,name',
             'generator:id,name,role_id',
             'workOrders:id,wo_number,product_id,quantity_target,status,planned_start,mrp_plan_id,parent_wo_id',
+            'workOrders.parent:id,wo_number',
             'purchaseRequests:id,pr_number,priority,status,is_auto_generated,date,mrp_plan_id',
         ]);
     }
@@ -661,6 +664,26 @@ class MrpEngineService
         }
 
         return $createdCount;
+    }
+
+    /**
+     * Retire auto-generated children that no longer belong to the active BOM
+     * hierarchy after a BOM revision. Progressed and manually created WOs are
+     * left untouched; only planned children linked to an older MRP plan are
+     * safe for this reconciliation.
+     */
+    private function cancelStalePlannedChildWorkOrders(int $salesOrderItemId, int $planId): void
+    {
+        WorkOrder::query()
+            ->where('sales_order_item_id', $salesOrderItemId)
+            ->whereNotNull('parent_wo_id')
+            ->whereNotNull('mrp_plan_id')
+            ->where('mrp_plan_id', '!=', $planId)
+            ->where('status', WorkOrderStatus::Planned->value)
+            ->update([
+                'status' => WorkOrderStatus::Cancelled->value,
+                'updated_at' => now(),
+            ]);
     }
 
     /**

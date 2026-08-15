@@ -157,8 +157,8 @@ export default function MrpPlanDetailPage() {
  <div>
  <div className="text-2xs uppercase tracking-wider text-muted mb-1">Work orders ({data.draft_wo_count})</div>
  {data.work_orders?.length ? data.work_orders.map((w) => (
- <Link key={w.id} to={`/production/work-orders/${w.id}`} className="block font-mono text-xs text-accent hover:underline">
- {w.wo_number} <span className="text-muted">({w.status_label ?? w.status}, qty {w.quantity_target})</span>
+ <Link key={w.id} to={`/production/work-orders/${w.id}`} className={`block font-mono text-xs text-accent hover:underline ${w.parent ? 'pl-4' : ''}`}>
+ {w.parent ? '↳ ' : ''}{w.wo_number} <span className="text-muted">({w.status_label ?? w.status}, qty {w.quantity_target})</span>
  </Link>
  )) : <span className="text-muted">—</span>}
  </div>

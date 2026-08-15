@@ -390,6 +390,15 @@ export default function WorkOrderDetailPage() {
  items: [{
  id: data.sales_order.so_number,
  href: `/crm/sales-orders/${data.sales_order.id}` }] }] : []),
+ ...(data.parent ? [{
+ label: 'Parent work order',
+ items: [{ id: data.parent.wo_number, href: `/production/work-orders/${data.parent.id}` }] }] : []),
+ ...(data.children && data.children.length > 0 ? [{
+ label: 'Subassembly work orders',
+ items: data.children.map((child) => ({
+ id: child.wo_number,
+ href: `/production/work-orders/${child.id}`,
+ meta: `qty ${child.quantity_target}` })) }] : []),
  ...(data.machine || data.mold ? [{
  label: 'Resources',
  items: [
