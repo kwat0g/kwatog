@@ -96,6 +96,16 @@ class MrpEngineService
             // L-32 — warnings collected during the explode pass are carried
             // into the diagnostics array built below.
             $diagnostics = [];
+            $productionNodesByLine = [];
+            $planningSupply = $sharedSupply ?? [];
+
+            $quantityToManufacture = function (
+                int $subassemblyProductId,
+                int $itemId,
+                float $grossQuantity,
+            ) use (&$planningSupply): float {
+                return $this->quantityToManufacture($itemId, $grossQuantity, $planningSupply);
+            };
 
             $remainingQuantityByLine = [];
 
@@ -123,8 +133,13 @@ class MrpEngineService
                 // Invalid BOM data (cycles, depth overflow, or missing UOM
                 // conversions) must fail the run rather than being mislabeled
                 // as a missing BOM and silently under-planning demand.
-                $exploded = $this->boms->explode((int) $line->product_id, $remainingQuantity);
-                foreach ($exploded as $row) {
+                $productionPlan = $this->boms->productionPlan(
+                    (int) $line->product_id,
+                    $remainingQuantity,
+                    $quantityToManufacture,
+                );
+                $productionNodesByLine[$line->id] = $productionPlan['subassemblies'];
+                foreach ($productionPlan['materials'] as $row) {
                     $iid = (int) $row['item_id'];
                     $grossPerItem[$iid] = ($grossPerItem[$iid] ?? 0.0) + (float) $row['gross_quantity'];
                     if (! isset($earliestNeedPerItem[$iid]) || $line->delivery_date->lt($earliestNeedPerItem[$iid])) {
@@ -162,34 +177,7 @@ class MrpEngineService
                 // reserved quantities. Order by id for deterministic locking.
                 // F-02 — quarantine/scrap-zone stock is held or scrapped and
                 // must not satisfy gross requirements.
-                if ($sharedSupply !== null && isset($sharedSupply[$itemId])) {
-                    $supply = $sharedSupply[$itemId];
-                } else {
-                    $levels = StockLevel::where('item_id', $itemId)
-                        ->whereHas('location.zone', function ($q) {
-                            $q->whereNotIn('zone_type', [
-                                \App\Modules\Inventory\Enums\WarehouseZoneType::Quarantine->value,
-                                \App\Modules\Inventory\Enums\WarehouseZoneType::Scrap->value,
-                            ]);
-                        })
-                        ->orderBy('location_id')
-                        ->lockForUpdate()
-                        ->get();
-                    $onHand    = (float) $levels->sum('quantity');
-                    // "reserved by OTHER active WOs" — for this run, treat all current
-                    // reservations as already-consumed availability.
-                    $reserved  = (float) $levels->sum('reserved_quantity');
-                    $inTransit = $this->inTransit($itemId);
-                    $supply = [
-                        'on_hand'    => $onHand,
-                        'reserved'   => $reserved,
-                        'in_transit' => $inTransit,
-                        'available'  => max(0.0, $onHand - $reserved + $inTransit),
-                    ];
-                    if ($sharedSupply !== null) {
-                        $sharedSupply[$itemId] = $supply;
-                    }
-                }
+                $supply = $this->supplyForItem($itemId, $planningSupply);
 
                 // Pending/approved auto-PRs already represent supply committed
                 // to this SO. Count them before creating another shortage, while
@@ -200,9 +188,7 @@ class MrpEngineService
                 $consumedFromSharedSupply = min($grossAfterOpenRequests, $availableBeforeAllocation);
                 $net = max(0.0, $grossAfterOpenRequests - $availableBeforeAllocation);
 
-                if ($sharedSupply !== null) {
-                    $sharedSupply[$itemId]['available'] = $availableBeforeAllocation - $consumedFromSharedSupply;
-                }
+                $planningSupply[$itemId]['available'] = $availableBeforeAllocation - $consumedFromSharedSupply;
 
                 $entry = [
                     'item_id'    => $itemId,
@@ -240,6 +226,10 @@ class MrpEngineService
                     $entry['lead_time_days'] = $leadTime;
                 }
                 $diagnostics[] = $entry;
+            }
+
+            if ($sharedSupply !== null) {
+                $sharedSupply = $planningSupply;
             }
 
             // Create one consolidated draft PR for all shortages — reconciled
@@ -401,9 +391,10 @@ class MrpEngineService
                     $draftWoCount++;
                 }
 
-                if ($rootWorkOrder !== null && $this->boms->activeForProduct((int) $line->product_id) !== null) {
+                $productionNodes = $productionNodesByLine[$line->id] ?? [];
+                if ($rootWorkOrder !== null && $productionNodes !== []) {
                     $draftWoCount += $this->createSubassemblyWorkOrders(
-                        $this->boms->productionTree((int) $line->product_id, (float) $workOrderTarget),
+                        $productionNodes,
                         $rootWorkOrder,
                         $so,
                         $line,
@@ -684,6 +675,58 @@ class MrpEngineService
                 'status' => WorkOrderStatus::Cancelled->value,
                 'updated_at' => now(),
             ]);
+    }
+
+    /**
+     * Load and cache usable supply for one inventory item. The cache is shared
+     * across SOs during a multi-order MRP run so one order cannot consume the
+     * same stock that an earlier order already allocated.
+     *
+     * @param array<int, array{on_hand:float,reserved:float,in_transit:float,available:float}> $planningSupply
+     * @return array{on_hand:float,reserved:float,in_transit:float,available:float}
+     */
+    private function supplyForItem(int $itemId, array &$planningSupply): array
+    {
+        if (array_key_exists($itemId, $planningSupply)) {
+            return $planningSupply[$itemId];
+        }
+
+        $levels = StockLevel::where('item_id', $itemId)
+            ->whereHas('location.zone', function ($q) {
+                $q->whereNotIn('zone_type', [
+                    \App\Modules\Inventory\Enums\WarehouseZoneType::Quarantine->value,
+                    \App\Modules\Inventory\Enums\WarehouseZoneType::Scrap->value,
+                ]);
+            })
+            ->orderBy('location_id')
+            ->lockForUpdate()
+            ->get();
+        $onHand = (float) $levels->sum('quantity');
+        $reserved = (float) $levels->sum('reserved_quantity');
+        $inTransit = $this->inTransit($itemId);
+
+        return $planningSupply[$itemId] = [
+            'on_hand' => $onHand,
+            'reserved' => $reserved,
+            'in_transit' => $inTransit,
+            'available' => max(0.0, $onHand - $reserved + $inTransit),
+        ];
+    }
+
+    /**
+     * Allocate available stock to a manufactured subassembly and return only
+     * the quantity that still needs a child work order.
+     *
+     * @param array<int, array{on_hand:float,reserved:float,in_transit:float,available:float}> $planningSupply
+     */
+    private function quantityToManufacture(int $itemId, float $grossQuantity, array &$planningSupply): float
+    {
+        $supply = $this->supplyForItem($itemId, $planningSupply);
+        $available = max(0.0, (float) $supply['available']);
+        $consumed = min(max(0.0, $grossQuantity), $available);
+        $planningSupply[$itemId]['available'] = $available - $consumed;
+
+        return max(0.0, $grossQuantity - $consumed);
     }
 
     /**

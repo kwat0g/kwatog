@@ -16,6 +16,7 @@ use App\Modules\MRP\Models\Bom;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Closure;
 use RuntimeException;
 
 class BomService
@@ -280,6 +281,47 @@ class BomService
     }
 
     /**
+     * Explode a product while allowing MRP to net available manufactured
+     * subassemblies before calculating downstream raw-material demand.
+     *
+     * The callback returns the quantity that must be manufactured for a
+     * subassembly line after stock allocation. Raw-material requirements below
+     * that line are then exploded only for that net-to-make quantity.
+     *
+     * @param Closure(int, int, float): float $quantityToManufacture
+     * @return array{materials: Collection, subassemblies: list<array>}
+     */
+    public function productionPlan(int $productId, float $finishedQuantity, Closure $quantityToManufacture): array
+    {
+        $bom = $this->activeForProduct($productId);
+        if (! $bom) {
+            throw new RuntimeException('No active BOM exists for the requested product.');
+        }
+
+        $accumulator = [];
+        $subassemblies = [];
+        $this->productionPlanInto(
+            $bom,
+            $finishedQuantity,
+            $accumulator,
+            $subassemblies,
+            [$productId],
+            0,
+            $quantityToManufacture,
+        );
+
+        return [
+            'materials' => collect(array_values($accumulator))->map(fn (array $row) => [
+                'item_id'        => $row['item_id'],
+                'item_code'      => $row['item_code'],
+                'item_name'      => $row['item_name'],
+                'gross_quantity' => number_format($row['qty'], 3, '.', ''),
+            ]),
+            'subassemblies' => $subassemblies,
+        ];
+    }
+
+    /**
      * Recursive worker. Walks every line of $bom, multiplying $multiplier by
      * each line's effective (waste-inclusive, unit-converted) quantity. A line
      * whose component item maps to a manufactured product with its own active
@@ -382,6 +424,85 @@ class BomService
         }
 
         return $nodes;
+    }
+
+    /**
+     * @param array<int, array{item_id:int,item_code:string,item_name:string,qty:float}> $accumulator
+     * @param list<array> $subassemblies
+     * @param array<int> $productPath
+     */
+    private function productionPlanInto(
+        Bom $bom,
+        float $multiplier,
+        array &$accumulator,
+        array &$subassemblies,
+        array $productPath,
+        int $depth,
+        Closure $quantityToManufacture,
+    ): void {
+        $maxDepth = $this->maxExplodeDepth();
+        if ($depth > $maxDepth) {
+            throw new RuntimeException(
+                'BOM explosion exceeded the maximum nesting depth of '
+                . $maxDepth . ' — check for a circular bill of materials.'
+            );
+        }
+
+        foreach ($bom->items as $row) {
+            $grossFloat = $this->grossQuantityForLine($row, $multiplier);
+            $subBom = $this->subAssemblyBomFor($row->item?->code);
+
+            if ($subBom === null) {
+                $iid = (int) $row->item_id;
+                if (! isset($accumulator[$iid])) {
+                    $accumulator[$iid] = [
+                        'item_id'   => $iid,
+                        'item_code' => (string) $row->item?->code,
+                        'item_name' => (string) $row->item?->name,
+                        'qty'       => 0.0,
+                    ];
+                }
+                $accumulator[$iid]['qty'] += $grossFloat;
+                continue;
+            }
+
+            if (in_array($subBom->product_id, $productPath, true)) {
+                throw new RuntimeException(
+                    'Circular bill of materials detected while exploding product '
+                    . $subBom->product_id . ' (item ' . ($row->item?->code ?? '?') . ').'
+                );
+            }
+
+            $toManufacture = min(
+                $grossFloat,
+                max(0.0, (float) $quantityToManufacture(
+                    (int) $subBom->product_id,
+                    (int) $row->item_id,
+                    $grossFloat,
+                )),
+            );
+            $children = [];
+            if ($toManufacture > 0.000001) {
+                $this->productionPlanInto(
+                    $subBom,
+                    $toManufacture,
+                    $accumulator,
+                    $children,
+                    array_merge($productPath, [$subBom->product_id]),
+                    $depth + 1,
+                    $quantityToManufacture,
+                );
+            }
+
+            $subassemblies[] = [
+                'product_id'     => (int) $subBom->product_id,
+                'item_id'        => (int) $row->item_id,
+                'item_code'      => (string) $row->item?->code,
+                'gross_quantity' => number_format($grossFloat, 3, '.', ''),
+                'quantity'       => number_format($toManufacture, 3, '.', ''),
+                'children'       => $children,
+            ];
+        }
     }
 
     private function grossQuantityForLine($row, float $multiplier): float
