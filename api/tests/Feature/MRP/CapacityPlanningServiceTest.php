@@ -100,6 +100,55 @@ class CapacityPlanningServiceTest extends TestCase
         $this->assertTrue($rows[0]->scheduled_end->lessThanOrEqualTo($rows[1]->scheduled_start));
     }
 
+    public function test_run_schedules_subassembly_children_before_their_parent(): void
+    {
+        $machine = $this->machine('CAP-M-HIER', 100);
+        $parentMold = $this->mold('CAP-D-PARENT');
+        $parentMold->compatibleMachines()->sync([$machine->id]);
+
+        $childProduct = Product::create([
+            'part_number' => 'CAP-CHILD-' . substr(uniqid(), -8),
+            'name' => 'Capacity Child Product',
+            'unit_of_measure' => 'pcs',
+            'standard_cost' => '8.00',
+            'is_active' => true,
+        ]);
+        $childMold = Mold::create([
+            'mold_code' => 'CAP-D-CHILD',
+            'name' => 'Capacity Child Mold',
+            'product_id' => $childProduct->id,
+            'cavity_count' => 1,
+            'cycle_time_seconds' => 30,
+            'output_rate_per_hour' => 100,
+            'setup_time_minutes' => 10,
+            'current_shot_count' => 0,
+            'max_shots_before_maintenance' => 100000,
+            'lifetime_max_shots' => 1000000,
+            'status' => 'available',
+        ]);
+        $childMold->compatibleMachines()->sync([$machine->id]);
+
+        $parent = $this->workOrder('CAP-PARENT', WorkOrderStatus::Planned, '100', 100);
+        $child = WorkOrder::factory()->create([
+            'wo_number' => 'CAP-CHILD',
+            'product_id' => $childProduct->id,
+            'parent_wo_id' => $parent->id,
+            'quantity_target' => 100,
+            'planned_start' => $this->tomorrow->copy()->setTime(8, 0),
+            'planned_end' => $this->tomorrow->copy()->setTime(17, 0),
+            'priority' => 1,
+            'status' => WorkOrderStatus::Planned->value,
+            'created_by' => $this->user->id,
+        ]);
+
+        $result = $this->planner->run([$parent->id, $child->id]);
+
+        $this->assertCount(2, $result['scheduled']);
+        $parentSchedule = ProductionSchedule::query()->where('work_order_id', $parent->id)->firstOrFail();
+        $childSchedule = ProductionSchedule::query()->where('work_order_id', $child->id)->firstOrFail();
+        $this->assertTrue($childSchedule->scheduled_end->lessThanOrEqualTo($parentSchedule->scheduled_start));
+    }
+
     public function test_confirm_promotes_the_work_order_and_schedule_as_one_process(): void
     {
         $machine = $this->machine('CAP-M-CONFIRM', 100);

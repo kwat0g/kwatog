@@ -121,6 +121,65 @@ class WorkOrderMachineConflictTest extends TestCase
         $this->assertSame(WorkOrderStatus::Confirmed, $confirmed->status);
     }
 
+    public function test_standard_no_bom_work_order_cannot_start(): void
+    {
+        $machine = $this->machine();
+        $mold = $this->mold();
+        $wo = $this->plannedWo($machine, $mold);
+        $confirmed = $this->service->confirm($wo);
+
+        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->service->start($confirmed);
+    }
+
+    public function test_parent_work_order_cannot_start_before_subassembly_child_is_ready(): void
+    {
+        $machine = $this->machine();
+        $mold = $this->mold();
+        $parent = $this->plannedWo($machine, $mold);
+        $parent->forceFill([
+            'work_order_class' => 'non_stock',
+            'exception_reason' => 'Assembly dependency test',
+            'exception_authorized_by' => $this->user->id,
+        ])->save();
+        $child = $this->plannedWo();
+        $child->forceFill([
+            'parent_wo_id' => $parent->id,
+            'quantity_target' => 10,
+        ])->save();
+        $parent->forceFill(['status' => WorkOrderStatus::Confirmed->value])->save();
+
+        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->expectExceptionMessage('waiting for subassembly work orders');
+
+        $this->service->start($parent->fresh());
+    }
+
+    public function test_parent_work_order_can_start_after_child_produces_required_good_quantity(): void
+    {
+        $machine = $this->machine();
+        $mold = $this->mold();
+        $parent = $this->plannedWo($machine, $mold);
+        $parent->forceFill([
+            'work_order_class' => 'non_stock',
+            'exception_reason' => 'Assembly dependency test',
+            'exception_authorized_by' => $this->user->id,
+            'status' => WorkOrderStatus::Confirmed->value,
+        ])->save();
+        $child = $this->plannedWo();
+        $child->forceFill([
+            'parent_wo_id' => $parent->id,
+            'quantity_target' => 10,
+            'quantity_produced' => 10,
+            'quantity_good' => 10,
+            'status' => WorkOrderStatus::Completed->value,
+        ])->save();
+
+        $started = $this->service->start($parent->fresh());
+
+        $this->assertSame(WorkOrderStatus::InProgress, $started->status);
+    }
+
     /**
      * No schedule rows on either side → blanket conflict. A machine bound to a
      * Confirmed WO blocks confirming a second WO.
