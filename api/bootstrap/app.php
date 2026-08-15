@@ -13,6 +13,7 @@ use App\Common\Middleware\RequestId;
 use App\Common\Middleware\SanitizeInput;
 use App\Common\Middleware\SessionTimeout;
 use App\Providers\ModuleServiceProvider;
+use App\Modules\B2B\Middleware\CheckPortalPasswordChange;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -53,6 +54,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'feature' => CheckFeature::class,
             'session.timeout' => SessionTimeout::class,
             'password.expired' => CheckPasswordExpiry::class,
+            'portal.password.changed' => CheckPortalPasswordChange::class,
             // B2B portal guard-type assertion — blocks web-session bleed into
             // the sanctum-driver portal guards (see EnsurePortalGuard).
             'portal' => EnsurePortalGuard::class,

@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 return [
     /*
-     * Optional shared secret that unlocks the detailed per-component `checks`
-     * payload of GET /api/v1/health (via X-Health-Token header or ?token=).
+     * Shared secret that unlocks the detailed per-component `checks` payload
+     * of GET /api/v1/health via the X-Health-Token header.
      *
-     * When empty, the checks are returned to everyone (legacy behavior).
-     * Set it in production to keep internal topology (db/redis/queue state)
-     * private while load balancers / uptime monitors supply the token.
+     * Empty is fail-closed: public health remains minimal and never exposes
+     * internal topology (db/redis/queue state). Query-string tokens are not
+     * supported because URLs can be retained in logs and referrers.
      */
     'detail_token' => (string) env('HEALTH_DETAIL_TOKEN', ''),
 ];

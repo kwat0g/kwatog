@@ -223,3 +223,11 @@ deploy: build-spa
 	@echo ""
 	@echo "  Deploy complete. Smoke-test https://$$SERVER_NAME/sanctum/csrf-cookie"
 	@echo ""
+
+demo-verify: ## Track C — READ-ONLY demo readiness gate (never writes)
+	docker compose exec api php artisan demo:verify
+
+demo-seed: ## Track C — USER-ONLY: apply DefenseHeroSeeder to the demo DB (back up first)
+	@echo "Back up first: scripts/db-backup.sh — never run this against an unbacked-up DB."
+	docker compose exec api php artisan db:seed --class=DefenseHeroSeeder
+	@echo "Then re-run: make demo-verify"

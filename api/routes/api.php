@@ -9,6 +9,10 @@ use App\Common\Controllers\ChainBottleneckController;
 use App\Common\Controllers\ChainListenerRecoveryController;
 use App\Common\Controllers\BusinessPolicyController;
 use Illuminate\Broadcasting\BroadcastController;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -40,49 +44,48 @@ Route::match(['get', 'post'], '/broadcasting/auth', [BroadcastController::class,
 |
 */
 
-Route::get('/health', function (\Illuminate\Http\Request $request) {
-    // Phase 4 — deep healthcheck. Reports component-by-component so a load
-    // balancer can route around partial failures and uptime monitors get
-    // useful telemetry instead of a flat 200.
+Route::get('/health', function (Request $request) {
+    // Public liveness stays minimal. Reports component-by-component only for
+    // an explicitly authorized detail request so load balancers can still
+    // distinguish healthy/degraded responses without exposing topology.
     //
     // The detailed per-component checks disclose internal topology (which
-    // components are up/down), so they are only included when the request
-    // carries the optional HEALTH_DETAIL_TOKEN (via X-Health-Token header or
-    // ?token= query). When no token is configured, behavior is unchanged —
-    // the checks are returned as before — keeping existing monitors working.
+    // components are up/down), so they require a non-empty configured
+    // HEALTH_DETAIL_TOKEN and an exact X-Health-Token header match. Empty
+    // configuration fails closed; query-string tokens are intentionally not
+    // accepted because URLs can leak through logs and referrers.
     // Read via config(), not env() — prod-entrypoint runs `config:cache` and
     // env() returns null outside config files once config is cached.
     $token = (string) config('health.detail_token', '');
-    $granted = $token === ''
-        || hash_equals($token, (string) $request->header('X-Health-Token', ''))
-        || hash_equals($token, (string) $request->query('token', ''));
+    $granted = $token !== ''
+        && hash_equals($token, (string) $request->header('X-Health-Token', ''));
 
     $checks = [
-        'app'   => true,
-        'time'  => now()->toIso8601String(),
-        'db'    => false,
+        'app' => true,
+        'time' => now()->toIso8601String(),
+        'db' => false,
         'redis' => false,
         'queue' => null,
     ];
 
     try {
-        \Illuminate\Support\Facades\DB::connection()->getPdo();
+        DB::connection()->getPdo();
         $checks['db'] = true;
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         // db stays false
     }
 
     try {
-        if (\Illuminate\Support\Facades\Redis::connection()->ping()) {
+        if (Redis::connection()->ping()) {
             $checks['redis'] = true;
         }
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         // redis stays false
     }
 
     try {
-        $checks['queue'] = \Illuminate\Support\Facades\Queue::size('default');
-    } catch (\Throwable $e) {
+        $checks['queue'] = Queue::size('default');
+    } catch (Throwable $e) {
         // queue stays null
     }
 
@@ -91,6 +94,7 @@ Route::get('/health', function (\Illuminate\Http\Request $request) {
     if ($granted) {
         $body['checks'] = $checks;
     }
+
     return response()->json($body, $healthy ? 200 : 503);
 });
 

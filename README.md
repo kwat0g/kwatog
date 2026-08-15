@@ -5,7 +5,7 @@ Production-grade ERP for **Philippine Ogami Corporation** — a Japanese-owned p
 > Read [`CLAUDE.md`](CLAUDE.md) for the project mission, architecture, and rules.
 > Read [`docs/PATTERNS.md`](docs/PATTERNS.md) for copy-paste code templates.
 > Read [`docs/DESIGN-SYSTEM.md`](docs/DESIGN-SYSTEM.md) for UI tokens and component specs.
-> Task list: [`docs/TASKS.md`](docs/TASKS.md). Database schemas: [`docs/SCHEMA.md`](docs/SCHEMA.md).
+> Documentation index: [`docs/README.md`](docs/README.md). Database schemas: [`docs/SCHEMA.md`](docs/SCHEMA.md).
 
 ## Stack
 
@@ -26,7 +26,7 @@ docker compose exec api php artisan key:generate
 make fresh         # migrate + seed
 ```
 
-Open http://localhost — SPA served via Nginx; API proxied at `/api/v1/*`; Mailpit UI at http://localhost:8025.
+Open http://localhost — SPA served via Nginx; API proxied at `/api/v1/*`. Configure Amazon SES SMTP credentials in `api/.env` before testing email workflows; local email actions send real messages.
 
 ## Make targets
 
@@ -47,11 +47,7 @@ make test         # phpunit + vitest
 - [`spa/`](spa) — Vite + React 18 + TypeScript SPA
 - [`docker/`](docker) — Container build files
 - [`docs/`](docs) — Project documentation
-- [`plans/`](plans) — Sprint plans
-
-## Sprints
-
-The build is split into 8 sprints (~85 tasks). Sprint 1 (foundation) is documented in [`plans/ogami-erp-sprint-1-foundation-tasks-1-12.md`](plans/ogami-erp-sprint-1-foundation-tasks-1-12.md).
+- [`scripts/`](scripts) — Deployment, recovery, QA, and audit verification tools
 
 ## Security non-negotiables
 

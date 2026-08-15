@@ -6,7 +6,7 @@
 #   • API uses Dockerfile.prod (multi-stage, --no-dev, opcache enabled).
 #   • Nginx terminates TLS via Let's Encrypt certs mounted from the host.
 #   • All database/redis/meilisearch ports stay internal-only.
-#   • mailpit removed; SMTP comes from real provider via env.
+#   • Email delivery uses an external SMTP provider configured via env.
 #
 # Deploy: see docs/DEPLOY.md.
 # ────────────────────────────────────────────────────────────────────────────

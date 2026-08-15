@@ -9,7 +9,9 @@ services:
       - ./api:/var/www
     environment:
       - APP_ENV=${APP_ENV:-local}
-      - APP_DEBUG=${APP_DEBUG:-true}
+      # Fail closed by default. Set APP_DEBUG=true explicitly for local
+      # debugging; never inherit a debug-enabled default into a shared host.
+      - APP_DEBUG=${APP_DEBUG:-false}
     depends_on:
       db:
         condition: service_healthy
@@ -25,6 +27,12 @@ services:
     working_dir: /app
     volumes:
       - ./spa:/app
+      # Audit scripts are kept at repository root and invoked by the SPA
+      # package scripts as ../scripts/*. Mount read-only; audits only inspect
+      # source files and browser/API state.
+      - ./scripts:/scripts:ro
+      # Root-relative audit scripts also inspect the SPA source at /spa.
+      - ./spa:/spa:ro
       # SPA contract tests read the backend notification catalog so frontend
       # metadata cannot drift from the API's canonical type list. Keep the
       # source mount read-only; the SPA container only needs it for inspection.
@@ -108,7 +116,9 @@ services:
       # Browser connects directly via ws://<host>:8080/app/<key>.
       # pusher-js does not support a path prefix, so we cannot proxy
       # this through Nginx — the Reverb port must be reachable.
-      - "${REVERB_HOST_PORT:-8080}:8080"
+      # Keep the development WebSocket endpoint local by default. Override
+      # REVERB_HOST_BIND only when a trusted external browser must connect.
+      - "${REVERB_HOST_BIND:-127.0.0.1}:${REVERB_HOST_PORT:-8080}:8080"
     depends_on:
       - api
     networks: [ogami-net]
@@ -128,13 +138,6 @@ services:
     depends_on:
       - api
       - redis
-    networks: [ogami-net]
-
-  mailpit:
-    image: axllent/mailpit:latest
-    container_name: ogami-mailpit
-    ports:
-      - "${MAILPIT_UI_PORT:-8025}:8025"
     networks: [ogami-net]
 
 networks:

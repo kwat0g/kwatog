@@ -1,7 +1,7 @@
 # OGAMI ERP — Claude Code Master Context
 
 > Claude Code reads this automatically on every command. Read completely before executing any task.
-> References: `docs/DESIGN-SYSTEM.md`, `docs/TASKS.md`, `docs/SCHEMA.md`, `docs/SEEDS.md`
+> References: `docs/README.md`, `docs/DESIGN-SYSTEM.md`, `docs/SCHEMA.md`, `docs/SEEDS.md`
 
 ## PROJECT
 
@@ -558,7 +558,7 @@ PATTERNS.md contains exact, copy-paste code templates for every page type, every
 
 1. Read this file (CLAUDE.md) — already happening
 2. **Read `docs/PATTERNS.md`** — find the matching template (list page, form page, detail page, controller, service, etc.)
-3. Read `docs/TASKS.md`, find the task
+3. Read the current issue/request and `docs/SYSTEM-IMPROVEMENT-ROADMAP-2026-08-13.md` when it is audit-related
 4. Read relevant sections of `docs/SCHEMA.md` for table specs
 5. Read `docs/DESIGN-SYSTEM.md` if task involves UI
 6. Read `docs/SEEDS.md` if task involves seed data
@@ -657,4 +657,3 @@ Recent additions use 4-digit numbered (`0186_*`, `0187_*`, …). Highest as of 2
 
 ### Test runner + suite size
 Full suite as of 2026-08-04: **1242 tests / 0 fail / ~9 min runtime**. Use `--filter='Foo|Bar'` for tight loops. Re-run full suite only at end of feature.
-

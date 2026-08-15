@@ -2,7 +2,7 @@
 
 Production-grade ERP for Philippine Ogami Corporation (Japanese-owned plastic injection molding manufacturer, IATF 16949). Modular monolith: **Laravel 11 API + React 18 SPA**, Docker Compose. Organized around 3 chains (Order-to-Cash, Procure-to-Pay, Hire-to-Retire) and 12 modules.
 
-> **Read first when coding:** [`CLAUDE.md`](CLAUDE.md) (master rules), [`docs/PATTERNS.md`](docs/PATTERNS.md) (copy-paste templates — mandatory before writing code), [`docs/DESIGN-SYSTEM.md`](docs/DESIGN-SYSTEM.md), [`docs/SCHEMA.md`](docs/SCHEMA.md), [`docs/TASKS.md`](docs/TASKS.md), [`docs/DEPLOY.md`](docs/DEPLOY.md).
+> **Read first when coding:** [`CLAUDE.md`](CLAUDE.md) (master rules), [`docs/README.md`](docs/README.md) (documentation index), [`docs/PATTERNS.md`](docs/PATTERNS.md) (copy-paste templates — mandatory before writing code), [`docs/DESIGN-SYSTEM.md`](docs/DESIGN-SYSTEM.md), [`docs/SCHEMA.md`](docs/SCHEMA.md), and [`docs/DEPLOY.md`](docs/DEPLOY.md).
 
 ## Quickstart
 
@@ -16,7 +16,7 @@ make fresh                         # migrate + seed (DESTRUCTIVE — never on pr
 ```
 
 - SPA + API at http://localhost (API proxied at `/api/v1/*`)
-- Mailpit UI at http://localhost:8025
+- Email delivery uses the Brevo SMTP relay configured in `api/.env`.
 - Reverb WebSocket at `ws://localhost:8080` (direct, **not** proxied through Nginx)
 
 ## Common commands (`Makefile`)
@@ -42,7 +42,7 @@ React 18 SPA (Vite + TS) ──HTTP-only cookies──▶ Laravel 11 REST API (P
                   PostgreSQL 16 · Redis 7 · Meilisearch · Reverb (WS)
 ```
 
-Services in `docker-compose.yml`: `api`, `spa`, `nginx`, `db`, `redis`, `meilisearch`, `reverb`, `queue`, `mailpit`.
+Services in `docker-compose.yml`: `api`, `spa`, `nginx`, `db`, `redis`, `meilisearch`, `reverb`, and `queue`. Email is delivered through the Brevo SMTP relay configured in `api/.env`.
 
 ### Key directories
 
@@ -51,7 +51,7 @@ Services in `docker-compose.yml`: `api`, `spa`, `nginx`, `db`, `redis`, `meilise
 - `api/database/migrations/` — numbered `0001_`, `0002_`, …
 - `api/resources/views/pdf/` — DomPDF Blade templates.
 - `spa/src/{api,components,hooks,layouts,pages,stores,types,lib,styles}/`
-- `docker/`, `docs/`, `plans/` (sprint plans), `scripts/`.
+- `docker/`, `docs/`, and `scripts/`.
 
 ## Conventions (non-negotiables — see `CLAUDE.md` for full list)
 
@@ -97,6 +97,5 @@ Services in `docker-compose.yml`: `api`, `spa`, `nginx`, `db`, `redis`, `meilise
 - Code templates: [`docs/PATTERNS.md`](docs/PATTERNS.md)
 - UI tokens: [`docs/DESIGN-SYSTEM.md`](docs/DESIGN-SYSTEM.md)
 - DB schema: [`docs/SCHEMA.md`](docs/SCHEMA.md) · seeds: [`docs/SEEDS.md`](docs/SEEDS.md)
-- Backlog: [`docs/TASKS.md`](docs/TASKS.md), [`docs/NEW-TASKS.md`](docs/NEW-TASKS.md), [`docs/POLISH-TASKS.md`](docs/POLISH-TASKS.md)
+- Audit roadmap: [`docs/SYSTEM-IMPROVEMENT-ROADMAP-2026-08-13.md`](docs/SYSTEM-IMPROVEMENT-ROADMAP-2026-08-13.md)
 - Deploy: [`docs/DEPLOY.md`](docs/DEPLOY.md) · user manual: [`docs/USER-MANUAL.md`](docs/USER-MANUAL.md)
-- Sprint plans: [`plans/`](plans/)
