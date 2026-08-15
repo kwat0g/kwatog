@@ -14,6 +14,13 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 5173,
     strictPort: true,
+    // Vite validates the Host header and 403s anything it does not recognise,
+    // as a DNS-rebinding defence. Empty by default so local dev keeps its
+    // localhost-only behaviour; remote dev sets VITE_ALLOWED_HOSTS.
+    allowedHosts: (process.env.VITE_ALLOWED_HOSTS ?? '')
+      .split(',')
+      .map((h) => h.trim())
+      .filter(Boolean),
     // Direct proxy for local dev without docker (kept for convenience).
     proxy: {
       '/api': { target: 'http://localhost', changeOrigin: false, secure: false },
@@ -23,7 +30,11 @@ export default defineConfig({
       // When accessed through the Nginx proxy on port 80, the browser
       // must connect its HMR WebSocket to the same origin — not Vite's
       // internal port 5173. Override clientPort so it matches NGINX_PORT.
-      protocol: 'ws',
+      // protocol follows the proxy's scheme: ws behind plain HTTP locally,
+      // wss when the proxy terminates TLS. A page served over HTTPS refuses a
+      // plaintext ws:// connection as mixed content, and the failure is silent
+      // — HMR just never connects.
+      protocol: (process.env.VITE_HMR_PROTOCOL as 'ws' | 'wss') || 'ws',
       host: process.env.VITE_HMR_HOST || 'localhost',
       clientPort: Number(process.env.VITE_HMR_PORT) || Number(process.env.NGINX_PORT) || 80,
     },
