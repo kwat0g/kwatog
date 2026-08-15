@@ -11,6 +11,7 @@ use App\Common\Services\OutboxService;
 use App\Modules\Attendance\Enums\AttendanceStatus;
 use App\Modules\Attendance\Models\Attendance;
 use App\Modules\Auth\Models\User;
+use App\Modules\HR\Models\Employee;
 use App\Modules\Leave\Enums\LeaveRequestStatus;
 use App\Modules\Leave\Events\LeaveRequestApproved;
 use App\Modules\Leave\Events\LeaveRequestPendingHR;
@@ -93,6 +94,12 @@ class LeaveRequestService
     public function submit(int $employeeId, array $data): LeaveRequest
     {
         return DB::transaction(function () use ($employeeId, $data) {
+            // Serialize every submission for one employee on a row that is
+            // guaranteed to exist. Locking only matching leave rows cannot
+            // protect the empty-gap race where two overlapping requests both
+            // observe no row before either inserts.
+            Employee::query()->lockForUpdate()->findOrFail($employeeId);
+
             $start = CarbonImmutable::parse($data['start_date']);
             $end   = CarbonImmutable::parse($data['end_date']);
             if ($end->lt($start)) {
@@ -129,8 +136,8 @@ class LeaveRequestService
                 throw new BusinessRuleException("Insufficient leave balance ({$bal->remaining} remaining; {$days} requested).");
             }
 
-            // Overlap check — lock overlapping rows to prevent concurrent
-            // insertions of overlapping leave requests.
+            // Overlap check remains the user-facing rule; the employee lock
+            // above is the concurrency authority for empty and populated gaps.
             //
             // M-18 — half-day awareness. The base date-range query stays the
             // same; we add a closure that excludes opposite-half collisions

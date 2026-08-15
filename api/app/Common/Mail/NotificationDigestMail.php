@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Common\Mail;
 
+use App\Common\Services\EmailDeliveryFailureNotifier;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
@@ -25,6 +26,7 @@ class NotificationDigestMail extends Mailable implements ShouldQueue
         public readonly ?string $recipientName,
         public readonly array $items,
         public readonly int $totalUnread,
+        public readonly ?int $recipientUserId = null,
     ) {}
 
     public function envelope(): Envelope
@@ -43,6 +45,16 @@ class NotificationDigestMail extends Mailable implements ShouldQueue
                 'items'         => $this->items,
                 'totalUnread'   => $this->totalUnread,
             ],
+        );
+    }
+
+    public function failed(\Throwable $e): void
+    {
+        app(EmailDeliveryFailureNotifier::class)->notifyUserId(
+            $this->recipientUserId,
+            'Notification digest',
+            'Your notification digest email could not be delivered. Review your unread notifications in the application.',
+            ['reason' => 'The email provider rejected or could not deliver the digest.'],
         );
     }
 }

@@ -33,6 +33,9 @@ class ReturnRequest extends Model
         'rma_number',
         'type',
         'status',
+        'finance_only',
+        'finance_only_reason',
+        'finance_only_approved_by',
         'disposition_status',
         'sales_order_id',
         'invoice_id',
@@ -71,6 +74,7 @@ class ReturnRequest extends Model
     protected $casts = [
         'type'         => ReturnRequestType::class,
         'status'       => ReturnRequestStatus::class,
+        'finance_only' => 'boolean',
         'inspection_handoff_status' => ReturnInspectionHandoffStatus::class,
         'return_date'  => 'date',
         'refund_amount' => 'decimal:2',

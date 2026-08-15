@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Dashboard\Services;
 
 use App\Modules\Auth\Models\User;
+use App\Modules\Dashboard\Exceptions\DashboardLayoutConflictException;
 use App\Modules\Dashboard\Enums\RenderKind;
 use App\Modules\Dashboard\Models\DashboardLayout;
 use App\Modules\Dashboard\Models\DashboardWidget;
@@ -41,52 +42,19 @@ class DashboardLayoutService
             ->orderBy('position_x')
             ->get();
 
-        $source = 'user';
-        if ($userLayout->isEmpty()) {
-            $userLayout = $this->roleDefaultRows($user);
-            $source = 'role';
-        }
-        if ($userLayout->isEmpty()) {
-            return [];
-        }
-
-        $widgetMap = DashboardWidget::query()
-            ->whereIn('key', $userLayout->pluck('widget_key')->unique()->all())
-            ->get()
-            ->keyBy('key');
-
-        $userPerms = $user->permission_slugs;
-        $isSystemAdmin = $user->role?->slug === 'system_admin';
-
-        $rows = [];
-        foreach ($userLayout as $row) {
-            /** @var DashboardWidget|null $widget */
-            $widget = $widgetMap->get($row->widget_key);
-            if (! $widget) {
-                continue;
+        // A personal layout can outlive a permission change. If every saved
+        // row becomes forbidden, fall back to the role layout instead of
+        // presenting a blank dashboard. An intentionally empty layout is
+        // represented by no user rows and therefore follows the same role
+        // default path.
+        if ($userLayout->isNotEmpty()) {
+            $resolved = $this->hydrateVisibleLayout($user, $userLayout, 'user');
+            if ($resolved !== []) {
+                return $resolved;
             }
-
-            // Strip widgets requiring a permission the user lacks (admin sees all).
-            if (! $isSystemAdmin && $widget->permission && ! in_array($widget->permission, $userPerms, true)) {
-                continue;
-            }
-
-            $rows[] = [
-                'key'         => $widget->key,
-                'name'        => $widget->name,
-                'description' => $widget->description,
-                'module'      => $widget->module,
-                'permission'  => $widget->permission,
-                'render_kind' => $widget->render_kind->value,
-                'x'           => (int) $row->position_x,
-                'y'           => (int) $row->position_y,
-                'w'           => (int) $row->width,
-                'h'           => (int) $row->height,
-                'source'      => $source,
-            ];
         }
 
-        return $rows;
+        return $this->hydrateVisibleLayout($user, $this->roleDefaultRows($user), 'role');
     }
 
     /**
@@ -171,9 +139,15 @@ class DashboardLayoutService
     /**
      * @param  array<int, array{key: string, x?: int, y?: int, w?: int, h?: int}>  $widgets
      */
-    public function saveUserLayout(User $user, array $widgets): void
+    public function saveUserLayout(User $user, array $widgets, string $expectedVersion): void
     {
-        DB::transaction(function () use ($user, $widgets) {
+        DB::transaction(function () use ($user, $widgets, $expectedVersion) {
+            User::query()->lockForUpdate()->findOrFail($user->id);
+            $currentVersion = $this->userLayoutVersion($user);
+            if (! hash_equals($currentVersion, $expectedVersion)) {
+                throw new DashboardLayoutConflictException($currentVersion);
+            }
+
             DashboardLayout::query()
                 ->where('owner_type', DashboardLayout::OWNER_USER)
                 ->where('owner_id', $user->id)
@@ -183,21 +157,33 @@ class DashboardLayoutService
                 return;
             }
 
-            $known = DashboardWidget::query()->pluck('key')->all();
+            $allowed = DashboardWidget::query()
+                ->get()
+                ->filter(fn (DashboardWidget $widget): bool =>
+                    $widget->permission === null || $user->hasPermission($widget->permission)
+                )
+                ->keyBy('key');
             $now = now();
             $rows = [];
+            $seen = [];
             foreach ($widgets as $i => $w) {
-                if (! in_array($w['key'] ?? null, $known, true)) {
+                $key = (string) ($w['key'] ?? '');
+                if ($key === '' || isset($seen[$key]) || ! $allowed->has($key)) {
                     continue;
                 }
+
+                $seen[$key] = true;
+                $width = max(1, min(12, (int) ($w['w'] ?? $allowed->get($key)->default_w ?? 4)));
+                $height = max(1, min(24, (int) ($w['h'] ?? $allowed->get($key)->default_h ?? 4)));
+                $positionX = max(0, min(12 - $width, (int) ($w['x'] ?? 0)));
                 $rows[] = [
                     'owner_type' => DashboardLayout::OWNER_USER,
                     'owner_id'   => $user->id,
-                    'widget_key' => $w['key'],
-                    'position_x' => (int) ($w['x'] ?? 0),
-                    'position_y' => (int) ($w['y'] ?? $i),
-                    'width'      => (int) ($w['w'] ?? 12),
-                    'height'     => (int) ($w['h'] ?? 4),
+                    'widget_key' => $key,
+                    'position_x' => $positionX,
+                    'position_y' => max(0, min(65535, (int) ($w['y'] ?? $i))),
+                    'width'      => $width,
+                    'height'     => $height,
                     'created_at' => $now,
                     'updated_at' => $now,
                 ];
@@ -208,12 +194,41 @@ class DashboardLayoutService
         });
     }
 
-    public function resetUserLayout(User $user): void
+    public function resetUserLayout(User $user, string $expectedVersion): void
     {
-        DashboardLayout::query()
+        DB::transaction(function () use ($user, $expectedVersion): void {
+            User::query()->lockForUpdate()->findOrFail($user->id);
+            $currentVersion = $this->userLayoutVersion($user);
+            if (! hash_equals($currentVersion, $expectedVersion)) {
+                throw new DashboardLayoutConflictException($currentVersion);
+            }
+
+            DashboardLayout::query()
+                ->where('owner_type', DashboardLayout::OWNER_USER)
+                ->where('owner_id', $user->id)
+                ->delete();
+        });
+    }
+
+    /** Version only the caller's personal rows; role-default changes do not masquerade as user edits. */
+    public function userLayoutVersion(User $user): string
+    {
+        $canonical = DashboardLayout::query()
             ->where('owner_type', DashboardLayout::OWNER_USER)
             ->where('owner_id', $user->id)
-            ->delete();
+            ->orderBy('widget_key')
+            ->get(['widget_key', 'position_x', 'position_y', 'width', 'height'])
+            ->map(fn (DashboardLayout $row): array => [
+                $row->widget_key,
+                (int) $row->position_x,
+                (int) $row->position_y,
+                (int) $row->width,
+                (int) $row->height,
+            ])
+            ->values()
+            ->all();
+
+        return hash('sha256', json_encode($canonical, JSON_THROW_ON_ERROR));
     }
 
     /**
@@ -221,15 +236,12 @@ class DashboardLayoutService
      */
     public function listAvailableWidgets(User $user): array
     {
-        $isSystemAdmin = $user->role?->slug === 'system_admin';
-        $userPerms = $user->permission_slugs;
-
         return DashboardWidget::query()
             ->orderBy('module')
             ->orderBy('key')
             ->get()
             ->filter(fn (DashboardWidget $w) =>
-                $isSystemAdmin || ! $w->permission || in_array($w->permission, $userPerms, true)
+                $w->permission === null || $user->hasPermission($w->permission)
             )
             ->map(fn (DashboardWidget $w) => [
                 'key'         => $w->key,
@@ -243,5 +255,50 @@ class DashboardLayoutService
             ])
             ->values()
             ->all();
+    }
+
+    /**
+     * Resolve metadata only after applying the caller's current permissions.
+     * Keeping this in one helper makes the plain and rich layout paths share
+     * the exact same visibility boundary.
+     *
+     * @param Collection<int, DashboardLayout> $layout
+     * @return array<int, array{key: string, name: string, description: ?string, module: string, render_kind: string, x: int, y: int, w: int, h: int, source: string}>
+     */
+    private function hydrateVisibleLayout(User $user, Collection $layout, string $source): array
+    {
+        if ($layout->isEmpty()) {
+            return [];
+        }
+
+        $widgetMap = DashboardWidget::query()
+            ->whereIn('key', $layout->pluck('widget_key')->unique()->all())
+            ->get()
+            ->keyBy('key');
+
+        $rows = [];
+        foreach ($layout as $row) {
+            /** @var DashboardWidget|null $widget */
+            $widget = $widgetMap->get($row->widget_key);
+            if (! $widget || ($widget->permission !== null && ! $user->hasPermission($widget->permission))) {
+                continue;
+            }
+
+            $rows[] = [
+                'key'         => $widget->key,
+                'name'        => $widget->name,
+                'description' => $widget->description,
+                'module'      => $widget->module,
+                'permission'  => $widget->permission,
+                'render_kind' => $widget->render_kind->value,
+                'x'           => (int) $row->position_x,
+                'y'           => (int) $row->position_y,
+                'w'           => (int) $row->width,
+                'h'           => (int) $row->height,
+                'source'      => $source,
+            ];
+        }
+
+        return $rows;
     }
 }

@@ -104,7 +104,7 @@ class DashboardWidgetDataService
             'finance.unpaid_invoices' => $this->number(DB::table('invoices')->where('balance', '>', 0)->whereNotIn('status', [InvoiceStatus::Draft->value, InvoiceStatus::Cancelled->value])->count(), 'customer invoices with balance'),
             'finance.upcoming_payables' => $this->currency(DB::table('bills')->whereBetween('due_date', [$today, now()->addDays($payablesDays)->toDateString()])->where('balance', '>', 0)->sum('balance'), "due in the next {$payablesDays} days"),
 
-            'hr.headcount' => $this->number(DB::table('employees')->where('status', 'active')->count(), 'active employees'),
+            'hr.headcount' => $this->headcountSummary($user, $departmentId),
             'hr.on_leave_today' => $this->number($this->leaveCount($today), 'approved leave today'),
             'hr.team_on_leave_today' => $departmentId
                 ? $this->number($this->leaveCount($today, $departmentId), 'approved leave in your department')
@@ -112,7 +112,7 @@ class DashboardWidgetDataService
             'hr.team_dtr_today' => $departmentId
                 ? $this->number($this->attendanceCount($today, $departmentId), 'department DTR records today')
                 : ['value' => null, 'kind' => 'number', 'helper' => 'No department is linked to this account'],
-            'hr.probation_alerts' => $this->number(DB::table('employees')->where('status', 'active')->whereBetween('date_regularized', [$today, now()->addDays($probationDays)->toDateString()])->count(), "regularization due in {$probationDays} days"),
+            'hr.probation_alerts' => $this->probationSummary($user, $departmentId, $probationDays, $today),
             'payroll.upcoming' => $this->upcomingPayroll(),
             'approvals.pending' => $this->pendingApprovalsForRole($user),
 
@@ -176,8 +176,9 @@ class DashboardWidgetDataService
             // Department-scoped: `loans.view` is held by department_head, whose
             // loan list is department-filtered (Loans/Controllers/LoanController).
             // A company-wide count here would hand that role figures its own
-            // module refuses it — the same defect class as the old
-            // company-wide hr.on_leave_today gated on self-service leave.view.
+            // module refuses it. Company-wide HR widgets use the sensitive HR
+            // gate; the department-scoped team widgets use ordinary
+            // self-service reads.
             'loans.outstanding' => $this->outstandingLoans($user, $departmentId),
             default => throw new \InvalidArgumentException("Unsupported dashboard widget: {$key}"),
         };
@@ -311,6 +312,40 @@ class DashboardWidgetDataService
     private function leaveCount(string $today, mixed $departmentId = null): int
     {
         return DB::table('leave_requests as lr')->join('employees as e', 'e.id', '=', 'lr.employee_id')->where('lr.status', 'approved')->whereDate('lr.start_date', '<=', $today)->whereDate('lr.end_date', '>=', $today)->when($departmentId, fn ($q) => $q->where('e.department_id', $departmentId))->count();
+    }
+
+    private function headcountSummary(User $user, mixed $departmentId): array
+    {
+        $query = DB::table('employees')->where('status', 'active');
+        $companyWide = $this->scope->isCompanyWide($user, 'hr.employees.view_sensitive');
+
+        if (! $companyWide) {
+            if ($departmentId === null) {
+                return ['value' => null, 'kind' => 'number', 'helper' => 'No department is linked to this account'];
+            }
+            $query->where('department_id', $departmentId);
+        }
+
+        return $this->number($query->count(), $companyWide ? 'active employees' : 'active employees in your department');
+    }
+
+    private function probationSummary(User $user, mixed $departmentId, int $horizonDays, string $today): array
+    {
+        $query = DB::table('employees')
+            ->where('status', 'active')
+            ->whereBetween('date_regularized', [$today, now()->addDays($horizonDays)->toDateString()]);
+
+        $companyWide = $this->scope->isCompanyWide($user, 'hr.employees.view_sensitive');
+        if (! $companyWide) {
+            if ($departmentId === null) {
+                return ['value' => null, 'kind' => 'number', 'helper' => 'No department is linked to this account'];
+            }
+            $query->where('department_id', $departmentId);
+        }
+
+        return $this->number($query->count(), $companyWide
+            ? "regularization due in {$horizonDays} days"
+            : "department reviews due in {$horizonDays} days");
     }
 
     private function attendanceCount(string $today, mixed $departmentId): int

@@ -78,6 +78,7 @@ class NotificationDigestService
                         $user->name ?? null,
                         $this->summarise($rows),
                         $total,
+                        (int) $user->id,
                     ));
                     $emailsSent++;
                     $summarised += $total;

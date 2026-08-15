@@ -68,6 +68,9 @@ class PayrollPeriod extends Model
         // a raw string: the resource's optional()->toIso8601String() silently
         // yielded null and any date comparison on it blew up.
         'processing_started_at' => 'datetime',
+        'processing_token' => 'string',
+        'thirteenth_month_run_token' => 'string',
+        'tax_reconciliation_signed_at' => 'datetime',
     ];
 
     public function payrolls(): HasMany

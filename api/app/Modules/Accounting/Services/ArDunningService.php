@@ -6,6 +6,7 @@ namespace App\Modules\Accounting\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\CurrencyDisplayService;
+use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Enums\InvoiceStatus;
@@ -57,8 +58,9 @@ class ArDunningService
 
         foreach ($invoices as $invoice) {
             $evaluated++;
+            $emailFailure = null;
             try {
-                $outcome = DB::transaction(function () use ($invoice, $today, $tiers): string {
+                $outcome = DB::transaction(function () use ($invoice, $today, $tiers, &$emailFailure): string {
                     // Two scheduler instances can select the same invoice
                     // before either has persisted last_dunning_tier. Re-read
                     // and lock the authoritative row so only one tier claim
@@ -87,10 +89,31 @@ class ArDunningService
                             'invoice_id' => $locked->id,
                         ]);
 
+                        $this->notifyArEmailFailure(
+                            $locked,
+                            $daysOverdue,
+                            'The customer has no usable email address. Contact the customer through an approved channel.',
+                        );
+
                         return 'blocked';
                     }
 
-                    Mail::to($email)->queue(new InvoiceDunningMail($locked, $tier, $daysOverdue));
+                    try {
+                        Mail::to($email)->queue(new InvoiceDunningMail(
+                            $locked,
+                            $tier,
+                            $daysOverdue,
+                            $this->arOfficerIds(),
+                        ));
+                    } catch (\Throwable $e) {
+                        // The transaction must roll back the tier claim. The
+                        // fallback is sent after rollback in the outer catch.
+                        $emailFailure = [
+                            'invoice_id' => (int) $locked->id,
+                            'days_overdue' => $daysOverdue,
+                        ];
+                        throw $e;
+                    }
 
                     $locked->forceFill([
                         'last_dunning_tier' => $tier,
@@ -111,6 +134,14 @@ class ArDunningService
                 };
             } catch (\Throwable $e) {
                 $failed++;
+                if (is_array($emailFailure)) {
+                    $failedInvoice = $invoice->fresh('customer') ?? $invoice;
+                    $this->notifyArEmailFailure(
+                        $failedInvoice,
+                        (int) $emailFailure['days_overdue'],
+                        'The reminder could not be accepted by the email provider. Contact the customer through an approved channel.',
+                    );
+                }
                 Log::warning('ArDunning failed for invoice', [
                     'invoice_id' => $invoice->id,
                     'error' => $e->getMessage(),
@@ -168,5 +199,31 @@ class ArDunningService
                 " is {$daysOverdue} days overdue (".app(CurrencyDisplayService::class)->format($invoice->balance).').',
             'link_to' => '/accounting/invoices',
         ]);
+    }
+
+    /** @return list<int> */
+    private function arOfficerIds(): array
+    {
+        return User::query()
+            ->whereHas('role.permissions', fn ($q) => $q->where('slug', 'accounting.invoices.view'))
+            ->where('is_active', true)
+            ->pluck('id')
+            ->map(static fn ($id): int => (int) $id)
+            ->all();
+    }
+
+    private function notifyArEmailFailure(Invoice $invoice, int $daysOverdue, string $message): void
+    {
+        app(EmailDeliveryFailureNotifier::class)->notifyUserIds(
+            $this->arOfficerIds(),
+            'Customer AR reminder',
+            "Invoice {$invoice->invoice_number} for ".($invoice->customer?->name ?? 'unknown customer')." is {$daysOverdue} days overdue. {$message}",
+            [
+                'link_to' => '/accounting/invoices',
+                'entity_type' => 'invoice',
+                'entity_id' => $invoice->hash_id,
+                'reason' => 'The customer email was missing, unreachable, or rejected by the email provider.',
+            ],
+        );
     }
 }

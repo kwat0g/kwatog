@@ -28,6 +28,26 @@ class NotifyEmployeesOnPayrollFinalized implements ShouldQueue
 
             if ($userIds->isEmpty()) return;
 
+            // P01-03 — cross-call dedupe. A redelivered finalize event (the
+            // listener failed after the insert committed, so the outbox row
+            // returned to PENDING) must not stack a second "payslip ready"
+            // inbox row per employee. Skip recipients who already hold this
+            // period's notice.
+            $periodHashId = method_exists($period, 'getHashIdAttribute') ? $period->hash_id : null;
+            if ($periodHashId) {
+                $alreadyNotified = DB::table('notifications')
+                    ->where('type', 'chain.payslip_ready')
+                    ->where('notifiable_type', User::class)
+                    ->whereIn('notifiable_id', $userIds)
+                    ->whereRaw("data->>'entity_id' = ?", [$periodHashId])
+                    ->distinct()
+                    ->pluck('notifiable_id');
+
+                $userIds = $userIds->diff($alreadyNotified);
+            }
+
+            if ($userIds->isEmpty()) return;
+
             $users = User::query()->whereIn('id', $userIds)->where('is_active', true)->get();
             $periodLabel = $this->periodLabel($period);
 

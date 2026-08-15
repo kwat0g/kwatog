@@ -63,23 +63,31 @@ class SalaryAdjustmentService
     public function approve(SalaryAdjustment $adjustment, User $user, ?string $remarks = null): SalaryAdjustment
     {
         return DB::transaction(function () use ($adjustment, $user, $remarks): SalaryAdjustment {
-            $this->approvals->approve($adjustment, $user, $remarks);
+            // Lock the adjustment row so the "apply once" guard in apply()
+            // serializes concurrent approvers of the final workflow step — two
+            // in-flight approvers of a multi-step chain would otherwise both
+            // pass the stale applied_at check and double-apply the raise.
+            $locked = SalaryAdjustment::query()->lockForUpdate()->findOrFail($adjustment->getKey());
 
-            if ($this->approvals->isFullyApproved($adjustment)) {
-                $this->apply($adjustment);
+            $this->approvals->approve($locked, $user, $remarks);
+
+            if ($this->approvals->isFullyApproved($locked)) {
+                $this->apply($locked);
             }
 
-            return $adjustment->fresh(['employee', 'requester']);
+            return $locked->fresh(['employee', 'requester']);
         });
     }
 
     public function reject(SalaryAdjustment $adjustment, User $user, string $remarks): SalaryAdjustment
     {
         return DB::transaction(function () use ($adjustment, $user, $remarks): SalaryAdjustment {
-            $this->approvals->reject($adjustment, $user, $remarks);
-            $adjustment->forceFill(['status' => SalaryAdjustmentStatus::Rejected])->save();
+            $locked = SalaryAdjustment::query()->lockForUpdate()->findOrFail($adjustment->getKey());
 
-            return $adjustment->fresh(['employee', 'requester']);
+            $this->approvals->reject($locked, $user, $remarks);
+            $locked->forceFill(['status' => SalaryAdjustmentStatus::Rejected])->save();
+
+            return $locked->fresh(['employee', 'requester']);
         });
     }
 

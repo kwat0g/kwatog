@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Schema;
  * Sprint 6 — Task 47.
  * Finished-good products sold by the CRM module. References:
  *   - docs/SCHEMA.md "MRP / products"
- *   - plans/ogami-erp-sprint-6-order-to-cash-part-1-crm-mrp-production-tasks-47-58.md
+ *   - historical Sprint 6 order-to-cash specification
  *
  * NOTE: schema.md groups this under MRP because the BOM hangs off it, but the
  * product master is owned by the CRM module per the file structure in CLAUDE.md.

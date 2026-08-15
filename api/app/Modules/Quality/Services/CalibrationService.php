@@ -44,13 +44,26 @@ class CalibrationService
      */
     public function recordCalibration(CalibrationRecord $record, string $onDate): CalibrationRecord
     {
-        $last = CarbonImmutable::parse($onDate);
-        $record->last_calibration_date = $last->toDateString();
-        $record->next_calibration_date = $last->addDays($record->frequency_days)->toDateString();
-        $record->status = $this->statusFor($record->next_calibration_date?->toDateString(), $record->status);
-        $record->save();
+        return DB::transaction(function () use ($record, $onDate) {
+            // Lock-then-guard: re-read so a concurrent entry cannot regress the
+            // register from a stale snapshot.
+            $locked = CalibrationRecord::query()->lockForUpdate()->findOrFail($record->getKey());
+            $last = CarbonImmutable::parse($onDate);
 
-        return $record->fresh();
+            // Never regress: a backdated entry must not roll last/next dates
+            // back after a newer calibration already committed.
+            if ($locked->last_calibration_date !== null
+                && $last->lte(CarbonImmutable::parse($locked->last_calibration_date))) {
+                return $locked->fresh();
+            }
+
+            $locked->last_calibration_date = $last->toDateString();
+            $locked->next_calibration_date = $last->addDays($locked->frequency_days)->toDateString();
+            $locked->status = $this->statusFor($locked->next_calibration_date?->toDateString(), $locked->status);
+            $locked->save();
+
+            return $locked->fresh();
+        });
     }
 
     /**

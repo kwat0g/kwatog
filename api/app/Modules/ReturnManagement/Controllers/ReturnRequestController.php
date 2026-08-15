@@ -169,7 +169,7 @@ class ReturnRequestController extends Controller
      */
     public function receive(ReceiveReturnRequest $request, ReturnRequest $returnRequest): ReturnRequestResource
     {
-        $rma = $this->service->receive($returnRequest, $request->receivedQuantitiesById());
+        $rma = $this->service->receive($returnRequest, $request->receivedQuantitiesById(), $request->quarantineLocationId(), $request->user());
         return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor']));
     }
 

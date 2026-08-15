@@ -3,15 +3,37 @@
 declare(strict_types=1);
 
 namespace App\Modules\B2B\Controllers;
+use App\Common\Rules\StrongPassword;
 
 use App\Modules\B2B\Models\SupplierPortalUser;
 use App\Modules\B2B\Services\B2bAuthService;
+use App\Modules\B2B\Services\PortalPasswordResetService;
+use App\Modules\B2B\Services\PortalPasswordService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class SupplierAuthController
 {
     public function __construct(private readonly B2bAuthService $auth) {}
+
+    public function forgotPassword(Request $request, PortalPasswordResetService $resets): JsonResponse
+    {
+        $data = $request->validate(['email' => ['required', 'email']]);
+        $resets->requestReset('supplier', $data['email']);
+
+        return response()->json(['message' => 'If an active portal account exists for that email, a reset link will be sent shortly.']);
+    }
+
+    public function resetPassword(Request $request, PortalPasswordResetService $resets): JsonResponse
+    {
+        $data = $request->validate([
+            'token' => ['required', 'string'],
+            'password' => ['required', 'string', 'confirmed', new StrongPassword()],
+        ]);
+        $resets->reset('supplier', $data['token'], $data['password']);
+
+        return response()->json(['message' => 'Portal password updated. You can now sign in.']);
+    }
 
     /**
      * POST /api/v1/b2b/supplier/login
@@ -44,6 +66,7 @@ class SupplierAuthController
                     'name'      => $user->name,
                     'email'     => $user->email,
                     'vendor_id' => app('hashids')->encode((int) $user->vendor_id),
+                    'must_change_password' => $user->must_change_password,
                 ],
             ],
         ]);
@@ -62,6 +85,19 @@ class SupplierAuthController
         return response()->json(['message' => 'Logged out successfully.']);
     }
 
+    public function changePassword(Request $request, PortalPasswordService $passwords): JsonResponse
+    {
+        $data = $request->validate([
+            'current_password' => ['required', 'string'],
+            'new_password' => ['required', 'string', 'confirmed', new StrongPassword()],
+            'new_password_confirmation' => ['required', 'string'],
+        ]);
+
+        $passwords->change($request->user('supplier_portal'), $data['current_password'], $data['new_password'], $request);
+
+        return response()->json(['message' => 'Password updated successfully. Please sign in again.']);
+    }
+
     /**
      * GET /api/v1/b2b/supplier/me
      * Return the authenticated supplier portal user's info.
@@ -78,6 +114,7 @@ class SupplierAuthController
                 'email'       => $user->email,
                 'vendor_id'   => app('hashids')->encode((int) $user->vendor_id),
                 'vendor_name' => $user->vendor?->name,
+                'must_change_password' => $user->must_change_password,
             ],
         ]);
     }

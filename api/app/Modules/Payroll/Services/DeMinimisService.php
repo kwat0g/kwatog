@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace App\Modules\Payroll\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\SettingsService;
 use App\Common\Support\Money;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Payroll\Enums\DeMinimisBenefitType;
 use App\Modules\Payroll\Models\DeMinimisBenefit;
 use App\Modules\Payroll\Models\PayrollPeriod;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -43,7 +45,8 @@ class DeMinimisService
         ?int $payrollId = null,
         ?string $notes = null,
     ): DeMinimisBenefit {
-        return DB::transaction(function () use ($employee, $benefitType, $amount, $periodYear, $periodMonth, $payrollId, $notes) {
+        try {
+            return DB::transaction(function () use ($employee, $benefitType, $amount, $periodYear, $periodMonth, $payrollId, $notes) {
             // Determine the non-taxable portion: the min of this amount and the remaining limit.
             $excess = $this->getTaxableExcess($employee, $benefitType, $periodYear, $periodMonth, $amount);
             $nonTaxableAmount = Money::sub($amount, $excess);
@@ -93,6 +96,15 @@ class DeMinimisService
                 'is_taxable_portion' => true,
             ])->latest()->first();
         });
+        } catch (QueryException $e) {
+            // The de_minimis_unique_employee_month constraint makes a duplicate
+            // benefit for the same employee/month a hard DB error; surface it as
+            // a clean business rule instead of a 500.
+            if ((string) $e->getCode() === '23505') {
+                throw new BusinessRuleException('De-minimis benefit already recorded for this employee and month.');
+            }
+            throw $e;
+        }
     }
 
     /**

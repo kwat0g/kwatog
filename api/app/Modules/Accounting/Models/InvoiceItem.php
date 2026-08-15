@@ -16,7 +16,7 @@ class InvoiceItem extends Model
     public $timestamps = false;
 
     protected $fillable = [
-        'invoice_id', 'revenue_account_id', 'product_id', 'description',
+        'invoice_id', 'revenue_account_id', 'product_id', 'source_delivery_item_id', 'description',
         'quantity', 'unit', 'unit_price', 'total',
     ];
 
@@ -34,5 +34,10 @@ class InvoiceItem extends Model
     public function revenueAccount(): BelongsTo
     {
         return $this->belongsTo(Account::class, 'revenue_account_id');
+    }
+
+    public function sourceDeliveryItem(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\SupplyChain\Models\DeliveryItem::class, 'source_delivery_item_id');
     }
 }

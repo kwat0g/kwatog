@@ -8,7 +8,9 @@ use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
+use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Production\Models\WorkOrderOutput;
 use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
@@ -32,8 +34,8 @@ class Inspection extends Model
     protected $fillable = [
         'inspection_number', 'stage', 'status',
         'product_id', 'item_id', 'inspection_spec_id',
-        'item_quality_plan_id', 'entity_type', 'entity_id', 'grn_item_id',
-        'batch_quantity', 'sample_size',
+        'item_quality_plan_id', 'entity_type', 'entity_id', 'work_order_output_id', 'grn_item_id',
+        'batch_quantity', 'accepted_quantity', 'sample_size',
         'aql_code', 'accept_count', 'reject_count', 'defect_count',
         'inspector_id', 'started_at', 'completed_at', 'notes',
     ];
@@ -43,6 +45,7 @@ class Inspection extends Model
         'status' => InspectionStatus::class,
         'entity_type' => InspectionEntityType::class,
         'batch_quantity' => 'integer',
+        'accepted_quantity' => 'integer',
         'sample_size' => 'integer',
         'accept_count' => 'integer',
         'reject_count' => 'integer',
@@ -73,7 +76,12 @@ class Inspection extends Model
 
     public function grnItem(): BelongsTo
     {
-        return $this->belongsTo(\App\Modules\Inventory\Models\GrnItem::class, 'grn_item_id');
+        return $this->belongsTo(GrnItem::class, 'grn_item_id');
+    }
+
+    public function workOrderOutput(): BelongsTo
+    {
+        return $this->belongsTo(WorkOrderOutput::class, 'work_order_output_id');
     }
 
     public function inspector(): BelongsTo

@@ -28,6 +28,7 @@ class WorkOrderOutputResource extends JsonResource
             'shift'        => $this->shift,
             'batch_code'   => $this->batch_code,
             'remarks'      => $this->remarks,
+            'material_lineage' => $this->material_lineage,
             'production_receipt_handoff' => [
                 'status' => $this->production_receipt_handoff_status instanceof ProductionReceiptHandoffStatus
                     ? $this->production_receipt_handoff_status->value

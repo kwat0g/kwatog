@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Purchasing\Services;
 
+use App\Common\Services\NotificationService;
+use App\Modules\Auth\Models\User;
 use App\Common\Services\SettingsService;
 use App\Modules\Purchasing\Contracts\SupplierDispatchGateway;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
@@ -43,7 +45,7 @@ class SupplierDispatchService
             throw $e;
         }
 
-        return $this->complete($claimed->id, $result);
+        return $this->complete($claimed->id, $result, $purchaseOrder);
     }
 
     /**
@@ -224,9 +226,9 @@ class SupplierDispatchService
         });
     }
 
-    private function complete(int $dispatchId, SupplierDispatchResult $result): SupplierOrderDispatch
+    private function complete(int $dispatchId, SupplierDispatchResult $result, PurchaseOrder $purchaseOrder): SupplierOrderDispatch
     {
-        return DB::transaction(function () use ($dispatchId, $result): SupplierOrderDispatch {
+        $dispatch = DB::transaction(function () use ($dispatchId, $result): SupplierOrderDispatch {
             $dispatch = SupplierOrderDispatch::query()->lockForUpdate()->findOrFail($dispatchId);
             if ($dispatch->status !== SupplierDispatchStatus::Pending) {
                 return $dispatch;
@@ -245,6 +247,44 @@ class SupplierDispatchService
 
             return $dispatch->fresh();
         });
+
+        if (in_array($dispatch->status, [
+            SupplierDispatchStatus::PortalAvailable,
+            SupplierDispatchStatus::ManualRequired,
+        ], true)) {
+            try {
+                $this->notifyPurchasing($purchaseOrder, $dispatch->status);
+            } catch (\Throwable $e) {
+                Log::warning('Supplier dispatch action alert failed; dispatch state remains durable.', [
+                    'purchase_order_id' => $purchaseOrder->id,
+                    'dispatch_id' => $dispatch->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return $dispatch;
+    }
+
+    private function notifyPurchasing(PurchaseOrder $purchaseOrder, SupplierDispatchStatus $status): void
+    {
+        $recipients = User::query()
+            ->whereHas('role.permissions', fn ($q) => $q->where('slug', 'purchasing.view'))
+            ->where('is_active', true)
+            ->get();
+
+        $isPortal = $status === SupplierDispatchStatus::PortalAvailable;
+        app(NotificationService::class)->sendInApp($recipients, 'supplier.dispatch_action_required', [
+            'title' => $isPortal
+                ? 'Supplier PO is available in the portal'
+                : 'Supplier PO needs manual transmission',
+            'message' => $isPortal
+                ? "PO {$purchaseOrder->po_number} is available to the supplier portal. Confirm transmission after the supplier is actually notified."
+                : "PO {$purchaseOrder->po_number} has no active supplier portal recipient. Send the approved PO through an approved channel and confirm transmission.",
+            'link_to' => "/purchasing/purchase-orders/{$purchaseOrder->hash_id}",
+            'entity_type' => 'purchase_order',
+            'entity_id' => $purchaseOrder->hash_id,
+        ]);
     }
 
     private function recordFailure(int $dispatchId, Throwable $exception): void

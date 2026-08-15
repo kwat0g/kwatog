@@ -129,10 +129,23 @@ class MaintenanceScheduleService
      */
     public function recomputeNextDueAt(MaintenanceSchedule $schedule, ?Carbon $completedAt = null): MaintenanceSchedule
     {
-        $schedule->last_performed_at = $completedAt ?? now();
-        $schedule->next_due_at = $this->computeNextDueAt($schedule);
-        $schedule->save();
-        return $schedule;
+        return DB::transaction(function () use ($schedule, $completedAt) {
+            // Lock-then-guard: re-read so two completions for the same schedule
+            // serialize the read-modify-write instead of regressing the due date.
+            $locked = MaintenanceSchedule::query()->lockForUpdate()->findOrFail($schedule->getKey());
+            $completedAt = $completedAt ?? now();
+
+            // Never regress last_performed_at: a stale, older completion must
+            // not overwrite a newer one that already committed.
+            if ($locked->last_performed_at !== null && $completedAt->lte($locked->last_performed_at)) {
+                return $locked;
+            }
+
+            $locked->last_performed_at = $completedAt;
+            $locked->next_due_at = $this->computeNextDueAt($locked);
+            $locked->save();
+            return $locked;
+        });
     }
 
     /**

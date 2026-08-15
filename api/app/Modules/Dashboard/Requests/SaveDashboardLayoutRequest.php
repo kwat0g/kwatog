@@ -21,6 +21,7 @@ class SaveDashboardLayoutRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'layout_version' => ['required', 'string', 'size:64'],
             'widgets'        => ['required', 'array'],
             'widgets.*.key'  => ['required', 'string', 'max:100'],
             'widgets.*.x'    => ['sometimes', 'integer', 'min:0', 'max:255'],

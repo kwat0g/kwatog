@@ -108,28 +108,34 @@ class ShipmentService
 
     public function updateStatus(Shipment $s, ShipmentStatus $next, ?string $note = null): Shipment
     {
-        $current = $s->status instanceof ShipmentStatus ? $s->status : ShipmentStatus::from((string) $s->status);
-        if (! $current->canTransitionTo($next)) {
-            throw new BusinessRuleException("Cannot transition shipment {$s->shipment_number} from {$current->value} to {$next->value}.");
-        }
-        $patch = ['status' => $next->value];
-        // Auto-stamp date columns at known transitions.
-        $today = now()->toDateString();
-        if ($next === ShipmentStatus::Shipped && ! $s->atd) {
-            $patch['atd'] = $today;
-        }
-        if ($next === ShipmentStatus::Cleared && ! $s->customs_clearance_date) {
-            $patch['customs_clearance_date'] = $today;
-        }
-        if ($next === ShipmentStatus::Received && ! $s->ata) {
-            $patch['ata'] = $today;
-        }
-        if ($note) {
-            $patch['notes'] = trim(($s->notes ? $s->notes."\n" : '').'['.$next->value.'] '.$note);
-        }
-        $s->forceFill($patch)->save();
+        return DB::transaction(function () use ($s, $next, $note) {
+            // Lock-then-guard: re-read so a stale transition cannot overwrite a
+            // shipment a concurrent update already advanced (same pattern as
+            // DeliveryService::updateStatus).
+            $locked = Shipment::query()->lockForUpdate()->findOrFail($s->getKey());
+            $current = $locked->status instanceof ShipmentStatus ? $locked->status : ShipmentStatus::from((string) $locked->status);
+            if (! $current->canTransitionTo($next)) {
+                throw new BusinessRuleException("Cannot transition shipment {$locked->shipment_number} from {$current->value} to {$next->value}.");
+            }
+            $patch = ['status' => $next->value];
+            // Auto-stamp date columns at known transitions.
+            $today = now()->toDateString();
+            if ($next === ShipmentStatus::Shipped && ! $locked->atd) {
+                $patch['atd'] = $today;
+            }
+            if ($next === ShipmentStatus::Cleared && ! $locked->customs_clearance_date) {
+                $patch['customs_clearance_date'] = $today;
+            }
+            if ($next === ShipmentStatus::Received && ! $locked->ata) {
+                $patch['ata'] = $today;
+            }
+            if ($note) {
+                $patch['notes'] = trim(($locked->notes ? $locked->notes."\n" : '').'['.$next->value.'] '.$note);
+            }
+            $locked->forceFill($patch)->save();
 
-        return $this->show($s);
+            return $this->show($locked);
+        });
     }
 
     /**

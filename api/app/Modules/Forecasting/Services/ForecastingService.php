@@ -104,6 +104,8 @@ class ForecastingService
         return DB::transaction(function () use (
             $productId, $customerId, $forecastYear, $forecastMonth, $method, $qty, $confidence, $user
         ) {
+            $this->lockForecastKey($productId, $customerId, $forecastYear, $forecastMonth);
+
             $existing = DemandForecast::query()
                 ->where('product_id', $productId)
                 ->where('customer_id', $customerId)
@@ -198,6 +200,8 @@ class ForecastingService
         return DB::transaction(function () use (
             $productId, $customerId, $forecastYear, $forecastMonth, $quantity, $confidence, $user
         ) {
+            $this->lockForecastKey($productId, $customerId, $forecastYear, $forecastMonth);
+
             $existing = DemandForecast::query()
                 ->where('product_id', $productId)
                 ->where('customer_id', $customerId)
@@ -374,5 +378,28 @@ class ForecastingService
         $cv     = $stddev / $mean;
         $conf   = 100.0 - (100.0 * $cv);
         return max(0.0, min(100.0, $conf));
+    }
+
+    /**
+     * Serialize canonical writes for one logical forecast key. PostgreSQL's
+     * transaction advisory lock closes the read/update-or-create race for
+     * service callers; other test/dev drivers safely fall back to the unique
+     * database constraint without attempting unsupported lock SQL.
+     */
+    private function lockForecastKey(int $productId, ?int $customerId, int $forecastYear, int $forecastMonth): void
+    {
+        if (DB::getDriverName() !== 'pgsql') {
+            return;
+        }
+
+        $key = sprintf(
+            'demand-forecast:%d:%s:%d:%d',
+            $productId,
+            $customerId === null ? 'total' : (string) $customerId,
+            $forecastYear,
+            $forecastMonth,
+        );
+
+        DB::select('SELECT pg_advisory_xact_lock(hashtextextended(?::text, 0))', [$key]);
     }
 }

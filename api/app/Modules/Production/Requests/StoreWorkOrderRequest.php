@@ -41,6 +41,8 @@ class StoreWorkOrderRequest extends FormRequest
             'planned_start'   => ['required', 'date'],
             'planned_end'     => ['required', 'date', 'after_or_equal:planned_start'],
             'priority'        => ['nullable', 'integer', 'min:0', 'max:255'],
+            'work_order_class' => ['nullable', 'string', 'in:standard,service,non_stock,prototype'],
+            'exception_reason' => ['required_unless:work_order_class,standard', 'nullable', 'string', 'max:2000'],
         ];
     }
 }

@@ -118,4 +118,11 @@ class PurchaseOrder extends Model
         if ($totalOrdered <= 0) return 0.0;
         return round(($totalReceived / $totalOrdered) * 100, 2);
     }
+
+    public function getQuantityAcceptedPercentAttribute(): float
+    {
+        $ordered = (float) $this->items()->sum('quantity');
+        $accepted = (float) $this->items()->sum('quantity_accepted');
+        return $ordered > 0 ? round(($accepted / $ordered) * 100, 2) : 0.0;
+    }
 }

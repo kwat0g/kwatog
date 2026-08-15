@@ -21,6 +21,9 @@ class PublicRecruitmentController
     {
         $query = JobPosting::with('department')
             ->where('status', JobPostingStatus::Open)
+            ->where(function ($q): void {
+                $q->whereNull('closes_at')->orWhere('closes_at', '>', now());
+            })
             ->orderByDesc('posted_at');
 
         if ($request->filled('department_id')) {
@@ -35,7 +38,8 @@ class PublicRecruitmentController
 
     public function show(JobPosting $jobPosting): PublicJobPostingResource
     {
-        if ($jobPosting->status !== JobPostingStatus::Open) {
+        if ($jobPosting->status !== JobPostingStatus::Open
+            || ($jobPosting->closes_at && $jobPosting->closes_at->isPast())) {
             abort(404);
         }
 

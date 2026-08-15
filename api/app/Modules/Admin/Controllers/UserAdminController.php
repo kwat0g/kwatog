@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Admin\Controllers;
 
+use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Modules\Admin\Requests\BulkChangeUserRoleRequest;
 use App\Modules\Admin\Requests\ChangeUserRoleRequest;
 use App\Modules\Admin\Requests\CreateUserRequest;
@@ -55,7 +56,21 @@ class UserAdminController
         ]);
 
         if ($payload['send_welcome'] && $created->tempPassword !== '') {
-            $created->user->notify(new WelcomeNotification($created->tempPassword));
+            try {
+                $created->user->notify(new WelcomeNotification($created->tempPassword));
+            } catch (\Throwable $e) {
+                app(EmailDeliveryFailureNotifier::class)->notifyPermission(
+                    'admin.users.manage',
+                    'User welcome email',
+                    "The welcome email for {$created->user->name} ({$created->user->email}) could not be delivered. Use the returned temporary password through an approved channel.",
+                    [
+                        'link_to' => '/admin/users/'.$created->user->hash_id,
+                        'entity_type' => 'user',
+                        'entity_id' => $created->user->hash_id,
+                        'reason' => 'The email provider rejected or could not deliver the welcome message.',
+                    ],
+                );
+            }
         }
 
         return response()->json([
@@ -90,7 +105,12 @@ class UserAdminController
 
     public function changeRole(ChangeUserRoleRequest $request, User $user): AdminUserDetailResource
     {
-        $updated = $this->service->changeRole($user, $request->decodedRoleId());
+        $updated = $this->service->changeRole(
+            $user,
+            $request->decodedRoleId(),
+            $request->decodedExpectedRoleId(),
+            $request->reason(),
+        );
         return new AdminUserDetailResource($updated->load(['employee.department', 'employee.position']));
     }
 
@@ -117,12 +137,14 @@ class UserAdminController
             $decoded['ids'],
             $request->decodedRoleId(),
             $request->reason(),
+            $request->decodedExpectedRoleIds(),
         );
 
         return response()->json([
             'message' => 'Roles updated.',
             'data' => [
-                'updated' => $updated,
+                'updated' => $updated['updated'],
+                'conflicts' => $updated['conflicts'],
                 'invalid_ids' => $decoded['invalid'],
             ],
         ]);

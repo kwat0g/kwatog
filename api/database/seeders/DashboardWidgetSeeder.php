@@ -66,13 +66,11 @@ class DashboardWidgetSeeder extends Seeder
 
             // ─── HR / Payroll ───────────────────────────────────────
             ['key' => 'hr.headcount',                  'name' => 'Headcount by Department',   'module' => 'hr',          'permission' => 'hr.employees.view', 'render_kind' => 'breakdown'],
-            // Company-wide counts, so they must be gated on a company-wide
-            // read — NOT on `leave.view` / `payroll.view`, which every role
-            // holds for its own self-service pages (RolePermissionSeeder::selfService).
-            // Gated that way, `employee` and `driver` saw the whole company's
-            // leave roster and the payroll calendar. The department-scoped
-            // reading of the same data is `hr.team_on_leave_today`.
-            ['key' => 'hr.on_leave_today',             'name' => 'On Leave Today',            'module' => 'hr',          'permission' => 'hr.employees.view'],
+            // Company-wide leave requires the same sensitive HR gate as the
+            // employee controller's all-row view. A department head may read
+            // their team through the separate team widget, but must not add a
+            // company-wide roster through the picker.
+            ['key' => 'hr.on_leave_today',             'name' => 'On Leave Today',            'module' => 'hr',          'permission' => 'hr.employees.view_sensitive'],
             ['key' => 'hr.team_on_leave_today',        'name' => 'Team On Leave Today',       'module' => 'hr',          'permission' => 'leave.view'],
             ['key' => 'hr.team_dtr_today',             'name' => 'Team DTR Today',            'module' => 'hr',          'permission' => 'attendance.view'],
             ['key' => 'hr.probation_alerts',           'name' => 'Probation Alerts',          'module' => 'hr',          'permission' => 'hr.employees.view'],

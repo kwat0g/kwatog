@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Payroll\Jobs;
 
+use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Modules\Payroll\Mail\PayslipMail;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Services\PayslipPdfService;
@@ -108,5 +109,18 @@ class SendPayslipEmailJob implements ShouldQueue
                 'payslip_email_last_error' => mb_substr($message, 0, 65535),
             ])->saveQuietly();
         });
+
+        $payroll = Payroll::query()->with('employee.user')->find($this->payrollId);
+        app(EmailDeliveryFailureNotifier::class)->notifyUserId(
+            $payroll?->employee?->user?->id,
+            'Employee payslip',
+            'Your payslip email could not be delivered. Open the payroll section in the application to view it.',
+            [
+                'link_to' => '/self-service/payslips',
+                'entity_type' => 'payroll',
+                'entity_id' => $payroll?->hash_id,
+                'reason' => 'The email provider rejected or could not deliver the payslip.',
+            ],
+        );
     }
 }

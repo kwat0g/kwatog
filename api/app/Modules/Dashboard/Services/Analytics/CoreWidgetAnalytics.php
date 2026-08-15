@@ -206,12 +206,13 @@ final class CoreWidgetAnalytics
             ];
         }
 
-        return ['total' => round($total, 2), 'segments' => $segments];
+        return ['total' => round($total, 2), 'segments' => $segments, 'kind' => 'currency'];
     }
 
     /**
-     * Active headcount per department. Department-scoped viewers see only
-     * their own row — the same permission gate the HR widgets already use.
+     * Active headcount per department. Only the sensitive HR read is
+     * company-wide; the ordinary employee read is department-scoped, matching
+     * EmployeeService's DepartmentScope policy.
      *
      * @return array<string, mixed>
      */
@@ -225,7 +226,7 @@ final class CoreWidgetAnalytics
             ->groupBy('departments.name')
             ->orderByDesc('value');
 
-        if (! $this->scope->isCompanyWide($user, 'hr.employees.view')) {
+        if (! $this->scope->isCompanyWide($user, 'hr.employees.view_sensitive')) {
             $departmentId = $this->scope->departmentId($user);
             if ($departmentId === null) {
                 return ['total' => 0, 'segments' => []];

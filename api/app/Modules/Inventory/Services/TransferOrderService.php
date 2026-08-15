@@ -57,12 +57,15 @@ class TransferOrderService
     public function execute(int $id, User $user): TransferOrder
     {
         return DB::transaction(function () use ($id, $user) {
-            $order = TransferOrder::findOrFail($id);
+            // Lock-then-guard: re-read under a row lock so concurrent executes
+            // cannot both observe Pending and post the movement twice (P39).
+            $order = TransferOrder::query()->lockForUpdate()->findOrFail($id);
             if ($order->status !== TransferOrderStatus::Pending) {
                 throw new BusinessRuleException('Transfer order is not pending.');
             }
 
-            // Execute via existing StockTransferService
+            // Execute via existing StockTransferService; backfill the movement
+            // reference so the ledger row traces back to this transfer order.
             $this->transfers->transfer(
                 $order->item_id,
                 $order->from_location_id,
@@ -70,6 +73,7 @@ class TransferOrderService
                 (string) $order->quantity,
                 $order->reason,
                 $user,
+                $order->id,
             );
 
             $order->update([
@@ -90,11 +94,15 @@ class TransferOrderService
 
     public function cancel(int $id): TransferOrder
     {
-        $order = TransferOrder::findOrFail($id);
-        if ($order->status !== TransferOrderStatus::Pending) {
-            throw new BusinessRuleException('Can only cancel pending transfer orders.');
-        }
-        $order->update(['status' => TransferOrderStatus::Cancelled->value]);
-        return $order->fresh();
+        return DB::transaction(function () use ($id) {
+            // Lock-then-guard: without the lock, cancel could race execute and
+            // mark an order Cancelled after its stock already moved.
+            $order = TransferOrder::query()->lockForUpdate()->findOrFail($id);
+            if ($order->status !== TransferOrderStatus::Pending) {
+                throw new BusinessRuleException('Can only cancel pending transfer orders.');
+            }
+            $order->update(['status' => TransferOrderStatus::Cancelled->value]);
+            return $order->fresh();
+        });
     }
 }

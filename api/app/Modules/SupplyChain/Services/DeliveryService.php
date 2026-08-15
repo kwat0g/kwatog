@@ -14,20 +14,21 @@ use App\Common\Services\TaxPolicyService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
 use App\Common\Support\TrashedFilter;
+use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Invoice;
-use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Services\InvoiceService;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\CRM\Services\SalesOrderService;
+use App\Modules\Production\Models\WorkOrderOutput;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Services\CoCService;
-use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\SupplyChain\Enums\DeliveryInvoiceHandoffStatus;
+use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\SupplyChain\Events\DeliveryConfirmed;
 use App\Modules\SupplyChain\Events\DeliveryInvoiceRequested;
 use App\Modules\SupplyChain\Exceptions\DeliveryInvoiceHandoffException;
@@ -187,6 +188,9 @@ class DeliveryService
 
                 $inspectionId = $this->resolveAndValidateInspection(
                     productId: (int) $soItem->product_id,
+                    salesOrderId: (int) $so->id,
+                    salesOrderItemId: (int) $soItem->id,
+                    quantity: (string) $row['quantity'],
                     suppliedInspectionId: $row['inspection_id'] ?? null,
                 );
 
@@ -204,36 +208,89 @@ class DeliveryService
     }
 
     /**
-     * For each delivery line we need a passed outgoing inspection on the
-     * matching product. If the caller supplied one, validate it; otherwise
-     * pick the most-recent passed outgoing inspection.
+     * For each new delivery line an explicit output-bound passed outgoing
+     * inspection is required. Legacy product/WO-only inspections remain
+     * readable, but cannot authorize a new delivery.
      */
-    private function resolveAndValidateInspection(int $productId, ?int $suppliedInspectionId): ?int
-    {
-        if ($suppliedInspectionId) {
-            $insp = Inspection::find($suppliedInspectionId);
-            if (! $insp
-                || $insp->product_id !== $productId
-                || ($insp->stage instanceof InspectionStage ? $insp->stage : InspectionStage::from((string) $insp->stage)) !== InspectionStage::Outgoing
-                || ($insp->status instanceof InspectionStatus ? $insp->status : InspectionStatus::from((string) $insp->status)) !== InspectionStatus::Passed) {
-                throw new RuntimeException("Supplied inspection #{$suppliedInspectionId} is not a passed outgoing inspection for the product.");
-            }
-
-            return (int) $insp->id;
+    private function resolveAndValidateInspection(
+        int $productId,
+        int $salesOrderId,
+        int $salesOrderItemId,
+        string $quantity,
+        mixed $suppliedInspectionId,
+    ): int {
+        if (! $suppliedInspectionId) {
+            throw new BusinessRuleException('A new delivery requires an explicit output-bound passed outgoing inspection.');
         }
 
-        $latest = Inspection::query()
-            ->where('product_id', $productId)
-            ->where('stage', InspectionStage::Outgoing->value)
-            ->where('status', InspectionStatus::Passed->value)
-            ->orderByDesc('completed_at')
-            ->first();
+        $inspection = $this->lockAndValidateInspectionForDelivery(
+            inspectionId: (int) $suppliedInspectionId,
+            salesOrderId: $salesOrderId,
+            salesOrderItemId: $salesOrderItemId,
+            productId: $productId,
+            quantity: $quantity,
+        );
 
-        if (! $latest) {
-            throw new RuntimeException("Cannot ship — no passed outgoing inspection found for product #{$productId}.");
+        return (int) $inspection->id;
+    }
+
+    /**
+     * Lock and validate one output-bound inspection, then reserve its accepted
+     * quantity against this delivery transaction. The inspection row is the
+     * serialization point for competing partial deliveries.
+     */
+    public function lockAndValidateInspectionForDelivery(
+        int $inspectionId,
+        int $salesOrderId,
+        int $salesOrderItemId,
+        int $productId,
+        string $quantity,
+    ): Inspection {
+        $inspection = Inspection::query()->lockForUpdate()->find($inspectionId);
+        $stage = $inspection?->stage instanceof InspectionStage
+            ? $inspection->stage
+            : ($inspection ? InspectionStage::tryFrom((string) $inspection->stage) : null);
+        $status = $inspection?->status instanceof InspectionStatus
+            ? $inspection->status
+            : ($inspection ? InspectionStatus::tryFrom((string) $inspection->status) : null);
+
+        if (! $inspection || $stage !== InspectionStage::Outgoing || $status !== InspectionStatus::Passed) {
+            throw new BusinessRuleException('The selected inspection is not a passed outgoing inspection.');
+        }
+        if (! $inspection->work_order_output_id) {
+            throw new BusinessRuleException('Legacy product/WO-only inspections cannot authorize a new delivery.');
         }
 
-        return (int) $latest->id;
+        $output = WorkOrderOutput::query()->lockForUpdate()->find($inspection->work_order_output_id);
+        $workOrder = $output?->workOrder;
+        if (! $output || ! $workOrder
+            || (int) $output->work_order_id !== (int) $inspection->entity_id
+            || (int) $workOrder->product_id !== $productId
+            || (int) $output->good_count !== (int) $inspection->batch_quantity
+            || (int) $inspection->product_id !== $productId
+            || (int) $workOrder->sales_order_id !== $salesOrderId
+            || (int) $workOrder->sales_order_item_id !== $salesOrderItemId) {
+            throw new BusinessRuleException('The selected outgoing inspection is not provenance-linked to this sales-order line.');
+        }
+
+        $requested = $this->normaliseDeliveryQuantity($quantity);
+        $reserved = (string) (DB::table('delivery_items as di')
+            ->join('deliveries as d', 'd.id', '=', 'di.delivery_id')
+            ->where('di.inspection_id', $inspection->id)
+            ->whereNull('d.deleted_at')
+            ->whereIn('d.status', self::QUANTITY_RESERVING_STATUSES)
+            ->sum('di.quantity') ?: '0.00');
+        $available = bcsub((string) $inspection->accepted_quantity, $reserved, 2);
+        if (bccomp($available, '0', 2) < 0) {
+            $available = '0.00';
+        }
+        if (bccomp($requested, $available, 2) > 0) {
+            throw new BusinessRuleException(
+                "Delivery quantity for outgoing inspection #{$inspection->inspection_number} exceeds the remaining accepted quantity ({$available})."
+            );
+        }
+
+        return $inspection;
     }
 
     public function updateStatus(Delivery $d, DeliveryStatus $next, ?string $note = null): Delivery
@@ -363,7 +420,7 @@ class DeliveryService
      * prevents a delivery_items value from being silently rounded when the
      * cross-module ledger is synchronized.
      *
-     * @param array<int, mixed> $rows
+     * @param  array<int, mixed>  $rows
      * @return array<int, string>
      */
     private function normaliseRequestedQuantities(array $rows): array
@@ -393,7 +450,7 @@ class DeliveryService
      * locks are acquired here in a deterministic query so duplicate requests
      * cannot race on the same sales-order line.
      *
-     * @param array<int|string, mixed> $requestedByItem
+     * @param  array<int|string, mixed>  $requestedByItem
      */
     public function assertDeliveryQuantitiesAvailable(SalesOrder $so, array $requestedByItem): void
     {
@@ -489,7 +546,7 @@ class DeliveryService
     }
 
     /**
-     * @param list<string> $statuses
+     * @param  list<string>  $statuses
      * @return array<int, string>
      */
     private function deliveryQuantitiesByItem(int $salesOrderId, array $statuses): array
@@ -956,6 +1013,7 @@ class DeliveryService
 
             return [
                 'revenue_account_id' => $hashids->encode((int) $revenueId),
+                'source_delivery_item_id' => $i->id,
                 'description' => $i->salesOrderItem?->product?->name ?? 'Delivery line',
                 'quantity' => (string) $i->quantity,
                 'unit_price' => (string) $i->unit_price,

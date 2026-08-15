@@ -6,6 +6,7 @@ use App\Modules\B2B\Controllers\CustomerAuthController;
 use App\Modules\B2B\Controllers\CustomerPortalController;
 use App\Modules\B2B\Controllers\SupplierAuthController;
 use App\Modules\B2B\Controllers\SupplierPortalController;
+use App\Modules\B2B\Controllers\PortalAccessController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -20,10 +21,14 @@ Route::prefix('b2b/supplier')->group(function () {
     // spraying. Logout shares the limiter to bound DoS on the token-revoke path.
     Route::post('login', [SupplierAuthController::class, 'login'])->middleware('throttle:auth');
     Route::post('logout', [SupplierAuthController::class, 'logout'])->middleware('throttle:auth');
+    Route::post('forgot-password', [SupplierAuthController::class, 'forgotPassword'])->middleware('throttle:auth');
+    Route::post('reset-password', [SupplierAuthController::class, 'resetPassword'])->middleware('throttle:auth');
 
     // Authenticated
     Route::middleware(['auth:supplier_portal', 'portal:supplier_portal', 'feature:b2b_portals', \App\Modules\B2B\Middleware\B2BTenancyScopeMiddleware::class])->group(function () {
         Route::get('me', [SupplierAuthController::class, 'me']);
+        Route::post('change-password', [SupplierAuthController::class, 'changePassword'])->middleware('throttle:sensitive');
+        Route::middleware('portal.password.changed')->group(function (): void {
         Route::get('dashboard', [SupplierPortalController::class, 'dashboard']);
         Route::get('purchase-orders', [SupplierPortalController::class, 'purchaseOrders']);
         Route::get('purchase-orders/{purchaseOrder}', [SupplierPortalController::class, 'purchaseOrderShow']);
@@ -44,8 +49,19 @@ Route::prefix('b2b/supplier')->group(function () {
         Route::post('delivery-schedules', [SupplierPortalController::class, 'storeDeliverySchedule']);
         // PPAP submissions (read-only, scoped to this supplier).
         Route::get('ppap-submissions', [SupplierPortalController::class, 'ppapSubmissions']);
+        });
     });
 });
+
+/* ─── Internal portal access administration ───────────────────── */
+Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired', 'feature:b2b_portals'])
+    ->prefix('b2b/portal-access')
+    ->group(function (): void {
+        Route::post('customers/{customer}/invite', [PortalAccessController::class, 'inviteCustomer'])
+            ->middleware('permission:accounting.customers.manage');
+        Route::post('suppliers/{vendor}/invite', [PortalAccessController::class, 'inviteSupplier'])
+            ->middleware('permission:accounting.vendors.manage');
+    });
 
 /* ─── Customer Portal ─────────────────────────────────────────── */
 Route::prefix('b2b/customer')->group(function () {
@@ -53,10 +69,14 @@ Route::prefix('b2b/customer')->group(function () {
     // spraying. Logout shares the limiter to bound DoS on the token-revoke path.
     Route::post('login', [CustomerAuthController::class, 'login'])->middleware('throttle:auth');
     Route::post('logout', [CustomerAuthController::class, 'logout'])->middleware('throttle:auth');
+    Route::post('forgot-password', [CustomerAuthController::class, 'forgotPassword'])->middleware('throttle:auth');
+    Route::post('reset-password', [CustomerAuthController::class, 'resetPassword'])->middleware('throttle:auth');
 
     // Authenticated
     Route::middleware(['auth:customer_portal', 'portal:customer_portal', 'feature:b2b_portals', \App\Modules\B2B\Middleware\B2BTenancyScopeMiddleware::class])->group(function () {
         Route::get('me', [CustomerAuthController::class, 'me']);
+        Route::post('change-password', [CustomerAuthController::class, 'changePassword'])->middleware('throttle:sensitive');
+        Route::middleware('portal.password.changed')->group(function (): void {
         Route::get('dashboard', [CustomerPortalController::class, 'dashboard']);
         Route::get('orders', [CustomerPortalController::class, 'salesOrders']);
         Route::get('orders/{salesOrder}', [CustomerPortalController::class, 'salesOrderShow']);
@@ -74,5 +94,6 @@ Route::prefix('b2b/customer')->group(function () {
         Route::get('statement-of-account', [CustomerPortalController::class, 'statementOfAccount']);
         Route::get('delivery-schedules', [CustomerPortalController::class, 'deliverySchedules']);
         Route::post('delivery-schedules', [CustomerPortalController::class, 'storeDeliverySchedule']);
+        });
     });
 });

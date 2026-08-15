@@ -55,6 +55,37 @@ class NotificationService
         string $type,
         array $data,
     ): void {
+        $this->dispatch($recipients, $type, $data, true);
+    }
+
+    /**
+     * Persist and broadcast an in-app notification without queueing email.
+     *
+     * This is deliberately a separate entry point for delivery fallbacks.
+     * Calling send() from an email failure handler would simply try the same
+     * broken email channel again for users who opted into email.
+     *
+     * @param  User|Collection<int, User>|array<int, User>  $recipients
+     * @param  array{title?: string, message?: string, link_to?: string, entity_type?: string, entity_id?: string}  $data
+     */
+    public function sendInApp(
+        User|Collection|array $recipients,
+        string $type,
+        array $data,
+    ): void {
+        $this->dispatch($recipients, $type, $data, false);
+    }
+
+    /**
+     * @param  User|Collection<int, User>|array<int, User>  $recipients
+     * @param  array<string, mixed>  $data
+     */
+    private function dispatch(
+        User|Collection|array $recipients,
+        string $type,
+        array $data,
+        bool $emailEnabled,
+    ): void {
         $users = $this->normaliseRecipients($recipients);
 
         if ($users === []) {
@@ -99,7 +130,8 @@ class NotificationService
 
             // email is opt-IN: it requires an explicit enabled row plus a
             // usable address, so we never mail someone who never asked.
-            if (($prefs["{$userId}:email"] ?? false) === true
+            if ($emailEnabled
+                && ($prefs["{$userId}:email"] ?? false) === true
                 && is_string($user->email) && $user->email !== '') {
                 $emails[] = [$user->email, $userId, $user->name ?? null];
             }
@@ -255,7 +287,7 @@ class NotificationService
     private function queueEmail(string $address, int $userId, ?string $name, string $type, array $data): void
     {
         try {
-            Mail::to($address)->queue(new UserNotificationMail($type, $data, $name));
+            Mail::to($address)->queue(new UserNotificationMail($type, $data, $name, $userId));
         } catch (\Throwable $e) {
             Log::warning('Notification email dispatch failed', [
                 'user_id' => $userId,

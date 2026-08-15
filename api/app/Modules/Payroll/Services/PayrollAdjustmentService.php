@@ -76,13 +76,21 @@ class PayrollAdjustmentService
         if ($adjustment->status !== PayrollAdjustmentStatus::Pending) {
             throw new BusinessRuleException('Only pending adjustments can be approved.');
         }
-        if ((int) $adjustment->created_by === (int) $user->id) {
-            throw new BusinessRuleException('You cannot approve your own payroll adjustment.');
-        }
-        $adjustment->status      = PayrollAdjustmentStatus::Approved;
-        $adjustment->approved_by = $user->id;
-        $adjustment->save();
-        return $adjustment->fresh();
+        return DB::transaction(function () use ($adjustment, $user) {
+            // Lock-then-guard: re-read so a stale approve/reject cannot race
+            // the decision and flip the status after the other one committed.
+            $locked = PayrollAdjustment::query()->lockForUpdate()->findOrFail($adjustment->getKey());
+            if ($locked->status !== PayrollAdjustmentStatus::Pending) {
+                throw new BusinessRuleException('Only pending adjustments can be approved.');
+            }
+            if ((int) $locked->created_by === (int) $user->id) {
+                throw new BusinessRuleException('You cannot approve your own payroll adjustment.');
+            }
+            $locked->status      = PayrollAdjustmentStatus::Approved;
+            $locked->approved_by = $user->id;
+            $locked->save();
+            return $locked->fresh();
+        });
     }
 
     public function reject(PayrollAdjustment $adjustment, User $user, ?string $remarks = null): PayrollAdjustment
@@ -90,12 +98,18 @@ class PayrollAdjustmentService
         if ($adjustment->status !== PayrollAdjustmentStatus::Pending) {
             throw new BusinessRuleException('Only pending adjustments can be rejected.');
         }
-        $adjustment->status      = PayrollAdjustmentStatus::Rejected;
-        $adjustment->approved_by = $user->id;
-        if ($remarks) {
-            $adjustment->reason = trim($adjustment->reason."\n\n[Rejected: {$remarks}]");
-        }
-        $adjustment->save();
-        return $adjustment->fresh();
+        return DB::transaction(function () use ($adjustment, $user, $remarks) {
+            $locked = PayrollAdjustment::query()->lockForUpdate()->findOrFail($adjustment->getKey());
+            if ($locked->status !== PayrollAdjustmentStatus::Pending) {
+                throw new BusinessRuleException('Only pending adjustments can be rejected.');
+            }
+            $locked->status      = PayrollAdjustmentStatus::Rejected;
+            $locked->approved_by = $user->id;
+            if ($remarks) {
+                $locked->reason = trim($locked->reason."\n\n[Rejected: {$remarks}]");
+            }
+            $locked->save();
+            return $locked->fresh();
+        });
     }
 }

@@ -23,6 +23,7 @@ use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\Production\Enums\WorkOrderStatus;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
@@ -287,11 +288,30 @@ class CustomerPortalService
 
     public function storeDeliverySchedule(int $customerId, array $data): DeliverySchedule
     {
-        return DeliverySchedule::create([
-            'customer_id' => $customerId,
-            'month' => $data['month'],
-            'status' => 'submitted',
-            'lines' => $data['lines'],
-        ]);
+        // Idempotent — a portal double-click or a retried request must not
+        // stack a second schedule for the same customer + month. Lock the
+        // existing submission first and return it; the partial unique index
+        // `delivery_schedules_customer_month_unique` backs this guard at the
+        // DB level.
+        $schedule = DB::transaction(function () use ($customerId, $data): DeliverySchedule {
+            $existing = DeliverySchedule::query()
+                ->where('customer_id', $customerId)
+                ->where('month', $data['month'])
+                ->lockForUpdate()
+                ->first();
+
+            if ($existing) {
+                return $existing;
+            }
+
+            return DeliverySchedule::create([
+                'customer_id' => $customerId,
+                'month' => $data['month'],
+                'status' => 'submitted',
+                'lines' => $data['lines'],
+            ]);
+        });
+
+        return $schedule;
     }
 }

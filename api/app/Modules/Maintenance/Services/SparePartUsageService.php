@@ -31,6 +31,10 @@ class SparePartUsageService
     public function record(MaintenanceWorkOrder $wo, array $data, User $by): SparePartUsage
     {
         return DB::transaction(function () use ($wo, $data, $by) {
+            // Lock the WO so concurrent spare-part issues serialize the running-
+            // cost read-modify-write instead of losing cost contributions.
+            $lockedWo = MaintenanceWorkOrder::query()->lockForUpdate()->findOrFail($wo->getKey());
+
             $item = Item::query()->whereKey((int) $data['item_id'])->lockForUpdate()->firstOrFail();
             if ($item->item_type !== ItemType::SparePart) {
                 throw ValidationException::withMessages([
@@ -57,9 +61,9 @@ class SparePartUsageService
                 toLocationId: null,
                 quantity: $qty,
                 unitCost: null,
-                referenceType: MaintenanceWorkOrder::class,
-                referenceId: $wo->id,
-                remarks: 'Spare-part issue for '.$wo->mwo_number,
+                referenceType: 'maintenance_work_order',
+                referenceId: $lockedWo->id,
+                remarks: 'Spare-part issue for '.$lockedWo->mwo_number,
                 createdBy: $by->id,
             ));
 
@@ -67,7 +71,7 @@ class SparePartUsageService
             $totalCost = bcmul($qty, $unitCost, 4);
 
             $usage = SparePartUsage::create([
-                'work_order_id'     => $wo->id,
+                'work_order_id'     => $lockedWo->id,
                 'item_id'           => $item->id,
                 'quantity'          => $qty,
                 'unit_cost'         => $unitCost,
@@ -76,8 +80,10 @@ class SparePartUsageService
                 'created_at'        => now(),
             ]);
 
-            // Bump WO running cost
-            $wo->forceFill(['cost' => (string) ((float) $wo->cost + (float) $totalCost)])->save();
+            // Bump WO running cost on the locked row (bcadd, not float +).
+            $lockedWo->forceFill([
+                'cost' => bcadd((string) $lockedWo->cost, $totalCost, 4),
+            ])->save();
 
             return $usage->load('item:id,code,name,unit_of_measure');
         });

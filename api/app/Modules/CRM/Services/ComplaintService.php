@@ -15,6 +15,7 @@ use App\Modules\CRM\Enums\ComplaintStatus;
 use App\Modules\CRM\Models\Complaint8DReport;
 use App\Modules\CRM\Models\CustomerComplaint;
 use App\Modules\CRM\Events\ComplaintNcrRequested;
+use App\Modules\CRM\Events\CustomerComplaintUpdated;
 use App\Modules\Quality\Enums\NcrSeverity;
 use App\Modules\Quality\Enums\NcrSource;
 use App\Modules\Quality\Models\NonConformanceReport;
@@ -85,7 +86,7 @@ class ComplaintService
      */
     public function create(array $data, User $by): CustomerComplaint
     {
-        return DB::transaction(function () use ($data, $by) {
+        $complaint = DB::transaction(function () use ($data, $by) {
             $complaint = CustomerComplaint::create([
                 'complaint_number'  => $this->sequences->generate('complaint'),
                 'customer_id'       => (int) $data['customer_id'],
@@ -141,6 +142,10 @@ class ComplaintService
 
             return $this->show($complaint);
         });
+
+        event(new CustomerComplaintUpdated($complaint, 'created'));
+
+        return $complaint;
     }
 
     public function update8DReport(CustomerComplaint $c, array $data): Complaint8DReport
@@ -177,7 +182,11 @@ class ComplaintService
             'finalized_at' => now(),
             'finalized_by' => $by->id,
         ]);
-        return $report->fresh();
+        $fresh = $report->fresh(['complaint']);
+        if ($fresh->complaint) {
+            event(new CustomerComplaintUpdated($fresh->complaint, '8D report finalized'));
+        }
+        return $fresh;
     }
 
     public function resolve(CustomerComplaint $c): CustomerComplaint
@@ -191,7 +200,9 @@ class ComplaintService
             'status'      => ComplaintStatus::Resolved->value,
             'resolved_at' => now(),
         ])->save();
-        return $this->show($c);
+        $updated = $this->show($c);
+        event(new CustomerComplaintUpdated($updated, 'resolved'));
+        return $updated;
     }
 
     public function close(CustomerComplaint $c): CustomerComplaint
@@ -203,7 +214,9 @@ class ComplaintService
             'status'    => ComplaintStatus::Closed->value,
             'closed_at' => now(),
         ])->save();
-        return $this->show($c);
+        $updated = $this->show($c);
+        event(new CustomerComplaintUpdated($updated, 'closed'));
+        return $updated;
     }
 
     /** Retry a previously failed complaint → Quality NCR handoff. */

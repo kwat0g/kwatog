@@ -6,6 +6,7 @@ namespace Database\Seeders;
 
 use App\Modules\Payroll\Models\GovernmentContributionTable;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Seeds Philippine government contribution tables (SSS, PhilHealth, Pag-IBIG, BIR).
@@ -29,7 +30,6 @@ class GovernmentTableSeeder extends Seeder
         $sssEffective        = '2024-01-01';
         $philhealthEffective = '2024-01-01';
         $pagibigEffective    = '2024-01-01';
-        $birEffective        = '2018-01-01';
 
         // ─── SSS (2024 schedule, regular employee — combined SS + EC + WISP) ─────────
         // Source: Social Security System contribution schedule effective Jan 2024.
@@ -125,21 +125,49 @@ class GovernmentTableSeeder extends Seeder
 
         // ─── BIR Withholding Tax (TRAIN Law, semi-monthly) ──────────────
         // Convention: ee_amount = fixed_tax (peso), er_amount = rate_on_excess.
-        $birBrackets = [
-            [     0.00,  10416.00,    0.00, 0.00], // exempt
-            [ 10416.01,  16666.00,    0.00, 0.15],
-            [ 16666.01,  33332.00,  937.50, 0.20],
-            [ 33332.01,  83332.00, 4270.83, 0.25],
-            [ 83332.01, 333332.00, 16770.83, 0.30],
-            [333332.01, 999999.99, 91770.83, 0.35],
+        // Official source: BIR RR 11-2018, Annex D (effective 2018-01-01
+        // through 2022), and Annex E (effective 2023-01-01 onward). The
+        // engine stores semi-monthly fixed tax in ee_amount and the rate on
+        // excess in er_amount. Decimal boundaries are deliberately expressed
+        // at cent precision so adjacent ranges cannot overlap or leave gaps.
+        $birSchedules = [
+            '2018-01-01' => [
+                [0.00, 10416.99, 0.00, 0.00],
+                [10417.00, 16666.99, 0.00, 0.20],
+                [16667.00, 33332.99, 1250.00, 0.25],
+                [33333.00, 83332.99, 5416.67, 0.30],
+                [83333.00, 333332.99, 20416.67, 0.32],
+                [333333.00, 999999999.99, 100416.67, 0.35],
+            ],
+            '2023-01-01' => [
+                [0.00, 10416.99, 0.00, 0.00],
+                [10417.00, 16666.99, 0.00, 0.15],
+                [16667.00, 33332.99, 937.50, 0.20],
+                [33333.00, 83332.99, 4270.70, 0.25],
+                [83333.00, 333332.99, 16770.70, 0.30],
+                [333333.00, 999999999.99, 91770.70, 0.35],
+            ],
         ];
-        foreach ($birBrackets as [$min, $max, $fixed, $rate]) {
-            GovernmentContributionTable::updateOrCreate(
-                ['agency' => 'bir', 'bracket_min' => $min, 'effective_date' => $birEffective],
-                ['bracket_max' => $max, 'ee_amount' => $fixed, 'er_amount' => $rate, 'is_active' => true],
-            );
+
+        foreach ($birSchedules as $effectiveDate => $birBrackets) {
+            DB::table('government_contribution_tables')
+                ->where('agency', 'bir')
+                ->whereDate('effective_date', $effectiveDate)
+                ->delete();
+
+            foreach ($birBrackets as [$min, $max, $fixed, $rate]) {
+                GovernmentContributionTable::create([
+                    'agency' => 'bir',
+                    'bracket_min' => $min,
+                    'bracket_max' => $max,
+                    'ee_amount' => $fixed,
+                    'er_amount' => $rate,
+                    'effective_date' => $effectiveDate,
+                    'is_active' => true,
+                ]);
+            }
         }
 
-        $this->command?->info('Government contribution tables seeded (SSS '.count($sssBrackets).', PhilHealth 1, Pag-IBIG '.count($pagibigBrackets).', BIR '.count($birBrackets).').');
+        $this->command?->info('Government contribution tables seeded (SSS '.count($sssBrackets).', PhilHealth 1, Pag-IBIG '.count($pagibigBrackets).', BIR 12).');
     }
 }

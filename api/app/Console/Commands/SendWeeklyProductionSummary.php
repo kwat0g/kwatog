@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Production\Notifications\WeeklyProductionSummary;
@@ -32,7 +33,6 @@ class SendWeeklyProductionSummary extends Command
         $users = User::query()
             ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
             ->where('is_active', true)
-            ->whereNotNull('email')
             ->get();
 
         if ($users->isEmpty()) {
@@ -40,8 +40,34 @@ class SendWeeklyProductionSummary extends Command
             return self::SUCCESS;
         }
 
-        Notification::send($users, new WeeklyProductionSummary($summary));
-        $this->info("Weekly production summary sent to {$users->count()} recipient(s) for week ending {$summary['range_end']}.");
+        $emailUsers = $users->filter(static fn (User $user): bool => filter_var($user->email, FILTER_VALIDATE_EMAIL));
+        if ($emailUsers->isEmpty()) {
+            app(EmailDeliveryFailureNotifier::class)->notify(
+                $users,
+                'Weekly production summary',
+                "The weekly production summary for {$summary['range_start']} to {$summary['range_end']} could not be emailed because no recipient has a usable email address. Review the production dashboard.",
+                ['link_to' => '/production/work-orders', 'entity_type' => 'production_summary'],
+            );
+            return self::SUCCESS;
+        }
+
+        try {
+            Notification::send($emailUsers, new WeeklyProductionSummary($summary));
+        } catch (\Throwable $e) {
+            app(EmailDeliveryFailureNotifier::class)->notify(
+                $users,
+                'Weekly production summary',
+                "The weekly production summary for {$summary['range_start']} to {$summary['range_end']} could not be delivered by email. Review the production dashboard.",
+                [
+                    'link_to' => '/production/work-orders',
+                    'entity_type' => 'production_summary',
+                    'reason' => 'The email provider rejected or could not deliver the production summary.',
+                ],
+            );
+            $this->error('Weekly production summary email failed; in-app fallback created.');
+            return self::FAILURE;
+        }
+        $this->info("Weekly production summary sent to {$emailUsers->count()} recipient(s) for week ending {$summary['range_end']}.");
         return self::SUCCESS;
     }
 }

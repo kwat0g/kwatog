@@ -10,6 +10,7 @@ use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
 use App\Common\Models\WorkflowDefinition;
+use App\Common\Support\Money;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Loans\Enums\LoanPaymentType;
@@ -293,38 +294,77 @@ class LoanService
         ?string $remarks = null,
     ): LoanPayment {
         return DB::transaction(function () use ($loan, $amount, $type, $payrollId, $remarks) {
-            if ($loan->status !== LoanStatus::Active) {
+            // Loan payment serialization invariant: every path that changes a
+            // loan row must make its decisions from the current row while
+            // holding that row lock, then commit the payment detail and loan
+            // aggregate in this same transaction.
+            $authoritative = EmployeeLoan::query()->lockForUpdate()->findOrFail($loan->getKey());
+            if ($authoritative->status !== LoanStatus::Active) {
                 throw new BusinessRuleException('Only active loans accept payments.');
             }
+            $normalizedAmount = Money::round2($amount);
+            if (Money::lte($normalizedAmount, '0.00')) {
+                throw new BusinessRuleException('Payment amount must be greater than zero.');
+            }
+            $now = now();
+
             /** @var LoanPayment $payment */
-            $payment = $loan->payments()->create([
-                'payroll_id'   => $payrollId,
-                'amount'       => $amount,
-                'payment_date' => now()->toDateString(),
+            $payment = $authoritative->payments()->create([
+                'payroll_id' => $payrollId,
+                'amount' => $normalizedAmount,
+                'payment_date' => $now->toDateString(),
                 'payment_type' => $type->value,
-                'remarks'      => $remarks,
-                'created_at'   => now(),
+                'remarks' => $remarks,
+                'created_at' => $now,
             ]);
 
-            $newPaid    = bcadd((string) $loan->total_paid, $amount, 2);
-            $newBalance = bcsub((string) $loan->balance, $amount, 2);
-            if (bccomp($newBalance, '0', 2) < 0) {
-                $newBalance = '0.00';
-            }
-            // Single save → single audit row.
-            $loan->fill([
-                'total_paid'             => $newPaid,
-                'balance'                => $newBalance,
-                'pay_periods_remaining'  => max(0, ((int) $loan->pay_periods_remaining) - 1),
-                'end_date'               => bccomp($newBalance, '0', 2) <= 0 ? now()->toDateString() : null,
-            ]);
-            $loan->status = bccomp($newBalance, '0', 2) <= 0
-                ? LoanStatus::Paid
-                : LoanStatus::Active;
-            $loan->save();
+            // Rebuild aggregates from the immutable payment ledger while the
+            // authoritative loan row is locked. This also repairs a legacy
+            // drifted aggregate instead of compounding it on the next write.
+            $this->reconcileAggregates($authoritative, $now->toDateString());
 
             return $payment;
         });
+    }
+
+    /** Reconcile the denormalized loan summary from its immutable payment rows. */
+    public function reconcileAggregates(EmployeeLoan $loan, ?string $asOf = null): EmployeeLoan
+    {
+        $paid = (string) $loan->payments()->sum('amount');
+        $schedule = $this->amortization->generateWithInterest(
+            (string) $loan->principal,
+            (string) $loan->interest_rate,
+            (int) $loan->pay_periods_total,
+        );
+        $totalDue = array_reduce(
+            $schedule,
+            static fn (string $total, array $row): string => Money::add($total, (string) $row['amount']),
+            '0.00',
+        );
+        $balance = Money::sub($totalDue, $paid);
+        if (Money::lt($balance, '0.00')) {
+            $balance = '0.00';
+        }
+        // Derive the remaining count from the immutable ledger so replaying
+        // reconciliation cannot decrement the schedule twice.
+        $paidOff = Money::lte($balance, '0.00');
+        // A manual payment may be partial, and company-loan deductions may be
+        // split across payroll runs. Exhausting the nominal payment-row count
+        // must never mark a positive balance paid or make payroll stop
+        // selecting it. Keep one collectible period until the ledger balance
+        // actually reaches zero.
+        $remaining = $paidOff
+            ? 0
+            : max(1, (int) $loan->pay_periods_total - $loan->payments()->count());
+        $loan->fill([
+            'total_paid' => Money::round2($paid),
+            'balance' => Money::round2($balance),
+            'pay_periods_remaining' => $remaining,
+            'end_date' => $paidOff ? ($asOf ?? now()->toDateString()) : null,
+        ]);
+        $loan->status = $paidOff ? LoanStatus::Paid : LoanStatus::Active;
+        $loan->save();
+        return $loan;
     }
 
     /** Used by Sprint 3's PayrollCalculatorService. */

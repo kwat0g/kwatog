@@ -5,15 +5,18 @@ declare(strict_types=1);
 namespace App\Modules\Admin\Services;
 
 use App\Common\Models\AuditLog;
+use App\Common\Services\TemporaryPasswordGenerator;
 use App\Modules\Admin\Models\LoginHistory;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Services\UserProvisioningService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 /**
  * U2 — central user-management service for the Admin > Users surface.
@@ -22,6 +25,7 @@ class UserAdminService
 {
     public function __construct(
         private readonly UserProvisioningService $provisioning,
+        private readonly TemporaryPasswordGenerator $temporaryPasswords,
     ) {}
 
     /**
@@ -89,7 +93,7 @@ class UserAdminService
     public function createStandalone(array $data): \App\Modules\Admin\Support\CreatedUser
     {
         return DB::transaction(function () use ($data) {
-            $tempPassword = $data['temp_password'] ?? \Illuminate\Support\Str::password(12, true, true, true, false);
+            $tempPassword = $data['temp_password'] ?? $this->temporaryPasswords->generate();
 
             /** @var User $user */
             $user = User::create([
@@ -144,42 +148,96 @@ class UserAdminService
         return $user->fresh(['role']);
     }
 
-    public function changeRole(User $user, int $roleId): User
+    public function changeRole(User $user, int $roleId, int $expectedRoleId, string $reason = ''): User
     {
-        DB::transaction(function () use ($user, $roleId) {
-            $user->update(['role_id' => $roleId]);
-            $user->flushPermissionsCache();
+        return DB::transaction(function () use ($user, $roleId, $expectedRoleId, $reason) {
+            $locked = User::query()->lockForUpdate()->findOrFail($user->getKey());
+            if ((int) $locked->role_id !== $expectedRoleId) {
+                throw new ConflictHttpException(
+                    'This user role changed while you were editing. Refresh the user and retry with the current role.'
+                );
+            }
+
+            $oldRoleId = (int) $locked->role_id;
+            $oldRole = Role::query()->find($oldRoleId);
+            $newRole = Role::query()->findOrFail($roleId);
+            $locked->update(['role_id' => $roleId]);
+
+            Cache::forget("auth:role_perms:{$oldRoleId}");
+            $locked->flushPermissionsCache();
+
+            AuditLog::create([
+                'user_id'    => Auth::id(),
+                'action'     => 'role_changed',
+                'model_type' => $locked->getMorphClass(),
+                'model_id'   => $locked->id,
+                'old_values' => [
+                    'role_id'   => $oldRoleId,
+                    'role_slug' => $oldRole?->slug,
+                ],
+                'new_values' => [
+                    'role_id'   => $newRole->id,
+                    'role_slug' => $newRole->slug,
+                    'reason'    => trim($reason) ?: 'Admin role assignment',
+                ],
+                'ip_address' => request()?->ip(),
+                'user_agent' => request()?->userAgent(),
+                'created_at' => now(),
+            ]);
+
+            return $locked->fresh(['role']);
         });
-        return $user->fresh(['role']);
     }
 
     /**
-     * Bulk update user roles in a transaction.
-     *
-     * @param  int[]  $userIds
+     * @param  array<int, int>  $userIds
      * @param  int  $roleId
      * @param  string  $reason
-     * @return int Count of updated users
+     * @param  array<int, int>  $expectedRoleIds  keyed by user ID
+     * @return array{updated: int, conflicts: array<int, array{user_id: string, expected_role_id: ?string, actual_role_id: ?string}>}
      */
-    public function bulkChangeRole(array $userIds, int $roleId, string $reason = ''): int
+    public function bulkChangeRole(array $userIds, int $roleId, string $reason = '', array $expectedRoleIds = []): array
     {
-        return DB::transaction(function () use ($userIds, $roleId, $reason) {
+        return DB::transaction(function () use ($userIds, $roleId, $reason, $expectedRoleIds) {
             $users = User::query()
                 ->whereIn('id', $userIds)
+                ->orderBy('id')
+                ->lockForUpdate()
                 ->get(['id', 'name', 'role_id']);
-
-            $count = $users->count();
 
             // Capture old role IDs before update.
             $oldRoleIds = $users->pluck('role_id', 'id')->all();
+            $conflicts = [];
+            $writable = [];
+            foreach ($users as $u) {
+                $expected = $expectedRoleIds[$u->id] ?? null;
+                if ($expected === null || (int) $u->role_id !== (int) $expected) {
+                    $conflicts[] = [
+                        'user_id' => $u->hash_id,
+                        'expected_role_id' => $expected !== null ? Role::find($expected)?->hash_id : null,
+                        'actual_role_id' => $u->role_id !== null ? Role::find($u->role_id)?->hash_id : null,
+                    ];
+                    continue;
+                }
+                $writable[] = $u->id;
+            }
+
+            if ($writable === []) {
+                return ['updated' => 0, 'conflicts' => $conflicts];
+            }
+
+            $changedOldRoleIds = array_intersect_key($oldRoleIds, array_flip($writable));
 
             User::query()
-                ->whereIn('id', $userIds)
+                ->whereIn('id', $writable)
                 ->update(['role_id' => $roleId]);
 
             // Flush permissions cache for each affected user.
             foreach ($users as $u) {
-                $u->flushPermissionsCache();
+                if (in_array($u->id, $writable, true)) {
+                    Cache::forget("auth:role_perms:{$u->role_id}");
+                    $u->flushPermissionsCache();
+                }
             }
 
             // Write audit log entry for the bulk action.
@@ -189,20 +247,21 @@ class UserAdminService
                 'model_type' => 'App\Modules\Auth\Models\User',
                 'model_id'   => null, // Null for bulk actions.
                 'old_values' => [
-                    'user_ids' => $userIds,
-                    'old_role_ids' => $oldRoleIds,
+                    'user_ids' => $writable,
+                    'old_role_ids' => $changedOldRoleIds,
                 ],
                 'new_values' => [
-                    'user_ids' => $userIds,
+                    'user_ids' => $writable,
                     'new_role_id' => $roleId,
                     'reason' => $reason,
+                    'conflicts' => $conflicts,
                 ],
                 'ip_address' => request()?->ip(),
                 'user_agent' => request()?->userAgent(),
                 'created_at' => now(),
             ]);
 
-            return $count;
+            return ['updated' => count($writable), 'conflicts' => $conflicts];
         });
     }
 

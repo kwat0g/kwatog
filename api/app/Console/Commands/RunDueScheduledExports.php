@@ -6,7 +6,9 @@ namespace App\Console\Commands;
 
 use App\Common\Enums\ExportFormat;
 use App\Common\Enums\ExportFrequency;
+use App\Common\Mail\ScheduledExportMail;
 use App\Common\Models\ScheduledExport;
+use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Common\Services\Export\ExportRunner;
 use App\Common\Services\Export\SpreadsheetExportService;
 use App\Common\Services\SettingsService;
@@ -23,8 +25,8 @@ use Illuminate\Support\Str;
  *   3. Mail it to recipients.
  *   4. Update last_run_at + next_run_at.
  *
- * Mail body uses an inline anonymous Mailable so we don't need a Blade
- * file for every export type.
+ * Mail delivery uses a dedicated Mailable so the export metadata and
+ * attachment are rendered consistently for every export type.
  */
 class RunDueScheduledExports extends Command
 {
@@ -38,6 +40,7 @@ class RunDueScheduledExports extends Command
         private readonly ExportRunner $runner,
         private readonly SpreadsheetExportService $spreadsheets,
         private readonly SettingsService $settings,
+        private readonly EmailDeliveryFailureNotifier $emailFailures,
     ) {
         parent::__construct();
     }
@@ -75,6 +78,17 @@ class RunDueScheduledExports extends Command
                 if ($token !== null) {
                     $this->releaseAfterFailure($row, $token, $e);
                 }
+                $this->emailFailures->notify(
+                    $row->owner,
+                    'Scheduled export',
+                    "The scheduled export '{$row->name}' could not be delivered. Review the export configuration and run it again or use an approved alternate channel.",
+                    [
+                        'link_to' => '/admin/scheduled-exports',
+                        'entity_type' => 'scheduled_export',
+                        'entity_id' => $row->hash_id,
+                        'reason' => 'The export email or export generation failed.',
+                    ],
+                );
                 Log::error('scheduled-export-failed', [
                     'id' => $row->id,
                     'module' => $row->module,
@@ -131,15 +145,14 @@ class RunDueScheduledExports extends Command
 
         $name = $row->name;
         $module = $row->module;
-        $company = $this->settings->requiredString('company.legal_name');
-
-        Mail::raw("Attached is your scheduled export: {$name} ({$module}).", function ($message) use ($recipients, $filename, $bytes, $name, $format, $company) {
-            $message->to($recipients)
-                ->subject("[{$company} ERP] Scheduled export: {$name}")
-                ->attachData($bytes, $filename, [
-                    'mime' => $format->mimeType(),
-                ]);
-        });
+        Mail::to($recipients)->queue(new ScheduledExportMail(
+            $name,
+            $module,
+            $filename,
+            $bytes,
+            $format,
+            $row->owner?->id,
+        ));
 
         $nextRunAt = $frequency->nextRunFrom(
             $runAt,

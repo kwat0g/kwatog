@@ -15,7 +15,10 @@ Please arrive 15 minutes early and bring a valid ID.
 {{ $companyName }}<br>
 {{ $companyAddress }}
 
+Your tracking code is **{{ $trackingCode }}**. You can use it to view your application status:
+
+<x-mail::button :url="$trackingUrl">Track Your Application</x-mail::button>
+
 Regards,<br>
-HR Department<br>
-{{ $companyName }}
+<strong>{{ $companyName }} HR Team</strong>
 </x-mail::message>

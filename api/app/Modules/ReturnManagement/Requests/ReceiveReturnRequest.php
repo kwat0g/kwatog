@@ -7,6 +7,8 @@ namespace App\Modules\ReturnManagement\Requests;
 use App\Common\Support\HashIdFilter;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\ReturnManagement\Models\ReturnRequestItem;
+use App\Common\Concerns\ResolvesHashIds;
+use App\Modules\Inventory\Models\WarehouseLocation;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
 
@@ -21,6 +23,7 @@ use Illuminate\Validation\Validator;
  */
 class ReceiveReturnRequest extends FormRequest
 {
+    use ResolvesHashIds;
     public function authorize(): bool
     {
         return $this->user()?->can('return_management.manage') === true;
@@ -31,7 +34,13 @@ class ReceiveReturnRequest extends FormRequest
         return [
             'received_quantities'   => ['nullable', 'array'],
             'received_quantities.*' => ['numeric', 'min:0'],
+            'quarantine_location_id' => ['nullable', 'integer', 'exists:warehouse_locations,id'],
         ];
+    }
+
+    protected function hashIdFields(): array
+    {
+        return ['quarantine_location_id' => WarehouseLocation::class];
     }
 
     public function withValidator(Validator $validator): void
@@ -76,5 +85,12 @@ class ReceiveReturnRequest extends FormRequest
         }
 
         return $out;
+    }
+
+    public function quarantineLocationId(): ?int
+    {
+        return isset($this->validated()['quarantine_location_id'])
+            ? (int) $this->validated()['quarantine_location_id']
+            : null;
     }
 }

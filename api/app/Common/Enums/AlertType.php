@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Common\Enums;
 
 /**
- * Task A2 — All twelve alert types fired by AlertEngineService.
+ * Task A2 — Operational alert types fired by AlertEngineService.
  *
  *  INVENTORY
  *    stock_critical   stock < safety_stock

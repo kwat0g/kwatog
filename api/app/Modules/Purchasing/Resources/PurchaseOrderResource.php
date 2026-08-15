@@ -68,6 +68,7 @@ class PurchaseOrderResource extends JsonResource
             'remarks'                => $this->remarks,
             'incoterm'               => $this->incoterm?->value,
             'quantity_received_pct'  => $this->quantity_received_percent,
+            'quantity_accepted_pct'  => $this->quantity_accepted_percent,
             'vendor'                 => $this->whenLoaded('vendor', fn () => [
                 'id'             => $this->vendor->hash_id,
                 'name'           => $this->vendor->name,

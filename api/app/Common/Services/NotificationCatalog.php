@@ -153,6 +153,7 @@ final class NotificationCatalog
                 ['key' => 'chain.payslip_ready', 'label' => 'Payslip ready', 'description' => 'Your payslip is ready to view.'],
                 ['key' => 'chain.separation_initiated', 'label' => 'Separation initiated', 'description' => 'An employee separation process has started.'],
                 ['key' => 'recruitment.new_application', 'label' => 'New job application', 'description' => 'A candidate applied to an open requisition.'],
+                ['key' => 'recruitment.bottleneck', 'label' => 'Recruitment bottleneck', 'description' => 'An application, interview, or job posting has been waiting long enough to require HR action.'],
                 ['key' => 'training.expiry', 'label' => 'Training about to expire', 'description' => 'An employee certification is approaching its expiry date.'],
             ]],
             ['title' => 'Quality & compliance', 'hint' => 'NCRs, SPC, cost of poor quality, and IATF document control', 'types' => [
@@ -181,6 +182,10 @@ final class NotificationCatalog
             ]],
             ['title' => 'Security & administration', 'hint' => 'Changes to your own access', 'types' => [
                 ['key' => 'permission.override', 'label' => 'Your permissions changed', 'description' => 'An administrator granted or revoked a permission on your account.'],
+            ]],
+            ['title' => 'Email delivery', 'hint' => 'Email failures that need an approved follow-up channel', 'types' => [
+                ['key' => 'email.delivery_failed', 'label' => 'Email delivery failed', 'description' => 'An email could not be delivered. Review the linked record and contact the recipient through an approved channel.'],
+                ['key' => 'supplier.dispatch_action_required', 'label' => 'Supplier dispatch action required', 'description' => 'An approved purchase order needs supplier notification or transmission confirmation.'],
             ]],
         ];
     }

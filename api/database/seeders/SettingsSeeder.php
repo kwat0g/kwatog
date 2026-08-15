@@ -36,6 +36,7 @@ class SettingsSeeder extends Seeder
             'latitude' => $envFloat('COMPANY_LATITUDE'),
             'longitude' => $envFloat('COMPANY_LONGITUDE'),
         ];
+        $emailBrandName = $envString('COMPANY_EMAIL_BRAND_NAME') ?: 'Ogami Philippines';
 
         $rows = [
             // ── Company ──────────────────────────────────────
@@ -69,6 +70,7 @@ class SettingsSeeder extends Seeder
             ['key' => 'company.public_url', 'value' => $company['public_url'], 'group' => 'company', 'label' => 'Company Public URL', 'description' => 'Public website URL shown on official documents.'],
             ['key' => 'company.latitude', 'value' => $company['latitude'], 'group' => 'company', 'label' => 'Facility Latitude', 'description' => 'GPS latitude coordinate of the primary manufacturing plant.'],
             ['key' => 'company.longitude', 'value' => $company['longitude'], 'group' => 'company', 'label' => 'Facility Longitude', 'description' => 'GPS longitude coordinate of the primary manufacturing plant.'],
+            ['key' => 'email.brand_name', 'value' => $emailBrandName, 'group' => 'email', 'label' => 'Email Display Name', 'description' => 'Customer-facing display name used in transactional email headers and footers.'],
             ['key' => 'pdf.footer_disclaimer', 'value' => $envString('PDF_FOOTER_DISCLAIMER'), 'group' => 'company', 'label' => 'PDF Footer Disclaimer', 'description' => 'Footer disclaimer shown on generated PDF documents.'],
 
             // ── Fiscal ───────────────────────────────────────
@@ -411,6 +413,7 @@ class SettingsSeeder extends Seeder
             'company.email', 'company.sales_inbox_email', 'company.vat_status',
             'company.logo_path', 'company.certification', 'company.public_url',
             'company.latitude', 'company.longitude', 'company.employee_email_domain',
+            'email.brand_name',
             'pdf.footer_disclaimer', 'quality.coc.manager_name', 'quality.coc.manager_role',
             'accounting.functional_currency_code', 'tax.ph.vat_rate',
         ];

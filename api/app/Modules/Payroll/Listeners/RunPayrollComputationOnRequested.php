@@ -62,7 +62,7 @@ class RunPayrollComputationOnRequested implements ShouldQueue
         // A duplicate publication, a stale replay, or an operator unlock may
         // have moved the period on while this request was waiting in the queue.
         // Never let that old request rewrite a later payroll state.
-        if ($period->status !== PayrollPeriodStatus::Processing) {
+        if (! $periods->claimIsOwned($period, $event->claimToken)) {
             app(ChainListenerRunService::class)->recordOutcome(
                 'skipped',
                 'payroll_period_not_processing',
@@ -71,10 +71,20 @@ class RunPayrollComputationOnRequested implements ShouldQueue
             return;
         }
 
-        (new ProcessPayrollJob($period, $event->triggeredBy))
+        (new ProcessPayrollJob($period, $event->triggeredBy, $event->claimToken))
             ->handle($calculator, $periods, $progress);
 
         $finished = $period->fresh();
+        if ($finished?->status === PayrollPeriodStatus::Processing
+            && ! $periods->claimIsOwned($finished, $event->claimToken)) {
+            app(ChainListenerRunService::class)->recordOutcome(
+                'skipped',
+                'payroll_compute_claim_taken_over',
+                'The payroll compute claim was taken over before this request completed.',
+            );
+
+            return;
+        }
         if ($finished?->status === PayrollPeriodStatus::Computed) {
             app(ChainListenerRunService::class)->recordOutcome(
                 'completed',
@@ -97,7 +107,7 @@ class RunPayrollComputationOnRequested implements ShouldQueue
      */
     public function failed(PayrollComputationRequested $event, Throwable $exception): void
     {
-        (new ProcessPayrollJob($event->period, $event->triggeredBy))->failed($exception);
+        (new ProcessPayrollJob($event->period, $event->triggeredBy, $event->claimToken))->failed($exception);
 
         Log::error('RunPayrollComputationOnRequested failed permanently', [
             'period_id' => $event->period->id,

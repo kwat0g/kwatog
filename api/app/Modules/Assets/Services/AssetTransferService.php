@@ -57,43 +57,51 @@ class AssetTransferService
 
     public function approve(AssetTransfer $transfer, User $by): AssetTransfer
     {
-        if ($transfer->status !== TransferStatus::Pending) {
-            throw new BusinessRuleException('Only pending transfers can be approved.');
-        }
-
-        if ((int) $transfer->requested_by === $by->id) {
-            throw new BusinessRuleException('Cannot approve a transfer you requested.');
-        }
-
         return DB::transaction(function () use ($transfer, $by) {
-            $transfer->forceFill([
+            // Lock-then-guard: re-read the authoritative row so a concurrent
+            // rejection holding a stale pending instance cannot land after the
+            // asset already moved (asset relocated while ledger says Rejected).
+            $locked = AssetTransfer::query()->lockForUpdate()->findOrFail($transfer->getKey());
+            if ($locked->status !== TransferStatus::Pending) {
+                throw new BusinessRuleException('Only pending transfers can be approved.');
+            }
+            if ((int) $locked->requested_by === $by->id) {
+                throw new BusinessRuleException('Cannot approve a transfer you requested.');
+            }
+
+            $locked->forceFill([
                 'status'      => TransferStatus::Approved->value,
                 'approved_by' => $by->id,
                 'approved_at' => now(),
             ])->save();
 
-            $transfer->asset->update(['department_id' => $transfer->to_department_id]);
+            $locked->asset->update(['department_id' => $locked->to_department_id]);
 
-            $transfer->forceFill(['status' => TransferStatus::Completed->value])->save();
+            $locked->forceFill(['status' => TransferStatus::Completed->value])->save();
 
-            return $transfer->fresh(['asset:id,asset_code,name', 'fromDepartment:id,name', 'toDepartment:id,name']);
+            return $locked->fresh(['asset:id,asset_code,name', 'fromDepartment:id,name', 'toDepartment:id,name']);
         });
     }
 
     public function reject(AssetTransfer $transfer, User $by): AssetTransfer
     {
-        if ($transfer->status !== TransferStatus::Pending) {
-            throw new BusinessRuleException('Only pending transfers can be rejected.');
-        }
+        return DB::transaction(function () use ($transfer, $by) {
+            // Lock-then-guard: without it, reject could race a concurrent
+            // approval and mark the transfer Rejected after its asset moved.
+            $locked = AssetTransfer::query()->lockForUpdate()->findOrFail($transfer->getKey());
+            if ($locked->status !== TransferStatus::Pending) {
+                throw new BusinessRuleException('Only pending transfers can be rejected.');
+            }
 
-        $transfer->forceFill([
-            'status'      => TransferStatus::Rejected->value,
-            'approved_by' => $by->id,
-            'approved_at' => now(),
-        ])->save();
+            $locked->forceFill([
+                'status'      => TransferStatus::Rejected->value,
+                'approved_by' => $by->id,
+                'approved_at' => now(),
+            ])->save();
 
-        // Match create()/approve(): fresh() with no arguments drops eager loads,
-        // so the resource would omit asset / departments.
-        return $transfer->fresh(['asset:id,asset_code,name', 'fromDepartment:id,name', 'toDepartment:id,name']);
+            // Match create()/approve(): fresh() with no arguments drops eager loads,
+            // so the resource would omit asset / departments.
+            return $locked->fresh(['asset:id,asset_code,name', 'fromDepartment:id,name', 'toDepartment:id,name']);
+        });
     }
 }

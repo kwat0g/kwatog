@@ -15,7 +15,7 @@ class StockTransferService
 {
     public function __construct(private readonly StockMovementService $movements) {}
 
-    public function transfer(int $itemId, int $fromLocationId, int $toLocationId, string $qty, ?string $remarks, User $by): StockMovement
+    public function transfer(int $itemId, int $fromLocationId, int $toLocationId, string $qty, ?string $remarks, User $by, ?int $referenceId = null): StockMovement
     {
         $level = StockLevel::query()->where('item_id', $itemId)->where('location_id', $fromLocationId)->first();
         if ($level === null || $level->weighted_avg_cost === null) {
@@ -28,8 +28,8 @@ class StockTransferService
             toLocationId: $toLocationId,
             quantity: $qty,
             unitCost: null,
-            referenceType: 'stock_transfer',
-            referenceId: null,
+            referenceType: $referenceId === null ? null : 'stock_transfer',
+            referenceId: $referenceId,
             remarks: $remarks,
             createdBy: $by->id,
         ));

@@ -5,10 +5,9 @@ declare(strict_types=1);
 namespace App\Modules\Quality\Resources;
 
 use App\Modules\Quality\Enums\InspectionStage;
-use Illuminate\Support\Str;
-
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Str;
 
 class InspectionResource extends JsonResource
 {
@@ -24,6 +23,16 @@ class InspectionResource extends JsonResource
             'entity_type' => $this->entity_type instanceof \BackedEnum ? $this->entity_type->value : $this->entity_type,
             'entity_hash_id' => $this->entity_id ? app('hashids')->encode($this->entity_id) : null,
             'batch_quantity' => (int) $this->batch_quantity,
+            'accepted_quantity' => (int) $this->accepted_quantity,
+            'work_order_output' => $this->whenLoaded('workOrderOutput', fn () => $this->workOrderOutput ? [
+                'id' => $this->workOrderOutput->hash_id,
+                'batch_code' => $this->workOrderOutput->batch_code,
+                'good_count' => (int) $this->workOrderOutput->good_count,
+                'work_order' => $this->workOrderOutput->relationLoaded('workOrder') && $this->workOrderOutput->workOrder ? [
+                    'id' => $this->workOrderOutput->workOrder->hash_id,
+                    'wo_number' => $this->workOrderOutput->workOrder->wo_number,
+                ] : null,
+            ] : null),
             'sample_size' => (int) $this->sample_size,
             'aql_code' => $this->aql_code,
             'accept_count' => (int) $this->accept_count,

@@ -65,6 +65,7 @@ class DashboardLayoutController
             'data' => $request->boolean('rich')
                 ? $this->service->getRichLayout($request->user())
                 : $this->service->getEffectiveLayout($request->user()),
+            'meta' => ['layout_version' => $this->service->userLayoutVersion($request->user())],
         ]);
     }
 
@@ -79,19 +80,26 @@ class DashboardLayoutController
 
     public function save(SaveDashboardLayoutRequest $request): JsonResponse
     {
-        $this->service->saveUserLayout($request->user(), $request->validated('widgets'));
+        $this->service->saveUserLayout(
+            $request->user(),
+            $request->validated('widgets'),
+            $request->validated('layout_version'),
+        );
 
         return response()->json([
             'data' => $this->service->getEffectiveLayout($request->user()),
+            'meta' => ['layout_version' => $this->service->userLayoutVersion($request->user())],
         ]);
     }
 
     public function reset(Request $request): JsonResponse
     {
-        $this->service->resetUserLayout($request->user());
+        $validated = $request->validate(['layout_version' => ['required', 'string', 'size:64']]);
+        $this->service->resetUserLayout($request->user(), $validated['layout_version']);
 
         return response()->json([
             'data' => $this->service->getEffectiveLayout($request->user()),
+            'meta' => ['layout_version' => $this->service->userLayoutVersion($request->user())],
         ]);
     }
 }

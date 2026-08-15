@@ -26,6 +26,7 @@ class PurchaseOrderItemResource extends JsonResource
             'unit_price'               => (string) $this->unit_price,
             'total'                    => (string) $this->total,
             'quantity_received'        => (string) $this->quantity_received,
+            'quantity_accepted'        => (string) $this->quantity_accepted,
             'quantity_remaining'       => $this->quantity_remaining,
         ];
     }

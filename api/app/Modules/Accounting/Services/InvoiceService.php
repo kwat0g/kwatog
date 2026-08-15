@@ -14,6 +14,7 @@ use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Enums\JournalEntryStatus;
+use App\Modules\Accounting\Events\InvoiceFinalized;
 use App\Modules\Accounting\Enums\VatClassification;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Collection as InvoiceCollection;
@@ -86,6 +87,16 @@ class InvoiceService
     public function create(array $data, User $by): Invoice
     {
         return DB::transaction(function () use ($data, $by) {
+            $lifecycle = (string) ($data['lifecycle_type'] ?? 'standard');
+            if (! in_array($lifecycle, ['standard', 'prebill'], true)) {
+                throw new BusinessRuleException('Invoice lifecycle must be standard or prebill.');
+            }
+            if ($lifecycle === 'prebill' && trim((string) ($data['prebill_reason'] ?? '')) === '') {
+                throw new BusinessRuleException('An approved prebill requires a reason.');
+            }
+            if ($lifecycle === 'prebill' && ! $by->hasPermission('accounting.invoices.prebill_approve')) {
+                throw new BusinessRuleException('You are not authorized to approve a prebill invoice.');
+            }
             $customer = Customer::findOrFail(
                 HashIdFilter::decode($data['customer_id'], Customer::class),
             );
@@ -107,6 +118,10 @@ class InvoiceService
                 'delivery_id'    => isset($data['delivery_id'])
                     ? HashIdFilter::decode($data['delivery_id'], \App\Modules\SupplyChain\Models\Delivery::class)
                     : null,
+                'lifecycle_type' => $lifecycle,
+                'prebill_approved_by' => $lifecycle === 'prebill' ? $by->id : null,
+                'prebill_approved_at' => $lifecycle === 'prebill' ? now() : null,
+                'prebill_reason' => $lifecycle === 'prebill' ? trim((string) $data['prebill_reason']) : null,
                 'date'           => $data['date'],
                 'due_date'       => $data['due_date']
                     ?? Carbon::parse($data['date'])->addDays($customer->payment_terms_days)->toDateString(),
@@ -179,7 +194,7 @@ class InvoiceService
     /** Lock the number, build + post the JE, flip status to finalized. */
     public function finalize(Invoice $invoice, User $by): Invoice
     {
-        return DB::transaction(function () use ($invoice, $by) {
+        $finalized = DB::transaction(function () use ($invoice, $by) {
             // The caller may be holding a stale draft. Serialize against the
             // persisted invoice and make every validation/calculation use that
             // authoritative row.
@@ -194,6 +209,19 @@ class InvoiceService
             $this->periods->assertPostingAllowed($lockedInvoice->date);
 
             $lockedInvoice->loadMissing(['items', 'customer']);
+
+            // Standard final invoices are delivery-gated. Prebilling is a
+            // distinct, explicitly approved lifecycle and never masquerades
+            // as a delivered sale.
+            if (($lockedInvoice->lifecycle_type ?? 'standard') === 'standard') {
+                $delivery = $lockedInvoice->delivery_id
+                    ? \App\Modules\SupplyChain\Models\Delivery::query()->with('items')->find($lockedInvoice->delivery_id)
+                    : null;
+                if (! $lockedInvoice->sales_order_id || ! $delivery || $delivery->status !== \App\Modules\SupplyChain\Enums\DeliveryStatus::Confirmed) {
+                    throw new BusinessRuleException('A standard sales-order invoice requires a confirmed delivered quantity. Use the approved prebill lifecycle for prebilling.');
+                }
+                $this->assertInvoiceMatchesConfirmedDelivery($lockedInvoice, $delivery);
+            }
 
             $arId        = $this->accountId($this->accounts->ar());
             $vatOutputId = $this->accountId($this->accounts->vatOutput());
@@ -252,7 +280,7 @@ class InvoiceService
             // C-2 — Promote the parent SO to 'invoiced' once we have a posted
             // JE and a locked invoice number. No-op if the invoice isn't
             // linked to an SO or the SO is already at/past invoiced.
-            if ($lockedInvoice->sales_order_id) {
+            if (($lockedInvoice->lifecycle_type ?? 'standard') === 'standard' && $lockedInvoice->sales_order_id) {
                 app(\App\Modules\CRM\Services\SalesOrderService::class)
                     ->markInvoiced((int) $lockedInvoice->sales_order_id);
             }
@@ -267,6 +295,13 @@ class InvoiceService
 
             return $this->show($lockedInvoice->fresh());
         });
+
+        // Customer email is dispatched only after the accounting transaction
+        // commits, so a rollback can never send an invoice that does not
+        // exist. The queued listener owns the external email boundary.
+        event(new InvoiceFinalized($finalized));
+
+        return $finalized;
     }
 
     public function cancel(Invoice $invoice, User $by): Invoice
@@ -411,7 +446,7 @@ class InvoiceService
     }
 
     /**
-     * @return array{0: array<int, array{revenue_account_id:int, description:string, quantity:string, unit:?string, unit_price:string, total:string}>, 1: string}
+     * @return array{0: array<int, array{revenue_account_id:int, source_delivery_item_id:?int, description:string, quantity:string, unit:?string, unit_price:string, total:string}>, 1: string}
      */
     private function normalizeItems(array $rawItems): array
     {
@@ -432,6 +467,11 @@ class InvoiceService
             }
             $rows[] = [
                 'revenue_account_id' => $accountId,
+                'source_delivery_item_id' => isset($raw['source_delivery_item_id'])
+                    ? (is_int($raw['source_delivery_item_id'])
+                        ? $raw['source_delivery_item_id']
+                        : HashIdFilter::decode($raw['source_delivery_item_id'], \App\Modules\SupplyChain\Models\DeliveryItem::class))
+                    : null,
                 'description'        => (string) $raw['description'],
                 'quantity'           => $qty,
                 'unit'               => $raw['unit'] ?? null,
@@ -441,6 +481,34 @@ class InvoiceService
             $subtotal = Money::add($subtotal, $total);
         }
         return [$rows, $subtotal];
+    }
+
+    private function assertInvoiceMatchesConfirmedDelivery(
+        Invoice $invoice,
+        \App\Modules\SupplyChain\Models\Delivery $delivery,
+    ): void {
+        if ((int) $delivery->sales_order_id !== (int) $invoice->sales_order_id) {
+            throw new BusinessRuleException('Invoice delivery does not belong to the selected sales order.');
+        }
+
+        $invoice->loadMissing('items');
+        $deliveryLines = $delivery->items->keyBy('id');
+        $seen = [];
+        foreach ($invoice->items as $line) {
+            if (! $line->source_delivery_item_id || isset($seen[$line->source_delivery_item_id])) {
+                throw new BusinessRuleException('Every standard invoice line requires one unique confirmed delivery line.');
+            }
+            $source = $deliveryLines->get($line->source_delivery_item_id);
+            if (! $source
+                || bccomp((string) $line->quantity, (string) $source->quantity, 2) !== 0
+                || bccomp((string) $line->unit_price, (string) $source->unit_price, 2) !== 0) {
+                throw new BusinessRuleException('Standard invoice quantity and price must match the confirmed delivery line.');
+            }
+            $seen[$line->source_delivery_item_id] = true;
+        }
+        if (count($seen) !== $deliveryLines->count()) {
+            throw new BusinessRuleException('A standard invoice must include every confirmed delivery line exactly once.');
+        }
     }
 
     private function accountId(string $code): int

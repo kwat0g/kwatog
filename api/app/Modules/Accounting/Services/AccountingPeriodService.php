@@ -53,15 +53,21 @@ class AccountingPeriodService
         $this->assertValidMonth($month);
 
         return DB::transaction(function () use ($year, $month, $by) {
-            $period = AccountingPeriod::query()->firstOrNew([
-                'year'  => $year,
-                'month' => $month,
-            ]);
+            // Lock-then-guard: lock the authoritative row so a concurrent
+            // close/reopen cannot race past the closed-check. A brand-new
+            // period races the unique (year, month) index instead; on a unique
+            // violation the winner is re-read under lock and relocked.
+            $period = AccountingPeriod::query()
+                ->where('year', $year)
+                ->where('month', $month)
+                ->lockForUpdate()
+                ->first();
 
-            if ($period->exists && $period->status === AccountingPeriodStatus::Closed) {
+            if ($period !== null && $period->status === AccountingPeriodStatus::Closed) {
                 return $period;
             }
 
+            $period ??= new AccountingPeriod(['year' => $year, 'month' => $month]);
             $period->fill(['year' => $year, 'month' => $month]);
             $period->status      = AccountingPeriodStatus::Closed;
             $period->closed_at   = now();
@@ -71,7 +77,22 @@ class AccountingPeriodService
             $period->reopened_at   = null;
             $period->reopened_by   = null;
             $period->reopen_reason = null;
-            $period->save();
+
+            try {
+                $period->save();
+            } catch (\Illuminate\Database\QueryException $e) {
+                if (($e->errorInfo[0] ?? null) !== '23505') {
+                    throw $e;
+                }
+                // Concurrent close won the insert; relock the winner.
+                $period = AccountingPeriod::query()
+                    ->where('year', $year)
+                    ->where('month', $month)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+                $period->status = AccountingPeriodStatus::Closed;
+                $period->save();
+            }
 
             return $period;
         });
@@ -95,7 +116,13 @@ class AccountingPeriodService
         }
 
         return DB::transaction(function () use ($year, $month, $by, $reason) {
-            $period = AccountingPeriod::query()->where('year', $year)->where('month', $month)->first();
+            // Lock-then-guard: re-read under lock so a concurrent close cannot
+            // race a reopen's closed-status check.
+            $period = AccountingPeriod::query()
+                ->where('year', $year)
+                ->where('month', $month)
+                ->lockForUpdate()
+                ->first();
 
             if (! $period) {
                 throw new BusinessRuleException(sprintf('Period %04d-%02d does not exist; nothing to reopen.', $year, $month));

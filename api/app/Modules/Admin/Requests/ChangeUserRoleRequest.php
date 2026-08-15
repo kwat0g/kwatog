@@ -16,7 +16,11 @@ class ChangeUserRoleRequest extends FormRequest
 
     public function rules(): array
     {
-        return ['role_id' => ['required', 'string']];
+        return [
+            'role_id'          => ['required', 'string'],
+            'expected_role_id' => ['required', 'string'],
+            'reason'           => ['nullable', 'string', 'max:500'],
+        ];
     }
 
     public function decodedRoleId(): int
@@ -24,5 +28,17 @@ class ChangeUserRoleRequest extends FormRequest
         $id = Role::tryDecodeHash((string) $this->validated('role_id'));
         abort_if($id === null, 422, 'Invalid role_id.');
         return $id;
+    }
+
+    public function decodedExpectedRoleId(): int
+    {
+        $id = Role::tryDecodeHash((string) $this->validated('expected_role_id'));
+        abort_if($id === null, 422, 'Invalid expected_role_id.');
+        return $id;
+    }
+
+    public function reason(): string
+    {
+        return trim((string) ($this->validated('reason') ?? '')) ?: 'Admin role assignment';
     }
 }

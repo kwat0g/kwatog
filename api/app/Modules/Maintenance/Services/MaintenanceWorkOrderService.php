@@ -173,25 +173,31 @@ class MaintenanceWorkOrderService
         if ($wo->status === MaintenanceWorkOrderStatus::InProgress) return $this->show($wo);
         $this->assertNotTerminal($wo);
         return DB::transaction(function () use ($wo, $by) {
-            $wo->forceFill([
+            // Lock-then-guard: re-read the authoritative row so a concurrent
+            // start/complete/cancel holding a stale instance cannot double-act.
+            $locked = MaintenanceWorkOrder::query()->lockForUpdate()->findOrFail($wo->getKey());
+            $this->assertNotTerminal($locked);
+            if ($locked->status === MaintenanceWorkOrderStatus::InProgress) return $this->show($locked);
+
+            $locked->forceFill([
                 'status'     => MaintenanceWorkOrderStatus::InProgress->value,
                 'started_at' => now(),
             ])->save();
 
             // Mark machine target as under maintenance
-            if ($wo->maintainable_type === MaintainableType::Machine) {
-                $machine = Machine::find($wo->maintainable_id);
+            if ($locked->maintainable_type === MaintainableType::Machine) {
+                $machine = Machine::query()->lockForUpdate()->find($locked->maintainable_id);
                 if ($machine && $machine->status?->value !== 'maintenance') {
                     $machine->forceFill(['status' => 'maintenance'])->save();
                 }
             }
-            if ($wo->maintainable_type === MaintainableType::Mold) {
-                $mold = Mold::find($wo->maintainable_id);
+            if ($locked->maintainable_type === MaintainableType::Mold) {
+                $mold = Mold::query()->lockForUpdate()->find($locked->maintainable_id);
                 if ($mold) {
                     MoldHistory::create([
                         'mold_id'             => $mold->id,
                         'event_type'          => MoldEventType::MaintenanceStarted->value,
-                        'description'         => $wo->description,
+                        'description'         => $locked->description,
                         'performed_by'        => $by->name,
                         'event_date'          => now()->toDateString(),
                         'shot_count_at_event' => (int) $mold->current_shot_count,
@@ -199,8 +205,8 @@ class MaintenanceWorkOrderService
                 }
             }
 
-            $this->log($wo, 'Maintenance started.', $by);
-            return $this->show($wo);
+            $this->log($locked, 'Maintenance started.', $by);
+            return $this->show($locked);
         });
     }
 
@@ -211,19 +217,25 @@ class MaintenanceWorkOrderService
     {
         $this->assertNotTerminal($wo);
         return DB::transaction(function () use ($wo, $data, $by) {
-            $cost = (string) SparePartUsage::query()->where('work_order_id', $wo->id)->sum('total_cost');
+            // Lock-then-guard: without the lock, two concurrent completes both
+            // pass the terminal guard and double-bump the mold lifecycle
+            // counters / maintenance cost from stale reads (P61).
+            $locked = MaintenanceWorkOrder::query()->lockForUpdate()->findOrFail($wo->getKey());
+            $this->assertNotTerminal($locked);
 
-            $wo->forceFill([
+            $cost = (string) SparePartUsage::query()->where('work_order_id', $locked->id)->sum('total_cost');
+
+            $locked->forceFill([
                 'status'           => MaintenanceWorkOrderStatus::Completed->value,
                 'completed_at'     => now(),
                 'downtime_minutes' => (int) ($data['downtime_minutes'] ?? 0),
                 'cost'             => $cost,
-                'remarks'          => $data['remarks'] ?? $wo->remarks,
+                'remarks'          => $data['remarks'] ?? $locked->remarks,
             ])->save();
 
             // Mold: reset shot count, log history, accumulate lifecycle counters
-            if ($wo->maintainable_type === MaintainableType::Mold) {
-                $mold = Mold::find($wo->maintainable_id);
+            if ($locked->maintainable_type === MaintainableType::Mold) {
+                $mold = Mold::query()->lockForUpdate()->find($locked->maintainable_id);
                 if ($mold) {
                     $shotsBefore = (int) $mold->current_shot_count;
                     $mold->forceFill([
@@ -236,7 +248,7 @@ class MaintenanceWorkOrderService
                     MoldHistory::create([
                         'mold_id'             => $mold->id,
                         'event_type'          => MoldEventType::MaintenanceCompleted->value,
-                        'description'         => $wo->description.' (shot count reset from '.$shotsBefore.')',
+                        'description'         => $locked->description.' (shot count reset from '.$shotsBefore.')',
                         'cost'                => $cost,
                         'performed_by'        => $by->name,
                         'event_date'          => now()->toDateString(),
@@ -245,21 +257,21 @@ class MaintenanceWorkOrderService
                 }
             }
             // Machine: restore to idle
-            if ($wo->maintainable_type === MaintainableType::Machine) {
-                $machine = Machine::find($wo->maintainable_id);
+            if ($locked->maintainable_type === MaintainableType::Machine) {
+                $machine = Machine::query()->lockForUpdate()->find($locked->maintainable_id);
                 if ($machine && $machine->status?->value === 'maintenance') {
                     $machine->forceFill(['status' => 'idle'])->save();
                 }
             }
 
             // Recompute schedule next_due_at
-            if ($wo->schedule_id) {
-                $schedule = MaintenanceSchedule::find($wo->schedule_id);
+            if ($locked->schedule_id) {
+                $schedule = MaintenanceSchedule::find($locked->schedule_id);
                 if ($schedule) $this->schedules->recomputeNextDueAt($schedule, now());
             }
 
-            $this->log($wo, 'Maintenance completed.'.($cost > 0 ? ' Spare parts cost '.app(\App\Common\Services\CurrencyDisplayService::class)->format($cost).'.' : ''), $by);
-            return $this->show($wo);
+            $this->log($locked, 'Maintenance completed.'.($cost > 0 ? ' Spare parts cost '.app(\App\Common\Services\CurrencyDisplayService::class)->format($cost).'.' : ''), $by);
+            return $this->show($locked);
         });
     }
 
@@ -267,25 +279,30 @@ class MaintenanceWorkOrderService
     {
         $this->assertNotTerminal($wo);
         return DB::transaction(function () use ($wo, $reason, $by) {
-            $wo->forceFill([
+            // Lock-then-guard: re-read so a concurrent complete cannot race a
+            // cancel past the terminal guard.
+            $locked = MaintenanceWorkOrder::query()->lockForUpdate()->findOrFail($wo->getKey());
+            $this->assertNotTerminal($locked);
+
+            $locked->forceFill([
                 'status'  => MaintenanceWorkOrderStatus::Cancelled->value,
-                'remarks' => $reason ?: $wo->remarks,
+                'remarks' => $reason ?: $locked->remarks,
             ])->save();
             // Restore machine to idle if it was set to maintenance by us
-            if ($wo->maintainable_type === MaintainableType::Machine) {
-                $machine = Machine::find($wo->maintainable_id);
+            if ($locked->maintainable_type === MaintainableType::Machine) {
+                $machine = Machine::query()->lockForUpdate()->find($locked->maintainable_id);
                 if ($machine && $machine->status?->value === 'maintenance') {
                     $machine->forceFill(['status' => 'idle'])->save();
                 }
             }
             // Recompute schedule next_due_at on cancel so running-hours-based
             // schedules don't re-trigger immediately on the next cron run.
-            if ($wo->schedule_id) {
-                $schedule = MaintenanceSchedule::find($wo->schedule_id);
+            if ($locked->schedule_id) {
+                $schedule = MaintenanceSchedule::find($locked->schedule_id);
                 if ($schedule) $this->schedules->recomputeNextDueAt($schedule, now());
             }
-            $this->log($wo, 'Cancelled'.($reason ? ': '.$reason : '.'), $by);
-            return $this->show($wo);
+            $this->log($locked, 'Cancelled'.($reason ? ': '.$reason : '.'), $by);
+            return $this->show($locked);
         });
     }
 

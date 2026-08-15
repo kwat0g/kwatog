@@ -10,6 +10,7 @@ use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\TaxPolicyService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
+use App\Modules\Accounting\Events\CreditNoteFinalized;
 use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Accounting\Enums\CreditNoteStatus;
 use App\Modules\Accounting\Enums\CreditNoteType;
@@ -166,28 +167,40 @@ class CreditNoteService
             throw new BusinessRuleException('Only draft credit notes can be finalized.');
         }
 
-        return DB::transaction(function () use ($cn, $by) {
-            $this->periods->assertPostingAllowed($cn->date->toDateString());
-            $cn->loadMissing('lines');
+        $finalized = DB::transaction(function () use ($cn, $by) {
+            // Lock-then-guard: re-read the authoritative row under a row lock so
+            // a concurrent finalizer holding a stale model cannot post the
+            // VAT-reversing journal entry twice (P01-01 shape on the GL).
+            $locked = CreditNote::query()->lockForUpdate()->findOrFail($cn->getKey());
+            if ($locked->status !== CreditNoteStatus::Draft) {
+                throw new BusinessRuleException('Only draft credit notes can be finalized.');
+            }
 
-            $lines = $this->buildGlLines($cn);
+            $this->periods->assertPostingAllowed($locked->date->toDateString());
+            $locked->loadMissing('lines');
+
+            $lines = $this->buildGlLines($locked);
             $number = $this->sequences->generate('credit_note');
 
             $je = $this->journals->create([
-                'date'           => $cn->date->toDateString(),
-                'description'    => "Credit note {$number} ({$cn->type->label()})",
+                'date'           => $locked->date->toDateString(),
+                'description'    => "Credit note {$number} ({$locked->type->label()})",
                 'reference_type' => 'credit_note',
-                'reference_id'   => $cn->id,
+                'reference_id'   => $locked->id,
                 'lines'          => $lines,
             ], $by);
             $je = $this->journals->post($je, $by);
 
-            $cn->fill(['credit_note_number' => $number, 'journal_entry_id' => $je->id]);
-            $cn->status = CreditNoteStatus::Finalized;
-            $cn->save();
+            $locked->fill(['credit_note_number' => $number, 'journal_entry_id' => $je->id]);
+            $locked->status = CreditNoteStatus::Finalized;
+            $locked->save();
 
-            return $cn->fresh(['lines']);
+            return $locked->fresh(['lines']);
         });
+
+        event(new CreditNoteFinalized($finalized));
+
+        return $finalized;
     }
 
     /**

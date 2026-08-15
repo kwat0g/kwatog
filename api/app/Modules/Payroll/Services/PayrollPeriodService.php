@@ -27,6 +27,7 @@ use App\Modules\Payroll\Jobs\ProcessPayrollJob;
 use App\Modules\Payroll\Models\DisbursementProof;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -681,6 +682,71 @@ class PayrollPeriodService
     }
 
     /**
+     * A processing token fences a worker from a later stale-claim takeover.
+     * Null is retained as a backwards-compatible match for pre-token claims.
+     */
+    public function claimIsOwned(PayrollPeriod $period, ?string $token): bool
+    {
+        $query = PayrollPeriod::query()
+            ->whereKey($period->id)
+            ->where('status', PayrollPeriodStatus::Processing->value);
+
+        if ($token === null) {
+            $query->whereNull('processing_token');
+        } else {
+            $query->where('processing_token', $token);
+        }
+
+        return $query->exists();
+    }
+
+    /** Lock and verify the current worker's processing claim. */
+    public function assertComputeClaim(PayrollPeriod $period, ?string $token): PayrollPeriod
+    {
+        $query = PayrollPeriod::query()
+            ->whereKey($period->id)
+            ->where('status', PayrollPeriodStatus::Processing->value);
+
+        if ($token === null) {
+            $query->whereNull('processing_token');
+        } else {
+            $query->where('processing_token', $token);
+        }
+
+        $owned = $query->lockForUpdate()->first();
+        if (! $owned) {
+            throw new BusinessRuleException('Payroll compute claim is no longer owned by this worker.');
+        }
+
+        return $owned;
+    }
+
+    /**
+     * Re-read and lock a reaper candidate before releasing it. The initial
+     * stale list is only a hint: a compute takeover may have replaced the
+     * claim while the command was iterating that list.
+     */
+    public function reapStaleClaim(PayrollPeriod $candidate, CarbonInterface $threshold): ?PayrollPeriod
+    {
+        return DB::transaction(function () use ($candidate, $threshold): ?PayrollPeriod {
+            $locked = PayrollPeriod::query()
+                ->lockForUpdate()
+                ->find($candidate->id);
+
+            if (! $locked || $locked->status !== PayrollPeriodStatus::Processing) {
+                return null;
+            }
+
+            $startedAt = $locked->processing_started_at;
+            if ($startedAt !== null && ! CarbonImmutable::parse($startedAt)->isBefore($threshold)) {
+                return null;
+            }
+
+            return $this->releaseClaim($locked, [], $locked->processing_token);
+        });
+    }
+
+    /**
      * Release a Processing claim onto its correct terminal status.
      *
      * Computed when the run produced rows (they are real payroll awaiting a
@@ -688,16 +754,24 @@ class PayrollPeriodService
      * job's finally block, failed(), force-unlock and the stale reaper — goes
      * through here so they cannot drift apart on what "finished" means.
      */
-    public function releaseClaim(PayrollPeriod $period, array $extraAttributes = []): PayrollPeriod
+    public function releaseClaim(PayrollPeriod $period, array $extraAttributes = [], ?string $token = null): PayrollPeriod
     {
-        $period->forceFill(array_merge([
+        $attributes = array_merge([
             'status' => $period->payrolls()->exists()
                 ? PayrollPeriodStatus::Computed->value
                 : PayrollPeriodStatus::Draft->value,
             'processing_started_at' => null,
-        ], $extraAttributes))->save();
+            'processing_token' => null,
+        ], $extraAttributes);
 
-        return $period;
+        $query = PayrollPeriod::query()->whereKey($period->id);
+        if ($token !== null) {
+            $query->where('status', PayrollPeriodStatus::Processing->value)
+                ->where('processing_token', $token);
+        }
+        $query->update($attributes);
+
+        return PayrollPeriod::query()->find($period->id) ?? $period;
     }
 
     /**
@@ -787,6 +861,7 @@ class PayrollPeriodService
             ->update([
                 'status'                => PayrollPeriodStatus::Processing->value,
                 'processing_started_at' => now(),
+                'processing_token'      => (string) Str::uuid(),
                 'computed_by'           => $actor?->id ?? $period->computed_by,
                 'updated_at'            => now(),
             ]);
@@ -829,6 +904,7 @@ class PayrollPeriodService
                     $fresh,
                     $actor?->id,
                     (string) Str::uuid(),
+                    $fresh->processing_token,
                 ),
                 $fresh,
                 'h2r',
@@ -918,6 +994,19 @@ class PayrollPeriodService
             }
             if ($locked->status !== PayrollPeriodStatus::Finalized) {
                 throw new BusinessRuleException('Only finalized periods can be marked as disbursed.');
+            }
+
+            // Finance policy: payroll cash cannot leave while the liability is
+            // still waiting for Accounting. `not_required` is an explicit
+            // policy outcome; pending/manual-required remain owned exceptions.
+            if (! in_array($locked->gl_handoff_status, [
+                PayrollGlHandoffStatus::Posted,
+                PayrollGlHandoffStatus::NotRequired,
+            ], true)) {
+                throw new BusinessRuleException(sprintf(
+                    'Payroll cannot be disbursed while GL handoff is %s. Post the handoff or record an approved not_required outcome.',
+                    $locked->gl_handoff_status?->label() ?? 'unknown',
+                ));
             }
 
             $proofCount = $locked->disbursementProofs()->count();
@@ -1125,7 +1214,13 @@ class PayrollPeriodService
                 'h2r',
                 'payroll_period',
                 'gl_handoff',
-                'payroll-gl-finalize:'.$fresh->id,
+                // P01-02 — the dedupe key needs a per-run discriminator. The
+                // insertOrIgnore dedupe would otherwise swallow the fresh GL
+                // request of a void → re-finalize cycle, leaving the corrected
+                // run silently unposted while reporting success. Delivery-side
+                // idempotency is still guaranteed by the listener's status and
+                // journal_entry_id guards under the period row lock.
+                'payroll-gl-finalize:'.$fresh->id.':'.Str::uuid(),
             );
 
             return $fresh;
@@ -1177,32 +1272,41 @@ class PayrollPeriodService
      */
     public function forceUnlock(PayrollPeriod $period, User $actor, ?string $reason = null): PayrollPeriod
     {
-        if ($period->status !== PayrollPeriodStatus::Processing) {
-            throw new BusinessRuleException('Only periods stuck at Processing can be force-unlocked.');
-        }
-
         return DB::transaction(function () use ($period, $actor, $reason) {
-            $previous = $period->status?->value;
+            // P01-01 — the guard must read the authoritative row. The
+            // route-bound model may predate a concurrent finalize; releaseClaim writes
+            // Computed/Draft with no guard of its own, so unlocking a stale
+            // Processing copy would demote a period that has since been paid.
+            $locked = PayrollPeriod::query()->lockForUpdate()->find($period->id);
+            if (! $locked) {
+                throw new BusinessRuleException('Payroll period not found.');
+            }
+            if ($locked->status !== PayrollPeriodStatus::Processing) {
+                throw new BusinessRuleException('Only periods stuck at Processing can be force-unlocked.');
+            }
+
+            $previous = $locked->status?->value;
             // Land on Computed when rows already exist (a crash midway through
             // the batch still produced payroll), otherwise Draft. Also stamps
             // force_unlocked_by — the column existed but was never written, so
             // the audit trail could not attribute the unlock.
-            $this->releaseClaim($period, ['force_unlocked_by' => $actor->id]);
-            $this->progress->forget($period);
+            $this->releaseClaim($locked, ['force_unlocked_by' => $actor->id]);
+            $this->progress->forget($locked);
+            $unlocked = $locked->fresh();
 
             AuditLog::create([
                 'user_id'    => $actor->id,
                 'action'     => 'payroll.period.force_unlock',
                 'model_type' => PayrollPeriod::class,
-                'model_id'   => $period->id,
+                'model_id'   => $locked->id,
                 'old_values' => ['status' => $previous],
-                'new_values' => ['status' => $period->status?->value, 'reason' => $reason],
+                'new_values' => ['status' => $unlocked?->status?->value, 'reason' => $reason],
                 'ip_address' => request()?->ip(),
                 'user_agent' => request()?->userAgent(),
                 'created_at' => now(),
             ]);
 
-            return $period->fresh();
+            return $unlocked ?? $locked;
         });
     }
 
@@ -1240,7 +1344,8 @@ class PayrollPeriodService
             // Reverse the GL posting if one exists and the accounting tables
             // are present. JournalEntryService::reverse() posts a balanced
             // mirror entry and flags the original as reversed.
-            if ($locked->journal_entry_id
+            $hadJournalEntry = $locked->journal_entry_id !== null;
+            if ($hadJournalEntry
                 && \Illuminate\Support\Facades\Schema::hasTable('journal_entries')) {
                 $je = JournalEntry::find($locked->journal_entry_id);
                 if ($je && $je->status === JournalEntryStatus::Posted && $je->reversed_by_entry_id === null) {
@@ -1251,12 +1356,18 @@ class PayrollPeriodService
             }
 
             $locked->forceFill([
-                'status'      => PayrollPeriodStatus::Voided->value,
-                'voided_at'   => now(),
-                'voided_by'   => $actor->id,
-                'void_reason' => $reason,
+                'status'            => PayrollPeriodStatus::Voided->value,
+                'voided_at'         => now(),
+                'voided_by'         => $actor->id,
+                'void_reason'       => $reason,
+                'thirteenth_month_run_state' => $locked->is_thirteenth_month ? 'voided_correction' : $locked->thirteenth_month_run_state,
+                // P02-02 — a voided period must not keep pointing at its
+                // (now reversed) journal entry, or every re-post path — retry,
+                // operator replay, re-finalize — reads the stale id, treats the
+                // reversal as a live posting, and silently no-ops.
+                'journal_entry_id'  => null,
             ])->save();
-            if ($locked->journal_entry_id === null) {
+            if (! $hadJournalEntry) {
                 $locked->markGlNotRequired('period_voided');
             }
 

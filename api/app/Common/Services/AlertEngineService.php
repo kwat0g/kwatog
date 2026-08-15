@@ -444,6 +444,7 @@ class AlertEngineService
 
     private function emailCritical(Alert $alert): void
     {
+        $users = collect();
         try {
             $catalog = (array) $this->settings->get('alerts.critical.notification_roles', []);
             $roleSlugs = array_values(array_filter(
@@ -461,9 +462,37 @@ class AlertEngineService
                 return;
             }
 
-            Notification::send($users, new CriticalAlertEmail($alert));
+            $emailUsers = $users->filter(static fn (User $user): bool => filter_var($user->email, FILTER_VALIDATE_EMAIL));
+            if ($emailUsers->isEmpty()) {
+                app(EmailDeliveryFailureNotifier::class)->notify(
+                    $users,
+                    'Critical alert',
+                    "Critical alert '{$alert->title}' could not be emailed because no configured recipient has a usable address. Review the alert immediately.",
+                    [
+                        'link_to' => '/alerts',
+                        'entity_type' => 'alert',
+                        'entity_id' => $alert->hash_id,
+                        'reason' => 'No critical-alert recipient has a usable email address.',
+                    ],
+                );
+
+                return;
+            }
+
+            Notification::send($emailUsers, new CriticalAlertEmail($alert));
             $alert->update(['notified_email_at' => now()]);
         } catch (\Throwable $e) {
+            app(EmailDeliveryFailureNotifier::class)->notify(
+                $users,
+                'Critical alert',
+                "Critical alert '{$alert->title}' could not be delivered by email. Review the alert immediately.",
+                [
+                    'link_to' => '/alerts',
+                    'entity_type' => 'alert',
+                    'entity_id' => $alert->hash_id,
+                    'reason' => 'The email provider rejected or could not deliver the critical alert.',
+                ],
+            );
             Log::warning('AlertEngine: critical email failed', ['error' => $e->getMessage(), 'alert_id' => $alert->id]);
         }
     }

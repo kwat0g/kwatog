@@ -55,7 +55,7 @@ class SalesOrderResource extends JsonResource
             ),
             // Sprint 6 audit §3.2: surface the chain context for the right-
             // panel LinkedRecords block on the detail page. hash_id only —
-            // never raw integer FKs (see plans/sprint-6-audit §1.3).
+            // Never expose raw integer foreign keys.
             'mrp_plan'           => $this->whenLoaded('mrpPlan', fn () => $this->mrpPlan ? [
                 'id'              => $this->mrpPlan->hash_id,
                 'mrp_plan_no'     => $this->mrpPlan->mrp_plan_no,

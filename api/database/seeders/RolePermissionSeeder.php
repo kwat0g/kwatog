@@ -157,6 +157,7 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'accounting.vendors.manage',       'name' => 'Manage Vendors'],
                 ['slug' => 'accounting.bills.view',           'name' => 'View Bills'],
                 ['slug' => 'accounting.bills.create',         'name' => 'Create Bills'],
+                ['slug' => 'accounting.bills.exception_approve', 'name' => 'Approve Service Bill Exceptions'],
                 ['slug' => 'accounting.bills.update',         'name' => 'Update / Cancel Bills'],
                 ['slug' => 'accounting.bills.pay',            'name' => 'Pay Bills'],
                 // Customers & Invoices (AR)
@@ -164,6 +165,7 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'accounting.customers.manage',     'name' => 'Manage Customers'],
                 ['slug' => 'accounting.invoices.view',        'name' => 'View Invoices'],
                 ['slug' => 'accounting.invoices.create',      'name' => 'Create Invoices'],
+                ['slug' => 'accounting.invoices.prebill_approve', 'name' => 'Approve Prebill Invoices'],
                 ['slug' => 'accounting.invoices.update',      'name' => 'Update / Cancel Invoices'],
                 ['slug' => 'accounting.invoices.collect',     'name' => 'Record Collections'],
                 // REC-13 — AR/AP credit notes.
@@ -174,11 +176,10 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'accounting.statements.export',    'name' => 'Export Statements (CSV/PDF)'],
                 // REC-05 — go-live opening balances (GL + stock). Finance-only
                 // via module('accounting'); a migration-time capability.
-                // Fiscal-period close/reopen. The routes are commented out
-                // (scope cut 2026-08-08) but CloseAccountingPeriodRequest /
-                // ReopenAccountingPeriodRequest still authorize against this
-                // slug, so it is seeded to keep the catalog and the code in
-                // sync if the routes are ever re-enabled.
+                // Fiscal-period view and close/reopen controls. Finance Officer
+                // receives these through the accounting module; system_admin
+                // retains wildcard access.
+                ['slug' => 'accounting.periods.view',        'name' => 'View Accounting Periods'],
                 ['slug' => 'accounting.periods.manage',      'name' => 'Close / Reopen Accounting Periods'],
             ],
 

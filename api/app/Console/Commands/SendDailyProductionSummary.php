@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Production\Notifications\DailyProductionSummary;
@@ -32,7 +33,6 @@ class SendDailyProductionSummary extends Command
         $users = User::query()
             ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
             ->where('is_active', true)
-            ->whereNotNull('email')
             ->get();
 
         if ($users->isEmpty()) {
@@ -40,8 +40,34 @@ class SendDailyProductionSummary extends Command
             return self::SUCCESS;
         }
 
-        Notification::send($users, new DailyProductionSummary($summary));
-        $this->info("Daily production summary sent to {$users->count()} recipient(s) for {$date->toDateString()}.");
+        $emailUsers = $users->filter(static fn (User $user): bool => filter_var($user->email, FILTER_VALIDATE_EMAIL));
+        if ($emailUsers->isEmpty()) {
+            app(EmailDeliveryFailureNotifier::class)->notify(
+                $users,
+                'Daily production summary',
+                "The daily production summary for {$date->toDateString()} could not be emailed because no recipient has a usable email address. Review the production dashboard.",
+                ['link_to' => '/production/work-orders', 'entity_type' => 'production_summary'],
+            );
+            return self::SUCCESS;
+        }
+
+        try {
+            Notification::send($emailUsers, new DailyProductionSummary($summary));
+        } catch (\Throwable $e) {
+            app(EmailDeliveryFailureNotifier::class)->notify(
+                $users,
+                'Daily production summary',
+                "The daily production summary for {$date->toDateString()} could not be delivered by email. Review the production dashboard.",
+                [
+                    'link_to' => '/production/work-orders',
+                    'entity_type' => 'production_summary',
+                    'reason' => 'The email provider rejected or could not deliver the production summary.',
+                ],
+            );
+            $this->error('Daily production summary email failed; in-app fallback created.');
+            return self::FAILURE;
+        }
+        $this->info("Daily production summary sent to {$emailUsers->count()} recipient(s) for {$date->toDateString()}.");
         return self::SUCCESS;
     }
 }

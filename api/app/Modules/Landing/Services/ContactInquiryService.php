@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Modules\Landing\Services;
 
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Common\Services\SettingsService;
+use App\Modules\Auth\Models\User;
 use App\Modules\Landing\Enums\ContactInquiryStatus;
 use App\Modules\Landing\Models\ContactInquiry;
 use App\Modules\Landing\Notifications\ContactInquiryReceivedNotification;
@@ -46,6 +48,22 @@ class ContactInquiryService
             Notification::route('mail', $this->settings->requiredString('company.sales_inbox_email'))
                 ->notify(new ContactInquiryReceivedNotification($inquiry));
         } catch (\Throwable $e) {
+            $recipients = User::query()
+                ->whereHas('role.permissions', fn ($q) => $q->where('slug', 'crm.inquiries.view'))
+                ->where('is_active', true)
+                ->get();
+
+            app(EmailDeliveryFailureNotifier::class)->notify(
+                $recipients,
+                'Contact inquiry',
+                "The sales inbox email for inquiry {$inquiry->inquiry_no} could not be delivered. Review the inquiry in the CRM.",
+                [
+                    'link_to' => "/crm/inquiries/{$inquiry->hash_id}",
+                    'entity_type' => 'contact_inquiry',
+                    'entity_id' => $inquiry->hash_id,
+                    'reason' => 'The configured sales inbox was unreachable or the email provider rejected the message.',
+                ],
+            );
             Log::warning('Contact inquiry notification failed', [
                 'inquiry_no' => $inquiry->inquiry_no,
                 'error' => $e->getMessage(),

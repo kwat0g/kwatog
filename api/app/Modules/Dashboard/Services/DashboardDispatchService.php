@@ -52,17 +52,15 @@ final class DashboardDispatchService
     /** @return array<int, array{key: string, path: string, permission: string, name: string, holder_count: int}> */
     public function qualifying(User $user): array
     {
-        // system_admin resolves every permission (hasPermission bypasses
-        // the cache); a plain in_array over the cached slugs would
-        // wrongly exclude it.
+        // hasPermission is the authorization boundary here. It includes the
+        // system administrator wildcard and any live per-user overrides, so
+        // dispatch never needs to know a role name.
         $catalog = DashboardCatalog::all();
-        $userPerms = $user->permission_slugs;
-        $isAdmin = $user->role?->slug === 'system_admin';
         $holders = $this->holderCounts();
 
         return array_values(array_filter(
-            array_map(function (array $d) use ($userPerms, $isAdmin, $holders): ?array {
-                if (! $isAdmin && ! in_array($d['permission'], $userPerms, true)) {
+            array_map(function (array $d) use ($user, $holders): ?array {
+                if (! $user->hasPermission($d['permission'])) {
                     return null;
                 }
                 $d['holder_count'] = $holders[$d['permission']] ?? 0;

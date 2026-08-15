@@ -13,6 +13,7 @@ use App\Modules\Attendance\Events\OvertimeRequestSubmitted;
 use App\Modules\Attendance\Models\OvertimeRequest;
 use App\Modules\Auth\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
 class OvertimeService
@@ -90,30 +91,61 @@ class OvertimeService
             return null;
         }
 
-        // Idempotency: skip if any OT row exists for (employee, date).
-        $exists = OvertimeRequest::query()
-            ->where('employee_id', $a->employee_id)
-            ->whereDate('date', $a->date)
-            ->exists();
-        if ($exists) {
-            return null;
-        }
-
         $hours = round($extra / 60, 1);
 
-        return DB::transaction(function () use ($a, $hours, $extra) {
-            $ot = OvertimeRequest::create([
-                'employee_id'      => $a->employee_id,
-                'date'             => $a->date,
-                'hours_requested'  => $hours,
-                'reason'           => "Auto-detected from biometric punch (worked {$extra} minutes past shift end).",
-                'is_auto_detected' => true,
-            ]);
-            // Default DB status is 'pending' — no need to set explicitly.
-            $ot->load('employee');
-            app(OutboxService::class)->record(new OvertimeRequestSubmitted($ot));
-            return $ot;
-        });
+        try {
+            return DB::transaction(function () use ($a, $hours, $extra): ?OvertimeRequest {
+                // Serialize normal replays. The partial unique index below is
+                // still authoritative when two workers both observe no row.
+                $existing = OvertimeRequest::query()
+                    ->where('employee_id', $a->employee_id)
+                    ->whereDate('date', $a->date)
+                    ->lockForUpdate()
+                    ->first();
+                if ($existing) {
+                    return null;
+                }
+
+                $ot = OvertimeRequest::create([
+                    'employee_id'      => $a->employee_id,
+                    'date'             => $a->date,
+                    'hours_requested'  => $hours,
+                    'reason'           => "Auto-detected from biometric punch (worked {$extra} minutes past shift end).",
+                    'is_auto_detected' => true,
+                ]);
+                // Default DB status is 'pending' — no need to set explicitly.
+                $ot->load('employee');
+                app(OutboxService::class)->record(new OvertimeRequestSubmitted($ot));
+                return $ot;
+            });
+        } catch (QueryException $e) {
+            // A concurrent replay may win the partial unique index after both
+            // workers pass the lock-then-check. Treat that loser as an
+            // idempotent replay and never emit a second outbox event.
+            if (! $this->isAutoSourceUniqueViolation($e)) {
+                throw $e;
+            }
+
+            $existing = OvertimeRequest::query()
+                ->where('employee_id', $a->employee_id)
+                ->whereDate('date', $a->date)
+                ->where('is_auto_detected', true)
+                ->exists();
+            if ($existing) {
+                return null;
+            }
+
+            throw $e;
+        }
+    }
+
+    private function isAutoSourceUniqueViolation(QueryException $exception): bool
+    {
+        $code = (string) $exception->getCode();
+
+        return in_array($code, ['23000', '23505'], true)
+            && (str_contains($exception->getMessage(), 'overtime_requests_auto_source_unique')
+                || str_contains($exception->getMessage(), 'overtime_requests.employee_id, overtime_requests.date'));
     }
 
     public function list(array $filters, ?User $user = null): LengthAwarePaginator

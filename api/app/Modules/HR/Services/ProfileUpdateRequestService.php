@@ -108,22 +108,27 @@ class ProfileUpdateRequestService
         $this->assertNotSelfReviewing($request, $reviewer);
 
         return DB::transaction(function () use ($request, $reviewer, $remarks) {
-            $request->update([
+            // Lock-then-guard: re-read so a concurrent reviewer cannot double-
+            // apply the changes or act on a request another leg just closed.
+            $locked = ProfileUpdateRequest::query()->lockForUpdate()->findOrFail($request->getKey());
+            abort_unless($locked->status === ProfileUpdateStatus::Pending->value, 422, 'Request is not awaiting HR review.');
+
+            $locked->update([
                 'reviewed_by'    => $reviewer->id,
                 'reviewed_at'    => now(),
                 'review_remarks' => $remarks,
             ]);
 
-            if ($request->requires_finance) {
+            if ($locked->requires_finance) {
                 // Defer application until Finance signs off.
-                $request->update(['status' => ProfileUpdateStatus::PendingFinance->value]);
-                return $request->fresh(['employee', 'reviewer']);
+                $locked->update(['status' => ProfileUpdateStatus::PendingFinance->value]);
+                return $locked->fresh(['employee', 'reviewer']);
             }
 
-            $this->applyChanges($request);
-            $request->update(['status' => ProfileUpdateStatus::Approved->value]);
+            $this->applyChanges($locked);
+            $locked->update(['status' => ProfileUpdateStatus::Approved->value]);
 
-            return $request->fresh(['employee', 'reviewer']);
+            return $locked->fresh(['employee', 'reviewer']);
         });
     }
 
@@ -138,16 +143,20 @@ class ProfileUpdateRequestService
         $this->assertNotSelfReviewing($request, $reviewer);
 
         return DB::transaction(function () use ($request, $reviewer, $remarks) {
-            $this->applyChanges($request);
+            $locked = ProfileUpdateRequest::query()->lockForUpdate()->findOrFail($request->getKey());
+            abort_unless($locked->requires_finance, 422, 'This request does not require Finance review.');
+            abort_unless($locked->status === ProfileUpdateStatus::PendingFinance->value, 422, 'Request is not awaiting Finance review.');
 
-            $request->update([
+            $this->applyChanges($locked);
+
+            $locked->update([
                 'status'              => ProfileUpdateStatus::Approved->value,
                 'finance_reviewed_by' => $reviewer->id,
                 'finance_reviewed_at' => now(),
                 'finance_remarks'     => $remarks,
             ]);
 
-            return $request->fresh(['employee', 'reviewer', 'financeReviewer']);
+            return $locked->fresh(['employee', 'reviewer', 'financeReviewer']);
         });
     }
 
@@ -155,21 +164,28 @@ class ProfileUpdateRequestService
     {
         abort_unless(in_array($request->status, [ProfileUpdateStatus::Pending->value, ProfileUpdateStatus::PendingFinance->value], true), 422, 'Request is not pending.');
 
-        // Record the rejection on whichever leg is acting.
-        $financeStage = $request->status === ProfileUpdateStatus::PendingFinance->value;
-        $request->update($financeStage ? [
-            'status'              => ProfileUpdateStatus::Rejected->value,
-            'finance_reviewed_by' => $reviewer->id,
-            'finance_reviewed_at' => now(),
-            'finance_remarks'     => $remarks,
-        ] : [
-            'status'         => ProfileUpdateStatus::Rejected->value,
-            'reviewed_by'    => $reviewer->id,
-            'reviewed_at'    => now(),
-            'review_remarks' => $remarks,
-        ]);
+        return DB::transaction(function () use ($request, $reviewer, $remarks) {
+            // Lock-then-guard: a stale reject must not flip a request another
+            // reviewer already approved.
+            $locked = ProfileUpdateRequest::query()->lockForUpdate()->findOrFail($request->getKey());
+            abort_unless(in_array($locked->status, [ProfileUpdateStatus::Pending->value, ProfileUpdateStatus::PendingFinance->value], true), 422, 'Request is not pending.');
 
-        return $request->fresh(['employee', 'reviewer', 'financeReviewer']);
+            // Record the rejection on whichever leg is acting.
+            $financeStage = $locked->status === ProfileUpdateStatus::PendingFinance->value;
+            $locked->update($financeStage ? [
+                'status'              => ProfileUpdateStatus::Rejected->value,
+                'finance_reviewed_by' => $reviewer->id,
+                'finance_reviewed_at' => now(),
+                'finance_remarks'     => $remarks,
+            ] : [
+                'status'         => ProfileUpdateStatus::Rejected->value,
+                'reviewed_by'    => $reviewer->id,
+                'reviewed_at'    => now(),
+                'review_remarks' => $remarks,
+            ]);
+
+            return $locked->fresh(['employee', 'reviewer', 'financeReviewer']);
+        });
     }
 
     /**

@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Modules\HR\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Models\AuditLog;
 use App\Common\Services\SettingsService;
+use App\Common\Support\Money;
 use App\Modules\Accounting\Enums\JournalEntryStatus;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\JournalEntry;
@@ -42,9 +44,9 @@ class FinalPayService
         private readonly SettingsService $settings,
     ) {}
 
-    public function compute(Clearance $clearance): Clearance
+    public function compute(Clearance $clearance, ?User $by = null): Clearance
     {
-        return DB::transaction(function () use ($clearance) {
+        return DB::transaction(function () use ($clearance, $by) {
             // Final pay is later consumed by finalize(), which locks this
             // aggregate before posting money. Re-read and lock here too so a
             // compute request racing with finalization cannot overwrite the
@@ -71,27 +73,50 @@ class FinalPayService
             $propertyL  = $this->unreturnedPropertyValue($employee);
             $advance    = $this->openCashAdvance($employee);
 
-            $plus = $lastSalary + $leaveValue + $thirteenth;
-            $less = $loanBal + $propertyL + $advance;
-            $net  = max(0.0, $plus - $less);
+            $plus = Money::add($lastSalary, $leaveValue, $thirteenth);
+            $less = Money::add($loanBal, $propertyL, $advance);
+            $net  = Money::clampMin(Money::sub($plus, $less), Money::zero());
 
             $breakdown = [
-                'last_salary_pro_rated'           => number_format($lastSalary, 2, '.', ''),
-                'unused_convertible_leave_value'  => number_format($leaveValue, 2, '.', ''),
-                'pro_rated_13th_month'            => number_format($thirteenth, 2, '.', ''),
-                'less_loan_balance'               => number_format($loanBal, 2, '.', ''),
-                'less_unreturned_property_value'  => number_format($propertyL, 2, '.', ''),
-                'less_advance'                    => number_format($advance, 2, '.', ''),
-                'gross_plus'                      => number_format($plus, 2, '.', ''),
-                'gross_less'                      => number_format($less, 2, '.', ''),
-                'net'                             => number_format($net, 2, '.', ''),
+                'last_salary_pro_rated'           => $lastSalary,
+                'unused_convertible_leave_value'  => $leaveValue,
+                'pro_rated_13th_month'            => $thirteenth,
+                'less_loan_balance'               => $loanBal,
+                'less_unreturned_property_value'  => $propertyL,
+                'less_advance'                    => $advance,
+                'gross_plus'                      => $plus,
+                'gross_less'                      => $less,
+                'net'                             => $net,
+            ];
+
+            $previous = [
+                'final_pay_computed' => (bool) $lockedClearance->final_pay_computed,
+                'final_pay_amount'   => $lockedClearance->final_pay_amount,
             ];
 
             $lockedClearance->forceFill([
                 'final_pay_breakdown' => $breakdown,
-                'final_pay_amount'    => number_format($net, 2, '.', ''),
+                'final_pay_amount'    => $net,
                 'final_pay_computed'  => true,
             ])->save();
+
+            // P05 advisory — the breakdown every later JE spends must be
+            // attributed, mirroring finalize's attribution.
+            AuditLog::create([
+                'user_id'    => $by?->id,
+                'action'     => 'hr.clearance.final_pay_computed',
+                'model_type' => Clearance::class,
+                'model_id'   => $lockedClearance->id,
+                'old_values' => $previous,
+                'new_values' => [
+                    'final_pay_computed' => true,
+                    'final_pay_amount'   => $net,
+                    'computed_by'        => $by?->id,
+                ],
+                'ip_address' => request()?->ip(),
+                'user_agent' => request()?->userAgent(),
+                'created_at' => now(),
+            ]);
 
             return $lockedClearance->fresh();
         });
@@ -169,32 +194,64 @@ class FinalPayService
             }
 
             $b = $lockedClearance->final_pay_breakdown ?? [];
-            $plus = (float) ($b['gross_plus'] ?? 0);
-            $net  = (float) ($b['net']        ?? 0);
 
-            $loan      = (float) ($b['less_loan_balance'] ?? 0);
-            $advance   = (float) ($b['less_advance']      ?? 0);
-            $property  = (float) ($b['less_unreturned_property_value'] ?? 0);
+            // P05-02 — the breakdown is a snapshot from compute time. Re-read
+            // the deduction side against live sources at the money moment:
+            // finalize's loan gate already refused any still-outstanding loan,
+            // so a loan settled between compute and finalize must not be
+            // deducted twice. Earnings (gross_plus) stay as computed — the
+            // operator-approved base — but what is withheld is re-derived and
+            // persisted so the UI and the JE agree.
+            $lockedClearance->load('employee');
+            $liveEmployee  = $lockedClearance->employee;
+            $liveLoan      = $liveEmployee ? $this->loanBalances($liveEmployee) : Money::zero();
+            $liveAdvance   = $liveEmployee ? $this->openCashAdvance($liveEmployee) : Money::zero();
+            $liveProperty  = $liveEmployee ? $this->unreturnedPropertyValue($liveEmployee) : Money::zero();
+
+            $plus = Money::round2((string) ($b['gross_plus'] ?? Money::zero()));
+            $less = Money::add($liveLoan, $liveAdvance, $liveProperty);
+            $net  = Money::clampMin(Money::sub($plus, $less), Money::zero());
+
+            $b['less_loan_balance']              = $liveLoan;
+            $b['less_advance']                   = $liveAdvance;
+            $b['less_unreturned_property_value'] = $liveProperty;
+            $b['gross_less']                     = $less;
+            $b['net']                            = $net;
+            $lockedClearance->forceFill([
+                'final_pay_breakdown' => $b,
+                'final_pay_amount'    => $net,
+            ])->save();
+
+            $loan = $liveLoan;
 
             $salariesExp = Account::where('code', $this->settings->requiredString('accounting.accounts.final_pay_salary_expense_code'))->firstOrFail();
             $cashInBank  = Account::where('code', $this->settings->requiredString('accounting.accounts.cash_code'))->firstOrFail();
             $loansPayable= Account::where('code', $this->settings->requiredString('accounting.accounts.loans_payable_code'))->firstOrFail();
             $accrued     = Account::where('code', $this->settings->requiredString('accounting.accounts.accrued_expense_code'))->firstOrFail();
 
+            // P05-01 — when deductions exceed earnings, net is clamped at 0.00
+            // but crediting the full deductions would leave an unbalanced JE
+            // that 500s the separation. Only what this payout can actually
+            // absorb is recovered; the un-recovered remainder stays on the
+            // books as an outstanding loan / property liability.
+            $recoverable = Money::lt($plus, $less) ? $plus : $less;
+            $loanCredit  = Money::lt($loan, $recoverable) ? $loan : $recoverable;
+            $otherCredit = Money::sub($recoverable, $loanCredit);
+
             $lines = [
-                ['account_id' => $salariesExp->id, 'debit' => number_format($plus, 2, '.', ''), 'credit' => '0.00', 'description' => 'Final pay components'],
+                ['account_id' => $salariesExp->id, 'debit' => $plus, 'credit' => Money::zero(), 'description' => 'Final pay components'],
             ];
-            if ($loan > 0) {
-                $lines[] = ['account_id' => $loansPayable->id, 'debit' => '0.00', 'credit' => number_format($loan, 2, '.', ''), 'description' => 'Settle outstanding loan from final pay'];
+            if (Money::gt($loanCredit, Money::zero())) {
+                $lines[] = ['account_id' => $loansPayable->id, 'debit' => Money::zero(), 'credit' => $loanCredit, 'description' => 'Settle outstanding loan from final pay'];
             }
-            if (($advance + $property) > 0) {
-                $lines[] = ['account_id' => $accrued->id, 'debit' => '0.00', 'credit' => number_format($advance + $property, 2, '.', ''), 'description' => 'Settle advance / unreturned property'];
+            if (Money::gt($otherCredit, Money::zero())) {
+                $lines[] = ['account_id' => $accrued->id, 'debit' => Money::zero(), 'credit' => $otherCredit, 'description' => 'Settle advance / unreturned property'];
             }
             // Only add the cash disbursement line when net > 0. When deductions
             // exactly cancel earnings (net = 0.00), the journal validator
             // rejects a line with both debit and credit equal to zero.
-            if ($net > 0) {
-                $lines[] = ['account_id' => $cashInBank->id, 'debit' => '0.00', 'credit' => number_format($net, 2, '.', ''), 'description' => 'Final pay disbursement'];
+            if (Money::gt($net, Money::zero())) {
+                $lines[] = ['account_id' => $cashInBank->id, 'debit' => Money::zero(), 'credit' => $net, 'description' => 'Final pay disbursement'];
             }
 
             $je = $this->journals->create([
@@ -213,7 +270,7 @@ class FinalPayService
 
     /* ─── Component helpers ─── */
 
-    private function lastSalaryProRated(Employee $e, CarbonInterface $separationDate): float
+    private function lastSalaryProRated(Employee $e, CarbonInterface $separationDate): string
     {
         $period = PayrollPeriod::query()
             ->where('is_thirteenth_month', false)
@@ -226,7 +283,7 @@ class FinalPayService
         // A disbursed period has already been paid and must never be included
         // again in final pay.
         if (! $period || $period->status === PayrollPeriodStatus::Disbursed) {
-            return 0.0;
+            return Money::zero();
         }
 
         // Prefer the authoritative result of the payroll engine when the open
@@ -237,29 +294,34 @@ class FinalPayService
             ->whereNotNull('computed_at')
             ->first();
         if ($payroll) {
-            return max(0.0,
-                (float) $payroll->basic_pay
-                + (float) $payroll->leave_pay
-                - (float) $payroll->tardiness_deduction
-                - (float) $payroll->undertime_deduction
-            );
+            $earnings = Money::add((string) $payroll->basic_pay, (string) $payroll->leave_pay);
+            $deductions = Money::add((string) $payroll->tardiness_deduction, (string) $payroll->undertime_deduction);
+
+            return Money::clampMin(Money::sub($earnings, $deductions), Money::zero());
         }
 
         // Otherwise calculate only from persisted DTR hours in the real
         // payroll period. Each row contributes at most one eight-hour day;
         // half-days contribute 0.5. No synthetic attendance is invented.
-        $dayEquivalents = Attendance::query()
+        $dayEquivalents = '0.0000';
+        $hoursPerDay = $this->hoursPerDay();
+        $attendances = Attendance::query()
             ->where('employee_id', $e->id)
             ->whereBetween('date', [$period->period_start, $separationDate])
-            ->get(['regular_hours'])
-            ->sum(fn (Attendance $attendance): float => min(1.0, max(0.0, (float) $attendance->regular_hours / $this->hoursPerDay())));
+            ->get(['regular_hours']);
+        foreach ($attendances as $attendance) {
+            $fraction = bcdiv((string) $attendance->regular_hours, $hoursPerDay, Money::INNER);
+            $fraction = bccomp($fraction, '0', Money::INNER) < 0 ? '0.0000' : $fraction;
+            $fraction = bccomp($fraction, '1', Money::INNER) > 0 ? '1.0000' : $fraction;
+            $dayEquivalents = bcadd($dayEquivalents, $fraction, Money::INNER);
+        }
 
         $dailyRate = $this->authoritativeDailyRate($e);
 
-        return max(0.0, round($dayEquivalents * $dailyRate, 2));
+        return Money::clampMin(Money::mul($dayEquivalents, $dailyRate), Money::zero());
     }
 
-    private function unusedConvertibleLeaveValue(Employee $e): float
+    private function unusedConvertibleLeaveValue(Employee $e): string
     {
         // A missing/failed leave query must not silently become zero final pay.
         // Database errors propagate so the separation remains visibly pending
@@ -270,47 +332,49 @@ class FinalPayService
             ->where('lt.is_convertible_on_separation', true)
             ->select(DB::raw('SUM(elb.remaining * lt.conversion_rate) as v'))
             ->value('v');
-        $days = (float) ($rows ?? 0);
+        $days = (string) ($rows ?? '0');
 
         $rate = $this->authoritativeDailyRate($e);
-        return max(0.0, $days * $rate);
+        return Money::clampMin(Money::mul($days, $rate), Money::zero());
     }
 
-    private function authoritativeDailyRate(Employee $employee): float
+    private function authoritativeDailyRate(Employee $employee): string
     {
         // Monthly equivalent reconciles both pay types (see Employee model), so
         // a semi-monthly employee's separation pay is not computed off half a
         // month's figure.
         $monthly = $employee->monthlyEquivalentSalary();
-        $rate = $monthly !== null ? (float) $monthly / $this->workDaysPerMonth() : 0.0;
+        $rate = $monthly !== null
+            ? Money::div((string) $monthly, $this->workDaysPerMonth(), Money::INNER)
+            : '0.0000';
 
-        if ($rate <= 0) {
+        if (bccomp($rate, '0', Money::INNER) <= 0) {
             throw new BusinessRuleException("Employee {$employee->employee_no} has no authoritative pay rate for final-pay calculation.");
         }
 
         return $rate;
     }
 
-    private function workDaysPerMonth(): float
+    private function workDaysPerMonth(): string
     {
         return $this->positivePayrollSetting('payroll.work_days_per_month');
     }
 
-    private function hoursPerDay(): float
+    private function hoursPerDay(): string
     {
         return $this->positivePayrollSetting('payroll.hours_per_day');
     }
 
-    private function positivePayrollSetting(string $key): float
+    private function positivePayrollSetting(string $key): string
     {
         $value = $this->settings->get($key);
-        if (! is_numeric($value) || (float) $value <= 0) {
+        if (! is_numeric($value) || bccomp((string) $value, '0', Money::INNER) <= 0) {
             throw new BusinessRuleException("Required payroll setting {$key} is missing or invalid.");
         }
-        return (float) $value;
+        return bcadd((string) $value, '0', Money::INNER);
     }
 
-    private function proRatedThirteenthMonth(Employee $e, CarbonInterface $separationDate): float
+    private function proRatedThirteenthMonth(Employee $e, CarbonInterface $separationDate): string
     {
         $year = (int) $separationDate->format('Y');
         $row = DB::table('thirteenth_month_accruals')
@@ -319,7 +383,7 @@ class FinalPayService
             ->orderByDesc('id')
             ->first();
         if ($row) {
-            return (float) $row->accrued_amount;
+            return Money::round2((string) $row->accrued_amount);
         }
 
         // Rebuild from authoritative computed payroll when an accrual snapshot
@@ -333,30 +397,30 @@ class FinalPayService
             ->whereNotNull('p.computed_at')
             ->sum('p.basic_pay');
 
-        return round((float) $basicEarned / 12, 2);
+        return Money::round2(Money::div((string) $basicEarned, '12', Money::INNER));
     }
 
-    private function loanBalances(Employee $e): float
+    private function loanBalances(Employee $e): string
     {
-        return $this->readFinalPaySource('employee loan balances', fn (): float => (float) DB::table('employee_loans')
+        return $this->readFinalPaySource('employee loan balances', fn (): string => (string) DB::table('employee_loans')
                 ->where('employee_id', $e->id)
                 ->whereIn('status', ['active', 'pending'])
                 ->where('loan_type', 'company_loan')
                 ->sum('balance'));
     }
 
-    private function openCashAdvance(Employee $e): float
+    private function openCashAdvance(Employee $e): string
     {
-        return $this->readFinalPaySource('employee cash-advance balances', fn (): float => (float) DB::table('employee_loans')
+        return $this->readFinalPaySource('employee cash-advance balances', fn (): string => (string) DB::table('employee_loans')
                 ->where('employee_id', $e->id)
                 ->whereIn('status', ['active', 'pending'])
                 ->where('loan_type', 'cash_advance')
                 ->sum('balance'));
     }
 
-    private function unreturnedPropertyValue(Employee $e): float
+    private function unreturnedPropertyValue(Employee $e): string
     {
-        return $this->readFinalPaySource('employee property records', fn (): float => (float) DB::table('employee_property')
+        return $this->readFinalPaySource('employee property records', fn (): string => (string) DB::table('employee_property')
                 ->where('employee_id', $e->id)
                 ->where('status', 'lost')
                 ->sum(DB::raw('quantity * replacement_unit_cost')));
@@ -367,10 +431,10 @@ class FinalPayService
      * computation. Treating a failed loan/property read as zero would create a
      * valid-looking but financially incomplete clearance.
      */
-    private function readFinalPaySource(string $source, Closure $query): float
+    private function readFinalPaySource(string $source, Closure $query): string
     {
         try {
-            return $query();
+            return Money::round2($query());
         } catch (Throwable $exception) {
             report($exception);
 

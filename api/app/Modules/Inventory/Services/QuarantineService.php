@@ -119,18 +119,8 @@ class QuarantineService
 
             $mrbNumber = $this->sequences->generate('mrb');
 
-            $movement = $this->movements->move(new StockMovementInput(
-                type: StockMovementType::Transfer,
-                itemId: $itemId,
-                quantity: $qty,
-                fromLocationId: $sourceId,
-                toLocationId: $quarantineId,
-                referenceType: 'material_review_record',
-                referenceId: null,
-                remarks: "MRB hold {$mrbNumber}",
-                createdBy: $by->id,
-            ));
-
+            // Persist the source first so the stock ledger never carries a
+            // temporarily unresolved polymorphic reference.
             $mrb = new MaterialReviewRecord();
             $mrb->fill([
                 'mrb_number'             => $mrbNumber,
@@ -140,7 +130,6 @@ class QuarantineService
                 'quantity'               => $qty,
                 'source_location_id'     => $sourceId,
                 'quarantine_location_id' => $quarantineId,
-                'hold_movement_id'       => $movement->id,
                 'held_by'                => $by->id,
                 'held_at'                => now(),
                 'notes'                  => $data['notes'] ?? null,
@@ -148,9 +137,20 @@ class QuarantineService
             $mrb->status = MrbStatus::Held;
             $mrb->save();
 
-            // Backfill the movement reference now that the MRB id exists.
-            $movement->reference_id = $mrb->id;
-            $movement->save();
+            $movement = $this->movements->move(new StockMovementInput(
+                type: StockMovementType::Transfer,
+                itemId: $itemId,
+                quantity: $qty,
+                fromLocationId: $sourceId,
+                toLocationId: $quarantineId,
+                referenceType: 'material_review_record',
+                referenceId: $mrb->id,
+                remarks: "MRB hold {$mrbNumber}",
+                createdBy: $by->id,
+            ));
+
+            $mrb->hold_movement_id = $movement->id;
+            $mrb->save();
 
             return $mrb;
         });
@@ -179,8 +179,16 @@ class QuarantineService
         }
 
         return DB::transaction(function () use ($mrb, $dispo, $by, $targetLocationId, $notes) {
-            $qty       = (string) $mrb->quantity;
-            $fromId    = $mrb->quarantine_location_id;
+            // Lock-then-guard: re-read the MRB under a row lock so a concurrent
+            // release holding a stale model cannot slip past the status check
+            // and re-move the quarantine stock (P40).
+            $locked = MaterialReviewRecord::query()->lockForUpdate()->findOrFail($mrb->getKey());
+            if ($locked->status !== MrbStatus::Held) {
+                throw new BusinessRuleException("MRB {$locked->mrb_number} is not held (status: {$locked->status->value}).");
+            }
+
+            $qty       = (string) $locked->quantity;
+            $fromId    = $locked->quarantine_location_id;
             $quarantine = WarehouseLocation::query()->with('zone')->findOrFail($fromId);
 
             $releaseLocationId = null;
@@ -199,13 +207,13 @@ class QuarantineService
                     }
                     $movement = $this->movements->move(new StockMovementInput(
                         type: StockMovementType::Transfer,
-                        itemId: $mrb->item_id,
+                        itemId: $locked->item_id,
                         quantity: $qty,
                         fromLocationId: $fromId,
                         toLocationId: $targetLocationId,
                         referenceType: 'material_review_record',
-                        referenceId: $mrb->id,
-                        remarks: "MRB release ({$dispo->value}) {$mrb->mrb_number}",
+                        referenceId: $locked->id,
+                        remarks: "MRB release ({$dispo->value}) {$locked->mrb_number}",
                         createdBy: $by->id,
                     ));
                     $releaseLocationId = $targetLocationId;
@@ -216,13 +224,13 @@ class QuarantineService
                     $this->resolveZoneLocation($quarantine, WarehouseZoneType::Scrap);
                     $movement = $this->movements->move(new StockMovementInput(
                         type: StockMovementType::Scrap,
-                        itemId: $mrb->item_id,
+                        itemId: $locked->item_id,
                         quantity: $qty,
                         fromLocationId: $fromId,
                         toLocationId: null,
                         referenceType: 'material_review_record',
-                        referenceId: $mrb->id,
-                        remarks: "MRB scrap {$mrb->mrb_number}",
+                        referenceId: $locked->id,
+                        remarks: "MRB scrap {$locked->mrb_number}",
                         createdBy: $by->id,
                     ));
                     $releaseLocationId = $fromId;
@@ -232,20 +240,20 @@ class QuarantineService
                 case NcrDisposition::ReturnToSupplier:
                     $movement = $this->movements->move(new StockMovementInput(
                         type: StockMovementType::ReturnToVendor,
-                        itemId: $mrb->item_id,
+                        itemId: $locked->item_id,
                         quantity: $qty,
                         fromLocationId: $fromId,
                         toLocationId: null,
                         referenceType: 'material_review_record',
-                        referenceId: $mrb->id,
-                        remarks: "MRB return-to-supplier {$mrb->mrb_number}",
+                        referenceId: $locked->id,
+                        remarks: "MRB return-to-supplier {$locked->mrb_number}",
                         createdBy: $by->id,
                     ));
                     $newStatus = MrbStatus::Returned;
                     break;
             }
 
-            $mrb->fill([
+            $locked->fill([
                 'disposition'         => $dispo->value,
                 'release_movement_id' => $movement->id,
                 'released_by'         => $by->id,
@@ -253,12 +261,12 @@ class QuarantineService
                 'release_location_id' => $releaseLocationId,
             ]);
             if ($notes !== null && $notes !== '') {
-                $mrb->notes = trim(($mrb->notes ? $mrb->notes."\n" : '').$notes);
+                $locked->notes = trim(($locked->notes ? $locked->notes."\n" : '').$notes);
             }
-            $mrb->status = $newStatus;
-            $mrb->save();
+            $locked->status = $newStatus;
+            $locked->save();
 
-            return $mrb;
+            return $locked;
         });
     }
 

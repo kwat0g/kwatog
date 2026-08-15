@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace App\Modules\Payroll\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
-use App\Common\Services\DocumentSequenceService;
+use App\Common\Models\AuditLog;
 use App\Common\Services\SettingsService;
 use App\Common\Support\Money;
+use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Services\AccountingPeriodService;
+use App\Modules\Accounting\Services\JournalEntryService;
+use App\Modules\Auth\Models\User;
 use App\Modules\Payroll\Enums\PayrollGlHandoffStatus;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use App\Modules\Payroll\Models\PayrollPeriod;
@@ -28,9 +31,9 @@ class PayrollGlPostingService
     private const MANUAL_MESSAGE = 'Payroll was finalized but could not be posted to the General Ledger. Fix the Accounting configuration or posting period, then replay the handoff.';
 
     public function __construct(
-        private readonly DocumentSequenceService $sequences,
         private readonly SettingsService $settings,
         private readonly AccountingPeriodService $periods,
+        private readonly JournalEntryService $journals,
     ) {}
 
     /**
@@ -309,26 +312,35 @@ class PayrollGlPostingService
                 ));
             }
 
-            $entryNumber = $this->sequences->generate('journal_entry');
-            $entryId = DB::table('journal_entries')->insertGetId([
-                'entry_number'   => $entryNumber,
+            $actorId = $period->finalized_by;
+            $actor = $actorId ? User::query()->find($actorId) : null;
+            $je = $this->journals->create([
                 'date'           => $period->payroll_date,
                 'description'    => sprintf('Payroll · %s', $period->label()),
                 'reference_type' => 'payroll_period',
                 'reference_id'   => $period->id,
-                'total_debit'    => $totalDebit,
-                'total_credit'   => $totalCredit,
-                'status'         => 'posted',
-                'posted_at'      => now(),
-                'created_at'     => now(),
-                'updated_at'     => now(),
-            ]);
+                'lines'          => $lines,
+            ], $actor);
+            $entryId = $this->journals->postSystem($je, $actorId);
+            $entryId = $entryId->id;
 
-            foreach ($lines as $line) {
-                DB::table('journal_entry_lines')->insert(array_merge($line, [
-                    'journal_entry_id' => $entryId,
-                ]));
-            }
+            AuditLog::create([
+                'user_id'    => $actorId,
+                'action'     => 'payroll.je.post',
+                'model_type' => JournalEntry::class,
+                'model_id'   => $entryId,
+                'old_values' => null,
+                'new_values' => [
+                    'status'         => 'posted',
+                    'total_debit'    => $totalDebit,
+                    'total_credit'   => $totalCredit,
+                    'reference_type' => 'payroll_period',
+                    'reference_id'   => $period->id,
+                ],
+                'ip_address' => request()?->ip(),
+                'user_agent' => request()?->userAgent(),
+                'created_at' => now(),
+            ]);
 
             $period->forceFill([
                 'journal_entry_id' => $entryId,

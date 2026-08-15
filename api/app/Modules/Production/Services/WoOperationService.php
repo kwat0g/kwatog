@@ -82,13 +82,18 @@ class WoOperationService
         $this->assertStatus($op, [WoOperationStatus::Pending], 'start setup');
 
         DB::transaction(function () use ($op, $operator) {
-            $op->update([
+            // Lock-then-guard: re-read the authoritative row so a concurrent
+            // transition holding a stale model cannot double-advance it.
+            $locked = WoOperation::query()->lockForUpdate()->findOrFail($op->getKey());
+            $this->assertStatus($locked, [WoOperationStatus::Pending], 'start setup');
+
+            $locked->update([
                 'status'      => WoOperationStatus::Setup,
                 'setup_start' => Carbon::now(),
                 'operator_id' => $operator->id,
             ]);
 
-            $this->log($op, $operator, ProductionLogEvent::StartSetup);
+            $this->log($locked, $operator, ProductionLogEvent::StartSetup);
         });
     }
 
@@ -102,11 +107,14 @@ class WoOperationService
         $this->assertStatus($op, [WoOperationStatus::Setup], 'end setup');
 
         DB::transaction(function () use ($op) {
-            $op->update([
+            $locked = WoOperation::query()->lockForUpdate()->findOrFail($op->getKey());
+            $this->assertStatus($locked, [WoOperationStatus::Setup], 'end setup');
+
+            $locked->update([
                 'setup_end' => Carbon::now(),
             ]);
 
-            $this->log($op, null, ProductionLogEvent::EndSetup);
+            $this->log($locked, null, ProductionLogEvent::EndSetup);
         });
     }
 
@@ -124,13 +132,17 @@ class WoOperationService
         $this->assertPreviousCompleted($op);
 
         DB::transaction(function () use ($op, $operator) {
-            $op->update([
+            $locked = WoOperation::query()->lockForUpdate()->findOrFail($op->getKey());
+            $this->assertStatus($locked, [WoOperationStatus::Pending, WoOperationStatus::Setup], 'start');
+            $this->assertPreviousCompleted($locked);
+
+            $locked->update([
                 'status'      => WoOperationStatus::InProgress,
                 'actual_start' => Carbon::now(),
                 'operator_id' => $operator->id,
             ]);
 
-            $this->log($op, $operator, ProductionLogEvent::StartProduction);
+            $this->log($locked, $operator, ProductionLogEvent::StartProduction);
         });
     }
 
@@ -144,11 +156,14 @@ class WoOperationService
         $this->assertStatus($op, [WoOperationStatus::InProgress], 'pause');
 
         DB::transaction(function () use ($op) {
-            $op->update([
+            $locked = WoOperation::query()->lockForUpdate()->findOrFail($op->getKey());
+            $this->assertStatus($locked, [WoOperationStatus::InProgress], 'pause');
+
+            $locked->update([
                 'status' => WoOperationStatus::Paused,
             ]);
 
-            $this->log($op, null, ProductionLogEvent::Pause);
+            $this->log($locked, null, ProductionLogEvent::Pause);
         });
     }
 
@@ -162,12 +177,15 @@ class WoOperationService
         $this->assertStatus($op, [WoOperationStatus::Paused], 'resume');
 
         DB::transaction(function () use ($op, $operator) {
-            $op->update([
+            $locked = WoOperation::query()->lockForUpdate()->findOrFail($op->getKey());
+            $this->assertStatus($locked, [WoOperationStatus::Paused], 'resume');
+
+            $locked->update([
                 'status'      => WoOperationStatus::InProgress,
                 'operator_id' => $operator->id,
             ]);
 
-            $this->log($op, $operator, ProductionLogEvent::Resume);
+            $this->log($locked, $operator, ProductionLogEvent::Resume);
         });
     }
 
@@ -181,21 +199,27 @@ class WoOperationService
         $this->assertStatus($op, [WoOperationStatus::InProgress], 'record output');
 
         DB::transaction(function () use ($op, $qty, $scrap, $scrapReason) {
+            // Lock-then-guard: accumulate on the authoritative row. Without the
+            // lock, two concurrent output records both read the old qty_completed
+            // and one record's output is lost (P32/P33).
+            $locked = WoOperation::query()->lockForUpdate()->findOrFail($op->getKey());
+            $this->assertStatus($locked, [WoOperationStatus::InProgress], 'record output');
+
             $updates = [
-                'qty_completed' => (float) $op->qty_completed + $qty,
-                'qty_scrapped'  => (float) $op->qty_scrapped + $scrap,
+                'qty_completed' => bcadd((string) $locked->qty_completed, (string) $qty, 4),
+                'qty_scrapped'  => bcadd((string) $locked->qty_scrapped, (string) $scrap, 4),
             ];
 
             if ($scrapReason !== null) {
                 $updates['scrap_reason'] = $scrapReason;
             }
 
-            $op->update($updates);
+            $locked->update($updates);
 
-            $this->log($op, null, ProductionLogEvent::RecordOutput, $qty);
+            $this->log($locked, null, ProductionLogEvent::RecordOutput, $qty);
 
             if ($scrap > 0) {
-                $this->log($op, null, ProductionLogEvent::RecordScrap, $scrap, $scrapReason);
+                $this->log($locked, null, ProductionLogEvent::RecordScrap, $scrap, $scrapReason);
             }
         });
     }
@@ -213,19 +237,22 @@ class WoOperationService
         $this->assertStatus($op, [WoOperationStatus::InProgress], 'complete');
 
         DB::transaction(function () use ($op) {
-            $op->update([
+            $locked = WoOperation::query()->lockForUpdate()->findOrFail($op->getKey());
+            $this->assertStatus($locked, [WoOperationStatus::InProgress], 'complete');
+
+            $locked->update([
                 'status'     => WoOperationStatus::Completed,
                 'actual_end' => Carbon::now(),
             ]);
 
-            $this->log($op, null, ProductionLogEvent::EndProduction);
+            $this->log($locked, null, ProductionLogEvent::EndProduction);
 
             // QC trigger — routing operation may require quality check after completion.
-            if ($op->routingOperation && $op->routingOperation->qc_required) {
+            if ($locked->routingOperation && $locked->routingOperation->qc_required) {
                 Log::info('WoOperation QC trigger: operation requires quality check', [
-                    'wo_operation_id' => $op->id,
-                    'work_order_id'   => $op->work_order_id,
-                    'operation_name'  => $op->operation_name,
+                    'wo_operation_id' => $locked->id,
+                    'work_order_id'   => $locked->work_order_id,
+                    'operation_name'  => $locked->operation_name,
                 ]);
             }
         });
@@ -239,7 +266,8 @@ class WoOperationService
     public function skipOperation(WoOperation $op, string $reason): void
     {
         DB::transaction(function () use ($op, $reason) {
-            $op->update([
+            $locked = WoOperation::query()->lockForUpdate()->findOrFail($op->getKey());
+            $locked->update([
                 'status' => WoOperationStatus::Skipped,
                 'notes'  => $reason,
             ]);

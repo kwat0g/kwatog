@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Common\Mail;
 
+use App\Common\Services\EmailDeliveryFailureNotifier;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
@@ -29,6 +30,7 @@ class UserNotificationMail extends Mailable implements ShouldQueue
         public readonly string $notificationType,
         public readonly array $data,
         public readonly ?string $recipientName = null,
+        public readonly ?int $recipientUserId = null,
     ) {}
 
     public function envelope(): Envelope
@@ -48,6 +50,21 @@ class UserNotificationMail extends Mailable implements ShouldQueue
                 'linkTo'        => $this->data['link_to'] ?? null,
                 'recipientName' => $this->recipientName,
                 'type'          => $this->notificationType,
+            ],
+        );
+    }
+
+    public function failed(\Throwable $e): void
+    {
+        app(EmailDeliveryFailureNotifier::class)->notifyUserId(
+            $this->recipientUserId,
+            'Internal notification',
+            'An email copy of an in-app notification could not be delivered. Review the notification in the application.',
+            [
+                'link_to' => $this->data['link_to'] ?? null,
+                'entity_type' => $this->data['entity_type'] ?? null,
+                'entity_id' => $this->data['entity_id'] ?? null,
+                'reason' => 'The email provider rejected or could not deliver the message.',
             ],
         );
     }

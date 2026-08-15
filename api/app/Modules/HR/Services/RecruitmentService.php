@@ -6,26 +6,33 @@ namespace App\Modules\HR\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Enums\ApplicationStage;
 use App\Modules\HR\Enums\JobPostingStatus;
 use App\Modules\HR\Mail\ApplicationReceivedMail;
+use App\Modules\HR\Mail\ApplicationStatusUpdatedMail;
+use App\Modules\HR\Mail\InterviewDetailsUpdatedMail;
 use App\Modules\HR\Mail\InterviewScheduledMail;
 use App\Modules\HR\Models\ApplicationInterview;
 use App\Modules\HR\Models\ApplicationNote;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\JobApplication;
 use App\Modules\HR\Models\JobPosting;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 class RecruitmentService
 {
+    private const DUPLICATE_EMAIL_INDEX = 'job_applications_posting_email_unique';
+
     public function __construct(
         private DocumentSequenceService $sequences,
         private NotificationService $notifications,
@@ -81,7 +88,10 @@ class RecruitmentService
                     'tracking_code' => $this->generateTrackingCode(),
                     'first_name' => $data['first_name'],
                     'last_name' => $data['last_name'],
-                    'email' => $data['email'],
+                    // Keep direct service callers consistent with the public
+                    // request: email uniqueness is case-insensitive and does
+                    // not depend on accidental surrounding whitespace.
+                    'email' => strtolower(trim((string) $data['email'])),
                     'phone' => $data['phone'],
                     'resume_path' => $path,
                     'resume_original_name' => $resume->getClientOriginalName(),
@@ -93,18 +103,50 @@ class RecruitmentService
 
                 return $application;
             });
+        } catch (QueryException $e) {
+            Storage::disk('local')->delete($path);
+
+            if ($this->isDuplicateApplicationEmailViolation($e)) {
+                throw ValidationException::withMessages([
+                    'email' => 'You have already applied for this position.',
+                ]);
+            }
+
+            throw $e;
         } catch (\Throwable $e) {
             Storage::disk('local')->delete($path);
             throw $e;
         }
 
         try {
-            Mail::to($application->email)->send(
-                new ApplicationReceivedMail($application, $posting)
+            Mail::to($application->email)->queue(
+                new ApplicationReceivedMail($application, $posting, $this->hrUserIds())
             );
-            $this->notifyHrNewApplication($application, $posting);
         } catch (\Throwable $e) {
             Log::warning('Application saved but its confirmation notification failed.', [
+                'application_id' => $application->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            app(EmailDeliveryFailureNotifier::class)->notify(
+                $this->hrUsers(),
+                'Recruitment application confirmation',
+                "The confirmation email for {$application->full_name} could not be delivered. Review the application and contact the candidate through an approved channel.",
+                [
+                    'link_to' => "/hr/recruitment/applications/{$application->hash_id}",
+                    'entity_type' => 'job_application',
+                    'entity_id' => $application->hash_id,
+                    'reason' => 'The candidate email address was unreachable or the email provider rejected the message.',
+                ],
+            );
+        }
+
+        try {
+            // This internal alert is independent from the candidate email.
+            // HR must still see every saved application when Brevo is down.
+            $this->notifyHrNewApplication($application, $posting);
+        } catch (\Throwable $e) {
+            Log::warning('Application saved but HR inbox notification failed.', [
                 'application_id' => $application->id,
                 'error' => $e->getMessage(),
             ]);
@@ -115,6 +157,7 @@ class RecruitmentService
 
     public function advanceStage(JobApplication $application, ?array $interviewData = null): void
     {
+        $previousStage = $application->stage;
         $next = $application->stage->next();
         if (! $next) {
             throw new BusinessRuleException("Cannot advance from terminal stage: {$application->stage->value}");
@@ -132,10 +175,19 @@ class RecruitmentService
                 $this->scheduleInterview($application, $interviewData);
             }
         });
+
+        // Interview scheduling has its own candidate-facing message. All
+        // other stage changes need an explicit status update so a candidate
+        // does not have to keep polling the tracking page to discover a
+        // screening, offer, or hiring decision.
+        if ($next !== ApplicationStage::Interview) {
+            $this->queueApplicationStatusEmail($application->fresh(), $previousStage, $next);
+        }
     }
 
     public function rejectApplication(JobApplication $application, ?string $reason = null): void
     {
+        $previousStage = $application->stage;
         if ($application->stage->isTerminal()) {
             throw new BusinessRuleException("Cannot reject from terminal stage: {$application->stage->value}");
         }
@@ -143,6 +195,8 @@ class RecruitmentService
         $application->rejection_reason = $reason;
         $application->stage = ApplicationStage::Rejected;
         $application->save();
+
+        $this->queueApplicationStatusEmail($application->fresh(), $previousStage, ApplicationStage::Rejected);
     }
 
     public function scheduleInterview(JobApplication $application, array $data): ApplicationInterview
@@ -157,20 +211,83 @@ class RecruitmentService
 
         $application->load('jobPosting');
 
-        Mail::to($application->email)->send(
-            new InterviewScheduledMail($application, $interview)
-        );
+        try {
+            Mail::to($application->email)->queue(
+                new InterviewScheduledMail($application, $interview, $this->hrUserIds())
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Interview was saved but its candidate email failed.', [
+                'application_id' => $application->id,
+                'interview_id' => $interview->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            app(EmailDeliveryFailureNotifier::class)->notify(
+                $this->hrUsers(),
+                'Recruitment interview notification',
+                "The interview email for {$application->full_name} could not be delivered. Review the interview and contact the candidate through an approved channel.",
+                [
+                    'link_to' => "/hr/recruitment/applications/{$application->hash_id}",
+                    'entity_type' => 'job_application',
+                    'entity_id' => $application->hash_id,
+                    'reason' => 'The candidate email address was unreachable or the email provider rejected the message.',
+                ],
+            );
+        }
 
         return $interview;
     }
 
     public function updateInterview(ApplicationInterview $interview, array $data): void
     {
-        if (isset($data['outcome'])) {
-            $interview->outcome = $data['outcome'];
+        $interview->loadMissing('application.jobPosting');
+        $outcomeProvided = array_key_exists('outcome', $data);
+        $outcome = $data['outcome'] ?? null;
+        unset($data['outcome']);
+        $interview->fill($data);
+        if ($outcomeProvided) {
+            // `outcome` is intentionally guarded on the model; only this
+            // workflow service may record an interview decision.
+            $interview->forceFill(['outcome' => $outcome]);
         }
-        $interview->fill(collect($data)->except('outcome')->toArray());
+
+        $candidateVisibleChange = collect([
+            'scheduled_at',
+            'location',
+            'interviewer_name',
+            'outcome',
+        ])->contains(fn (string $field): bool => $interview->isDirty($field));
         $interview->save();
+
+        if ($candidateVisibleChange) {
+            try {
+                Mail::to($interview->application->email)->queue(
+                    new InterviewDetailsUpdatedMail(
+                        $interview->application,
+                        $interview,
+                        $this->hrUserIds(),
+                    )
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Interview was updated but its candidate email could not be queued.', [
+                    'application_id' => $interview->application_id,
+                    'interview_id' => $interview->id,
+                    'error' => $e->getMessage(),
+                ]);
+
+                app(EmailDeliveryFailureNotifier::class)->notify(
+                    $this->hrUsers(),
+                    'Recruitment interview update',
+                    "The interview update email for {$interview->application->full_name} could not be queued. Review the interview and contact the candidate through an approved channel.",
+                    [
+                        'link_to' => "/hr/recruitment/applications/{$interview->application->hash_id}",
+                        'entity_type' => 'job_application',
+                        'entity_id' => $interview->application->hash_id,
+                        'reason' => 'The candidate email address was unreachable or the email provider rejected the message.',
+                    ],
+                );
+            }
+        }
     }
 
     public function addNote(JobApplication $application, string $body, User $user): ApplicationNote
@@ -186,7 +303,7 @@ class RecruitmentService
     {
         $app = JobApplication::with(['jobPosting:id,title', 'interviews' => function ($q) {
             $q->where('scheduled_at', '>=', now())->orderBy('scheduled_at')->limit(1);
-        }])->where('tracking_code', $trackingCode)->first();
+        }])->where('tracking_code', strtoupper(trim($trackingCode)))->first();
 
         if (! $app) {
             return null;
@@ -262,10 +379,7 @@ class RecruitmentService
 
     private function notifyHrNewApplication(JobApplication $application, JobPosting $posting): void
     {
-        $roles = array_values(array_filter((array) $this->settings->get('hr.recruitment.notification_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
-        $hrUsers = User::whereHas('role', function ($q) use ($roles) {
-            $q->whereIn('slug', $roles);
-        })->where('is_active', true)->get();
+        $hrUsers = $this->hrUsers();
 
         if ($hrUsers->isEmpty()) {
             return;
@@ -278,5 +392,78 @@ class RecruitmentService
             'entity_type' => 'job_application',
             'entity_id' => $application->hash_id,
         ]);
+    }
+
+    /** @return \Illuminate\Support\Collection<int, User> */
+    private function hrUsers(): \Illuminate\Support\Collection
+    {
+        $roles = array_values(array_filter(
+            (array) $this->settings->get('hr.recruitment.notification_roles', ['hr_officer', 'system_admin']),
+            static fn ($role): bool => is_string($role) && $role !== '',
+        ));
+
+        // An explicitly empty setting must not disable the only fallback for
+        // recruitment alerts. Administrators can still narrow this list by
+        // configuring one or more concrete roles.
+        if ($roles === []) {
+            $roles = ['hr_officer', 'system_admin'];
+        }
+
+        return User::whereHas('role', function ($q) use ($roles): void {
+            $q->whereIn('slug', $roles);
+        })->where('is_active', true)->get();
+    }
+
+    /** @return list<int> */
+    private function hrUserIds(): array
+    {
+        return $this->hrUsers()->pluck('id')->map(static fn ($id): int => (int) $id)->all();
+    }
+
+    private function queueApplicationStatusEmail(
+        JobApplication $application,
+        ApplicationStage $previousStage,
+        ApplicationStage $currentStage,
+    ): void {
+        $application->loadMissing('jobPosting');
+
+        try {
+            Mail::to($application->email)->queue(
+                new ApplicationStatusUpdatedMail(
+                    $application->full_name,
+                    $application->jobPosting->title,
+                    $previousStage->value,
+                    $currentStage->value,
+                    $application->tracking_code,
+                    $application->hash_id,
+                    $this->hrUserIds(),
+                )
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Application status changed but its candidate email could not be queued.', [
+                'application_id' => $application->id,
+                'previous_stage' => $previousStage->value,
+                'current_stage' => $currentStage->value,
+                'error' => $e->getMessage(),
+            ]);
+
+            app(EmailDeliveryFailureNotifier::class)->notify(
+                $this->hrUsers(),
+                'Recruitment application update',
+                "The status update email for {$application->full_name} could not be queued. Review the application and contact the candidate through an approved channel.",
+                [
+                    'link_to' => "/hr/recruitment/applications/{$application->hash_id}",
+                    'entity_type' => 'job_application',
+                    'entity_id' => $application->hash_id,
+                    'reason' => 'The candidate email address was unreachable or the email provider rejected the message.',
+                ],
+            );
+        }
+    }
+
+    private function isDuplicateApplicationEmailViolation(QueryException $exception): bool
+    {
+        return in_array((string) $exception->getCode(), ['23000', '23505'], true)
+            && str_contains(strtolower($exception->getMessage()), self::DUPLICATE_EMAIL_INDEX);
     }
 }

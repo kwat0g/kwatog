@@ -22,6 +22,8 @@ class BulkChangeUserRoleRequest extends FormRequest
             'user_ids.*' => ['required', 'string', 'distinct'],
             'role_id' => ['required', 'string'],
             'reason' => ['required', 'string', 'min:5', 'max:500'],
+            'expected_role_ids' => ['required', 'array'],
+            'expected_role_ids.*' => ['required', 'string'],
         ];
     }
 
@@ -59,5 +61,19 @@ class BulkChangeUserRoleRequest extends FormRequest
     public function reason(): string
     {
         return (string) $this->validated('reason');
+    }
+
+    /** @return array<int, int> keyed by decoded user ID */
+    public function decodedExpectedRoleIds(): array
+    {
+        $decoded = [];
+        foreach ((array) $this->validated('expected_role_ids') as $userHash => $roleHash) {
+            $userId = User::tryDecodeHash((string) $userHash);
+            $roleId = Role::tryDecodeHash((string) $roleHash);
+            abort_if($userId === null || $roleId === null, 422, 'Invalid expected_role_ids entry.');
+            $decoded[$userId] = $roleId;
+        }
+
+        return $decoded;
     }
 }

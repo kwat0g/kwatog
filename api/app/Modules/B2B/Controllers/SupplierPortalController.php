@@ -17,6 +17,7 @@ use App\Modules\B2B\Requests\Supplier\SubmitInvoiceRequest;
 use App\Modules\B2B\Requests\Supplier\UploadShippingDocumentsRequest;
 use App\Modules\B2B\Resources\DeliveryScheduleResource;
 use App\Modules\B2B\Resources\PortalShippingDocumentResource;
+use App\Modules\B2B\Resources\SupplierDeliveryResource;
 use App\Modules\B2B\Services\SupplierPortalService;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Resources\PurchaseOrderResource;
@@ -290,7 +291,7 @@ class SupplierPortalController extends Controller
     /**
      * GET /api/v1/b2b/supplier/deliveries
      */
-    public function deliveries(Request $request): JsonResponse
+    public function deliveries(Request $request): AnonymousResourceCollection
     {
         $user = $this->user($request);
 
@@ -298,7 +299,7 @@ class SupplierPortalController extends Controller
             'status' => $request->query('status'),
         ]);
 
-        return response()->json(['data' => $deliveries]);
+        return SupplierDeliveryResource::collection($deliveries);
     }
 
     /**

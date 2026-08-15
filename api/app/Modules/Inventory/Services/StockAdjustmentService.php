@@ -9,7 +9,11 @@ use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\StockAdjustmentReason;
 use App\Modules\Inventory\Enums\StockAdjustmentStatus;
+use App\Modules\Inventory\Enums\StockCountItemStatus;
+use App\Modules\Inventory\Enums\StockCountSessionStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
+use App\Modules\Inventory\Models\StockCountItem;
+use App\Modules\Inventory\Models\StockCountSession;
 use App\Modules\Inventory\Models\StockAdjustment;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockMovement;
@@ -22,46 +26,69 @@ class StockAdjustmentService
     public function __construct(private readonly StockMovementService $movements, private readonly SettingsService $settings) {}
 
     /**
-     * Legacy entry point — applies an inbound adjustment IMMEDIATELY and
-     * returns the ledger movement. Kept signature-compatible with existing
-     * callers/tests; the optional $reasonCode is appended last so old calls
-     * keep working. The value-threshold approval gate is intentionally NOT
-     * applied here (immediate apply) — use create() for gated adjustments.
+     * Reconcile one counted item through the stock-count finalization path.
+     *
+     * The caller supplies only the item context and actor. The authoritative
+     * session/item rows are re-read under lock; direction, quantity, and WAC
+     * are derived from those locked values. Movement, audit row, and Adjusted
+     * transition commit together, so a replay cannot post twice.
      */
-    public function adjustIn(
-        int $itemId,
-        int $locationId,
-        string $qty,
-        string $unitCost,
-        string $reason,
-        User $by,
-        StockAdjustmentReason|string|null $reasonCode = null,
-        bool $bypassCountFreeze = false,
-    ): StockMovement {
-        return DB::transaction(function () use ($itemId, $locationId, $qty, $unitCost, $reason, $by, $reasonCode, $bypassCountFreeze) {
-            $mvmt = $this->applyMovement('in', $itemId, $locationId, $qty, $unitCost, $reason, $by, $bypassCountFreeze);
-            $this->recordAdjustment('in', $itemId, $locationId, $qty, $unitCost, $reason, $reasonCode, $by, $mvmt, StockAdjustmentStatus::Approved);
-            return $mvmt;
-        });
-    }
+    public function reconcileStockCountItem(StockCountItem $countItem, User $by): ?StockMovement
+    {
+        return DB::transaction(function () use ($countItem, $by) {
+            $session = StockCountSession::query()->lockForUpdate()->findOrFail($countItem->session_id);
+            $item = StockCountItem::query()->lockForUpdate()->findOrFail($countItem->getKey());
 
-    /**
-     * Legacy entry point — applies an outbound adjustment IMMEDIATELY at the
-     * current WAC and returns the ledger movement.
-     */
-    public function adjustOut(
-        int $itemId,
-        int $locationId,
-        string $qty,
-        string $reason,
-        User $by,
-        StockAdjustmentReason|string|null $reasonCode = null,
-        bool $bypassCountFreeze = false,
-    ): StockMovement {
-        return DB::transaction(function () use ($itemId, $locationId, $qty, $reason, $by, $reasonCode, $bypassCountFreeze) {
-            $mvmt = $this->applyMovement('out', $itemId, $locationId, $qty, null, $reason, $by, $bypassCountFreeze);
-            $cost = (string) $mvmt->unit_cost;
-            $this->recordAdjustment('out', $itemId, $locationId, $qty, $cost, $reason, $reasonCode, $by, $mvmt, StockAdjustmentStatus::Approved);
+            if ($session->status !== StockCountSessionStatus::InProgress) {
+                throw new BusinessRuleException('Stock-count reconciliation requires an in-progress session.');
+            }
+            if (! in_array($item->status, [StockCountItemStatus::Counted, StockCountItemStatus::Verified], true)) {
+                throw new BusinessRuleException('Stock-count reconciliation requires a counted item.');
+            }
+            if ($item->item_id === null || $item->counted_quantity === null) {
+                throw new BusinessRuleException('Stock-count reconciliation requires an item with a recorded count.');
+            }
+
+            $diff = bcsub((string) $item->counted_quantity, (string) $item->system_quantity, 3);
+            if (bccomp($diff, '0', 3) === 0) {
+                return null;
+            }
+
+            $direction = bccomp($diff, '0', 3) > 0 ? 'in' : 'out';
+            $qty = $direction === 'in' ? $diff : substr($diff, 1);
+            $unitCost = (string) (StockLevel::query()
+                ->where('item_id', $item->item_id)
+                ->where('location_id', $item->location_id)
+                ->lockForUpdate()
+                ->value('weighted_avg_cost') ?? '0.00');
+            $reason = 'Cycle count adjustment — session '.$session->session_number;
+
+            $mvmt = $this->applyMovement(
+                $direction,
+                (int) $item->item_id,
+                (int) $item->location_id,
+                $qty,
+                $direction === 'in' ? $unitCost : null,
+                $reason,
+                $by,
+                true,
+                'stock_count_session',
+                (int) $session->id,
+            );
+            $this->recordAdjustment(
+                $direction,
+                (int) $item->item_id,
+                (int) $item->location_id,
+                $qty,
+                (string) $mvmt->unit_cost,
+                $reason,
+                null,
+                $by,
+                $mvmt,
+                StockAdjustmentStatus::Approved,
+            );
+            $item->update(['status' => StockCountItemStatus::Adjusted->value]);
+
             return $mvmt;
         });
     }
@@ -112,14 +139,28 @@ class StockAdjustmentService
                 'requested_by' => $by->id,
             ]);
 
+            // Persist the source before writing the stock ledger so the
+            // movement reference is resolvable at its canonical boundary.
+            $adj->forceFill(['status' => StockAdjustmentStatus::Pending->value])->save();
+
             if ($gated) {
                 // Above threshold — hold for approval; no ledger movement yet.
-                $adj->forceFill(['status' => StockAdjustmentStatus::Pending->value])->save();
                 return $adj;
             }
 
             // Sub-threshold — apply immediately and link the movement.
-            $mvmt = $this->applyMovement($direction, $itemId, $locationId, $qty, $direction === 'out' ? null : $cost, $reason, $by);
+            $mvmt = $this->applyMovement(
+                $direction,
+                $itemId,
+                $locationId,
+                $qty,
+                $direction === 'out' ? null : $cost,
+                $reason,
+                $by,
+                false,
+                'stock_adjustment',
+                (int) $adj->id,
+            );
             $adj->unit_cost = (string) $mvmt->unit_cost;
             $adj->stock_movement_id = $mvmt->id;
             $adj->approved_by = $by->id;
@@ -140,27 +181,35 @@ class StockAdjustmentService
         if (! ($by->hasPermission('inventory.adjust.approve'))) {
             throw new BusinessRuleException('You are not authorized to approve stock adjustments.');
         }
-        if ($adj->status === StockAdjustmentStatus::Approved || $adj->stock_movement_id) {
-            throw new BusinessRuleException('Adjustment is already approved.');
-        }
 
         return DB::transaction(function () use ($adj, $by) {
-            $mvmt = $this->applyMovement(
-                $adj->direction,
-                (int) $adj->item_id,
-                (int) $adj->location_id,
-                (string) $adj->quantity,
-                (string) $adj->unit_cost,
-                (string) $adj->reason,
-                $by,
-            );
-            $adj->stock_movement_id = $mvmt->id;
-            $adj->approved_by = $by->id;
-            $adj->approved_at = now();
-            $adj->forceFill(['status' => StockAdjustmentStatus::Approved->value]);
-            $adj->save();
+            // Lock-then-guard: re-read the authoritative row under a row lock
+            // so a concurrent approval holding a stale model cannot slip past
+            // the status check and post the stock movement twice (P37).
+            $locked = StockAdjustment::query()->lockForUpdate()->findOrFail($adj->getKey());
+            if ($locked->status === StockAdjustmentStatus::Approved || $locked->stock_movement_id) {
+                throw new BusinessRuleException('Adjustment is already approved.');
+            }
 
-            return $adj->fresh();
+            $mvmt = $this->applyMovement(
+                $locked->direction,
+                (int) $locked->item_id,
+                (int) $locked->location_id,
+                (string) $locked->quantity,
+                (string) $locked->unit_cost,
+                (string) $locked->reason,
+                $by,
+                false,
+                'stock_adjustment',
+                (int) $locked->id,
+            );
+            $locked->stock_movement_id = $mvmt->id;
+            $locked->approved_by = $by->id;
+            $locked->approved_at = now();
+            $locked->forceFill(['status' => StockAdjustmentStatus::Approved->value]);
+            $locked->save();
+
+            return $locked->fresh();
         });
     }
 
@@ -176,6 +225,8 @@ class StockAdjustmentService
         string $reason,
         User $by,
         bool $bypassCountFreeze = false,
+        string $referenceType = 'stock_adjustment',
+        ?int $referenceId = null,
     ): StockMovement {
         return $this->movements->move(new StockMovementInput(
             type: $direction === 'in' ? StockMovementType::AdjustmentIn : StockMovementType::AdjustmentOut,
@@ -184,15 +235,15 @@ class StockAdjustmentService
             toLocationId: $direction === 'in' ? $locationId : null,
             quantity: $qty,
             unitCost: $unitCost,
-            referenceType: 'stock_adjustment',
-            referenceId: null,
+            referenceType: $referenceType,
+            referenceId: $referenceId,
             remarks: $reason,
             createdBy: $by->id,
             bypassCountFreeze: $bypassCountFreeze,
         ));
     }
 
-    /** Persist the adjustment record for the legacy adjustIn/adjustOut paths. */
+    /** Persist the adjustment record for a posted or approved movement. */
     private function recordAdjustment(
         string $direction,
         int $itemId,

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\HR\Models;
 
 use App\Common\Traits\HasHashId;
+use App\Common\Traits\HasAuditLog;
 use App\Modules\Auth\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -17,7 +18,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class EmployeeSalaryHistory extends Model
 {
-    use HasHashId;
+    use HasHashId, HasAuditLog;
 
     protected $table = 'employee_salary_history';
 

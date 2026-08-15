@@ -54,6 +54,7 @@ Route::middleware(['auth:sanctum', 'feature:crm'])->prefix('crm')->group(functio
     Route::patch('/sales-orders/{salesOrder}/restore', [SalesOrderController::class, 'restore'])->middleware('permission:crm.sales_orders.delete');
     Route::post('/sales-orders/{salesOrder}/confirm', [SalesOrderController::class, 'confirm'])->middleware('permission:crm.sales_orders.confirm');
     Route::post('/sales-orders/{salesOrder}/cancel',  [SalesOrderController::class, 'cancel']) ->middleware('permission:crm.sales_orders.cancel');
+    Route::post('/sales-orders/{salesOrder}/transition', [SalesOrderController::class, 'transition'])->middleware('permission:crm.sales_orders.update');
 
 
     /* ─── Customer complaints + 8D (Task 68) ─── */

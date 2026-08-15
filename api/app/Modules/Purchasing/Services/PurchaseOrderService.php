@@ -339,6 +339,8 @@ class PurchaseOrderService
 
     public function approve(PurchaseOrder $po, User $by, ?string $remarks = null): PurchaseOrder
     {
+        // Fast-path guard (authoritative re-check happens under the row lock
+        // inside the transaction).
         if (! in_array($po->status, [PurchaseOrderStatus::PendingApproval, PurchaseOrderStatus::Draft], true)) {
             throw new BusinessRuleException('PO is not in an approvable state.');
         }
@@ -371,24 +373,32 @@ class PurchaseOrderService
         }
 
         $result = DB::transaction(function () use ($po, $by, $remarks) {
-            $this->approvals->approve($po, $by, $remarks);
+            // Lock-then-guard: re-read the authoritative row so a concurrent
+            // approver holding a stale draft/pending instance cannot double-
+            // evaluate isFullyApproved and duplicate the approval outbox event.
+            $locked = PurchaseOrder::query()->lockForUpdate()->findOrFail($po->getKey());
+            if (! in_array($locked->status, [PurchaseOrderStatus::PendingApproval, PurchaseOrderStatus::Draft], true)) {
+                throw new BusinessRuleException('PO is not in an approvable state.');
+            }
+
+            $this->approvals->approve($locked, $by, $remarks);
             $becameApproved = false;
-            if ($this->approvals->isFullyApproved($po)) {
-                $po->forceFill([
+            if ($this->approvals->isFullyApproved($locked)) {
+                $locked->forceFill([
                     'status'      => PurchaseOrderStatus::Approved,
                     'approved_by' => $by->id,
                     'approved_at' => now(),
                 ])->save();
                 // Update last_price on approved_suppliers per line.
-                foreach ($po->items()->get() as $line) {
+                foreach ($locked->items()->get() as $line) {
                     ApprovedSupplier::query()->updateOrCreate(
-                        ['item_id' => $line->item_id, 'vendor_id' => $po->vendor_id],
+                        ['item_id' => $line->item_id, 'vendor_id' => $locked->vendor_id],
                         ['last_price' => $line->unit_price, 'last_price_at' => now()]
                     );
                 }
                 $becameApproved = true;
             }
-            $fresh = $po->fresh();
+            $fresh = $locked->fresh();
             if ($becameApproved) {
                 // Series C — Task C2. Domain event for chain listeners
                 // (NotifyOnPurchaseOrderApproved + future SendPOToSupplier).
@@ -449,10 +459,17 @@ class PurchaseOrderService
     public function reject(PurchaseOrder $po, User $by, string $reason): PurchaseOrder
     {
         $result = DB::transaction(function () use ($po, $by, $reason) {
-            $this->approvals->reject($po, $by, $reason);
+            // Lock-then-guard: re-read so a stale instance cannot reject an
+            // approval that concurrently committed.
+            $locked = PurchaseOrder::query()->lockForUpdate()->findOrFail($po->getKey());
+            if (! in_array($locked->status, [PurchaseOrderStatus::PendingApproval, PurchaseOrderStatus::Draft], true)) {
+                throw new BusinessRuleException('PO is not in an approvable state.');
+            }
+
+            $this->approvals->reject($locked, $by, $reason);
             // status is non-fillable; service-only.
-            $po->forceFill(['status' => PurchaseOrderStatus::Cancelled])->save();
-            $fresh = $po->fresh();
+            $locked->forceFill(['status' => PurchaseOrderStatus::Cancelled])->save();
+            $fresh = $locked->fresh();
             $this->supplierDispatches->cancelForPurchaseOrder(
                 $fresh,
                 'Purchase order was rejected; supplier dispatch is no longer actionable.',

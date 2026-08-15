@@ -24,7 +24,7 @@ class Bill extends Model
     }
 
     protected $fillable = [
-        'bill_number', 'vendor_id', 'purchase_order_id', 'goods_receipt_note_id',
+        'bill_number', 'vendor_id', 'purchase_order_id', 'goods_receipt_note_id', 'provenance_type', 'exception_evidence', 'exception_owner_id', 'exception_approved_by', 'exception_approved_at',
         'date', 'due_date', 'is_vatable',
         'subtotal', 'vat_amount', 'total_amount', 'amount_paid', 'balance',
         'status', 'journal_entry_id', 'created_by', 'remarks',
@@ -46,7 +46,7 @@ class Bill extends Model
         'has_variances'            => 'boolean',
         'three_way_match_snapshot' => 'array',
         'three_way_overridden'     => 'boolean',
-        'three_way_overridden_at'  => 'datetime',
+        'three_way_overridden_at'  => 'datetime', 'exception_approved_at' => 'datetime',
     ];
 
     public function purchaseOrder(): BelongsTo

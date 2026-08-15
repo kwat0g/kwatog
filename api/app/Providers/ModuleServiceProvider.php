@@ -42,7 +42,6 @@ class ModuleServiceProvider extends ServiceProvider
         'B2B',
         'Forecasting',
         'ReturnManagement',
-        'Edge',
         'Landing',
     ];
 

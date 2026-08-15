@@ -27,5 +27,5 @@ If payment has already been made, please disregard this notice and reply
 with proof of payment so we can update our records.
 
 Thanks,
-{{ config('app.name') }} Accounts Receivable
+{{ config('mail.from.name', 'Ogami Philippines') }} Accounts Receivable
 </x-mail::message>

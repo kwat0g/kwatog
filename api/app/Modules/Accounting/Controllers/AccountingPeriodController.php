@@ -29,7 +29,9 @@ class AccountingPeriodController
         } catch (\RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
-        return new AccountingPeriodResource($period->load(['closedBy', 'reopenedBy']));
+        return (new AccountingPeriodResource($period->load(['closedBy', 'reopenedBy'])))
+            ->response()
+            ->setStatusCode(200);
     }
 
     public function reopen(ReopenAccountingPeriodRequest $request): JsonResponse|AccountingPeriodResource
@@ -45,6 +47,8 @@ class AccountingPeriodController
         } catch (\RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
-        return new AccountingPeriodResource($period->load(['closedBy', 'reopenedBy']));
+        return (new AccountingPeriodResource($period->load(['closedBy', 'reopenedBy'])))
+            ->response()
+            ->setStatusCode(200);
     }
 }

@@ -15,10 +15,12 @@ use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Accounting\Services\BillService;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\DeliverySchedule;
+use App\Modules\B2B\Events\SupplierInvoiceSubmitted;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\B2B\Enums\SupplierAgingBucket;
 use App\Modules\B2B\Models\PortalShippingDocument;
 use App\Common\Services\SystemUserResolver;
+use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Services\PurchaseOrderService;
@@ -218,17 +220,42 @@ class SupplierPortalService
         }
 
         try {
-            return PortalShippingDocument::create([
-                'purchase_order_id' => $purchaseOrder->id,
-                'document_type' => $data['document_type'],
-                'file_path' => $path,
-                'original_filename' => $file->getClientOriginalName(),
-                'file_size_bytes' => $file->getSize(),
-                'mime_type' => $file->getMimeType(),
-                'notes' => $data['notes'] ?? null,
-                'uploaded_by' => $portalUserId,
-                'uploaded_at' => now(),
-            ]);
+            // Idempotent — a double-click or retried request that re-uploads
+            // the same file (same PO + type + filename + size) must not stack
+            // a second document row or orphan a second stored file. Lock the
+            // PO row to serialize concurrent uploads, then return the existing
+            // row and delete the just-stored duplicate. The unique index
+            // `portal_shipping_documents_dedup_unique` backs this guard at the
+            // DB level.
+            return DB::transaction(function () use ($vendorId, $purchaseOrder, $portalUserId, $path, $file, $data): PortalShippingDocument {
+                $po = PurchaseOrder::query()->lockForUpdate()->findOrFail($purchaseOrder->id);
+                abort_if((int) $po->vendor_id !== $vendorId, 403);
+
+                $existing = PortalShippingDocument::query()
+                    ->where('purchase_order_id', $po->id)
+                    ->where('document_type', $data['document_type'])
+                    ->where('original_filename', $file->getClientOriginalName())
+                    ->where('file_size_bytes', $file->getSize())
+                    ->first();
+
+                if ($existing) {
+                    Storage::disk('local')->delete($path);
+
+                    return $existing;
+                }
+
+                return PortalShippingDocument::create([
+                    'purchase_order_id' => $po->id,
+                    'document_type' => $data['document_type'],
+                    'file_path' => $path,
+                    'original_filename' => $file->getClientOriginalName(),
+                    'file_size_bytes' => $file->getSize(),
+                    'mime_type' => $file->getMimeType(),
+                    'notes' => $data['notes'] ?? null,
+                    'uploaded_by' => $portalUserId,
+                    'uploaded_at' => now(),
+                ]);
+            });
         } catch (\Throwable $e) {
             Storage::disk('local')->delete($path);
             throw $e;
@@ -278,7 +305,7 @@ class SupplierPortalService
 
         $storedPath = null;
         try {
-            return DB::transaction(function () use ($purchaseOrder, $data, $file, $portalUserId, $vendorId, &$storedPath) {
+            $result = DB::transaction(function () use ($purchaseOrder, $data, $file, $portalUserId, $vendorId, &$storedPath) {
                 // Lock both the source PO and vendor before checking the
                 // supplier bill number. This is the idempotency boundary for
                 // portal double-submit/retry requests.
@@ -327,12 +354,24 @@ class SupplierPortalService
                     throw new BusinessRuleException('This purchase order has no items to bill.');
                 }
 
+                $acceptedGrn = GoodsReceiptNote::query()
+                    ->where('purchase_order_id', $lockedPurchaseOrder->id)
+                    ->where('vendor_id', $vendorId)
+                    ->where('status', GrnStatus::Accepted)
+                    ->latest('id')
+                    ->first();
+                if (! $acceptedGrn) {
+                    throw new BusinessRuleException('Supplier invoices for stock items require an accepted goods receipt.');
+                }
+
                 $systemUser = app(SystemUserResolver::class);
 
                 $bill = $systemUser->impersonate(fn () => $this->bills->createDraft([
                     'bill_number' => $data['bill_number'],
                     'vendor_id' => $lockedPurchaseOrder->vendor->hash_id,
                     'purchase_order_id' => $lockedPurchaseOrder->hash_id,
+                    'goods_receipt_note_id' => $acceptedGrn->hash_id,
+                    'provenance_type' => 'stock',
                     'date' => $data['date'],
                     'due_date' => $data['due_date'] ?? $data['date'],
                     'is_vatable' => $data['is_vatable'] ?? $this->taxPolicy->isVatRegistered(),
@@ -363,9 +402,15 @@ class SupplierPortalService
 
                 return [
                     'bill' => $bill,
-                    'message' => 'Invoice submitted successfully. A draft bill is waiting for Accounts Payable review.',
+                'message' => 'Invoice submitted successfully. A draft bill is waiting for Accounts Payable review.',
                 ];
             });
+
+            if (str_starts_with((string) $result['message'], 'Invoice submitted successfully')) {
+                event(new SupplierInvoiceSubmitted($result['bill']));
+            }
+
+            return $result;
         } catch (\Throwable $e) {
             if (is_string($storedPath)) {
                 Storage::disk('local')->delete($storedPath);
@@ -497,13 +542,34 @@ class SupplierPortalService
             ->where('vendor_id', $vendorId)
             ->firstOrFail();
 
-        return DeliverySchedule::create([
-            'vendor_id' => $vendorId,
-            'purchase_order_id' => $po->id,
-            'month' => $data['month'],
-            'status' => 'submitted',
-            'lines' => $data['lines'],
-        ]);
+        // Idempotent — a portal double-click or a retried request must not
+        // stack a second schedule for the same PO + month. Lock the existing
+        // submission first and return it, mirroring submitInvoice's
+        // already-submitted path. The partial unique index
+        // `delivery_schedules_vendor_po_month_unique` backs this guard at the
+        // DB level.
+        $schedule = DB::transaction(function () use ($vendorId, $po, $data): DeliverySchedule {
+            $existing = DeliverySchedule::query()
+                ->where('vendor_id', $vendorId)
+                ->where('purchase_order_id', $po->id)
+                ->where('month', $data['month'])
+                ->lockForUpdate()
+                ->first();
+
+            if ($existing) {
+                return $existing;
+            }
+
+            return DeliverySchedule::create([
+                'vendor_id' => $vendorId,
+                'purchase_order_id' => $po->id,
+                'month' => $data['month'],
+                'status' => 'submitted',
+                'lines' => $data['lines'],
+            ]);
+        });
+
+        return $schedule;
     }
 
     /* ─── PPAP Submissions ───────────────────────────────────────── */

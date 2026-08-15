@@ -8,6 +8,7 @@ use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Auth\Models\User;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -19,17 +20,17 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * delegate may act for EVERY role the delegator currently holds; a concrete
  * slug scopes the delegation to a single role.
  *
- * @property int         $delegator_user_id
- * @property int         $delegate_user_id
+ * @property int $delegator_user_id
+ * @property int $delegate_user_id
  * @property string|null $role_slug
- * @property \Carbon\Carbon $starts_at
- * @property \Carbon\Carbon $ends_at
- * @property bool        $is_active
+ * @property Carbon $starts_at
+ * @property Carbon $ends_at
+ * @property bool $is_active
  */
 class ApprovalDelegation extends Model
 {
-    use HasHashId;
     use HasAuditLog;
+    use HasHashId;
 
     protected $fillable = [
         'delegator_user_id',
@@ -43,7 +44,7 @@ class ApprovalDelegation extends Model
 
     protected $casts = [
         'starts_at' => 'date',
-        'ends_at'   => 'date',
+        'ends_at' => 'date',
         'is_active' => 'boolean',
     ];
 
@@ -61,7 +62,7 @@ class ApprovalDelegation extends Model
      * Base query for delegations that are active and whose [starts_at, ends_at]
      * window (inclusive, day granularity) covers the given instant.
      */
-    private static function coveringQuery(Carbon $on): \Illuminate\Database\Eloquent\Builder
+    private static function coveringQuery(Carbon $on): Builder
     {
         $day = $on->copy()->startOfDay();
 
@@ -84,20 +85,17 @@ class ApprovalDelegation extends Model
         $rows = static::coveringQuery($on)
             ->where(function ($q) use ($roleSlug): void {
                 $q->where('role_slug', $roleSlug)
-                  ->orWhereNull('role_slug');
+                    ->orWhereNull('role_slug');
             })
             ->with('delegator:id,role_id')
             ->get();
 
         $ids = [];
         foreach ($rows as $row) {
-            if ($row->role_slug === $roleSlug) {
-                $ids[] = (int) $row->delegate_user_id;
-                continue;
-            }
-            // role_slug null — only honour it if the delegator genuinely holds
-            // the requested role, so a blanket delegation never escalates a
-            // delegate beyond the delegator's own authority.
+            // Both exact-role and blanket delegations are effective only while
+            // the delegator still holds the requested role. A role change must
+            // revoke delegated authority immediately, without requiring a
+            // cleanup job or a manual delegation edit.
             if ($row->delegator && $row->delegator->role?->slug === $roleSlug) {
                 $ids[] = (int) $row->delegate_user_id;
             }
@@ -121,14 +119,15 @@ class ApprovalDelegation extends Model
 
         $slugs = [];
         foreach ($rows as $row) {
-            if ($row->role_slug !== null) {
+            $delegatorRole = $row->delegator?->role?->slug;
+            if ($row->role_slug !== null && $row->role_slug === $delegatorRole) {
                 $slugs[] = (string) $row->role_slug;
+
                 continue;
             }
             // Blanket delegation — inherit whatever single role the delegator holds.
-            $slug = $row->delegator?->role?->slug;
-            if ($slug !== null) {
-                $slugs[] = (string) $slug;
+            if ($row->role_slug === null && $delegatorRole !== null) {
+                $slugs[] = (string) $delegatorRole;
             }
         }
 

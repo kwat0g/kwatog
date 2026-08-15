@@ -196,13 +196,9 @@ class MovementGlPostingService
             return null;
         }
 
-        // Promote draft → posted directly (system-generated post; mirrors
-        // GrnGlPostingService).
-        DB::table('journal_entries')->where('id', $je->id)->update([
-            'status'    => 'posted',
-            'posted_at' => now(),
-            'updated_at' => now(),
-        ]);
+        // Promote the system-generated draft through the canonical accounting
+        // lifecycle; no direct journal_entries mutation is permitted here.
+        $this->journals->postSystem($je);
 
         $this->markGenerated($movement, (int) $je->id);
 

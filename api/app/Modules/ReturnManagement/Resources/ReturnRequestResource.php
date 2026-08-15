@@ -20,6 +20,10 @@ class ReturnRequestResource extends JsonResource
             'status_label'         => $this->status?->label(),
             'is_editable'          => $this->is_editable,
             'disposition_status'   => $this->disposition_status,
+            'finance_only'         => (bool) $this->finance_only,
+            'finance_only_reason'  => $this->finance_only_reason,
+            'finance_only_approved_by' => $this->finance_only_approved_by
+                ? \App\Common\Support\HashId::encode((int) $this->finance_only_approved_by) : null,
             'inspection_handoff'   => [
                 'status'       => $this->inspection_handoff_status?->value,
                 'status_label' => $this->inspection_handoff_status?->label(),

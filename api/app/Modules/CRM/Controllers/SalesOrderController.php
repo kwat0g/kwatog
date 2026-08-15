@@ -102,6 +102,14 @@ class SalesOrderController
         return new SalesOrderResource($so);
     }
 
+    public function transition(Request $request, SalesOrder $salesOrder): JsonResponse
+    {
+        $target = SalesOrderStatus::tryFrom((string) $request->input('status'));
+        if ($target === null) return response()->json(['message' => 'Unknown sales order status.'], 422);
+        $result = $this->service->transitionTo($salesOrder->id, $target, $request->user()?->id);
+        return response()->json(['data' => $result->toArray()], $result->statusCode);
+    }
+
     public function chain(SalesOrder $salesOrder): JsonResponse
     {
         return response()->json(['data' => $this->service->chain($salesOrder)]);

@@ -23,5 +23,6 @@ class PayrollComputationRequested
         public readonly PayrollPeriod $period,
         public readonly ?int $triggeredBy,
         public readonly string $requestId,
+        public readonly ?string $claimToken = null,
     ) {}
 }

@@ -74,8 +74,11 @@ class RecruitmentApplicationController
     public function updateInterview(Request $request, ApplicationInterview $interview): ApplicationInterviewResource
     {
         $data = $request->validate([
-            'notes'   => ['nullable', 'string'],
-            'outcome' => ['nullable', Rule::enum(InterviewOutcome::class)],
+            'scheduled_at'     => ['sometimes', 'date', 'after:now'],
+            'location'         => ['sometimes', 'nullable', 'string', 'max:200'],
+            'interviewer_name' => ['sometimes', 'string', 'max:200'],
+            'notes'            => ['sometimes', 'nullable', 'string'],
+            'outcome'          => ['sometimes', 'nullable', Rule::enum(InterviewOutcome::class)],
         ]);
 
         $this->service->updateInterview($interview, $data);

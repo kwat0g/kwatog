@@ -70,14 +70,18 @@ class ReapStalePayrollRuns extends Command
 
         foreach ($stale as $period) {
             try {
-                $periods->releaseClaim($period);
-                $progress->forget($period);
+                $released = $periods->reapStaleClaim($period, $threshold);
+                if ($released === null) {
+                    continue;
+                }
+
+                $progress->forget($released);
 
                 $this->line(sprintf(
                     '  Released period #%d (%s) → %s',
-                    $period->id,
-                    $period->label(),
-                    $period->fresh()?->status?->value ?? 'unknown',
+                    $released->id,
+                    $released->label(),
+                    $released->status?->value ?? 'unknown',
                 ));
                 $reaped++;
             } catch (\Throwable $e) {

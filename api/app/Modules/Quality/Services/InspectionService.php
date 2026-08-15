@@ -15,6 +15,7 @@ use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Production\Models\WorkOrderOutput;
 use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
@@ -29,8 +30,8 @@ use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\SupplyChain\Models\Delivery;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 
 /**
  * Sprint 7 — Task 60. Lifecycle service for quality inspections.
@@ -60,6 +61,7 @@ class InspectionService
                 'inspector:id,name,role_id',
                 'spec:id,product_id,version',
                 'qualityPlan:id,item_id,vendor_id,version,sampling_method',
+                'workOrderOutput.workOrder:id,wo_number,product_id',
             ]);
 
         if (! empty($filters['stage'])) {
@@ -68,8 +70,12 @@ class InspectionService
         if (! empty($filters['status'])) {
             $q->where('status', $filters['status']);
         }
-        if (! empty($filters['from'])) $q->whereDate('created_at', '>=', $filters['from']);
-        if (! empty($filters['to']))   $q->whereDate('created_at', '<=', $filters['to']);
+        if (! empty($filters['from'])) {
+            $q->whereDate('created_at', '>=', $filters['from']);
+        }
+        if (! empty($filters['to'])) {
+            $q->whereDate('created_at', '<=', $filters['to']);
+        }
         if (! empty($filters['product_id'])) {
             // InspectionController::index() forwards the raw query bag, so the
             // SPA's hash string would hit a bigint column (Postgres 22P02 → 500).
@@ -103,16 +109,16 @@ class InspectionService
      * Model backing each polymorphic `entity_type`, for decoding `entity_id`
      * hashes on the list filter. Mirrors CreateInspectionRequest's map.
      *
-     * @return class-string<\Illuminate\Database\Eloquent\Model>|null
+     * @return class-string<Model>|null
      */
     private function entityModelClass(string $type): ?string
     {
         return match ($type) {
-            InspectionEntityType::Grn->value           => GoodsReceiptNote::class,
-            InspectionEntityType::WorkOrder->value     => WorkOrder::class,
-            InspectionEntityType::Delivery->value      => Delivery::class,
+            InspectionEntityType::Grn->value => GoodsReceiptNote::class,
+            InspectionEntityType::WorkOrder->value => WorkOrder::class,
+            InspectionEntityType::Delivery->value => Delivery::class,
             InspectionEntityType::ReturnRequest->value => ReturnRequest::class,
-            default                                    => null,
+            default => null,
         };
     }
 
@@ -124,6 +130,7 @@ class InspectionService
             'inspector:id,name,role_id',
             'spec:id,product_id,version,is_active',
             'qualityPlan:id,item_id,vendor_id,version,sampling_method',
+            'workOrderOutput.workOrder:id,wo_number,product_id',
             'measurements' => fn ($q) => $q->orderBy('sample_index')->orderBy('id'),
         ]);
     }
@@ -271,6 +278,33 @@ class InspectionService
         }
 
         $product = Product::query()->findOrFail($productId);
+        $output = null;
+        if ($stage === InspectionStage::Outgoing) {
+            $outputId = (int) ($data['work_order_output_id'] ?? 0);
+            if ($outputId < 1) {
+                throw new BusinessRuleException('Outgoing inspection requires a specific work-order output batch.');
+            }
+
+            $output = WorkOrderOutput::query()->with('workOrder')->findOrFail($outputId);
+            if ((int) $output->good_count < 1) {
+                throw new BusinessRuleException('Outgoing inspection requires a positive good output quantity.');
+            }
+            if ((int) $output->workOrder?->product_id !== $product->id) {
+                throw new BusinessRuleException('Outgoing inspection product does not match the work-order output.');
+            }
+
+            $entityType = (string) ($data['entity_type'] ?? InspectionEntityType::WorkOrder->value);
+            $entityId = (int) ($data['entity_id'] ?? $output->work_order_id);
+            if ($entityType !== InspectionEntityType::WorkOrder->value || $entityId !== (int) $output->work_order_id) {
+                throw new BusinessRuleException('Outgoing inspection must target the work order that produced the output batch.');
+            }
+
+            // The physical output is authoritative; callers cannot inspect a
+            // different quantity while claiming provenance for this batch.
+            $batchQty = (int) $output->good_count;
+            $data['entity_type'] = InspectionEntityType::WorkOrder->value;
+            $data['entity_id'] = $output->work_order_id;
+        }
         $spec = InspectionSpec::query()
             ->where('product_id', $product->id)
             ->where('is_active', true)
@@ -301,7 +335,7 @@ class InspectionService
         }
 
         return DB::transaction(function () use (
-            $stage, $product, $spec, $batchQty, $sample, $code, $accept, $reject, $by, $data
+            $stage, $product, $spec, $batchQty, $sample, $code, $accept, $reject, $by, $data, $output
         ) {
             $insp = Inspection::query()->create([
                 'inspection_number' => $this->sequences->generate('inspection'),
@@ -311,7 +345,9 @@ class InspectionService
                 'inspection_spec_id' => $spec->id,
                 'entity_type' => isset($data['entity_type']) ? InspectionEntityType::from((string) $data['entity_type'])->value : null,
                 'entity_id' => isset($data['entity_id']) ? (int) $data['entity_id'] : null,
+                'work_order_output_id' => $output?->id,
                 'batch_quantity' => $batchQty,
+                'accepted_quantity' => 0,
                 'sample_size' => $sample,
                 'aql_code' => $code,
                 'accept_count' => $accept,
@@ -493,6 +529,9 @@ class InspectionService
             $lockedInspection->forceFill([
                 'status' => $passed ? InspectionStatus::Passed->value : InspectionStatus::Failed->value,
                 'defect_count' => $defects,
+                'accepted_quantity' => $passed && $lockedInspection->stage === InspectionStage::Outgoing
+                    ? (int) $lockedInspection->batch_quantity
+                    : 0,
                 'completed_at' => now(),
                 'inspector_id' => $lockedInspection->inspector_id ?? $by->id,
             ])->save();
@@ -544,6 +583,7 @@ class InspectionService
 
             $lockedInspection->forceFill([
                 'status' => InspectionStatus::Cancelled->value,
+                'accepted_quantity' => 0,
                 'completed_at' => now(),
                 'notes' => trim(($lockedInspection->notes ? $lockedInspection->notes."\n" : '').'[cancelled] '.($reason ?: 'no reason given').' — by user#'.$by->id),
             ])->save();

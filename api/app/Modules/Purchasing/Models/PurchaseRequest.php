@@ -9,6 +9,7 @@ use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
+use App\Modules\MRP\Models\MrpPlan;
 use App\Modules\Purchasing\Enums\PurchaseRequestPriority;
 use App\Modules\Purchasing\Enums\PurchaseRequestConversionStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
@@ -75,6 +76,12 @@ class PurchaseRequest extends Model
     public function purchaseOrders(): HasMany
     {
         return $this->hasMany(PurchaseOrder::class);
+    }
+
+    /** The MRP plan that auto-generated this PR (null for manual PRs). */
+    public function mrpPlan(): BelongsTo
+    {
+        return $this->belongsTo(MrpPlan::class);
     }
 
     public function template(): BelongsTo

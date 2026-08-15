@@ -344,15 +344,21 @@ class PurchaseRequestService
 
     public function approve(PurchaseRequest $pr, User $by, ?string $remarks = null): PurchaseRequest
     {
-        if ($pr->status !== PurchaseRequestStatus::Pending) {
-            throw new BusinessRuleException('Only pending PRs can be approved.');
-        }
-        $this->budget->assertAcknowledged($pr);
         return DB::transaction(function () use ($pr, $by, $remarks) {
-            $this->approvals->approve($pr, $by, $remarks);
+            // Lock-then-guard: re-read the authoritative row so a concurrent
+            // approval (or cancel) holding a stale pending instance cannot slip
+            // past the guard — which would double-evaluate isFullyApproved and
+            // duplicate the approval outbox event.
+            $locked = PurchaseRequest::query()->lockForUpdate()->findOrFail($pr->getKey());
+            if ($locked->status !== PurchaseRequestStatus::Pending) {
+                throw new BusinessRuleException('Only pending PRs can be approved.');
+            }
+            $this->budget->assertAcknowledged($locked);
+
+            $this->approvals->approve($locked, $by, $remarks);
             $becameApproved = false;
-            if ($this->approvals->isFullyApproved($pr)) {
-                $pr->forceFill([
+            if ($this->approvals->isFullyApproved($locked)) {
+                $locked->forceFill([
                     'status'               => PurchaseRequestStatus::Approved,
                     'approved_at'          => now(),
                     'po_conversion_status' => PurchaseRequestConversionStatus::Pending,
@@ -361,7 +367,7 @@ class PurchaseRequestService
                 ])->save();
                 $becameApproved = true;
             }
-            $fresh = $pr->fresh();
+            $fresh = $locked->fresh();
             if ($becameApproved) {
                 app(OutboxService::class)->recordForChain(
                     new PurchaseRequestApproved($fresh),
@@ -404,23 +410,31 @@ class PurchaseRequestService
 
     public function reject(PurchaseRequest $pr, User $by, string $reason): PurchaseRequest
     {
-        if ($pr->status !== PurchaseRequestStatus::Pending) {
-            throw new BusinessRuleException('Only pending PRs can be rejected.');
-        }
         return DB::transaction(function () use ($pr, $by, $reason) {
-            $this->approvals->reject($pr, $by, $reason);
-            $pr->forceFill(['status' => PurchaseRequestStatus::Rejected])->save();
-            return $pr->fresh();
+            // Lock-then-guard: re-read so a stale pending instance cannot reject
+            // an approval that concurrently committed.
+            $locked = PurchaseRequest::query()->lockForUpdate()->findOrFail($pr->getKey());
+            if ($locked->status !== PurchaseRequestStatus::Pending) {
+                throw new BusinessRuleException('Only pending PRs can be rejected.');
+            }
+            $this->approvals->reject($locked, $by, $reason);
+            $locked->forceFill(['status' => PurchaseRequestStatus::Rejected])->save();
+            return $locked->fresh();
         });
     }
 
     public function cancel(PurchaseRequest $pr): PurchaseRequest
     {
-        if (! in_array($pr->status, [PurchaseRequestStatus::Draft, PurchaseRequestStatus::Pending], true)) {
-            throw new BusinessRuleException('Cannot cancel a PR in this status.');
-        }
-        $pr->forceFill(['status' => PurchaseRequestStatus::Cancelled])->save();
-        return $pr->fresh();
+        return DB::transaction(function () use ($pr) {
+            // Lock-then-guard: without it, cancel could race a concurrent
+            // approval and cancel an already-approved PR.
+            $locked = PurchaseRequest::query()->lockForUpdate()->findOrFail($pr->getKey());
+            if (! in_array($locked->status, [PurchaseRequestStatus::Draft, PurchaseRequestStatus::Pending], true)) {
+                throw new BusinessRuleException('Cannot cancel a PR in this status.');
+            }
+            $locked->forceFill(['status' => PurchaseRequestStatus::Cancelled])->save();
+            return $locked->fresh();
+        });
     }
 
     public function delete(PurchaseRequest $pr): void

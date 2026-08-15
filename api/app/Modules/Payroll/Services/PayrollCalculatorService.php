@@ -66,6 +66,7 @@ class PayrollCalculatorService
         private readonly BirTaxComputationService $bir,
         private readonly ThirteenthMonthService $thirteenthMonth,
         private readonly SettingsService $settings,
+        private readonly PayrollPeriodService $periods,
     ) {}
 
     /**
@@ -78,7 +79,12 @@ class PayrollCalculatorService
      *        per-employee Recompute button) are additionally refused Approved
      *        and Processing periods — see the guard below.
      */
-    public function computeForEmployee(PayrollPeriod $period, Employee $employee, bool $internal = false): Payroll
+    public function computeForEmployee(
+        PayrollPeriod $period,
+        Employee $employee,
+        bool $internal = false,
+        ?string $claimToken = null,
+    ): Payroll
     {
         // Locked = Finalized, Disbursed or Voided. Only Finalized was checked
         // before, so a disbursed run (money already paid) or a voided one could
@@ -112,7 +118,14 @@ class PayrollCalculatorService
             );
         }
 
-        return DB::transaction(function () use ($period, $employee) {
+        return DB::transaction(function () use ($period, $employee, $internal, $claimToken) {
+            // Lock the period claim for the whole employee transaction. If a
+            // stale worker was taken over after its previous employee, it must
+            // stop before deleting/replacing or writing any row for this one.
+            if ($internal) {
+                $period = $this->periods->assertComputeClaim($period, $claimToken);
+            }
+
             // Wipe any prior rows for this employee+period (clean recompute).
             $existing = Payroll::where('payroll_period_id', $period->id)
                 ->where('employee_id', $employee->id)
@@ -825,6 +838,12 @@ class PayrollCalculatorService
             ->where('employee_id', $employee->id)
             ->where('status', LoanStatus::Active->value)
             ->where('pay_periods_remaining', '>', 0)
+            // Keep the loan-row lock order stable across payroll runs and
+            // manual payments/reversals. Decisions below are made only from
+            // the locked, current row and all detail + aggregate writes are
+            // covered by computeForEmployee's transaction.
+            ->orderBy('id')
+            ->lockForUpdate()
             ->get();
 
         $total = '0.00';
@@ -837,8 +856,12 @@ class PayrollCalculatorService
                 : Money::div($amort, '2', 4);
 
             // Don't take more than the outstanding balance.
-            $deduction = Money::lt((string) $loan->balance, $perPeriod) ? (string) $loan->balance : Money::round2($perPeriod);
-            if (Money::isZero($deduction)) continue;
+            $deduction = Money::lt((string) $loan->balance, $perPeriod)
+                ? Money::round2((string) $loan->balance)
+                : Money::round2($perPeriod);
+            if (Money::isZero($deduction)) {
+                continue;
+            }
 
             $total = Money::add($total, $deduction);
             PayrollDeductionDetail::create([
@@ -858,16 +881,11 @@ class PayrollCalculatorService
                 'remarks'      => 'Auto-deduction from payroll',
             ]);
 
-            // Update loan state.
-            $loan->total_paid           = Money::add((string) $loan->total_paid, $deduction);
-            $loan->balance              = Money::sub((string) $loan->balance, $deduction);
-            $loan->pay_periods_remaining = max(0, $loan->pay_periods_remaining - 1);
-            if (Money::lte($loan->balance, '0.00') || $loan->pay_periods_remaining === 0) {
-                $loan->status = LoanStatus::Paid;
-                $loan->balance = '0.00';
-                $loan->end_date = $period->payroll_date;
-            }
-            $loan->save();
+            // Reconcile from the immutable payment ledger. The loan row is
+            // already locked above, so manual payments and this deduction
+            // cannot race or leave the denormalized summary drifting.
+            app(\App\Modules\Loans\Services\LoanService::class)
+                ->reconcileAggregates($loan, $period->payroll_date->toDateString());
         }
 
         return $total;
@@ -902,10 +920,30 @@ class PayrollCalculatorService
      */
     private function reverseLoanDeductions(Payroll $previous): void
     {
-        $payments = LoanPayment::where('payroll_id', $previous->id)->get();
+        $payments = LoanPayment::query()
+            ->where('payroll_id', $previous->id)
+            ->orderBy('loan_id')
+            ->orderBy('id')
+            ->get();
+        if ($payments->isEmpty()) {
+            return;
+        }
+
+        // Recompute must serialize against both payroll deduction and manual
+        // payment paths. Lock every affected loan in id order before changing
+        // any aggregate, while keeping the existing reverse/delete semantics.
+        $loans = EmployeeLoan::query()
+            ->whereIn('id', $payments->pluck('loan_id')->unique()->sort()->values())
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get()
+            ->keyBy('id');
+
         foreach ($payments as $p) {
-            $loan = EmployeeLoan::find($p->loan_id);
-            if (! $loan) continue;
+            $loan = $loans->get($p->loan_id);
+            if (! $loan) {
+                continue;
+            }
             $loan->total_paid = Money::sub((string) $loan->total_paid, (string) $p->amount);
             $loan->balance    = Money::add((string) $loan->balance, (string) $p->amount);
             $loan->pay_periods_remaining = $loan->pay_periods_remaining + 1;

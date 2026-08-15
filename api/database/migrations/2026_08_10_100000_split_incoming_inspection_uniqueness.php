@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Incoming QC is line-scoped when a GRN has item quality plans, while
@@ -35,6 +36,20 @@ return new class extends Migration
         }
 
         if (in_array($driver, ['pgsql', 'sqlite'], true)) {
+            // On a fresh install the later output-provenance migration may
+            // already have run because its legacy numeric filename sorts
+            // before dated migrations. Do not reintroduce the obsolete
+            // WO-scoped outgoing index in that ordering.
+            if (Schema::hasColumn('inspections', 'work_order_output_id')) {
+                DB::statement(
+                    'CREATE UNIQUE INDEX IF NOT EXISTS inspections_legacy_incoming_entity_unique '
+                    .'ON inspections (stage, entity_type, entity_id) '
+                    ."WHERE stage = 'incoming' AND grn_item_id IS NULL"
+                );
+
+                return;
+            }
+
             DB::statement(
                 'CREATE UNIQUE INDEX inspections_non_incoming_entity_unique '
                 .'ON inspections (stage, entity_type, entity_id) '
@@ -63,6 +78,15 @@ return new class extends Migration
         if (in_array($driver, ['pgsql', 'sqlite'], true)) {
             DB::statement('DROP INDEX IF EXISTS inspections_non_incoming_entity_unique');
             DB::statement('DROP INDEX IF EXISTS inspections_legacy_incoming_entity_unique');
+
+            // In reverse migration order the later output-provenance schema
+            // still exists here. Its own down() performs the duplicate-QC
+            // preflight and restores the pre-provenance index, so recreating
+            // that index early would bypass the clear safety error.
+            if (Schema::hasColumn('inspections', 'work_order_output_id')) {
+                return;
+            }
+
             if ($driver === 'pgsql') {
                 DB::statement(
                     'ALTER TABLE inspections ADD CONSTRAINT inspections_stage_entity_unique '

@@ -54,12 +54,17 @@ class UserPermissionOverrideService
         /** @var Permission $permission */
         $permission = Permission::where('slug', $permissionSlug)->firstOrFail();
 
-        $existing = UserPermissionOverride::with(['permission', 'user'])
-            ->where('user_id', $user->id)
-            ->where('permission_id', $permission->id)
-            ->first();
+        // Read the existing row under lock inside the transaction so concurrent
+        // first-sets cannot both log 'created' and fire duplicate outbox events.
+        $existing = null;
 
-        $override = DB::transaction(function () use ($user, $actor, $permission, $permissionSlug, $type, $reason, $expiresAt, $existing) {
+        $override = DB::transaction(function () use ($user, $actor, $permission, $permissionSlug, $type, $reason, $expiresAt, &$existing) {
+            $existing = UserPermissionOverride::with(['permission', 'user'])
+                ->where('user_id', $user->id)
+                ->where('permission_id', $permission->id)
+                ->lockForUpdate()
+                ->first();
+
             $override = UserPermissionOverride::updateOrCreate(
                 [
                     'user_id'       => $user->id,
@@ -114,7 +119,7 @@ class UserPermissionOverrideService
             return $override;
         });
 
-        DB::afterCommit(function () use ($user, $permissionSlug, $existing, $type, $reason) {
+        DB::afterCommit(function () use ($user, $permissionSlug, &$existing, $type, $reason) {
             $this->notifications->send($user, 'permission.override', [
                 'title' => $existing ? 'Permission Override Updated' : 'Permission Override Applied',
                 'message' => $existing

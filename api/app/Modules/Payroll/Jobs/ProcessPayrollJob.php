@@ -17,6 +17,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -61,6 +62,7 @@ class ProcessPayrollJob implements ShouldQueue
     public function __construct(
         public PayrollPeriod $period,
         public ?int $triggeredBy = null,
+        public ?string $claimToken = null,
     ) {}
 
     public function handle(
@@ -77,10 +79,11 @@ class ProcessPayrollJob implements ShouldQueue
         // force-unlocked, voided, or otherwise moved on while we sat in the
         // queue — recomputing it now would clobber state the user has since
         // acted on, so bail without touching a single row.
-        if ($period->status !== PayrollPeriodStatus::Processing) {
+        if (! $periods->claimIsOwned($period, $this->claimToken)) {
             Log::info('ProcessPayrollJob: period no longer claimed for compute; skipping', [
                 'period_id' => $period->id,
                 'status'    => $period->status?->value,
+                'claim_token' => $this->claimToken,
             ]);
             return;
         }
@@ -90,7 +93,12 @@ class ProcessPayrollJob implements ShouldQueue
         // claimForCompute() normally stamps this; keep it for queued dispatches
         // that bypassed the HTTP path (e.g. AutoPayrollPeriodService).
         if ($this->triggeredBy !== null && $period->computed_by !== $this->triggeredBy) {
-            $period->forceFill(['computed_by' => $this->triggeredBy])->save();
+            $period = DB::transaction(function () use ($period, $periods): PayrollPeriod {
+                $owned = $periods->assertComputeClaim($period, $this->claimToken);
+                $owned->forceFill(['computed_by' => $this->triggeredBy])->save();
+
+                return $owned->fresh();
+            });
         }
 
         $employees = $periods->availableEmployees($period);
@@ -113,7 +121,12 @@ class ProcessPayrollJob implements ShouldQueue
                     // internal: true — the period is legitimately Processing
                     // because WE claimed it. External callers are refused that
                     // status (see PayrollCalculatorService::computeForEmployee).
-                    $calculator->computeForEmployee($period, $emp, internal: true);
+                    $calculator->computeForEmployee(
+                        $period,
+                        $emp,
+                        internal: true,
+                        claimToken: $this->claimToken,
+                    );
                 } catch (Throwable $e) {
                     $failures++;
                     Log::error('Payroll computation failed for employee', [
@@ -133,18 +146,33 @@ class ProcessPayrollJob implements ShouldQueue
                     //
                     // approve() blocks on any row with an error_message, so
                     // these cannot be signed off or posted to the GL.
-                    Payroll::updateOrCreate(
-                        ['payroll_period_id' => $period->id, 'employee_id' => $emp->id],
-                        [
-                            'pay_type'         => $emp->pay_type instanceof \BackedEnum ? $emp->pay_type->value : (string) $emp->pay_type,
-                            'basic_pay'        => '0.00',
-                            'gross_pay'        => '0.00',
-                            'total_deductions' => '0.00',
-                            'net_pay'          => '0.00',
-                            'error_message'    => $e->getMessage(),
-                            'computed_at'      => now(),
-                        ]
-                    );
+                    try {
+                        DB::transaction(function () use ($periods, $period, $emp, $e): void {
+                            $periods->assertComputeClaim($period, $this->claimToken);
+                            Payroll::updateOrCreate(
+                                ['payroll_period_id' => $period->id, 'employee_id' => $emp->id],
+                                [
+                                    'pay_type'         => $emp->pay_type instanceof \BackedEnum ? $emp->pay_type->value : (string) $emp->pay_type,
+                                    'basic_pay'        => '0.00',
+                                    'gross_pay'        => '0.00',
+                                    'total_deductions' => '0.00',
+                                    'net_pay'          => '0.00',
+                                    'error_message'    => $e->getMessage(),
+                                    'computed_at'      => now(),
+                                ]
+                            );
+                        });
+                    } catch (Throwable $claimOrWriteError) {
+                        if (! $periods->claimIsOwned($period, $this->claimToken)) {
+                            Log::warning('Payroll computation claim was taken over; stale worker stopped', [
+                                'period_id' => $period->id,
+                                'employee_id' => $emp->id,
+                            ]);
+                            break;
+                        }
+
+                        throw $claimOrWriteError;
+                    }
                 }
 
                 $processed++;
@@ -159,20 +187,35 @@ class ProcessPayrollJob implements ShouldQueue
             // Draft is only correct when there is genuinely nothing to show.
             // releaseClaim() is shared with force-unlock and the stale reaper
             // so all three agree on what "finished" means.
-            $periods->releaseClaim($period);
-            $period = $period->fresh() ?? $period;
-            // Final emit carries the terminal status, so a subscribed page
-            // flips out of the processing state without waiting for a poll.
-            $emit();
-
-            // Task A9 — detect anomalies on completed period.
+            $released = false;
             try {
-                app(\App\Modules\Payroll\Services\PayrollAnomalyService::class)->detect($period);
-            } catch (\Throwable $e) {
-                Log::warning('PayrollAnomalyService::detect failed after job', [
+                $period = DB::transaction(function () use ($periods, $period): PayrollPeriod {
+                    $owned = $periods->assertComputeClaim($period, $this->claimToken);
+
+                    return $periods->releaseClaim($owned, [], $this->claimToken);
+                });
+                $released = true;
+            } catch (Throwable $claimLost) {
+                Log::warning('Payroll computation claim was lost before terminal release', [
                     'period_id' => $period->id,
-                    'error'     => $e->getMessage(),
+                    'error' => $claimLost->getMessage(),
                 ]);
+            }
+
+            if ($released) {
+                // Final emit carries the terminal status, so a subscribed page
+                // flips out of the processing state without waiting for a poll.
+                $emit();
+
+                // Task A9 — detect anomalies on completed period.
+                try {
+                    app(\App\Modules\Payroll\Services\PayrollAnomalyService::class)->detect($period);
+                } catch (\Throwable $e) {
+                    Log::warning('PayrollAnomalyService::detect failed after job', [
+                        'period_id' => $period->id,
+                        'error'     => $e->getMessage(),
+                    ]);
+                }
             }
         }
     }
@@ -189,7 +232,18 @@ class ProcessPayrollJob implements ShouldQueue
         // arrive null and fatal exactly when we most need this to work.
         $period = $this->period->fresh();
         if ($period && $period->status === PayrollPeriodStatus::Processing) {
-            app(PayrollPeriodService::class)->releaseClaim($period);
+            try {
+                DB::transaction(function () use ($period): void {
+                    $periods = app(PayrollPeriodService::class);
+                    $owned = $periods->assertComputeClaim($period, $this->claimToken);
+                    $periods->releaseClaim($owned, [], $this->claimToken);
+                });
+            } catch (Throwable $claimLost) {
+                Log::warning('ProcessPayrollJob failure could not release a stale claim', [
+                    'period_id' => $period->id,
+                    'error' => $claimLost->getMessage(),
+                ]);
+            }
         }
         Log::error('ProcessPayrollJob failed catastrophically', [
             'period_id' => $this->period->id,

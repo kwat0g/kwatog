@@ -192,8 +192,14 @@ class NcrService
             throw new BusinessRuleException('Cannot add actions to a closed NCR.');
         }
         return DB::transaction(function () use ($ncr, $data, $by) {
+            // Lock-then-guard: re-read so a stale action cannot be appended to
+            // an NCR that a concurrent close just made terminal.
+            $locked = NonConformanceReport::query()->lockForUpdate()->findOrFail($ncr->getKey());
+            if ($locked->status->isTerminal()) {
+                throw new BusinessRuleException('Cannot add actions to a closed NCR.');
+            }
             $action = NcrAction::create([
-                'ncr_id'       => $ncr->id,
+                'ncr_id'       => $locked->id,
                 'action_type'  => NcrActionType::from((string) $data['action_type'])->value,
                 'description'  => $data['description'],
                 'performed_by' => $by->id,
@@ -204,8 +210,8 @@ class NcrService
                 'due_date'     => $data['due_date'] ?? now()->addDays($this->settings->requiredInt('quality.effectiveness.check_interval_days', 1))->toDateString(),
             ]);
             // Bump status to in_progress on first action.
-            if ($ncr->status === NcrStatus::Open) {
-                $ncr->forceFill(['status' => NcrStatus::InProgress->value])->save();
+            if ($locked->status === NcrStatus::Open) {
+                $locked->forceFill(['status' => NcrStatus::InProgress->value])->save();
             }
             return $action->load('performer:id,name,role_id');
         });
@@ -216,13 +222,21 @@ class NcrService
         if ($ncr->status->isTerminal()) {
             throw new BusinessRuleException('NCR is already closed.');
         }
-        $ncr->forceFill([
-            'disposition'       => NcrDisposition::from($disposition)->value,
-            'root_cause'        => $rootCause ?: $ncr->root_cause,
-            'corrective_action' => $correctiveAction ?: $ncr->corrective_action,
-            'status'            => NcrStatus::InProgress->value,
-        ])->save();
-        return $this->show($ncr);
+        return DB::transaction(function () use ($ncr, $disposition, $rootCause, $correctiveAction) {
+            // Lock-then-guard: a stale disposition must not flip a concurrently
+            // closed NCR back to in_progress.
+            $locked = NonConformanceReport::query()->lockForUpdate()->findOrFail($ncr->getKey());
+            if ($locked->status->isTerminal()) {
+                throw new BusinessRuleException('NCR is already closed.');
+            }
+            $locked->forceFill([
+                'disposition'       => NcrDisposition::from($disposition)->value,
+                'root_cause'        => $rootCause ?: $locked->root_cause,
+                'corrective_action' => $correctiveAction ?: $locked->corrective_action,
+                'status'            => NcrStatus::InProgress->value,
+            ])->save();
+            return $this->show($locked);
+        });
     }
 
     /**
@@ -253,67 +267,74 @@ class NcrService
         }
 
         return DB::transaction(function () use ($ncr, $by) {
-            $ncr->forceFill([
+            // Lock-then-guard: re-read so a concurrent close cannot double-
+            // create the replacement/rework WO from a stale snapshot.
+            $locked = NonConformanceReport::query()->lockForUpdate()->findOrFail($ncr->getKey());
+            if ($locked->status->isTerminal()) {
+                throw new BusinessRuleException('NCR is already closed.');
+            }
+
+            $locked->forceFill([
                 'status'    => NcrStatus::Closed->value,
                 'closed_by' => $by->id,
                 'closed_at' => now(),
             ])->save();
 
             // Replacement WO: outgoing-QC scrap → re-create the lost output.
-            if ($ncr->disposition === NcrDisposition::Scrap
-                && $ncr->inspection_id
-                && $ncr->product_id
-                && $ncr->affected_quantity > 0) {
-                $insp = Inspection::find($ncr->inspection_id);
+            if ($locked->disposition === NcrDisposition::Scrap
+                && $locked->inspection_id
+                && $locked->product_id
+                && $locked->affected_quantity > 0) {
+                $insp = Inspection::find($locked->inspection_id);
                 if ($insp && $insp->stage === InspectionStage::Outgoing) {
                     $wo = $this->workOrderService()?->createDraft([
-                        'product_id'      => $ncr->product_id,
-                        'quantity_target' => $ncr->affected_quantity,
+                        'product_id'      => $locked->product_id,
+                        'quantity_target' => $locked->affected_quantity,
                         'planned_start'   => now()->addDay()->toDateString(),
                         'planned_end'     => now()->addDays($this->settings->requiredInt('quality.ncr.replacement_work_order_lead_days', 1))->toDateString(),
                         'priority'        => $this->settings->requiredInt('quality.ncr.replacement_work_order_priority', 0, 10),
-                        'parent_ncr_id'   => $ncr->id,
+                        'parent_ncr_id'   => $locked->id,
                         'created_by'     => $by->id,
                     ]);
                     if ($wo) {
-                        $ncr->forceFill(['replacement_work_order_id' => $wo->id])->save();
+                        $locked->forceFill(['replacement_work_order_id' => $wo->id])->save();
                     }
                 }
             }
 
             // T3.1.B — Rework disposition mirrors Scrap branch but creates a
             // rework WO on the configured replacement timeline and priority.
-            if ($ncr->disposition === NcrDisposition::Rework
-                && $ncr->inspection_id
-                && $ncr->product_id
-                && $ncr->affected_quantity > 0) {
-                $insp = Inspection::find($ncr->inspection_id);
+            if ($locked->disposition === NcrDisposition::Rework
+                && $locked->inspection_id
+                && $locked->product_id
+                && $locked->affected_quantity > 0) {
+                $insp = Inspection::find($locked->inspection_id);
                 if ($insp && $insp->stage === InspectionStage::Outgoing) {
                     $wo = $this->workOrderService()?->createDraft([
-                        'product_id'      => $ncr->product_id,
-                        'quantity_target' => (int) $ncr->affected_quantity,
+                        'product_id'      => $locked->product_id,
+                        'quantity_target' => (int) $locked->affected_quantity,
                         'planned_start'   => now()->addDay()->toDateString(),
                         'planned_end'     => now()->addDays($this->settings->requiredInt('quality.ncr.replacement_work_order_lead_days', 1))->toDateString(),
                         'priority'        => $this->settings->requiredInt('quality.ncr.replacement_work_order_priority', 0, 10),
-                        'parent_ncr_id'   => $ncr->id,
+                        'parent_ncr_id'   => $locked->id,
                         'created_by'      => $by->id,
                     ]);
                     if ($wo) {
-                        $ncr->forceFill(['rework_work_order_id' => $wo->id])->save();
+                        $locked->forceFill(['rework_work_order_id' => $wo->id])->save();
                     }
                 }
             }
 
             // Return to supplier → notify Purchasing officers.
-            if ($ncr->disposition === NcrDisposition::ReturnToSupplier) {
-                $this->notifyPurchasing($ncr);
+            if ($locked->disposition === NcrDisposition::ReturnToSupplier) {
+                $this->notifyPurchasing($locked);
             }
 
             // CAPA effectiveness loop: schedule 30-day verification checks for
             // the corrective + preventive actions now that the NCR is closed.
-            app(EffectivenessService::class)->scheduleVerification($ncr);
+            app(EffectivenessService::class)->scheduleVerification($locked);
 
-            return $this->show($ncr);
+            return $this->show($locked);
         });
     }
 
@@ -322,13 +343,21 @@ class NcrService
         if ($ncr->status->isTerminal()) {
             throw new BusinessRuleException('NCR is already closed.');
         }
-        $ncr->forceFill([
-            'status'           => NcrStatus::Cancelled->value,
-            'closed_by'        => $by->id,
-            'closed_at'        => now(),
-            'corrective_action'=> trim(($ncr->corrective_action ? $ncr->corrective_action."\n" : '').'[cancelled] '.($reason ?: 'no reason given')),
-        ])->save();
-        return $this->show($ncr);
+        return DB::transaction(function () use ($ncr, $reason, $by) {
+            // Lock-then-guard: a stale cancel must not flip a concurrently
+            // closed NCR to cancelled.
+            $locked = NonConformanceReport::query()->lockForUpdate()->findOrFail($ncr->getKey());
+            if ($locked->status->isTerminal()) {
+                throw new BusinessRuleException('NCR is already closed.');
+            }
+            $locked->forceFill([
+                'status'           => NcrStatus::Cancelled->value,
+                'closed_by'        => $by->id,
+                'closed_at'        => now(),
+                'corrective_action'=> trim(($locked->corrective_action ? $locked->corrective_action."\n" : '').'[cancelled] '.($reason ?: 'no reason given')),
+            ])->save();
+            return $this->show($locked);
+        });
     }
 
     /** Lazy resolve to keep the Quality module bootable without Production. */

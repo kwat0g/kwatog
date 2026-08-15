@@ -10,6 +10,7 @@ use App\Modules\Accounting\Models\BillItem;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\InvoiceItem;
+use App\Modules\SupplyChain\Models\DeliveryItem;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
@@ -53,6 +54,7 @@ class StoreReturnRequestRequest extends FormRequest
             'items.*.item_id'               => Item::class,
             'items.*.source_sales_order_item_id' => SalesOrderItem::class,
             'items.*.source_invoice_item_id'     => InvoiceItem::class,
+            'items.*.source_delivery_item_id'    => DeliveryItem::class,
             'items.*.source_po_item_id'     => PurchaseOrderItem::class,
             'items.*.source_grn_item_id'    => GrnItem::class,
             'items.*.source_bill_item_id'   => BillItem::class,
@@ -71,6 +73,8 @@ class StoreReturnRequestRequest extends FormRequest
             'vendor_id'           => ['nullable', 'integer', 'exists:vendors,id'],
             'reason_code'         => ['nullable', 'string', 'max:30'],
             'reason_description'  => ['nullable', 'string', 'max:1000'],
+            'finance_only'        => ['sometimes', 'boolean'],
+            'finance_only_reason' => ['nullable', 'string', 'max:1000'],
             'customer_notes'      => ['nullable', 'string', 'max:2000'],
             'internal_notes'      => ['nullable', 'string', 'max:2000'],
             'resolution'          => ['nullable', 'string', 'max:30'],
@@ -90,6 +94,9 @@ class StoreReturnRequestRequest extends FormRequest
             // originating SO / invoice line.
             'items.*.source_sales_order_item_id' => ['nullable', 'integer', 'exists:sales_order_items,id'],
             'items.*.source_invoice_item_id'     => ['nullable', 'integer', 'exists:invoice_items,id'],
+            'items.*.source_delivery_item_id'    => ['nullable', 'integer', 'exists:delivery_items,id'],
+            'items.*.lot_number'                  => ['nullable', 'string', 'max:120'],
+            'items.*.serial_number'               => ['nullable', 'string', 'max:120'],
             'items.*.source_po_item_id'   => ['nullable', 'integer', 'exists:purchase_order_items,id'],
             'items.*.source_grn_item_id'  => ['nullable', 'integer', 'exists:grn_items,id'],
             'items.*.source_bill_item_id' => ['nullable', 'integer', 'exists:bill_items,id'],
@@ -135,6 +142,15 @@ class StoreReturnRequestRequest extends FormRequest
                         'Each return line must reference a product or an inventory item.'
                     );
                 }
+                if ($type === ReturnRequestType::CustomerReturn->value
+                    && !empty($line['item_id']) && !$this->boolean('finance_only')
+                    && empty($line['source_invoice_item_id']) && empty($line['source_sales_order_item_id'])
+                    && empty($line['source_delivery_item_id'])) {
+                    $validator->errors()->add("items.{$index}.source_invoice_item_id", 'Stockable returns require invoice or sales-order line provenance.');
+                }
+            }
+            if ($this->boolean('finance_only') && trim((string) $this->input('finance_only_reason')) === '') {
+                $validator->errors()->add('finance_only_reason', 'Finance-only returns require an explicit non-stock reason.');
             }
         });
     }

@@ -118,6 +118,8 @@ class BillService
             $vendor = Vendor::findOrFail(
                 HashIdFilter::decode($data['vendor_id'], Vendor::class)
             );
+            $provenance = (string) ($data['provenance_type'] ?? 'stock');
+            $this->assertBillProvenance($provenance, $data, $by);
             $isVatable = (bool) ($data['is_vatable'] ?? $this->taxPolicy->isVatRegistered());
 
             // Build items + totals.
@@ -207,6 +209,12 @@ class BillService
                 'bill_number' => $data['bill_number'],
                 'vendor_id' => $vendor->id,
                 'purchase_order_id' => $poId,
+                'goods_receipt_note_id' => $provenance === 'stock' ? (HashIdFilter::decode($data['goods_receipt_note_id'], GoodsReceiptNote::class) ?? (int) $data['goods_receipt_note_id']) : null,
+                'provenance_type' => $provenance,
+                'exception_evidence' => $provenance === 'service' ? trim((string) $data['exception_evidence']) : null,
+                'exception_owner_id' => $provenance === 'service' ? $by->id : null,
+                'exception_approved_by' => $provenance === 'service' ? $by->id : null,
+                'exception_approved_at' => $provenance === 'service' ? now() : null,
                 'date' => $data['date'],
                 'due_date' => $data['due_date']
                     ?? Carbon::parse($data['date'])->addDays($vendor->payment_terms_days)->toDateString(),
@@ -348,6 +356,7 @@ class BillService
                 'vendor_id' => $vendor->id,
                 'purchase_order_id' => $po->id,
                 'goods_receipt_note_id' => $lockedGrn->id,
+                'provenance_type' => 'stock',
                 'date' => $billDate,
                 'due_date' => Carbon::parse($billDate)->addDays($vendor->payment_terms_days)->toDateString(),
                 'is_vatable' => $isVatable,
@@ -390,6 +399,7 @@ class BillService
             if ($lockedBill->status !== BillStatus::Draft) {
                 throw new BusinessRuleException('Only draft bills can be posted.');
             }
+            $this->assertPersistedBillProvenance($lockedBill);
 
             // Recompute at the point of posting. A GRN, PO, or draft line can
             // have changed after the bill was staged, and the old snapshot is
@@ -642,6 +652,43 @@ class BillService
     /**
      * @return array{0: array<int, array{expense_account_id:int, item_id:?int, description:string, quantity:string, unit:?string, unit_price:string, total:string}>, 1: string}
      */
+    private function assertBillProvenance(string $type, array $data, User $by): void
+    {
+        if ($type === 'service') {
+            if (empty($data['exception_evidence']) || ! ($data['exception_approved'] ?? false)) {
+                throw new BusinessRuleException('Service/non-stock bills require evidence, an owner, and explicit approval.');
+            }
+            if (! $by->hasPermission('accounting.bills.exception_approve')) {
+                throw new BusinessRuleException('You are not authorized to approve a service/non-stock bill exception.');
+            }
+            return;
+        }
+        if ($type !== 'stock' || empty($data['purchase_order_id']) || empty($data['goods_receipt_note_id'])) {
+            throw new BusinessRuleException('Stock/item bills require PO and accepted GRN provenance.');
+        }
+        $id = HashIdFilter::decode($data['goods_receipt_note_id'], GoodsReceiptNote::class) ?? (int) $data['goods_receipt_note_id'];
+        $grn = GoodsReceiptNote::query()->find($id);
+        if (! $grn || $grn->status !== \App\Modules\Inventory\Enums\GrnStatus::Accepted) {
+            throw new BusinessRuleException('Stock/item bills require an accepted GRN.');
+        }
+        $poId = HashIdFilter::decode($data['purchase_order_id'], PurchaseOrder::class)
+            ?? (int) $data['purchase_order_id'];
+        if ((int) $grn->purchase_order_id !== (int) $poId) {
+            throw new BusinessRuleException('The accepted GRN does not belong to the selected purchase order.');
+        }
+    }
+
+    private function assertPersistedBillProvenance(Bill $bill): void
+    {
+        if ($bill->provenance_type === 'service') {
+            if (! $bill->exception_evidence || ! $bill->exception_owner_id || ! $bill->exception_approved_by) throw new BusinessRuleException('Service/non-stock bill exception evidence is incomplete.');
+            return;
+        }
+        $grn = $bill->goods_receipt_note_id ? GoodsReceiptNote::query()->find($bill->goods_receipt_note_id) : null;
+        if (! $bill->purchase_order_id || ! $grn || $grn->status !== \App\Modules\Inventory\Enums\GrnStatus::Accepted) throw new BusinessRuleException('Stock/item bills require PO and accepted GRN provenance.');
+        if ((int) $grn->purchase_order_id !== (int) $bill->purchase_order_id) throw new BusinessRuleException('The accepted GRN does not belong to the bill purchase order.');
+    }
+
     private function normalizeItems(array $rawItems): array
     {
         if (count($rawItems) === 0) {

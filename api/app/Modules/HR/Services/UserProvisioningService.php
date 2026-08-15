@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Services;
 
+use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Common\Services\SettingsService;
+use App\Common\Services\TemporaryPasswordGenerator;
 use App\Modules\Auth\Models\PasswordHistory;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -15,7 +17,7 @@ use App\Modules\HR\Exceptions\EmployeeNoLongerExistsException;
 use App\Modules\HR\Models\Employee;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log;
 
 /**
  * U1 — provisions, deactivates, and resets system accounts linked to an
@@ -23,7 +25,10 @@ use Illuminate\Support\Str;
  */
 class UserProvisioningService
 {
-    public function __construct(private readonly SettingsService $settings) {}
+    public function __construct(
+        private readonly SettingsService $settings,
+        private readonly TemporaryPasswordGenerator $temporaryPasswords,
+    ) {}
     /**
      * @param  array{email?: string, role_id?: int, send_welcome?: bool}  $options
      *
@@ -66,7 +71,20 @@ class UserProvisioningService
             ]);
 
             if (($options['send_welcome'] ?? true) === true) {
-                $user->notify(new WelcomeNotification($tempPassword));
+                try {
+                    $user->notify(new WelcomeNotification($tempPassword));
+                } catch (\Throwable $e) {
+                    app(EmailDeliveryFailureNotifier::class)->notifyPermission(
+                        'hr.employees.view',
+                        'Employee welcome email',
+                        "The welcome email for {$user->name} ({$user->email}) could not be delivered. Provide the temporary credentials through an approved channel.",
+                        ['reason' => 'The email provider rejected or could not deliver the welcome message.'],
+                    );
+                    Log::warning('Employee welcome email delivery failed', [
+                        'user_id' => $user->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
             }
 
             return $user->fresh(['role']);
@@ -134,7 +152,20 @@ class UserProvisioningService
                 'password_changed_at'   => now(),
             ])->save();
 
-            $user->notify(new PasswordResetNotification($temp));
+            try {
+                $user->notify(new PasswordResetNotification($temp));
+            } catch (\Throwable $e) {
+                app(EmailDeliveryFailureNotifier::class)->notifyPermission(
+                    'hr.employees.view',
+                    'Employee password reset email',
+                    "The password reset email for {$user->name} ({$user->email}) could not be delivered. Provide the temporary password through an approved channel.",
+                    ['reason' => 'The email provider rejected or could not deliver the password reset message.'],
+                );
+                Log::warning('Employee password reset email delivery failed', [
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
 
             return $temp;
         });
@@ -241,12 +272,11 @@ class UserProvisioningService
     }
 
     /**
-     * 12-char random password with upper, lower, number, symbol.
-     * Uses Laravel's Str::password which guarantees policy compliance.
+     * Generate a policy-compliant temporary password.
      */
     private function generateTempPassword(): string
     {
-        return Str::password(12, true, true, true, false);
+        return $this->temporaryPasswords->generate();
     }
 
     private function defaultRoleIdForEmployee(): int

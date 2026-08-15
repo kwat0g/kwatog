@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Accounting\Services;
 
 use App\Common\Services\DocumentSequenceService;
+use App\Modules\Accounting\Events\OfficialReceiptIssued;
 use App\Modules\Accounting\Models\Collection;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\OfficialReceipt;
@@ -26,7 +27,7 @@ class OfficialReceiptService
      */
     public function issueForCollection(Collection $collection, User $by): OfficialReceipt
     {
-        return DB::transaction(function () use ($collection, $by) {
+        $receipt = DB::transaction(function () use ($collection, $by) {
             $collection->loadMissing('invoice');
             $invoice = $collection->invoice;
 
@@ -40,6 +41,10 @@ class OfficialReceiptService
                 'created_by'    => $by->id,
             ]);
         });
+
+        event(new OfficialReceiptIssued($receipt));
+
+        return $receipt;
     }
 
     /**
@@ -47,7 +52,7 @@ class OfficialReceiptService
      */
     public function issueForInvoice(Invoice $invoice, string $amount, User $by): OfficialReceipt
     {
-        return DB::transaction(fn () => OfficialReceipt::create([
+        $receipt = DB::transaction(fn () => OfficialReceipt::create([
             'or_number'   => $this->sequences->generate('official_receipt'),
             'invoice_id'  => $invoice->id,
             'customer_id' => $invoice->customer_id,
@@ -55,5 +60,9 @@ class OfficialReceiptService
             'date'        => now()->toDateString(),
             'created_by'  => $by->id,
         ]));
+
+        event(new OfficialReceiptIssued($receipt));
+
+        return $receipt;
     }
 }

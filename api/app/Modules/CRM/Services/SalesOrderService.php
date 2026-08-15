@@ -17,6 +17,8 @@ use App\Modules\CRM\Events\SalesOrderConfirmed;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
+use App\Modules\CRM\Models\SalesOrderTransitionRejection;
+use App\Modules\CRM\Support\SalesOrderTransitionResult;
 use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionStage;
 use Carbon\Carbon;
@@ -542,58 +544,65 @@ class SalesOrderService
     // NOT own SO state. They must be idempotent, lock-aware, and gated so an
     // upstream operation never blows up because of a stale/invalid transition.
 
-    public function markInProduction(?int $salesOrderId): void
+    public function markInProduction(?int $salesOrderId): SalesOrderTransitionResult
     {
-        $this->transitionTo($salesOrderId, SalesOrderStatus::InProduction);
+        return $this->transitionTo($salesOrderId, SalesOrderStatus::InProduction);
     }
 
-    public function markPartiallyDelivered(?int $salesOrderId): void
+    public function markPartiallyDelivered(?int $salesOrderId): SalesOrderTransitionResult
     {
-        $this->transitionTo($salesOrderId, SalesOrderStatus::PartiallyDelivered);
+        return $this->transitionTo($salesOrderId, SalesOrderStatus::PartiallyDelivered);
     }
 
-    public function markDelivered(?int $salesOrderId): void
+    public function markDelivered(?int $salesOrderId): SalesOrderTransitionResult
     {
-        $this->transitionTo($salesOrderId, SalesOrderStatus::Delivered);
+        return $this->transitionTo($salesOrderId, SalesOrderStatus::Delivered);
     }
 
-    public function markInvoiced(?int $salesOrderId): void
+    public function markInvoiced(?int $salesOrderId): SalesOrderTransitionResult
     {
-        $this->transitionTo($salesOrderId, SalesOrderStatus::Invoiced);
+        return $this->transitionTo($salesOrderId, SalesOrderStatus::Invoiced);
     }
 
-    private function transitionTo(?int $salesOrderId, SalesOrderStatus $target): void
+    public function transitionTo(?int $salesOrderId, SalesOrderStatus $target, ?int $requestedBy = null): SalesOrderTransitionResult
     {
         if ($salesOrderId === null) {
-            return;
+            return new SalesOrderTransitionResult('skipped', 422, null, $target->value, 'sales_order_missing');
         }
 
-        DB::transaction(function () use ($salesOrderId, $target) {
+        return DB::transaction(function () use ($salesOrderId, $target, $requestedBy): SalesOrderTransitionResult {
             $so = SalesOrder::lockForUpdate()->find($salesOrderId);
             if (! $so) {
-                return;
+                return new SalesOrderTransitionResult('skipped', 422, null, $target->value, 'sales_order_missing');
             }
 
             $currentValue = $so->status?->value;
 
             // Idempotent: already at the target state.
             if ($currentValue === $target->value) {
-                return;
+                return new SalesOrderTransitionResult('succeeded', 200, $currentValue, $target->value);
             }
 
             $allowed = self::ALLOWED_TRANSITIONS[$currentValue ?? ''] ?? [];
             if (! in_array($target->value, $allowed, true)) {
+                $reason = "Transition from {$currentValue} to {$target->value} is not allowed.";
+                SalesOrderTransitionRejection::create([
+                    'sales_order_id' => $so->id, 'from_status' => $currentValue,
+                    'to_status' => $target->value, 'reason_code' => 'illegal_transition',
+                    'reason' => $reason, 'requested_by' => $requestedBy,
+                ]);
                 Log::debug('SalesOrder transition skipped', [
                     'sales_order_id' => $so->id,
                     'from'           => $currentValue,
                     'to'             => $target->value,
                 ]);
-                return;
+                return new SalesOrderTransitionResult('skipped', 409, $currentValue, $target->value, $reason);
             }
 
             $so->update(['status' => $target->value]);
             $fresh = $so->fresh();
             app(\App\Common\Services\ChainBroadcaster::class)->broadcastFor($fresh, $target->value);
+            return new SalesOrderTransitionResult('succeeded', 200, $currentValue, $target->value);
         });
     }
 

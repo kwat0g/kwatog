@@ -17,14 +17,14 @@ class PurchaseOrderItem extends Model
     protected $fillable = [
         'purchase_order_id', 'item_id', 'purchase_request_item_id',
         'description', 'quantity', 'unit', 'unit_price', 'total',
-        'quantity_received',
+        'quantity_received', 'quantity_accepted',
     ];
 
     protected $casts = [
         'quantity'          => 'decimal:2',
         'unit_price'        => 'decimal:2',
         'total'             => 'decimal:2',
-        'quantity_received' => 'decimal:2',
+        'quantity_received' => 'decimal:2', 'quantity_accepted' => 'decimal:3',
     ];
 
     public function purchaseOrder(): BelongsTo
@@ -38,6 +38,14 @@ class PurchaseOrderItem extends Model
     }
 
     public function getQuantityRemainingAttribute(): string
+    {
+        // Operationally remaining means accepted/usable quantity; physical
+        // receipts pending QC must not close or satisfy a PO line.
+        $diff = (float) $this->quantity - (float) $this->quantity_accepted;
+        return number_format(max(0.0, $diff), 2, '.', '');
+    }
+
+    public function getPhysicalQuantityRemainingAttribute(): string
     {
         $diff = (float) $this->quantity - (float) $this->quantity_received;
         return number_format(max(0.0, $diff), 2, '.', '');

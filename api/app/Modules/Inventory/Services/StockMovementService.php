@@ -17,6 +17,7 @@ use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Support\StockMovementInput;
+use App\Modules\Accounting\Services\SourceReferenceRegistry;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\OutboxService;
 use Illuminate\Support\Facades\DB;
@@ -52,6 +53,7 @@ class StockMovementService
     public function move(StockMovementInput $in): StockMovement
     {
         $this->validateInput($in);
+        SourceReferenceRegistry::assertValid($in->referenceType, $in->referenceId);
 
         return DB::transaction(function () use ($in) {
             if (! $in->bypassCountFreeze) {

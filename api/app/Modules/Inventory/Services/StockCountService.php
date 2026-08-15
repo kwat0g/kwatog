@@ -193,10 +193,14 @@ class StockCountService
     public function completeSession(int $id, User $user): StockCountSession
     {
         return DB::transaction(function () use ($id, $user) {
-            $session = StockCountSession::with('items')->lockForUpdate()->findOrFail($id);
+            $session = StockCountSession::query()->lockForUpdate()->findOrFail($id);
             if ($session->status !== StockCountSessionStatus::InProgress) {
                 throw new BusinessRuleException('Session must be in progress to complete.');
             }
+            // Lock the session's items too: a count recorded concurrently with
+            // completion must not be overwritten by the variance snapshot, or a
+            // wrong adjustment could be posted from stale counted values.
+            $session->setRelation('items', $session->items()->lockForUpdate()->get());
 
             $varianceCount = 0;
             $varianceValue = 0;
@@ -221,38 +225,12 @@ class StockCountService
                 // Auto-create stock adjustment for variances
                 if (abs($variance) > 0.001 && $item->item_id && $item->counted_quantity !== null) {
                     $diff = bcsub((string) $item->counted_quantity, (string) $item->system_quantity, 3);
-                    if (bccomp($diff, '0', 3) > 0) {
-                        // Stock increase — value the overage at the location's
-                        // current WAC (locked so the read cannot race a
-                        // concurrent adjust), never at zero: a '0' cost drags
-                        // the blended average toward zero with every cycle.
-                        $unitCost = (string) (StockLevel::query()
-                            ->where('item_id', $item->item_id)
-                            ->where('location_id', $item->location_id)
-                            ->lockForUpdate()
-                            ->value('weighted_avg_cost') ?? '0.00');
-                        $this->adjustments->adjustIn(
-                            $item->item_id,
-                            $item->location_id,
-                            $diff,
-                            $unitCost,
-                            'Cycle count adjustment — session ' . $session->session_number,
-                            $user,
-                            bypassCountFreeze: true,
-                        );
-                    } elseif (bccomp($diff, '0', 3) < 0) {
-                        // Stock decrease
-                        $this->adjustments->adjustOut(
-                            $item->item_id,
-                            $item->location_id,
-                            substr($diff, 1), // remove minus sign
-                            'Cycle count adjustment — session ' . $session->session_number,
-                            $user,
-                            bypassCountFreeze: true,
-                        );
+                    if (bccomp($diff, '0', 3) !== 0) {
+                        // Reconciliation derives direction and values the
+                        // overage at the current WAC inside its lock; it also
+                        // handles the stock decrease path.
+                        $this->adjustments->reconcileStockCountItem($item, $user);
                     }
-
-                    $item->update(['status' => StockCountItemStatus::Adjusted->value]);
                 }
             }
 
@@ -270,11 +248,16 @@ class StockCountService
 
     public function cancelSession(int $id): StockCountSession
     {
-        $session = StockCountSession::findOrFail($id);
-        if (in_array($session->status, [StockCountSessionStatus::Completed, StockCountSessionStatus::Cancelled], true)) {
-            throw new BusinessRuleException('Session already completed or cancelled.');
-        }
-        $session->update(['status' => StockCountSessionStatus::Cancelled->value]);
-        return $session->fresh();
+        return DB::transaction(function () use ($id) {
+            // Lock-then-guard: without the lock, cancel could race a concurrent
+            // completion and mark the session Cancelled after its stock
+            // adjustments already posted.
+            $session = StockCountSession::query()->lockForUpdate()->findOrFail($id);
+            if (in_array($session->status, [StockCountSessionStatus::Completed, StockCountSessionStatus::Cancelled], true)) {
+                throw new BusinessRuleException('Session already completed or cancelled.');
+            }
+            $session->update(['status' => StockCountSessionStatus::Cancelled->value]);
+            return $session->fresh();
+        });
     }
 }

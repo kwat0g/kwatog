@@ -80,7 +80,7 @@ class SeparationController
     public function computeFinalPay(Request $request, Clearance $clearance): ClearanceResource
     {
         abort_unless($request->user()?->can('hr.separation.finalize'), 403);
-        return new ClearanceResource($this->service->show($this->finalPay->compute($clearance)));
+        return new ClearanceResource($this->service->show($this->finalPay->compute($clearance, $request->user())));
     }
 
     /**

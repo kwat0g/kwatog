@@ -76,15 +76,18 @@ class AssetService
     public function update(Asset $asset, array $data): Asset
     {
         return DB::transaction(function () use ($asset, $data) {
-            if ($asset->status === AssetStatus::Disposed) {
+            // Lock-then-guard: re-read so a concurrent dispose cannot slip a
+            // write onto an asset that just became immutable.
+            $locked = Asset::query()->lockForUpdate()->findOrFail($asset->getKey());
+            if ($locked->status === AssetStatus::Disposed) {
                 throw new BusinessRuleException('Disposed assets are immutable.');
             }
-            $asset->fill(array_intersect_key($data, array_flip([
+            $locked->fill(array_intersect_key($data, array_flip([
                 'name', 'description', 'department_id', 'location',
                 'useful_life_years', 'salvage_value',
             ])));
-            $asset->save();
-            return $asset->fresh();
+            $locked->save();
+            return $locked->fresh();
         });
     }
 
@@ -104,9 +107,16 @@ class AssetService
             throw new BusinessRuleException('Asset already disposed.');
         }
         return DB::transaction(function () use ($asset, $data, $by) {
+            // Lock-then-guard: re-read so a concurrent dispose cannot post a
+            // second disposal JE from a stale snapshot.
+            $locked = Asset::query()->lockForUpdate()->findOrFail($asset->getKey());
+            if ($locked->status === AssetStatus::Disposed) {
+                throw new BusinessRuleException('Asset already disposed.');
+            }
+
             $disposalAmount = (float) ($data['disposal_amount'] ?? 0);
-            $cost           = (float) $asset->acquisition_cost;
-            $accum          = (float) $asset->accumulated_depreciation;
+            $cost           = (float) $locked->acquisition_cost;
+            $accum          = (float) $locked->accumulated_depreciation;
             $bookValue      = max(0.0, $cost - $accum);
 
             $cashAcct  = Account::where('code', $this->settings->requiredString('accounting.accounts.asset_cash_code'))->firstOrFail();
@@ -131,20 +141,20 @@ class AssetService
 
             $je = $this->journals->create([
                 'date'           => $data['disposed_date'] ?? now()->toDateString(),
-                'description'    => 'Disposal of asset '.$asset->asset_code.' — '.$asset->name,
+                'description'    => 'Disposal of asset '.$locked->asset_code.' — '.$locked->name,
                 'reference_type' => Asset::class,
-                'reference_id'   => $asset->id,
+                'reference_id'   => $locked->id,
                 'lines'          => $lines,
             ], $by);
             $this->journals->post($je, $by);
 
-            $asset->forceFill([
+            $locked->forceFill([
                 'status'          => AssetStatus::Disposed->value,
                 'disposed_date'   => $data['disposed_date'] ?? now()->toDateString(),
                 'disposal_amount' => $disposalAmount,
             ])->save();
 
-            return $asset->fresh();
+            return $locked->fresh();
         });
     }
 

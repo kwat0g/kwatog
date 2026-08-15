@@ -32,7 +32,7 @@ class ApprovalDelegationService
         if ($actor->role?->slug !== 'system_admin') {
             $q->where(function ($w) use ($actor): void {
                 $w->where('delegator_user_id', $actor->id)
-                  ->orWhere('delegate_user_id', $actor->id);
+                    ->orWhere('delegate_user_id', $actor->id);
             });
         }
 
@@ -62,15 +62,25 @@ class ApprovalDelegationService
             throw new BusinessRuleException('The selected delegate does not exist.');
         }
 
-        return DB::transaction(function () use ($data, $delegatorId, $delegateId) {
+        $delegator = User::query()->with('role')->find($delegatorId);
+        if (! $delegator) {
+            throw new BusinessRuleException('The selected delegator does not exist.');
+        }
+
+        $roleSlug = $data['role_slug'] ?? null;
+        if ($roleSlug !== null && $delegator->role?->slug !== $roleSlug) {
+            throw new BusinessRuleException('A delegation may only cover the delegator\'s current role.');
+        }
+
+        return DB::transaction(function () use ($data, $delegatorId, $delegateId, $roleSlug) {
             $delegation = ApprovalDelegation::create([
                 'delegator_user_id' => $delegatorId,
-                'delegate_user_id'  => $delegateId,
-                'role_slug'         => $data['role_slug'] ?? null,
-                'starts_at'         => $data['starts_at'],
-                'ends_at'           => $data['ends_at'],
-                'reason'            => $data['reason'] ?? null,
-                'is_active'         => true,
+                'delegate_user_id' => $delegateId,
+                'role_slug' => $roleSlug,
+                'starts_at' => $data['starts_at'],
+                'ends_at' => $data['ends_at'],
+                'reason' => $data['reason'] ?? null,
+                'is_active' => true,
             ]);
 
             return $delegation->load(['delegator', 'delegate']);

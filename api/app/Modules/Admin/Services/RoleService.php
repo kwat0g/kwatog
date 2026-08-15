@@ -211,8 +211,14 @@ class RoleService
         abort_if($role->users()->exists(), 422, 'Cannot delete a role that still has assigned users.');
 
         DB::transaction(function () use ($role) {
-            $role->permissions()->detach();
-            $role->delete();
+            // Re-check under the row lock: a user may have been assigned to the
+            // role between the outer guard and this transaction.
+            $locked = Role::query()->lockForUpdate()->findOrFail($role->getKey());
+            abort_if((bool) $locked->is_system, 422, 'System roles cannot be deleted.');
+            abort_if($locked->users()->exists(), 422, 'Cannot delete a role that still has assigned users.');
+
+            $locked->permissions()->detach();
+            $locked->delete();
         });
     }
 

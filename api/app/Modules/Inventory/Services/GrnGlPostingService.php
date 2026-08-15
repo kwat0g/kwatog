@@ -214,17 +214,9 @@ class GrnGlPostingService
                 'lines'          => $lines,
             ]);
 
-            // Promote draft → posted. We pass null for the system user; the
-            // service signature accepts ?User and only stamps posted_by from
-            // the supplied user, which is fine for a system-generated post.
-            // JournalEntryService::post() requires a non-null User so we go
-            // through DB directly — mirrors PayrollGlPostingService's
-            // shortcut (it inserts as 'posted' in one shot).
-            DB::table('journal_entries')->where('id', $je->id)->update([
-                'status'    => 'posted',
-                'posted_at' => now(),
-                'updated_at' => now(),
-            ]);
+            // Promote the system-generated draft through the canonical
+            // accounting lifecycle; do not mutate journal_entries directly.
+            $this->journals->postSystem($je);
 
             if (! $grn->journal_entry_id) {
                 $grn->journal_entry_id = $je->id;

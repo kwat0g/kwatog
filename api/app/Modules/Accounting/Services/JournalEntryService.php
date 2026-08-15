@@ -96,6 +96,10 @@ class JournalEntryService
      */
     public function create(array $data, ?User $user = null): JournalEntry
     {
+        SourceReferenceRegistry::assertValid(
+            $data['reference_type'] ?? null,
+            array_key_exists('reference_id', $data) && $data['reference_id'] !== null ? (int) $data['reference_id'] : null,
+        );
         return DB::transaction(function () use ($data, $user) {
             // OGAMI-001 — block posting/back-dating into a closed period.
             $this->periods->assertPostingAllowed($data['date']);
@@ -138,6 +142,10 @@ class JournalEntryService
             throw new BusinessRuleException('Only draft entries can be edited.');
         }
 
+        $referenceType = $data['reference_type'] ?? $je->reference_type;
+        $referenceId = array_key_exists('reference_id', $data) ? $data['reference_id'] : $je->reference_id;
+        SourceReferenceRegistry::assertValid($referenceType, $referenceId === null ? null : (int) $referenceId);
+
         return DB::transaction(function () use ($je, $data) {
             [$lines, $totalDebit, $totalCredit] = $this->buildLines($data['lines'] ?? []);
             if (Money::cmp($totalDebit, $totalCredit) !== 0) {
@@ -179,19 +187,26 @@ class JournalEntryService
 
     public function post(JournalEntry $je, User $by): JournalEntry
     {
-        if ($je->status !== JournalEntryStatus::Draft) {
-            throw new BusinessRuleException('Only draft entries can be posted.');
-        }
-
         return DB::transaction(function () use ($je, $by) {
+            // P20 — re-check the authoritative row while holding its lock. The
+            // passed model may be stale: a concurrent reversal (or any external
+            // terminal flip) after the draft was loaded must not let this post
+            // resurrect a reversed/voided entry.
+            $lockedJe = JournalEntry::query()
+                ->lockForUpdate()
+                ->findOrFail($je->getKey());
+            if ($lockedJe->status !== JournalEntryStatus::Draft) {
+                throw new BusinessRuleException('Only draft entries can be posted.');
+            }
+
             // OGAMI-001 — block posting into a closed period (date may have
             // been back-dated since the draft was created).
-            $this->periods->assertPostingAllowed($je->date);
+            $this->periods->assertPostingAllowed($lockedJe->date);
 
             // Re-validate balance — the lines may have been edited.
-            $je->loadMissing('lines');
+            $lockedJe->loadMissing('lines');
             $td = Money::zero(); $tc = Money::zero();
-            foreach ($je->lines as $line) {
+            foreach ($lockedJe->lines as $line) {
                 $td = Money::add($td, (string) $line->debit);
                 $tc = Money::add($tc, (string) $line->credit);
             }
@@ -208,9 +223,9 @@ class JournalEntryService
             //      below `accounting.je_self_post_limit` may be self-posted. A limit
             //      of 0 (the default) means maker !== checker is ALWAYS required.
             // Mirrors the abort(403, ...) self-action pattern in ApprovalService.
-            $this->assertNotSelfPosting($je, $by, $td);
+            $this->assertNotSelfPosting($lockedJe, $by, $td);
 
-            $je->update([
+            $lockedJe->update([
                 'status'      => JournalEntryStatus::Posted,
                 'posted_by'   => $by->id,
                 'posted_at'   => now(),
@@ -218,7 +233,46 @@ class JournalEntryService
                 'total_credit'=> $tc,
             ]);
 
-            return $je->fresh(['lines.account']);
+            return $lockedJe->fresh(['lines.account']);
+        });
+    }
+
+    /**
+     * Post a system-generated draft without maker-checker attribution.
+     * Automated GL writers still use the canonical balance, period, lock, and
+     * status transition path; the optional actor is retained for posting audit.
+     */
+    public function postSystem(JournalEntry $je, ?int $actorId = null): JournalEntry
+    {
+        return DB::transaction(function () use ($je, $actorId): JournalEntry {
+            $lockedJe = JournalEntry::query()
+                ->lockForUpdate()
+                ->findOrFail($je->getKey());
+            if ($lockedJe->status !== JournalEntryStatus::Draft) {
+                throw new BusinessRuleException('Only draft entries can be posted.');
+            }
+
+            $this->periods->assertPostingAllowed($lockedJe->date);
+            $lockedJe->loadMissing('lines');
+            $td = Money::zero();
+            $tc = Money::zero();
+            foreach ($lockedJe->lines as $line) {
+                $td = Money::add($td, (string) $line->debit);
+                $tc = Money::add($tc, (string) $line->credit);
+            }
+            if (Money::cmp($td, $tc) !== 0) {
+                throw new UnbalancedJournalEntryException($td, $tc);
+            }
+
+            $lockedJe->update([
+                'status' => JournalEntryStatus::Posted,
+                'posted_by' => $actorId,
+                'posted_at' => now(),
+                'total_debit' => $td,
+                'total_credit' => $tc,
+            ]);
+
+            return $lockedJe->fresh(['lines.account']);
         });
     }
 

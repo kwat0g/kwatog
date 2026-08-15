@@ -30,6 +30,8 @@ class StoreInvoiceRequest extends FormRequest
             // HashIDs resolved in the service, hence 'string' not 'integer'.
             'sales_order_id'               => ['nullable', 'string'],
             'delivery_id'                  => ['nullable', 'string'],
+            'lifecycle_type'              => ['nullable', 'string', Rule::in(['standard', 'prebill'])],
+            'prebill_reason'              => ['required_if:lifecycle_type,prebill', 'string', 'max:1000'],
             // Rule::in keeps VatClassification::from() off the 500 path — an
             // unknown string there is an uncatchable \ValueError. Also the only
             // way the SPA can reach zero_rated (export/PEZA) sales.
@@ -45,6 +47,7 @@ class StoreInvoiceRequest extends FormRequest
             'is_original'                  => ['nullable', 'boolean'],
             'items'                        => ['required', 'array', 'min:1'],
             'items.*.revenue_account_id'   => ['required', 'string'],
+            'items.*.source_delivery_item_id' => ['nullable', 'string'],
             'items.*.description'          => ['required', 'string', 'max:200'],
             'items.*.quantity'             => ['required', 'numeric', 'min:0.01'],
             'items.*.unit'                 => ['nullable', 'string', 'max:20'],

@@ -7,13 +7,14 @@ namespace App\Modules\Production\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
+use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\ItemType;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Enums\WarehouseZoneType;
+use App\Modules\Inventory\Exceptions\InvalidMovementException;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
-use App\Modules\Inventory\Exceptions\InvalidMovementException;
 use App\Modules\Inventory\Services\StockMovementService;
 use App\Modules\Inventory\Support\StockMovementInput;
 use App\Modules\MRP\Models\Mold;
@@ -25,7 +26,6 @@ use App\Modules\Production\Events\WorkOrderOutputRecorded;
 use App\Modules\Production\Exceptions\ProductionReceiptHandoffException;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderOutput;
-use App\Modules\Auth\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -34,9 +34,8 @@ use Illuminate\Support\Facades\Log;
 /**
  * Sprint 6 — Task 55.
  *
- * Records production output for an in-progress WO. Idempotent at the
- * X-Idempotency-Key header — duplicate keys within 24h return the cached
- * payload instead of double-recording.
+ * Records production output for an in-progress WO. X-Idempotency-Key values
+ * are durably persisted per work order; cache is only a performance shortcut.
  *
  * On success:
  *  - Persists work_order_outputs + work_order_defects rows.
@@ -50,6 +49,7 @@ use Illuminate\Support\Facades\Log;
 class WorkOrderOutputService
 {
     private const IDEMPOTENCY_TTL_SECONDS = 86400;
+
     private const RECEIPT_MANUAL_MESSAGE = 'Finished-goods inventory receipt could not be created automatically. Fix the item/location setup, then replay the handoff or create the receipt manually.';
 
     public function __construct(
@@ -59,10 +59,10 @@ class WorkOrderOutputService
     ) {}
 
     /**
-     * @param array $data {
-     *   good_count: int, reject_count: int, shift?: string, remarks?: string,
-     *   defects?: array<int, array{defect_type_id: int, count: int}>
-     * }
+     * @param  array  $data  {
+     *                       good_count: int, reject_count: int, shift?: string, remarks?: string,
+     *                       defects?: array<int, array{defect_type_id: int, count: int}>
+     *                       }
      */
     public function record(
         WorkOrder $wo,
@@ -70,22 +70,15 @@ class WorkOrderOutputService
         int $recordedBy,
         ?string $idempotencyKey = null,
     ): WorkOrderOutput {
-        // Idempotency: replay the cached output for the same key.
-        if ($idempotencyKey) {
-            $cacheKey = "production:idem:{$idempotencyKey}";
-            if (($outputId = Cache::get($cacheKey)) !== null) {
-                $cached = WorkOrderOutput::with('defects.defectType')->find($outputId);
-                if ($cached) return $cached;
-            }
+        if ($idempotencyKey !== null && strlen($idempotencyKey) > 128) {
+            throw new BusinessRuleException('The idempotency key must be 128 characters or fewer.');
         }
 
-        if ($wo->status !== WorkOrderStatus::InProgress) {
-            throw new BusinessRuleException('Only in-progress work orders can record output.');
-        }
+        $idempotencyKey = $idempotencyKey !== '' ? $idempotencyKey : null;
 
-        $good   = (int) ($data['good_count'] ?? 0);
+        $good = (int) ($data['good_count'] ?? 0);
         $reject = (int) ($data['reject_count'] ?? 0);
-        $total  = $good + $reject;
+        $total = $good + $reject;
         if ($total <= 0) {
             throw new BusinessRuleException('At least one of Good count or Reject count must be greater than zero.');
         }
@@ -93,26 +86,100 @@ class WorkOrderOutputService
         $defects = $data['defects'] ?? [];
         $defectSum = 0;
         $uniqueDefectTypes = [];
-        
+        $canonicalDefects = [];
+
         foreach ($defects as $d) {
+            $defectTypeId = (int) ($d['defect_type_id'] ?? 0);
             $count = (int) ($d['count'] ?? 0);
+            $canonicalDefects[] = [
+                'defect_type_id' => $defectTypeId,
+                'count' => $count,
+            ];
             if ($count > 0) {
                 $defectSum += $count;
-                $uniqueDefectTypes[] = $d['defect_type_id'];
+                $uniqueDefectTypes[] = $defectTypeId;
             }
         }
-        
+
         if ($reject > 0 && $defectSum !== $reject) {
             throw new BusinessRuleException("The total sum of defects ({$defectSum}) must exactly equal the Reject count ({$reject}).");
         }
-        
+
         if (count(array_unique($uniqueDefectTypes)) !== count($uniqueDefectTypes)) {
             throw new BusinessRuleException('Duplicate defect types are not allowed.');
         }
 
-        $output = DB::transaction(function () use ($wo, $data, $recordedBy, $good, $reject, $total, $defects) {
+        usort($canonicalDefects, static function (array $left, array $right): int {
+            return $left['defect_type_id'] <=> $right['defect_type_id']
+                ?: $left['count'] <=> $right['count'];
+        });
+
+        $idempotencyFingerprint = $this->idempotencyFingerprint(
+            $good,
+            $reject,
+            $data['shift'] ?? null,
+            $data['remarks'] ?? null,
+            $canonicalDefects,
+        );
+
+        // Cache is performance-only: every hit is validated against the
+        // durable output row and its persisted fingerprint.
+        if ($idempotencyKey !== null) {
+            $cacheKey = "production:idem:{$wo->id}:{$idempotencyKey}";
+            if (($outputId = Cache::get($cacheKey)) !== null) {
+                $cached = WorkOrderOutput::query()
+                    ->with('defects.defectType')
+                    ->where('work_order_id', $wo->id)
+                    ->find($outputId);
+                if ($cached) {
+                    if ($cached->idempotency_fingerprint !== $idempotencyFingerprint) {
+                        throw new BusinessRuleException('The idempotency key was already used for a different production output payload.');
+                    }
+
+                    return $cached;
+                }
+            }
+        }
+
+        $output = DB::transaction(function () use (
+            $wo,
+            $data,
+            $recordedBy,
+            $good,
+            $reject,
+            $total,
+            $defects,
+            $idempotencyKey,
+            $idempotencyFingerprint,
+        ): WorkOrderOutput {
             // Lock + reload the WO so concurrent recordings don't lose increments.
-            $fresh = WorkOrder::lockForUpdate()->find($wo->id);
+            $fresh = WorkOrder::query()->lockForUpdate()->find($wo->id);
+            if (! $fresh) {
+                throw new BusinessRuleException('The work order no longer exists.');
+            }
+
+            // Check the durable key before the status guard: a valid retry
+            // replays even after the WO has become terminal.
+            if ($idempotencyKey !== null) {
+                $existing = WorkOrderOutput::query()
+                    ->where('work_order_id', $fresh->id)
+                    ->where('idempotency_key', $idempotencyKey)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($existing) {
+                    if ($existing->idempotency_fingerprint !== $idempotencyFingerprint) {
+                        throw new BusinessRuleException('The idempotency key was already used for a different production output payload.');
+                    }
+
+                    return $existing->load('defects.defectType');
+                }
+            }
+
+            // Re-check the authoritative WO, not the route-bound/stale model.
+            if ($fresh->status !== WorkOrderStatus::InProgress) {
+                throw new BusinessRuleException('Only in-progress work orders can record output.');
+            }
 
             if (($fresh->quantity_produced + $total) > $fresh->quantity_target) {
                 throw new BusinessRuleException("Recording this output would exceed the work order target quantity ({$fresh->quantity_target}).");
@@ -124,13 +191,22 @@ class WorkOrderOutputService
 
             $output = WorkOrderOutput::create([
                 'work_order_id' => $fresh->id,
-                'recorded_by'   => $recordedBy,
-                'recorded_at'   => Carbon::now(),
-                'good_count'    => $good,
-                'reject_count'  => $reject,
-                'shift'         => $data['shift'] ?? null,
-                'batch_code'    => $batchCode,
-                'remarks'       => $data['remarks'] ?? null,
+                'recorded_by' => $recordedBy,
+                'recorded_at' => Carbon::now(),
+                'good_count' => $good,
+                'reject_count' => $reject,
+                'shift' => $data['shift'] ?? null,
+                'batch_code' => $batchCode,
+                'remarks' => $data['remarks'] ?? null,
+                'material_lineage' => [
+                    'work_order_class' => $fresh->work_order_class ?: 'standard',
+                    'exception_reason' => $fresh->exception_reason,
+                    'authorized_by' => $fresh->exception_authorized_by,
+                    'material_plan_source' => $fresh->material_plan_source,
+                    'materials' => $fresh->materials()->get(['item_id', 'bom_quantity', 'actual_quantity_issued'])->toArray(),
+                ],
+                'idempotency_key' => $idempotencyKey,
+                'idempotency_fingerprint' => $idempotencyFingerprint,
                 'production_receipt_handoff_status' => $good > 0
                     ? ProductionReceiptHandoffStatus::NotStarted->value
                     : ProductionReceiptHandoffStatus::NotRequired->value,
@@ -138,18 +214,20 @@ class WorkOrderOutputService
             ]);
 
             foreach ($defects as $d) {
-                if ((int) ($d['count'] ?? 0) <= 0) continue;
+                if ((int) ($d['count'] ?? 0) <= 0) {
+                    continue;
+                }
                 $output->defects()->create([
                     'defect_type_id' => (int) $d['defect_type_id'],
-                    'count'          => (int) $d['count'],
+                    'count' => (int) $d['count'],
                 ]);
             }
 
             $fresh->update([
                 'quantity_produced' => (int) $fresh->quantity_produced + $total,
-                'quantity_good'     => (int) $fresh->quantity_good + $good,
+                'quantity_good' => (int) $fresh->quantity_good + $good,
                 'quantity_rejected' => (int) $fresh->quantity_rejected + $reject,
-                'scrap_rate'        => (int) $fresh->quantity_produced + $total > 0
+                'scrap_rate' => (int) $fresh->quantity_produced + $total > 0
                     ? round((((int) $fresh->quantity_rejected + $reject) /
                             ((int) $fresh->quantity_produced + $total)) * 100, 2)
                     : 0,
@@ -206,12 +284,30 @@ class WorkOrderOutputService
             return $eventOutput;
         });
 
-        // Cache idempotency key (Redis or array driver — service container picks).
-        if ($idempotencyKey) {
-            Cache::put("production:idem:{$idempotencyKey}", $output->id, self::IDEMPOTENCY_TTL_SECONDS);
+        // Cache the durable result for fast replay. The database row remains
+        // authoritative after cache expiry/flush and after WO status changes.
+        if ($idempotencyKey !== null) {
+            Cache::put("production:idem:{$output->work_order_id}:{$idempotencyKey}", $output->id, self::IDEMPOTENCY_TTL_SECONDS);
         }
 
         return $output;
+    }
+
+    /** @param array<int, array{defect_type_id:int, count:int}> $defects */
+    private function idempotencyFingerprint(
+        int $good,
+        int $reject,
+        mixed $shift,
+        mixed $remarks,
+        array $defects,
+    ): string {
+        return hash('sha256', json_encode([
+            'good_count' => $good,
+            'reject_count' => $reject,
+            'shift' => $shift === null ? null : (string) $shift,
+            'remarks' => $remarks === null ? null : (string) $remarks,
+            'defects' => $defects,
+        ], JSON_THROW_ON_ERROR));
     }
 
     /**

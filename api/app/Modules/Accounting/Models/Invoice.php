@@ -25,7 +25,7 @@ class Invoice extends Model
     }
 
     protected $fillable = [
-        'invoice_number', 'customer_id', 'sales_order_id', 'delivery_id',
+        'invoice_number', 'customer_id', 'sales_order_id', 'delivery_id', 'lifecycle_type', 'prebill_approved_by', 'prebill_approved_at', 'prebill_reason',
         'date', 'due_date', 'is_vatable', 'vat_classification',
         'subtotal', 'vat_amount', 'senior_pwd_discount', 'total_amount', 'amount_paid', 'balance',
         'buyer_tin', 'atp_number', 'serial_range', 'is_original',
@@ -47,7 +47,7 @@ class Invoice extends Model
         'balance'      => 'decimal:2',
         'status'       => InvoiceStatus::class,
         'last_dunning_tier' => 'integer',
-        'last_dunning_at'   => 'datetime',
+        'last_dunning_at'   => 'datetime', 'prebill_approved_at' => 'datetime',
     ];
 
     public function customer(): BelongsTo

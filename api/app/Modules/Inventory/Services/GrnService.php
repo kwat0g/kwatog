@@ -521,8 +521,13 @@ class GrnService
                 }
                 $row->quantity_accepted = $row->quantity_received;
                 $row->save();
+                $poItem = PurchaseOrderItem::query()->whereKey($row->purchase_order_item_id)->lockForUpdate()->firstOrFail();
+                $poItem->quantity_accepted = bcadd((string) $poItem->quantity_accepted, $delta, 3);
+                $poItem->save();
                 $this->moveAcceptedQuantity($row, $delta, $by, "GRN {$lockedGrn->grn_number}");
             }
+            $po = PurchaseOrder::query()->lockForUpdate()->findOrFail($lockedGrn->purchase_order_id);
+            $this->refreshPoStatus($po, $by);
             $lockedGrn->update([
                 'status' => GrnStatus::Accepted,
                 'accepted_by' => $by->id,
@@ -595,6 +600,9 @@ class GrnService
                 }
                 $row->quantity_accepted = $accepted;
                 $row->save();
+                $poItem = PurchaseOrderItem::query()->whereKey($row->purchase_order_item_id)->lockForUpdate()->firstOrFail();
+                $poItem->quantity_accepted = bcadd((string) $poItem->quantity_accepted, $delta, 3);
+                $poItem->save();
                 $this->moveAcceptedQuantity($row, $delta, $by, "GRN {$lockedGrn->grn_number} (acceptance delta)");
             }
             if (! $hasDelta) {
@@ -605,6 +613,8 @@ class GrnService
                 'accepted_by' => $by->id,
                 'accepted_at' => now(),
             ]);
+            $po = PurchaseOrder::query()->lockForUpdate()->findOrFail($lockedGrn->purchase_order_id);
+            $this->refreshPoStatus($po, $by);
             $fresh = $lockedGrn->fresh();
 
             $this->gl->post($fresh);
@@ -908,6 +918,9 @@ class GrnService
         foreach ($grn->items as $row) {
             $row->quantity_accepted = $row->quantity_received;
             $row->save();
+            $poItem = PurchaseOrderItem::query()->whereKey($row->purchase_order_item_id)->lockForUpdate()->firstOrFail();
+            $poItem->quantity_accepted = bcadd((string) $poItem->quantity_accepted, (string) $row->quantity_received, 3);
+            $poItem->save();
             $mvmt = $this->movements->move(new StockMovementInput(
                 type: StockMovementType::GrnReceipt,
                 itemId: $row->item_id,
@@ -1000,6 +1013,8 @@ class GrnService
                 (string) $row->quantity_received,
                 3,
             );
+            $accepted = min((float) $poItem->quantity_accepted, (float) $row->quantity_accepted);
+            $poItem->quantity_accepted = bcsub((string) $poItem->quantity_accepted, number_format($accepted, 3, '.', ''), 3);
             $poItem->save();
         }
 
@@ -1108,9 +1123,12 @@ class GrnService
 
         $po->load('items');
         $allReceived = $po->items->isNotEmpty() && $po->items->every(
-            fn ($l) => bccomp((string) $l->quantity_received, (string) $l->quantity, 3) >= 0
+            fn ($l) => bccomp((string) $l->quantity_accepted, (string) $l->quantity, 3) >= 0
         );
         $anyReceived = $po->items->contains(
+            // Physical receipt is visible to purchasing before QC acceptance.
+            // A full Received status still requires accepted quantities above,
+            // but any received quantity must move the PO out of Sent.
             fn ($l) => bccomp((string) $l->quantity_received, '0', 3) > 0
         );
         if ($allReceived) {
