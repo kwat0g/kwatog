@@ -40,6 +40,7 @@ class MrpPlanResource extends JsonResource
                 $this->workOrders->map(fn ($w) => [
                     'id' => $w->hash_id, 'wo_number' => $w->wo_number,
                     'product_id' => $w->product_id,
+                    'parent_wo_id' => $w->parent_wo_id,
                     'quantity_target' => (int) $w->quantity_target,
                     'status' => (string) $w->status?->value,
                     'status_label' => WorkOrderStatus::tryFrom((string) $w->status?->value)?->label() ?? (string) $w->status?->value,

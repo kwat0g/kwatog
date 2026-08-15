@@ -128,6 +128,7 @@ class WorkOrderService
         return $wo->load([
             'product', 'salesOrder', 'salesOrderItem',
             'machine', 'mold', 'parent:id,wo_number',
+            'children:id,wo_number,product_id,parent_wo_id,status,quantity_target',
             'creator:id,name,role_id',
             'materials.item:id,code,name,unit_of_measure',
             'outputs.recorder:id,name,role_id', 'outputs.defects.defectType',
@@ -165,17 +166,24 @@ class WorkOrderService
                     ? (int) $data['priority']
                     : $this->settings->requiredInt('mrp.work_order.normal_priority', 0, 255),
                 'status'              => WorkOrderStatus::Planned->value,
+                'work_order_class'    => $data['work_order_class'] ?? 'standard',
+                'exception_reason'    => $data['exception_reason'] ?? null,
+                'exception_authorized_by' => $data['exception_authorized_by'] ?? $data['created_by'],
+                'material_plan_source' => $this->boms->activeForProduct((int) $data['product_id']) !== null ? 'bom' : null,
                 'created_by'          => (int) $data['created_by'],
             ];
             $wo = WorkOrder::create($payload);
 
-            // BOM expansion (Task 49 owns BomService::explode). If no active
-            // BOM exists, the WO still saves — supervisor can add materials
-            // manually. Once a BOM exists, however, explosion errors (cycles,
-            // depth limits, or data faults) must roll back instead of being
-            // silently converted into an unmaterialized WO.
+            // Materialize only the immediate BOM components. Manufactured
+            // subassemblies stay on the parent WO and receive their own
+            // child WO from MRP; recursively flattening here would make the
+            // parent appear to consume raw materials it does not produce.
+            // If no active BOM exists, the WO still saves — supervisor can
+            // add materials manually. Once a BOM exists, however, direct
+            // requirement errors must roll back instead of silently creating
+            // an unmaterialized WO.
             if ($this->boms->activeForProduct((int) $data['product_id']) !== null) {
-                $rows = $this->boms->explode((int) $data['product_id'], (float) $data['quantity_target']);
+                $rows = $this->boms->directRequirements((int) $data['product_id'], (float) $data['quantity_target']);
                 foreach ($rows as $row) {
                     $wo->materials()->create([
                         'item_id'                => (int) $row['item_id'],
@@ -308,6 +316,7 @@ class WorkOrderService
             }
             $this->assertTransition($lockedWo, WorkOrderStatus::InProgress);
             $from = $lockedWo->status?->value ?? 'confirmed';
+            $this->assertMaterialPlan($lockedWo);
 
             $machine = $lockedWo->machine_id ? Machine::lockForUpdate()->find($lockedWo->machine_id) : null;
             $mold    = $lockedWo->mold_id    ? Mold::lockForUpdate()->find($lockedWo->mold_id)       : null;
@@ -611,6 +620,21 @@ class WorkOrderService
         if (! in_array($to->value, self::ALLOWED[$from] ?? [], true)) {
             throw new IllegalLifecycleTransitionException($from, $to->value);
         }
+    }
+
+    private function assertMaterialPlan(WorkOrder $wo): void
+    {
+        $class = (string) ($wo->work_order_class ?: 'standard');
+        if ($class !== 'standard') {
+            if (! in_array($class, ['service', 'non_stock', 'prototype'], true) || trim((string) $wo->exception_reason) === '') {
+                throw new BusinessRuleException('A no-BOM work order requires an explicit service, non-stock, or prototype class and an authorized reason.');
+            }
+            return;
+        }
+        if ($wo->materials()->exists()) {
+            return;
+        }
+        throw new BusinessRuleException('Standard stock-producing work orders require an effective BOM/material plan before start.');
     }
 
     /**

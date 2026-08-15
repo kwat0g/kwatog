@@ -341,6 +341,7 @@ class MrpEngineService
 
                 $progressedWos = WorkOrder::query()
                     ->where('sales_order_item_id', $line->id)
+                    ->whereNull('parent_wo_id')
                     ->whereIn('status', [
                         WorkOrderStatus::Confirmed->value,
                         WorkOrderStatus::InProgress->value,
@@ -353,6 +354,7 @@ class MrpEngineService
 
                 $priorPlanned = WorkOrder::query()
                     ->where('sales_order_item_id', $line->id)
+                    ->whereNull('parent_wo_id')
                     ->whereNotNull('mrp_plan_id')
                     ->where('mrp_plan_id', '!=', $plan->id)
                     ->where('status', WorkOrderStatus::Planned->value)
@@ -366,12 +368,14 @@ class MrpEngineService
                     continue;
                 }
                 $workOrderQuantity = max(0.0, $remainingQuantity - $openProduction);
+                $workOrderTarget = (int) ceil($workOrderQuantity);
+                $rootWorkOrder = null;
 
                 if ($priorPlanned->isNotEmpty()) {
                     $reuse = $priorPlanned->shift();
                     $reuse->forceFill([
                         'mrp_plan_id'     => $plan->id,
-                        'quantity_target' => (int) ceil($workOrderQuantity),
+                        'quantity_target' => $workOrderTarget,
                         'planned_start'   => $plannedStart,
                         'planned_end'     => $plannedEnd,
                         'priority'        => $priority,
@@ -379,22 +383,33 @@ class MrpEngineService
                     foreach ($priorPlanned as $surplus) {
                         $surplus->forceFill(['status' => WorkOrderStatus::Cancelled->value])->save();
                     }
+                    $rootWorkOrder = $reuse->fresh();
                     $draftWoCount++;
-                    continue;
+                } else {
+                    $rootWorkOrder = $this->workOrders->createDraft([
+                        'product_id'          => $line->product_id,
+                        'sales_order_id'      => $so->id,
+                        'sales_order_item_id' => $line->id,
+                        'mrp_plan_id'         => $plan->id,
+                        'quantity_target'     => $workOrderTarget,
+                        'planned_start'       => $plannedStart,
+                        'planned_end'         => $plannedEnd,
+                        'priority'            => $priority,
+                        'created_by'          => $so->created_by,
+                    ]);
+                    $draftWoCount++;
                 }
 
-                $this->workOrders->createDraft([
-                    'product_id'          => $line->product_id,
-                    'sales_order_id'      => $so->id,
-                    'sales_order_item_id' => $line->id,
-                    'mrp_plan_id'         => $plan->id,
-                    'quantity_target'     => (int) ceil($workOrderQuantity),
-                    'planned_start'       => $plannedStart,
-                    'planned_end'         => $plannedEnd,
-                    'priority'            => $priority,
-                    'created_by'          => $so->created_by,
-                ]);
-                $draftWoCount++;
+                if ($rootWorkOrder !== null && $this->boms->activeForProduct((int) $line->product_id) !== null) {
+                    $draftWoCount += $this->createSubassemblyWorkOrders(
+                        $this->boms->productionTree((int) $line->product_id, (float) $workOrderTarget),
+                        $rootWorkOrder,
+                        $so,
+                        $line,
+                        $plan,
+                        $priority,
+                    );
+                }
             }
 
             // Finalise plan totals.
@@ -561,9 +576,91 @@ class MrpEngineService
         return $plan->load([
             'salesOrder.customer:id,name',
             'generator:id,name,role_id',
-            'workOrders:id,wo_number,product_id,quantity_target,status,planned_start,mrp_plan_id',
+            'workOrders:id,wo_number,product_id,quantity_target,status,planned_start,mrp_plan_id,parent_wo_id',
             'purchaseRequests:id,pr_number,priority,status,is_auto_generated,date,mrp_plan_id',
         ]);
+    }
+
+    /**
+     * Create or reconcile the manufactured subassembly WOs beneath one
+     * parent. Planned children from the superseded plan are reused by product
+     * and parent, so an MRP rerun preserves the production tree instead of
+     * appending duplicate records.
+     *
+     * @param list<array{product_id:int,item_id:int,item_code:string,quantity:string,children:list<array>}> $nodes
+     */
+    private function createSubassemblyWorkOrders(
+        array $nodes,
+        WorkOrder $parent,
+        SalesOrder $so,
+        SalesOrderItem $line,
+        MrpPlan $plan,
+        int $priority,
+    ): int {
+        $createdCount = 0;
+
+        foreach ($nodes as $node) {
+            $quantity = (int) ceil((float) $node['quantity']);
+            if ($quantity <= 0) {
+                continue;
+            }
+
+            $parentStart = $parent->planned_start instanceof Carbon
+                ? $parent->planned_start->copy()
+                : Carbon::parse($parent->planned_start);
+            $childEnd = $parentStart->copy()->subDay();
+            $childStart = $childEnd->copy()->subDay();
+
+            $priorChildren = WorkOrder::query()
+                ->where('parent_wo_id', $parent->id)
+                ->where('product_id', (int) $node['product_id'])
+                ->whereNotNull('mrp_plan_id')
+                ->where('mrp_plan_id', '!=', $plan->id)
+                ->where('status', WorkOrderStatus::Planned->value)
+                ->orderByDesc('id')
+                ->get();
+
+            $child = $priorChildren->shift();
+            if ($child !== null) {
+                $child->forceFill([
+                    'mrp_plan_id'     => $plan->id,
+                    'quantity_target' => $quantity,
+                    'planned_start'   => $childStart,
+                    'planned_end'     => $childEnd,
+                    'priority'        => $priority,
+                ])->save();
+                $child = $child->fresh();
+
+                foreach ($priorChildren as $surplus) {
+                    $surplus->forceFill(['status' => WorkOrderStatus::Cancelled->value])->save();
+                }
+            } else {
+                $child = $this->workOrders->createDraft([
+                    'product_id'          => (int) $node['product_id'],
+                    'sales_order_id'      => $so->id,
+                    'sales_order_item_id' => $line->id,
+                    'mrp_plan_id'         => $plan->id,
+                    'parent_wo_id'        => $parent->id,
+                    'quantity_target'     => $quantity,
+                    'planned_start'       => $childStart,
+                    'planned_end'         => $childEnd,
+                    'priority'            => $priority,
+                    'created_by'          => $so->created_by,
+                ]);
+            }
+
+            $createdCount++;
+            $createdCount += $this->createSubassemblyWorkOrders(
+                $node['children'],
+                $child,
+                $so,
+                $line,
+                $plan,
+                $priority,
+            );
+        }
+
+        return $createdCount;
     }
 
     /**

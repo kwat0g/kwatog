@@ -37,6 +37,7 @@ class WorkOrder extends Model
         'quantity_rejected', 'scrap_rate',
         'planned_start', 'planned_end', 'actual_start', 'actual_end',
         'status', 'pause_reason', 'priority', 'created_by',
+        'work_order_class', 'exception_reason', 'exception_authorized_by', 'material_plan_source',
         // ADV3 — IATF 16949 traceability.
         'batch_number', 'material_lot_references',
     ];
@@ -53,6 +54,7 @@ class WorkOrder extends Model
         'quantity_rejected' => 'decimal:0',
         'scrap_rate'        => 'decimal:2',
         'priority'          => 'integer',
+        'exception_authorized_by' => 'integer',
         // ADV3 — array of {item_id, item_code, item_name, grn_number, material_lot_number, supplier_lot_reference, quantity_used}.
         'material_lot_references' => 'array',
     ];
@@ -85,6 +87,11 @@ class WorkOrder extends Model
     public function parent(): BelongsTo
     {
         return $this->belongsTo(self::class, 'parent_wo_id');
+    }
+
+    public function children(): HasMany
+    {
+        return $this->hasMany(self::class, 'parent_wo_id');
     }
 
     public function creator(): BelongsTo

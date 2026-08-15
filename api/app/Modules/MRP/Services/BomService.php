@@ -239,6 +239,47 @@ class BomService
     }
 
     /**
+     * Return the direct material requirements for a product quantity.
+     *
+     * Work orders consume their immediate BOM components. A manufactured
+     * subassembly therefore remains a material on its parent WO, while its
+     * own raw materials are attached to the child WO.
+     *
+     * @return Collection<int, array{item_id:int, item_code:string, item_name:string, gross_quantity:string}>
+     */
+    public function directRequirements(int $productId, float $finishedQuantity): Collection
+    {
+        $bom = $this->activeForProduct($productId);
+        if (! $bom) {
+            throw new RuntimeException('No active BOM exists for the requested product.');
+        }
+
+        return $bom->items->map(fn ($row) => [
+            'item_id'        => (int) $row->item_id,
+            'item_code'      => (string) $row->item?->code,
+            'item_name'      => (string) $row->item?->name,
+            'gross_quantity' => number_format($this->grossQuantityForLine($row, $finishedQuantity), 3, '.', ''),
+        ]);
+    }
+
+    /**
+     * Return the manufactured-subassembly tree required for a product.
+     * Each node is pegged to its immediate parent so MRP can create durable
+     * parent_wo_id links without flattening the production hierarchy.
+     *
+     * @return list<array{product_id:int, item_id:int, item_code:string, quantity:string, children:list<array> }>
+     */
+    public function productionTree(int $productId, float $finishedQuantity): array
+    {
+        $bom = $this->activeForProduct($productId);
+        if (! $bom) {
+            throw new RuntimeException('No active BOM exists for the requested product.');
+        }
+
+        return $this->productionTreeInto($bom, $finishedQuantity, [$productId], 0);
+    }
+
+    /**
      * Recursive worker. Walks every line of $bom, multiplying $multiplier by
      * each line's effective (waste-inclusive, unit-converted) quantity. A line
      * whose component item maps to a manufactured product with its own active
@@ -259,24 +300,7 @@ class BomService
         }
 
         foreach ($bom->items as $row) {
-            $effective = (float) $row->effective_quantity;
-            $gross = $effective * $multiplier;
-
-            // OGAMI-004 — convert the line quantity to the item base uom when a
-            // conversion row is configured. Identity otherwise (missing
-            // conversion falls back to the authored quantity rather than
-            // throwing, preserving legacy-BOM behaviour).
-            $grossStr = number_format($gross, 6, '.', '');
-            if ($row->item && ! empty($row->unit)) {
-                try {
-                    $grossStr = $row->item->convertToBase($grossStr, (string) $row->unit);
-                } catch (RuntimeException $e) {
-                    throw new BusinessRuleException(
-                        "Cannot explode item {$row->item->code}: {$e->getMessage()}"
-                    );
-                }
-            }
-            $grossFloat = (float) $grossStr;
+            $grossFloat = $this->grossQuantityForLine($row, $multiplier);
 
             // OGAMI-015 — does this component item resolve to a manufactured
             // sub-assembly with its own active BOM? Convention: the CRM Product
@@ -312,6 +336,70 @@ class BomService
             }
             $accumulator[$iid]['qty'] += $grossFloat;
         }
+    }
+
+    /**
+     * @param array<int> $productPath
+     * @return list<array{product_id:int, item_id:int, item_code:string, quantity:string, children:list<array> }>
+     */
+    private function productionTreeInto(Bom $bom, float $multiplier, array $productPath, int $depth): array
+    {
+        $maxDepth = $this->maxExplodeDepth();
+        if ($depth > $maxDepth) {
+            throw new RuntimeException(
+                'BOM explosion exceeded the maximum nesting depth of '
+                . $maxDepth . ' — check for a circular bill of materials.'
+            );
+        }
+
+        $nodes = [];
+        foreach ($bom->items as $row) {
+            $grossFloat = $this->grossQuantityForLine($row, $multiplier);
+            $subBom = $this->subAssemblyBomFor($row->item?->code);
+            if ($subBom === null) {
+                continue;
+            }
+
+            if (in_array($subBom->product_id, $productPath, true)) {
+                throw new RuntimeException(
+                    'Circular bill of materials detected while exploding product '
+                    . $subBom->product_id . ' (item ' . ($row->item?->code ?? '?') . ').'
+                );
+            }
+
+            $nodes[] = [
+                'product_id' => (int) $subBom->product_id,
+                'item_id'    => (int) $row->item_id,
+                'item_code'  => (string) $row->item?->code,
+                'quantity'   => number_format($grossFloat, 3, '.', ''),
+                'children'   => $this->productionTreeInto(
+                    $subBom,
+                    $grossFloat,
+                    array_merge($productPath, [$subBom->product_id]),
+                    $depth + 1,
+                ),
+            ];
+        }
+
+        return $nodes;
+    }
+
+    private function grossQuantityForLine($row, float $multiplier): float
+    {
+        $gross = (float) $row->effective_quantity * $multiplier;
+        $grossString = number_format($gross, 6, '.', '');
+
+        if ($row->item && ! empty($row->unit)) {
+            try {
+                $grossString = $row->item->convertToBase($grossString, (string) $row->unit);
+            } catch (RuntimeException $e) {
+                throw new BusinessRuleException(
+                    "Cannot explode item {$row->item->code}: {$e->getMessage()}"
+                );
+            }
+        }
+
+        return (float) $grossString;
     }
 
     /**

@@ -17,6 +17,10 @@ class WorkOrderResource extends JsonResource
         return [
             'id'                  => $this->hash_id,
             'wo_number'           => $this->wo_number,
+            'work_order_class'    => $this->work_order_class ?: 'standard',
+            'exception_reason'    => $this->exception_reason,
+            'exception_authorized_by' => $this->exception_authorized_by,
+            'material_plan_source' => $this->material_plan_source,
             // ADV3 — IATF 16949 traceability fields.
             'batch_number'            => $this->batch_number,
             'material_lot_references' => $this->material_lot_references ?? [],
@@ -39,6 +43,17 @@ class WorkOrderResource extends JsonResource
                 'mold_code' => $this->mold->mold_code,
                 'name' => $this->mold->name,
             ] : null),
+            'parent'              => $this->whenLoaded('parent', fn () => $this->parent ? [
+                'id' => $this->parent->hash_id,
+                'wo_number' => $this->parent->wo_number,
+            ] : null),
+            'children'            => $this->whenLoaded('children', fn () => $this->children->map(fn ($child) => [
+                'id' => $child->hash_id,
+                'wo_number' => $child->wo_number,
+                'product_id' => (int) $child->product_id,
+                'quantity_target' => (int) $child->quantity_target,
+                'status' => (string) $child->status?->value,
+            ])->values()),
             'quantity_target'     => (int) $this->quantity_target,
             'quantity_produced'   => (int) $this->quantity_produced,
             'quantity_good'       => (int) $this->quantity_good,
@@ -84,6 +99,7 @@ class WorkOrderResource extends JsonResource
                     'shift' => $o->shift,
                     'batch_code' => $o->batch_code,
                     'remarks' => $o->remarks,
+                    'material_lineage' => $o->material_lineage,
                     'production_receipt_handoff' => [
                         'status' => $o->production_receipt_handoff_status instanceof ProductionReceiptHandoffStatus
                             ? $o->production_receipt_handoff_status->value
