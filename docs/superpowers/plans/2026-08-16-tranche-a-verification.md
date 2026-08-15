@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make `api-tests.yml` and `audit-governance.yml` pass, turn the decorative `static_audit` CI gate into a real one by activating larastan, and register findings F-039–F-041 in the existing audit-governance contract.
+**Goal:** Make `api-tests.yml` and `audit-governance.yml` pass, turn the decorative `static_audit` CI gate into a real one by activating larastan, and register findings F-039–F-042 in the existing audit-governance contract.
 
 **Architecture:** Three independent fixes plus governance plumbing. Two fixes are code (`EmailBrandingService` drops a dead `env()` tier; `BadgeControllerTest` gets a second sales order). One is configuration (`api/phpstan.neon` activates larastan at level 0 with one documented suppression). Governance lands last, once every gate command actually passes, so no gate is ever committed in a vacuously-passing state.
 
@@ -40,10 +40,10 @@ CI is already red today, so deferring governance does not regress anything. Exit
 | `api/phpstan.neon` | Create — activate larastan, level 0, one documented suppression | 3 |
 | `api/app/Console/Commands/CheckRecruitmentBottlenecks.php` | Modify `:188` — import the `DB` facade (style only) | 3 |
 | `scripts/verify-audit-finding-lifecycle.mjs` | Modify — discover every dated findings document, reject cross-file duplicate IDs | 4 |
-| `scripts/verify-audit-acceptance-manifest.mjs` | Modify — expect 41 gates, validate `finding_sources` | 4 |
-| `docs/SYSTEM-AUDIT-FINDINGS-2026-08-16.md` | Create — F-039–F-041 sections plus the two non-findings | 4 |
-| `docs/SYSTEM-AUDIT-FINDING-LIFECYCLE.json` | Modify — three rows | 4 |
-| `docs/AUDIT-ACCEPTANCE-MANIFEST-2026-08-13.json` | Modify — `finding_source` → `finding_sources`, three gates | 4 |
+| `scripts/verify-audit-acceptance-manifest.mjs` | Modify — expect 42 gates, validate `finding_sources` | 4 |
+| `docs/SYSTEM-AUDIT-FINDINGS-2026-08-16.md` | Create — F-039–F-042 sections plus the two non-findings | 4 |
+| `docs/SYSTEM-AUDIT-FINDING-LIFECYCLE.json` | Modify — four rows (F-042 open) | 4 |
+| `docs/AUDIT-ACCEPTANCE-MANIFEST-2026-08-13.json` | Modify — `finding_source` → `finding_sources`, four gates | 4 |
 
 ---
 
@@ -520,14 +520,14 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 
 ---
 
-### Task 4: Register F-039–F-041 in the audit governance contract
+### Task 4: Register F-039–F-042 in the audit governance contract
 
 **Files:**
 - Modify: `scripts/verify-audit-finding-lifecycle.mjs:1-8`
 - Modify: `scripts/verify-audit-acceptance-manifest.mjs:8,21,23`
 - Create: `docs/SYSTEM-AUDIT-FINDINGS-2026-08-16.md`
-- Modify: `docs/SYSTEM-AUDIT-FINDING-LIFECYCLE.json` (append three rows)
-- Modify: `docs/AUDIT-ACCEPTANCE-MANIFEST-2026-08-13.json` (rename one key, append three gates)
+- Modify: `docs/SYSTEM-AUDIT-FINDING-LIFECYCLE.json` (append four rows — F-042 at status open)
+- Modify: `docs/AUDIT-ACCEPTANCE-MANIFEST-2026-08-13.json` (rename one key, append four gates)
 
 **Interfaces:**
 - Consumes: Tasks 1–3 all green. Every gate command registered here must already pass.
@@ -626,6 +626,8 @@ Confirm the temporary file is gone: `git status --porcelain docs/` must not list
 
 - [ ] **Step 4: Update the acceptance-manifest validator**
 
+**Note:** Steps 4-7 are one atomic edit set. The manifest validator is expected to pass only at Step 8 — between Steps 4 and 7 it will report a gate-count mismatch and a `finding_sources` mismatch, because the gates and the renamed key do not exist yet. Those intermediate failures are the plan working as designed. Do not "fix" them, and do not commit until Step 8 is green.
+
 In `scripts/verify-audit-acceptance-manifest.mjs`, change line 8:
 
 ```js
@@ -675,7 +677,7 @@ to:
 ```js
 // Kept explicit by decision: growing the registry stays a deliberate,
 // reviewable edit rather than one absorbed silently.
-if (manifest.gates?.length !== 41) errors.push(`expected 41 gates, got ${manifest.gates?.length ?? 0}`);
+if (manifest.gates?.length !== 42) errors.push(`expected 42 gates, got ${manifest.gates?.length ?? 0}`);
 ```
 
 Change line 23:
@@ -687,7 +689,7 @@ console.log('Audit acceptance manifest clean: 38 findings mapped; F-030 remains 
 to:
 
 ```js
-console.log('Audit acceptance manifest clean: 41 findings mapped; F-030 remains external-evidence-only.');
+console.log('Audit acceptance manifest clean: 42 findings mapped; F-030 remains external-evidence-only.');
 ```
 
 - [ ] **Step 5: Write the new findings register**
@@ -780,6 +782,26 @@ exists to prevent. Suppressed in `api/phpstan.neon` with that reason inline.
 - **Priority:** P1.
 - **Impact:** CI blocked.
 - **Complexity:** S.
+
+### F-042 — The PHPUnit suite declares APP_ENV=testing but runs against the development .env
+
+- **Module / feature:** Test harness / environment isolation.
+- **Related modules:** every module with a feature test — 1,767 test methods across 355 files.
+- **Category:** Test integrity / configuration correctness.
+- **Affected roles:** all contributors; no direct runtime user impact.
+- **Current Behavior:** `api/phpunit.xml:20` declares `<env name="APP_ENV" value="testing"/>` with no `force="true"` attribute. `docker-compose.yml:11` injects `APP_ENV=${APP_ENV:-local}` into the container's real environment. PHPUnit's `<env>` without `force="true"` does not override a variable that already exists in the environment, so `APP_ENV` stays `local` and Laravel loads `api/.env` rather than a testing configuration.
+- **Problem:** The suite does not run in the environment it declares. Every `<env>` value in `phpunit.xml` that is also present in `api/.env` is silently inert — including the carefully commented `COMPANY_*` and `TAX_PH_VAT_RATE` values whose docblock explains they exist to keep document-generating endpoints from failing. Tests read development configuration, so they neither prove behavior under the declared test configuration nor isolate themselves from a developer's local `.env` edits.
+- **Real-world scenario:** A developer changes a value in `api/.env` to try something locally. A test that depends on that value changes behavior with no code change, and the failure appears unrelated. Conversely, a test passes locally against a developer's `.env` and fails in CI, where the workflow supplies its own environment block.
+- **Root Cause:** A missing `force="true"` attribute, masked by the fact that most affected values in `phpunit.xml` and `api/.env` happen to be identical strings — which is also what made finding F-040's probe key indistinguishable and caused this tranche's plan defect.
+- **Recommended Improvement:** Add `force="true"` to the `APP_ENV` entry, then audit every other `<env>` entry in `phpunit.xml` for the same omission. Expect fallout: changing which `.env` loads alters configuration for the whole suite, so this needs its own tranche with a full-suite run, not a drive-by fix.
+- **Ideal Process:** The test suite's declared environment is the environment it runs in, independent of any developer's local `.env`.
+- **New Feature/Module Required:** No.
+- **Cross-Module Impact:** Potentially every feature test.
+- **Evidence:** `api/phpunit.xml:20`; `docker-compose.yml:11`; `api/.env:17` (`COMPANY_CERTIFICATION` identical to its hardcoded fallback, which is how this was discovered); observed `env('APP_ENV') === 'local'` inside the running api container.
+- **Priority:** P2.
+- **Impact:** Tests do not prove what they claim to; local configuration leaks into results.
+- **Complexity:** M — the fix is one attribute, the fallout is suite-wide.
+- **Status note:** Discovered while implementing F-040 in this tranche. Registered `open` rather than fixed: altering which `.env` the suite loads immediately before this tranche's full-suite verification would make the tranche unverifiable.
 ````
 
 - [ ] **Step 6: Append the three lifecycle rows**
@@ -793,8 +815,11 @@ Substitute the two assertion counts with the values recorded in **Task 1 Step 3*
 ```json
   { "id": "F-039", "status": "verified", "owner": "Engineering Productivity", "evidence_date": "2026-08-16", "verification_scope": "larastan-backed static analysis of app/ at level 0 with one documented suppression", "policy_decision": null, "regression_proof": "phpstan analyse app: 0 errors with larastan active (previously 1 false positive that failed CI)" },
   { "id": "F-040", "status": "verified", "owner": "Platform Engineering", "evidence_date": "2026-08-16", "verification_scope": "EmailBrandingService key resolution with an env sentinel present and the settings row empty", "policy_decision": null, "regression_proof": "Email branding resolution: 2 focused tests / <Task 2 Step 4 assertion count> assertions" },
-  { "id": "F-041", "status": "verified", "owner": "Platform Engineering", "evidence_date": "2026-08-16", "verification_scope": "MRP plan badge count against the 2026-08-15 plan-uniqueness constraints", "policy_decision": null, "regression_proof": "Badge counts: 9 focused tests / <Task 1 Step 3 assertion count> assertions, discriminator confirmed by mutating BadgeService" }
+  { "id": "F-041", "status": "verified", "owner": "Platform Engineering", "evidence_date": "2026-08-16", "verification_scope": "MRP plan badge count against the 2026-08-15 plan-uniqueness constraints", "policy_decision": null, "regression_proof": "Badge counts: 9 focused tests / <Task 1 Step 3 assertion count> assertions, discriminator confirmed by mutating BadgeService" },
+  { "id": "F-042", "status": "open", "owner": "Engineering Productivity", "evidence_date": "2026-08-16", "verification_scope": "phpunit.xml APP_ENV declaration only; suite-wide fallout of forcing the testing environment is unmeasured", "policy_decision": null, "regression_proof": null }
 ```
+
+`F-042` is registered `open` with `regression_proof: null`. The validator permits that — it requires a non-empty `regression_proof` only for `verified` and `mitigated`, and `F-030` is the existing precedent for an `open` row. Do not mark it `verified`; it is deliberately unfixed.
 
 - [ ] **Step 7: Update the acceptance manifest**
 
@@ -818,8 +843,11 @@ Then add a comma after the `F-038` gate and append these three before the closin
 ```json
     {"id":"F-039","type":"static_audit","command":"cd api && vendor/bin/phpstan analyse app --memory-limit=1G"},
     {"id":"F-040","type":"focused_test","command":"cd api && php artisan test --filter=EmailBranding"},
-    {"id":"F-041","type":"focused_test","command":"cd api && php artisan test --filter=BadgeControllerTest"}
+    {"id":"F-041","type":"focused_test","command":"cd api && php artisan test --filter=BadgeControllerTest"},
+    {"id":"F-042","type":"static_audit","command":"cd api && grep -qE 'APP_ENV.+force' phpunit.xml"}
 ```
+
+F-042's gate command currently exits 1 — correctly, because the finding is `open`. The manifest validator never executes gate commands; it only requires each to be a non-empty string. Recording the command now documents the acceptance criterion so whoever fixes F-042 knows exactly what proves it. Do not soften it to something that passes today.
 
 - [ ] **Step 8: Run both governance validators**
 
@@ -831,21 +859,26 @@ node scripts/verify-audit-acceptance-manifest.mjs; echo "manifest exit=$?"
 Expected:
 
 ```
-Audit lifecycle clean: 41 findings across 2 register(s) (open=1, mitigated=1, verified=39, decision_required=0).
+Audit lifecycle clean: 42 findings across 2 register(s) (open=2, mitigated=1, verified=39, decision_required=0).
 lifecycle exit=0
-Audit acceptance manifest clean: 41 findings mapped; F-030 remains external-evidence-only.
+Audit acceptance manifest clean: 42 findings mapped; F-030 remains external-evidence-only.
 manifest exit=0
 ```
+
+`open=2` is F-030 (pre-existing) plus F-042 (registered open by design).
 
 - [ ] **Step 9: Run every newly registered gate command exactly as written**
 
 ```bash
 docker compose exec -T api vendor/bin/phpstan analyse app --memory-limit=1G; echo "F-039 exit=$?"
-docker compose exec -T api php artisan test --filter=EmailBranding; echo "F-040 exit=$?"
-docker compose exec -T api php artisan test --filter=BadgeControllerTest; echo "F-041 exit=$?"
+docker compose exec -T api php artisan test --filter=EmailBranding;          echo "F-040 exit=$?"
+docker compose exec -T api php artisan test --filter=BadgeControllerTest;    echo "F-041 exit=$?"
+(cd api && grep -qE 'APP_ENV.+force' phpunit.xml);                           echo "F-042 exit=$?"
 ```
 
-Expected: all three exit 0. A gate that passes because it selected no tests is a failure — confirm F-040 reports 2 tests and F-041 reports 9.
+Expected: F-039, F-040, and F-041 exit 0. **F-042 exits 1** — that is correct and required, because the finding is registered `open` and unfixed. If F-042 exits 0, something added the `force` attribute and the finding should not be `open`.
+
+A gate that passes because it selected no tests is a failure — confirm F-040 reports 2 tests and F-041 reports 9.
 
 - [ ] **Step 10: Commit**
 
@@ -855,7 +888,7 @@ git add scripts/verify-audit-finding-lifecycle.mjs \
         docs/SYSTEM-AUDIT-FINDINGS-2026-08-16.md \
         docs/SYSTEM-AUDIT-FINDING-LIFECYCLE.json \
         docs/AUDIT-ACCEPTANCE-MANIFEST-2026-08-13.json
-git commit -m "docs: register F-039..F-041 in the audit governance contract
+git commit -m "docs: register F-039..F-042 in the audit governance contract
 
 The lifecycle validator read a single hardcoded findings register, so a
 second audit could not enter the contract without editing the script for
@@ -865,8 +898,11 @@ single-file read could not have had.
 
 finding_source named only the 08-13 register and nothing validated it; it is
 now finding_sources and is checked against the registers actually present.
-The expected gate count stays explicit at 41 so registry growth remains a
-reviewable edit.
+The expected gate count stays explicit at 42 so registry growth remains a
+reviewable edit. F-042 is registered open: the suite declares APP_ENV=testing
+without force="true", so it runs against the development .env. Found while
+implementing F-040 and deliberately not fixed here — changing which .env loads
+would alter configuration for all 1,767 tests.
 
 Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 ```
@@ -917,7 +953,7 @@ node scripts/verify-audit-finding-lifecycle.mjs;                            echo
 node scripts/verify-audit-acceptance-manifest.mjs;                          echo "3. manifest=$?"
 ```
 
-Expected: all three exit 0, with 41 findings reported by both validators.
+Expected: all three exit 0, with 42 findings reported by both validators.
 
 - [ ] **Step 5: Verify no unrelated files were staged across the tranche**
 
