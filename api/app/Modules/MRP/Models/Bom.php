@@ -21,7 +21,8 @@ class Bom extends Model
     protected $table = 'bill_of_materials';
 
     protected $fillable = [
-        'product_id', 'version', 'is_active', 'material_cost', 'cost_basis',
+        'product_id', 'version', 'is_active', 'material_cost', 'labor_cost',
+        'machine_cost', 'overhead_cost', 'total_cost', 'cost_basis',
         'costed_at', 'cost_warnings',
     ];
 
@@ -29,6 +30,10 @@ class Bom extends Model
         'version'   => 'integer',
         'is_active' => 'boolean',
         'material_cost' => 'decimal:2',
+        'labor_cost' => 'decimal:2',
+        'machine_cost' => 'decimal:2',
+        'overhead_cost' => 'decimal:2',
+        'total_cost' => 'decimal:2',
         'costed_at' => 'datetime',
         'cost_warnings' => 'array',
     ];

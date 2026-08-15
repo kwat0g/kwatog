@@ -9,6 +9,9 @@ export interface RoutingOperation {
  mold: { id: string; mold_code: string; name: string } | null;
  setup_time_minutes: string;
  cycle_time_minutes: string;
+ labor_rate_per_hour: string;
+ machine_rate_per_hour: string;
+ overhead_rate_per_hour: string;
  description: string | null;
  qc_required: boolean;
 }

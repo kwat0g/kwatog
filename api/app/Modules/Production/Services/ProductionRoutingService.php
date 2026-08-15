@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Production\Services;
 
+use App\Modules\MRP\Models\Bom;
+use App\Modules\MRP\Services\BomCostingService;
 use App\Modules\Production\Models\ProductRouting;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -72,8 +74,11 @@ class ProductionRoutingService
                     'work_center'         => $opData['work_center'] ?? null,
                     'machine_id'          => $opData['machine_id'] ?? null,
                     'mold_id'             => $opData['mold_id'] ?? null,
-                    'setup_time_minutes'  => $opData['setup_time_minutes'] ?? null,
+                    'setup_time_minutes'  => $opData['setup_time_minutes'] ?? 0,
                     'cycle_time_minutes'  => $opData['cycle_time_minutes'],
+                    'labor_rate_per_hour' => $opData['labor_rate_per_hour'] ?? 0,
+                    'machine_rate_per_hour' => $opData['machine_rate_per_hour'] ?? 0,
+                    'overhead_rate_per_hour' => $opData['overhead_rate_per_hour'] ?? 0,
                     'description'         => $opData['description'] ?? null,
                     'qc_required'         => $opData['qc_required'] ?? false,
                 ]);
@@ -81,6 +86,7 @@ class ProductionRoutingService
             }
 
             $routing->update(['total_cycle_time' => $totalCycleTime]);
+            $this->recalculateActiveBom((int) $routing->product_id);
 
             return $this->show($routing->fresh());
         });
@@ -117,8 +123,11 @@ class ProductionRoutingService
                     'work_center'         => $opData['work_center'] ?? null,
                     'machine_id'          => $opData['machine_id'] ?? null,
                     'mold_id'             => $opData['mold_id'] ?? null,
-                    'setup_time_minutes'  => $opData['setup_time_minutes'] ?? null,
+                    'setup_time_minutes'  => $opData['setup_time_minutes'] ?? 0,
                     'cycle_time_minutes'  => $opData['cycle_time_minutes'],
+                    'labor_rate_per_hour' => $opData['labor_rate_per_hour'] ?? 0,
+                    'machine_rate_per_hour' => $opData['machine_rate_per_hour'] ?? 0,
+                    'overhead_rate_per_hour' => $opData['overhead_rate_per_hour'] ?? 0,
                     'description'         => $opData['description'] ?? null,
                     'qc_required'         => $opData['qc_required'] ?? false,
                 ]);
@@ -126,6 +135,7 @@ class ProductionRoutingService
             }
 
             $routing->update(['total_cycle_time' => $totalCycleTime]);
+            $this->recalculateActiveBom((int) $routing->product_id);
 
             return $this->show($routing->fresh());
         });
@@ -162,6 +172,9 @@ class ProductionRoutingService
                     'mold_id'             => $op->mold_id,
                     'setup_time_minutes'  => $op->setup_time_minutes,
                     'cycle_time_minutes'  => $op->cycle_time_minutes,
+                    'labor_rate_per_hour' => $op->labor_rate_per_hour,
+                    'machine_rate_per_hour' => $op->machine_rate_per_hour,
+                    'overhead_rate_per_hour' => $op->overhead_rate_per_hour,
                     'description'         => $op->description,
                     'qc_required'         => $op->qc_required,
                 ]);
@@ -169,8 +182,21 @@ class ProductionRoutingService
 
             // Deactivate the source routing.
             $routing->update(['is_active' => false]);
+            $this->recalculateActiveBom((int) $newRouting->product_id);
 
             return $this->show($newRouting->fresh());
         });
+    }
+
+    private function recalculateActiveBom(int $productId): void
+    {
+        $bom = Bom::query()
+            ->where('product_id', $productId)
+            ->active()
+            ->first();
+
+        if ($bom !== null) {
+            app(BomCostingService::class)->recalculate($bom);
+        }
     }
 }

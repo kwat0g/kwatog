@@ -38,6 +38,7 @@ export interface BomItem {
  cost_quantity: string | null;
  unit_cost: string | null;
  extended_cost: string | null;
+ cost_source: 'standard_cost' | 'bom_rollup' | null;
  sort_order: number;
 }
 
@@ -54,6 +55,10 @@ export interface Bom {
  is_active: boolean;
  item_count: number;
  material_cost: string | null;
+ labor_cost: string | null;
+ machine_cost: string | null;
+ overhead_cost: string | null;
+ total_cost: string | null;
  cost_basis: string | null;
  costed_at: string | null;
  cost_warnings: BomCostWarning[];

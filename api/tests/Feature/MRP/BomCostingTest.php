@@ -12,6 +12,9 @@ use App\Modules\Inventory\Models\Uom;
 use App\Modules\MRP\Models\Bom;
 use App\Modules\MRP\Models\BomItem;
 use App\Modules\MRP\Services\BomService;
+use App\Modules\Production\Models\ProductRouting;
+use App\Modules\Production\Models\RoutingOperation;
+use App\Modules\Production\Services\ProductionRoutingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -132,5 +135,112 @@ class BomCostingTest extends TestCase
 
         $this->assertSame('22.50', (string) $recosted->material_cost);
         $this->assertSame('11.2500', (string) $recosted->items->first()->unit_cost);
+    }
+
+    public function test_bom_costing_rolls_up_active_subassembly_costs_and_tracks_total(): void
+    {
+        $finishedGood = Product::factory()->create();
+        $subassembly = Product::factory()->create([
+            'part_number' => 'SA-'.strtoupper(substr(uniqid(), -6)),
+        ]);
+        $subassemblyItem = Item::factory()->create([
+            'code' => $subassembly->part_number,
+            'standard_cost' => '99.0000',
+            'unit_of_measure' => 'pcs',
+        ]);
+        $rawMaterial = Item::factory()->create([
+            'standard_cost' => '3.0000',
+            'unit_of_measure' => 'pcs',
+        ]);
+
+        $this->service->create($subassembly->id, [[
+            'item_id' => $rawMaterial->id,
+            'quantity_per_unit' => '2.0000',
+            'unit' => 'pcs',
+            'waste_factor' => '0.00',
+        ]]);
+
+        $bom = $this->service->create($finishedGood->id, [[
+            'item_id' => $subassemblyItem->id,
+            'quantity_per_unit' => '2.0000',
+            'unit' => 'pcs',
+            'waste_factor' => '0.00',
+        ]]);
+
+        $line = $bom->items->first();
+
+        $this->assertSame('6.0000', (string) $line->unit_cost);
+        $this->assertSame('bom_rollup', $line->cost_source);
+        $this->assertSame('12.00', (string) $line->extended_cost);
+        $this->assertSame('12.00', (string) $bom->material_cost);
+        $this->assertSame('12.00', (string) $bom->total_cost);
+    }
+
+    public function test_bom_costing_includes_active_routing_labor_machine_and_overhead_costs(): void
+    {
+        $product = Product::factory()->create();
+        $material = Item::factory()->create([
+            'standard_cost' => '10.0000',
+            'unit_of_measure' => 'pcs',
+        ]);
+        $routing = ProductRouting::create([
+            'product_id' => $product->id,
+            'version' => 1,
+            'is_active' => true,
+            'total_cycle_time' => '30.00',
+        ]);
+        RoutingOperation::create([
+            'routing_id' => $routing->id,
+            'sequence' => 10,
+            'operation_name' => 'Assembly',
+            'cycle_time_minutes' => '30.00',
+            'labor_rate_per_hour' => '10.0000',
+            'machine_rate_per_hour' => '20.0000',
+            'overhead_rate_per_hour' => '5.0000',
+        ]);
+
+        $bom = $this->service->create($product->id, [[
+            'item_id' => $material->id,
+            'quantity_per_unit' => '1.0000',
+            'unit' => 'pcs',
+            'waste_factor' => '0.00',
+        ]]);
+
+        $this->assertSame('10.00', (string) $bom->material_cost);
+        $this->assertSame('5.00', (string) $bom->labor_cost);
+        $this->assertSame('10.00', (string) $bom->machine_cost);
+        $this->assertSame('2.50', (string) $bom->overhead_cost);
+        $this->assertSame('27.50', (string) $bom->total_cost);
+        $this->assertSame('standard_cost+routing', $bom->cost_basis);
+    }
+
+    public function test_routing_changes_recalculate_the_active_bom_snapshot(): void
+    {
+        $product = Product::factory()->create();
+        $material = Item::factory()->create([
+            'standard_cost' => '10.0000',
+            'unit_of_measure' => 'pcs',
+        ]);
+        $bom = $this->service->create($product->id, [[
+            'item_id' => $material->id,
+            'quantity_per_unit' => '1.0000',
+            'unit' => 'pcs',
+            'waste_factor' => '0.00',
+        ]]);
+
+        app(ProductionRoutingService::class)->create([
+            'product_id' => $product->id,
+            'notes' => null,
+            'operations' => [[
+                'sequence' => 10,
+                'operation_name' => 'Assembly',
+                'cycle_time_minutes' => '30.00',
+                'labor_rate_per_hour' => '10.0000',
+                'machine_rate_per_hour' => '20.0000',
+                'overhead_rate_per_hour' => '5.0000',
+            ]],
+        ]);
+
+        $this->assertSame('27.50', (string) $bom->fresh()->total_cost);
     }
 }

@@ -40,6 +40,9 @@ class StoreRoutingRequest extends FormRequest
             'operations.*.mold_id'           => ['nullable', 'integer', 'exists:molds,id'],
             'operations.*.setup_time_minutes' => ['nullable', 'numeric', 'min:0'],
             'operations.*.cycle_time_minutes' => ['required', 'numeric', 'min:0.01'],
+            'operations.*.labor_rate_per_hour' => ['nullable', 'numeric', 'min:0'],
+            'operations.*.machine_rate_per_hour' => ['nullable', 'numeric', 'min:0'],
+            'operations.*.overhead_rate_per_hour' => ['nullable', 'numeric', 'min:0'],
             'operations.*.description'       => ['nullable', 'string'],
             'operations.*.qc_required'       => ['nullable', 'boolean'],
         ];

@@ -35,7 +35,7 @@ export default function BomsListPage() {
  : '—' },
  { key: 'version', header: 'Version', align: 'right', cell: (r) => <NumCell>v{r.version}</NumCell> },
  { key: 'lines', header: 'Lines', align: 'right', cell: (r) => <NumCell>{r.item_count}</NumCell> },
- { key: 'material_cost', header: 'Material cost', align: 'right', cell: (r) => <NumCell>{formatPeso(r.material_cost)}</NumCell> },
+ { key: 'total_cost', header: 'Total cost', align: 'right', cell: (r) => <NumCell>{formatPeso(r.total_cost ?? r.material_cost)}</NumCell> },
  {
  key: 'active', header: 'Status',
  cell: (r) => r.is_active ? <Chip variant="success">Active</Chip> : <Chip variant="neutral">Archived</Chip> },

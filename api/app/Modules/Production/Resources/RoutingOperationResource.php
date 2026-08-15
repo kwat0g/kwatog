@@ -28,6 +28,9 @@ class RoutingOperationResource extends JsonResource
             ] : null),
             'setup_time_minutes'  => $this->setup_time_minutes,
             'cycle_time_minutes'  => $this->cycle_time_minutes,
+            'labor_rate_per_hour' => $this->labor_rate_per_hour,
+            'machine_rate_per_hour' => $this->machine_rate_per_hour,
+            'overhead_rate_per_hour' => $this->overhead_rate_per_hour,
             'description'         => $this->description,
             'qc_required'         => (bool) $this->qc_required,
         ];

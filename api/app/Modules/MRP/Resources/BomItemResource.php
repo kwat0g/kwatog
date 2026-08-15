@@ -27,6 +27,7 @@ class BomItemResource extends JsonResource
             'cost_quantity'      => $this->cost_quantity !== null ? (string) $this->cost_quantity : null,
             'unit_cost'          => $this->unit_cost !== null ? (string) $this->unit_cost : null,
             'extended_cost'      => $this->extended_cost !== null ? (string) $this->extended_cost : null,
+            'cost_source'        => $this->cost_source,
             'sort_order'         => (int) $this->sort_order,
         ];
     }

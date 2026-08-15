@@ -19,6 +19,7 @@ class BomItem extends Model
     protected $fillable = [
         'bom_id', 'item_id', 'quantity_per_unit', 'unit', 'waste_factor', 'sort_order',
         'cost_quantity', 'unit_cost', 'extended_cost',
+        'cost_source',
     ];
 
     protected $casts = [
@@ -27,6 +28,7 @@ class BomItem extends Model
         'cost_quantity'     => 'decimal:6',
         'unit_cost'         => 'decimal:4',
         'extended_cost'     => 'decimal:2',
+        'cost_source'       => 'string',
         'sort_order'        => 'integer',
     ];
 

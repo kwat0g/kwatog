@@ -118,11 +118,29 @@ actions={
 
  <div className="px-5 py-4 space-y-4">
  <Panel title="Costing" meta={data.costed_at ? `Updated ${data.costed_at.slice(0, 16).replace('T', ' ')}` : 'Not calculated'}>
- <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+ <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
  <div>
  <div className="text-xs uppercase tracking-wider text-muted">Material cost / unit</div>
  <div className="mt-1 text-xl font-mono font-medium">{formatPeso(data.material_cost)}</div>
  </div>
+ <div>
+ <div className="text-xs uppercase tracking-wider text-muted">Labor / unit</div>
+ <div className="mt-1 text-xl font-mono font-medium">{formatPeso(data.labor_cost)}</div>
+ </div>
+ <div>
+ <div className="text-xs uppercase tracking-wider text-muted">Machine / unit</div>
+ <div className="mt-1 text-xl font-mono font-medium">{formatPeso(data.machine_cost)}</div>
+ </div>
+ <div>
+ <div className="text-xs uppercase tracking-wider text-muted">Overhead / unit</div>
+ <div className="mt-1 text-xl font-mono font-medium">{formatPeso(data.overhead_cost)}</div>
+ </div>
+ <div>
+ <div className="text-xs uppercase tracking-wider text-muted">Total cost / unit</div>
+ <div className="mt-1 text-xl font-mono font-medium text-success-fg">{formatPeso(data.total_cost)}</div>
+ </div>
+ </div>
+ <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
  <div>
  <div className="text-xs uppercase tracking-wider text-muted">Cost basis</div>
  <div className="mt-1 text-sm">{data.cost_basis ?? '—'}</div>
@@ -149,6 +167,7 @@ actions={
  <Th align="right">Cost qty</Th>
  <Th align="right">Unit cost</Th>
  <Th align="right">Extended</Th>
+ <Th>Source</Th>
  </tr>
  </thead>
  <tbody>
@@ -166,6 +185,7 @@ actions={
  <Td align="right" mono>{m.cost_quantity === null ? '—' : Number(m.cost_quantity).toFixed(6)}</Td>
  <Td align="right" mono>{m.unit_cost === null ? '—' : formatPeso(m.unit_cost)}</Td>
  <Td align="right" mono className="font-medium">{m.extended_cost === null ? '—' : formatPeso(m.extended_cost)}</Td>
+ <Td>{m.cost_source === 'bom_rollup' ? <Chip variant="info">Subassembly roll-up</Chip> : m.cost_source === 'standard_cost' ? <Chip variant="neutral">Standard cost</Chip> : '—'}</Td>
  </tr>
  ))}
  </tbody>

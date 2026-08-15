@@ -40,6 +40,9 @@ const operationSchema = z.object({
  mold_id: z.string().optional().or(z.literal('')),
  setup_time_minutes: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Use a non-negative decimal').optional().or(z.literal('')),
  cycle_time_minutes: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Cycle time is required').refine((v) => Number(v) > 0, 'Must be > 0'),
+ labor_rate_per_hour: z.string().regex(/^\d+(\.\d{1,4})?$/, 'Use a non-negative rate').optional().or(z.literal('')),
+ machine_rate_per_hour: z.string().regex(/^\d+(\.\d{1,4})?$/, 'Use a non-negative rate').optional().or(z.literal('')),
+ overhead_rate_per_hour: z.string().regex(/^\d+(\.\d{1,4})?$/, 'Use a non-negative rate').optional().or(z.literal('')),
  qc_required: z.boolean(),
  description: z.string().max(500).optional().or(z.literal('')),
 });
@@ -90,7 +93,7 @@ export default function RoutingEditorPage() {
  product_id: '',
  notes: '',
  operations: [
- { sequence: '', operation_name: '', work_center: '', machine_id: '', mold_id: '', setup_time_minutes: '', cycle_time_minutes: '', qc_required: false, description: '' },
+ { sequence: '', operation_name: '', work_center: '', machine_id: '', mold_id: '', setup_time_minutes: '', cycle_time_minutes: '', labor_rate_per_hour: '', machine_rate_per_hour: '', overhead_rate_per_hour: '', qc_required: false, description: '' },
  ],
  },
  });
@@ -113,10 +116,13 @@ export default function RoutingEditorPage() {
  mold_id: op.mold?.id ?? '',
  setup_time_minutes: op.setup_time_minutes ?? '',
  cycle_time_minutes: op.cycle_time_minutes ?? '',
+ labor_rate_per_hour: op.labor_rate_per_hour ?? '',
+ machine_rate_per_hour: op.machine_rate_per_hour ?? '',
+ overhead_rate_per_hour: op.overhead_rate_per_hour ?? '',
  qc_required: op.qc_required,
  description: op.description ?? '',
  }))
- : [{ sequence: '', operation_name: '', work_center: '', machine_id: '', mold_id: '', setup_time_minutes: '', cycle_time_minutes: '', qc_required: false, description: '' }],
+ : [{ sequence: '', operation_name: '', work_center: '', machine_id: '', mold_id: '', setup_time_minutes: '', cycle_time_minutes: '', labor_rate_per_hour: '', machine_rate_per_hour: '', overhead_rate_per_hour: '', qc_required: false, description: '' }],
  });
  }, [existing.data, reset]);
 
@@ -134,6 +140,9 @@ export default function RoutingEditorPage() {
  mold_id: op.mold_id || null,
  setup_time_minutes: op.setup_time_minutes || null,
  cycle_time_minutes: op.cycle_time_minutes,
+ labor_rate_per_hour: op.labor_rate_per_hour || null,
+ machine_rate_per_hour: op.machine_rate_per_hour || null,
+ overhead_rate_per_hour: op.overhead_rate_per_hour || null,
  qc_required: op.qc_required,
  description: op.description || null,
  })),
@@ -261,6 +270,9 @@ export default function RoutingEditorPage() {
  <Th>Mold</Th>
  <Th align="right">Setup (min)</Th>
  <Th align="right">Cycle (min)</Th>
+ <Th align="right">Labor / hr</Th>
+ <Th align="right">Machine / hr</Th>
+ <Th align="right">Overhead / hr</Th>
  <Th align="center">QC</Th>
  <Th className="w-8" />
  </tr>
@@ -331,6 +343,30 @@ export default function RoutingEditorPage() {
  className="font-mono text-right"
  />
  </Td>
+ <Td>
+ <Input
+ {...register(`operations.${i}.labor_rate_per_hour` as const)}
+ error={errors.operations?.[i]?.labor_rate_per_hour?.message}
+ placeholder="0"
+ className="font-mono text-right"
+ />
+ </Td>
+ <Td>
+ <Input
+ {...register(`operations.${i}.machine_rate_per_hour` as const)}
+ error={errors.operations?.[i]?.machine_rate_per_hour?.message}
+ placeholder="0"
+ className="font-mono text-right"
+ />
+ </Td>
+ <Td>
+ <Input
+ {...register(`operations.${i}.overhead_rate_per_hour` as const)}
+ error={errors.operations?.[i]?.overhead_rate_per_hour?.message}
+ placeholder="0"
+ className="font-mono text-right"
+ />
+ </Td>
  <Td align="center">
  <div className="flex items-center justify-center h-8">
  <Checkbox {...register(`operations.${i}.qc_required` as const)} />
@@ -376,6 +412,9 @@ export default function RoutingEditorPage() {
  mold_id: '',
  setup_time_minutes: '',
  cycle_time_minutes: '',
+ labor_rate_per_hour: '',
+ machine_rate_per_hour: '',
+ overhead_rate_per_hour: '',
  qc_required: false,
  description: '',
  });

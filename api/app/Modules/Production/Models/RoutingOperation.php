@@ -24,6 +24,9 @@ class RoutingOperation extends Model
         'mold_id',
         'setup_time_minutes',
         'cycle_time_minutes',
+        'labor_rate_per_hour',
+        'machine_rate_per_hour',
+        'overhead_rate_per_hour',
         'description',
         'qc_required',
     ];
@@ -31,6 +34,9 @@ class RoutingOperation extends Model
     protected $casts = [
         'setup_time_minutes' => 'decimal:2',
         'cycle_time_minutes' => 'decimal:2',
+        'labor_rate_per_hour' => 'decimal:4',
+        'machine_rate_per_hour' => 'decimal:4',
+        'overhead_rate_per_hour' => 'decimal:4',
         'qc_required'        => 'boolean',
         'sequence'            => 'integer',
     ];
