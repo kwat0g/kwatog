@@ -3,9 +3,9 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import {
- AlertTriangle, AlertCircle, Info, X, Boxes, Factory, Wrench, Receipt, FileText,
- ShieldCheck, Clock,
-} from 'lucide-react';
+ LuTriangleAlert, LuCircleAlert, LuInfo, LuX, LuBoxes, LuFactory, LuWrench, LuReceipt, LuFileText,
+ LuShieldCheck, LuClock,
+} from '@/lib/icons';
 import { alertsApi } from '@/api/alerts';
 import type { Alert, AlertListParams, AlertSeverity, AlertType } from '@/types/alerts';
 import { Button } from '@/components/ui/Button';
@@ -18,26 +18,30 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDateTime } from '@/lib/formatDate';
 
-const TYPE_ICON: Record<AlertType, typeof AlertCircle> = {
- stock_critical: Boxes,
- stock_low: Boxes,
- no_supplier: Boxes,
- machine_breakdown: Factory,
- mold_shot_limit: Wrench,
- mold_shot_critical: Wrench,
- wo_overdue: Clock,
- oee_below_threshold: Factory,
- ar_overdue_30: Receipt,
- ar_overdue_60: Receipt,
- ap_due_soon: FileText,
- qc_fail_rate_high: ShieldCheck,
+const TYPE_ICON: Record<AlertType, typeof LuCircleAlert> = {
+ stock_critical: LuBoxes,
+ stock_low: LuBoxes,
+ no_supplier: LuBoxes,
+ machine_breakdown: LuFactory,
+ mold_shot_limit: LuWrench,
+ mold_shot_critical: LuWrench,
+ wo_overdue: LuClock,
+ oee_below_threshold: LuFactory,
+ ar_overdue_30: LuReceipt,
+ ar_overdue_60: LuReceipt,
+ ap_due_soon: LuFileText,
+ qc_fail_rate_high: LuShieldCheck,
+ mrp_shortage: LuBoxes,
+ mrp_schedule_conflict: LuFactory,
+ mrp_run_failed: LuTriangleAlert,
+ mrp_data_error: LuTriangleAlert,
 };
 
 const severityVariant = (s: AlertSeverity): 'danger' | 'warning' | 'info' =>
  s === 'critical' ? 'danger' : s === 'warning' ? 'warning' : 'info';
 
 const severityIcon = (s: AlertSeverity) =>
- s === 'critical' ? AlertTriangle : s === 'warning' ? AlertCircle : Info;
+ s === 'critical' ? LuTriangleAlert : s === 'warning' ? LuCircleAlert : LuInfo;
 
 export default function AlertsListPage() {
  const queryClient = useQueryClient();
@@ -153,7 +157,7 @@ export default function AlertsListPage() {
  </h2>
  <div className="rounded-md border border-subtle divide-y divide-subtle bg-canvas">
  {items.map((a) => {
- const Icon = TYPE_ICON[a.type] ?? AlertCircle;
+ const Icon = TYPE_ICON[a.type] ?? LuCircleAlert;
  return (
  <div
  key={a.id}
@@ -196,7 +200,7 @@ export default function AlertsListPage() {
  <Button
  variant="secondary"
  size="sm"
- icon={<X size={12} />}
+ icon={<LuX size={12} />}
  onClick={() => dismiss.mutate(a.id)}
  disabled={dismiss.isPending}
  aria-label={`Dismiss alert ${a.title}`}

@@ -8,6 +8,7 @@ enum MrpRunTrigger: string
 {
     case Scheduled = 'scheduled';
     case Manual    = 'manual';
+    case Automatic = 'automatic';
 
     public static function values(): array
     {

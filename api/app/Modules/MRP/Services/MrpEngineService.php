@@ -455,6 +455,21 @@ class MrpEngineService
      */
     public function runForAllActiveSalesOrders(MrpRunTrigger $trigger, ?int $userId = null): MrpRun
     {
+        return $this->runForActiveSalesOrders($trigger, $userId, null);
+    }
+
+    /**
+     * Run MRP for all active SOs or an affected subset. Passing an empty list
+     * deliberately evaluates no orders; null is the plant-wide fallback.
+     *
+     * @param list<int>|null $salesOrderIds
+     */
+    public function runForActiveSalesOrders(
+        MrpRunTrigger $trigger,
+        ?int $userId = null,
+        ?array $salesOrderIds = null,
+    ): MrpRun
+    {
         $start = microtime(true);
 
         $run = MrpRun::create([
@@ -467,9 +482,13 @@ class MrpEngineService
         ]);
 
         try {
-            $sos = SalesOrder::whereIn('status', [
+            $salesOrderQuery = SalesOrder::whereIn('status', [
                 'confirmed', 'in_production', 'partially_delivered',
-            ])->get();
+            ]);
+            if ($salesOrderIds !== null) {
+                $salesOrderQuery->whereIn('id', array_values(array_unique(array_map('intval', $salesOrderIds))));
+            }
+            $sos = $salesOrderQuery->get();
 
             $shortagesTotal = 0;
             $prsCreated     = 0;

@@ -79,6 +79,10 @@ use App\Modules\Maintenance\Events\PreventiveMaintenanceGenerationRequested;
 use App\Modules\Maintenance\Listeners\GeneratePreventiveMaintenanceOnRequested;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\MRP\Events\MachineStatusChanged;
+use App\Modules\MRP\Events\MrpReplanRequested;
+use App\Modules\MRP\Listeners\QueueMrpOnReplanRequested;
+use App\Modules\MRP\Listeners\QueueMrpOnSalesOrderConfirmed;
+use App\Modules\MRP\Listeners\QueueMrpOnStockMovementCompleted;
 use App\Modules\MRP\Models\MrpPlan;
 use App\Modules\Payroll\Events\PayrollComputationRequested;
 use App\Modules\Payroll\Events\PayrollGlPostingRequested;
@@ -243,6 +247,13 @@ class AppServiceProvider extends ServiceProvider
 
         // Task 8: notify purchasing officer and warehouse staff when an auto-PR is created for a low-stock item.
         Event::listen(LowStockPrCreated::class, [NotifyOnLowStockPrCreated::class, 'handle']);
+
+        // Automatic MRP is initiated only after the durable business event is
+        // published. The queued job coalesces repeated requests and performs
+        // both demand planning and finite-capacity scheduling.
+        Event::listen(SalesOrderConfirmed::class, [QueueMrpOnSalesOrderConfirmed::class, 'handle']);
+        Event::listen(StockMovementCompleted::class, [QueueMrpOnStockMovementCompleted::class, 'handle']);
+        Event::listen(MrpReplanRequested::class, [QueueMrpOnReplanRequested::class, 'handle']);
 
         // Sprint 6 Task 56: machine breakdown / restoration handling.
         Event::listen(MachineStatusChanged::class, [HandleMachineBreakdown::class, 'handle']);

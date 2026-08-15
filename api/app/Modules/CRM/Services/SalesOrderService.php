@@ -58,17 +58,6 @@ class SalesOrderService
     ) {}
 
     /**
-     * Resolve the MRP engine via the container so this module's tests can run
-     * without the MRP module being booted (and so unit tests can mock it).
-     * The actual class lives in App\Modules\MRP\Services\MrpEngineService.
-     */
-    private function mrpEngine(): ?\App\Modules\MRP\Services\MrpEngineService
-    {
-        $cls = '\\App\\Modules\\MRP\\Services\\MrpEngineService';
-        return class_exists($cls) ? app($cls) : null;
-    }
-
-    /**
      * Enforce customer credit limit before confirming a sales order.
      *
      * Total exposure = AR balance on open invoices (finalized/partial)
@@ -335,15 +324,6 @@ class SalesOrderService
 
             $lockedSo->update(['status' => SalesOrderStatus::Confirmed->value]);
 
-            // Sprint 6 Task 52: trigger MRP run synchronously inside the
-            // confirmation transaction. Wrapped in try/catch so a broken BOM or
-            // missing supplier mapping fails the whole confirm with a 422 — the
-            // CRM officer has to fix the data before the SO can advance.
-            $engine = $this->mrpEngine();
-            if ($engine) {
-                $engine->runForSalesOrder($lockedSo);
-            }
-
             $fresh = $lockedSo->fresh();
 
             // Durable cross-module publication. The row is written inside the
@@ -392,14 +372,22 @@ class SalesOrderService
     /**
      * Confirm SO and return a chain summary of everything auto-created.
      *
-     * Wraps confirm() which runs MRP (creating WOs + PRs), then attempts
-     * capacity scheduling via CapacityPlanningService. Non-fatal if scheduling
-     * fails — the WOs still exist as 'planned'.
+     * Wraps confirm() which queues the durable MRP + capacity-planning job.
+     * In the sync test driver the queue completes before this method returns;
+     * in production the response explicitly reports planning as queued.
      */
     public function confirmWithChainResult(SalesOrder $so): array
     {
-        // The confirm() call already runs MRP inside its transaction.
+        // The confirmation outbox event queues MRP after commit. With the sync
+        // test driver it has completed by now; with Redis workers it remains
+        // explicitly visible as queued to the caller.
         $confirmedSo = $this->confirm($so);
+
+        // The automatic listener may have updated mrp_plan_id after the
+        // confirmation transaction returned. Refresh the foreign key before
+        // loading the chain relations; otherwise an eager-loaded null
+        // belongsTo relation remains pinned to the pre-MRP model snapshot.
+        $confirmedSo->refresh();
 
         // Gather what MRP created.
         $confirmedSo->load([
@@ -412,22 +400,9 @@ class SalesOrderService
         $plan = $confirmedSo->mrpPlan;
         $workOrders = $confirmedSo->workOrders;
 
-        // Attempt auto-scheduling via CapacityPlanner.
-        $schedulingResult = ['scheduled' => [], 'conflicts' => []];
-        $planner = $this->capacityPlanner();
-        if ($planner && $workOrders->isNotEmpty()) {
-            $plannedWoIds = $workOrders
-                ->where('status', \App\Modules\Production\Enums\WorkOrderStatus::Planned)
-                ->pluck('id')
-                ->all();
-            if (!empty($plannedWoIds)) {
-                try {
-                    $schedulingResult = $planner->run($plannedWoIds);
-                } catch (\Throwable $e) {
-                    // Scheduling failure is non-fatal — WOs still exist as planned.
-                }
-            }
-        }
+        $planSummary = (array) ($plan?->summary ?? []);
+        $schedulingResult = $planSummary['scheduling'] ?? ['scheduled' => [], 'conflicts' => []];
+        $planningStatus = $plan ? 'completed' : 'queued';
 
         // Reload WOs after scheduling may have changed their machine/mold.
         $confirmedSo->load([
@@ -475,6 +450,7 @@ class SalesOrderService
                 'needs_manual' => collect($woSummaries)->where('needs_manual_scheduling', true)->count(),
                 'shortages' => $shortageCount,
                 'prs_created' => $prsCreated,
+                'planning_status' => $planningStatus,
                 'work_orders' => $woSummaries,
                 'scheduling_conflicts' => $schedulingResult['conflicts'],
             ],

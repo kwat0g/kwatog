@@ -48,6 +48,11 @@ enum AlertType: string
     /** Series C — Task C5 — Chain bottleneck alert. */
     case ChainBottleneck    = 'chain_bottleneck';
 
+    case MrpShortage         = 'mrp_shortage';
+    case MrpScheduleConflict = 'mrp_schedule_conflict';
+    case MrpRunFailed        = 'mrp_run_failed';
+    case MrpDataError        = 'mrp_data_error';
+
     public static function values(): array
     {
         return array_map(fn (self $c) => $c->value, self::cases());
@@ -69,6 +74,10 @@ enum AlertType: string
             self::ApDueSoon => 'AP due soon',
             self::QcFailRateHigh => 'QC fail rate high',
             self::ChainBottleneck => 'Chain bottleneck',
+            self::MrpShortage => 'MRP material shortage',
+            self::MrpScheduleConflict => 'MRP schedule conflict',
+            self::MrpRunFailed => 'MRP run failed',
+            self::MrpDataError => 'MRP data error',
         };
     }
 
@@ -76,7 +85,8 @@ enum AlertType: string
     {
         return match ($this) {
             self::StockCritical, self::MachineBreakdown,
-            self::MoldShotCritical, self::ArOverdue60 => AlertSeverity::Critical,
+            self::MoldShotCritical, self::ArOverdue60,
+            self::MrpRunFailed => AlertSeverity::Critical,
 
             self::ApDueSoon => AlertSeverity::Info,
 

@@ -8,7 +8,7 @@ use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\MRP\Enums\MrpRunTrigger;
-use App\Modules\MRP\Services\MrpEngineService;
+use App\Modules\MRP\Services\MrpAutomationService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
@@ -20,11 +20,11 @@ class RunDailyMrp extends Command
     protected $signature   = 'mrp:run-daily';
     protected $description = 'Re-run MRP across all active sales orders (Task A1)';
 
-    public function handle(MrpEngineService $engine, SettingsService $settings): int
+    public function handle(MrpAutomationService $automation, SettingsService $settings): int
     {
         $this->info('Starting daily MRP run...');
 
-        $run = $engine->runForAllActiveSalesOrders(MrpRunTrigger::Scheduled, null);
+        $run = $automation->run(null, MrpRunTrigger::Scheduled, null, 'daily_fallback');
 
         $this->info(sprintf(
             'Daily MRP run %s — evaluated %d SOs, %d shortages, %d PRs created, %d PRs updated, %dms',

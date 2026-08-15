@@ -34,6 +34,7 @@ use App\Modules\MRP\Events\MachineStatusChanged;
 use App\Modules\MRP\Events\MoldShotLimitNearing;
 use App\Modules\MRP\Events\MoldShotLimitReached;
 use App\Modules\MRP\Events\MrpPlanGenerated;
+use App\Modules\MRP\Events\MrpReplanRequested;
 use App\Modules\Payroll\Events\PayrollComputationRequested;
 use App\Modules\Payroll\Events\PayrollGlPostingRequested;
 use App\Modules\Payroll\Events\PayrollPeriodDisbursed;
@@ -124,6 +125,7 @@ class OutboxEventCodec
         MoldShotLimitNearing::class,
         MoldShotLimitReached::class,
         MrpPlanGenerated::class,
+        MrpReplanRequested::class,
     ];
 
     /** @return array{event_type: class-string, payload: array<string, mixed>} */

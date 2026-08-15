@@ -8,7 +8,7 @@ use App\Common\Services\NotificationService;
 use App\Modules\Auth\Models\User;
 use App\Modules\MRP\Enums\MrpRunTrigger;
 use App\Modules\MRP\Resources\MrpRunResource;
-use App\Modules\MRP\Services\MrpEngineService;
+use App\Modules\MRP\Services\MrpAutomationService;
 use App\Modules\MRP\Services\MrpRunService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,7 +18,7 @@ class MrpRunController
 {
     public function __construct(
         private readonly MrpRunService $runs,
-        private readonly MrpEngineService $engine,
+        private readonly MrpAutomationService $automation,
     ) {}
 
     public function index(Request $request): AnonymousResourceCollection
@@ -42,7 +42,7 @@ class MrpRunController
     public function store(Request $request): JsonResponse
     {
         $userId = $request->user()?->id;
-        $run = $this->engine->runForAllActiveSalesOrders(MrpRunTrigger::Manual, $userId);
+        $run = $this->automation->run(null, MrpRunTrigger::Manual, $userId, 'manual_recovery');
 
         return response()
             ->json(['data' => (new MrpRunResource($run))->toArray($request)])

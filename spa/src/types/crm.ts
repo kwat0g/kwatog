@@ -218,6 +218,7 @@ export interface SoChainResultWo {
 
 export interface SoChainResult {
  so_number: string;
+ planning_status: 'queued' | 'completed';
  work_orders_created: number;
  auto_scheduled: number;
  needs_manual: number;

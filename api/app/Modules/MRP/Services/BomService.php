@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\MRP\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
@@ -13,6 +14,7 @@ use App\Modules\CRM\Models\Product;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\Uom;
 use App\Modules\MRP\Models\Bom;
+use App\Modules\MRP\Events\MrpReplanRequested;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -72,7 +74,7 @@ class BomService
      */
     public function create(int $productId, array $itemRows): Bom
     {
-        return DB::transaction(function () use ($productId, $itemRows) {
+        $bom = DB::transaction(function () use ($productId, $itemRows) {
             $this->validateDefinition($productId, $itemRows);
             $previous = Bom::where('product_id', $productId)->lockForUpdate()->orderByDesc('version')->first();
 
@@ -98,6 +100,10 @@ class BomService
 
             return $this->show($this->costing->recalculate($bom->fresh()));
         });
+
+        $this->requestAutomaticReplan($bom, 'bom_changed');
+
+        return $bom;
     }
 
     /** "Edit" creates a new version. Old version stays archived. */
@@ -141,6 +147,19 @@ class BomService
             throw new BusinessRuleException('Cannot delete the active BOM. Archive it by creating a new version instead.');
         }
         $bom->delete();
+    }
+
+    private function requestAutomaticReplan(Bom $bom, string $reason): void
+    {
+        $salesOrderIds = app(MrpScopeResolver::class)->salesOrderIdsForProduct((int) $bom->product_id);
+        if ($salesOrderIds === []) {
+            return;
+        }
+
+        app(OutboxService::class)->record(
+            new MrpReplanRequested($salesOrderIds, $reason),
+            'mrp:replan:bom:' . $bom->id,
+        );
     }
 
     /**

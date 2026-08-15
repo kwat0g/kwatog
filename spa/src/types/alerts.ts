@@ -16,7 +16,11 @@ export type AlertType =
  | 'ar_overdue_30'
  | 'ar_overdue_60'
  | 'ap_due_soon'
- | 'qc_fail_rate_high';
+ | 'qc_fail_rate_high'
+ | 'mrp_shortage'
+ | 'mrp_schedule_conflict'
+ | 'mrp_run_failed'
+ | 'mrp_data_error';
 
 export interface Alert {
  id: string; // hash_id

@@ -9,6 +9,9 @@ use App\Common\Enums\AlertType;
 use App\Common\Services\AlertEngineService;
 use App\Modules\CRM\Events\SalesOrderConfirmed;
 use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\CRM\Models\Product;
+use App\Modules\CRM\Models\SalesOrderItem;
+use App\Modules\Inventory\Models\Item;
 use App\Modules\MRP\Events\MrpReplanRequested;
 use App\Modules\MRP\Jobs\RunAutomaticMrpJob;
 use App\Modules\MRP\Services\MrpAutomationService;
@@ -19,6 +22,9 @@ use App\Modules\MRP\Listeners\QueueMrpOnSalesOrderConfirmed;
 use App\Modules\MRP\Listeners\QueueMrpOnStockMovementCompleted;
 use App\Modules\MRP\Enums\MrpRunTrigger;
 use App\Modules\MRP\Models\MrpRun;
+use App\Modules\MRP\Models\MrpPlan;
+use App\Modules\MRP\Models\Bom;
+use App\Modules\MRP\Models\BomItem;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Inventory\Events\StockMovementCompleted;
 use App\Modules\Inventory\Models\StockMovement;
@@ -65,12 +71,48 @@ class MrpAutomationTest extends TestCase
         $resolver->shouldReceive('salesOrderIdsForItems')->once()->with([88])->andReturn([12, 13]);
         app()->instance(MrpScopeResolver::class, $resolver);
 
-        (new QueueMrpOnStockMovementCompleted())->handle(new StockMovementCompleted($movement));
+        app(QueueMrpOnStockMovementCompleted::class)->handle(new StockMovementCompleted($movement));
 
         Queue::assertPushed(RunAutomaticMrpJob::class, function (RunAutomaticMrpJob $job): bool {
             return $job->salesOrderIds === [12, 13]
                 && $job->reason === 'inventory_changed';
         });
+    }
+
+    public function test_subassembly_scope_resolves_parent_sales_orders(): void
+    {
+        $child = Product::factory()->create([
+            'part_number' => 'SUB-' . strtoupper(substr(uniqid(), -6)),
+        ]);
+        $parent = Product::factory()->create();
+        $childItem = Item::factory()->create([
+            'code' => $child->part_number,
+            'unit_of_measure' => 'pcs',
+            'item_type' => 'finished_good',
+        ]);
+        $bom = Bom::create([
+            'product_id' => $parent->id,
+            'version' => 1,
+            'is_active' => true,
+        ]);
+        BomItem::create([
+            'bom_id' => $bom->id,
+            'item_id' => $childItem->id,
+            'quantity_per_unit' => '1.0000',
+            'unit' => 'pcs',
+            'waste_factor' => '0.00',
+            'sort_order' => 0,
+        ]);
+        $salesOrder = SalesOrder::factory()->create(['status' => 'confirmed']);
+        SalesOrderItem::factory()->create([
+            'sales_order_id' => $salesOrder->id,
+            'product_id' => $parent->id,
+        ]);
+
+        $this->assertSame(
+            [$salesOrder->id],
+            app(MrpScopeResolver::class)->salesOrderIdsForProduct($child->id),
+        );
     }
 
     public function test_mrp_replan_event_is_supported_by_the_durable_event_codec(): void
@@ -88,14 +130,30 @@ class MrpAutomationTest extends TestCase
 
     public function test_automatic_run_raises_idempotent_alerts_for_shortages_and_schedule_conflicts(): void
     {
+        $salesOrder = SalesOrder::factory()->create(['status' => 'confirmed']);
         $run = MrpRun::create([
             'run_at' => now(),
             'triggered_by' => MrpRunTrigger::Automatic->value,
             'status' => 'completed',
+            'shortages_found' => 1,
+            'summary' => [
+                'per_sales_order' => [
+                    ['so_id' => $salesOrder->id, 'shortages_found' => 1, 'plan_no' => 'MRP-AUTO-TEST'],
+                    ['so_id' => 999, 'error' => 'Circular bill of materials detected.'],
+                ],
+            ],
         ]);
-        $salesOrder = SalesOrder::factory()->create(['status' => 'confirmed']);
+        $plan = MrpPlan::create([
+            'mrp_plan_no' => 'MRP-AUTO-TEST',
+            'sales_order_id' => $salesOrder->id,
+            'version' => 1,
+            'status' => 'active',
+            'generated_by' => $salesOrder->created_by,
+            'generated_at' => now(),
+        ]);
         $workOrder = WorkOrder::factory()->create([
             'sales_order_id' => $salesOrder->id,
+            'mrp_plan_id' => $plan->id,
             'status' => 'planned',
         ]);
 
@@ -107,11 +165,15 @@ class MrpAutomationTest extends TestCase
             'conflicts' => [['wo_number' => $workOrder->wo_number, 'reasons' => ['no_mold_with_capacity']]],
         ]);
         $alerts = Mockery::mock(AlertEngineService::class);
-        $alerts->shouldReceive('raise')->twice()->withArgs(function (
+        $alerts->shouldReceive('raise')->times(3)->withArgs(function (
             AlertType $type,
             AlertSeverity $severity,
         ): bool {
-            return in_array($type, [AlertType::MrpShortage, AlertType::MrpScheduleConflict], true)
+            return in_array($type, [
+                AlertType::MrpShortage,
+                AlertType::MrpScheduleConflict,
+                AlertType::MrpDataError,
+            ], true)
                 && $severity === AlertSeverity::Warning;
         });
 

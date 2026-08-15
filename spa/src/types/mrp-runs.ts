@@ -2,7 +2,7 @@
  * Task A1 — MRP run history types.
  */
 
-export type MrpRunTrigger = 'scheduled' | 'manual';
+export type MrpRunTrigger = 'scheduled' | 'manual' | 'automatic';
 export type MrpRunStatus = 'running' | 'completed' | 'failed';
 
 export interface MrpRun {

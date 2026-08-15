@@ -107,6 +107,7 @@ export function ChainResultModal({ chainResult, onClose }: ChainResultModalProps
 
  const hasConflicts = chainResult.scheduling_conflicts.length > 0;
  const hasManualWos = chainResult.needs_manual > 0;
+ const planningQueued = chainResult.planning_status === 'queued';
 
  return (
  <Modal
@@ -121,6 +122,13 @@ export function ChainResultModal({ chainResult, onClose }: ChainResultModalProps
  <CheckCircle size={16} className="text-success-fg" />
  <span className="text-success-fg font-medium">{chainResult.so_number} confirmed</span>
  </div>
+
+ {planningQueued && (
+ <div className="flex items-start gap-2 border border-info bg-info-bg rounded-md px-3 py-2.5 text-sm">
+ <Info size={16} className="text-info-fg mt-0.5 shrink-0" />
+ <span className="text-muted">MRP material and work-order planning is queued and will update shortly.</span>
+ </div>
+ )}
 
  {/* Warning banner for issues */}
  {(hasConflicts || hasManualWos) && (
