@@ -7,7 +7,7 @@
  */
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
+import { LuPlus } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
 import { selfServiceApi } from '@/api/self-service';
@@ -176,7 +176,7 @@ export default function SelfServiceOvertimePage() {
  <Button
  variant="primary"
  size="sm"
- icon={<Plus size={14} />}
+ icon={<LuPlus size={14} />}
  onClick={() => setModalOpen(true)}
  >
  Apply for OT
@@ -204,7 +204,7 @@ export default function SelfServiceOvertimePage() {
  title="No overtime requests yet"
  description="Apply for overtime to see your requests here."
  action={
- <Button variant="primary" icon={<Plus size={14} />} onClick={() => setModalOpen(true)}>
+ <Button variant="primary" icon={<LuPlus size={14} />} onClick={() => setModalOpen(true)}>
  Apply for OT
  </Button>
  }

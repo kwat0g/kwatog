@@ -4,7 +4,7 @@
 // `hasDraft === true`. Sensitive fields are NEVER restored — they were
 // excluded at write-time by `stripSensitive`.
 
-import { Clock } from 'lucide-react';
+import { LuClock } from '@/lib/icons';
 import { cn } from '@/lib/cn';
 import { focusRing } from '@/lib/focus';
 
@@ -33,7 +33,7 @@ export function DraftRestoreBanner({ ageMs, onRestore, onDiscard }: Props) {
  className="flex items-center justify-between gap-3 mx-5 mt-4 px-3 py-2 rounded-md border border-warning bg-warning-bg text-warning-fg"
  >
  <div className="flex items-center gap-2">
- <Clock size={14} />
+ <LuClock size={14} />
  <p className="text-sm">
  You have an unsaved draft from <span className="font-medium">{ageLabel}</span>. Sensitive fields are
  not restored.

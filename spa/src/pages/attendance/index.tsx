@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Upload, Clock, Sun } from 'lucide-react';
+import { LuUpload, LuClock, LuSun } from '@/lib/icons';
 import { attendancesApi, type AttendanceListParams } from '@/api/attendance/attendances';
 import { departmentsApi } from '@/api/hr/departments';
 import { Button } from '@/components/ui/Button';
@@ -109,17 +109,17 @@ export default function AttendancePage() {
  actions={
  <>
  {(can('attendance.edit') || can('attendance.shifts.manage')) && (
- <Button variant="secondary" size="sm" icon={<Clock size={14} />} onClick={() => navigate('/hr/attendance/shifts')}>
+ <Button variant="secondary" size="sm" icon={<LuClock size={14} />} onClick={() => navigate('/hr/attendance/shifts')}>
  Shifts
  </Button>
  )}
  {(can('attendance.edit') || can('attendance.holidays.manage')) && (
- <Button variant="secondary" size="sm" icon={<Sun size={14} />} onClick={() => navigate('/hr/attendance/holidays')}>
+ <Button variant="secondary" size="sm" icon={<LuSun size={14} />} onClick={() => navigate('/hr/attendance/holidays')}>
  Holidays
  </Button>
  )}
  {can('attendance.import') && (
- <Button variant="primary" size="sm" icon={<Upload size={14} />} onClick={() => navigate('/hr/attendance/import')}>
+ <Button variant="primary" size="sm" icon={<LuUpload size={14} />} onClick={() => navigate('/hr/attendance/import')}>
  Import DTR
  </Button>
  )}

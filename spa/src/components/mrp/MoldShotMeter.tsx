@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle, ShieldAlert, Wrench } from 'lucide-react';
+import { LuTriangleAlert, LuCircleCheck, LuShieldAlert, LuWrench } from '@/lib/icons';
 import { Chip } from '@/components/ui/Chip';
 import { Button } from '@/components/ui/Button';
 import { formatInt } from '@/lib/formatNumber';
@@ -62,11 +62,11 @@ export function MoldShotMeter({
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           {isExceeded ? (
-            <ShieldAlert className="w-5 h-5 text-danger-fg animate-pulse" />
+            <LuShieldAlert className="w-5 h-5 text-danger-fg animate-pulse" />
           ) : isNearing ? (
-            <AlertTriangle className="w-5 h-5 text-warning-fg" />
+            <LuTriangleAlert className="w-5 h-5 text-warning-fg" />
           ) : (
-            <CheckCircle className="w-5 h-5 text-success-fg" />
+            <LuCircleCheck className="w-5 h-5 text-success-fg" />
           )}
           <div>
             <h4 className="text-xs font-medium uppercase tracking-wider text-primary flex items-center gap-2">
@@ -138,7 +138,7 @@ export function MoldShotMeter({
       {(isNearing || isExceeded) && (
         <div className="flex items-center justify-between gap-2 p-2.5 rounded-md bg-warning-bg/10 border border-warning/30 text-xs">
           <div className="flex items-center gap-2">
-            <Wrench className="w-4 h-4 text-warning-fg shrink-0" />
+            <LuWrench className="w-4 h-4 text-warning-fg shrink-0" />
             <span className="text-warning-fg">
               {isExceeded
                 ? 'Mold has reached its maximum shot limit! Cavity inspection & overhaul required.'

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
-import { RefreshCw } from 'lucide-react';
+import { LuRefreshCw } from '@/lib/icons';
 import { budgetingApi } from '@/api/accounting/budgeting';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
@@ -79,7 +79,7 @@ export default function BudgetVsActualPage() {
  <Button
  variant="secondary"
  size="xs"
- icon={<RefreshCw size={13} />}
+ icon={<LuRefreshCw size={13} />}
  onClick={() => syncActuals.mutate()}
  disabled={syncActuals.isPending}
  loading={syncActuals.isPending}

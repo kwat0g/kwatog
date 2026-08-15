@@ -14,10 +14,9 @@ import { useLayoutEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import gsap from 'gsap';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Briefcase } from 'lucide-react';
+import { LuArrowRight, LuBriefcase } from '@/lib/icons';
 import { HeroCanvas } from '../components/HeroCanvas';
 import { PartBlueprint } from '../components/PartBlueprint';
-import { ScrambleText } from '../components/ScrambleText';
 import { landingApi } from '@/api/landing';
 import { reduceMotion } from '../motion';
 import { useMagnetic } from '../hooks/useMagnetic';
@@ -69,8 +68,7 @@ export function HeroSection() {
       // and keeps every word nameable throughout.
       const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
       tl.from('[data-hero-line] > *', { yPercent: 115, duration: 1.05, stagger: 0.12 })
-        .from('[data-hero="eyebrow"]', { opacity: 0, y: 16, duration: 0.7 }, 0.1)
-        .from('[data-hero="sub"]', { opacity: 0, y: 20, duration: 0.8 }, '-=0.6')
+        .from('[data-hero="sub"]', { opacity: 0, y: 20, duration: 0.8 }, 0.2)
         .from('[data-hero="cta"]', { opacity: 0, y: 20, duration: 0.7 }, '-=0.55')
         .from(
           '[data-hero="trust"] > *',
@@ -138,14 +136,6 @@ export function HeroSection() {
       <div className="mx-auto grid w-full max-w-[1440px] items-center gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:gap-10">
         {/* ── Text column ───────────────────────────────────────── */}
         <div>
-          <p
-            data-hero="eyebrow"
-            className="flex items-center gap-2.5 font-mono text-[11px] uppercase tracking-[0.22em] text-muted"
-          >
-            <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-            <ScrambleText text={address} trigger="mount" />
-          </p>
-
           {/* Solid ink, not a gradient fill. The old treatment was
               `from-primary via-primary to-secondary` — two of three stops the
               same token, so it bought a barely-perceptible tint at the cost of
@@ -195,7 +185,7 @@ export function HeroSection() {
             >
               <span className="relative z-10 flex items-center gap-2">
                 {heroCta?.quote_label ?? '—'}
-                <ArrowRight
+                <LuArrowRight
                   size={18}
                   className="transition-transform duration-300 group-hover:translate-x-1.5"
                 />
@@ -212,7 +202,7 @@ export function HeroSection() {
               to={heroCta?.careers_href ?? '/'}
               className="inline-flex items-center justify-center gap-2 rounded-full border border-strong px-8 py-4 font-sans text-[15px] font-medium text-primary transition-all duration-300 hover:scale-105 hover:border-primary hover:bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
             >
-              <Briefcase size={16} />
+              <LuBriefcase size={16} />
               {heroCta?.careers_label ?? '—'}
             </Link>
           </div>

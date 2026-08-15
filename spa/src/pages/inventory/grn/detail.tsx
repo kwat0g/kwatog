@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, Link } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
-import { AlertTriangle, CheckCircle2, RefreshCw, XCircle, PackageCheck, Send } from 'lucide-react';
+import { LuTriangleAlert, LuCircleCheck, LuRefreshCw, LuCircleX, LuPackageCheck, LuSend } from '@/lib/icons';
 import { billsApi } from '@/api/accounting/bills';
 import { grnApi } from '@/api/inventory/grn';
 import { warehouseApi } from '@/api/inventory/warehouse';
@@ -186,23 +186,23 @@ export default function GrnDetailPage() {
    <div className="flex items-center gap-2">
    <Chip variant={variant}>{grnOptions?.statuses.find((option) => option.value === data.status)?.label ?? data.status}</Chip>
    {incomingQcNeedsAttention && can('quality.inspections.manage') && (
-    <Button variant="secondary" size="sm" icon={<RefreshCw size={14} />} onClick={() => retryIncomingQc.mutate()} loading={retryIncomingQc.isPending}>
+    <Button variant="secondary" size="sm" icon={<LuRefreshCw size={14} />} onClick={() => retryIncomingQc.mutate()} loading={retryIncomingQc.isPending}>
      Retry incoming QC
     </Button>
    )}
    {isDraft && can('inventory.grn.create') && (
-    <Button variant="primary" size="sm" icon={<PackageCheck size={14} />}
+    <Button variant="primary" size="sm" icon={<LuPackageCheck size={14} />}
      onClick={() => setConfirmFinalize(true)} loading={finalize.isPending}
      disabled={!finalizeReady}>Finalize receiving</Button>
    )}
    {isEditable && can('inventory.grn.create') && (
     <>
-    {data.status === 'pending_qc' && <Button variant="secondary" size="xs" icon={<XCircle size={14} />} onClick={() => setRejectOpen(true)}>Reject</Button>}
+    {data.status === 'pending_qc' && <Button variant="secondary" size="xs" icon={<LuCircleX size={14} />} onClick={() => setRejectOpen(true)}>Reject</Button>}
     {data.status === 'partial_accepted' || hasPartial ? (
-     <Button variant="primary" size="sm" icon={<CheckCircle2 size={14} />} onClick={() => setConfirmPartial(true)}
+     <Button variant="primary" size="sm" icon={<LuCircleCheck size={14} />} onClick={() => setConfirmPartial(true)}
       loading={accept.isPending} disabled={accept.isPending || !hasAcceptanceIncrease}>{data.status === 'partial_accepted' ? (acceptanceComplete ? 'Accept remaining' : 'Accept additional') : 'Partial accept'}</Button>
     ) : (
-     <Button variant="primary" size="sm" icon={<CheckCircle2 size={14} />} onClick={() => setConfirmAccept(true)}
+     <Button variant="primary" size="sm" icon={<LuCircleCheck size={14} />} onClick={() => setConfirmAccept(true)}
       loading={accept.isPending} disabled={accept.isPending}>Accept</Button>
     )}
     </>
@@ -213,7 +213,7 @@ export default function GrnDetailPage() {
   <div className="px-5 py-4 space-y-4">
   {isDraft && (
    <div className="flex items-center gap-3 rounded-md border border-info/40 bg-info-bg/10 px-4 py-3 text-sm">
-   <PackageCheck size={16} className="shrink-0 text-info-fg" />
+   <LuPackageCheck size={16} className="shrink-0 text-info-fg" />
    <div>
     <div className="font-medium">Expected receipt — awaiting goods</div>
     <div className="text-muted">
@@ -225,13 +225,13 @@ export default function GrnDetailPage() {
   )}
   {incomingQcNeedsAttention && (
    <div className="flex items-center gap-3 rounded-md border border-warning/40 bg-warning-bg/10 px-4 py-3 text-sm">
-    <AlertTriangle size={16} className="shrink-0 text-warning-fg" />
+    <LuTriangleAlert size={16} className="shrink-0 text-warning-fg" />
     <div className="flex-1">
      <div className="font-medium">Incoming QC handoff needs attention</div>
      <div className="text-muted">{data.incoming_qc_handoff?.message ?? 'No incoming Quality inspection has been staged yet.'}</div>
     </div>
     {can('quality.inspections.manage') && (
-     <Button variant="secondary" size="sm" icon={<RefreshCw size={14} />} onClick={() => retryIncomingQc.mutate()} loading={retryIncomingQc.isPending}>
+     <Button variant="secondary" size="sm" icon={<LuRefreshCw size={14} />} onClick={() => retryIncomingQc.mutate()} loading={retryIncomingQc.isPending}>
       Retry trigger
      </Button>
     )}
@@ -239,7 +239,7 @@ export default function GrnDetailPage() {
   )}
   {data.bill && (
   <div className="flex items-center gap-3 rounded-md border border-success/40 bg-success-bg/10 px-4 py-3 text-sm">
-  <CheckCircle2 size={16} className="shrink-0 text-success-fg" />
+  <LuCircleCheck size={16} className="shrink-0 text-success-fg" />
   <div className="flex-1">
   <div className="font-medium">Supplier bill auto-created</div>
   <div className="text-muted">
@@ -250,7 +250,7 @@ export default function GrnDetailPage() {
   </div>
   </div>
   {data.bill.status === 'draft' && can('accounting.bills.create') && (
-  <Button variant="secondary" size="sm" icon={<Send size={14} />} onClick={() => setConfirmPostBill(true)}>
+  <Button variant="secondary" size="sm" icon={<LuSend size={14} />} onClick={() => setConfirmPostBill(true)}>
   Post bill
   </Button>
   )}
@@ -282,7 +282,8 @@ export default function GrnDetailPage() {
    </dl>
   </Panel>
   <Panel title="Line items">
-   <table className={tableCls}>
+   <div className="overflow-x-auto">
+   <table className={`${tableCls} min-w-[760px]`}>
    <thead><tr className={theadTrCls}>
     <Th>Item</Th>
     <Th>Location</Th>
@@ -351,6 +352,7 @@ export default function GrnDetailPage() {
    ))}
    </tbody>
    </table>
+   </div>
   </Panel>
   </div>
 

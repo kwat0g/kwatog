@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Plus, CalendarRange, Coins } from 'lucide-react';
+import { LuPlus, LuCalendarRange, LuCoins } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { periodsApi, type PeriodListParams } from '@/api/payroll/periods';
 import { DeMinimisManager } from '@/pages/payroll/de-minimis';
@@ -133,20 +133,20 @@ export default function PayrollPeriodsPage() {
  actions={
  <>
  {can('payroll.adjustments.create') && (
- <Button variant="secondary" size="sm" icon={<Coins size={14} />} onClick={() => setShowDeMinimis(true)}>
+ <Button variant="secondary" size="sm" icon={<LuCoins size={14} />} onClick={() => setShowDeMinimis(true)}>
  De Minimis
  </Button>
  )}
  {canRunThirteenth && (
  <Button
- variant="secondary" size="sm" icon={<CalendarRange size={14} />}
+ variant="secondary" size="sm" icon={<LuCalendarRange size={14} />}
  onClick={() => setShowThirteenth(true)}
  >
  Run 13th Month
  </Button>
  )}
  {canCreate && (
- <Button variant="primary" size="sm" icon={<Plus size={14} />}
+ <Button variant="primary" size="sm" icon={<LuPlus size={14} />}
  onClick={() => navigate('/payroll/periods/create')}>
  New Period
  </Button>

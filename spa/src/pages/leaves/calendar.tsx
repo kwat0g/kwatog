@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { LuChevronLeft, LuChevronRight } from '@/lib/icons';
 import { leaveCalendarApi } from '@/api/leave';
 import { departmentsApi } from '@/api/hr/departments';
 import { Button } from '@/components/ui/Button';
@@ -90,13 +90,13 @@ export default function LeaveCalendarPage() {
  <div className="px-5 py-3 border-b border-default flex flex-wrap items-center gap-3">
  <div className="flex items-center gap-1">
  <Button variant="secondary" size="sm" onClick={prevMonth} aria-label="Previous month">
- <ChevronLeft size={14} />
+ <LuChevronLeft size={14} />
  </Button>
  <span className="text-sm font-medium min-w-[140px] text-center">
  {MONTH_NAMES[month - 1]} {year}
  </span>
  <Button variant="secondary" size="sm" onClick={nextMonth} aria-label="Next month">
- <ChevronRight size={14} />
+ <LuChevronRight size={14} />
  </Button>
  </div>
  <Select

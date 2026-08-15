@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Edit, Trash2, ArchiveRestore } from 'lucide-react';
+import { LuPencil, LuTrash2, LuArchiveRestore } from '@/lib/icons';
 import { recruitmentApi } from '@/api/recruitment';
 import { ArchiveFilter } from '@/components/ui/ArchiveFilter';
 import type { ArchiveScope } from '@/lib/archiveScope';
@@ -130,7 +130,7 @@ export default function PostingDetailPage() {
  actions={
  can('hr.recruitment.manage') ? (
  <>
- <Button variant="secondary" size="sm" icon={<Edit size={12} />} onClick={() => navigate(`/hr/recruitment/postings/${id}/edit`)}>
+ <Button variant="secondary" size="sm" icon={<LuPencil size={12} />} onClick={() => navigate(`/hr/recruitment/postings/${id}/edit`)}>
  Edit
  </Button>
  {posting.status === 'draft' && (
@@ -144,11 +144,11 @@ export default function PostingDetailPage() {
  </Button>
  )}
  {scope === 'only' ? (
-  <Button variant="secondary" size="sm" icon={<ArchiveRestore size={12} />} onClick={() => setShowRestoreConfirm(true)}>
+  <Button variant="secondary" size="sm" icon={<LuArchiveRestore size={12} />} onClick={() => setShowRestoreConfirm(true)}>
   Restore
   </Button>
  ) : posting.status === 'draft' ? (
-  <Button variant="danger" size="sm" icon={<Trash2 size={12} />} onClick={() => setShowDeleteConfirm(true)}>
+  <Button variant="danger" size="sm" icon={<LuTrash2 size={12} />} onClick={() => setShowDeleteConfirm(true)}>
   Delete
   </Button>
  ) : null}

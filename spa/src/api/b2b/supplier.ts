@@ -6,7 +6,7 @@ import type {
  PortalPoDetail,
  SupplierBillSummary,
  SupplierBillDetail,
- PortalDeliverySummary,
+ SupplierDeliverySummary,
  PortalShippingDocument,
  SubmittedBill,
  VendorStatementOfAccount,
@@ -41,6 +41,27 @@ export const supplierPortalApi = {
  me: async () => {
  const { data } = await portalClient.get<{ data: SupplierPortalUser }>('/b2b/supplier/me');
  return data.data;
+ },
+
+ forgotPassword: async (email: string) => {
+ await getPortalCsrf();
+ const { data } = await portalClient.post<{ message: string }>('/b2b/supplier/forgot-password', { email });
+ return data;
+ },
+
+ resetPassword: async (token: string, password: string, password_confirmation: string) => {
+ await getPortalCsrf();
+ const { data } = await portalClient.post<{ message: string }>('/b2b/supplier/reset-password', {
+ token,
+ password,
+ password_confirmation,
+ });
+ return data;
+ },
+
+ changePassword: async (payload: { current_password: string; new_password: string; new_password_confirmation: string }) => {
+  const { data } = await portalClient.post<{ message: string }>('/b2b/supplier/change-password', payload);
+  return data;
  },
 
  // Shared read-only policy values, authenticated with the portal bearer token.
@@ -90,7 +111,7 @@ export const supplierPortalApi = {
 
  // ── Deliveries ─────────────────────────────────────
  listDeliveries: async () => {
- const { data } = await portalClient.get<{ data: PortalDeliverySummary[] }>('/b2b/supplier/deliveries');
+ const { data } = await portalClient.get<{ data: SupplierDeliverySummary[] }>('/b2b/supplier/deliveries');
  return data.data;
  },
 
@@ -145,6 +166,14 @@ export const supplierPortalApi = {
  `/b2b/supplier/purchase-orders/${poId}/shipping-documents`,
  form,
  { headers: { 'Content-Type': 'multipart/form-data' } }
+ );
+ return data;
+ },
+
+ downloadShippingDocument: async (id: string) => {
+ const { data } = await portalClient.get<Blob>(
+ `/b2b/supplier/shipping-documents/${id}/download`,
+ { responseType: 'blob' }
  );
  return data;
  },

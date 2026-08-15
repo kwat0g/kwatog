@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Pencil, Plus } from 'lucide-react';
+import { LuPencil, LuPlus } from '@/lib/icons';
 import { crmCustomersApi } from '@/api/crm/customers';
 import { salesOrdersApi } from '@/api/crm/salesOrders';
 import { complaintsApi } from '@/api/crm/complaints';
@@ -147,7 +147,7 @@ export default function CrmCustomerDetailPage() {
  <Button
  variant="secondary"
  size="sm"
- icon={<Plus size={14} />}
+ icon={<LuPlus size={14} />}
  onClick={() => navigate(`/crm/sales-orders/create?customer_id=${customer.id}`)}
  >
  New SO
@@ -157,7 +157,7 @@ export default function CrmCustomerDetailPage() {
  <Button
  variant="primary"
  size="sm"
- icon={<Pencil size={14} />}
+ icon={<LuPencil size={14} />}
  onClick={() => navigate(`/crm/customers/${customer.id}/edit`)}
  >
  Edit

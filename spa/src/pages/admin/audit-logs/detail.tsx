@@ -182,7 +182,7 @@ export default function AuditLogDetailPage() {
  <Row label="IP">
  <span className="font-mono text-xs">{data.ip_address ?? '—'}</span>
  </Row>
- <Row label="User agent">
+ <Row label="LuUser agent">
  <span className="font-mono text-xs break-all">{data.user_agent ?? '—'}</span>
  </Row>
  </dl>

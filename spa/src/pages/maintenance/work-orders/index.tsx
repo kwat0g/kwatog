@@ -1,7 +1,7 @@
 /** Sprint 8 — Task 69. Maintenance work-orders list. */
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
-import { Plus, Smartphone } from 'lucide-react';
+import { LuPlus, LuSmartphone } from '@/lib/icons';
 import { workOrdersApi, type WorkOrderListParams } from '@/api/maintenance/workOrders';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -109,11 +109,11 @@ export default function MaintenanceWorkOrdersListPage() {
  subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'order' : 'orders'}` : undefined}
  actions={
  <div className="flex items-center gap-2">
- <Button variant="secondary" size="sm" icon={<Smartphone size={14} />} onClick={() => navigate('/maintenance/mobile')}>
+ <Button variant="secondary" size="sm" icon={<LuSmartphone size={14} />} onClick={() => navigate('/maintenance/mobile')}>
  Mobile view
  </Button>
  {can('maintenance.wo.create') && (
- <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/maintenance/work-orders/create')}>
+ <Button variant="primary" size="sm" icon={<LuPlus size={14} />} onClick={() => navigate('/maintenance/work-orders/create')}>
  New work order
  </Button>
  )}

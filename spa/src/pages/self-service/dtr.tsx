@@ -1,6 +1,6 @@
 /** Sprint 8 — Task 74 + Sprint P5 + SS-DTR. DTR with month picker. */
 import { useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { LuChevronLeft, LuChevronRight } from '@/lib/icons';
 import { useQuery } from '@tanstack/react-query';
 import { client } from '@/api/client';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -158,7 +158,7 @@ export default function SelfServiceDtrPage() {
  variant="secondary"
  size="sm"
  iconOnly
- icon={<ChevronLeft size={14} />}
+ icon={<LuChevronLeft size={14} />}
  aria-label="Previous month"
  onClick={goBack}
  disabled={isEarliestMonth}
@@ -170,7 +170,7 @@ export default function SelfServiceDtrPage() {
  variant="secondary"
  size="sm"
  iconOnly
- icon={<ChevronRight size={14} />}
+ icon={<LuChevronRight size={14} />}
  aria-label="Next month"
  onClick={goForward}
  disabled={isCurrentMonth}

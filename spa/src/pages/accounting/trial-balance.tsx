@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Download, Printer } from 'lucide-react';
+import { LuDownload, LuPrinter } from '@/lib/icons';
 import { statementsApi } from '@/api/accounting/statements';
 import { downloadAuthenticatedFile } from '@/api/download';
 import { Button } from '@/components/ui/Button';
@@ -32,8 +32,8 @@ export default function TrialBalancePage() {
  backLabel="Journal Entries"
  actions={
  <div className="flex gap-1.5">
- <Button variant="secondary" size="sm" icon={<Download size={14} />} onClick={() => void downloadAuthenticatedFile(statementsApi.csvUrl('trial-balance', { from, to }), { errorMessage: 'Failed to export trial balance.' })}>CSV</Button>
- <Button variant="secondary" size="sm" icon={<Printer size={14} />} onClick={() => void downloadAuthenticatedFile(statementsApi.pdfUrl('trial-balance', { from, to }), { openInNewTab: true, errorMessage: 'Failed to generate trial balance PDF.' })}>PDF</Button>
+ <Button variant="secondary" size="sm" icon={<LuDownload size={14} />} onClick={() => void downloadAuthenticatedFile(statementsApi.csvUrl('trial-balance', { from, to }), { errorMessage: 'Failed to export trial balance.' })}>CSV</Button>
+ <Button variant="secondary" size="sm" icon={<LuPrinter size={14} />} onClick={() => void downloadAuthenticatedFile(statementsApi.pdfUrl('trial-balance', { from, to }), { openInNewTab: true, errorMessage: 'Failed to generate trial balance PDF.' })}>PDF</Button>
  </div>
  }
  />

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, KeyRound, Coins } from 'lucide-react';
+import { LuPlus, LuKeyRound, LuCoins } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { employeesApi, type EmployeeListParams } from '@/api/hr/employees';
 import { departmentsApi } from '@/api/hr/departments';
@@ -246,7 +246,7 @@ export default function EmployeesListPage() {
               <Button
                 variant="secondary"
                 size="sm"
-                icon={<Coins size={14} />}
+                icon={<LuCoins size={14} />}
                 onClick={() => setView(view === 'employees' ? 'adjustments' : 'employees')}
               >
                 {view === 'employees' ? 'Salary Adjustments' : 'Employee List'}
@@ -256,7 +256,7 @@ export default function EmployeesListPage() {
               <Button
                 variant="primary"
                 size="sm"
-                icon={<Plus size={14} />}
+                icon={<LuPlus size={14} />}
                 onClick={() => navigate('/hr/employees/create')}
               >
                 Add employee
@@ -350,7 +350,7 @@ export default function EmployeesListPage() {
                           label: bulkProvision.isPending
                             ? 'Provisioning…'
                             : 'Create system accounts',
-                          icon: <KeyRound size={12} />,
+                          icon: <LuKeyRound size={12} />,
                           variant: 'primary',
                           onClick: (rows) => bulkProvision.mutate(rows),
                         },

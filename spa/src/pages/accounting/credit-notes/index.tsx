@@ -7,7 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
-import { Plus, Trash2 } from 'lucide-react';
+import { LuPlus, LuTrash2 } from '@/lib/icons';
 import { creditNotesApi, type CreditNoteListParams } from '@/api/accounting/credit-notes';
 import { accountsApi } from '@/api/accounting/accounts';
 import { customersApi } from '@/api/accounting/customers';
@@ -88,7 +88,7 @@ export default function CreditNotesPage() {
  title="Credit Notes"
  subtitle={data ? `${data.meta.total} credit notes` : undefined}
  actions={can('accounting.credit_notes.manage') ? (
- <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => setCreateOpen(true)}>New credit note</Button>
+ <Button variant="primary" size="sm" icon={<LuPlus size={14} />} onClick={() => setCreateOpen(true)}>New credit note</Button>
  ) : undefined}
  />
 
@@ -209,7 +209,7 @@ function CreateCreditNoteModal({ onClose, onCreated }: { onClose: () => void; on
  <div className="col-span-4"><Input {...register(`lines.${idx}.description` as const)} error={errors.lines?.[idx]?.description?.message} /></div>
  <div className="col-span-2"><Input step="0.01" min="0" className="font-mono tabular-nums text-right" {...numberInputProps()} {...register(`lines.${idx}.amount` as const)} error={errors.lines?.[idx]?.amount?.message} /></div>
  <div className="col-span-1 flex justify-end pt-1.5">
- {fields.length > 1 && <Button type="button" variant="ghost" size="sm" iconOnly icon={<Trash2 size={14} />}
+ {fields.length > 1 && <Button type="button" variant="ghost" size="sm" iconOnly icon={<LuTrash2 size={14} />}
  aria-label="Remove line" onClick={() => remove(idx)} className="text-muted hover:text-danger-fg" />}
  </div>
  </div>
@@ -217,7 +217,7 @@ function CreateCreditNoteModal({ onClose, onCreated }: { onClose: () => void; on
  </div>
 
  <div className="flex items-center justify-between">
- <Button type="button" variant="secondary" size="sm" icon={<Plus size={14} />} onClick={() => append({ account_id: '', description: '', amount: undefined as unknown as number })}>Add line</Button>
+ <Button type="button" variant="secondary" size="sm" icon={<LuPlus size={14} />} onClick={() => append({ account_id: '', description: '', amount: undefined as unknown as number })}>Add line</Button>
  <div className="text-sm font-mono tabular-nums text-right">
  <div className="text-muted">Subtotal: {formatPeso(totals.sub)}</div>
  <div className="text-muted">VAT: {formatPeso(totals.vat)}</div>

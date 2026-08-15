@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
+import { LuPlus } from '@/lib/icons';
 import { shipmentsApi, type ShipmentListParams } from '@/api/supply-chain';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -70,7 +70,7 @@ export default function ShipmentsListPage() {
  <Button
  variant="primary"
  size="sm"
- icon={<Plus size={14} />}
+ icon={<LuPlus size={14} />}
  onClick={() => navigate('/supply-chain/shipments/create')}
  >
  New shipment

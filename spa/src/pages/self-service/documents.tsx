@@ -15,7 +15,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Download, Receipt, ChevronRight } from 'lucide-react';
+import { LuDownload, LuReceipt, LuChevronRight } from '@/lib/icons';
 import { downloadAuthenticatedFile } from '@/api/download';
 import { selfServiceApi } from '@/api/self-service';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -164,7 +164,7 @@ export default function SelfServiceDocumentsPage() {
  <Button
  variant="secondary"
  size="sm"
- icon={<Download size={14} />}
+ icon={<LuDownload size={14} />}
  aria-label={`Download ${cert.label}`}
  onClick={() => download(url, cert.label)}
  >
@@ -190,13 +190,13 @@ export default function SelfServiceDocumentsPage() {
  className="flex items-center gap-3 px-4 py-3 hover:bg-subtle transition-colors duration-fast"
  >
  <span className="w-8 h-8 rounded-md bg-subtle flex items-center justify-center text-muted shrink-0">
- <Receipt size={16} />
+ <LuReceipt size={16} />
  </span>
  <span className="flex-1 min-w-0">
  <span className="block text-sm font-medium text-primary">View all payslips</span>
  <span className="block text-xs text-muted">Download any period's payslip PDF</span>
  </span>
- <ChevronRight size={14} className="text-text-subtle shrink-0" aria-hidden="true" />
+ <LuChevronRight size={14} className="text-text-subtle shrink-0" aria-hidden="true" />
  </Link>
  </Panel>
 

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Bell } from 'lucide-react';
+import { LuBell } from '@/lib/icons';
 import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { getEcho } from '@/lib/echo';
@@ -34,7 +34,7 @@ export function useNotificationRealtime(): void {
         qc.invalidateQueries({ queryKey: ['notifications'] });
 
         const title = payload.data?.title ?? 'New notification';
-        toast(title, { icon: <Bell size={16} className="text-muted" />, duration: 4000 });
+        toast(title, { icon: <LuBell size={16} className="text-muted" />, duration: 4000 });
       });
 
       teardown = () => {

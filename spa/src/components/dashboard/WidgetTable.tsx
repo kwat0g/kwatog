@@ -25,7 +25,7 @@ export function WidgetTable({ columns, rows, total_count }: WidgetTableData) {
                 scope="col"
                 className={cn(
                   'pb-1 font-medium text-muted',
-                  column.numeric && 'text-right',
+                  column.align === 'right' || column.numeric ? 'text-right' : column.align === 'center' ? 'text-center' : 'text-left',
                 )}
               >
                 {column.label}
@@ -44,7 +44,7 @@ export function WidgetTable({ columns, rows, total_count }: WidgetTableData) {
                     key={column.key}
                     className={cn(
                       'py-1.5 text-primary',
-                      column.numeric && 'text-right font-mono tabular-nums',
+                      column.align === 'right' || column.numeric ? 'text-right font-mono tabular-nums' : column.align === 'center' ? 'text-center' : 'text-left',
                     )}
                   >
                     {cell === null || cell === '' ? '—' : cell}

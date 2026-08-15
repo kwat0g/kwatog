@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { LuPlus } from '@/lib/icons';
 import { recruitmentApi } from '@/api/recruitment';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -114,7 +114,7 @@ export default function PostingsListPage() {
  ]}
  actions={
  can('hr.recruitment.manage') ? (
- <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/hr/recruitment/postings/create')}>
+ <Button variant="primary" size="sm" icon={<LuPlus size={14} />} onClick={() => navigate('/hr/recruitment/postings/create')}>
  New Posting
  </Button>
  ) : undefined

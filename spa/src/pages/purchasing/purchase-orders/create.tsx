@@ -4,7 +4,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Trash2 } from 'lucide-react';
+import { LuPlus, LuTrash2 } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { purchaseOrdersApi } from '@/api/purchasing/purchase-orders';
 import { purchaseRequestsApi } from '@/api/purchasing/purchase-requests';
@@ -319,7 +319,7 @@ export default function CreatePurchaseOrderPage() {
               type="button"
               size="sm"
               variant="secondary"
-              icon={<Plus size={12} />}
+              icon={<LuPlus size={12} />}
               onClick={() =>
                 append({ item_id: '', description: '', quantity: '', unit: '', unit_price: '' })
               }
@@ -415,7 +415,7 @@ export default function CreatePurchaseOrderPage() {
                         variant="ghost"
                         size="sm"
                         iconOnly
-                        icon={<Trash2 size={12} />}
+                        icon={<LuTrash2 size={12} />}
                         onClick={() => remove(i)}
                         aria-label="Remove line"
                         className="text-muted hover:text-danger-fg"

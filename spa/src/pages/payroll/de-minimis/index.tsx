@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Trash2, ArchiveRestore } from 'lucide-react';
+import { LuPlus, LuTrash2, LuArchiveRestore } from '@/lib/icons';
 import { client } from '@/api/client';
 import { employeesApi } from '@/api/hr/employees';
 import { ArchiveFilter } from '@/components/ui/ArchiveFilter';
@@ -112,9 +112,9 @@ export function DeMinimisManager() {
       key: 'actions', header: '',
       cell: (r: DeMinimisRow) => (
         scope === 'only' ? (
-          <Button variant="ghost" size="xs" icon={<ArchiveRestore size={12} />} onClick={(e) => { e.stopPropagation(); restoreMutation.mutate(r.id); }} />
+          <Button variant="ghost" size="xs" icon={<LuArchiveRestore size={12} />} onClick={(e) => { e.stopPropagation(); restoreMutation.mutate(r.id); }} />
         ) : (
-          <Button variant="ghost" size="xs" icon={<Trash2 size={12} />} onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(r.id); }} />
+          <Button variant="ghost" size="xs" icon={<LuTrash2 size={12} />} onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(r.id); }} />
         )
       ),
     },
@@ -127,7 +127,7 @@ export function DeMinimisManager() {
         <div className="flex items-center gap-2">
           <ArchiveFilter value={scope} onChange={setScope} />
           {can('payroll.adjustments.create') && (
-            <Button variant="primary" size="xs" icon={<Plus size={14} />} onClick={() => setShowCreate(true)}>Record Benefit</Button>
+            <Button variant="primary" size="xs" icon={<LuPlus size={14} />} onClick={() => setShowCreate(true)}>Record Benefit</Button>
           )}
         </div>
       </div>

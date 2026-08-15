@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Pencil, Plus, Trash2, ArchiveRestore } from 'lucide-react';
+import { LuPencil, LuPlus, LuTrash2, LuArchiveRestore } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { schedulesApi, type ScheduleListParams } from '@/api/maintenance/schedules';
 import { Button } from '@/components/ui/Button';
@@ -115,7 +115,7 @@ cell: (r: MaintenanceSchedule) => (
   variant="ghost"
   size="sm"
   iconOnly
-  icon={<Pencil size={14} />}
+  icon={<LuPencil size={14} />}
   aria-label="Edit schedule"
   onClick={() => { navigate(`/maintenance/schedules/${r.id}/edit`); }}
   className="text-muted hover:text-primary"
@@ -126,7 +126,7 @@ cell: (r: MaintenanceSchedule) => (
   variant="ghost"
   size="sm"
   iconOnly
-  icon={<ArchiveRestore size={14} />}
+  icon={<LuArchiveRestore size={14} />}
   aria-label="Restore schedule"
   onClick={() => { setRestoreTarget(r.id); }}
   className="text-muted hover:text-primary"
@@ -137,7 +137,7 @@ cell: (r: MaintenanceSchedule) => (
   variant="ghost"
   size="sm"
   iconOnly
-  icon={<Trash2 size={14} />}
+  icon={<LuTrash2 size={14} />}
   aria-label="Delete schedule"
   onClick={() => { setDeleteTarget(r.id); }}
   className="text-muted hover:text-danger-fg"
@@ -169,7 +169,7 @@ cell: (r: MaintenanceSchedule) => (
  subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'schedule' : 'schedules'}` : undefined}
  actions={
  can('maintenance.schedules.manage') ? (
- <Button variant="primary" size="xs" icon={<Plus size={14} />} onClick={() => navigate('/maintenance/schedules/create')}>
+ <Button variant="primary" size="xs" icon={<LuPlus size={14} />} onClick={() => navigate('/maintenance/schedules/create')}>
  New schedule
  </Button>
  ) : undefined

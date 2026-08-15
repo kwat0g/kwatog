@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus } from 'lucide-react';
+import { LuPlus } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
 import { leaveRequestsApi } from '@/api/leave';
@@ -204,7 +204,7 @@ export default function SelfServiceLeavePage() {
  <Button
  variant="primary"
  size="sm"
- icon={<Plus size={14} />}
+ icon={<LuPlus size={14} />}
  onClick={() => setModalOpen(true)}
  >
  New request
@@ -229,7 +229,7 @@ export default function SelfServiceLeavePage() {
  title="No leave requests yet"
  description="File your first leave request to see it here."
  action={
- <Button variant="primary" icon={<Plus size={14} />} onClick={() => setModalOpen(true)}>
+ <Button variant="primary" icon={<LuPlus size={14} />} onClick={() => setModalOpen(true)}>
  New request
  </Button>
  }

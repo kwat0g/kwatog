@@ -24,7 +24,7 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, PauseCircle, Clock } from 'lucide-react';
+import { LuTriangleAlert, LuCirclePause, LuClock } from '@/lib/icons';
 import { workOrdersApi, type WorkOrderListParams } from '@/api/production/workOrders';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -278,10 +278,10 @@ export default function WorkOrdersListPage() {
   );
 }
 
-const TONE: Record<ReasonKind, { accent: string; icon: typeof AlertTriangle; label: string }> = {
-  stuck: { accent: 'text-warning', icon: PauseCircle, label: 'Paused' },
-  overdue: { accent: 'text-danger', icon: AlertTriangle, label: 'Overdue' },
-  'late-start': { accent: 'text-warning', icon: Clock, label: 'Late start' },
+const TONE: Record<ReasonKind, { accent: string; icon: typeof LuTriangleAlert; label: string }> = {
+  stuck: { accent: 'text-warning', icon: LuCirclePause, label: 'Paused' },
+  overdue: { accent: 'text-danger', icon: LuTriangleAlert, label: 'Overdue' },
+  'late-start': { accent: 'text-warning', icon: LuClock, label: 'Late start' },
 };
 
 /**

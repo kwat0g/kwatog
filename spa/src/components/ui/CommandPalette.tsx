@@ -1,26 +1,27 @@
+import { IconType } from '@/lib/icons';
 /** Global ⌘K command palette: recent items, page navigation, record search. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/cn';
 import { useNavigate } from 'react-router-dom';
 import {
-  Search,
-  Loader2,
-  Clock,
-  X,
-  User,
-  ShoppingCart,
-  Package,
-  FileText,
-  Receipt,
-  Wrench,
-  Box,
-  Building2,
-  Truck,
-  AlertTriangle,
-  ArrowRight,
-  type LucideIcon,
-} from 'lucide-react';
+  LuSearch,
+  LuLoader,
+  LuClock,
+  LuX,
+  LuUser,
+  LuShoppingCart,
+  LuPackage,
+  LuFileText,
+  LuReceipt,
+  LuWrench,
+  LuBox,
+  LuBuilding2,
+  LuTruck,
+  LuTriangleAlert,
+  LuArrowRight,
+
+} from '@/lib/icons';
 import { client } from '@/api/client';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { formatPeso } from '@/lib/formatNumber';
@@ -66,22 +67,22 @@ interface SearchResponse {
 /** Stable empty reference — a fresh `[]` per render would break the `sections` memo. */
 const NO_GROUPS: PaletteGroup[] = [];
 
-const ICONS: Record<GroupType, LucideIcon> = {
-  employee: User,
-  sales_order: ShoppingCart,
-  purchase_order: Package,
-  work_order: Wrench,
-  invoice: Receipt,
-  bill: FileText,
-  product: Box,
-  item: Box,
-  customer: Building2,
-  vendor: Truck,
-  ncr: AlertTriangle,
+const ICONS: Record<GroupType, IconType> = {
+  employee: LuUser,
+  sales_order: LuShoppingCart,
+  purchase_order: LuPackage,
+  work_order: LuWrench,
+  invoice: LuReceipt,
+  bill: LuFileText,
+  product: LuBox,
+  item: LuBox,
+  customer: LuBuilding2,
+  vendor: LuTruck,
+  ncr: LuTriangleAlert,
 };
 
-function iconForType(type?: string | null): LucideIcon {
-  return (type && type in ICONS ? ICONS[type as GroupType] : FileText) as LucideIcon;
+function iconForType(type?: string | null): IconType {
+  return (type && type in ICONS ? ICONS[type as GroupType] : LuFileText) as IconType;
 }
 
 /** Normalized row — every section renders through this shape. */
@@ -91,7 +92,7 @@ interface Row {
   sublabel?: string | null;
   status?: string | null;
   amount?: string | null;
-  icon: LucideIcon;
+  icon: IconType;
   /** Palette group type ('sales_order', 'page', …) — preserved into recents. */
   type?: string | null;
   /** Record IDs render in mono; page names in sans. */
@@ -101,7 +102,7 @@ interface Row {
 interface Section {
   key: string;
   label: string;
-  icon?: LucideIcon;
+  icon?: IconType;
   rows: Row[];
   /** Optional affordance on the right of the section header. */
   headerAction?: { label: string; onClick: () => void };
@@ -194,7 +195,7 @@ export function CommandPalette({ open, onClose }: Props) {
         out.push({
           key: 'recent',
           label: 'Recent',
-          icon: Clock,
+          icon: LuClock,
           headerAction: { label: 'Clear', onClick: clearRecents },
           rows: recents.map((r) => ({
             url: r.url,
@@ -202,7 +203,7 @@ export function CommandPalette({ open, onClose }: Props) {
             sublabel: r.sublabel,
             status: r.status,
             type: r.type,
-            icon: r.type === 'page' ? ArrowRight : iconForType(r.type),
+            icon: r.type === 'page' ? LuArrowRight : iconForType(r.type),
             mono: r.type !== 'page',
           })),
         });
@@ -342,7 +343,7 @@ export function CommandPalette({ open, onClose }: Props) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2 px-3 py-2.5 border-b border-default">
-          <Search size={14} className="text-muted shrink-0" />
+          <LuSearch size={14} className="text-muted shrink-0" />
           <input
             ref={inputRef}
             value={q}
@@ -351,7 +352,7 @@ export function CommandPalette({ open, onClose }: Props) {
             className="flex-1 bg-transparent text-sm outline-none placeholder:text-subtle"
             aria-label="Search query"
           />
-          {loading && <Loader2 size={14} className="text-muted animate-spin" />}
+          {loading && <LuLoader size={14} className="text-muted animate-spin" />}
           <kbd className="font-mono text-2xs text-subtle border border-subtle rounded px-1 py-0.5">
             ESC
           </kbd>
@@ -391,7 +392,7 @@ export function CommandPalette({ open, onClose }: Props) {
                   <LinkButton
                     tone="muted"
                     onClick={section.headerAction.onClick}
-                    icon={<X size={10} />}
+                    icon={<LuX size={10} />}
                     className="normal-case tracking-normal font-normal"
                   >
                     {section.headerAction.label}

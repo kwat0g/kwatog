@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
-import { Send, ThumbsUp, ThumbsDown, X, ShoppingCart, FileText, AlertTriangle, Zap, Sparkles } from 'lucide-react';
+import { LuSend, LuThumbsUp, LuThumbsDown, LuX, LuShoppingCart, LuFileText, LuTriangleAlert, LuZap, LuSparkles } from '@/lib/icons';
 import { billsApi } from '@/api/accounting/bills';
 import { purchaseRequestsApi } from '@/api/purchasing/purchase-requests';
 import { downloadAuthenticatedFile } from '@/api/download';
@@ -108,23 +108,23 @@ export default function PurchaseRequestDetailPage() {
  <div className="flex items-center gap-2">
  <Chip variant={statusVariant[data.status]}>{data.status_label ?? data.status}</Chip>
  {data.is_auto_generated && <Chip variant="warning">AUTO</Chip>}
- {data.is_urgent && <Chip variant="danger"><Zap size={12} className="inline mr-0.5" />URGENT</Chip>}
+ {data.is_urgent && <Chip variant="danger"><LuZap size={12} className="inline mr-0.5" />URGENT</Chip>}
  {data.status === 'draft' && can('purchasing.pr.create') && (
- <Button size="sm" variant="primary" icon={<Send size={14} />} onClick={() => setConfirm('submit')} loading={submit.isPending}>Submit</Button>
+ <Button size="sm" variant="primary" icon={<LuSend size={14} />} onClick={() => setConfirm('submit')} loading={submit.isPending}>Submit</Button>
  )}
  {data.status === 'pending' && can('purchasing.pr.approve') && (
  <>
- <Button size="xs" variant="secondary" icon={<ThumbsDown size={14} />} onClick={() => setRejectOpen(true)} loading={reject.isPending}>Reject</Button>
- <Button size="xs" variant="primary" icon={<ThumbsUp size={14} />} onClick={() => setConfirm('approve')} loading={approve.isPending}>Approve</Button>
+ <Button size="xs" variant="secondary" icon={<LuThumbsDown size={14} />} onClick={() => setRejectOpen(true)} loading={reject.isPending}>Reject</Button>
+ <Button size="xs" variant="primary" icon={<LuThumbsUp size={14} />} onClick={() => setConfirm('approve')} loading={approve.isPending}>Approve</Button>
  </>
  )}
  {data.status === 'approved' && can('purchasing.po.create') && (
- <Button size="sm" variant="primary" icon={<ShoppingCart size={14} />} onClick={() => nav(`/purchasing/purchase-orders/create?pr_id=${data.id}`)}>Convert to PO</Button>
+ <Button size="sm" variant="primary" icon={<LuShoppingCart size={14} />} onClick={() => nav(`/purchasing/purchase-orders/create?pr_id=${data.id}`)}>Convert to PO</Button>
  )}
- <Button size="sm" variant="secondary" icon={<FileText size={14} />}
+ <Button size="sm" variant="secondary" icon={<LuFileText size={14} />}
  onClick={() => void downloadAuthenticatedFile(purchaseRequestsApi.pdfUrl(data.id), { openInNewTab: true, errorMessage: 'Failed to generate purchase request PDF.' })}>PDF</Button>
  {(data.status === 'draft' || data.status === 'pending') && (
- <Button size="sm" variant="secondary" icon={<X size={14} />} onClick={() => setConfirm('cancel')} loading={cancel.isPending}>Cancel</Button>
+ <Button size="sm" variant="secondary" icon={<LuX size={14} />} onClick={() => setConfirm('cancel')} loading={cancel.isPending}>Cancel</Button>
  )}
  </div>
  }
@@ -132,7 +132,7 @@ export default function PurchaseRequestDetailPage() {
  <div className="px-5 py-4 space-y-4">
   {data.status === 'approved' && data.po_conversion_status === 'manual_required' && (
   <div className="flex items-center gap-3 rounded-md border border-warning/40 bg-warning-bg/10 px-4 py-3 text-sm">
-  <AlertTriangle size={16} className="shrink-0 text-warning-fg" />
+  <LuTriangleAlert size={16} className="shrink-0 text-warning-fg" />
   <div className="flex-1">
   <div className="font-medium">Manual PO conversion required</div>
   <div className="text-muted">{data.po_conversion_note ?? 'Automatic conversion could not complete. Review the request and convert it manually.'}</div>
@@ -142,7 +142,7 @@ export default function PurchaseRequestDetailPage() {
   )}
   {data.status === 'approved' && data.po_conversion_status === 'pending' && (
   <div className="flex items-center gap-3 rounded-md border border-info/40 bg-info-bg/10 px-4 py-3 text-sm">
-  <ShoppingCart size={16} className="shrink-0 text-info-fg" />
+  <LuShoppingCart size={16} className="shrink-0 text-info-fg" />
   <div>
   <div className="font-medium">Automatic PO conversion pending</div>
   <div className="text-muted">The approved request is queued for purchase-order creation.</div>
@@ -151,7 +151,7 @@ export default function PurchaseRequestDetailPage() {
   )}
   {data.status === 'converted' && data.purchase_orders?.some((po) => po.is_auto_generated) && (
   <div className="flex items-center gap-3 rounded-md border border-success/40 bg-success-bg/10 px-4 py-3 text-sm">
-  <Sparkles size={16} className="shrink-0 text-success-fg" />
+  <LuSparkles size={16} className="shrink-0 text-success-fg" />
   <div>
   <div className="font-medium">Auto-converted to purchase order</div>
   <div className="text-muted">
@@ -171,7 +171,7 @@ export default function PurchaseRequestDetailPage() {
   visible from the PR; a draft supplier bill on any linked PO can be posted here. */}
   {data.purchase_orders?.some((po) => po.bill?.status === 'draft') && (
   <div className="flex items-center gap-3 rounded-md border border-success/40 bg-success-bg/10 px-4 py-3 text-sm">
-  <FileText size={16} className="shrink-0 text-success-fg" />
+  <LuFileText size={16} className="shrink-0 text-success-fg" />
   <div className="flex-1">
   <div className="font-medium">Supplier bill auto-created</div>
   <div className="text-muted">
@@ -186,7 +186,7 @@ export default function PurchaseRequestDetailPage() {
   <Chip variant="neutral">{po.bill!.status_label ?? po.bill!.status}</Chip>
   <span className="text-2xs text-muted">on <Link to={`/purchasing/purchase-orders/${po.id}`} className="font-mono text-accent hover:underline">{po.po_number}</Link></span>
   {can('accounting.bills.create') && (
-  <Button variant="secondary" size="xs" icon={<Send size={11} />} onClick={() => setPostBillId(po.bill!.id)}>
+  <Button variant="secondary" size="xs" icon={<LuSend size={11} />} onClick={() => setPostBillId(po.bill!.id)}>
   Post
   </Button>
   )}
@@ -233,7 +233,7 @@ export default function PurchaseRequestDetailPage() {
  <Panel title="Header">
  <dl className="grid grid-cols-3 gap-y-3 gap-x-6 text-sm">
  <div><dt className="text-2xs uppercase tracking-wider text-muted">Date</dt><dd className="font-mono">{formatDate(data.date)}</dd></div>
- <div><dt className="text-2xs uppercase tracking-wider text-muted">Priority</dt><dd className="flex items-center gap-1">{data.priority_label ?? data.priority}{data.is_urgent && <span title={data.urgency_reason ?? ''}><AlertTriangle size={12} className="text-danger-fg" /></span>}</dd></div>
+ <div><dt className="text-2xs uppercase tracking-wider text-muted">Priority</dt><dd className="flex items-center gap-1">{data.priority_label ?? data.priority}{data.is_urgent && <span title={data.urgency_reason ?? ''}><LuTriangleAlert size={12} className="text-danger-fg" /></span>}</dd></div>
  <div><dt className="text-2xs uppercase tracking-wider text-muted">Department</dt><dd>{data.department?.name ?? '—'}</dd></div>
  <div><dt className="text-2xs uppercase tracking-wider text-muted">Template</dt><dd>{data.template?.name ?? '—'}</dd></div>
  <div><dt className="text-2xs uppercase tracking-wider text-muted">Requester</dt><dd>{data.requester?.name ?? '—'}</dd></div>
@@ -359,20 +359,35 @@ export default function PurchaseRequestDetailPage() {
  }
 
  /** PR chain: Draft → Submitted → each approval step → Approved → Converted. */
-function buildPrChainSteps(pr: PurchaseRequest): ChainStep[] {
+ // eslint-disable-next-line react-refresh/only-export-components -- exported for pure chain-state tests
+export function buildPrChainSteps(pr: PurchaseRequest): ChainStep[] {
  const steps: ChainStep[] = [
  { key: 'draft', label: 'Draft', date: formatDate(pr.date),
  state: pr.status === 'draft' ? 'active' : 'done' },
  { key: 'submit', label: 'Submitted', date: pr.submitted_at ? formatDate(pr.submitted_at) : undefined,
  state: pr.submitted_at ? 'done' : pr.status === 'draft' ? 'pending' : 'active' },
  ];
- for (const r of (pr.approval_records ?? [])) {
- steps.push({
- key: `step-${r.step_order}`,
- label: r.role_slug.replace(/_/g, ' '),
- date: r.acted_at ? formatDate(r.acted_at) : undefined,
- state: r.action === 'approved' ? 'done' : r.action === 'pending' ? 'active' : 'pending',
- });
+ let rejectionSeen = false;
+ const approvalRecords = [...(pr.approval_records ?? [])].sort((a, b) => a.step_order - b.step_order);
+ for (const r of approvalRecords) {
+  const isRejected = r.action === 'rejected';
+  const isSkipped = r.action === 'skipped' || (rejectionSeen && r.action === 'pending');
+  const actionLabel = isRejected ? 'Rejected' : isSkipped ? 'Skipped' : r.action === 'approved' ? 'Approved' : 'Pending';
+  const remark = r.remarks?.trim();
+  const description = [
+   actionLabel,
+   r.acted_at ? formatDate(r.acted_at) : null,
+   remark ? `${isRejected ? 'Reason' : 'Remarks'}: ${remark}` : null,
+   rejectionSeen && r.action === 'pending' ? 'Not reached after an earlier rejection.' : null,
+  ].filter(Boolean).join(' · ');
+  steps.push({
+  key: `step-${r.step_order}`,
+  label: r.role_slug.replace(/_/g, ' '),
+  date: r.acted_at ? formatDate(r.acted_at) : undefined,
+  state: isRejected ? 'rejected' : isSkipped ? 'skipped' : r.action === 'approved' ? 'done' : 'active',
+  description,
+  });
+  rejectionSeen = rejectionSeen || isRejected;
  }
  steps.push({
  key: 'approved', label: 'Approved',

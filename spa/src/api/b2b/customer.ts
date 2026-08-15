@@ -46,6 +46,27 @@ export const customerPortalApi = {
  return data.data;
  },
 
+ forgotPassword: async (email: string) => {
+ await getPortalCsrf();
+ const { data } = await portalClient.post<{ message: string }>('/b2b/customer/forgot-password', { email });
+ return data;
+ },
+
+ resetPassword: async (token: string, password: string, password_confirmation: string) => {
+ await getPortalCsrf();
+ const { data } = await portalClient.post<{ message: string }>('/b2b/customer/reset-password', {
+ token,
+ password,
+ password_confirmation,
+ });
+ return data;
+ },
+
+ changePassword: async (payload: { current_password: string; new_password: string; new_password_confirmation: string }) => {
+  const { data } = await portalClient.post<{ message: string }>('/b2b/customer/change-password', payload);
+  return data;
+ },
+
  // Shared read-only policy values, authenticated with the portal bearer token.
  businessPolicies: async () => {
  const { data } = await portalClient.get<{ data: BusinessPolicies }>('/business-policies');
@@ -101,6 +122,14 @@ export const customerPortalApi = {
  getDelivery: async (id: string) => {
  const { data } = await portalClient.get<{ data: PortalDeliveryDetail }>(`/b2b/customer/deliveries/${id}`);
  return data.data;
+ },
+
+ viewDeliveryProof: async (deliveryId: string, proofId: string) => {
+ const { data } = await portalClient.get<Blob>(
+ `/b2b/customer/deliveries/${deliveryId}/proofs/${proofId}/view`,
+ { responseType: 'blob' }
+ );
+ return data;
  },
 
  // ── Complaints (RMA / Customer Complaints) ─────────

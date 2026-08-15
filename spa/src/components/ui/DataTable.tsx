@@ -7,7 +7,7 @@ import {
   type ReactNode,
   type KeyboardEvent,
 } from 'react';
-import { ArrowDown, ArrowUp, ChevronDown } from 'lucide-react';
+import { LuArrowDown, LuArrowUp, LuChevronDown } from '@/lib/icons';
 import { cn } from '@/lib/cn';
 import { focusRingInset } from '@/lib/focus';
 import { Button } from './Button';
@@ -249,7 +249,7 @@ export function DataTable<T>({
     const active = currentSort === col.key;
     return (
       <span className={cn('inline-block ml-1', !active && 'opacity-30')}>
-        {active && currentDirection === 'asc' ? <ArrowUp size={10} /> : <ArrowDown size={10} />}
+        {active && currentDirection === 'asc' ? <LuArrowUp size={10} /> : <LuArrowDown size={10} />}
       </span>
     );
   };
@@ -481,7 +481,7 @@ export function DataTable<T>({
                               focusRingInset,
                             )}
                           >
-                            <ChevronDown
+                            <LuChevronDown
                               size={12}
                               className={cn(
                                 'transition-transform duration-fast',

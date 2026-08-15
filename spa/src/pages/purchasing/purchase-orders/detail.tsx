@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
-import { Send, ThumbsUp, ThumbsDown, Truck, X, FileText, CheckSquare, Scale, Receipt, Package as PackageIcon, AlertTriangle } from 'lucide-react';
+import { LuSend, LuThumbsUp, LuThumbsDown, LuTruck, LuX, LuFileText, LuSquareCheck, LuScale, LuReceipt, LuPackage as PackageIcon, LuTriangleAlert } from '@/lib/icons';
 import { billsApi } from '@/api/accounting/bills';
 import { purchaseOrdersApi } from '@/api/purchasing/purchase-orders';
 import { downloadAuthenticatedFile } from '@/api/download';
@@ -119,29 +119,29 @@ export default function PurchaseOrderDetailPage() {
  <Chip
  variant={data.bills.some((b) => b.has_variances && !b.three_way_overridden) ? 'warning' : 'success'}
  >
- <Scale size={12} className="mr-0.5" />
+ <LuScale size={12} className="mr-0.5" />
  {data.bills.some((b) => b.has_variances && !b.three_way_overridden) ? 'Variance' : 'Matched'}
  </Chip>
  )}
  {data.status === 'draft' && can('purchasing.po.create') && (
- <Button size="sm" variant="primary" icon={<Send size={14} />} onClick={() => setConfirm('submit')} loading={submit.isPending}>Submit</Button>
+ <Button size="sm" variant="primary" icon={<LuSend size={14} />} onClick={() => setConfirm('submit')} loading={submit.isPending}>Submit</Button>
  )}
  {(data.status === 'draft' || data.status === 'pending_approval') && can('purchasing.po.approve') && (
  <>
- <Button size="xs" variant="secondary" icon={<ThumbsDown size={14} />} onClick={() => setRejectOpen(true)} loading={reject.isPending}>Reject</Button>
- <Button size="xs" variant="primary" icon={<ThumbsUp size={14} />} onClick={() => setConfirm('approve')} loading={approve.isPending}>Approve</Button>
+ <Button size="xs" variant="secondary" icon={<LuThumbsDown size={14} />} onClick={() => setRejectOpen(true)} loading={reject.isPending}>Reject</Button>
+ <Button size="xs" variant="primary" icon={<LuThumbsUp size={14} />} onClick={() => setConfirm('approve')} loading={approve.isPending}>Approve</Button>
  </>
  )}
  {data.status === 'approved' && can('purchasing.po.send') && (
- <Button size="sm" variant="primary" icon={<Truck size={14} />} onClick={() => setConfirm('send')} loading={send.isPending}>Mark as sent</Button>
+ <Button size="sm" variant="primary" icon={<LuTruck size={14} />} onClick={() => setConfirm('send')} loading={send.isPending}>Mark as sent</Button>
  )}
  {data.status === 'received' && can('purchasing.po.create') && (
- <Button size="sm" variant="secondary" icon={<CheckSquare size={14} />} onClick={() => setConfirm('close')} loading={close.isPending}>Close</Button>
+ <Button size="sm" variant="secondary" icon={<LuSquareCheck size={14} />} onClick={() => setConfirm('close')} loading={close.isPending}>Close</Button>
  )}
- <Button size="sm" variant="secondary" icon={<FileText size={14} />}
+ <Button size="sm" variant="secondary" icon={<LuFileText size={14} />}
  onClick={() => void downloadAuthenticatedFile(purchaseOrdersApi.pdfUrl(id), { openInNewTab: true, errorMessage: 'Failed to generate purchase order PDF.' })}>PDF</Button>
  {!['received', 'closed', 'cancelled'].includes(data.status) && (
- <Button size="sm" variant="secondary" icon={<X size={14} />} onClick={() => setCancelOpen(true)} loading={cancel.isPending}>Cancel</Button>
+ <Button size="sm" variant="secondary" icon={<LuX size={14} />} onClick={() => setCancelOpen(true)} loading={cancel.isPending}>Cancel</Button>
  )}
  </div>
  }
@@ -223,7 +223,8 @@ export default function PurchaseOrderDetailPage() {
  </Panel>
  )}
  <Panel title="Line items">
- <table className={tableCls}>
+ <div className="overflow-x-auto">
+ <table className={`${tableCls} min-w-[720px]`}>
  <thead><tr className={theadTrCls}>
  <Th>Item</Th>
  <Th>Description</Th>
@@ -247,6 +248,7 @@ export default function PurchaseOrderDetailPage() {
  ))}
  </tbody>
  </table>
+ </div>
  </Panel>
  </div>
  <div className="space-y-4">
@@ -256,7 +258,7 @@ export default function PurchaseOrderDetailPage() {
  {/* ADV5 — Billing process panel: GRN → 3-way match → Bill → Payment. */}
  {(data.status !== 'draft' && data.status !== 'pending_approval' && data.status !== 'cancelled') && (
  <Panel
- title={<span className="inline-flex items-center gap-1.5"><Receipt size={14} className="text-accent" />Billing</span>}
+ title={<span className="inline-flex items-center gap-1.5"><LuReceipt size={14} className="text-accent" />Billing</span>}
  meta={(() => {
  const grnCount = data.goods_receipt_notes?.length ?? 0;
  const billCount = data.bills?.length ?? 0;
@@ -286,14 +288,14 @@ export default function PurchaseOrderDetailPage() {
 
  {/* Step 2 — 3-way match */}
  <div className="flex items-start gap-2">
- <Scale size={14} className="mt-0.5 text-muted shrink-0" />
+ <LuScale size={14} className="mt-0.5 text-muted shrink-0" />
  <div className="flex-1">
  <div className="text-2xs uppercase tracking-wider text-muted">3-way match</div>
  {(data.bills?.length ?? 0) === 0 ? (
  <div className="text-muted">Pending bill</div>
  ) : data.bills!.some((b) => b.has_variances && !b.three_way_overridden) ? (
  <div className="inline-flex items-center gap-1 text-warning-fg">
- <AlertTriangle size={12} /> Variance detected — review required
+ <LuTriangleAlert size={12} /> Variance detected — review required
  </div>
  ) : data.bills!.some((b) => b.three_way_overridden) ? (
  <span className="text-info-fg">Variance overridden by Finance</span>
@@ -305,7 +307,7 @@ export default function PurchaseOrderDetailPage() {
 
  {/* Step 3 — Billing */}
  <div className="flex items-start gap-2">
- <Receipt size={14} className="mt-0.5 text-muted shrink-0" />
+ <LuReceipt size={14} className="mt-0.5 text-muted shrink-0" />
  <div className="flex-1">
  <div className="text-2xs uppercase tracking-wider text-muted">Bills</div>
  {(data.bills?.length ?? 0) === 0 ? (
@@ -334,7 +336,7 @@ export default function PurchaseOrderDetailPage() {
   <Button
   variant="secondary"
   size="xs"
-  icon={<Send size={12} />}
+  icon={<LuSend size={12} />}
   onClick={() => setPostBillId(b.id)}
   >
   Post bill

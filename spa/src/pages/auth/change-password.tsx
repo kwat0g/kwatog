@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
-import { Eye, EyeOff, Check, X } from 'lucide-react';
+import { LuEye, LuEyeOff } from '@/lib/icons';
 import { authApi } from '@/api/auth';
 import { useAuthStore } from '@/stores/authStore';
 import { Button } from '@/components/ui/Button';
@@ -14,7 +14,11 @@ import { Input } from '@/components/ui/Input';
 import { Panel } from '@/components/ui/Panel';
 import { FormErrorSummary } from '@/components/ui/FormErrorSummary';
 import { PasswordStrength } from '@/components/ui/PasswordStrength';
-import { cn } from '@/lib/cn';
+import {
+  PasswordMatchHint,
+  PasswordRequirements,
+} from '@/components/ui/PasswordRequirements';
+import { isStrongPassword, passwordMinimumLength } from '@/components/ui/passwordValidation';
 
 const schema = z
  .object({
@@ -50,6 +54,10 @@ export default function ChangePasswordPage() {
  });
 
  const newPassword = watch('new_password', '');
+ const confirmation = watch('new_password_confirmation', '');
+ const currentPassword = watch('current_password', '');
+ const minimumLength = passwordMinimumLength(policy);
+ const passwordIsStrong = isStrongPassword(newPassword, policy);
 
  const onSubmit = async (data: ChangePasswordForm) => {
  try {
@@ -98,7 +106,7 @@ export default function ChangePasswordPage() {
  aria-label={shown ? `Hide ${label}` : `Show ${label}`}
  className="flex h-full items-center justify-center px-2 text-muted transition-colors hover:text-primary"
  >
- {shown ? <EyeOff size={15} /> : <Eye size={15} />}
+ {shown ? <LuEyeOff size={15} /> : <LuEye size={15} />}
  </button>
  );
 
@@ -128,6 +136,7 @@ export default function ChangePasswordPage() {
  type={showNew ? 'text' : 'password'}
  label="New password"
  autoComplete="new-password"
+ minLength={minimumLength}
  {...register('new_password')}
  error={errors.new_password?.message}
  suffix={
@@ -138,7 +147,7 @@ export default function ChangePasswordPage() {
  />
  }
  />
- <PasswordStrength password={newPassword} />
+ <PasswordStrength password={newPassword} minimumLength={minimumLength} />
  <Input
  type={showConfirm ? 'text' : 'password'}
  label="Confirm new password"
@@ -153,34 +162,15 @@ export default function ChangePasswordPage() {
  />
  }
  />
+ <PasswordMatchHint password={newPassword} confirmation={confirmation} />
 
- <ul className="mt-1 space-y-0.5 text-xs">
- {[
- { passed: newPassword.length >= (policy?.minimum_length ?? Number.MAX_SAFE_INTEGER), label: policy ? `At least ${policy.minimum_length} characters` : 'Loading password policy…' },
- ...(policy?.requires_uppercase ? [{ passed: /[A-Z]/.test(newPassword), label: 'An uppercase letter' }] : []),
- ...(policy?.requires_digit ? [{ passed: /[0-9]/.test(newPassword), label: 'A digit' }] : []),
- ...(policy?.requires_special ? [{ passed: /[^A-Za-z0-9]/.test(newPassword), label: 'A special character' }] : []),
- ].map((p) => {
- return (
- <li
- key={p.label}
- className={cn(
- 'flex items-center gap-1.5 transition-colors',
- p.passed ? 'text-success-fg' : 'text-muted',
- )}
- >
- {p.passed ? <Check size={12} /> : <X size={12} />}
- {p.label}
- </li>
- );
- })}
- </ul>
+ <PasswordRequirements password={newPassword} policy={policy} className="mt-1" />
 
  <Button
  type="submit"
  variant="primary"
  loading={isSubmitting}
- disabled={isSubmitting}
+ disabled={isSubmitting || !currentPassword || !passwordIsStrong || newPassword !== confirmation}
  className="mt-2 w-full"
  >
  {isSubmitting ? 'Updating…' : 'Update password'}

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { Search, X } from 'lucide-react';
+import { LuSearch, LuX } from '@/lib/icons';
 import { cn } from '@/lib/cn';
 import { focusRing } from '@/lib/focus';
 import { Select } from './Select';
@@ -109,7 +109,7 @@ export function FilterBar({
  role="search"
  className="flex items-center h-8 w-64 rounded-md border border-default bg-canvas px-2.5 transition-colors duration-fast focus-within:ring-2 focus-within:ring-accent focus-within:border-accent"
  >
- <Search size={14} className="text-muted shrink-0" aria-hidden />
+ <LuSearch size={14} className="text-muted shrink-0" aria-hidden />
  <input
  ref={inputRef}
  type="text"
@@ -126,7 +126,7 @@ export function FilterBar({
  aria-label="Clear search"
  className={cn('shrink-0 text-muted hover:text-primary rounded-sm cursor-pointer', focusRing)}
  >
- <X size={13} />
+ <LuX size={13} />
  </button>
  )}
  </form>

@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
-import { ShieldAlert } from 'lucide-react';
+import { LuShieldAlert } from '@/lib/icons';
 import { mrbApi } from '@/api/inventory/mrb';
 import { itemsApi } from '@/api/inventory/items';
 import { warehouseApi } from '@/api/inventory/warehouse';
@@ -134,7 +134,7 @@ export default function MrbListPage() {
  subtitle={data ? `${data.meta.total} records` : undefined}
  actions={
  canManage ? (
- <Button variant="primary" icon={<ShieldAlert size={14} />} onClick={() => setHoldOpen(true)}>
+ <Button variant="primary" icon={<LuShieldAlert size={14} />} onClick={() => setHoldOpen(true)}>
  Raise hold
  </Button>
  ) : undefined

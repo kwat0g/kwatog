@@ -1,5 +1,6 @@
 import { ProgressBar } from '@/components/ui/ProgressBar';
-import type { WidgetBreakdownData, WidgetSegmentTone } from '@/api/dashboard-layout';
+import type { WidgetBreakdownData, WidgetSegmentTone, WidgetValueKind } from '@/api/dashboard-layout';
+import { formatPeso } from '@/lib/formatNumber';
 
 /**
  * A breakdown widget: one labelled bar per segment, share-of-total width.
@@ -19,7 +20,15 @@ const toneVariant: Record<WidgetSegmentTone, 'accent' | 'success' | 'info' | 'wa
     danger: 'danger',
   };
 
-export function WidgetBreakdown({ total, segments }: WidgetBreakdownData) {
+function formatValue(value: number, kind?: WidgetValueKind): string {
+  if (kind === 'currency') return formatPeso(value);
+  if (kind === 'percent') return `${value.toFixed(1)}%`;
+  if (kind === 'hours') return `${value.toFixed(2)} h`;
+  if (kind === 'decimal') return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  return value.toLocaleString();
+}
+
+export function WidgetBreakdown({ total, segments, kind }: WidgetBreakdownData) {
   if (segments.length === 0) {
     return <p className="text-xs text-muted">Nothing to break down.</p>;
   }
@@ -27,7 +36,7 @@ export function WidgetBreakdown({ total, segments }: WidgetBreakdownData) {
   return (
     <div className="space-y-2">
       <div className="text-2xl font-mono tabular-nums font-medium text-primary">
-        {total.toLocaleString()}
+        {formatValue(total, kind)}
       </div>
 
       <ul className="divide-y divide-subtle">
@@ -40,7 +49,7 @@ export function WidgetBreakdown({ total, segments }: WidgetBreakdownData) {
               <div className="flex items-baseline justify-between gap-2">
                 <span className="truncate text-xs text-secondary">{segment.label}</span>
                 <span className="font-mono text-xs tabular-nums text-primary">
-                  {segment.value.toLocaleString()}
+                  {formatValue(segment.value, kind)}
                 </span>
               </div>
               <ProgressBar value={share} variant={toneVariant[segment.tone]} />

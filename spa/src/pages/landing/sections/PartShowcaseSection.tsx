@@ -17,7 +17,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { Layers, Box, Hand, RotateCcw } from 'lucide-react';
+import { LuLayers, LuBox, LuHand, LuRotateCcw } from '@/lib/icons';
 import { SectionHeading } from '../components/SectionHeading';
 import { ScrambleText } from '../components/ScrambleText';
 import { ProfileSilhouette } from '../components/ProfileSilhouette';
@@ -136,17 +136,17 @@ export function PartShowcaseSection() {
                       : 'border-strong text-primary hover:border-accent/50 hover:bg-elevated',
                   )}
                 >
-                  {exploded ? <Box size={15} /> : <Layers size={15} />}
+                  {exploded ? <LuBox size={15} /> : <LuLayers size={15} />}
                   {exploded ? 'Assemble part' : 'Exploded view'}
                 </button>
 
                 <p className="mt-4 flex items-center gap-4 font-mono text-[10px] uppercase tracking-[0.16em] text-text-subtle">
                   <span className="flex items-center gap-1.5">
-                    <Hand size={12} />
+                    <LuHand size={12} />
                     Drag to rotate
                   </span>
                   <span className="flex items-center gap-1.5">
-                    <RotateCcw size={12} />
+                    <LuRotateCcw size={12} />
                     Auto-turntable
                   </span>
                 </p>

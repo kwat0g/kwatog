@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Check, X, RotateCcw } from 'lucide-react';
+import { LuCheck, LuX, LuRotateCcw } from '@/lib/icons';
 import { overtimeApi } from '@/api/attendance/overtime';
 import { attendancesApi } from '@/api/attendance/attendances';
 import { Button } from '@/components/ui/Button';
@@ -102,12 +102,12 @@ export default function OvertimeDetailPage() {
  <>
  {canApprove && (
  <>
- <Button variant="primary" size="xs" icon={<Check size={12} />} disabled={approveMut.isPending} loading={approveMut.isPending} onClick={() => setConfirmApprove(true)}>Approve</Button>
- <Button variant="danger" size="xs" icon={<X size={12} />} onClick={() => setReject(true)}>Reject</Button>
+ <Button variant="primary" size="xs" icon={<LuCheck size={12} />} disabled={approveMut.isPending} loading={approveMut.isPending} onClick={() => setConfirmApprove(true)}>Approve</Button>
+ <Button variant="danger" size="xs" icon={<LuX size={12} />} onClick={() => setReject(true)}>Reject</Button>
  </>
  )}
  {canCancel && (
- <Button variant="secondary" size="sm" icon={<RotateCcw size={12} />} onClick={() => setConfirmCancel(true)} disabled={cancelMut.isPending}>Cancel request</Button>
+ <Button variant="secondary" size="sm" icon={<LuRotateCcw size={12} />} onClick={() => setConfirmCancel(true)} disabled={cancelMut.isPending}>Cancel request</Button>
  )}
  </>
  }

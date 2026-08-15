@@ -1,3 +1,4 @@
+import { IconType } from '@/lib/icons';
 /**
  * Sprint P4 — per-notification-type metadata for the bell dropdown
  * and notifications page (icon + group bucket).
@@ -21,37 +22,37 @@
  * - system: informational progress through a chain
  */
 import {
- AlertCircle,
- AlertTriangle,
- Bell,
- Calendar,
- CheckCircle2,
- CircleDollarSign,
- ClipboardCheck,
- Factory,
- FileText,
- FileWarning,
- Gauge,
- GraduationCap,
- HandCoins,
- KeyRound,
- Package,
- PackageCheck,
- Receipt,
- ShieldAlert,
- ShieldCheck,
- TrendingDown,
- Truck,
- UserPlus,
- Users,
- Wrench,
- type LucideIcon,
-} from 'lucide-react';
+ LuCircleAlert,
+ LuTriangleAlert,
+ LuBell,
+ LuCalendar,
+ LuCircleCheck,
+ LuCircleDollarSign,
+ LuClipboardCheck,
+ LuFactory,
+ LuFileText,
+ LuFileWarning,
+ LuGauge,
+ LuGraduationCap,
+ LuHandCoins,
+ LuKeyRound,
+ LuPackage,
+ LuPackageCheck,
+ LuReceipt,
+ LuShieldAlert,
+ LuShieldCheck,
+ LuTrendingDown,
+ LuTruck,
+ LuUserPlus,
+ LuUsers,
+ LuWrench,
+
+} from '@/lib/icons';
 
 export type NotificationGroup = 'approvals' | 'alerts' | 'system';
 
 export interface NotificationMeta {
- icon: LucideIcon;
+ icon: IconType;
  group: NotificationGroup;
  /** Friendly label for the chip on the notifications list. */
  label: string;
@@ -64,67 +65,70 @@ export interface NotificationMeta {
  */
 const BY_TYPE: Record<string, NotificationMeta> = {
  // ── Chain 1 · Order to Cash ──────────────────────────────────────────
- 'chain.so_confirmed': { icon: ClipboardCheck, group: 'system', label: 'Sales' },
- 'chain.in_process_qc_required': { icon: ShieldCheck, group: 'system', label: 'Quality' },
- 'production.wo_completed': { icon: Factory, group: 'system', label: 'Production' },
- 'chain.outgoing_qc_required': { icon: ShieldCheck, group: 'system', label: 'Quality' },
- 'quality.inspection_failed': { icon: ShieldAlert, group: 'alerts', label: 'Quality' },
- 'chain.delivery_drafted': { icon: Truck, group: 'system', label: 'Logistics' },
- 'chain.delivery_confirmed': { icon: Truck, group: 'system', label: 'Logistics' },
- 'return.restocked': { icon: PackageCheck, group: 'system', label: 'Returns' },
+ 'chain.so_confirmed': { icon: LuClipboardCheck, group: 'system', label: 'Sales' },
+ 'chain.in_process_qc_required': { icon: LuShieldCheck, group: 'system', label: 'Quality' },
+ 'production.wo_completed': { icon: LuFactory, group: 'system', label: 'Production' },
+ 'chain.outgoing_qc_required': { icon: LuShieldCheck, group: 'system', label: 'Quality' },
+ 'quality.inspection_failed': { icon: LuShieldAlert, group: 'alerts', label: 'Quality' },
+ 'chain.delivery_drafted': { icon: LuTruck, group: 'system', label: 'Logistics' },
+ 'chain.delivery_confirmed': { icon: LuTruck, group: 'system', label: 'Logistics' },
+ 'return.restocked': { icon: LuPackageCheck, group: 'system', label: 'Returns' },
 
  // ── Chain 2 · Procure to Pay ─────────────────────────────────────────
- 'inventory.grn_received': { icon: PackageCheck, group: 'system', label: 'Inventory' },
- 'chain.incoming_qc_required': { icon: ShieldCheck, group: 'system', label: 'Quality' },
- 'inventory.low_stock': { icon: Package, group: 'alerts', label: 'Inventory' },
- 'chain.pr_approved': { icon: FileText, group: 'approvals', label: 'Purchasing' },
+ 'inventory.grn_received': { icon: LuPackageCheck, group: 'system', label: 'Inventory' },
+ 'chain.incoming_qc_required': { icon: LuShieldCheck, group: 'system', label: 'Quality' },
+ 'inventory.low_stock': { icon: LuPackage, group: 'alerts', label: 'Inventory' },
+ 'chain.pr_approved': { icon: LuFileText, group: 'approvals', label: 'Purchasing' },
  // Auto-conversion failed (no supplier / no price) — needs a human to convert
  // the PR by hand, so it belongs in alerts, not the informational stream.
- 'chain.pr_auto_convert_skipped': { icon: FileWarning, group: 'alerts', label: 'Purchasing' },
- 'chain.po_approved': { icon: Package, group: 'approvals', label: 'Purchasing' },
- 'auto_po_pending': { icon: Package, group: 'approvals', label: 'Purchasing' },
- 'purchasing.supplier_deterioration': { icon: TrendingDown, group: 'alerts', label: 'Purchasing' },
- 'return.shipped_to_vendor': { icon: Truck, group: 'system', label: 'Returns' },
+ 'chain.pr_auto_convert_skipped': { icon: LuFileWarning, group: 'alerts', label: 'Purchasing' },
+ 'chain.po_approved': { icon: LuPackage, group: 'approvals', label: 'Purchasing' },
+ 'auto_po_pending': { icon: LuPackage, group: 'approvals', label: 'Purchasing' },
+ 'purchasing.supplier_deterioration': { icon: LuTrendingDown, group: 'alerts', label: 'Purchasing' },
+ 'supplier.dispatch_action_required': { icon: LuTruck, group: 'alerts', label: 'Purchasing' },
+ 'return.shipped_to_vendor': { icon: LuTruck, group: 'system', label: 'Returns' },
 
  // ── Chain 3 · Hire to Retire ─────────────────────────────────────────
- 'leave.submitted': { icon: Calendar, group: 'approvals', label: 'Leave' },
- 'leave.pending_hr': { icon: Calendar, group: 'approvals', label: 'Leave' },
- 'leave.approved': { icon: Calendar, group: 'approvals', label: 'Leave' },
- 'leave.rejected': { icon: Calendar, group: 'approvals', label: 'Leave' },
- 'attendance.ot_submitted': { icon: Calendar, group: 'approvals', label: 'Overtime' },
- 'attendance.ot_approved': { icon: Calendar, group: 'approvals', label: 'Overtime' },
- 'attendance.ot_rejected': { icon: Calendar, group: 'approvals', label: 'Overtime' },
- 'loans.submitted': { icon: HandCoins, group: 'approvals', label: 'Loans' },
- 'loans.approved': { icon: HandCoins, group: 'approvals', label: 'Loans' },
- 'loans.rejected': { icon: HandCoins, group: 'approvals', label: 'Loans' },
- 'chain.payslip_ready': { icon: Receipt, group: 'system', label: 'Payroll' },
- 'chain.separation_initiated': { icon: Users, group: 'system', label: 'HR' },
- 'recruitment.new_application': { icon: UserPlus, group: 'system', label: 'Recruitment' },
- 'training.expiry': { icon: GraduationCap, group: 'alerts', label: 'Training' },
+ 'leave.submitted': { icon: LuCalendar, group: 'approvals', label: 'Leave' },
+ 'leave.pending_hr': { icon: LuCalendar, group: 'approvals', label: 'Leave' },
+ 'leave.approved': { icon: LuCalendar, group: 'approvals', label: 'Leave' },
+ 'leave.rejected': { icon: LuCalendar, group: 'approvals', label: 'Leave' },
+ 'attendance.ot_submitted': { icon: LuCalendar, group: 'approvals', label: 'Overtime' },
+ 'attendance.ot_approved': { icon: LuCalendar, group: 'approvals', label: 'Overtime' },
+ 'attendance.ot_rejected': { icon: LuCalendar, group: 'approvals', label: 'Overtime' },
+ 'loans.submitted': { icon: LuHandCoins, group: 'approvals', label: 'Loans' },
+ 'loans.approved': { icon: LuHandCoins, group: 'approvals', label: 'Loans' },
+ 'loans.rejected': { icon: LuHandCoins, group: 'approvals', label: 'Loans' },
+ 'chain.payslip_ready': { icon: LuReceipt, group: 'system', label: 'Payroll' },
+ 'chain.separation_initiated': { icon: LuUsers, group: 'system', label: 'HR' },
+  'recruitment.new_application': { icon: LuUserPlus, group: 'system', label: 'Recruitment' },
+  'recruitment.bottleneck': { icon: LuCalendar, group: 'alerts', label: 'Recruitment' },
+ 'training.expiry': { icon: LuGraduationCap, group: 'alerts', label: 'Training' },
 
  // ── Quality & compliance ─────────────────────────────────────────────
- 'auto_ncr_created': { icon: ShieldAlert, group: 'alerts', label: 'Quality' },
- 'ncr.escalation': { icon: ShieldAlert, group: 'alerts', label: 'Quality' },
- 'ncr.recurrence': { icon: ShieldAlert, group: 'alerts', label: 'Quality' },
- 'ncr.return_to_supplier': { icon: ShieldAlert, group: 'alerts', label: 'Quality' },
- 'spc_alert': { icon: Gauge, group: 'alerts', label: 'SPC' },
- 'effectiveness_due': { icon: ClipboardCheck, group: 'approvals', label: 'Quality' },
- 'effectiveness_overdue': { icon: AlertTriangle, group: 'alerts', label: 'Quality' },
- 'document.review_due': { icon: FileWarning, group: 'approvals', label: 'Documents' },
- '8d.sla': { icon: AlertTriangle, group: 'alerts', label: 'Complaints' },
+ 'auto_ncr_created': { icon: LuShieldAlert, group: 'alerts', label: 'Quality' },
+ 'ncr.escalation': { icon: LuShieldAlert, group: 'alerts', label: 'Quality' },
+ 'ncr.recurrence': { icon: LuShieldAlert, group: 'alerts', label: 'Quality' },
+ 'ncr.return_to_supplier': { icon: LuShieldAlert, group: 'alerts', label: 'Quality' },
+ 'spc_alert': { icon: LuGauge, group: 'alerts', label: 'SPC' },
+ 'effectiveness_due': { icon: LuClipboardCheck, group: 'approvals', label: 'Quality' },
+ 'effectiveness_overdue': { icon: LuTriangleAlert, group: 'alerts', label: 'Quality' },
+ 'document.review_due': { icon: LuFileWarning, group: 'approvals', label: 'Documents' },
+ '8d.sla': { icon: LuTriangleAlert, group: 'alerts', label: 'Complaints' },
 
  // ── Finance & accounting ─────────────────────────────────────────────
- 'ar.dunning.escalation': { icon: CircleDollarSign, group: 'alerts', label: 'Receivables' },
- 'invoice.auto_failed': { icon: FileWarning, group: 'alerts', label: 'Billing' },
+ 'ar.dunning.escalation': { icon: LuCircleDollarSign, group: 'alerts', label: 'Receivables' },
+ 'invoice.auto_failed': { icon: LuFileWarning, group: 'alerts', label: 'Billing' },
+ 'email.delivery_failed': { icon: LuTriangleAlert, group: 'alerts', label: 'Email' },
 
  // ── Maintenance, planning & approvals ────────────────────────────────
- 'mrp_run_completed': { icon: Factory, group: 'system', label: 'MRP' },
- 'maintenance.breakdown': { icon: Wrench, group: 'alerts', label: 'Maintenance' },
- 'approval_reminder': { icon: CheckCircle2, group: 'approvals', label: 'Approval' },
- 'approval_escalation': { icon: AlertTriangle, group: 'approvals', label: 'Approval' },
+ 'mrp_run_completed': { icon: LuFactory, group: 'system', label: 'MRP' },
+ 'maintenance.breakdown': { icon: LuWrench, group: 'alerts', label: 'Maintenance' },
+ 'approval_reminder': { icon: LuCircleCheck, group: 'approvals', label: 'Approval' },
+ 'approval_escalation': { icon: LuTriangleAlert, group: 'approvals', label: 'Approval' },
 
  // ── Security & administration ────────────────────────────────────────
- 'permission.override': { icon: KeyRound, group: 'system', label: 'Access' },
+ 'permission.override': { icon: LuKeyRound, group: 'system', label: 'Access' },
 };
 
 /**
@@ -134,31 +138,31 @@ const BY_TYPE: Record<string, NotificationMeta> = {
  */
 const RULES: Array<{ pattern: RegExp; meta: NotificationMeta }> = [
  // Quality
- { pattern: /Ncr/i, meta: { icon: ShieldAlert, group: 'alerts', label: 'Quality' } },
- { pattern: /Inspection/i, meta: { icon: ShieldAlert, group: 'alerts', label: 'Quality' } },
+ { pattern: /Ncr/i, meta: { icon: LuShieldAlert, group: 'alerts', label: 'Quality' } },
+ { pattern: /Inspection/i, meta: { icon: LuShieldAlert, group: 'alerts', label: 'Quality' } },
 
  // Maintenance / breakdowns
- { pattern: /Breakdown|Maintenance/i, meta: { icon: Wrench, group: 'alerts', label: 'Maintenance' } },
+ { pattern: /Breakdown|Maintenance/i, meta: { icon: LuWrench, group: 'alerts', label: 'Maintenance' } },
 
  // Inventory / alerts
- { pattern: /Stock|Inventory/i, meta: { icon: Package, group: 'alerts', label: 'Inventory' } },
+ { pattern: /Stock|Inventory/i, meta: { icon: LuPackage, group: 'alerts', label: 'Inventory' } },
 
  // Procure-to-pay approvals
- { pattern: /PurchaseRequest/i, meta: { icon: FileText, group: 'approvals', label: 'Purchasing' } },
- { pattern: /PurchaseOrder/i, meta: { icon: Package, group: 'approvals', label: 'Purchasing' } },
- { pattern: /Bill/i, meta: { icon: FileText, group: 'approvals', label: 'Accounting' } },
+ { pattern: /PurchaseRequest/i, meta: { icon: LuFileText, group: 'approvals', label: 'Purchasing' } },
+ { pattern: /PurchaseOrder/i, meta: { icon: LuPackage, group: 'approvals', label: 'Purchasing' } },
+ { pattern: /Bill/i, meta: { icon: LuFileText, group: 'approvals', label: 'Accounting' } },
 
  // HR-side approvals
- { pattern: /Leave/i, meta: { icon: Calendar, group: 'approvals', label: 'Leave' } },
- { pattern: /Loan|CashAdvance/i, meta: { icon: HandCoins, group: 'approvals', label: 'Loans' } },
- { pattern: /Payroll/i, meta: { icon: HandCoins, group: 'approvals', label: 'Payroll' } },
+ { pattern: /Leave/i, meta: { icon: LuCalendar, group: 'approvals', label: 'Leave' } },
+ { pattern: /Loan|CashAdvance/i, meta: { icon: LuHandCoins, group: 'approvals', label: 'Loans' } },
+ { pattern: /Payroll/i, meta: { icon: LuHandCoins, group: 'approvals', label: 'Payroll' } },
 
  // Order-to-cash / fulfilment
- { pattern: /Delivery|Shipment/i, meta: { icon: Truck, group: 'system', label: 'Logistics' } },
- { pattern: /Invoice|Collection/i, meta: { icon: FileText, group: 'approvals', label: 'Billing' } },
+ { pattern: /Delivery|Shipment/i, meta: { icon: LuTruck, group: 'system', label: 'Logistics' } },
+ { pattern: /Invoice|Collection/i, meta: { icon: LuFileText, group: 'approvals', label: 'Billing' } },
 ];
 
-const DEFAULT: NotificationMeta = { icon: Bell, group: 'system', label: 'System' };
+const DEFAULT: NotificationMeta = { icon: LuBell, group: 'system', label: 'System' };
 
 export function notificationMeta(type: string | undefined): NotificationMeta {
  if (!type) return DEFAULT;
@@ -172,10 +176,10 @@ export function notificationMeta(type: string | undefined): NotificationMeta {
  }
  // Fallbacks by keyword.
  if (/approved|rejected/i.test(baseName)) {
- return { icon: CheckCircle2, group: 'approvals', label: 'Approval' };
+ return { icon: LuCircleCheck, group: 'approvals', label: 'Approval' };
  }
  if (/alert|warn/i.test(baseName)) {
- return { icon: AlertCircle, group: 'alerts', label: 'Alert' };
+ return { icon: LuCircleAlert, group: 'alerts', label: 'Alert' };
  }
  return DEFAULT;
 }

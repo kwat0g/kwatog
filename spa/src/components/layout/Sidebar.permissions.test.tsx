@@ -68,4 +68,20 @@ describe('role-aligned sidebar permissions', () => {
  expect(isNavItemVisible(item('/inventory/warehouse-map'), genericInventory)).toBe(true);
  expect(SECTIONS.flatMap((s) => s.items).some((entry) => entry.to === '/inventory/stock-count')).toBe(false);
  });
+
+ it('exposes accounting periods to finance view holders while preserving the manage gate in the page', () => {
+ const finance = {
+ permissions: new Set(['accounting.periods.view']),
+ features: allFeatures,
+ roleSlug: 'finance_officer',
+ };
+ const employee = {
+ permissions: new Set(['payroll.view']),
+ features: allFeatures,
+ roleSlug: 'employee',
+ };
+
+ expect(isNavItemVisible(item('/accounting/periods'), finance)).toBe(true);
+ expect(isNavItemVisible(item('/accounting/periods'), employee)).toBe(false);
+ });
 });

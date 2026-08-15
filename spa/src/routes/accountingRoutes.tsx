@@ -29,8 +29,9 @@ const IncomeStatementPage = lazy(() => import('@/pages/accounting/income-stateme
 const BalanceSheetPage = lazy(() => import('@/pages/accounting/balance-sheet'));
 const ArAgingPage = lazy(() => import('@/pages/accounting/ar-aging'));
 const ApAgingPage = lazy(() => import('@/pages/accounting/ap-aging'));
+const AccountingPeriodsPage = lazy(() => import('@/pages/accounting/periods'));
 // REC-05 — go-live opening balances
-// REC-14 — accounting period close/reopen (page hidden 2026-08-08, scope cut — file kept)
+// REC-14 — accounting period close/reopen.
 // REC-13 — AR/AP credit notes
 const CreditNotesPage = lazy(() => import('@/pages/accounting/credit-notes'));
 const CreditNoteDetailPage = lazy(() => import('@/pages/accounting/credit-notes/detail'));
@@ -97,6 +98,8 @@ export const accountingRoutes = (
  element={<PermissionGuard permission="accounting.statements.view"><ArAgingPage /></PermissionGuard>} />
  <Route path="/accounting/ap-aging"
  element={<PermissionGuard permission="accounting.statements.view"><ApAgingPage /></PermissionGuard>} />
+ <Route path="/accounting/periods"
+ element={<PermissionGuard permission="accounting.periods.view"><AccountingPeriodsPage /></PermissionGuard>} />
  <Route path="/accounting/credit-notes"
  element={<PermissionGuard permission="accounting.credit_notes.view"><CreditNotesPage /></PermissionGuard>} />
  <Route path="/accounting/credit-notes/:id"

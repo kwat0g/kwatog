@@ -7,7 +7,7 @@ import type { AuthUser } from '@/api/auth';
 
 const authenticatedUser = {
  id: 'u1',
- name: 'Session User',
+ name: 'Session LuUser',
  email: 'session@ogami.test',
  is_active: true,
  must_change_password: false,

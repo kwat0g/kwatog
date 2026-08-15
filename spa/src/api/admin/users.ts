@@ -34,9 +34,13 @@ export const adminUsersApi = {
  activate: (id: string) =>
  client.patch<{ message: string }>(`/admin/users/${id}/activate`).then((r) => r.data),
 
- changeRole: (id: string, roleId: string) =>
+ changeRole: (id: string, roleId: string, expectedRoleId: string, reason?: string) =>
  client
- .patch<ApiSuccess<AdminUserDetail>>(`/admin/users/${id}/role`, { role_id: roleId })
+ .patch<ApiSuccess<AdminUserDetail>>(`/admin/users/${id}/role`, {
+ role_id: roleId,
+ expected_role_id: expectedRoleId,
+ reason,
+ })
  .then((r) => {
  const body = r.data as { data?: AdminUserDetail } & AdminUserDetail;
  return body.data ?? (r.data as unknown as AdminUserDetail);
@@ -52,12 +56,13 @@ export const adminUsersApi = {
  .get<{ data: LoginEvent[] }>(`/admin/users/${id}/login-history`)
  .then((r) => r.data.data),
 
- bulkChangeRole: (userIds: string[], roleId: string, reason: string) =>
+ bulkChangeRole: (userIds: string[], roleId: string, reason: string, expectedRoleIds: Record<string, string>) =>
  client
- .patch<{ updated: number; invalid_ids: string[] }>(`/admin/users/bulk-role`, {
+ .patch<{ message: string; data: { updated: number; conflicts: Array<{ user_id: string; expected_role_id: string | null; actual_role_id: string | null }>; invalid_ids: string[] } }>(`/admin/users/bulk-role`, {
  user_ids: userIds,
  role_id: roleId,
  reason,
+ expected_role_ids: expectedRoleIds,
  })
- .then((r) => r.data),
+ .then((r) => r.data.data),
 };

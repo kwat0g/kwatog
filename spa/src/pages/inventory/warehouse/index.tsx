@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { AxiosError } from 'axios';
-import { ArchiveRestore, Pencil, Plus, Trash2 } from 'lucide-react';
+import { LuArchiveRestore, LuPencil, LuPlus, LuTrash2 } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { warehouseApi } from '@/api/inventory/warehouse';
 import { ArchiveFilter } from '@/components/ui/ArchiveFilter';
@@ -137,7 +137,7 @@ export default function WarehousePage() {
  <Button
  variant="primary"
  size="sm"
- icon={<Plus size={14} />}
+ icon={<LuPlus size={14} />}
  onClick={() => setWhModal({ mode: 'create', existing: null })}
  >
  New warehouse
@@ -189,15 +189,15 @@ export default function WarehousePage() {
  {canManage && (
  <div className="hidden group-hover:flex pr-1 gap-0.5">
  <IconBtn label={`Edit ${w.name}`} onClick={() => setWhModal({ mode: 'edit', existing: w })}>
- <Pencil size={12} />
+ <LuPencil size={12} />
  </IconBtn>
  {scope === 'only' ? (
  <IconBtn label={`Restore ${w.name}`} onClick={() => setConfirmRestore({ kind: 'warehouse', id: w.id, name: w.name })}>
- <ArchiveRestore size={12} />
+ <LuArchiveRestore size={12} />
  </IconBtn>
  ) : (
  <IconBtn label={`Delete ${w.name}`} danger onClick={() => setConfirmDelete({ kind: 'warehouse', id: w.id, name: w.name })}>
- <Trash2 size={12} />
+ <LuTrash2 size={12} />
  </IconBtn>
  )}
  </div>
@@ -213,7 +213,7 @@ export default function WarehousePage() {
  title={`Zones — ${wh.name}`}
  className="col-span-4"
  actions={canManage ? (
- <Button size="sm" variant="secondary" icon={<Plus size={12} />} onClick={() => setZoneModal({ mode: 'create', existing: null })}>
+ <Button size="sm" variant="secondary" icon={<LuPlus size={12} />} onClick={() => setZoneModal({ mode: 'create', existing: null })}>
  Zone
  </Button>
  ) : null}
@@ -237,15 +237,15 @@ export default function WarehousePage() {
  {canManage && (
  <div className="hidden group-hover:flex pr-1 gap-0.5">
  <IconBtn label={`Edit ${z.name}`} onClick={() => setZoneModal({ mode: 'edit', existing: z })}>
- <Pencil size={12} />
+ <LuPencil size={12} />
  </IconBtn>
  {scope === 'only' ? (
  <IconBtn label={`Restore ${z.name}`} onClick={() => setConfirmRestore({ kind: 'zone', id: z.id, name: z.name })}>
- <ArchiveRestore size={12} />
+ <LuArchiveRestore size={12} />
  </IconBtn>
  ) : (
  <IconBtn label={`Delete ${z.name}`} danger onClick={() => setConfirmDelete({ kind: 'zone', id: z.id, name: z.name })}>
- <Trash2 size={12} />
+ <LuTrash2 size={12} />
  </IconBtn>
  )}
  </div>
@@ -262,7 +262,7 @@ export default function WarehousePage() {
  title={`Locations — ${zone?.name ?? '—'}`}
  className="col-span-5"
  actions={canManage && zone ? (
- <Button size="sm" variant="secondary" icon={<Plus size={12} />} onClick={() => setLocModal({ mode: 'create', existing: null })}>
+ <Button size="sm" variant="secondary" icon={<LuPlus size={12} />} onClick={() => setLocModal({ mode: 'create', existing: null })}>
  Location
  </Button>
  ) : null}
@@ -293,15 +293,15 @@ export default function WarehousePage() {
  {canManage && (
  <div className="hidden group-hover:flex justify-end gap-0.5">
  <IconBtn label={`Edit ${l.code}`} onClick={() => setLocModal({ mode: 'edit', existing: l })}>
- <Pencil size={12} />
+ <LuPencil size={12} />
  </IconBtn>
  {scope === 'only' ? (
  <IconBtn label={`Restore ${l.code}`} onClick={() => setConfirmRestore({ kind: 'location', id: l.id, code: l.code })}>
- <ArchiveRestore size={12} />
+ <LuArchiveRestore size={12} />
  </IconBtn>
  ) : (
  <IconBtn label={`Delete ${l.code}`} danger onClick={() => setConfirmDelete({ kind: 'location', id: l.id, code: l.code })}>
- <Trash2 size={12} />
+ <LuTrash2 size={12} />
  </IconBtn>
  )}
  </div>

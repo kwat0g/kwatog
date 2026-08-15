@@ -1,5 +1,5 @@
 import { forwardRef, useSyncExternalStore, type InputHTMLAttributes, type ReactNode } from 'react';
-import { Check, X } from 'lucide-react';
+import { LuCheck, LuX } from '@/lib/icons';
 import { cn } from '@/lib/cn';
 import type { FieldSize } from './Select';
 import { getFunctionalCurrency, subscribeFunctionalCurrency } from '@/lib/runtimeCurrency';
@@ -71,9 +71,9 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     const showValidIcon = validState === 'valid' && !error;
     const showInvalidIcon = validState === 'invalid' || !!error;
     const validIcon = showInvalidIcon ? (
-      <X size={12} className="text-danger-fg" aria-hidden />
+      <LuX size={12} className="text-danger-fg" aria-hidden />
     ) : showValidIcon ? (
-      <Check size={12} className="text-success-fg" aria-hidden />
+      <LuCheck size={12} className="text-success-fg" aria-hidden />
     ) : null;
 
     return (

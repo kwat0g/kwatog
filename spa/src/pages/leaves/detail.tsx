@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Check, X, RotateCcw } from 'lucide-react';
+import { LuCheck, LuX, LuRotateCcw } from '@/lib/icons';
 import { leaveRequestsApi, leaveBalancesApi } from '@/api/leave';
 import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
@@ -108,18 +108,18 @@ export default function LeaveDetailPage() {
  {/* Series R/R3 — declarative permission gating via <CanDo>. */}
  {req.status === 'pending_dept' && (
  <CanDo permission="leave.approve_dept">
- <Button variant="primary" size="xs" icon={<Check size={12} />} disabled={approveDept.isPending} loading={approveDept.isPending} onClick={() => setConfirmApproveDept(true)}>Approve</Button>
- <Button variant="danger" size="xs" icon={<X size={12} />} onClick={() => setReject(true)}>Reject</Button>
+ <Button variant="primary" size="xs" icon={<LuCheck size={12} />} disabled={approveDept.isPending} loading={approveDept.isPending} onClick={() => setConfirmApproveDept(true)}>Approve</Button>
+ <Button variant="danger" size="xs" icon={<LuX size={12} />} onClick={() => setReject(true)}>Reject</Button>
  </CanDo>
  )}
  {req.status === 'pending_hr' && (
  <CanDo permission="leave.approve_hr">
- <Button variant="primary" size="xs" icon={<Check size={12} />} disabled={approveHR.isPending} loading={approveHR.isPending} onClick={() => setConfirmApproveHR(true)}>Approve</Button>
- <Button variant="danger" size="xs" icon={<X size={12} />} onClick={() => setReject(true)}>Reject</Button>
+ <Button variant="primary" size="xs" icon={<LuCheck size={12} />} disabled={approveHR.isPending} loading={approveHR.isPending} onClick={() => setConfirmApproveHR(true)}>Approve</Button>
+ <Button variant="danger" size="xs" icon={<LuX size={12} />} onClick={() => setReject(true)}>Reject</Button>
  </CanDo>
  )}
  {canCancel && (
- <Button variant="secondary" size="sm" icon={<RotateCcw size={12} />} onClick={() => setConfirmCancel(true)} disabled={cancelMut.isPending}>Cancel</Button>
+ <Button variant="secondary" size="sm" icon={<LuRotateCcw size={12} />} onClick={() => setConfirmCancel(true)} disabled={cancelMut.isPending}>Cancel</Button>
  )}
  </>
  }

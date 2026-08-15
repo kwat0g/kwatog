@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
-import { Plus, Trash2 } from 'lucide-react';
+import { LuPlus, LuTrash2 } from '@/lib/icons';
 import { accountsApi } from '@/api/accounting/accounts';
 import { journalEntriesApi } from '@/api/accounting/journal-entries';
 import { Button } from '@/components/ui/Button';
@@ -157,7 +157,7 @@ export default function CreateJournalEntryPage() {
  variant="ghost"
  size="sm"
  iconOnly
- icon={<Trash2 size={14} />}
+ icon={<LuTrash2 size={14} />}
  aria-label="Remove line"
  onClick={() => remove(idx)}
  className="text-muted hover:text-danger-fg"
@@ -169,7 +169,7 @@ export default function CreateJournalEntryPage() {
  </div>
 
  <div className="flex items-center justify-between mt-3">
- <Button type="button" variant="secondary" size="sm" icon={<Plus size={14} />} onClick={() => append({ account_id: '', debit: undefined, credit: undefined, description: '' })}>
+ <Button type="button" variant="secondary" size="sm" icon={<LuPlus size={14} />} onClick={() => append({ account_id: '', debit: undefined, credit: undefined, description: '' })}>
  Add line
  </Button>
  <div className="flex items-center gap-4 text-sm font-mono tabular-nums">

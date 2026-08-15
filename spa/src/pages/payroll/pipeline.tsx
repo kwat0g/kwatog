@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Circle, CircleDot, LoaderCircle, Minus } from 'lucide-react';
+import { LuTriangleAlert, LuCircleCheck, LuChevronLeft, LuChevronRight, LuCircle, LuCircleDot, LuLoaderCircle, LuMinus } from '@/lib/icons';
 import { periodsApi } from '@/api/payroll/periods';
 import { Button } from '@/components/ui/Button';
 import { Chip, type ChipVariant } from '@/components/ui/Chip';
@@ -33,13 +33,13 @@ const statusIcon = (status: PipelinePeriod['status']) => {
  switch (status) {
  case 'disbursed':
  case 'finalized':
- case 'approved': icon = <CheckCircle2 size={14} />; break;
- case 'computed': icon = <CircleDot size={14} />; break;
- case 'processing': icon = <LoaderCircle size={14} className="animate-spin" />; break;
- case 'draft': icon = <AlertTriangle size={14} />; break;
- case 'scheduled': icon = <Circle size={14} />; break;
- case 'not_created': icon = <Minus size={14} />; break;
- default: icon = <Circle size={14} />;
+ case 'approved': icon = <LuCircleCheck size={14} />; break;
+ case 'computed': icon = <LuCircleDot size={14} />; break;
+ case 'processing': icon = <LuLoaderCircle size={14} className="animate-spin" />; break;
+ case 'draft': icon = <LuTriangleAlert size={14} />; break;
+ case 'scheduled': icon = <LuCircle size={14} />; break;
+ case 'not_created': icon = <LuMinus size={14} />; break;
+ default: icon = <LuCircle size={14} />;
  }
  return <span aria-hidden="true" className="inline-flex text-muted">{icon}</span>;
 };
@@ -90,11 +90,11 @@ export default function PayrollPipelinePage() {
  actions={
  <div className="flex items-center gap-2">
  <Button variant="secondary" size="sm" onClick={() => setYear((y) => y - 1)}>
- <ChevronLeft size={14} />
+ <LuChevronLeft size={14} />
  </Button>
  <span className="font-mono font-medium tabular-nums text-sm">{year}</span>
  <Button variant="secondary" size="sm" onClick={() => setYear((y) => y + 1)}>
- <ChevronRight size={14} />
+ <LuChevronRight size={14} />
  </Button>
  </div>
  }

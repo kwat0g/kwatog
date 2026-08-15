@@ -1,17 +1,18 @@
+import { IconType } from '@/lib/icons';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {
-  ArrowRight,
-  AlertTriangle,
-  CheckCircle,
-  Clock,
-  FileText,
-  ShoppingCart,
-  Package,
-  Receipt,
-  Scale,
-  type LucideIcon,
-} from 'lucide-react';
+  LuArrowRight,
+  LuTriangleAlert,
+  LuCircleCheck,
+  LuClock,
+  LuFileText,
+  LuShoppingCart,
+  LuPackage,
+  LuReceipt,
+  LuScale,
+
+} from '@/lib/icons';
 import { procurementChainApi } from '@/api/purchasing/purchase-orders';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -150,7 +151,7 @@ export default function ProcurementChainPage() {
                   to="/purchasing/purchase-orders"
                   className="text-accent hover:underline inline-flex items-center gap-1"
                 >
-                  View all POs <ArrowRight size={12} />
+                  View all POs <LuArrowRight size={12} />
                 </Link>
               </div>
             </div>
@@ -176,7 +177,7 @@ export default function ProcurementChainPage() {
                   to="/inventory/grn"
                   className="text-accent hover:underline inline-flex items-center gap-1"
                 >
-                  View GRNs <ArrowRight size={12} />
+                  View GRNs <LuArrowRight size={12} />
                 </Link>
               </div>
             </div>
@@ -211,7 +212,7 @@ export default function ProcurementChainPage() {
                   to="/accounting/bills"
                   className="text-accent hover:underline inline-flex items-center gap-1"
                 >
-                  View bills <ArrowRight size={12} />
+                  View bills <LuArrowRight size={12} />
                 </Link>
               </div>
             </div>
@@ -222,14 +223,14 @@ export default function ProcurementChainPage() {
             <div className="space-y-3">
               <div className="flex items-center justify-between text-sm">
                 <span className="flex items-center gap-1.5">
-                  <CheckCircle size={14} className="text-success-fg" />
+                  <LuCircleCheck size={14} className="text-success-fg" />
                   Matched
                 </span>
                 <span className="font-mono tabular-nums font-medium">{tw.matched}</span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="flex items-center gap-1.5">
-                  <AlertTriangle
+                  <LuTriangleAlert
                     size={14}
                     className={tw.has_variances > 0 ? 'text-warning-fg' : 'text-muted'}
                   />
@@ -239,7 +240,7 @@ export default function ProcurementChainPage() {
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="flex items-center gap-1.5">
-                  <Clock size={14} className={tw.overridden > 0 ? 'text-info-fg' : 'text-muted'} />
+                  <LuClock size={14} className={tw.overridden > 0 ? 'text-info-fg' : 'text-muted'} />
                   Overridden
                 </span>
                 <span className="font-mono tabular-nums font-medium">{tw.overridden}</span>
@@ -257,35 +258,35 @@ export default function ProcurementChainPage() {
         <Panel title="Procure-to-Pay Flow">
           <div className="flex items-center gap-0.5 text-xs">
             <FlowStep
-              icon={FileText}
+              icon={LuFileText}
               label="PR"
               count={mr.pr_pending + mr.pr_approved}
               active={mr.pr_pending > 0}
             />
             <FlowArrow />
             <FlowStep
-              icon={ShoppingCart}
+              icon={LuShoppingCart}
               label="PO"
               count={mr.po_draft + mr.po_sent + mr.po_partially_received + mr.po_received}
               active={mr.po_draft > 0 || mr.po_sent > 0}
             />
             <FlowArrow />
             <FlowStep
-              icon={Package}
+              icon={LuPackage}
               label="GRN"
               count={rc.grn_received + rc.grn_pending_qc}
               active={rc.grn_pending_qc > 0 || rc.grn_received > 0}
             />
             <FlowArrow />
             <FlowStep
-              icon={Receipt}
+              icon={LuReceipt}
               label="Bill"
               count={bl.bills_unpaid}
               active={bl.bills_unpaid > 0}
             />
             <FlowArrow />
             <FlowStep
-              icon={Scale}
+              icon={LuScale}
               label="Match"
               count={tw.matched + tw.has_variances + tw.overridden}
               active={tw.has_variances > 0}
@@ -329,7 +330,7 @@ function StageRow({ label, count, max, color }: StageRowProps) {
 }
 
 interface FlowStepProps {
-  icon: LucideIcon;
+  icon: IconType;
   label: string;
   count: number;
   active: boolean;
@@ -348,5 +349,5 @@ function FlowStep({ icon: Icon, label, count, active }: FlowStepProps) {
 }
 
 function FlowArrow() {
-  return <ArrowRight size={14} className="text-muted shrink-0" />;
+  return <LuArrowRight size={14} className="text-muted shrink-0" />;
 }

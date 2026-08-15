@@ -1,9 +1,9 @@
 import {
- ChevronLeft,
- ChevronRight,
- ChevronsLeft,
- ChevronsRight,
-} from 'lucide-react';
+ LuChevronLeft,
+ LuChevronRight,
+ LuChevronsLeft,
+ LuChevronsRight,
+} from '@/lib/icons';
 import type { PaginationMeta } from '@/types';
 import { Button } from './Button';
 
@@ -23,7 +23,7 @@ export function DataTablePagination({ meta, onPageChange }: PaginationProps) {
  variant="ghost"
  size="sm"
  iconOnly
- icon={<ChevronsLeft size={14} />}
+ icon={<LuChevronsLeft size={14} />}
  aria-label="First page"
  disabled={meta.current_page <= 1}
  onClick={() => onPageChange(1)}
@@ -33,7 +33,7 @@ export function DataTablePagination({ meta, onPageChange }: PaginationProps) {
  variant="ghost"
  size="sm"
  iconOnly
- icon={<ChevronLeft size={14} />}
+ icon={<LuChevronLeft size={14} />}
  aria-label="Previous page"
  disabled={meta.current_page <= 1}
  onClick={() => onPageChange(meta.current_page - 1)}
@@ -46,7 +46,7 @@ export function DataTablePagination({ meta, onPageChange }: PaginationProps) {
  variant="ghost"
  size="sm"
  iconOnly
- icon={<ChevronRight size={14} />}
+ icon={<LuChevronRight size={14} />}
  aria-label="Next page"
  disabled={meta.current_page >= meta.last_page}
  onClick={() => onPageChange(meta.current_page + 1)}
@@ -56,7 +56,7 @@ export function DataTablePagination({ meta, onPageChange }: PaginationProps) {
  variant="ghost"
  size="sm"
  iconOnly
- icon={<ChevronsRight size={14} />}
+ icon={<LuChevronsRight size={14} />}
  aria-label="Last page"
  disabled={meta.current_page >= meta.last_page}
  onClick={() => onPageChange(meta.last_page)}

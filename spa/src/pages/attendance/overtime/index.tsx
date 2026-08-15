@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { LuPlus } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { overtimeApi, type OvertimeListParams } from '@/api/attendance/overtime';
 import { Button } from '@/components/ui/Button';
@@ -151,7 +151,7 @@ export default function OvertimeListPage() {
  <Button variant="secondary" size="xs" onClick={() => setView(view === 'list' ? 'kanban' : 'list')}>
  {view === 'list' ? 'Kanban view' : 'List view'}
  </Button>
- <Button variant="primary" size="xs" icon={<Plus size={14} />} onClick={() => navigate('/hr/attendance/overtime/create')}>
+ <Button variant="primary" size="xs" icon={<LuPlus size={14} />} onClick={() => navigate('/hr/attendance/overtime/create')}>
  New OT request
  </Button>
  </>

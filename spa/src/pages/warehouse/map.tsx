@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { Search } from 'lucide-react';
+import { LuSearch } from '@/lib/icons';
 import { warehouseMapApi } from '@/api/inventory/warehouseWms';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -238,7 +238,7 @@ export default function WarehouseMapPage() {
                           placeholder="Search bin or item…"
                           value={binQuery}
                           onChange={(e) => setBinQuery(e.target.value)}
-                          prefix={<Search size={13} />}
+                          prefix={<LuSearch size={13} />}
                           className="font-mono"
                           containerClassName="max-w-xs"
                         />

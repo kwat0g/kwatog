@@ -8,7 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
-import { Pencil, UserMinus, Eye, EyeOff, Plus, Check, Camera } from 'lucide-react';
+import { LuPencil, LuUserMinus, LuEye, LuEyeOff, LuPlus, LuCheck, LuCamera } from '@/lib/icons';
 import { employeesApi, type SeparateData } from '@/api/hr/employees';
 import { shiftsApi } from '@/api/attendance/shifts';
 import { employeeDocumentApi } from '@/api/hr/employee-documents';
@@ -122,7 +122,7 @@ export default function EmployeeDetailPage() {
               <Button
                 variant="secondary"
                 size="sm"
-                icon={<Pencil size={12} />}
+                icon={<LuPencil size={12} />}
                 onClick={() => navigate(`/hr/employees/${id}/edit`)}
               >
                 Edit
@@ -132,7 +132,7 @@ export default function EmployeeDetailPage() {
               <Button
                 variant="danger"
                 size="sm"
-                icon={<UserMinus size={12} />}
+                icon={<LuUserMinus size={12} />}
                 onClick={() => setSeparateOpen(true)}
               >
                 Separate
@@ -281,7 +281,7 @@ function OverviewTab({ employee }: { employee: any }) {
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <Camera size={24} className="text-muted" />
+                <LuCamera size={24} className="text-muted" />
               )}
             </div>
             {can('hr.employees.edit') && (
@@ -399,7 +399,7 @@ function GovIdsPanel({ employee }: { employee: any }) {
     <Button
       variant="ghost"
       size="sm"
-      icon={revealed ? <EyeOff size={12} /> : <Eye size={12} />}
+      icon={revealed ? <LuEyeOff size={12} /> : <LuEye size={12} />}
       onClick={() => setRevealed((v) => !v)}
     >
       {revealed ? 'Hide' : 'Reveal'}
@@ -556,7 +556,7 @@ function DocumentsTab({ employee }: { employee: any }) {
           <Button
             variant="secondary"
             size="sm"
-            icon={<Plus size={12} />}
+            icon={<LuPlus size={12} />}
             onClick={() => setShowUpload(true)}
           >
             Upload
@@ -911,7 +911,7 @@ function TrainingsTab({ employeeId }: { employeeId: string }) {
             <Button
               variant="secondary"
               size="sm"
-              icon={<Plus size={12} />}
+              icon={<LuPlus size={12} />}
               onClick={() => setShowAssign(true)}
             >
               Assign
@@ -951,7 +951,7 @@ function TrainingsTab({ employeeId }: { employeeId: string }) {
                         <Button
                           variant="ghost"
                           size="sm"
-                          icon={<Check size={12} />}
+                          icon={<LuCheck size={12} />}
                           onClick={() => completeMutation.mutate(r.id)}
                         />
                         <Button
@@ -1075,7 +1075,7 @@ function SkillsTab({ employeeId }: { employeeId: string }) {
             <Button
               variant="secondary"
               size="sm"
-              icon={<Plus size={12} />}
+              icon={<LuPlus size={12} />}
               onClick={() => setShowAssign(true)}
             >
               Assign

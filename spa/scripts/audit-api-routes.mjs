@@ -8,6 +8,7 @@ const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const spaDirectory = resolve(scriptDirectory, '..');
 const repositoryDirectory = resolve(spaDirectory, '..');
 const sourceDirectory = join(spaDirectory, 'src');
+const scopeManifestPath = join(scriptDirectory, 'api-route-scope-manifest.json');
 const requestMethods = new Set(['get', 'post', 'put', 'patch', 'delete']);
 const axiosClients = new Set(['client', 'portalClient', 'unwrappingClient', 'publicClient']);
 
@@ -123,12 +124,34 @@ const missing = requests.filter((request) => !routes.some(
   (route) => route.method === request.method && routePattern(route.path).test(request.path),
 ));
 
-if (missing.length > 0) {
-  for (const request of missing) {
+const scopeManifest = JSON.parse(readFileSync(scopeManifestPath, 'utf8'));
+const manifestKey = (entry) => `${entry.method.toUpperCase()} ${entry.path}`;
+const classified = new Map(scopeManifest.map((entry) => [manifestKey(entry), entry]));
+if (classified.size !== scopeManifest.length) {
+  throw new Error('API route scope manifest contains duplicate method/path entries.');
+}
+
+const missingKeys = new Set(missing.map(manifestKey));
+const staleClassifications = scopeManifest.filter((entry) => !missingKeys.has(manifestKey(entry)));
+if (staleClassifications.length > 0) {
+  for (const entry of staleClassifications) {
+    console.error(`STALE  ${entry.method.padEnd(6)} ${entry.path}`);
+  }
+  console.error(`\n${staleClassifications.length} scope-manifest entr${staleClassifications.length === 1 ? 'y is' : 'ies are'} no longer an unmatched SPA request.`);
+  process.exitCode = 1;
+}
+
+const unclassified = missing.filter((request) => !classified.has(manifestKey(request)));
+
+if (unclassified.length > 0) {
+  for (const request of unclassified) {
     console.error(`${request.method.padEnd(6)} ${request.path.padEnd(64)} ${request.file}:${request.line}`);
   }
-  console.error(`\n${missing.length} SPA request(s) do not match a Laravel API route.`);
+  console.error(`\n${unclassified.length} unmatched SPA request(s) lack a scope-manifest decision.`);
   process.exitCode = 1;
-} else {
-  console.log(`${requests.length} statically declared SPA requests match ${routes.length} Laravel API method/routes.`);
+}
+
+if (!process.exitCode) {
+  console.log(`${requests.length - missing.length} SPA requests match ${routes.length} Laravel API method/routes.`);
+  console.log(`${missing.length} unmatched requests are explicitly classified in api-route-scope-manifest.json.`);
 }

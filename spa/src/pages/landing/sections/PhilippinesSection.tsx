@@ -11,7 +11,7 @@
 
 import { Suspense, lazy } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ExternalLink, MapPin } from 'lucide-react';
+import { LuExternalLink, LuMapPin } from '@/lib/icons';
 import { landingApi } from '@/api/landing';
 
 const PlantMap = lazy(() =>
@@ -135,7 +135,7 @@ export function PhilippinesSection() {
                 title="Open the plant location in Google Maps"
                 className="absolute left-1/2 top-14 z-10 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-[3px] border border-strong bg-canvas px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-primary transition-colors duration-200 hover:border-accent hover:text-accent sm:top-5"
               >
-                <ExternalLink size={12} className="text-accent" />
+                <LuExternalLink size={12} className="text-accent" />
                 Open in Google Maps
               </a>
             ) : null}
@@ -143,7 +143,7 @@ export function PhilippinesSection() {
             {/* location label */}
             <div className="absolute left-1/2 top-[calc(50%+64px)] z-10 w-[86%] -translate-x-1/2 text-center">
               <span className="inline-flex max-w-full items-center justify-center gap-1.5 rounded-[3px] border border-default bg-canvas px-2 py-1 text-center font-mono text-[11px] uppercase leading-snug tracking-[0.16em] text-primary">
-                <MapPin size={13} className="shrink-0 text-accent" />
+                <LuMapPin size={13} className="shrink-0 text-accent" />
                 {contact?.address ?? '—'}
               </span>
             </div>

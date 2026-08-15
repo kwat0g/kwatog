@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { AxiosError } from 'axios';
-import { ArchiveRestore, Pencil, Plus, Trash2 } from 'lucide-react';
+import { LuArchiveRestore, LuPencil, LuPlus, LuTrash2 } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { itemCategoriesApi } from '@/api/inventory/items';
 import { ArchiveFilter } from '@/components/ui/ArchiveFilter';
@@ -182,7 +182,7 @@ export function ItemCategoriesManager() {
        variant="ghost"
        size="sm"
        iconOnly
-       icon={<Pencil size={14} />}
+       icon={<LuPencil size={14} />}
        aria-label={`Edit ${r.name}`}
        onClick={() => {
         const node = findById(filteredData ?? [], r.id);
@@ -201,7 +201,7 @@ export function ItemCategoriesManager() {
        aria-label={`${scope === 'only' ? 'Restore' : 'Delete'} ${r.name}`}
        onClick={() => (scope === 'only' ? setConfirmRestore(r) : setConfirmDelete(r))}
        className={scope === 'only' ? 'text-muted hover:text-primary' : 'text-muted hover:text-danger-fg'}
-       icon={scope === 'only' ? <ArchiveRestore size={14} /> : <Trash2 size={14} />}
+       icon={scope === 'only' ? <LuArchiveRestore size={14} /> : <LuTrash2 size={14} />}
       />
      </div>
     ) : null,
@@ -227,7 +227,7 @@ export function ItemCategoriesManager() {
       <Button
        variant="primary"
        size="xs"
-       icon={<Plus size={14} />}
+       icon={<LuPlus size={14} />}
        onClick={() => {
         setEditing(null);
         setFormOpen(true);

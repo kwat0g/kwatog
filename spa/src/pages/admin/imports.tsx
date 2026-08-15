@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Upload, Play, CheckCircle2, AlertCircle, Undo2 } from 'lucide-react';
+import { LuUpload, LuPlay, LuCircleCheck, LuCircleAlert, LuUndo2 } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
 import {
@@ -128,12 +128,12 @@ export default function ImportsPage() {
  </div>
 
  <div className="flex gap-2 pt-1">
- <Button variant="secondary" size="sm" icon={<Play size={14} />}
+ <Button variant="secondary" size="sm" icon={<LuPlay size={14} />}
  onClick={() => dryRunMut.mutate()}
  disabled={!file || dryRunMut.isPending} loading={dryRunMut.isPending}>
  Validate
  </Button>
- <Button variant="primary" size="sm" icon={<Upload size={14} />}
+ <Button variant="primary" size="sm" icon={<LuUpload size={14} />}
  onClick={() => commitMut.mutate()}
  disabled={!file || commitMut.isPending} loading={commitMut.isPending}>
  Import
@@ -142,19 +142,19 @@ export default function ImportsPage() {
 
  {isClean && (
  <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-success-bg text-success-fg text-xs">
- <CheckCircle2 size={14} />
+ <LuCircleCheck size={14} />
  {dryRun!.valid} row(s) valid, 0 errors — ready to import.
  </div>
  )}
  {dryRun && dryRun.errors.length > 0 && !commitErrors && (
  <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-warning-bg text-warning-fg text-xs">
- <AlertCircle size={14} />
+ <LuCircleAlert size={14} />
  {dryRun.valid} valid, {dryRun.errors.length} error(s) — fix before importing.
  </div>
  )}
  {commitErrors && (
  <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-danger-bg text-danger-fg text-xs">
- <AlertCircle size={14} />
+ <LuCircleAlert size={14} />
  Import rejected — nothing was imported. Fix the {commitErrors.length} row(s) below.
  </div>
  )}
@@ -236,7 +236,7 @@ export default function ImportsPage() {
  <LinkButton
  tone="muted"
  onClick={() => setRollbackTarget(b)}
- icon={<Undo2 size={13} />}
+ icon={<LuUndo2 size={13} />}
  className="text-xs hover:text-danger-fg"
  >
  Roll back

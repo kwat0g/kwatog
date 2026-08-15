@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Pencil, ShieldCheck } from 'lucide-react';
+import { LuPencil, LuShieldCheck } from '@/lib/icons';
 import { itemsApi } from '@/api/inventory/items';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -51,7 +51,7 @@ export default function ItemDetailPage() {
  {data.quality_plan_ready ? 'Quality plan ready' : 'Quality plan missing'}
  </Chip>
  {can('inventory.items.manage') && (
- <Button variant="secondary" size="sm" icon={<Pencil size={14} />}
+ <Button variant="secondary" size="sm" icon={<LuPencil size={14} />}
  onClick={() => navigate(`/inventory/items/${data.id}/edit`)}>
  Edit
  </Button>
@@ -85,7 +85,7 @@ export default function ItemDetailPage() {
  <span className="text-muted">·</span>
  <Link to={`/inventory/stock-levels?view=movements&item_id=${data.id}`} className="text-sm text-accent hover:underline">View movements</Link>
  <span className="text-muted">·</span>
- <Link to={`/inventory/items/${data.id}/quality-plans`} className="text-sm text-accent hover:underline inline-flex items-center gap-1"><ShieldCheck size={12} /> Quality plans</Link>
+ <Link to={`/inventory/items/${data.id}/quality-plans`} className="text-sm text-accent hover:underline inline-flex items-center gap-1"><LuShieldCheck size={12} /> Quality plans</Link>
  </div>
  </Panel>
  </div>

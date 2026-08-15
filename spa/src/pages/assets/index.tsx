@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
-import { CalendarClock, Plus } from 'lucide-react';
+import { LuCalendarClock, LuPlus } from '@/lib/icons';
 import { assetsApi, type AssetListParams } from '@/api/assets';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -76,12 +76,12 @@ export default function AssetsListPage() {
  can('assets.depreciation.view') || can('assets.create') ? (
  <div className="flex items-center gap-2">
  {can('assets.depreciation.view') && (
- <Button variant="secondary" size="sm" icon={<CalendarClock size={14} />} onClick={() => setShowDepreciation(true)}>
+ <Button variant="secondary" size="sm" icon={<LuCalendarClock size={14} />} onClick={() => setShowDepreciation(true)}>
  Run depreciation
  </Button>
  )}
  {can('assets.create') && (
- <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/assets/create')}>
+ <Button variant="primary" size="sm" icon={<LuPlus size={14} />} onClick={() => navigate('/assets/create')}>
  New asset
  </Button>
  )}

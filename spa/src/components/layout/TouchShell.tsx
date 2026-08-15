@@ -1,7 +1,7 @@
+import { IconType } from '@/lib/icons';
 /* eslint-disable react-refresh/only-export-components -- useTouchSubmitLabel is colocated with the shell it labels, matching DashboardShell.tsx. */
 import { useEffect, type ReactNode } from 'react';
 import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
-import { type LucideIcon } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
 import { Button } from '@/components/ui/Button';
@@ -26,7 +26,7 @@ import { cn } from '@/lib/cn';
 export interface TouchTab {
   to: string;
   label: string;
-  icon: LucideIcon;
+  icon: IconType;
   /** Match the path exactly. Use for index routes that would otherwise stay lit. */
   exact?: boolean;
 }
@@ -35,7 +35,7 @@ interface TouchShellProps {
   /** Small uppercase label above the user's name — which app this is. */
   eyebrow: string;
   /** Optional glyph beside the eyebrow. */
-  eyebrowIcon?: LucideIcon;
+  eyebrowIcon?: IconType;
   /** Shown when the session has no name yet, e.g. "Operator". */
   fallbackName: string;
   /** Bottom tab bar. Omit for single-screen apps (driver). */

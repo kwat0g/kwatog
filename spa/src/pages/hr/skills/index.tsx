@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2 } from 'lucide-react';
+import { LuPlus, LuTrash2 } from '@/lib/icons';
 import { skillsApi } from '@/api/hr/skills';
 import { DataTable } from '@/components/ui/DataTable';
 import { Button } from '@/components/ui/Button';
@@ -78,7 +78,7 @@ export default function SkillsListPage() {
  {
  key: 'actions', header: '',
  cell: (row: Skill) => row.is_active && can('hr.trainings.manage') ? (
- <Button variant="ghost" size="xs" icon={<Trash2 size={12} />}
+ <Button variant="ghost" size="xs" icon={<LuTrash2 size={12} />}
  onClick={(e) => { e.stopPropagation(); deactivateMutation.mutate(row.id); }} />
  ) : null,
  },
@@ -90,7 +90,7 @@ export default function SkillsListPage() {
  title="Skills"
  subtitle={data ? `${data.meta.total} skills` : undefined}
  actions={can('hr.trainings.manage') && (
- <Button variant="primary" size="xs" icon={<Plus size={14} />} onClick={() => setShowCreate(true)}>
+ <Button variant="primary" size="xs" icon={<LuPlus size={14} />} onClick={() => setShowCreate(true)}>
  Add Skill
  </Button>
  )}

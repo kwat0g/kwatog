@@ -1,5 +1,7 @@
+import { PortalTable } from '@/components/portal/PortalTable';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { customerPortalApi } from '@/api/b2b/customer';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
@@ -7,6 +9,21 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+
+async function openProof(deliveryId: string, proofId: string, fileName: string) {
+ try {
+ const blob = await customerPortalApi.viewDeliveryProof(deliveryId, proofId);
+ const url = window.URL.createObjectURL(blob);
+ const popup = window.open('', '_blank');
+ if (popup) {
+ popup.opener = null;
+ popup.location.href = url;
+ }
+ window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+ } catch {
+ toast.error(`Failed to open proof file ${fileName}.`);
+ }
+}
 
 export default function CustomerDeliveryDetailPage() {
  const { id } = useParams<{ id: string }>();
@@ -47,7 +64,8 @@ export default function CustomerDeliveryDetailPage() {
  {/* Items */}
  {delivery.items && delivery.items.length > 0 && (
  <Panel title={`Items (${delivery.items.length})`} noPadding>
- <table className={tableCls}>
+ <PortalTable>
+<table className={tableCls}>
  <thead>
  <tr className={theadTrCls}>
  <Th>Part #</Th>
@@ -65,6 +83,7 @@ export default function CustomerDeliveryDetailPage() {
  ))}
  </tbody>
  </table>
+</PortalTable>
  </Panel>
  )}
 
@@ -76,10 +95,10 @@ export default function CustomerDeliveryDetailPage() {
  <div key={proof.id} className="border border-default rounded-md p-3">
  <p className="text-xs font-medium capitalize mb-1">{proof.proof_type}</p>
  {proof.view_url ? (
- <a href={proof.view_url} target="_blank" rel="noopener noreferrer"
+ <button type="button" onClick={() => void openProof(id!, proof.id, proof.file_name)}
  className="text-2xs text-accent hover:underline block truncate">
  {proof.file_name}
- </a>
+ </button>
  ) : (
  <p className="text-2xs text-muted">{proof.file_name}</p>
  )}

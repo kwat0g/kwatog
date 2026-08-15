@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Lock, LockOpen } from 'lucide-react';
+import { LuLock, LuLockOpen } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
 import {
@@ -20,6 +20,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { Textarea } from '@/components/ui/Textarea';
+import { implicitOpenCurrentPeriod } from './implicitOpenCurrentPeriod';
 
 const MONTHS = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -70,7 +71,18 @@ export default function AccountingPeriodsPage() {
  action={<Button variant="secondary" onClick={() => periodsQ.refetch()}>Retry</Button>} />
  )}
  {periodsQ.data && periods.length === 0 && (
- <EmptyState icon="inbox" title="No accounting periods" description="Periods appear here as entries are posted." />
+ <EmptyState
+ icon="inbox"
+ title="No accounting periods yet"
+ description={canManage
+  ? 'No period rows exist yet. Close the current month to create the first accounting lock.'
+  : 'No period rows exist yet. A finance officer can close the current month to create the first accounting lock.'}
+ action={canManage ? (
+  <Button variant="primary" icon={<LuLock size={14} />} onClick={() => setCloseTarget(implicitOpenCurrentPeriod())}>
+   Close current month
+  </Button>
+ ) : undefined}
+ />
  )}
  {periods.length > 0 && (
  <div className="border border-default rounded-md overflow-hidden">
@@ -99,12 +111,12 @@ export default function AccountingPeriodsPage() {
  <Td className="text-xs text-muted max-w-[220px] truncate">{p.reopen_reason ?? '—'}</Td>
  <Td align="right">
  {canManage && p.status !== 'closed' && (
- <Button variant="secondary" size="sm" icon={<Lock size={13} />} onClick={() => setCloseTarget(p)}>
+ <Button variant="secondary" size="sm" icon={<LuLock size={13} />} onClick={() => setCloseTarget(p)}>
  Close
  </Button>
  )}
  {canManage && p.status === 'closed' && (
- <Button variant="secondary" size="sm" icon={<LockOpen size={13} />} onClick={() => setReopenTarget(p)}>
+ <Button variant="secondary" size="sm" icon={<LuLockOpen size={13} />} onClick={() => setReopenTarget(p)}>
  Reopen
  </Button>
  )}

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { ArchiveRestore, Printer } from 'lucide-react';
+import { LuArchiveRestore, LuPrinter } from '@/lib/icons';
 import { journalEntriesApi } from '@/api/accounting/journal-entries';
 import { downloadAuthenticatedFile } from '@/api/download';
 import { Button } from '@/components/ui/Button';
@@ -97,7 +97,7 @@ export default function JournalEntryDetailPage() {
  ]}
  actions={
  <div className="flex gap-1.5">
- <Button variant="secondary" size="sm" icon={<Printer size={14} />} onClick={() => void downloadAuthenticatedFile(journalEntriesApi.pdfUrl(je.id), { openInNewTab: true, errorMessage: 'Failed to generate journal entry PDF.' })}>Print</Button>
+ <Button variant="secondary" size="sm" icon={<LuPrinter size={14} />} onClick={() => void downloadAuthenticatedFile(journalEntriesApi.pdfUrl(je.id), { openInNewTab: true, errorMessage: 'Failed to generate journal entry PDF.' })}>Print</Button>
  {isDraft && can('accounting.journal.post') && (
  <Button variant="primary" size="sm" onClick={() => setShowPost(true)} disabled={postMut.isPending}>
  Post
@@ -109,7 +109,7 @@ export default function JournalEntryDetailPage() {
   </Button>
   )}
  {can('accounting.journal.create') && (
-  <Button variant="secondary" size="sm" icon={<ArchiveRestore size={14} />} onClick={() => restoreMut.mutate()} loading={restoreMut.isPending} disabled={restoreMut.isPending}>
+  <Button variant="secondary" size="sm" icon={<LuArchiveRestore size={14} />} onClick={() => restoreMut.mutate()} loading={restoreMut.isPending} disabled={restoreMut.isPending}>
   Restore
   </Button>
   )}

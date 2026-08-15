@@ -1,4 +1,4 @@
-export type ChainStepState = 'done' | 'active' | 'pending';
+export type ChainStepState = 'done' | 'active' | 'pending' | 'rejected' | 'skipped';
 
 export interface ChainStep {
  key: string;

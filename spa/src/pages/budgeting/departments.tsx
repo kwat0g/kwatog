@@ -8,7 +8,7 @@ import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
-import { ArrowLeft, Building2 } from 'lucide-react';
+import { LuArrowLeft, LuBuilding2 } from '@/lib/icons';
 import { cn } from '@/lib/cn';
 import { formatCompactCurrency } from '@/lib/formatNumber';
 import type { Budget } from '@/types/budgeting';
@@ -98,7 +98,7 @@ export default function DepartmentBudgetDetailPage() {
             to="/budgeting"
             className="inline-flex items-center gap-1.5 text-sm text-secondary hover:text-primary transition-colors"
           >
-            <ArrowLeft size={14} /> Back to Overview
+            <LuArrowLeft size={14} /> Back to Overview
           </Link>
         }
       />
@@ -208,7 +208,7 @@ export default function DepartmentBudgetDetailPage() {
 
       {(!budgets || budgets.length === 0) && (
         <div className="text-center py-12 text-muted">
-          <Building2 size={48} className="mx-auto mb-3 opacity-40" />
+          <LuBuilding2 size={48} className="mx-auto mb-3 opacity-40" />
           <p className="text-lg font-medium">No budgets found</p>
           <p className="text-sm mt-1">
             This department has no budgets configured for the current fiscal year.

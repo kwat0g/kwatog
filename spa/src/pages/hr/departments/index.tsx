@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
-import { ChevronRight, ChevronDown, Plus, Pencil, Trash2, Building2, ArchiveRestore } from 'lucide-react';
+import { LuChevronRight, LuChevronDown, LuPlus, LuPencil, LuTrash2, LuBuilding2, LuArchiveRestore } from '@/lib/icons';
 import { departmentsApi } from '@/api/hr/departments';
 import { ArchiveFilter } from '@/components/ui/ArchiveFilter';
 import { archiveToTrashed, type ArchiveScope } from '@/lib/archiveScope';
@@ -139,7 +139,7 @@ export default function DepartmentsPage() {
  subtitle={`${rows.length} departments`}
  actions={
  can('hr.departments.manage') && (
- <Button variant="primary" size="sm" onClick={openCreate} icon={<Plus size={14} />}>
+ <Button variant="primary" size="sm" onClick={openCreate} icon={<LuPlus size={14} />}>
  Add department
  </Button>
  )
@@ -228,15 +228,15 @@ export default function DepartmentsPage() {
  )}
  {can('hr.departments.manage') && (
   <ModalFooter className="justify-start">
-  <Button variant="secondary" size="sm" onClick={() => openEdit(selected.id)} icon={<Pencil size={12} />}>
+  <Button variant="secondary" size="sm" onClick={() => openEdit(selected.id)} icon={<LuPencil size={12} />}>
   Edit
   </Button>
   {scope === 'only' ? (
-  <Button variant="secondary" size="sm" onClick={() => setPendingRestore(selected)} icon={<ArchiveRestore size={12} />}>
+  <Button variant="secondary" size="sm" onClick={() => setPendingRestore(selected)} icon={<LuArchiveRestore size={12} />}>
   Restore
   </Button>
   ) : (
-  <Button variant="danger" size="sm" onClick={() => setPendingDelete(selected)} icon={<Trash2 size={12} />}>
+  <Button variant="danger" size="sm" onClick={() => setPendingDelete(selected)} icon={<LuTrash2 size={12} />}>
   Delete
   </Button>
   )}
@@ -317,7 +317,7 @@ function TreeRow({
  aria-label={`${isOpen ? 'Collapse' : 'Expand'} ${node.name}`}
  aria-expanded={isOpen}
  >
- {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+ {isOpen ? <LuChevronDown size={12} /> : <LuChevronRight size={12} />}
  </button>
  ) : (
  // Leaf: a dot, not a control — nothing to expand.
@@ -325,7 +325,7 @@ function TreeRow({
  <span className="w-2 h-2 rounded-full bg-elevated" />
  </span>
  )}
- <Building2 size={13} className="text-muted shrink-0" />
+ <LuBuilding2 size={13} className="text-muted shrink-0" />
  <span className="font-medium truncate">{node.name}</span>
  <span className="font-mono text-xs text-muted ml-1.5">{node.code}</span>
  <span className="ml-auto flex items-center gap-2 text-xs text-muted">

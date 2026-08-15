@@ -3,13 +3,15 @@ import { cn } from '@/lib/cn';
 export interface PasswordStrengthProps {
  password: string;
  className?: string;
+ minimumLength?: number;
 }
 
-function scorePassword(password: string): { score: number; label: string; color: string } {
+function scorePassword(password: string, minimumLength: number): { score: number; label: string; color: string } {
  let score = 0;
- if (password.length >= 8) score += 1;
- if (password.length >= 12) score += 1;
+ if (password.length >= minimumLength) score += 1;
+ if (password.length >= Math.max(minimumLength + 4, 12)) score += 1;
  if (/[A-Z]/.test(password)) score += 1;
+ if (/[a-z]/.test(password)) score += 1;
  if (/[0-9]/.test(password)) score += 1;
  if (/[^A-Za-z0-9]/.test(password)) score += 1;
 
@@ -19,8 +21,8 @@ function scorePassword(password: string): { score: number; label: string; color:
  return { score, label: 'Strong', color: 'bg-success-bg' };
 }
 
-export function PasswordStrength({ password, className }: PasswordStrengthProps) {
- const { score, label, color } = scorePassword(password);
+export function PasswordStrength({ password, className, minimumLength = 8 }: PasswordStrengthProps) {
+ const { score, label, color } = scorePassword(password, minimumLength);
  const segments = 5;
 
  if (!password) return null;

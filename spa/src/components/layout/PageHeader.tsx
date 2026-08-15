@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { LuArrowLeft } from '@/lib/icons';
 import { isValidElement, useEffect, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { RefreshingIndicator } from './RefreshingIndicator';
@@ -69,14 +69,14 @@ export function PageHeader({
 
   return (
     <div className={cn('px-5 py-4 border-b border-default bg-canvas', className)}>
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           {breadcrumbs && breadcrumbs.length > 0 && (
             <Breadcrumb segments={breadcrumbs} className="mb-2" />
           )}
           {backTo && (
             <a href={backTo} onClick={handleBackClick} className="inline-flex items-center gap-1 text-xs text-muted hover:text-primary mb-1">
-              <ArrowLeft size={11} />
+              <LuArrowLeft size={11} />
               {backLabel ?? 'Back'}
             </a>
           )}
@@ -86,7 +86,7 @@ export function PageHeader({
           </h1>
           {subtitle && <div className="text-xs text-muted mt-0.5">{subtitle}</div>}
         </div>
-        {actions && <div className="flex items-center gap-1.5 shrink-0">{actions}</div>}
+        {actions && <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0">{actions}</div>}
       </div>
       {bottom && <div className="mt-3">{bottom}</div>}
     </div>

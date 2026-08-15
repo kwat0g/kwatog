@@ -9,7 +9,7 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
-import { Check, Ban, Save, FileDown } from 'lucide-react';
+import { LuCheck, LuBan, LuSave, LuFileDown } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import type { AxiosError } from 'axios';
 import { inspectionsApi } from '@/api/quality/inspections';
@@ -213,7 +213,7 @@ export default function InspectionDetailPage() {
  <Button
  variant="secondary"
  size="sm"
- icon={<Save size={14} />}
+ icon={<LuSave size={14} />}
  loading={save.isPending}
  disabled={dirtyCount === 0}
  onClick={() => save.mutate()}
@@ -223,7 +223,7 @@ export default function InspectionDetailPage() {
  <Button
  variant="primary"
  size="sm"
- icon={<Check size={14} />}
+ icon={<LuCheck size={14} />}
  disabled={unresolvedCount > 0}
  onClick={() => setConfirmComplete(true)}
  >
@@ -232,7 +232,7 @@ export default function InspectionDetailPage() {
  <Button
  variant="secondary"
  size="sm"
- icon={<Ban size={14} />}
+ icon={<LuBan size={14} />}
  onClick={() => setConfirmCancel(true)}
  >
  Cancel
@@ -244,7 +244,7 @@ export default function InspectionDetailPage() {
  <Button
  variant="secondary"
  size="sm"
- icon={<FileDown size={14} />}
+ icon={<LuFileDown size={14} />}
  loading={cocLoading}
  onClick={async () => {
  setCocLoading(true);

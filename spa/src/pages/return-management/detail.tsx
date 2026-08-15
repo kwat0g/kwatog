@@ -16,7 +16,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { returnManagementApi } from '@/api/returnManagement';
 import { creditNotesApi } from '@/api/accounting/credit-notes';
-import { AlertTriangle, FileText, PackageCheck, RefreshCw } from 'lucide-react';
+import { LuTriangleAlert, LuFileText, LuPackageCheck, LuRefreshCw } from '@/lib/icons';
 import { warehouseApi } from '@/api/inventory/warehouse';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
@@ -300,7 +300,7 @@ export default function ReturnRequestDetailPage() {
   <Button
    size="sm"
    variant="secondary"
-   icon={<RefreshCw size={13} className={retryInspectionMut.isPending ? 'animate-spin' : ''} />}
+   icon={<LuRefreshCw size={13} className={retryInspectionMut.isPending ? 'animate-spin' : ''} />}
    loading={retryInspectionMut.isPending}
    onClick={() => retryInspectionMut.mutate()}
   >
@@ -406,7 +406,7 @@ export default function ReturnRequestDetailPage() {
 
  {rma.inspection_handoff?.status === 'manual_required' && (
   <div className="flex items-start gap-3 rounded-md border border-warning/40 bg-warning-bg/10 px-4 py-3 text-sm">
-   <AlertTriangle size={16} className="mt-0.5 shrink-0 text-warning-fg" />
+   <LuTriangleAlert size={16} className="mt-0.5 shrink-0 text-warning-fg" />
    <div className="flex-1">
     <div className="font-medium">Quality inspection handoff needs attention</div>
     <div className="text-muted">
@@ -417,7 +417,7 @@ export default function ReturnRequestDetailPage() {
     <Button
      variant="secondary"
      size="sm"
-     icon={<RefreshCw size={13} />}
+     icon={<LuRefreshCw size={13} />}
      loading={retryInspectionMut.isPending}
      onClick={() => retryInspectionMut.mutate()}
     >
@@ -505,7 +505,7 @@ export default function ReturnRequestDetailPage() {
   auto-bill / auto-invoice review-then-post pattern). */}
  {rma.credit_note && rma.credit_note.status === 'draft' && (
  <div className="flex items-center gap-3 rounded-md border border-success/40 bg-success-bg/10 px-4 py-3 text-sm">
- <FileText size={16} className="shrink-0 text-success-fg" />
+ <LuFileText size={16} className="shrink-0 text-success-fg" />
  <div className="flex-1">
  <div className="font-medium">Credit note auto-created</div>
  <div className="text-muted">
@@ -516,7 +516,7 @@ export default function ReturnRequestDetailPage() {
  {' '}· {formatPeso(rma.credit_note.total_amount)}. Review and finalize to post the AR credit to the GL.
  </div>
  </div> {can('accounting.credit_notes.manage') && (
-   <Button variant="secondary" size="sm" icon={<FileText size={14} />}
+   <Button variant="secondary" size="sm" icon={<LuFileText size={14} />}
     onClick={() => setFinalizeCnId(rma.credit_note!.id)} loading={finalizeCn.isPending}>Finalize</Button>
   )}
   </div>
@@ -527,7 +527,7 @@ export default function ReturnRequestDetailPage() {
       units moved and where, so the physical flow is as visible as the credit. */}
   {rma.moved_quantity && Number(rma.moved_quantity) > 0 && (
    <div className="flex items-center gap-3 rounded-md border border-success/40 bg-success-bg/10 px-4 py-3 text-sm">
-    <PackageCheck size={16} className="shrink-0 text-success-fg" />
+    <LuPackageCheck size={16} className="shrink-0 text-success-fg" />
     <div className="flex-1">
      <div className="font-medium">
       {rma.type === 'supplier_return' ? 'Goods shipped back to supplier' : 'Goods restocked into inventory'}

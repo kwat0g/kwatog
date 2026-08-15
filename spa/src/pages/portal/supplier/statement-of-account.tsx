@@ -1,3 +1,4 @@
+import { PortalTable } from '@/components/portal/PortalTable';
 import { useCallback, useEffect, useState } from 'react';
 import { supplierPortalApi } from '@/api/b2b/supplier';
 import type { VendorStatementOfAccount } from '@/types/b2b';
@@ -89,7 +90,8 @@ export default function SupplierStatementOfAccountPage() {
  {soa.open_bills.length === 0 ? (
  <EmptyState icon="circle-check" title="No open bills" description="All bills are paid." />
  ) : (
- <table className={tableCls}>
+ <PortalTable>
+<table className={tableCls}>
  <thead>
  <tr className={theadTrCls}>
  <Th>Bill #</Th>
@@ -125,6 +127,7 @@ export default function SupplierStatementOfAccountPage() {
  ))}
  </tbody>
  </table>
+</PortalTable>
  )}
  </Panel>
  </>

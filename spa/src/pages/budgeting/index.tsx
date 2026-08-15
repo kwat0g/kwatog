@@ -12,7 +12,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/cn';
 import { formatCompactCurrency, formatPeso } from '@/lib/formatNumber';
-import { Plus } from 'lucide-react';
+import { LuPlus } from '@/lib/icons';
 import type { BudgetOverview } from '@/types/budgeting';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
@@ -94,7 +94,7 @@ export default function BudgetOverviewPage() {
             <Button
               variant="primary"
               size="sm"
-              icon={<Plus size={14} />}
+              icon={<LuPlus size={14} />}
               onClick={() => navigate('/budgeting/create')}
             >
               Create Budget

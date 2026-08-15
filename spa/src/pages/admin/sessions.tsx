@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Trash2 } from 'lucide-react';
+import { LuTrash2 } from '@/lib/icons';
 import { sessionsApi, type ActiveSession } from '@/api/admin/sessions';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -21,7 +21,7 @@ function parseUserAgent(ua: string | null): string {
 const columns: Column<ActiveSession>[] = [
  {
  key: 'user',
- header: 'User',
+ header: 'LuUser',
  cell: (s) => (
  <StackedCell
  primary={
@@ -119,7 +119,7 @@ export default function SessionsPage() {
  onClick={() => setTerminateTarget(s)}
  title={s.is_current ? 'Cannot terminate your own session' : 'Terminate session'}
  >
- <Trash2 size={14} />
+ <LuTrash2 size={14} />
  </Button>
  ),
  },

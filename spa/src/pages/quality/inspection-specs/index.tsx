@@ -8,7 +8,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { LuPlus } from '@/lib/icons';
 import { inspectionSpecsApi, type InspectionSpecListParams } from '@/api/quality/inspectionSpecs';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -63,7 +63,7 @@ export default function InspectionSpecsListPage() {
  title="Inspection specs"
  subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'spec' : 'specs'}` : undefined}
  actions={can('quality.specs.manage') ? (
- <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/quality/inspection-specs/new')}>
+ <Button variant="primary" size="sm" icon={<LuPlus size={14} />} onClick={() => navigate('/quality/inspection-specs/new')}>
  New spec
  </Button>
  ) : undefined}

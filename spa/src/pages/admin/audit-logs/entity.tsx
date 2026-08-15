@@ -8,7 +8,7 @@
  */
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Download, Clock, User as UserIcon, ArrowRight } from 'lucide-react';
+import { LuDownload, LuClock, LuUser as UserIcon, LuArrowRight } from '@/lib/icons';
 import { auditLogsApi, type AuditLogEntry, type AuditLogParams } from '@/api/admin/audit-logs';
 import { downloadAuthenticatedFile } from '@/api/download';
 import { Button } from '@/components/ui/Button';
@@ -54,7 +54,7 @@ function ChangeSummary({ entry }: { entry: AuditLogEntry }) {
  </span>
  )}
  {old[key] !== undefined && nw[key] !== undefined && (
- <ArrowRight size={10} className="text-muted shrink-0" />
+ <LuArrowRight size={10} className="text-muted shrink-0" />
  )}
  {nw[key] !== undefined && (
  <span className="font-mono tabular-nums text-primary">
@@ -141,7 +141,7 @@ export default function EntityAuditTrailPage() {
  <Button
  variant="secondary"
  size="sm"
- icon={<Download size={14} />}
+ icon={<LuDownload size={14} />}
  onClick={handleExportPdf}
  >
  Export PDF
@@ -201,7 +201,7 @@ export default function EntityAuditTrailPage() {
  {entry.action}
  </Chip>
  <span className="text-xs text-muted flex items-center gap-1">
- <Clock size={12} />
+ <LuClock size={12} />
  {formatDateTime(entry.created_at)}
  </span>
  </div>

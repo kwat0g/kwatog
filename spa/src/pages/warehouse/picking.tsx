@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { MapPin, Package, Truck } from 'lucide-react';
+import { LuMapPin, LuPackage, LuTruck } from '@/lib/icons';
 import { pickingListApi } from '@/api/inventory/warehouseWms';
 import { materialIssuesApi } from '@/api/inventory/material-issues';
 import { Button } from '@/components/ui/Button';
@@ -105,7 +105,7 @@ export default function PickingListPage() {
  {/* Line header */}
  <div className="flex items-center justify-between px-3 py-1.5 border-b border-subtle bg-elevated/30">
  <div className="flex items-center gap-2 text-xs">
- <Package size={14} className="text-muted" />
+ <LuPackage size={14} className="text-muted" />
  <span className="font-mono font-medium">{line.item_code}</span>
  <span className="text-muted">{line.item_name}</span>
  </div>
@@ -128,7 +128,7 @@ export default function PickingListPage() {
  className="flex items-center justify-between px-2 py-1 rounded text-xs hover:bg-elevated/50 transition-colors"
  >
  <div className="flex items-center gap-2 min-w-0">
- <MapPin size={12} className="shrink-0 text-accent" />
+ <LuMapPin size={12} className="shrink-0 text-accent" />
  <span className="font-mono">{sug.location.full_code}</span>
  <span className="text-muted text-2xs">
  {sug.location.zone} / {sug.location.warehouse}
@@ -158,7 +158,7 @@ export default function PickingListPage() {
  <Button
  variant="primary"
  size="sm"
- icon={<Truck size={14} />}
+ icon={<LuTruck size={14} />}
  disabled={!canPick}
  onClick={() => {
  // Navigate to detail for recording the pick

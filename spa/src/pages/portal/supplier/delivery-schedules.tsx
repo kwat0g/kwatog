@@ -1,5 +1,7 @@
+import { PortalTable } from '@/components/portal/PortalTable';
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, X } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { LuPlus, LuX } from '@/lib/icons';
 import { supplierPortalApi } from '@/api/b2b/supplier';
 import type { DeliverySchedule, PortalPoSummary } from '@/types/b2b';
 import { Panel } from '@/components/ui/Panel';
@@ -24,6 +26,7 @@ export default function SupplierDeliverySchedulesPage() {
  const [loading, setLoading] = useState(true);
  const [showForm, setShowForm] = useState(false);
  const [submitting, setSubmitting] = useState(false);
+ const [loadError, setLoadError] = useState(false);
  const [pos, setPos] = useState<PortalPoSummary[]>([]);
 
  const [form, setForm] = useState<ScheduleForm>({
@@ -34,9 +37,12 @@ export default function SupplierDeliverySchedulesPage() {
 
  const fetchSchedules = useCallback(async () => {
  setLoading(true);
+ setLoadError(false);
  try {
  const data = await supplierPortalApi.listDeliverySchedules();
  setSchedules(data);
+ } catch {
+ setLoadError(true);
  } finally {
  setLoading(false);
  }
@@ -83,6 +89,7 @@ export default function SupplierDeliverySchedulesPage() {
  setSubmitting(true);
  try {
  await supplierPortalApi.createDeliverySchedule(form);
+ toast.success('Delivery schedule submitted.');
  setShowForm(false);
  setForm({
  purchase_order_id: '',
@@ -90,6 +97,8 @@ export default function SupplierDeliverySchedulesPage() {
  lines: [{ product_name: '', quantity: 0, notes: '' }],
  });
  await fetchSchedules();
+ } catch {
+ toast.error('Could not submit the delivery schedule. Please try again.');
  } finally {
  setSubmitting(false);
  }
@@ -103,7 +112,7 @@ export default function SupplierDeliverySchedulesPage() {
  backTo="/portal/supplier"
  backLabel="Portal"
  actions={
- <Button variant="primary" size="sm" icon={showForm ? <X size={14} /> : <Plus size={14} />} onClick={() => setShowForm(!showForm)}>
+ <Button variant="primary" size="sm" icon={showForm ? <LuX size={14} /> : <LuPlus size={14} />} onClick={() => setShowForm(!showForm)}>
  {showForm ? 'Cancel' : 'New schedule'}
  </Button>
  }
@@ -140,18 +149,18 @@ export default function SupplierDeliverySchedulesPage() {
  <div className="space-y-2">
  <div className="flex items-center justify-between">
  <span className="text-xs font-medium text-muted">Line items</span>
- <Button type="button" variant="ghost" size="sm" icon={<Plus size={12} />} onClick={handleAddLine}>
+ <Button type="button" variant="ghost" size="sm" icon={<LuPlus size={12} />} onClick={handleAddLine}>
  Add line
  </Button>
  </div>
  {form.lines.map((line, idx) => (
- <div key={idx} className="flex gap-2 items-start">
+ <div key={idx} className="grid gap-2 rounded-md border border-default bg-surface p-2 sm:grid-cols-[minmax(0,1fr)_6rem_minmax(8rem,12rem)_auto] sm:items-start">
  <Input
  fieldSize="sm"
  type="text"
  placeholder="Product name"
  aria-label="Product name"
- containerClassName="flex-1"
+ containerClassName="min-w-0"
  value={line.product_name}
  onChange={(e) => handleLineChange(idx, 'product_name', e.target.value)}
  required
@@ -164,7 +173,7 @@ export default function SupplierDeliverySchedulesPage() {
  placeholder="Qty"
  aria-label="Quantity"
  className="font-mono tabular-nums"
- containerClassName="w-24"
+ containerClassName="min-w-0 sm:w-24"
  value={line.quantity || ''}
  onChange={(e) => handleLineChange(idx, 'quantity', parseFloat(e.target.value) || 0)}
  required
@@ -174,7 +183,7 @@ export default function SupplierDeliverySchedulesPage() {
  type="text"
  placeholder="Notes"
  aria-label="Notes"
- containerClassName="w-32"
+ containerClassName="min-w-0 sm:w-32"
  value={line.notes}
  onChange={(e) => handleLineChange(idx, 'notes', e.target.value)}
  />
@@ -184,10 +193,10 @@ export default function SupplierDeliverySchedulesPage() {
  variant="ghost"
  size="sm"
  iconOnly
- icon={<X size={14} />}
+ icon={<LuX size={14} />}
  onClick={() => handleRemoveLine(idx)}
  aria-label="Remove line"
- className="shrink-0 text-muted hover:text-danger-fg"
+ className="justify-self-end text-muted hover:text-danger-fg sm:justify-self-auto"
  />
  )}
  </div>
@@ -211,7 +220,16 @@ export default function SupplierDeliverySchedulesPage() {
  )}
 
  {!loading && schedules.length === 0 && (
+ loadError ? (
+ <EmptyState
+ icon="alert-circle"
+ title="Could not load delivery schedules"
+ description="Check your connection and try again."
+ action={<Button variant="secondary" onClick={() => fetchSchedules()}>Try again</Button>}
+ />
+ ) : (
  <EmptyState icon="clipboard-list" title="No delivery schedules yet" description="Submit your first delivery schedule using the button above." />
+ )
  )}
 
  {!loading && schedules.length > 0 && (
@@ -230,7 +248,8 @@ export default function SupplierDeliverySchedulesPage() {
  {formatDate(s.created_at)}
  </p>
  </div>
- <table className={tableCls}>
+ <PortalTable>
+<table className={tableCls}>
  <thead>
  <tr className={theadTrCls}>
  <Th>Product</Th>
@@ -248,6 +267,7 @@ export default function SupplierDeliverySchedulesPage() {
  ))}
  </tbody>
  </table>
+</PortalTable>
  </Panel>
  ))}
  </div>

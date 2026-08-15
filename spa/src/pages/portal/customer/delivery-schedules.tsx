@@ -1,7 +1,8 @@
+import { PortalTable } from '@/components/portal/PortalTable';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
-import { Plus, X, Send } from 'lucide-react';
+import { LuPlus, LuX, LuSend } from '@/lib/icons';
 import { customerPortalApi } from '@/api/b2b/customer';
 import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
@@ -67,7 +68,7 @@ export default function DeliverySchedulesPage() {
  backTo="/portal/customer"
  backLabel="Portal"
  actions={
- <Button variant="primary" size="sm" icon={showForm ? <X size={14} /> : <Plus size={14} />} onClick={() => setShowForm(!showForm)}>
+ <Button variant="primary" size="sm" icon={showForm ? <LuX size={14} /> : <LuPlus size={14} />} onClick={() => setShowForm(!showForm)}>
  {showForm ? 'Cancel' : 'New schedule'}
  </Button>
  }
@@ -98,13 +99,13 @@ export default function DeliverySchedulesPage() {
  <div className="space-y-2">
  <div className="flex items-center justify-between">
  <span className="text-xs text-muted font-medium">Line items</span>
- <Button type="button" variant="ghost" size="sm" icon={<Plus size={12} />} onClick={addLine}>
+ <Button type="button" variant="ghost" size="sm" icon={<LuPlus size={12} />} onClick={addLine}>
  Add item
  </Button>
  </div>
  {lines.map((line, idx) => (
- <div key={idx} className="flex items-start gap-2 p-2 bg-surface border border-default rounded-md">
- <div className="flex-1 space-y-1.5">
+ <div key={idx} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 rounded-md border border-default bg-surface p-2">
+ <div className="min-w-0 space-y-1.5">
  <Input
  fieldSize="sm"
  type="text"
@@ -114,14 +115,14 @@ export default function DeliverySchedulesPage() {
  onChange={(e) => updateLine(idx, 'product_name', e.target.value)}
  required
  />
- <div className="flex gap-2">
+ <div className="flex flex-col gap-2 sm:flex-row">
  <Input
  fieldSize="sm"
  type="number"
  placeholder="Qty"
  aria-label="Quantity"
  className="font-mono tabular-nums"
- containerClassName="w-24"
+ containerClassName="w-full sm:w-24"
  value={line.quantity || ''}
  onChange={(e) => updateLine(idx, 'quantity', parseFloat(e.target.value) || 0)}
  required
@@ -144,7 +145,7 @@ export default function DeliverySchedulesPage() {
  variant="ghost"
  size="sm"
  iconOnly
- icon={<X size={14} />}
+ icon={<LuX size={14} />}
  onClick={() => removeLine(idx)}
  disabled={lines.length <= 1}
  aria-label="Remove line"
@@ -154,7 +155,7 @@ export default function DeliverySchedulesPage() {
  ))}
  </div>
 
- <Button type="submit" variant="primary" size="sm" icon={<Send size={14} />} loading={createMut.isPending} className="self-start">
+ <Button type="submit" variant="primary" size="sm" icon={<LuSend size={14} />} loading={createMut.isPending} className="self-start">
  Submit schedule
  </Button>
  </form>
@@ -172,7 +173,8 @@ export default function DeliverySchedulesPage() {
  <span className="text-xs font-medium">{s.month}</span>
  <Chip variant={chipVariantForStatus(s.status)}>{s.status_label ?? s.status}</Chip>
  </div>
- <table className={tableCls}>
+ <PortalTable>
+<table className={tableCls}>
  <thead>
  <tr className={theadTrCls}>
  <Th>Product</Th>
@@ -190,6 +192,7 @@ export default function DeliverySchedulesPage() {
  ))}
  </tbody>
  </table>
+</PortalTable>
  <p className="text-2xs text-muted mt-1.5">
  Submitted {formatDate(s.created_at)}
  </p>

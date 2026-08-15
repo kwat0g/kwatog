@@ -1,7 +1,7 @@
 /** ADV8 — Downtime analytics dashboard. */
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Activity, Clock, TrendingDown, TrendingUp, Timer, BarChart3 } from 'lucide-react';
+import { LuActivity, LuClock, LuTrendingDown, LuTrendingUp, LuTimer, LuChartColumnIncreasing } from '@/lib/icons';
 import { downtimeAnalyticsApi } from '@/api/maintenance/downtimeAnalytics';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Chip } from '@/components/ui/Chip';
@@ -40,7 +40,7 @@ function formatMinutes(mins: number): string {
  return `${mins}m`;
 }
 
-function StatCard({ label, value, icon: Icon, trend }: { label: string; value: string; icon: typeof Activity; trend?: 'up' | 'down' | 'neutral' }) {
+function StatCard({ label, value, icon: Icon, trend }: { label: string; value: string; icon: typeof LuActivity; trend?: 'up' | 'down' | 'neutral' }) {
  return (
  <Panel className="p-4">
  <div className="flex items-start justify-between">
@@ -56,12 +56,12 @@ function StatCard({ label, value, icon: Icon, trend }: { label: string; value: s
  <div className="mt-2 flex items-center gap-1 text-2xs">
  {trend === 'up' ? (
  <>
- <TrendingUp size={12} className="text-danger-fg" />
+ <LuTrendingUp size={12} className="text-danger-fg" />
  <span className="text-danger-fg">Higher than avg</span>
  </>
  ) : trend === 'down' ? (
  <>
- <TrendingDown size={12} className="text-success-fg" />
+ <LuTrendingDown size={12} className="text-success-fg" />
  <span className="text-success-fg">Better than avg</span>
  </>
  ) : null}
@@ -226,25 +226,25 @@ export default function DowntimeAnalyticsPage() {
  <StatCard
  label="Total Downtime"
  value={formatMinutes(summary.total_downtime_minutes)}
- icon={Clock}
+ icon={LuClock}
  trend={policyQ.data && summary.total_downtime_minutes > policyQ.data.total_warning_minutes ? 'up' : 'down'}
  />
  <StatCard
  label="MTBF"
  value={summary.mtbf_hours ? `${summary.mtbf_hours.toFixed(1)}h` : '—'}
- icon={Timer}
+ icon={LuTimer}
  trend={policyQ.data && summary.mtbf_hours && summary.mtbf_hours > policyQ.data.mtbf_good_hours ? 'down' : 'up'}
  />
  <StatCard
  label="MTTR"
  value={summary.mttr_minutes ? formatMinutes(summary.mttr_minutes) : '—'}
- icon={Activity}
+ icon={LuActivity}
  trend={policyQ.data && summary.mttr_minutes && summary.mttr_minutes < policyQ.data.mttr_good_minutes ? 'down' : 'up'}
  />
  <StatCard
  label="Availability"
  value={summary.availability_pct == null ? '—' : `${summary.availability_pct.toFixed(1)}%`}
- icon={BarChart3}
+ icon={LuChartColumnIncreasing}
  trend={summary.availability_pct != null && policyQ.data?.availability_good_pct != null && summary.availability_pct >= policyQ.data.availability_good_pct ? 'down' : 'up'}
  />
  </>

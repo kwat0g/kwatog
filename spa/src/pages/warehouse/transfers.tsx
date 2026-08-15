@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { CheckCircle2, Plus, XCircle } from 'lucide-react';
+import { LuCircleCheck, LuPlus, LuCircleX } from '@/lib/icons';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { transferOrderApi } from '@/api/inventory/warehouseWms';
@@ -98,7 +98,7 @@ export default function TransferOrdersPage() {
  title="Transfer Orders"
  subtitle={transfers ? `${transfers.length} transfers` : undefined}
  actions={canManage ? (
- <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => setShowCreateModal(true)}>
+ <Button variant="primary" size="sm" icon={<LuPlus size={14} />} onClick={() => setShowCreateModal(true)}>
  New transfer
  </Button>
  ) : null}
@@ -152,10 +152,10 @@ export default function TransferOrdersPage() {
  actions={
  activeTransfer.status === 'pending' && canManage ? (
  <div className="flex gap-1">
- <Button size="sm" variant="primary" icon={<CheckCircle2 size={14} />} onClick={() => setExecuteTarget(activeTransfer)}>
+ <Button size="sm" variant="primary" icon={<LuCircleCheck size={14} />} onClick={() => setExecuteTarget(activeTransfer)}>
  Execute
  </Button>
- <Button size="sm" variant="danger" icon={<XCircle size={14} />} onClick={() => setCancelTarget(activeTransfer)}>
+ <Button size="sm" variant="danger" icon={<LuCircleX size={14} />} onClick={() => setCancelTarget(activeTransfer)}>
  Cancel
  </Button>
  </div>

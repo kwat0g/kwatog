@@ -2,7 +2,7 @@ import { FilterBar } from '@/components/ui/FilterBar';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Pencil } from 'lucide-react';
+import { LuPencil } from '@/lib/icons';
 import { priceAgreementsApi, type PriceAgreementListParams } from '@/api/crm/priceAgreements';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -62,7 +62,7 @@ export default function PriceAgreementsListPage() {
  className="p-1 rounded text-muted hover:text-primary hover:bg-elevated transition-colors inline-flex items-center justify-center"
  aria-label="Edit agreement"
  >
- <Pencil size={14} />
+ <LuPencil size={14} />
  </Link>
  ),
  },

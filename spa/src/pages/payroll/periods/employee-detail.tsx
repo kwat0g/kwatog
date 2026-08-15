@@ -1,6 +1,6 @@
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Download, RefreshCw, FilePenLine } from 'lucide-react';
+import { LuDownload, LuRefreshCw, LuFilePenLine } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { downloadAuthenticatedFile } from '@/api/download';
 import { payrollsApi } from '@/api/payroll/payrolls';
@@ -77,7 +77,7 @@ export default function PayrollEmployeeDetailPage() {
  <Button
  variant="secondary"
  size="sm"
- icon={<Download size={14} />}
+ icon={<LuDownload size={14} />}
  onClick={() => void downloadAuthenticatedFile(payrollsApi.payslipUrl(data.id), {
  openInNewTab: true,
  errorMessage: 'Failed to generate the payslip.',
@@ -86,7 +86,7 @@ export default function PayrollEmployeeDetailPage() {
  Payslip
  </Button>
  {can('payroll.periods.compute') && (
- <Button variant="secondary" size="sm" icon={<RefreshCw size={14} />}
+ <Button variant="secondary" size="sm" icon={<LuRefreshCw size={14} />}
  onClick={() => recomputeMutation.mutate()}
  disabled={recomputeMutation.isPending} loading={recomputeMutation.isPending}>
  Recompute
@@ -96,7 +96,7 @@ export default function PayrollEmployeeDetailPage() {
  <Link to="/payroll/adjustments/create"
  state={{ original_payroll_id: data.id, employee: emp }}
  className="inline-flex items-center gap-1 px-3 h-7 text-xs rounded-md bg-accent text-accent-fg hover:bg-accent-hover">
- <FilePenLine size={14} /> Raise adjustment
+ <LuFilePenLine size={14} /> Raise adjustment
  </Link>
  )}
  </>

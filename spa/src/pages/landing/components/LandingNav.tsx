@@ -2,9 +2,8 @@
  * LandingNav — fixed top navigation for the public marketing site.
  *
  * Transparent over the hero, then condenses to a blurred light bar on scroll.
- * Exactly one action button — "Login" → /login (internal ERP entry). Section
- * anchors live inline on desktop and in a slide-down sheet on mobile; the Login
- * button stays visible at every breakpoint.
+ * Employee access stays primary, while customer and supplier access remain
+ * available from the mobile menu and footer.
  *
  * When rendered on a non-landing page (e.g. /careers), the logo and section
  * anchors navigate back to / with the anchor, and a "Careers" link appears
@@ -18,8 +17,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, LogIn } from 'lucide-react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { LuMenu, LuX, LuLogIn } from '@/lib/icons';
 import { cn } from '@/lib/cn';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { useMagnetic } from '../hooks/useMagnetic';
@@ -229,11 +228,11 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas',
             )}
           >
-            <LogIn
+            <LuLogIn
               size={15}
               className="transition-transform duration-300 group-hover:translate-x-0.5"
             />
-            Login
+            Staff login
           </button>
 
           {/* Mobile menu toggle — 48px target on mobile */}
@@ -246,7 +245,7 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
             onClick={() => onOpenChange(!open)}
             className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-default text-primary transition-colors hover:bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas sm:h-10 sm:w-10 lg:hidden"
           >
-            {open ? <X size={20} /> : <Menu size={20} />}
+            {open ? <LuX size={20} /> : <LuMenu size={20} />}
           </button>
         </div>
       </nav>
@@ -257,7 +256,7 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
         ref={sheetRef}
         className={cn(
           'overflow-hidden border-default bg-canvas transition-[max-height] duration-300 lg:hidden',
-          open ? 'max-h-96 border-t' : 'max-h-0',
+          open ? 'max-h-[32rem] border-t' : 'max-h-0',
         )}
       >
         <div className="flex flex-col gap-1 px-5 py-4">
@@ -278,6 +277,27 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
               {link.label}
             </a>
           ))}
+          <div className="mt-3 border-t border-default pt-3">
+            <p className="px-3 font-mono text-[10px] uppercase tracking-[0.16em] text-text-subtle">
+              Partner access
+            </p>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <Link
+                to="/portal/customer/login"
+                onClick={() => onOpenChange(false)}
+                className="rounded-md border border-default bg-surface px-3 py-2.5 text-center text-[12px] text-secondary transition-colors hover:border-accent/40 hover:bg-elevated hover:text-primary"
+              >
+                Customer
+              </Link>
+              <Link
+                to="/portal/supplier/login"
+                onClick={() => onOpenChange(false)}
+                className="rounded-md border border-default bg-surface px-3 py-2.5 text-center text-[12px] text-secondary transition-colors hover:border-accent/40 hover:bg-elevated hover:text-primary"
+              >
+                Supplier
+              </Link>
+            </div>
+          </div>
         </div>
       </div>
     </header>

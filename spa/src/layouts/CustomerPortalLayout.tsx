@@ -20,7 +20,14 @@ export default function CustomerPortalLayout() {
  setIsLoading(true);
  setBootstrapError(false);
  customerPortalApi.me()
- .then((u) => { if (!cancelled) setUser(u); })
+  .then((u) => {
+  if (cancelled) return;
+  if (u.must_change_password) {
+  navigate('/portal/customer/change-password', { replace: true });
+  return;
+  }
+  setUser(u);
+  })
  .catch((error: unknown) => {
  if (cancelled) return;
  if (axios.isAxiosError(error) && error.response?.status === 401) {

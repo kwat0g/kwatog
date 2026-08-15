@@ -1,7 +1,8 @@
+import { PortalTable } from '@/components/portal/PortalTable';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { FileDown } from 'lucide-react';
+import { LuFileDown } from '@/lib/icons';
 import { supplierPortalApi } from '@/api/b2b/supplier';
 import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
@@ -50,7 +51,7 @@ export default function SupplierInvoiceDetailPage() {
  backLabel="Invoices"
  actions={invoice ? (
  <div className="flex items-center gap-2">
- <Button variant="ghost" size="sm" icon={<FileDown size={14} />} onClick={downloadPdf}>
+ <Button variant="ghost" size="sm" icon={<LuFileDown size={14} />} onClick={downloadPdf}>
  PDF
  </Button>
  <Chip variant={chipVariantForStatus(invoice.status)}>{invoice.status_label ?? invoice.status}</Chip>
@@ -90,7 +91,8 @@ export default function SupplierInvoiceDetailPage() {
 
  {invoice.items && invoice.items.length > 0 && (
  <Panel title={`Items (${invoice.items.length})`} noPadding>
- <table className={tableCls}>
+ <PortalTable>
+<table className={tableCls}>
  <thead>
  <tr className={theadTrCls}>
  <Th>Description</Th>
@@ -110,12 +112,14 @@ export default function SupplierInvoiceDetailPage() {
  ))}
  </tbody>
  </table>
+</PortalTable>
  </Panel>
  )}
 
  {invoice.payments && invoice.payments.length > 0 && (
  <Panel title="Payments" noPadding>
- <table className={tableCls}>
+ <PortalTable>
+<table className={tableCls}>
  <thead>
  <tr className={theadTrCls}>
  <Th>Date</Th>
@@ -133,6 +137,7 @@ export default function SupplierInvoiceDetailPage() {
  ))}
  </tbody>
  </table>
+</PortalTable>
  </Panel>
  )}
  </>

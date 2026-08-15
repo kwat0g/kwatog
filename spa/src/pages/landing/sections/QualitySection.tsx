@@ -1,3 +1,4 @@
+import { IconType } from '@/lib/icons';
 /**
  * QualitySection — IATF 16949 woven across the chain, framed as buyer guarantees.
  *
@@ -6,7 +7,7 @@
  * a customer can trust what ships because it was checked at every stage.
  */
 
-import { ShieldCheck, Download, Award, type LucideIcon } from 'lucide-react';
+import { LuShieldCheck, LuDownload, LuAward } from '@/lib/icons';
 import { useQuery } from '@tanstack/react-query';
 import { SectionHeading } from '../components/SectionHeading';
 import { QUALITY_PILLAR_ICONS } from '../data';
@@ -15,7 +16,7 @@ import { focusRingLanding } from '@/lib/focus';
 import { section, container, cardGap } from '../styles';
 import { cn } from '@/lib/cn';
 
-type PillarData = { id: string; title: string; body: string; icon: LucideIcon };
+type PillarData = { id: string; title: string; body: string; icon: IconType };
 
 function PillarCell({ pillar, index }: { pillar: PillarData; index: number }) {
   const Icon = pillar.icon;
@@ -84,7 +85,7 @@ export function QualitySection() {
             className="flex flex-col justify-between rounded-lg border border-default bg-surface p-6 transition-colors duration-normal hover:border-accent/50 sm:p-8"
           >
             <div className="flex h-12 w-12 items-center justify-center rounded-md border border-default text-accent">
-              <Award size={22} strokeWidth={1.6} />
+              <LuAward size={22} strokeWidth={1.6} />
             </div>
             <div className="mt-5">
               <h3 className="font-display text-2xl font-semibold tracking-[-0.02em] text-primary">
@@ -114,7 +115,7 @@ export function QualitySection() {
                 }}
                 className={cn('mt-6 inline-flex w-fit items-center gap-2 rounded-full border border-strong px-6 py-3 font-sans text-[14px] font-medium text-primary transition-all duration-300 hover:scale-105 hover:border-primary hover:bg-elevated cursor-pointer', focusRingLanding)}
               >
-                <Download size={14} />
+                <LuDownload size={14} />
                 Download quality policy
               </button>
             </div>
@@ -125,7 +126,7 @@ export function QualitySection() {
             data-reveal-delay="0.08"
             className="flex items-start gap-5 rounded-lg border border-accent/30 bg-accent/5 p-6 transition-colors duration-normal hover:border-accent/50 sm:p-8"
           >
-            <ShieldCheck size={26} className="mt-0.5 shrink-0 text-accent" strokeWidth={2} />
+            <LuShieldCheck size={26} className="mt-0.5 shrink-0 text-accent" strokeWidth={2} />
             <p className="font-sans text-base font-light leading-relaxed text-secondary">
                 <span className="font-medium text-primary">
                   {qualityPolicy?.conformance_title ?? '—'}

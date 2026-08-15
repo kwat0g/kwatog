@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, X } from 'lucide-react';
+import { LuPlus, LuX } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { deliveriesApi, vehiclesApi } from '@/api/supply-chain';
 import { salesOrdersApi } from '@/api/crm/salesOrders';
@@ -270,7 +270,7 @@ export default function CreateDeliveryPage() {
  variant="secondary"
  size="sm"
  iconOnly
- icon={<X size={14} />}
+ icon={<LuX size={14} />}
  onClick={() => remove(index)}
  disabled={fields.length === 1}
  title="Remove line"
@@ -286,7 +286,7 @@ export default function CreateDeliveryPage() {
  append({ sales_order_item_id: '', quantity: undefined as unknown as number, inspection_id: '' })
  }
  disabled={!selectedSoId}
- icon={<Plus size={14} />}
+ icon={<LuPlus size={14} />}
  className="mt-2 text-xs"
  >
  Add delivery line

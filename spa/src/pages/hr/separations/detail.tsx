@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Check } from 'lucide-react';
+import { LuCheck } from '@/lib/icons';
 import { separationsApi } from '@/api/separations';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -125,7 +125,7 @@ export default function SeparationDetailPage() {
  <div className="text-sm font-medium">{item.label}</div>
  <div className="text-xs text-muted font-mono">
  {item.status === 'cleared' && item.signed_at
- ? <><Check size={11} className="inline mr-1" />Cleared {item.signed_at.slice(0, 10)}</>
+ ? <><LuCheck size={11} className="inline mr-1" />Cleared {item.signed_at.slice(0, 10)}</>
  : 'Pending'}
  </div>
  </div>

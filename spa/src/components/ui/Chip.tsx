@@ -63,6 +63,9 @@ export function chipVariantForStatus(status: string | null | undefined): ChipVar
  case 'on_leave':
  case 'in_transit':
  case 'holiday':
+ case 'open':
+ case 'issued':
+ case 'sent':
  return 'info';
  case 'pending':
  case 'pending_dept':
@@ -76,7 +79,11 @@ export function chipVariantForStatus(status: string | null | undefined): ChipVar
  case 'maintenance':
  case 'late':
  case 'halfday':
+ case 'awaiting_acknowledgment':
  return 'warning';
+ case 'received':
+ case 'fully_received':
+ return 'success';
  case 'rejected':
  case 'failed':
  case 'breakdown':

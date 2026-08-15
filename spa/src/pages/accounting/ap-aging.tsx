@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Download } from 'lucide-react';
+import { LuDownload } from '@/lib/icons';
 import { statementsApi } from '@/api/accounting/statements';
 import { downloadAuthenticatedFile } from '@/api/download';
 import { Button } from '@/components/ui/Button';
@@ -29,7 +29,7 @@ export default function ApAgingPage() {
  backLabel="Journal Entries"
  actions={
  <div className="flex gap-1.5">
- <Button variant="secondary" size="sm" icon={<Download size={14} />} onClick={() => void downloadAuthenticatedFile(statementsApi.csvUrl('ap-aging', { as_of: asOf }), { errorMessage: 'Failed to export AP aging.' })}>CSV</Button>
+ <Button variant="secondary" size="sm" icon={<LuDownload size={14} />} onClick={() => void downloadAuthenticatedFile(statementsApi.csvUrl('ap-aging', { as_of: asOf }), { errorMessage: 'Failed to export AP aging.' })}>CSV</Button>
  </div>
  }
  />

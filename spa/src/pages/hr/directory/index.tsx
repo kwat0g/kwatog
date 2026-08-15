@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { GitBranch, LayoutGrid, List as ListIcon, Search } from 'lucide-react';
+import { LuGitBranch, LuLayoutGrid, LuList as ListIcon, LuSearch } from '@/lib/icons';
 import { directoryApi } from '@/api/hr/directory';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
@@ -63,9 +63,9 @@ export default function EmployeeDirectoryPage() {
  value={view}
  onChange={setView}
  options={[
- { value: 'grid', label: <LayoutGrid size={14} />, ariaLabel: 'Grid view' },
+ { value: 'grid', label: <LuLayoutGrid size={14} />, ariaLabel: 'Grid view' },
  { value: 'list', label: <ListIcon size={14} />, ariaLabel: 'List view' },
- { value: 'org', label: <GitBranch size={14} />, ariaLabel: 'Org chart view' },
+ { value: 'org', label: <LuGitBranch size={14} />, ariaLabel: 'Org chart view' },
  ]}
  />
  }
@@ -78,7 +78,7 @@ export default function EmployeeDirectoryPage() {
  aria-label="Search directory"
  value={search}
  onChange={(e: { target: { value: string } }) => setSearch(e.target.value)}
- prefix={<Search size={12} />}
+ prefix={<LuSearch size={12} />}
  containerClassName="max-w-md"
  />
  </div>

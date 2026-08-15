@@ -1,3 +1,4 @@
+import { PortalTable } from '@/components/portal/PortalTable';
 import { useQuery } from '@tanstack/react-query';
 import { supplierPortalApi } from '@/api/b2b/supplier';
 import { Panel } from '@/components/ui/Panel';
@@ -35,10 +36,11 @@ export default function SupplierDeliveriesPage() {
  {!isLoading && !isError && (
  <Panel noPadding>
  {deliveries && deliveries.length > 0 ? (
- <table className={tableCls}>
+ <PortalTable>
+<table className={tableCls}>
  <thead>
  <tr className={theadTrCls}>
- <Th>DR #</Th>
+ <Th>GRN #</Th>
  <Th>Date</Th>
  <Th align="right">Status</Th>
  </tr>
@@ -46,8 +48,8 @@ export default function SupplierDeliveriesPage() {
  <tbody>
  {deliveries.map((d) => (
  <tr key={d.id} className={trCls}>
- <Td mono>{d.delivery_number}</Td>
- <Td className="text-muted">{d.delivered_at ?? '—'}</Td>
+ <Td mono>{d.grn_number}</Td>
+ <Td className="text-muted">{d.received_date ?? '—'}</Td>
  <Td align="right" mono>
  <Chip variant={chipVariantForStatus(d.status)}>{d.status_label ?? d.status.replace(/_/g, ' ')}</Chip>
  </Td>
@@ -55,6 +57,7 @@ export default function SupplierDeliveriesPage() {
  ))}
  </tbody>
  </table>
+</PortalTable>
  ) : (
  <EmptyState icon="truck" title="No deliveries" description="No delivery records are available." />
  )}

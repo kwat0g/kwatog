@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { LuTrendingUp, LuTrendingDown, LuMinus } from '@/lib/icons';
 import { Link } from 'react-router-dom';
 import { kpiApi } from '@/api/kpi';
 import { cn } from '@/lib/cn';
@@ -28,9 +28,9 @@ const TREND_COLORS: Record<string, Record<string, string>> = {
 
 const TrendIcon = ({ trend, status }: { trend: string; status: string }) => {
  const color = TREND_COLORS[status]?.[trend] ?? 'text-muted';
- if (trend === 'up') return <TrendingUp size={12} className={color} />;
- if (trend === 'down') return <TrendingDown size={12} className={color} />;
- return <Minus size={12} className="text-muted" />;
+ if (trend === 'up') return <LuTrendingUp size={12} className={color} />;
+ if (trend === 'down') return <LuTrendingDown size={12} className={color} />;
+ return <LuMinus size={12} className="text-muted" />;
 };
 
 interface KpiStripProps {

@@ -3,7 +3,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { LuPlus } from '@/lib/icons';
 import { ncrsApi, type NcrListParams } from '@/api/quality/ncrs';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -171,7 +171,7 @@ export default function NcrsListPage() {
             <Button
               variant="primary"
               size="sm"
-              icon={<Plus size={14} />}
+              icon={<LuPlus size={14} />}
               onClick={() => navigate('/quality/ncrs/new')}
             >
               New NCR

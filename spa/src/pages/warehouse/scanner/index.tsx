@@ -1,7 +1,7 @@
 import { FormEvent, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { ScanBarcode, Search } from 'lucide-react';
+import { LuScanBarcode, LuSearch } from '@/lib/icons';
 import { scannerApi } from '@/api/inventory/scanner';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
@@ -44,7 +44,7 @@ export default function WarehouseScannerPage() {
  </Panel>
  <form onSubmit={submit} className="rounded-md border border-default bg-canvas p-4">
  <label className="block text-sm font-medium mb-2" htmlFor="warehouse-barcode">Barcode</label>
- <div className="flex gap-2"><Input id="warehouse-barcode" ref={inputRef} autoFocus value={barcode} onChange={(event) => setBarcode(event.target.value)} prefix={<ScanBarcode size={16} />} containerClassName="flex-1" placeholder="Scan now…" /><Button type="submit" variant="primary" disabled={scan.isPending}><Search size={14} /> Resolve</Button></div>
+ <div className="flex gap-2"><Input id="warehouse-barcode" ref={inputRef} autoFocus value={barcode} onChange={(event) => setBarcode(event.target.value)} prefix={<LuScanBarcode size={16} />} containerClassName="flex-1" placeholder="Scan now…" /><Button type="submit" variant="primary" disabled={scan.isPending}><LuSearch size={14} /> Resolve</Button></div>
  </form>
  {scan.isError && <EmptyState icon="alert-circle" title="Barcode lookup failed" />}
  {scan.data && <Panel title="Scan result">

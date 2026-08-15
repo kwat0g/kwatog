@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Lock, Timer, ShieldCheck, Eye, EyeOff, AlertTriangle } from 'lucide-react';
+import { LuTimer, LuEye, LuEyeOff, LuTriangleAlert } from '@/lib/icons';
 import { AxiosError } from 'axios';
 import gsap from 'gsap';
 import { useAuthStore } from '@/stores/authStore';
@@ -75,8 +75,7 @@ export default function LoginPage() {
 
  const header = root.querySelector<HTMLElement>('[data-entrance="header"]');
  const fields = root.querySelector<HTMLElement>('[data-entrance="fields"]');
- const footer = root.querySelector<HTMLElement>('[data-entrance="footer"]');
- const targets = [header, fields, footer].filter(Boolean);
+ const targets = [header, fields].filter(Boolean);
 
  const ctx = gsap.context(() => {
  gsap.fromTo(
@@ -177,17 +176,7 @@ export default function LoginPage() {
  <Panel>
  {/* Header block */}
  <div className="mb-6" data-entrance="header">
- <div className="flex items-center justify-between">
- <p className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.2em] text-muted">
- <Lock size={12} className="text-accent" />
- Secure sign-in
- </p>
- <span className="inline-flex items-center gap-1.5 rounded-full border border-default bg-surface px-2.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.16em] text-muted">
- <span className="h-1.5 w-1.5 rounded-full bg-success-bg animate-pulse" />
- System Active
- </span>
- </div>
- <h1 className="mt-3 font-display text-2xl tracking-tight text-primary">
+ <h1 className="font-display text-2xl tracking-tight text-primary">
  Welcome back
  </h1>
  <p className="mt-1.5 text-[13px] text-muted">
@@ -238,7 +227,7 @@ export default function LoginPage() {
  aria-label={showPassword ? 'Hide password' : 'Show password'}
  className="flex h-full items-center justify-center px-2 text-muted transition-colors hover:text-primary"
  >
- {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+ {showPassword ? <LuEyeOff size={15} /> : <LuEye size={15} />}
  </button>
  }
  />
@@ -246,7 +235,7 @@ export default function LoginPage() {
  <div aria-live="polite" className="mt-1.5 min-h-[1.25rem]">
  {capsOn && passwordFocused && (
  <span className="flex items-center gap-1.5 font-mono text-[11px] text-warning-fg">
- <AlertTriangle size={11} />
+ <LuTriangleAlert size={11} />
  Caps Lock is on
  </span>
  )}
@@ -284,7 +273,7 @@ export default function LoginPage() {
  className="flex flex-col items-center justify-center gap-1.5 text-xs text-warning-fg"
  >
  <div className="flex items-center gap-1.5">
- <Timer size={12} />
+ <LuTimer size={12} />
  <span>Too many attempts — disabled for {formatCooldown(cooldown)}</span>
  </div>
  <span className="text-muted">
@@ -301,15 +290,24 @@ export default function LoginPage() {
  </form>
  </div>
 
- {/* Security footer */}
- <p
- data-entrance="footer"
- className="mt-7 flex items-center justify-center gap-1.5 border-t border-default pt-5 font-mono text-[10px] uppercase tracking-[0.16em] text-text-subtle"
- >
- <ShieldCheck size={12} />
- Your account is protected against unauthorized access
- </p>
  </Panel>
+ <div className="mt-4 px-2 text-center">
+ <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-text-subtle">
+ External partner access
+ </p>
+ <p className="mt-1 text-xs text-muted">
+ Customers and suppliers use their dedicated portal sign-in.
+ </p>
+ <div className="mt-2 flex items-center justify-center gap-4 text-xs">
+ <Link to="/portal/customer/login" className="text-accent underline-offset-2 hover:underline">
+ Customer portal
+ </Link>
+ <span className="text-subtle" aria-hidden="true">·</span>
+ <Link to="/portal/supplier/login" className="text-accent underline-offset-2 hover:underline">
+ Supplier portal
+ </Link>
+ </div>
+ </div>
  </div>
  );
 }

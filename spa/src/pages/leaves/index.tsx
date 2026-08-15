@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, ListChecks, RotateCcw } from 'lucide-react';
+import { LuPlus, LuListChecks, LuRotateCcw } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { leaveRequestsApi, type LeaveListParams } from '@/api/leave';
 import { Button } from '@/components/ui/Button';
@@ -154,16 +154,16 @@ export default function LeavesPage() {
  </Button>
  {can('leave.types.manage') && (
  <>
- <Button variant="secondary" size="xs" icon={<ListChecks size={14} />} onClick={() => setShowTypes(true)}>
+ <Button variant="secondary" size="xs" icon={<LuListChecks size={14} />} onClick={() => setShowTypes(true)}>
  Manage Types
  </Button>
- <Button variant="secondary" size="xs" icon={<RotateCcw size={14} />} onClick={() => setShowYearEnd(true)}>
+ <Button variant="secondary" size="xs" icon={<LuRotateCcw size={14} />} onClick={() => setShowYearEnd(true)}>
  Year-End Leave
  </Button>
  </>
  )}
  {can('leave.create') && (
- <Button variant="primary" size="xs" icon={<Plus size={14} />} onClick={() => navigate('/hr/leaves/create')}>
+ <Button variant="primary" size="xs" icon={<LuPlus size={14} />} onClick={() => navigate('/hr/leaves/create')}>
  Request leave
  </Button>
  )}

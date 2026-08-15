@@ -1,10 +1,10 @@
-import { ClipboardList, CheckCircle2 } from 'lucide-react';
+import { LuClipboardList, LuCircleCheck } from '@/lib/icons';
 import { TouchShell, type TouchTab } from '@/components/layout/TouchShell';
 
 /** Factory Floor PWA — operator-scoped, no sidebar. Chrome lives in TouchShell. */
 const tabs: readonly TouchTab[] = [
- { to: '/factory', label: 'Work Orders', icon: ClipboardList, exact: true },
- { to: '/factory/qc', label: 'QC Check', icon: CheckCircle2, exact: true },
+ { to: '/factory', label: 'Work Orders', icon: LuClipboardList, exact: true },
+ { to: '/factory/qc', label: 'QC Check', icon: LuCircleCheck, exact: true },
 ];
 
 export default function FactoryFloorLayout() {

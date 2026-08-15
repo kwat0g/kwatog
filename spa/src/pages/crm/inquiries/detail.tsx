@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
-import { Mail, Phone, Building2 } from 'lucide-react';
+import { LuMail, LuPhone, LuBuilding2 } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { inquiriesApi } from '@/api/crm/inquiries';
 import { Button } from '@/components/ui/Button';
@@ -92,18 +92,18 @@ export default function InquiryDetailPage() {
  <Panel title="Contact">
  <dl className="divide-y divide-subtle">
  <div className="flex items-center gap-2.5 px-4 py-2.5">
- <Mail size={14} className="shrink-0 text-muted" />
+ <LuMail size={14} className="shrink-0 text-muted" />
  <a href={`mailto:${data.email}`} className="text-link hover:text-link-hover">{data.email}</a>
  </div>
  {data.phone && (
  <div className="flex items-center gap-2.5 px-4 py-2.5">
- <Phone size={14} className="shrink-0 text-muted" />
+ <LuPhone size={14} className="shrink-0 text-muted" />
  <span className="font-mono tabular-nums">{data.phone}</span>
  </div>
  )}
  {data.company && (
  <div className="flex items-center gap-2.5 px-4 py-2.5">
- <Building2 size={14} className="shrink-0 text-muted" />
+ <LuBuilding2 size={14} className="shrink-0 text-muted" />
  <span>{data.company}</span>
  </div>
  )}
@@ -121,7 +121,7 @@ export default function InquiryDetailPage() {
  <dd className="font-mono tabular-nums">{data.ip_address ?? '—'}</dd>
  </div>
  <div className="flex justify-between gap-4 px-4 py-2.5">
- <dt className="shrink-0 text-muted">User agent</dt>
+ <dt className="shrink-0 text-muted">LuUser agent</dt>
  <dd className="truncate font-mono text-xs" title={data.user_agent ?? undefined}>
  {data.user_agent ?? '—'}
  </dd>

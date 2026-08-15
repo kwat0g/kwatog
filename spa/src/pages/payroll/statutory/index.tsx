@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Download, Loader2 } from 'lucide-react';
+import { LuDownload, LuLoader } from '@/lib/icons';
 import { statutoryApi } from '@/api/payroll/statutory';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Panel } from '@/components/ui/Panel';
@@ -35,7 +35,7 @@ function ExportCard({ title, description, onClick, disabled = false, loading = f
  )}
  >
  <span className="mt-0.5 text-muted group-hover:text-primary" aria-hidden>
- {loading ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+ {loading ? <LuLoader size={15} className="animate-spin" /> : <LuDownload size={15} />}
  </span>
  <span className="min-w-0">
  <span className="block text-sm font-medium text-primary">{title}</span>

@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { LuPlus } from '@/lib/icons';
 import { complaintsApi, type ComplaintListParams } from '@/api/crm/complaints';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -72,7 +72,7 @@ export default function ComplaintsListPage() {
  title="Customer complaints"
  subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'complaint' : 'complaints'}` : undefined}
  actions={can('crm.complaints.manage') ? (
- <Button variant="primary" size="sm" icon={<Plus size={14} />}
+ <Button variant="primary" size="sm" icon={<LuPlus size={14} />}
  onClick={() => navigate('/crm/complaints/new')}>
  New complaint
  </Button>

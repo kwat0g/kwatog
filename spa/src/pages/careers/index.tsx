@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Briefcase, MapPin, Clock } from 'lucide-react';
+import { LuBriefcase, LuMapPin, LuClock } from '@/lib/icons';
 import { LandingNav } from '@/pages/landing/components/LandingNav';
 import { LandingFooter } from '@/pages/landing/components/LandingFooter';
 import { publicRecruitmentApi } from '@/api/public-recruitment';
@@ -101,11 +101,11 @@ export default function CareersPage() {
  </h2>
  <div className="mt-3 flex flex-col gap-2 text-sm text-secondary">
  <span className="flex items-center gap-1.5">
- <MapPin size={14} />
+ <LuMapPin size={14} />
  {posting.department.name}
  </span>
  <span className="flex items-center gap-1.5">
- <Briefcase size={14} />
+ <LuBriefcase size={14} />
  {posting.employment_type_label ?? posting.employment_type}
  </span>
  {posting.salary_range && (
@@ -115,7 +115,7 @@ export default function CareersPage() {
  )}
  {posting.closes_at && (
  <span className="flex items-center gap-1.5 text-warning-fg">
- <Clock size={14} />
+ <LuClock size={14} />
  Closes {formatDate(posting.closes_at)}
  </span>
  )}

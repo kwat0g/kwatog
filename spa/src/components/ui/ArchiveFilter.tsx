@@ -1,4 +1,4 @@
-import { Archive, List } from 'lucide-react';
+import { LuArchive, LuList } from '@/lib/icons';
 import { SegmentedControl } from './SegmentedControl';
 import type { ArchiveScope } from '@/lib/archiveScope';
 
@@ -32,8 +32,8 @@ export function ArchiveFilter({
   onChange={onChange}
   options={[
   { value: 'active', label: activeLabel, ariaLabel: 'Show active records' },
-  { value: 'with', label: <span className="inline-flex items-center gap-1"><List size={12} />All</span>, ariaLabel: 'Show active and archived records' },
-  { value: 'only', label: <span className="inline-flex items-center gap-1"><Archive size={12} />Archived</span>, ariaLabel: 'Show archived records only' },
+  { value: 'with', label: <span className="inline-flex items-center gap-1"><LuList size={12} />All</span>, ariaLabel: 'Show active and archived records' },
+  { value: 'only', label: <span className="inline-flex items-center gap-1"><LuArchive size={12} />Archived</span>, ariaLabel: 'Show archived records only' },
   ]}
   />
  );

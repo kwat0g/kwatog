@@ -3,7 +3,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
-import { ArrowLeft, Mail, CheckCircle } from 'lucide-react';
+import { LuArrowLeft, LuMail, LuCircleCheck } from '@/lib/icons';
 import { AxiosError } from 'axios';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -56,7 +56,7 @@ export default function ForgotPasswordPage() {
  <Panel>
  <div className="mb-6">
  <p className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.2em] text-muted">
- <Mail size={12} className="text-accent" />
+ <LuMail size={12} className="text-accent" />
  Reset password
  </p>
  <h1 className="mt-3 font-display text-2xl tracking-tight text-primary">
@@ -72,7 +72,7 @@ export default function ForgotPasswordPage() {
  role="status"
  className="rounded-md border border-success/30 bg-success-bg/10 p-5 text-center"
  >
- <CheckCircle size={32} className="mx-auto text-success-fg" strokeWidth={1.5} />
+ <LuCircleCheck size={32} className="mx-auto text-success-fg" strokeWidth={1.5} />
  <h2 className="mt-3 font-display text-lg text-primary">
  Check your inbox
  </h2>
@@ -83,7 +83,7 @@ export default function ForgotPasswordPage() {
  to="/login"
  className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:underline"
  >
- <ArrowLeft size={14} />
+ <LuArrowLeft size={14} />
  Back to sign in
  </Link>
  </div>
@@ -113,7 +113,7 @@ export default function ForgotPasswordPage() {
  to="/login"
  className="inline-flex items-center gap-1 underline-offset-2 transition-colors hover:text-primary hover:underline"
  >
- <ArrowLeft size={12} />
+ <LuArrowLeft size={12} />
  Back to sign in
  </Link>
  </div>

@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { conditionReadingsApi } from '@/api/maintenance/conditionReadings';
 import { machinesApi } from '@/api/mrp/machines';
 import toast from 'react-hot-toast';
-import { AlertTriangle, CheckCircle2, Thermometer } from 'lucide-react';
+import { LuTriangleAlert, LuCircleCheck, LuThermometer } from '@/lib/icons';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -85,7 +85,7 @@ export default function MobileConditionReading() {
  return (
  <div className="space-y-4">
  <h1 className="text-lg font-medium flex items-center gap-2">
- <Thermometer className="w-5 h-5" />
+ <LuThermometer className="w-5 h-5" />
  Condition reading
  </h1>
 
@@ -188,7 +188,7 @@ export default function MobileConditionReading() {
  {lastResult?.triggered && (
  <div className="rounded-md border border-danger bg-danger-bg p-4" role="alert">
  <div className="flex items-start gap-3">
- <AlertTriangle className="w-5 h-5 text-danger-fg flex-shrink-0 mt-0.5" />
+ <LuTriangleAlert className="w-5 h-5 text-danger-fg flex-shrink-0 mt-0.5" />
  <div>
  <div className="text-sm font-medium text-danger-fg">
  Threshold breached
@@ -210,7 +210,7 @@ export default function MobileConditionReading() {
  {lastResult && !lastResult.triggered && (
  <div className="rounded-md border border-success bg-success-bg p-4">
  <div className="flex items-center gap-2 text-sm text-success-fg">
- <CheckCircle2 className="w-4 h-4" />
+ <LuCircleCheck className="w-4 h-4" />
  Reading within normal range.
  {lastResult.reason && (
  <span className="text-xs text-success-fg ml-1">

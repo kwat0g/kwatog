@@ -18,7 +18,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { ArrowRight, Mail, Phone, CheckCircle } from 'lucide-react';
+import { LuArrowRight, LuMail, LuPhone, LuCircleCheck } from '@/lib/icons';
 import { AxiosError } from 'axios';
 import { DatumMark } from '@/components/brand/DatumMark';
 import { ScrambleText } from '../components/ScrambleText';
@@ -165,11 +165,11 @@ export function ContactSection() {
                   href={salesEmail ? `mailto:${salesEmail}` : undefined}
                   className="flex items-center gap-2.5 font-mono text-sm text-secondary transition-colors hover:text-accent"
                 >
-                  <Mail size={15} className="text-accent" />
+                  <LuMail size={15} className="text-accent" />
                   {salesEmail || '—'}
                 </a>
                 <span className="flex items-center gap-2.5 font-mono text-sm text-secondary">
-                  <Phone size={15} className="text-accent" />
+                  <LuPhone size={15} className="text-accent" />
                   {phone || '—'}
                 </span>
                 <span className="font-mono text-sm text-text-subtle">{address}</span>
@@ -184,7 +184,7 @@ export function ContactSection() {
             >
               {submitted ? (
                 <div className="py-5 text-center">
-                  <CheckCircle size={40} className="mx-auto text-success" strokeWidth={1.5} />
+                  <LuCircleCheck size={40} className="mx-auto text-success" strokeWidth={1.5} />
                   <h3 className="mt-4 font-display text-xl text-primary">
                     {sectionCopy?.contact_success_title ?? '—'}
                   </h3>
@@ -251,7 +251,7 @@ export function ContactSection() {
                     className="mt-2 w-full"
                   >
                     {ctaLabel}
-                    <ArrowRight size={16} />
+                    <LuArrowRight size={16} />
                   </Button>
                   <p className="text-center text-xs text-muted">
                     Prefer email?{' '}

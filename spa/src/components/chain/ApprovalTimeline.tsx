@@ -8,7 +8,7 @@
  * Used on every approvable record's detail page (Leave, Loan, PR, PO, …) and
  * also embedded in the printed approval form (P9).
  */
-import { Check, X, MinusCircle } from 'lucide-react';
+import { LuCheck, LuX, LuCircleMinus } from '@/lib/icons';
 import { Chip } from '@/components/ui/Chip';
 import { cn } from '@/lib/cn';
 import { formatDateTime } from '@/lib/formatDate';
@@ -85,9 +85,9 @@ export function ApprovalTimeline({
                   isActive && step.action === 'pending' && 'animate-approval-pulse',
                 )}
               >
-                {step.action === 'approved' && <Check size={11} strokeWidth={3} />}
-                {step.action === 'rejected' && <X size={11} strokeWidth={3} />}
-                {step.action === 'skipped' && <MinusCircle size={11} />}
+                {step.action === 'approved' && <LuCheck size={11} strokeWidth={3} />}
+                {step.action === 'rejected' && <LuX size={11} strokeWidth={3} />}
+                {step.action === 'skipped' && <LuCircleMinus size={11} />}
               </span>
               {i < steps.length - 1 && (
                 <span

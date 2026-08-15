@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { AxiosError } from 'axios';
-import { Plus, Star, StarOff, Trash2, ArchiveRestore } from 'lucide-react';
+import { LuPlus, LuStar, LuStarOff, LuTrash2, LuArchiveRestore } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { approvedSuppliersApi } from '@/api/purchasing/approved-suppliers';
 import { ArchiveFilter } from '@/components/ui/ArchiveFilter';
@@ -96,7 +96,7 @@ export default function ApprovedSuppliersPage() {
  variant="ghost"
  size="sm"
  iconOnly
- icon={r.is_preferred ? <Star size={14} fill="currentColor" /> : <StarOff size={14} />}
+ icon={r.is_preferred ? <LuStar size={14} fill="currentColor" /> : <LuStarOff size={14} />}
  aria-label={r.is_preferred ? 'Unmark preferred' : 'Mark as preferred'}
  onClick={() => togglePreferred.mutate(r)}
  disabled={!canManage || togglePreferred.isPending}
@@ -127,7 +127,7 @@ export default function ApprovedSuppliersPage() {
  aria-label={scope === 'only' ? 'Restore approved supplier' : 'Remove approved supplier'}
  onClick={() => (scope === 'only' ? setConfirmRestore(r) : setConfirmDelete(r))}
  className={scope === 'only' ? 'text-muted hover:text-primary' : 'text-muted hover:text-danger-fg'}
- icon={scope === 'only' ? <ArchiveRestore size={14} /> : <Trash2 size={14} />}
+ icon={scope === 'only' ? <LuArchiveRestore size={14} /> : <LuTrash2 size={14} />}
  />
  ),
  }] : []),
@@ -139,7 +139,7 @@ export default function ApprovedSuppliersPage() {
  title="Approved suppliers"
  subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'link' : 'links'}` : undefined}
  actions={canManage ? (
- <Button variant="primary" size="xs" icon={<Plus size={14} />} onClick={() => setOpen(true)}>
+ <Button variant="primary" size="xs" icon={<LuPlus size={14} />} onClick={() => setOpen(true)}>
  Link supplier
  </Button>
  ) : null}

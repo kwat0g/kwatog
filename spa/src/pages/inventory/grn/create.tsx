@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
-import { Trash2 } from 'lucide-react';
+import { LuTrash2 } from '@/lib/icons';
 import { grnApi } from '@/api/inventory/grn';
 import { purchaseOrdersApi } from '@/api/purchasing/purchase-orders';
 import { warehouseApi } from '@/api/inventory/warehouse';
@@ -265,7 +265,7 @@ export default function CreateGrnPage() {
  variant="ghost"
  size="sm"
  iconOnly
- icon={<Trash2 size={12} />}
+ icon={<LuTrash2 size={12} />}
  onClick={() => setItems(items.filter((_, k) => k !== i))}
  aria-label="Remove line"
  className="text-muted hover:text-danger-fg"

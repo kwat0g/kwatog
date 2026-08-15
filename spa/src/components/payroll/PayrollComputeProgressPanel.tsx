@@ -1,4 +1,4 @@
-import { AlertTriangle, LockOpen, RefreshCw } from 'lucide-react';
+import { LuTriangleAlert, LuLockOpen, LuRefreshCw } from '@/lib/icons';
 import { Button } from '@/components/ui/Button';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { Spinner } from '@/components/ui/Spinner';
@@ -44,7 +44,7 @@ export function PayrollComputeProgressPanel({
  return (
  <div className="mb-4 rounded-md border border-warning bg-warning-bg px-3 py-2.5 text-warning-fg">
  <div className="flex items-start gap-2">
- <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+ <LuTriangleAlert size={14} className="mt-0.5 shrink-0" />
  <div className="min-w-0 flex-1">
  <div className="text-xs font-medium">This compute run has stalled</div>
  <p className="mt-0.5 text-xs text-primary/80">
@@ -62,7 +62,7 @@ export function PayrollComputeProgressPanel({
  <Button
  variant="secondary"
  size="sm"
- icon={<RefreshCw size={14} />}
+ icon={<LuRefreshCw size={14} />}
  onClick={onRetry}
  disabled={retryPending}
  loading={retryPending}
@@ -74,7 +74,7 @@ export function PayrollComputeProgressPanel({
  <Button
  variant="ghost"
  size="sm"
- icon={<LockOpen size={14} />}
+ icon={<LuLockOpen size={14} />}
  onClick={onForceUnlock}
  disabled={forceUnlockPending}
  loading={forceUnlockPending}

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
+import { LuPlus } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { stockAdjustmentsApi, type StockAdjustmentListParams } from '@/api/inventory/stock';
 import { Chip } from '@/components/ui/Chip';
@@ -101,7 +101,7 @@ export default function StockAdjustmentsPage() {
  <PageHeader
  title="Stock Adjustments"
  subtitle="Manual in/out adjustments with finance approval for high-value entries"
- actions={<Link to="/inventory/stock-adjustments/create"><Button size="xs" icon={<Plus size={14} />}>New adjustment</Button></Link>}
+ actions={<Link to="/inventory/stock-adjustments/create"><Button size="xs" icon={<LuPlus size={14} />}>New adjustment</Button></Link>}
  />
  <FilterBar
  filters={filterConfig}

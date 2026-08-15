@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
-import { Play, Loader2 } from 'lucide-react';
+import { LuPlay, LuLoader } from '@/lib/icons';
 import { mrpPlansApi, type MrpPlanListParams } from '@/api/mrp/mrpPlans';
 import { mrpRunsApi } from '@/api/mrp-runs';
 import { Button } from '@/components/ui/Button';
@@ -110,7 +110,7 @@ export default function MrpPlansListPage() {
  <Button
  variant="primary"
  size="sm"
- icon={triggerRun.isPending ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+ icon={triggerRun.isPending ? <LuLoader size={14} className="animate-spin" /> : <LuPlay size={14} />}
  disabled={triggerRun.isPending}
  onClick={() => triggerRun.mutate()}
  >

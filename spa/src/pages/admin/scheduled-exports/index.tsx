@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Trash2, ArchiveRestore } from 'lucide-react';
+import { LuTrash2, LuArchiveRestore } from '@/lib/icons';
 import { scheduledExportsApi } from '@/api/exports';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -153,7 +153,7 @@ const [page, setPage] = useState(1);
   <Button
   size="sm"
   variant="ghost"
-  icon={<ArchiveRestore size={14} />}
+  icon={<LuArchiveRestore size={14} />}
   onClick={() => setRestoreTarget(row)}
   >
   Restore
@@ -162,7 +162,7 @@ const [page, setPage] = useState(1);
   <Button
   size="sm"
   variant="ghost"
-  icon={<Trash2 size={14} />}
+  icon={<LuTrash2 size={14} />}
   onClick={() => setDeleteTarget(row)}
   >
   Archive

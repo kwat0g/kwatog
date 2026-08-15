@@ -24,7 +24,7 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
-/** U2 — Admin > Create User (standalone, no employee link). */
+/** U2 — Admin > Create LuUser (standalone, no employee link). */
 export default function AdminCreateUserPage() {
  const navigate = useNavigate();
  const queryClient = useQueryClient();
@@ -50,7 +50,7 @@ export default function AdminCreateUserPage() {
  mutationFn: (v: FormValues) => adminUsersApi.create(v),
  onSuccess: (r) => {
  queryClient.invalidateQueries({ queryKey: ['admin-users'] });
- toast.success(r.message ?? 'User created.');
+ toast.success(r.message ?? 'LuUser created.');
  if (r.data.temp_password) {
  setTempPasswordModal(r.data.temp_password);
  } else {
@@ -74,7 +74,7 @@ export default function AdminCreateUserPage() {
 
  return (
  <div>
- <PageHeader title="Create User" backTo="/admin/users" backLabel="Users" breadcrumbs={[{ label: 'Admin' }, { label: 'Users', href: '/admin/users' }, { label: 'New User' }]} />
+ <PageHeader title="Create LuUser" backTo="/admin/users" backLabel="Users" breadcrumbs={[{ label: 'Admin' }, { label: 'Users', href: '/admin/users' }, { label: 'New LuUser' }]} />
 
  <form
  onSubmit={handleSubmit((v) => mutation.mutate(v))}
@@ -129,7 +129,7 @@ export default function AdminCreateUserPage() {
  disabled={isSubmitting || mutation.isPending}
  loading={mutation.isPending}
  >
- {mutation.isPending ? 'Creating…' : 'Create User'}
+ {mutation.isPending ? 'Creating…' : 'Create LuUser'}
  </Button>
  </ModalFooter>
  </form>

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { LuRefreshCw } from '@/lib/icons';
 import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { getEcho } from '@/lib/echo';
@@ -55,7 +55,7 @@ export function useChainProgress(
         const stepLabel = humanize(payload.active_step);
         const who = payload.actor_name ? ` by ${payload.actor_name}` : '';
         toast(`${stepLabel} updated${who}`, {
-          icon: <RefreshCw size={16} className="text-muted" />,
+          icon: <LuRefreshCw size={16} className="text-muted" />,
           duration: 3500,
         });
       };

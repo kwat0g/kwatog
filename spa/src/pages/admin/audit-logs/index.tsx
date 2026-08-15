@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Download } from 'lucide-react';
+import { LuDownload } from '@/lib/icons';
 import { auditLogsApi, type AuditLogEntry, type AuditLogParams } from '@/api/admin/audit-logs';
 import { downloadAuthenticatedFile } from '@/api/download';
 import { Button } from '@/components/ui/Button';
@@ -84,7 +84,7 @@ export default function AuditLogsPage() {
  title="Audit logs"
  subtitle={data ? `${formatInt(data.meta.total)} entries` : undefined}
  actions={
- <Button variant="secondary" size="sm" icon={<Download size={14} />}
+ <Button variant="secondary" size="sm" icon={<LuDownload size={14} />}
  onClick={() => void downloadAuthenticatedFile(auditLogsApi.exportUrl(filters), { errorMessage: 'Failed to export audit logs.' })}>
  Export CSV
  </Button>

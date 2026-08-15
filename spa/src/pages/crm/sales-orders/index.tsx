@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { LuPlus } from '@/lib/icons';
 import { salesOrdersApi, type SalesOrderListParams } from '@/api/crm/salesOrders';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -80,7 +80,7 @@ export default function SalesOrdersListPage() {
  title="Sales orders"
  subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'order' : 'orders'}` : undefined}
  actions={canCreate ? (
- <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/crm/sales-orders/create')}>
+ <Button variant="primary" size="sm" icon={<LuPlus size={14} />} onClick={() => navigate('/crm/sales-orders/create')}>
  New sales order
  </Button>
  ) : null}

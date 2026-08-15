@@ -1,6 +1,6 @@
-import { cn } from '@/lib/cn';
+import { PortalTable } from '@/components/portal/PortalTable';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { supplierPortalApi } from '@/api/b2b/supplier';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
@@ -13,7 +13,6 @@ import { CompanyName } from '@/components/brand/CompanyName';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 export default function SupplierPurchaseOrdersPage() {
-  const navigate = useNavigate();
   const {
     data: pos,
     isLoading,
@@ -55,7 +54,8 @@ export default function SupplierPurchaseOrdersPage() {
         {!isLoading && !isError && (
           <Panel noPadding>
             {pos && pos.length > 0 ? (
-              <table className={tableCls}>
+              <PortalTable>
+<table className={tableCls}>
                 <thead>
                   <tr className={theadTrCls}>
                     <Th>PO #</Th>
@@ -69,13 +69,11 @@ export default function SupplierPurchaseOrdersPage() {
                   {pos.map((po) => (
                     <tr
                       key={po.id}
-                      className={cn(trCls, 'cursor-pointer')}
-                      onClick={() => navigate(`/portal/supplier/purchase-orders/${po.id}`)}
+                      className={trCls}
                     >
                       <Td>
                         <Link
                           to={`/portal/supplier/purchase-orders/${po.id}`}
-                          onClick={(e) => e.stopPropagation()}
                           className="font-mono text-accent hover:underline font-medium"
                         >
                           {po.po_number}
@@ -95,6 +93,7 @@ export default function SupplierPurchaseOrdersPage() {
                   ))}
                 </tbody>
               </table>
+</PortalTable>
             ) : (
               <EmptyState
                 icon="file-text"

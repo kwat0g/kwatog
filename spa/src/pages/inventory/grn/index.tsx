@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { LuPlus } from '@/lib/icons';
 import { grnApi } from '@/api/inventory/grn';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -72,7 +72,7 @@ export default function GrnListPage() {
  <div>
  <PageHeader title="Goods Receipt Notes" subtitle={data ? `${data.meta.total} records` : undefined}
  actions={can('inventory.grn.create') ? (
- <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/inventory/grn/create')}>New GRN</Button>
+ <Button variant="primary" size="sm" icon={<LuPlus size={14} />} onClick={() => navigate('/inventory/grn/create')}>New GRN</Button>
  ) : null}
  />
  <FilterBar filters={filterConfig} values={filters}

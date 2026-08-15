@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
-import { Search, CheckCircle, Clock, ArrowLeft, Calendar, MapPin } from 'lucide-react';
+import { LuSearch, LuCircleCheck, LuClock, LuArrowLeft, LuCalendar, LuMapPin } from '@/lib/icons';
 import { LandingNav } from '@/pages/landing/components/LandingNav';
 import { LandingFooter } from '@/pages/landing/components/LandingFooter';
 import { publicRecruitmentApi } from '@/api/public-recruitment';
@@ -59,7 +59,7 @@ export default function ApplicationTrackPage() {
           to="/careers"
           className="mb-8 inline-flex items-center gap-1.5 text-sm text-muted hover:text-primary"
         >
-          <ArrowLeft size={14} /> Back to careers
+          <LuArrowLeft size={14} /> Back to careers
         </Link>
 
         <h1 className="text-2xl font-medium tracking-tight text-primary">Track Your Application</h1>
@@ -75,7 +75,7 @@ export default function ApplicationTrackPage() {
             className="font-mono uppercase tracking-widest"
           />
           <Button type="submit" disabled={mutation.isPending}>
-            <Search size={16} />
+            <LuSearch size={16} />
             {mutation.isPending ? 'Searching...' : 'Track'}
           </Button>
         </form>
@@ -118,7 +118,7 @@ export default function ApplicationTrackPage() {
                                 : 'bg-elevated text-muted'
                           }`}
                         >
-                          {isDone ? <CheckCircle size={14} /> : idx + 1}
+                          {isDone ? <LuCircleCheck size={14} /> : idx + 1}
                         </div>
                         {idx < info.stage_steps.length - 1 && (
                           <div
@@ -138,7 +138,7 @@ export default function ApplicationTrackPage() {
                         {step.label}
                         {isActive && (
                           <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-elevated px-2 py-0.5 text-xs text-secondary">
-                            <Clock size={10} /> Current
+                            <LuClock size={10} /> Current
                           </span>
                         )}
                       </span>
@@ -153,12 +153,12 @@ export default function ApplicationTrackPage() {
                 <h3 className="text-sm font-medium text-info-fg">Upcoming Interview</h3>
                 <div className="mt-2 space-y-1 text-sm text-info-fg">
                   <p className="flex items-center gap-1.5">
-                    <Calendar size={14} />
+                    <LuCalendar size={14} />
                     {formatDateTime(info.interview.scheduled_at)}
                   </p>
                   {info.interview.location && (
                     <p className="flex items-center gap-1.5">
-                      <MapPin size={14} />
+                      <LuMapPin size={14} />
                       {info.interview.location}
                     </p>
                   )}

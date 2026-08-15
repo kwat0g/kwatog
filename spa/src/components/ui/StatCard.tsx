@@ -80,7 +80,7 @@ export function StatCard({
         to={linkTo}
         className={cn(
           baseClass,
-          'block cursor-pointer hover:bg-elevated transition-colors duration-fast',
+          'block cursor-pointer transition-colors duration-fast hover:bg-elevated active:scale-[0.998] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2',
           className,
         )}
       >

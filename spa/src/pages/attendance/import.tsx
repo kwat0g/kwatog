@@ -1,7 +1,7 @@
 import { useRef, useState, type ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
-import { Upload, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { LuUpload, LuCircleAlert, LuCircleCheck } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { attendancesApi, type ImportResult } from '@/api/attendance/attendances';
 import { Button } from '@/components/ui/Button';
@@ -61,7 +61,7 @@ export default function AttendanceImportPage() {
  tabIndex={0}
  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click(); }}
  >
- <Upload size={28} className="text-muted mb-3" />
+ <LuUpload size={28} className="text-muted mb-3" />
  <p className="text-sm font-medium">
  {file ? file.name : 'Drop CSV here, or click to browse'}
  </p>
@@ -107,7 +107,7 @@ export default function AttendanceImportPage() {
  {result.errors.length > 0 && (
  <div className="border border-danger-bg rounded-md overflow-hidden">
  <div className="px-3 py-2 bg-danger-bg text-danger-fg text-xs uppercase tracking-wider font-medium flex items-center gap-1.5">
- <AlertCircle size={12} />
+ <LuCircleAlert size={12} />
  {result.errors.length} error{result.errors.length === 1 ? '' : 's'}
  </div>
  <ul className="divide-y divide-subtle text-sm">
@@ -122,7 +122,7 @@ export default function AttendanceImportPage() {
  )}
  {result.imported > 0 && result.skipped === 0 && (
  <div className="text-sm text-success-fg flex items-center gap-1.5">
- <CheckCircle2 size={14} />
+ <LuCircleCheck size={14} />
  All rows imported successfully.
  </div>
  )}

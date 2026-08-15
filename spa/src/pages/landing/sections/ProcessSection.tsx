@@ -8,7 +8,7 @@
 
 import { useLayoutEffect, useRef } from 'react';
 import gsap from 'gsap';
-import { ArrowRight } from 'lucide-react';
+import { LuArrowRight } from '@/lib/icons';
 import { useQuery } from '@tanstack/react-query';
 import { SectionHeading } from '../components/SectionHeading';
 import { PROCESS_ICONS } from '../data';
@@ -131,7 +131,7 @@ export function ProcessSection() {
               </span>
               <span className="motion-safe:animate-pulse flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-muted">
                 Scroll to explore
-                <ArrowRight size={12} />
+                <LuArrowRight size={12} />
               </span>
             </div>
           )}

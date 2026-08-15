@@ -15,7 +15,7 @@ import { formatDate } from '@/lib/formatDate';
 import { formatCompactCurrency } from '@/lib/formatNumber';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/cn';
-import { ArrowLeft, Send, XCircle, CheckCircle } from 'lucide-react';
+import { LuArrowLeft, LuSend, LuCircleX, LuCircleCheck } from '@/lib/icons';
 import type { Budget } from '@/types/budgeting';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
@@ -136,7 +136,7 @@ export default function BudgetDetailPage() {
               to="/budgeting"
               className="inline-flex items-center gap-1 text-sm text-secondary hover:text-primary transition-colors"
             >
-              <ArrowLeft size={14} /> Back
+              <LuArrowLeft size={14} /> Back
             </Link>
             {canSubmit && (
               <Button
@@ -145,7 +145,7 @@ export default function BudgetDetailPage() {
                 onClick={() => setConfirmSubmit(true)}
                 loading={submitMutation.isPending}
               >
-                <Send size={14} /> Submit for Approval
+                <LuSend size={14} /> Submit for Approval
               </Button>
             )}
             {canApproveAction && (
@@ -155,7 +155,7 @@ export default function BudgetDetailPage() {
                 onClick={() => setConfirmApprove(true)}
                 loading={approveMutation.isPending}
               >
-                <CheckCircle size={14} /> Approve
+                <LuCircleCheck size={14} /> Approve
               </Button>
             )}
             {canClose && (
@@ -165,7 +165,7 @@ export default function BudgetDetailPage() {
                 onClick={() => setConfirmClose(true)}
                 loading={closeMutation.isPending}
               >
-                <XCircle size={14} /> Close
+                <LuCircleX size={14} /> Close
               </Button>
             )}
           </div>

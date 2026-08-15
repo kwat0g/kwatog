@@ -16,7 +16,7 @@
 
 import { useEffect } from 'react';
 import L from 'leaflet';
-import { ExternalLink } from 'lucide-react';
+import { LuExternalLink } from '@/lib/icons';
 import { MapContainer, Marker, Popup, TileLayer, ZoomControl, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -102,7 +102,7 @@ export function PlantMap({ latitude, longitude, address }: PlantMapProps) {
               rel="noopener noreferrer"
               className="mt-1.5 inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-accent underline underline-offset-2 transition-opacity hover:opacity-70"
             >
-              <ExternalLink size={11} />
+              <LuExternalLink size={11} />
               Open in Google Maps
             </a>
           </div>

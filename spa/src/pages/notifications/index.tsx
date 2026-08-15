@@ -13,7 +13,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Check, Eye, Trash2, X } from 'lucide-react';
+import { LuCheck, LuEye, LuTrash2, LuX } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { notificationsApi, type NotificationRow } from '@/api/notifications';
 import { Button } from '@/components/ui/Button';
@@ -141,7 +141,7 @@ export default function NotificationsListPage() {
  <Button
  variant="ghost"
  size="sm"
- icon={<Trash2 size={14} />}
+ icon={<LuTrash2 size={14} />}
  onClick={() => clearRead.mutate()}
  loading={clearRead.isPending}
  disabled={readCount <= 0}
@@ -151,7 +151,7 @@ export default function NotificationsListPage() {
  <Button
  variant="secondary"
  size="sm"
- icon={<Check size={14} />}
+ icon={<LuCheck size={14} />}
  onClick={() => markAll.mutate()}
  loading={markAll.isPending}
  disabled={(data?.meta.unread_count ?? 0) === 0}
@@ -278,7 +278,7 @@ export default function NotificationsListPage() {
  variant="ghost"
  size="sm"
  iconOnly
- icon={<Eye size={14} />}
+ icon={<LuEye size={14} />}
  aria-label="Mark as read"
  // stopPropagation matters: without it the click bubbles
  // to the row handler, which navigates to link_to — the
@@ -295,7 +295,7 @@ export default function NotificationsListPage() {
  variant="ghost"
  size="sm"
  iconOnly
- icon={<X size={14} />}
+ icon={<LuX size={14} />}
  aria-label="Dismiss notification"
  onClick={(event) => {
  event.stopPropagation();

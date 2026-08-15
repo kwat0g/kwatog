@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { X } from 'lucide-react';
+import { LuX } from '@/lib/icons';
 import { cn } from '@/lib/cn';
 import { focusRingLanding } from '@/lib/focus';
 
@@ -47,7 +47,7 @@ export function CookieBanner() {
           )}
           aria-label="Decline cookies"
         >
-          <X size={16} />
+          <LuX size={16} />
         </button>
       </div>
       <div className="mt-3 flex items-center gap-2">

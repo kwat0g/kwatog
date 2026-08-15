@@ -2,24 +2,24 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import {
-  Building2,
-  Calendar,
-  Banknote,
-  CheckCircle2,
-  Shield,
-  Puzzle,
-  Search,
-  Server,
-  Sliders,
-  Check,
-  Cpu,
-  Database,
-  Layers,
-  Clock,
-  Activity,
-  Lock,
-  Unlock,
-} from 'lucide-react';
+  LuBuilding2,
+  LuCalendar,
+  LuBanknote,
+  LuCircleCheck,
+  LuShield,
+  LuPuzzle,
+  LuSearch,
+  LuServer,
+  LuSlidersHorizontal,
+  LuCheck,
+  LuCpu,
+  LuDatabase,
+  LuLayers,
+  LuClock,
+  LuActivity,
+  LuLock,
+  LuLockOpen,
+} from '@/lib/icons';
 import {
   settingsApi,
   type SettingRow,
@@ -101,74 +101,74 @@ const GROUP_META: Record<string, GroupMeta> = {
   company: {
     label: 'Company',
     description: 'Organization identity used on documents, PDFs, and legal notices',
-    icon: <Building2 size={16} />,
+    icon: <LuBuilding2 size={16} />,
     category: 'general',
   },
   fiscal: {
     label: 'Fiscal Year',
     description: 'Fiscal year cycle and reporting period configuration',
-    icon: <Calendar size={16} />,
+    icon: <LuCalendar size={16} />,
     category: 'general',
   },
   payroll: {
     label: 'Payroll',
     description: 'Pay schedule and payslip delivery options',
-    icon: <Banknote size={16} />,
+    icon: <LuBanknote size={16} />,
     category: 'operations',
   },
   approval: {
     label: 'Approvals',
     description: 'Workflow threshold limits and auto-resolution policies',
-    icon: <CheckCircle2 size={16} />,
+    icon: <LuCircleCheck size={16} />,
     category: 'operations',
   },
   accounting: {
     label: 'Accounting',
     description: 'Default ledgers and automated collection parameters',
-    icon: <Banknote size={16} />,
+    icon: <LuBanknote size={16} />,
     category: 'operations',
   },
   attendance: {
     label: 'Attendance',
     description: 'Overtime calculation thresholds and biometric rules',
-    icon: <Calendar size={16} />,
+    icon: <LuCalendar size={16} />,
     category: 'operations',
   },
   hr: {
     label: 'HR & Staffing',
     description: 'Employee provisioning and onboarding configurations',
-    icon: <Building2 size={16} />,
+    icon: <LuBuilding2 size={16} />,
     category: 'operations',
   },
   purchasing: {
     label: 'Purchasing',
     description: 'Three-way matching tolerances and PO limits',
-    icon: <Banknote size={16} />,
+    icon: <LuBanknote size={16} />,
     category: 'operations',
   },
   inventory: {
     label: 'Inventory',
     description: 'Stock valuation policies and safety stock parameters',
-    icon: <Puzzle size={16} />,
+    icon: <LuPuzzle size={16} />,
     category: 'operations',
   },
   dashboard: {
     label: 'Dashboard & Badges',
     description:
       'Sidebar badge caching and severity thresholds, including per-badge overrides (dashboard.badges.overrides.<badge>.{danger,warning})',
-    icon: <Sliders size={16} />,
+    icon: <LuSlidersHorizontal size={16} />,
     category: 'operations',
   },
   security: {
     label: 'Security & Auth',
     description: 'Login policies, session timeouts, and password rules',
-    icon: <Shield size={16} />,
+    icon: <LuShield size={16} />,
     category: 'security',
   },
   modules: {
     label: 'Module Feature Flags',
     description: 'Enable or disable system modules across the application',
-    icon: <Sliders size={16} />,
+    icon: <LuSlidersHorizontal size={16} />,
     category: 'modules',
   },
 };
@@ -256,15 +256,15 @@ export default function SettingsPage() {
   return (
     <div>
       <PageHeader
-        title="Settings & Configuration"
+        title="LuSettings & Configuration"
         subtitle="System parameters, organization profile, security policies, and feature flags."
         actions={
           <Button
             variant={isEditMode ? 'primary' : 'secondary'}
-            icon={isEditMode ? <Unlock size={14} /> : <Lock size={14} />}
+            icon={isEditMode ? <LuLockOpen size={14} /> : <LuLock size={14} />}
             onClick={() => setIsEditMode(!isEditMode)}
           >
-            {isEditMode ? 'Lock Settings' : 'Unlock to Edit'}
+            {isEditMode ? 'Lock LuSettings' : 'Unlock to Edit'}
           </Button>
         }
       />
@@ -274,12 +274,12 @@ export default function SettingsPage() {
         <div className="flex items-center gap-1.5 overflow-x-auto border-b border-default pb-3 scrollbar-none">
           {(
             [
-              { id: 'all', label: 'All Settings', icon: <Sliders size={14} /> },
-              { id: 'general', label: 'Company & Fiscal', icon: <Building2 size={14} /> },
-              { id: 'operations', label: 'Operations & HR', icon: <Banknote size={14} /> },
-              { id: 'security', label: 'Security & Auth', icon: <Shield size={14} /> },
-              { id: 'modules', label: 'Feature Flags', icon: <Puzzle size={14} /> },
-              { id: 'system', label: 'System Info', icon: <Server size={14} /> },
+              { id: 'all', label: 'All LuSettings', icon: <LuSlidersHorizontal size={14} /> },
+              { id: 'general', label: 'Company & Fiscal', icon: <LuBuilding2 size={14} /> },
+              { id: 'operations', label: 'Operations & HR', icon: <LuBanknote size={14} /> },
+              { id: 'security', label: 'Security & Auth', icon: <LuShield size={14} /> },
+              { id: 'modules', label: 'Feature Flags', icon: <LuPuzzle size={14} /> },
+              { id: 'system', label: 'System Info', icon: <LuServer size={14} /> },
             ] as const
           ).map((tab) => (
             <button
@@ -323,7 +323,7 @@ export default function SettingsPage() {
                 aria-label="Search settings"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                prefix={<Search size={14} className="text-muted" />}
+                prefix={<LuSearch size={14} className="text-muted" />}
                 containerClassName="max-w-md flex-1"
               />
               <div className="flex items-center gap-2 text-xs font-mono text-muted">
@@ -617,7 +617,7 @@ function ScalarRow({
         {saving && <span className="text-2xs font-mono text-accent animate-pulse">Saving…</span>}
         {saved && !saving && (
           <span className="text-2xs font-mono text-success-fg flex items-center gap-0.5">
-            <Check size={12} /> Saved
+            <LuCheck size={12} /> Saved
           </span>
         )}
       </div>
@@ -632,7 +632,7 @@ function SystemInfoPanel({ info }: { info: SystemInfo }) {
         <div className="flex items-center justify-between w-full">
           <span className="flex items-center gap-2 text-base ">
             <span className="text-accent">
-              <Server size={16} />
+              <LuServer size={16} />
             </span>
             <span>System Telemetry & Environment</span>
           </span>
@@ -646,33 +646,33 @@ function SystemInfoPanel({ info }: { info: SystemInfo }) {
       }
     >
       <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
-        <TelemetryCard icon={<Cpu size={16} />} label="PHP Version" value={info.php_version} />
+        <TelemetryCard icon={<LuCpu size={16} />} label="PHP Version" value={info.php_version} />
         <TelemetryCard
-          icon={<Activity size={16} />}
+          icon={<LuActivity size={16} />}
           label="Laravel Version"
           value={info.laravel_version}
         />
         <TelemetryCard
-          icon={<Database size={16} />}
+          icon={<LuDatabase size={16} />}
           label="Database"
           value={`${info.database.driver} (${info.database.version})`}
         />
-        <TelemetryCard icon={<Layers size={16} />} label="Cache Driver" value={info.cache_driver} />
-        <TelemetryCard icon={<Layers size={16} />} label="Queue Driver" value={info.queue_driver} />
+        <TelemetryCard icon={<LuLayers size={16} />} label="Cache Driver" value={info.cache_driver} />
+        <TelemetryCard icon={<LuLayers size={16} />} label="Queue Driver" value={info.queue_driver} />
         <TelemetryCard
-          icon={<Layers size={16} />}
+          icon={<LuLayers size={16} />}
           label="Session Driver"
           value={info.session_driver}
         />
         <TelemetryCard
-          icon={<Shield size={16} />}
+          icon={<LuShield size={16} />}
           label="Debug Mode"
           value={info.app_debug ? 'Enabled (ON)' : 'Disabled (OFF)'}
           tone={info.app_debug ? 'warning' : 'neutral'}
         />
-        <TelemetryCard icon={<Clock size={16} />} label="Timezone" value={info.timezone} />
+        <TelemetryCard icon={<LuClock size={16} />} label="Timezone" value={info.timezone} />
         <TelemetryCard
-          icon={<Clock size={16} />}
+          icon={<LuClock size={16} />}
           label="Server Time"
           value={formatDateTime(info.server_time)}
         />

@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
-import { Plus } from 'lucide-react';
+import { LuPlus } from '@/lib/icons';
 import { machinesApi, type MachineListParams } from '@/api/mrp/machines';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -95,7 +95,7 @@ export default function MachinesListPage() {
  <PageHeader title="Machines"
  subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'machine' : 'machines'}` : undefined}
  actions={canManage ? (
- <Button variant="primary" size="xs" icon={<Plus size={14} />} onClick={() => navigate('/mrp/machines/create')}>
+ <Button variant="primary" size="xs" icon={<LuPlus size={14} />} onClick={() => navigate('/mrp/machines/create')}>
  New machine
  </Button>
  ) : null} />

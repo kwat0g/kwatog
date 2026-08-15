@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
-import { Plus, Pencil, Trash2, ArchiveRestore } from 'lucide-react';
+import { LuPlus, LuPencil, LuTrash2, LuArchiveRestore } from '@/lib/icons';
 import { positionsApi } from '@/api/hr/positions';
 import { departmentsApi } from '@/api/hr/departments';
 import { ArchiveFilter } from '@/components/ui/ArchiveFilter';
@@ -142,7 +142,7 @@ export default function PositionsPage() {
  subtitle={data ? `${formatInt(data.meta.total)} positions` : undefined}
  actions={
  can('hr.positions.manage') && (
- <Button variant="primary" size="sm" onClick={() => { setEditing(null); setModalOpen(true); }} icon={<Plus size={14} />}>
+ <Button variant="primary" size="sm" onClick={() => { setEditing(null); setModalOpen(true); }} icon={<LuPlus size={14} />}>
  Add position
  </Button>
  )
@@ -206,15 +206,15 @@ export default function PositionsPage() {
  <DetailRow label="Employees" value={String(selected.employees_count ?? 0)} mono />
  {can('hr.positions.manage') && (
   <ModalFooter className="justify-start">
-  <Button variant="secondary" size="sm" onClick={() => { setEditing(selected); setModalOpen(true); }} icon={<Pencil size={12} />}>
+  <Button variant="secondary" size="sm" onClick={() => { setEditing(selected); setModalOpen(true); }} icon={<LuPencil size={12} />}>
   Edit
   </Button>
   {scope === 'only' ? (
-  <Button variant="secondary" size="sm" onClick={() => setPendingRestore(selected)} icon={<ArchiveRestore size={12} />}>
+  <Button variant="secondary" size="sm" onClick={() => setPendingRestore(selected)} icon={<LuArchiveRestore size={12} />}>
   Restore
   </Button>
   ) : (
-  <Button variant="danger" size="sm" onClick={() => setPendingDelete(selected)} icon={<Trash2 size={12} />}>
+  <Button variant="danger" size="sm" onClick={() => setPendingDelete(selected)} icon={<LuTrash2 size={12} />}>
   Delete
   </Button>
   )}

@@ -12,7 +12,7 @@ import '@fontsource/instrument-serif/400.css';
 import '@fontsource/instrument-serif/400-italic.css';
 import '@fontsource-variable/public-sans';
 import '@fontsource-variable/spline-sans-mono';
-import { CheckCircle2, AlertTriangle, Info } from 'lucide-react';
+import { LuCircleCheck, LuTriangleAlert, LuInfo } from '@/lib/icons';
 import './styles/globals.css';
 
 // Initialize theme before first paint (system preference until auth supplies a saved choice).
@@ -76,11 +76,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
               <div className="flex-1 flex items-center gap-3 pr-8">
                 <div className="shrink-0 flex items-center justify-center">
                   {t.type === 'success' ? (
-                    <CheckCircle2 className="text-success-fg" size={16} />
+                    <LuCircleCheck className="text-success-fg" size={16} />
                   ) : t.type === 'error' ? (
-                    <AlertTriangle className="text-danger-fg" size={16} />
+                    <LuTriangleAlert className="text-danger-fg" size={16} />
                   ) : (
-                    <Info className="text-accent" size={16} />
+                    <LuInfo className="text-accent" size={16} />
                   )}
                 </div>
                 <div>{resolveValue(t.message, t)}</div>

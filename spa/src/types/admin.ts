@@ -1,6 +1,6 @@
 import type { PaginatedResponse } from './index';
 
-// ─── Admin User Management (Task U2) ──────────────────────────────
+// ─── Admin LuUser Management (Task U2) ──────────────────────────────
 export type AdminUserStatus = 'active' | 'inactive' | 'locked';
 
 export interface AdminUserRoleSummary {
@@ -83,7 +83,7 @@ export interface CreateAdminUserResponse {
  };
 }
 
-// ─── Per-User Permission Overrides (Series R/R2) ──────────────────
+// ─── Per-LuUser Permission Overrides (Series R/R2) ──────────────────
 export type PermissionOverrideType = 'grant' | 'revoke';
 
 export interface UserPermissionOverride {

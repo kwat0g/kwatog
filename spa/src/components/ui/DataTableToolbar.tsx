@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Settings2, Rows3, Rows2, Rows4 } from 'lucide-react';
+import { LuSettings2, LuRows3, LuRows2, LuRows4 } from '@/lib/icons';
 import { cn } from '@/lib/cn';
 import { Checkbox } from './Checkbox';
 import type { Column } from './DataTable';
@@ -42,7 +42,7 @@ export function DataTableToolbar<T>({
  onClick={() => setVisMenuOpen((v) => !v)}
  className={cn('h-7 w-7 inline-flex items-center justify-center rounded-md border border-default text-muted hover:bg-elevated transition-colors duration-fast cursor-pointer', focusRing)}
  >
- <Settings2 size={14} />
+ <LuSettings2 size={14} />
  </button>
  {visMenuOpen && (
  <div
@@ -74,7 +74,7 @@ export function DataTableToolbar<T>({
  )}
  {showDensity &&
  (['compact', 'default', 'spacious'] as TableDensity[]).map((d) => {
- const Icon = d === 'compact' ? Rows4 : d === 'spacious' ? Rows2 : Rows3;
+ const Icon = d === 'compact' ? LuRows4 : d === 'spacious' ? LuRows2 : LuRows3;
  return (
  <button
  key={d}

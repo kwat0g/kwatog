@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { CheckCheck, Clock4, ExternalLink, UserCheck } from 'lucide-react';
+import { LuCheckCheck, LuClock4, LuExternalLink, LuUserCheck } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { actionCenterApi } from '@/api/actionCenter';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -41,16 +41,16 @@ export default function ExceptionWorkbenchPage() {
  {query.data && <div className="p-5 space-y-3">
  <div className="rounded-md border border-default bg-canvas p-2 flex items-center gap-2 flex-wrap">
  <span className="text-xs text-muted mr-auto">{selected.size} selected · {query.data.summary.overdue} overdue · {query.data.summary.unassigned} unassigned</span>
- <Button size="sm" variant="secondary" disabled={!selected.size} onClick={() => update.mutate({ action: 'claim' })}><UserCheck size={12} /> Claim</Button>
- <Button size="sm" variant="secondary" disabled={!selected.size} onClick={() => update.mutate({ action: 'acknowledge' })}><CheckCheck size={12} /> Acknowledge</Button>
- <Button size="sm" variant="secondary" disabled={!selected.size} onClick={() => update.mutate({ action: 'snooze', snoozed_until: new Date(Date.now() + 4 * 3600_000).toISOString() })}><Clock4 size={12} /> Snooze 4h</Button>
+ <Button size="sm" variant="secondary" disabled={!selected.size} onClick={() => update.mutate({ action: 'claim' })}><LuUserCheck size={12} /> Claim</Button>
+ <Button size="sm" variant="secondary" disabled={!selected.size} onClick={() => update.mutate({ action: 'acknowledge' })}><LuCheckCheck size={12} /> Acknowledge</Button>
+ <Button size="sm" variant="secondary" disabled={!selected.size} onClick={() => update.mutate({ action: 'snooze', snoozed_until: new Date(Date.now() + 4 * 3600_000).toISOString() })}><LuClock4 size={12} /> Snooze 4h</Button>
  <Button size="sm" variant="primary" disabled={!selected.size} onClick={() => update.mutate({ action: 'resolve' })}>Resolve</Button>
  </div>
  {items.length === 0 ? <EmptyState icon="check-circle" title="No active exceptions" /> : <div className="rounded-md border border-default bg-canvas divide-y divide-subtle">
  {items.map((item) => <div key={item.id} className="p-3 flex items-start gap-3">
  <Checkbox aria-label={`Select ${item.title}`} className="mt-1" checked={selected.has(item.id)} onChange={() => toggle(item.id)} />
  <div className="min-w-0 flex-1"><div className="flex gap-2 items-center flex-wrap"><span className="text-sm font-medium">{item.title}</span><Chip variant={item.priority === 'critical' ? 'danger' : item.priority === 'high' ? 'warning' : 'info'}>{item.priority_label ?? item.priority}</Chip>{item.is_overdue && <Chip variant="danger">overdue</Chip>}<Chip>{item.task_state_label ?? item.task_state}</Chip></div><p className="text-xs text-muted mt-1">{item.description}</p><p className="text-2xs text-text-subtle mt-1">{item.assigned_to ? `Assigned to ${item.assigned_to.name}` : 'Unassigned'}{item.due_at ? ` · Due ${formatRelative(item.due_at)}` : ''}</p></div>
- <Button aria-label="Open source record" size="sm" variant="secondary" onClick={() => navigate(item.link)}><ExternalLink size={12} /></Button>
+ <Button aria-label="Open source record" size="sm" variant="secondary" onClick={() => navigate(item.link)}><LuExternalLink size={12} /></Button>
  </div>)}
  </div>}
  </div>}

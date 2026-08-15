@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
-import { CheckCircle2, Link2 } from 'lucide-react';
+import { LuCircleCheck, LuLink2 } from '@/lib/icons';
 import { creditNotesApi } from '@/api/accounting/credit-notes';
 import { invoicesApi } from '@/api/accounting/invoices';
 import { billsApi } from '@/api/accounting/bills';
@@ -111,12 +111,12 @@ export default function CreditNoteDetailPage() {
  actions={
  <div className="flex gap-1.5">
  {canManage && cn.status === 'draft' && (
- <Button variant="primary" size="sm" icon={<CheckCircle2 size={14} />} loading={finalize.isPending} onClick={() => finalize.mutate()}>
+ <Button variant="primary" size="sm" icon={<LuCircleCheck size={14} />} loading={finalize.isPending} onClick={() => finalize.mutate()}>
  Finalize + post
  </Button>
  )}
  {canManage && cn.status === 'finalized' && Number(cn.balance) > 0 && (
- <Button variant="primary" size="sm" icon={<Link2 size={14} />} onClick={() => setApplyOpen(true)}>
+ <Button variant="primary" size="sm" icon={<LuLink2 size={14} />} onClick={() => setApplyOpen(true)}>
  Apply to {isCustomer ? 'invoice' : 'bill'}
  </Button>
  )}

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Download, Printer } from 'lucide-react';
+import { LuDownload, LuPrinter } from '@/lib/icons';
 import { stockCardApi } from '@/api/inventory/stockCard';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -52,10 +52,10 @@ export default function StockCardPage() {
  }
  actions={
  <div className="flex gap-2">
- <Button variant="secondary" size="sm" icon={<Download size={14} />} disabled>
+ <Button variant="secondary" size="sm" icon={<LuDownload size={14} />} disabled>
  Export CSV
  </Button>
- <Button variant="secondary" size="sm" icon={<Printer size={14} />} onClick={() => window.print()}>
+ <Button variant="secondary" size="sm" icon={<LuPrinter size={14} />} onClick={() => window.print()}>
  Print
  </Button>
  </div>

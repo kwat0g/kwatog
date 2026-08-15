@@ -1,6 +1,6 @@
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Pencil } from 'lucide-react';
+import { LuPencil } from '@/lib/icons';
 import { moldsApi } from '@/api/mrp/molds';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -71,7 +71,7 @@ export default function MoldDetailPage() {
  backLabel="Molds"
  breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'Molds', href: '/mrp/molds' }, { label: m.mold_code }]}
  actions={canManage ? (
- <Button variant="secondary" size="sm" icon={<Pencil size={14} />}
+ <Button variant="secondary" size="sm" icon={<LuPencil size={14} />}
  onClick={() => navigate(`/mrp/molds/${m.id}/edit`)}>
  Edit
  </Button>

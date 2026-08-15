@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { LuPlus } from '@/lib/icons';
 import { loansApi, type LoanListParams } from '@/api/loans';
 import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
@@ -68,7 +68,7 @@ export default function LoansPage() {
  title="Loans & Cash Advance"
  subtitle={data ? `${data.meta.total} records` : undefined}
  actions={can('loans.create') ? (
- <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/hr/loans/create')}>
+ <Button variant="primary" size="sm" icon={<LuPlus size={14} />} onClick={() => navigate('/hr/loans/create')}>
  New request
  </Button>
  ) : null}

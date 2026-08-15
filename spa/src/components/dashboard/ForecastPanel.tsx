@@ -7,7 +7,7 @@
  *
  * Data shape matches {@link ForecastPanelData} from '@/types/forecasting-dashboard'.
  */
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { LuTrendingUp, LuTrendingDown, LuMinus } from '@/lib/icons';
 import { Panel } from '@/components/ui/Panel';
 import { Chip } from '@/components/ui/Chip';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
@@ -35,10 +35,10 @@ interface Props {
   showKpi?: boolean;
 }
 
-const TREND_ICON: Record<TrendDirection, typeof TrendingUp> = {
-  up: TrendingUp,
-  down: TrendingDown,
-  stable: Minus,
+const TREND_ICON: Record<TrendDirection, typeof LuTrendingUp> = {
+  up: LuTrendingUp,
+  down: LuTrendingDown,
+  stable: LuMinus,
 };
 
 const TREND_COLOR: Record<TrendDirection, 'success' | 'danger' | 'info'> = {

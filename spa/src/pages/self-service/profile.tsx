@@ -15,7 +15,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { KeyRound, LogOut, Pencil } from 'lucide-react';
+import { LuKeyRound, LuLogOut, LuPencil } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
 import { selfServiceApi } from '@/api/self-service';
@@ -126,7 +126,7 @@ export default function SelfServiceProfilePage() {
  <Button
  variant="secondary"
  size="sm"
- icon={<KeyRound size={12} />}
+ icon={<LuKeyRound size={12} />}
  onClick={() => navigate('/change-password')}
  >
  Change password
@@ -134,7 +134,7 @@ export default function SelfServiceProfilePage() {
  <Button
  variant="secondary"
  size="sm"
- icon={<LogOut size={12} />}
+ icon={<LuLogOut size={12} />}
  onClick={() => logout()}
  >
  Sign out
@@ -497,7 +497,7 @@ function EditablePanel({
  noPadding={!editing}
  actions={
  !editing ? (
- <LinkButton onClick={startEdit} icon={<Pencil size={12} />} className="text-xs">
+ <LinkButton onClick={startEdit} icon={<LuPencil size={12} />} className="text-xs">
  Edit
  </LinkButton>
  ) : undefined

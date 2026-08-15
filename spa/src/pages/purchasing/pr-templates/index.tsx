@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Copy, ArchiveRestore } from 'lucide-react';
+import { LuPlus, LuPencil, LuTrash2, LuCopy, LuArchiveRestore } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
 import { prTemplatesApi } from '@/api/purchasing/purchase-requests';
@@ -98,7 +98,7 @@ export default function PrTemplatesListPage() {
  variant="ghost"
  size="sm"
  iconOnly
- icon={<Copy size={14} />}
+ icon={<LuCopy size={14} />}
  aria-label="Use template"
  onClick={() => useTemplate.mutate(r)}
  className="text-muted hover:text-accent"
@@ -108,7 +108,7 @@ export default function PrTemplatesListPage() {
  variant="ghost"
  size="sm"
  iconOnly
- icon={<Pencil size={14} />}
+ icon={<LuPencil size={14} />}
  aria-label="Edit template"
  onClick={() => navigate(`/purchasing/pr-templates/${r.id}/edit`)}
  className="text-muted hover:text-primary"
@@ -122,7 +122,7 @@ export default function PrTemplatesListPage() {
  aria-label={scope === 'only' ? 'Restore template' : 'Delete template'}
  onClick={() => (scope === 'only' ? setRestoreId(r.id) : setDeleteId(r.id))}
  className={scope === 'only' ? 'text-muted hover:text-primary' : 'text-muted hover:text-danger-fg'}
- icon={scope === 'only' ? <ArchiveRestore size={14} /> : <Trash2 size={14} />}
+ icon={scope === 'only' ? <LuArchiveRestore size={14} /> : <LuTrash2 size={14} />}
  />
 )}
  </div>
@@ -139,7 +139,7 @@ export default function PrTemplatesListPage() {
  <div>
  <PageHeader title="PR Templates" subtitle={data ? `${data.meta.total} templates` : undefined}
  actions={can('purchasing.pr.create') ? (
- <Button variant="primary" size="xs" icon={<Plus size={14} />} onClick={() => navigate('/purchasing/pr-templates/create')}>New Template</Button>
+ <Button variant="primary" size="xs" icon={<LuPlus size={14} />} onClick={() => navigate('/purchasing/pr-templates/create')}>New Template</Button>
  ) : null} />
  <FilterBar filters={filterConfig} values={filters}
  onSearch={(s) => setFilters(f => ({ ...f, search: s, page: 1 }))}

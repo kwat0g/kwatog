@@ -1,7 +1,8 @@
+import { PortalTable } from '@/components/portal/PortalTable';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
-import { Plus, X, FileText } from 'lucide-react';
+import { LuPlus, LuX, LuFileText } from '@/lib/icons';
 import { customerPortalApi } from '@/api/b2b/customer';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
@@ -70,7 +71,7 @@ export default function CustomerComplaintsPage() {
  title="Complaints"
  subtitle={<>Quality issues you have reported to <CompanyName /></>}
  actions={
- <Button variant="primary" size="sm" icon={showForm ? <X size={14} /> : <Plus size={14} />} onClick={() => setShowForm(!showForm)}>
+ <Button variant="primary" size="sm" icon={showForm ? <LuX size={14} /> : <LuPlus size={14} />} onClick={() => setShowForm(!showForm)}>
  {showForm ? 'Cancel' : 'New complaint'}
  </Button>
  }
@@ -124,7 +125,8 @@ export default function CustomerComplaintsPage() {
  {!isLoading && !isError && (
  <Panel noPadding>
  {complaints && complaints.length > 0 ? (
- <table className={tableCls}>
+ <PortalTable>
+<table className={tableCls}>
  <thead>
  <tr className={theadTrCls}>
  <Th>#</Th>
@@ -157,7 +159,7 @@ export default function CustomerComplaintsPage() {
  {(c.status === 'resolved' || c.status === 'closed') && (
  <LinkButton
  onClick={() => open8d(c.id)}
- icon={<FileText size={12} />}
+ icon={<LuFileText size={12} />}
  className="text-2xs"
  title="View 8D report"
  >
@@ -169,6 +171,7 @@ export default function CustomerComplaintsPage() {
  ))}
  </tbody>
  </table>
+</PortalTable>
  ) : (
  <EmptyState icon="message-square" title="No complaints" description="Any reported issues will appear here." />
  )}
@@ -191,7 +194,7 @@ export default function CustomerComplaintsPage() {
  variant="ghost"
  size="sm"
  iconOnly
- icon={<X size={16} />}
+ icon={<LuX size={16} />}
  aria-label="Close 8D report"
  onClick={() => setViewing8d(null)}
  className="text-muted hover:text-primary"

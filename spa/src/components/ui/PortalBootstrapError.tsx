@@ -1,4 +1,4 @@
-import { AlertTriangle } from 'lucide-react';
+import { LuTriangleAlert } from '@/lib/icons';
 import { Button } from './Button';
 
 interface PortalBootstrapErrorProps {
@@ -11,7 +11,7 @@ export function PortalBootstrapError({ title, onRetry, onSignIn }: PortalBootstr
  return (
  <div className="min-h-screen flex items-center justify-center bg-canvas px-5">
  <div className="max-w-md text-center">
- <AlertTriangle className="mx-auto mb-3 h-6 w-6 text-warning-fg" aria-hidden="true" />
+ <LuTriangleAlert className="mx-auto mb-3 h-6 w-6 text-warning-fg" aria-hidden="true" />
  <h1 className="text-lg font-medium text-primary">{title}</h1>
  <p className="mt-2 text-sm text-muted">
  We could not load your portal session. Check your connection and try again.

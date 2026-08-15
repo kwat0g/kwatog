@@ -10,7 +10,7 @@
  */
 import { useMemo, useState, type ChangeEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Search } from 'lucide-react';
+import { LuSearch } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { client } from '@/api/client';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -177,7 +177,7 @@ export default function NotificationPreferencesPage() {
  onChange={(e) => setSearch(e.target.value)}
  placeholder="Filter events…"
  aria-label="Filter notification types"
- prefix={<Search size={12} />}
+ prefix={<LuSearch size={12} />}
  />
  </div>
  }

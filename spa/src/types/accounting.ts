@@ -184,8 +184,13 @@ export interface CreateBillItemData {
 export interface CreateBillData {
  bill_number: string;
  vendor_id: string;
- /** REC-02 — links the bill to a PO to trigger 3-way match. */
+ /** Stock bills require an accepted receipt tied to this PO. */
+ provenance_type: 'stock' | 'service';
  purchase_order_id?: string;
+ goods_receipt_note_id?: string;
+ /** Service/non-stock exception evidence; approval is explicit in the UI. */
+ exception_evidence?: string;
+ exception_approved?: boolean;
  /** REC-02 — post despite blocking variances (audit-trailed). */
  allow_override?: boolean;
  override_reason?: string;
@@ -284,6 +289,7 @@ export interface Collection {
 
 export interface CreateInvoiceItemData {
  revenue_account_id: string;
+ source_delivery_item_id?: string;
  description: string;
  quantity: string;
  unit?: string;
@@ -291,6 +297,10 @@ export interface CreateInvoiceItemData {
 }
 export interface CreateInvoiceData {
  customer_id: string;
+ lifecycle_type?: 'standard' | 'prebill';
+ prebill_reason?: string;
+ sales_order_id?: string;
+ delivery_id?: string;
  date: string;
  due_date?: string;
  is_vatable?: boolean;

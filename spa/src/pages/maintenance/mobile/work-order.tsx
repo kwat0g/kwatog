@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { workOrdersApi } from '@/api/maintenance/workOrders';
 import { itemsApi } from '@/api/inventory/items';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Plus, Trash2, Play, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { LuArrowLeft, LuPlus, LuTrash2, LuPlay, LuCircleCheck, LuTriangleAlert } from '@/lib/icons';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -175,7 +175,7 @@ export default function MobileWorkOrderDetail() {
           focusRing,
         )}
       >
-        <ArrowLeft className="w-4 h-4" />
+        <LuArrowLeft className="w-4 h-4" />
         Back to list
       </Link>
 
@@ -184,7 +184,7 @@ export default function MobileWorkOrderDetail() {
         <div className="flex items-center justify-between">
           <span className="font-mono tabular-nums text-sm font-medium">{wo.mwo_number}</span>
           <Chip variant={maintenancePriorityVariant[wo.priority]} className="gap-1">
-            {wo.priority === 'critical' && <AlertTriangle className="w-3 h-3" aria-hidden />}
+            {wo.priority === 'critical' && <LuTriangleAlert className="w-3 h-3" aria-hidden />}
             {wo.priority_label ?? wo.priority}
           </Chip>
         </div>
@@ -214,7 +214,7 @@ export default function MobileWorkOrderDetail() {
           variant="primary"
           size="lg"
           className="w-full"
-          icon={<Play className="w-5 h-5" />}
+          icon={<LuPlay className="w-5 h-5" />}
           onClick={() => startMutation.mutate()}
           loading={startMutation.isPending}
         >
@@ -231,7 +231,7 @@ export default function MobileWorkOrderDetail() {
               type="button"
               variant="ghost"
               size="lg"
-              icon={<Plus className="w-4 h-4" />}
+              icon={<LuPlus className="w-4 h-4" />}
               onClick={() => setShowPartSheet(true)}
               className="text-accent"
             >
@@ -339,7 +339,7 @@ export default function MobileWorkOrderDetail() {
               variant="primary"
               size="touch"
               className="w-full"
-              icon={<CheckCircle2 className="w-5 h-5" />}
+              icon={<LuCircleCheck className="w-5 h-5" />}
               loading={completeMutation.isPending}
             >
               {completeLabel || 'Complete work order'}
@@ -457,7 +457,7 @@ export default function MobileWorkOrderDetail() {
                   variant="ghost"
                   size="lg"
                   iconOnly
-                  icon={<Trash2 className="w-4 h-4" />}
+                  icon={<LuTrash2 className="w-4 h-4" />}
                   aria-label="Clear selected part"
                   onClick={() => {
                     setSelectedItem(null);

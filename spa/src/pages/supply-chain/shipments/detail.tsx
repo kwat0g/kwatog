@@ -2,7 +2,7 @@
 import { useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, Download, FileText, Trash2, Upload, ArchiveRestore } from 'lucide-react';
+import { LuArrowRight, LuDownload, LuFileText, LuTrash2, LuUpload, LuArchiveRestore } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import type { AxiosError } from 'axios';
 import { downloadAuthenticatedFile } from '@/api/download';
@@ -165,7 +165,7 @@ export default function ShipmentDetailPage() {
             <Button
               variant="primary"
               size="sm"
-              icon={<ArrowRight size={14} />}
+              icon={<LuArrowRight size={14} />}
               loading={advance.isPending}
               onClick={() => {
                 setPendingStatus(nextStatus);
@@ -300,7 +300,7 @@ export default function ShipmentDetailPage() {
                     key={doc.id}
                     className="flex items-center gap-3 px-3 py-2.5 border border-subtle rounded-md bg-canvas"
                   >
-                    <FileText size={16} className="shrink-0 text-muted" />
+                    <LuFileText size={16} className="shrink-0 text-muted" />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium truncate">
@@ -338,7 +338,7 @@ export default function ShipmentDetailPage() {
                             variant="ghost"
                             size="sm"
                             iconOnly
-                            icon={<ArchiveRestore size={14} />}
+                            icon={<LuArchiveRestore size={14} />}
                             aria-label="Restore document"
                             onClick={() => setRestoreDocId(doc.id)}
                             className="text-muted hover:text-primary"
@@ -348,7 +348,7 @@ export default function ShipmentDetailPage() {
                             variant="ghost"
                             size="sm"
                             iconOnly
-                            icon={<Trash2 size={14} />}
+                            icon={<LuTrash2 size={14} />}
                             aria-label="Archive document"
                             onClick={() => setDeleteDocId(doc.id)}
                             className="text-muted hover:text-danger-fg"
@@ -394,7 +394,7 @@ export default function ShipmentDetailPage() {
                     }}
                   />
                   <span className="flex items-center justify-center gap-2 cursor-pointer w-full py-3 border-2 border-dashed border-default rounded-md text-sm text-muted hover:border-accent hover:text-accent transition-colors">
-                    <Upload size={16} />
+                    <LuUpload size={16} />
                     {uploadDoc.isPending
                       ? 'Uploading…'
                       : 'Click to upload (PDF, image, Excel — max 20 MB)'}
@@ -424,7 +424,7 @@ export default function ShipmentDetailPage() {
               <Button
                 variant="secondary"
                 size="sm"
-                icon={<Download size={14} />}
+                icon={<LuDownload size={14} />}
                 className="w-full justify-start"
                 onClick={() =>
                   void downloadAuthenticatedFile(
@@ -438,7 +438,7 @@ export default function ShipmentDetailPage() {
               <Button
                 variant="secondary"
                 size="sm"
-                icon={<Download size={14} />}
+                icon={<LuDownload size={14} />}
                 className="w-full justify-start"
                 onClick={() =>
                   void downloadAuthenticatedFile(
@@ -513,7 +513,7 @@ export default function ShipmentDetailPage() {
             </Button>
             <Button
               variant="primary"
-              icon={<ArrowRight size={14} />}
+              icon={<LuArrowRight size={14} />}
               loading={advance.isPending}
               onClick={() => {
                 if (pendingStatus) {

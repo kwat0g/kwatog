@@ -7,22 +7,24 @@ import type { ApiSuccess } from '@/types';
 
 /** How a widget draws itself. Mirrors the backend RenderKind enum. */
 export type WidgetRenderKind = 'scalar' | 'breakdown' | 'trend' | 'table' | 'gauge';
+export type WidgetValueKind = 'number' | 'count' | 'decimal' | 'currency' | 'percent' | 'hours' | 'date';
 
 export type WidgetSegmentTone = 'neutral' | 'success' | 'warning' | 'danger' | 'info';
 
 export interface WidgetBreakdownData {
  total: number;
  segments: Array<{ label: string; value: number; tone: WidgetSegmentTone }>;
+ kind?: WidgetValueKind;
 }
 
 export interface WidgetTrendData {
  points: Array<{ label: string; value: number }>;
  delta: number | null;
- kind: DashboardWidgetSummary['kind'];
+ kind: WidgetValueKind;
 }
 
 export interface WidgetTableData {
- columns: Array<{ key: string; label: string; numeric?: boolean }>;
+ columns: Array<{ key: string; label: string; numeric?: boolean; align?: 'left' | 'center' | 'right' }>;
  rows: Array<Record<string, string | number | null>>;
  total_count: number;
 }
@@ -32,7 +34,7 @@ export interface WidgetGaugeData {
  target: number | null;
  min: number;
  max: number;
- kind: DashboardWidgetSummary['kind'];
+ kind: WidgetValueKind;
 }
 
 /**
@@ -82,10 +84,19 @@ export interface SavedLayoutWidget {
  h?: number;
 }
 
+export interface DashboardLayoutSnapshot {
+ items: DashboardLayoutItem[];
+ version: string;
+}
+
+interface DashboardLayoutEnvelope extends ApiSuccess<DashboardLayoutItem[]> {
+ meta: { layout_version: string };
+}
+
 export interface DashboardWidgetSummary {
  key: string;
  value: string | null;
- kind: 'number' | 'decimal' | 'currency' | 'percent' | 'hours' | 'date';
+ kind: WidgetValueKind;
  helper: string | null;
  available: boolean;
  updated_at: string;
@@ -128,10 +139,10 @@ export const dashboardLayoutApi = {
   */
  layout: (opts?: { rich?: boolean }) =>
  client
- .get<ApiSuccess<DashboardLayoutItem[]>>('/dashboard/layout', {
+ .get<DashboardLayoutEnvelope>('/dashboard/layout', {
  params: opts?.rich ? { rich: 1 } : undefined,
  })
- .then((r) => r.data.data),
+ .then((r): DashboardLayoutSnapshot => ({ items: r.data.data, version: r.data.meta.layout_version })),
 
  data: (keys: string[]) =>
  client
@@ -140,13 +151,13 @@ export const dashboardLayoutApi = {
  })
  .then((r) => r.data.data),
 
- save: (widgets: SavedLayoutWidget[]) =>
+ save: (widgets: SavedLayoutWidget[], layoutVersion: string) =>
  client
- .put<ApiSuccess<DashboardLayoutItem[]>>('/dashboard/layout', { widgets })
- .then((r) => r.data.data),
+ .put<DashboardLayoutEnvelope>('/dashboard/layout', { widgets, layout_version: layoutVersion })
+ .then((r): DashboardLayoutSnapshot => ({ items: r.data.data, version: r.data.meta.layout_version })),
 
- reset: () =>
+ reset: (layoutVersion: string) =>
  client
- .post<ApiSuccess<DashboardLayoutItem[]>>('/dashboard/layout/reset')
- .then((r) => r.data.data),
+ .post<DashboardLayoutEnvelope>('/dashboard/layout/reset', { layout_version: layoutVersion })
+ .then((r): DashboardLayoutSnapshot => ({ items: r.data.data, version: r.data.meta.layout_version })),
 };

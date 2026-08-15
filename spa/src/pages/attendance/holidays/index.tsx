@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
-import { ChevronLeft, ChevronRight, Plus, Pencil, ArchiveRestore, Trash2 } from 'lucide-react';
+import { LuChevronLeft, LuChevronRight, LuPlus, LuPencil, LuArchiveRestore, LuTrash2 } from '@/lib/icons';
 import { format, getDaysInMonth, startOfMonth, parseISO, isSameMonth, getDay } from 'date-fns';
 import { holidaysApi } from '@/api/attendance/holidays';
 import { ArchiveFilter } from '@/components/ui/ArchiveFilter';
@@ -84,14 +84,14 @@ export default function HolidaysPage() {
  subtitle={`${holidays.length} for ${year}`}
  actions={
  <>
- <Button variant="ghost" size="sm" onClick={() => setYear((y) => y - 1)} icon={<ChevronLeft size={12} />} aria-label="Previous year" />
+ <Button variant="ghost" size="sm" onClick={() => setYear((y) => y - 1)} icon={<LuChevronLeft size={12} />} aria-label="Previous year" />
  <span className="font-mono tabular-nums text-sm px-1.5">{year}</span>
- <Button variant="ghost" size="sm" onClick={() => setYear((y) => y + 1)} icon={<ChevronRight size={12} />} aria-label="Next year" />
+ <Button variant="ghost" size="sm" onClick={() => setYear((y) => y + 1)} icon={<LuChevronRight size={12} />} aria-label="Next year" />
  <Button variant="secondary" size="sm" onClick={() => setView(view === 'list' ? 'calendar' : 'list')}>
  {view === 'list' ? 'Calendar view' : 'List view'}
  </Button>
  {can('attendance.holidays.manage') && (
- <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => { setEditing(null); setModalOpen(true); }}>
+ <Button variant="primary" size="sm" icon={<LuPlus size={14} />} onClick={() => { setEditing(null); setModalOpen(true); }}>
  Add holiday
  </Button>
  )}
@@ -229,11 +229,11 @@ function ListView({
  </div>
  {canManage && (
  <ModalFooter className="justify-start">
- <Button variant="secondary" size="sm" onClick={() => onEdit(selected)} icon={<Pencil size={12} />}>Edit</Button>
+ <Button variant="secondary" size="sm" onClick={() => onEdit(selected)} icon={<LuPencil size={12} />}>Edit</Button>
  {showRestore ? (
- <Button variant="secondary" size="sm" onClick={() => onRestore(selected)} icon={<ArchiveRestore size={12} />}>Restore</Button>
+ <Button variant="secondary" size="sm" onClick={() => onRestore(selected)} icon={<LuArchiveRestore size={12} />}>Restore</Button>
  ) : (
- <Button variant="danger" size="sm" onClick={() => onDelete(selected)} icon={<Trash2 size={12} />}>Archive</Button>
+ <Button variant="danger" size="sm" onClick={() => onDelete(selected)} icon={<LuTrash2 size={12} />}>Archive</Button>
  )}
  </ModalFooter>
  )}

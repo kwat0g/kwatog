@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
-import { Plus, Trash2 } from 'lucide-react';
+import { LuPlus, LuTrash2 } from '@/lib/icons';
 import { customersApi } from '@/api/accounting/customers';
 import { accountsApi } from '@/api/accounting/accounts';
 import { invoicesApi } from '@/api/accounting/invoices';
@@ -34,6 +34,7 @@ const itemSchema = z.object({
 
 const schema = z.object({
  customer_id: z.string().min(1, 'Customer is required'),
+ prebill_reason: z.string().trim().min(1, 'Prebill approval reason is required').max(1000),
  date: z.string().min(1, 'Date is required'),
  due_date: z.string().optional().or(z.literal('')),
  is_vatable: z.boolean(),
@@ -67,7 +68,7 @@ export default function CreateInvoicePage() {
  resolver: zodResolver(schema),
  defaultValues: {
  customer_id: presetCustomer, date: new Date().toISOString().slice(0, 10),
- due_date: '', is_vatable: undefined as unknown as boolean, remarks: '',
+ prebill_reason: '', due_date: '', is_vatable: undefined as unknown as boolean, remarks: '',
  items: [{ revenue_account_id: '', description: '', quantity: undefined as unknown as number, unit: '', unit_price: undefined as unknown as number }],
  },
  });
@@ -88,6 +89,7 @@ export default function CreateInvoicePage() {
  const mutation = useMutation({
  mutationFn: (d: FormValues) => invoicesApi.create({
  customer_id: d.customer_id, date: d.date, due_date: d.due_date || undefined,
+ lifecycle_type: 'prebill', prebill_reason: d.prebill_reason,
  is_vatable: d.is_vatable, remarks: d.remarks || undefined,
  items: d.items.map((it) => ({
  revenue_account_id: it.revenue_account_id,
@@ -126,11 +128,12 @@ export default function CreateInvoicePage() {
  </Select>
  <Input label="Date" type="date" required {...register('date')} error={errors.date?.message} />
  <Input label="Due date" type="date" {...register('due_date')} error={errors.due_date?.message} />
+ <Textarea label="Prebill approval reason" required rows={2} className="col-span-3" {...register('prebill_reason')} error={errors.prebill_reason?.message} helper="Manual invoices use the approved prebill lifecycle. Delivery-generated invoices follow the standard confirmed-delivery lifecycle." />
  <div className="flex items-end col-span-2"><Switch label={`VAT-able (${vatRateLabel})`} disabled={!vatConfigured} {...register('is_vatable')} /></div>
  <div />
  <Textarea label="Remarks" rows={2} className="col-span-3" {...register('remarks')} error={errors.remarks?.message} />
  </div>
- <p className="text-xs text-muted mt-2">Note: invoices are saved as drafts. Finalize from the detail page to assign a number and post the JE.</p>
+ <p className="text-xs text-muted mt-2">This manual invoice is saved as an approved prebill draft. Finalize from the detail page to assign a number and post the JE.</p>
  </Panel>
 
  <Panel title="Line items">
@@ -167,7 +170,7 @@ export default function CreateInvoicePage() {
  <div className="col-span-1 pt-1.5 text-right font-mono tabular-nums text-sm">{formatPeso(lineTotal)}</div>
  <div className="col-span-1 flex justify-end pt-1.5">
  {fields.length > 1 && (
- <Button type="button" variant="ghost" size="sm" iconOnly icon={<Trash2 size={14} />}
+ <Button type="button" variant="ghost" size="sm" iconOnly icon={<LuTrash2 size={14} />}
  aria-label="Remove line" onClick={() => remove(idx)} className="text-muted hover:text-danger-fg" />
  )}
  </div>
@@ -176,7 +179,7 @@ export default function CreateInvoicePage() {
  })}
  </div>
  <div className="flex items-center justify-between mt-3">
- <Button type="button" variant="secondary" size="sm" icon={<Plus size={14} />} onClick={() => append({ revenue_account_id: '', description: '', quantity: undefined as unknown as number, unit: '', unit_price: undefined as unknown as number })}>
+ <Button type="button" variant="secondary" size="sm" icon={<LuPlus size={14} />} onClick={() => append({ revenue_account_id: '', description: '', quantity: undefined as unknown as number, unit: '', unit_price: undefined as unknown as number })}>
  Add line
  </Button>
  <div className="text-sm font-mono tabular-nums">

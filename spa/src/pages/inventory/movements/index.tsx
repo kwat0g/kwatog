@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AxiosError } from 'axios';
-import { RefreshCw } from 'lucide-react';
+import { LuRefreshCw } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { stockMovementsApi } from '@/api/inventory/stock';
 import { Chip } from '@/components/ui/Chip';
@@ -92,7 +92,7 @@ export function StockMovementsTab({
  type="button"
  variant="ghost"
  size="sm"
- icon={<RefreshCw size={13} className={retryGl.isPending ? 'animate-spin' : ''} />}
+ icon={<LuRefreshCw size={13} className={retryGl.isPending ? 'animate-spin' : ''} />}
  disabled={retryGl.isPending}
  onClick={() => retryGl.mutate(movement.id)}
  >Retry</Button>

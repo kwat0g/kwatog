@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
-import { Plus, Pencil, ArchiveRestore, Trash2, Users } from 'lucide-react';
+import { LuPlus, LuPencil, LuArchiveRestore, LuTrash2, LuUsers } from '@/lib/icons';
 import { useNavigate } from 'react-router-dom';
 import { shiftsApi } from '@/api/attendance/shifts';
 import { ArchiveFilter } from '@/components/ui/ArchiveFilter';
@@ -110,10 +110,10 @@ export default function ShiftsPage() {
  <>
  {can('attendance.shifts.manage') && (
  <>
- <Button variant="secondary" size="sm" icon={<Users size={14} />} onClick={() => navigate('/hr/attendance/shifts/assign')}>
+ <Button variant="secondary" size="sm" icon={<LuUsers size={14} />} onClick={() => navigate('/hr/attendance/shifts/assign')}>
  Bulk assign
  </Button>
- <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => { setEditing(null); setModalOpen(true); }}>
+ <Button variant="primary" size="sm" icon={<LuPlus size={14} />} onClick={() => { setEditing(null); setModalOpen(true); }}>
  Add shift
  </Button>
  </>
@@ -184,11 +184,11 @@ export default function ShiftsPage() {
  </div>
  {can('attendance.shifts.manage') && (
  <ModalFooter className="justify-start">
- <Button variant="secondary" size="sm" onClick={() => { setEditing(selected); setModalOpen(true); }} icon={<Pencil size={12} />}>Edit</Button>
+ <Button variant="secondary" size="sm" onClick={() => { setEditing(selected); setModalOpen(true); }} icon={<LuPencil size={12} />}>Edit</Button>
  {scope === 'only' ? (
- <Button variant="secondary" size="sm" onClick={() => setPendingRestore(selected)} icon={<ArchiveRestore size={12} />}>Restore</Button>
+ <Button variant="secondary" size="sm" onClick={() => setPendingRestore(selected)} icon={<LuArchiveRestore size={12} />}>Restore</Button>
  ) : (
- <Button variant="danger" size="sm" onClick={() => setPendingDelete(selected)} icon={<Trash2 size={12} />}>Archive</Button>
+ <Button variant="danger" size="sm" onClick={() => setPendingDelete(selected)} icon={<LuTrash2 size={12} />}>Archive</Button>
  )}
  </ModalFooter>
  )}

@@ -13,7 +13,7 @@ function setStore(permissions: string[], roleSlug = 'employee') {
  useAuthStore.setState({
  user: {
  id: 'u1',
- name: 'Test User',
+ name: 'Test LuUser',
  email: 't@t.test',
  role: { id: 'r1', slug: roleSlug, name: roleSlug },
  permissions,

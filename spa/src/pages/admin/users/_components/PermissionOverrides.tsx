@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
-import { Plus, Trash2 } from 'lucide-react';
+import { LuPlus, LuTrash2 } from '@/lib/icons';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -36,7 +36,7 @@ interface PermissionOverridesSectionProps {
 /**
  * Series R — Task R2.
  *
- * Mounted on the User detail page. Lists active overrides for the user and
+ * Mounted on the LuUser detail page. Lists active overrides for the user and
  * provides Add/Remove actions gated by `admin.users.manage_permissions`.
  *
  * Server is the source of truth: the list endpoint already excludes expired
@@ -79,7 +79,7 @@ export function PermissionOverrides({
  <Button
  variant="secondary"
  size="sm"
- icon={<Plus size={12} />}
+ icon={<LuPlus size={12} />}
  onClick={() => setShowAdd(true)}
  disabled={isSystemAdminUser}
  aria-label="Add override"
@@ -179,7 +179,7 @@ export function PermissionOverrides({
  <Button
  variant="ghost"
  size="sm"
- icon={<Trash2 size={12} />}
+ icon={<LuTrash2 size={12} />}
  onClick={() => setConfirmRemove(o)}
  aria-label={`Remove ${o.permission.slug} override`}
  >

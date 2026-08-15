@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { AxiosError } from 'axios';
-import { KeyRound, CheckCircle, Check, X } from 'lucide-react';
+import { LuKeyRound, LuCircleCheck } from '@/lib/icons';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Panel } from '@/components/ui/Panel';
@@ -13,16 +13,15 @@ import { PasswordStrength } from '@/components/ui/PasswordStrength';
 import { authApi } from '@/api/auth';
 import { useQuery } from '@tanstack/react-query';
 import { landingApi } from '@/api/landing';
-import { cn } from '@/lib/cn';
+import {
+  PasswordMatchHint,
+  PasswordRequirements,
+} from '@/components/ui/PasswordRequirements';
+import { isStrongPassword, passwordMinimumLength } from '@/components/ui/passwordValidation';
 
 const schema = z
   .object({
-    password: z
-      .string()
-      .min(8, 'Password must be at least 8 characters')
-      .regex(/[A-Z]/, 'Password must contain an uppercase letter')
-      .regex(/[0-9]/, 'Password must contain a digit')
-      .regex(/[^A-Za-z0-9]/, 'Password must contain a special character'),
+    password: z.string().min(1, 'Password is required'),
     password_confirmation: z.string().min(1, 'Confirm your password'),
   })
   .refine((data) => data.password === data.password_confirmation, {
@@ -65,9 +64,16 @@ export default function ResetPasswordPage() {
   });
 
   const passwordValue = watch('password', '');
+  const confirmationValue = watch('password_confirmation', '');
+  const minimumLength = passwordMinimumLength(policy);
+  const passwordIsStrong = isStrongPassword(passwordValue, policy);
 
   const onSubmit = async (data: ResetPasswordForm) => {
     if (!token) return;
+    if (!isStrongPassword(data.password, policy)) {
+      setError('password', { type: 'validate', message: 'Complete all password requirements.' });
+      return;
+    }
     try {
       await authApi.resetPassword({
         token,
@@ -100,7 +106,7 @@ export default function ResetPasswordPage() {
     <Panel>
       <div className="mb-6">
         <p className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.2em] text-muted">
-          <KeyRound size={12} className="text-accent" />
+          <LuKeyRound size={12} className="text-accent" />
           New password
         </p>
         <h1 className="mt-3 font-display text-2xl tracking-tight text-primary">
@@ -116,7 +122,7 @@ export default function ResetPasswordPage() {
           role="status"
           className="rounded-md border border-success/30 bg-success-bg/10 p-5 text-center"
         >
-          <CheckCircle size={32} className="mx-auto text-success-fg" strokeWidth={1.5} />
+          <LuCircleCheck size={32} className="mx-auto text-success-fg" strokeWidth={1.5} />
           <h2 className="mt-3 font-display text-lg text-primary">Password updated</h2>
           <p className="mt-1 text-[13px] text-secondary">
             You can now sign in with your new password.
@@ -135,53 +141,27 @@ export default function ResetPasswordPage() {
             type="password"
             label="New password"
             autoComplete="new-password"
+            minLength={minimumLength}
             {...register('password')}
             error={errors.password?.message}
           />
-          <PasswordStrength password={passwordValue} />
-          <ul className="mt-1 space-y-0.5 text-xs">
-            {[
-              {
-                passed: passwordValue.length >= (policy?.minimum_length ?? Number.MAX_SAFE_INTEGER),
-                label: policy
-                  ? `At least ${policy.minimum_length} characters`
-                  : 'Loading password policy…',
-              },
-              ...(policy?.requires_uppercase
-                ? [{ passed: /[A-Z]/.test(passwordValue), label: 'An uppercase letter' }]
-                : []),
-              ...(policy?.requires_digit
-                ? [{ passed: /[0-9]/.test(passwordValue), label: 'A digit' }]
-                : []),
-              ...(policy?.requires_special
-                ? [{ passed: /[^A-Za-z0-9]/.test(passwordValue), label: 'A special character' }]
-                : []),
-            ].map((p) => (
-              <li
-                key={p.label}
-                className={cn(
-                  'flex items-center gap-1.5 transition-colors',
-                  p.passed ? 'text-success-fg' : 'text-muted',
-                )}
-              >
-                {p.passed ? <Check size={12} /> : <X size={12} />}
-                {p.label}
-              </li>
-            ))}
-          </ul>
+          <PasswordStrength password={passwordValue} minimumLength={minimumLength} />
+          <PasswordRequirements password={passwordValue} policy={policy} className="mt-1" />
           <Input
             type="password"
             label="Confirm new password"
             autoComplete="new-password"
+            minLength={minimumLength}
             {...register('password_confirmation')}
             error={errors.password_confirmation?.message}
           />
+          <PasswordMatchHint password={passwordValue} confirmation={confirmationValue} />
           <Button
             type="submit"
             variant="primary"
             size="lg"
             loading={isSubmitting}
-            disabled={isSubmitting}
+            disabled={isSubmitting || !token || !passwordIsStrong || passwordValue !== confirmationValue}
             className="mt-2 w-full"
           >
             Reset password

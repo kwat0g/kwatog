@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
-import { Plus, Printer } from 'lucide-react';
+import { LuPlus, LuPrinter } from '@/lib/icons';
 import { purchaseOrdersApi } from '@/api/purchasing/purchase-orders';
 import { bulkPrint } from '@/api/print';
 import { Button } from '@/components/ui/Button';
@@ -165,7 +165,7 @@ export default function PurchaseOrdersListPage() {
             <Button
               variant="primary"
               size="sm"
-              icon={<Plus size={14} />}
+              icon={<LuPlus size={14} />}
               onClick={() => navigate('/purchasing/purchase-orders/create')}
             >
               New PO
@@ -225,7 +225,7 @@ export default function PurchaseOrdersListPage() {
             bulkActions={[
               {
                 label: 'Print PDFs',
-                icon: <Printer size={14} />,
+                icon: <LuPrinter size={14} />,
                 onClick: (rows: PurchaseOrder[]) =>
                   bulkPrint(
                     'purchase_order',

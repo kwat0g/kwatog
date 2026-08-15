@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Pencil, Trash2, ArchiveRestore } from 'lucide-react';
+import { LuPlus, LuPencil, LuTrash2, LuArchiveRestore } from '@/lib/icons';
 import { trainingsApi } from '@/api/hr/trainings';
 import { ArchiveFilter } from '@/components/ui/ArchiveFilter';
 import { archiveToTrashed, type ArchiveScope } from '@/lib/archiveScope';
@@ -76,11 +76,11 @@ const [deleteTarget, setDeleteTarget] = useState<Training | null>(null);
   key: 'actions', header: '',
   cell: (row: Training) => (
   <div className="flex gap-1">
-  <Button variant="ghost" size="xs" iconOnly aria-label={`Edit ${row.name}`} icon={<Pencil size={12} />} onClick={(e) => { e.stopPropagation(); navigate(`/hr/trainings/${row.id}/edit`); }} />
+  <Button variant="ghost" size="xs" iconOnly aria-label={`Edit ${row.name}`} icon={<LuPencil size={12} />} onClick={(e) => { e.stopPropagation(); navigate(`/hr/trainings/${row.id}/edit`); }} />
   {scope === 'only' ? (
-  <Button variant="ghost" size="xs" iconOnly aria-label={`Restore ${row.name}`} icon={<ArchiveRestore size={12} />} onClick={(e) => { e.stopPropagation(); setRestoreTarget(row); }} />
+  <Button variant="ghost" size="xs" iconOnly aria-label={`Restore ${row.name}`} icon={<LuArchiveRestore size={12} />} onClick={(e) => { e.stopPropagation(); setRestoreTarget(row); }} />
   ) : (
-  <Button variant="ghost" size="xs" iconOnly aria-label={`Archive ${row.name}`} icon={<Trash2 size={12} />} onClick={(e) => { e.stopPropagation(); setDeleteTarget(row); }} />
+  <Button variant="ghost" size="xs" iconOnly aria-label={`Archive ${row.name}`} icon={<LuTrash2 size={12} />} onClick={(e) => { e.stopPropagation(); setDeleteTarget(row); }} />
   )}
   </div>
   ),
@@ -93,7 +93,7 @@ const [deleteTarget, setDeleteTarget] = useState<Training | null>(null);
  title="Trainings"
  subtitle={data ? `${data.meta.total} trainings` : undefined}
  actions={can('hr.trainings.manage') && (
- <Button variant="primary" size="xs" icon={<Plus size={14} />} onClick={() => navigate('/hr/trainings/create')}>
+ <Button variant="primary" size="xs" icon={<LuPlus size={14} />} onClick={() => navigate('/hr/trainings/create')}>
  Add Training
  </Button>
  )}

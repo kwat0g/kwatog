@@ -1,3 +1,4 @@
+import { PortalTable } from '@/components/portal/PortalTable';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import { customerPortalApi } from '@/api/b2b/customer';
@@ -64,7 +65,8 @@ export default function CustomerOrderDetailPage() {
  {/* Items */}
  <Panel title={`Items (${order.items?.length ?? 0})`} noPadding>
  {order.items && order.items.length > 0 ? (
- <table className={tableCls}>
+ <PortalTable>
+<table className={tableCls}>
  <thead>
  <tr className={theadTrCls}>
  <Th>Part #</Th>
@@ -86,6 +88,7 @@ export default function CustomerOrderDetailPage() {
  ))}
  </tbody>
  </table>
+</PortalTable>
  ) : (
  <EmptyState icon="package" title="No items" />
  )}
@@ -94,7 +97,8 @@ export default function CustomerOrderDetailPage() {
  {/* Work Orders */}
  {order.work_orders && order.work_orders.length > 0 && (
  <Panel title="Work Orders" noPadding>
- <table className={tableCls}>
+ <PortalTable>
+<table className={tableCls}>
  <thead>
  <tr className={theadTrCls}>
  <Th>WO #</Th>
@@ -118,6 +122,7 @@ export default function CustomerOrderDetailPage() {
  ))}
  </tbody>
  </table>
+</PortalTable>
  </Panel>
  )}
  </>

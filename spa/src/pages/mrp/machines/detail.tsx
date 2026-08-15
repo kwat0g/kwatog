@@ -1,6 +1,6 @@
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Pencil } from 'lucide-react';
+import { LuPencil } from '@/lib/icons';
 import { machinesApi } from '@/api/mrp/machines';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -58,7 +58,7 @@ export default function MachineDetailPage() {
  backLabel="Machines"
  breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'Machines', href: '/mrp/machines' }, { label: data.machine_code }]}
  actions={canManage ? (
- <Button variant="secondary" size="sm" icon={<Pencil size={14} />}
+ <Button variant="secondary" size="sm" icon={<LuPencil size={14} />}
  onClick={() => navigate(`/mrp/machines/${data.id}/edit`)}>
  Edit
  </Button>

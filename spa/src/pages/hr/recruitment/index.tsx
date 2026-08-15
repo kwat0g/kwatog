@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
-import { Plus, ArrowRight } from 'lucide-react';
+import { LuPlus, LuArrowRight } from '@/lib/icons';
 import { recruitmentApi } from '@/api/recruitment';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -86,7 +86,7 @@ export default function RecruitmentDashboard() {
  ]}
  actions={
  can('hr.recruitment.manage') ? (
- <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/hr/recruitment/postings/create')}>
+ <Button variant="primary" size="sm" icon={<LuPlus size={14} />} onClick={() => navigate('/hr/recruitment/postings/create')}>
  New Posting
  </Button>
  ) : undefined
@@ -109,7 +109,7 @@ export default function RecruitmentDashboard() {
  title="Recent Applications"
  actions={
  <Link to="/hr/recruitment/applications" className="inline-flex items-center gap-1 text-xs text-accent hover:underline">
- View all <ArrowRight size={12} />
+ View all <LuArrowRight size={12} />
  </Link>
  }
  noPadding
@@ -133,7 +133,7 @@ export default function RecruitmentDashboard() {
  title="Open Postings"
  actions={
  <Link to="/hr/recruitment/postings" className="inline-flex items-center gap-1 text-xs text-accent hover:underline">
- View all <ArrowRight size={12} />
+ View all <LuArrowRight size={12} />
  </Link>
  }
  noPadding

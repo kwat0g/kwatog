@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
-import { Plus, Trash2 } from 'lucide-react';
+import { LuPlus, LuTrash2 } from '@/lib/icons';
 import { materialIssuesApi } from '@/api/inventory/material-issues';
 import { workOrdersApi } from '@/api/production/workOrders';
 import { itemsApi } from '@/api/inventory/items';
@@ -230,7 +230,7 @@ export default function CreateMaterialIssuePage() {
  variant="ghost"
  size="sm"
  iconOnly
- icon={<Trash2 size={14} />}
+ icon={<LuTrash2 size={14} />}
  aria-label="Remove line"
  onClick={() => remove(idx)}
  className="text-muted hover:text-danger-fg"
@@ -245,7 +245,7 @@ export default function CreateMaterialIssuePage() {
  type="button"
  variant="secondary"
  size="sm"
- icon={<Plus size={14} />}
+ icon={<LuPlus size={14} />}
  onClick={() => append({ ...blankLine })}
  >
  Add line

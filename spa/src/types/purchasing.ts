@@ -119,6 +119,7 @@ export interface PurchaseOrderItem {
  unit_price: string;
  total: string;
  quantity_received: string;
+ quantity_accepted: string;
  quantity_remaining: string;
 }
 
@@ -157,6 +158,7 @@ export interface PurchaseOrder {
  budget_acknowledged_at?: string | null;
  remarks: string | null;
  quantity_received_pct: number;
+ quantity_accepted_pct: number;
  vendor: { id: string; name: string; contact_person: string | null; email: string | null } | null;
  purchase_request: { id: string; pr_number: string } | null;
  items?: PurchaseOrderItem[];

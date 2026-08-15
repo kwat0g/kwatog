@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, Calendar as CalIcon } from 'lucide-react';
+import { LuChevronLeft, LuChevronRight, LuCalendar as CalIcon } from '@/lib/icons';
 import { calendarApi } from '@/api/calendar';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -126,7 +126,7 @@ export default function CalendarPage() {
  setCursor((c) => new Date(c.getFullYear(), c.getMonth() - 1, 1))
  }
  >
- <ChevronLeft size={16} />
+ <LuChevronLeft size={16} />
  </Button>
  <span className="font-medium tabular-nums px-2 min-w-[140px] text-center">
  {monthLabel(cursor)}
@@ -139,7 +139,7 @@ export default function CalendarPage() {
  setCursor((c) => new Date(c.getFullYear(), c.getMonth() + 1, 1))
  }
  >
- <ChevronRight size={16} />
+ <LuChevronRight size={16} />
  </Button>
  </div>
  </div>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Check, X } from 'lucide-react';
+import { LuPlus, LuCheck, LuX } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { adjustmentsApi, type AdjustmentListParams } from '@/api/payroll/adjustments';
 import { Button } from '@/components/ui/Button';
@@ -162,7 +162,7 @@ export default function PayrollAdjustmentsPage() {
             <Button
               size="xs"
               variant="ghost"
-              icon={<Check size={12} />}
+              icon={<LuCheck size={12} />}
               onClick={() => setConfirmApprove(r)}
               disabled={approveMutation.isPending}
             >
@@ -171,7 +171,7 @@ export default function PayrollAdjustmentsPage() {
             <Button
               size="xs"
               variant="ghost"
-              icon={<X size={12} />}
+              icon={<LuX size={12} />}
               onClick={() => setRejectTarget(r)}
             >
               Reject
@@ -191,7 +191,7 @@ export default function PayrollAdjustmentsPage() {
             <Button
               variant="primary"
               size="xs"
-              icon={<Plus size={14} />}
+              icon={<LuPlus size={14} />}
               onClick={() => navigate('/payroll/adjustments/create')}
             >
               Raise adjustment

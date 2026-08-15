@@ -1,5 +1,5 @@
 import { forwardRef, type SelectHTMLAttributes } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { LuChevronDown } from '@/lib/icons';
 import { cn } from '@/lib/cn';
 
 /**
@@ -87,7 +87,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
             aria-hidden
             className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted"
           >
-            <ChevronDown size={fieldSize === 'sm' ? 12 : 14} />
+            <LuChevronDown size={fieldSize === 'sm' ? 12 : 14} />
           </span>
         </div>
         {error && (

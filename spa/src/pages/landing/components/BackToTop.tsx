@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowUp } from 'lucide-react';
+import { LuArrowUp } from '@/lib/icons';
 import { cn } from '@/lib/cn';
 
 export function BackToTop() {
@@ -35,7 +35,7 @@ export function BackToTop() {
         visible ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0 pointer-events-none',
       )}
     >
-      <ArrowUp size={18} />
+      <LuArrowUp size={18} />
     </button>
   );
 }

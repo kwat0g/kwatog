@@ -13,7 +13,7 @@
 import { useMemo, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Search, Tag, Layers, Package, Factory, ShieldCheck, Truck, Building2 } from 'lucide-react';
+import { LuSearch, LuTag, LuLayers, LuPackage, LuFactory, LuShieldCheck, LuTruck, LuBuilding2 } from '@/lib/icons';
 import { traceabilityApi, type TraceabilityResult } from '@/api/quality/traceability';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Panel } from '@/components/ui/Panel';
@@ -51,7 +51,7 @@ export default function TraceabilityPage() {
  <div className="px-5 pt-4">
  <form onSubmit={onSubmit} className="flex items-center gap-2 max-w-2xl">
  <div className="flex-1 flex items-center h-8 rounded-md border border-default bg-canvas px-2.5 transition-colors duration-fast focus-within:ring-2 focus-within:ring-accent focus-within:border-accent">
- <Search size={14} className="text-muted shrink-0" aria-hidden />
+ <LuSearch size={14} className="text-muted shrink-0" aria-hidden />
  <input
  autoFocus
  type="text"
@@ -141,7 +141,7 @@ function BatchView({ result }: { result: TraceabilityResult }) {
  return (
  <div className="grid grid-cols-3 gap-4">
  <div className="col-span-1">
- <SectionCard icon={<Package size={14} />} title="Backward — materials">
+ <SectionCard icon={<LuPackage size={14} />} title="Backward — materials">
  {materials.length === 0
  ? <p className="text-xs text-muted">No material lot references recorded.</p>
  : (
@@ -164,7 +164,7 @@ function BatchView({ result }: { result: TraceabilityResult }) {
  </div>
 
  <div className="col-span-1">
- <SectionCard icon={<Factory size={14} />} title="Production batch" highlight>
+ <SectionCard icon={<LuFactory size={14} />} title="Production batch" highlight>
  <dl className="text-xs space-y-1.5">
  <Row label="Batch" value={<span className="font-mono">{wo.batch_number ?? '—'}</span>} />
  <Row label="Work order" value={
@@ -185,7 +185,7 @@ function BatchView({ result }: { result: TraceabilityResult }) {
  </div>
 
  <div className="col-span-1 space-y-4">
- <SectionCard icon={<ShieldCheck size={14} />} title="Forward — inspections">
+ <SectionCard icon={<LuShieldCheck size={14} />} title="Forward — inspections">
  {inspections.length === 0
  ? <p className="text-xs text-muted">No inspections recorded.</p>
  : (
@@ -202,7 +202,7 @@ function BatchView({ result }: { result: TraceabilityResult }) {
  )}
  </SectionCard>
 
- <SectionCard icon={<Tag size={14} />} title="Forward — shipment lots">
+ <SectionCard icon={<LuTag size={14} />} title="Forward — shipment lots">
  {lots.length === 0
  ? <p className="text-xs text-muted">Not yet shipped.</p>
  : (
@@ -224,7 +224,7 @@ function BatchView({ result }: { result: TraceabilityResult }) {
  )}
  {l.customer?.name && (
  <div className="text-muted flex items-center gap-1">
- <Building2 size={11} />{l.customer.name}
+ <LuBuilding2 size={11} />{l.customer.name}
  </div>
  )}
  </li>
@@ -248,7 +248,7 @@ function LotView({ result }: { result: TraceabilityResult }) {
  return (
  <div className="grid grid-cols-3 gap-4">
  <div className="col-span-1">
- <SectionCard icon={<Layers size={14} />} title="Backward — production batches">
+ <SectionCard icon={<LuLayers size={14} />} title="Backward — production batches">
  {woRows.length === 0
  ? <p className="text-xs text-muted">No batches linked.</p>
  : (
@@ -280,7 +280,7 @@ function LotView({ result }: { result: TraceabilityResult }) {
  </div>
 
  <div className="col-span-1">
- <SectionCard icon={<Tag size={14} />} title="Shipment lot" highlight>
+ <SectionCard icon={<LuTag size={14} />} title="Shipment lot" highlight>
  <dl className="text-xs space-y-1.5">
  <Row label="Lot" value={<span className="font-mono">{lot.lot_number}</span>} />
  <Row label="Date" value={<span className="font-mono tabular-nums">{lot.lot_date ?? '—'}</span>} />
@@ -293,7 +293,7 @@ function LotView({ result }: { result: TraceabilityResult }) {
  </div>
 
  <div className="col-span-1 space-y-4">
- <SectionCard icon={<Truck size={14} />} title="Forward — delivery">
+ <SectionCard icon={<LuTruck size={14} />} title="Forward — delivery">
  {!delivery
  ? <p className="text-xs text-muted">Not yet dispatched.</p>
  : (
@@ -310,7 +310,7 @@ function LotView({ result }: { result: TraceabilityResult }) {
  )}
  </SectionCard>
 
- <SectionCard icon={<Building2 size={14} />} title="Customer">
+ <SectionCard icon={<LuBuilding2 size={14} />} title="Customer">
  {customer?.name ? <p className="text-sm">{customer.name}</p> : <p className="text-xs text-muted">—</p>}
  </SectionCard>
  </div>
@@ -328,7 +328,7 @@ function MaterialLotView({ result }: { result: TraceabilityResult }) {
  return (
  <div className="grid grid-cols-3 gap-4">
  <div className="col-span-1">
- <SectionCard icon={<Building2 size={14} />} title="Backward — supplier GRN">
+ <SectionCard icon={<LuBuilding2 size={14} />} title="Backward — supplier GRN">
  {!grn
  ? <p className="text-xs text-muted">No linked GRN.</p>
  : (
@@ -341,7 +341,7 @@ function MaterialLotView({ result }: { result: TraceabilityResult }) {
  </div>
 
  <div className="col-span-1">
- <SectionCard icon={<Package size={14} />} title="Material lot" highlight>
+ <SectionCard icon={<LuPackage size={14} />} title="Material lot" highlight>
  <dl className="text-xs space-y-1.5">
  <Row label="Lot" value={<span className="font-mono">{ml.material_lot_number ?? '—'}</span>} />
  <Row label="Supplier ref" value={<span className="font-mono">{ml.supplier_lot_reference ?? '—'}</span>} />
@@ -355,7 +355,7 @@ function MaterialLotView({ result }: { result: TraceabilityResult }) {
  </div>
 
  <div className="col-span-1">
- <SectionCard icon={<Factory size={14} />} title="Forward — consuming batches">
+ <SectionCard icon={<LuFactory size={14} />} title="Forward — consuming batches">
  {wos.length === 0
  ? <p className="text-xs text-muted">No production batches consumed this lot yet.</p>
  : (

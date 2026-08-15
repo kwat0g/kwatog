@@ -10,7 +10,7 @@ import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { AxiosError } from 'axios';
-import { AlertTriangle, Plus, Trash2 } from 'lucide-react';
+import { LuTriangleAlert, LuPlus, LuTrash2 } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { onFormInvalid } from '@/lib/formErrors';
 import { workOrdersApi } from '@/api/production/workOrders';
@@ -102,7 +102,7 @@ export default function RecordOutputPage() {
  },
  onSuccess: (output) => {
  if (output.production_receipt_handoff?.status === 'manual_required') {
- toast(`Output ${output.batch_code ?? ''} recorded. Finished-goods receipt needs Inventory attention.`, { icon: <AlertTriangle size={16} aria-hidden="true" /> });
+ toast(`Output ${output.batch_code ?? ''} recorded. Finished-goods receipt needs Inventory attention.`, { icon: <LuTriangleAlert size={16} aria-hidden="true" /> });
  } else {
  toast.success(`Output ${output.batch_code ?? ''} recorded.`);
  }
@@ -162,7 +162,7 @@ export default function RecordOutputPage() {
  <div className="mt-4 border-t border-default pt-3">
  <div className="flex items-center justify-between mb-2">
  <div className="text-2xs uppercase tracking-wider text-muted font-medium">Defect breakdown</div>
- <Button type="button" variant="secondary" size="sm" icon={<Plus size={14} />}
+ <Button type="button" variant="secondary" size="sm" icon={<LuPlus size={14} />}
  onClick={() => append({ defect_type_id: '', count: '' })}>
  Add defect
  </Button>
@@ -188,7 +188,7 @@ export default function RecordOutputPage() {
  variant="ghost"
  size="sm"
  iconOnly
- icon={<Trash2 size={14} />}
+ icon={<LuTrash2 size={14} />}
  aria-label="Remove line"
  onClick={() => remove(i)}
  className="text-muted hover:text-danger-fg"

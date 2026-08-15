@@ -1,7 +1,7 @@
 /** ADV8 — Machine health / condition monitoring. */
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Activity, Thermometer, Gauge, Droplets, Zap } from 'lucide-react';
+import { LuActivity, LuThermometer, LuGauge, LuDroplets, LuZap } from '@/lib/icons';
 import { conditionReadingsApi } from '@/api/maintenance/conditionReadings';
 import { machinesApi } from '@/api/mrp/machines';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -17,12 +17,12 @@ import type {
 } from '@/types/maintenance';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
 
-const METRIC_ICONS: Record<ConditionMetric, typeof Activity> = {
-  temperature: Thermometer,
-  vibration: Gauge,
-  pressure: Activity,
-  current: Zap,
-  oil_quality: Droplets,
+const METRIC_ICONS: Record<ConditionMetric, typeof LuActivity> = {
+  temperature: LuThermometer,
+  vibration: LuGauge,
+  pressure: LuActivity,
+  current: LuZap,
+  oil_quality: LuDroplets,
 };
 
 function HealthGauge({
@@ -319,7 +319,7 @@ export default function MachineHealthPage() {
                     Manually log a sensor reading or inspection result for this machine.
                   </p>
                 </div>
-                <Button variant="primary" size="sm" icon={<Activity size={14} />}>
+                <Button variant="primary" size="sm" icon={<LuActivity size={14} />}>
                   Record reading
                 </Button>
               </div>

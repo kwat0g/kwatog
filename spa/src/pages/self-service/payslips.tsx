@@ -1,7 +1,7 @@
 /** Sprint 8 — Task 74 + Sprint P5. Self-service payslips, web table layout. */
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { CheckCircle2, Clock } from 'lucide-react';
+import { LuCircleCheck, LuClock } from '@/lib/icons';
 import { downloadAuthenticatedFile } from '@/api/download';
 import { payrollsApi, type PayrollListParams } from '@/api/payroll/payrolls';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -59,12 +59,12 @@ const columns: Column<Payroll>[] = [
  {/* ADV1 — Show disbursement status if available */}
  {p.period_disbursement_status === 'disbursed' && (
  <span className="inline-flex items-center gap-1 text-xs text-success-fg">
- <CheckCircle2 size={12} /> Disbursed
+ <LuCircleCheck size={12} /> Disbursed
  </span>
  )}
  {p.period_disbursement_status === 'pending' && !p.error_message && (
  <span className="inline-flex items-center gap-1 text-xs text-muted">
- <Clock size={12} /> Awaiting disbursement
+ <LuClock size={12} /> Awaiting disbursement
  </span>
  )}
  </div>

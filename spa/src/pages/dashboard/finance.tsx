@@ -1,7 +1,7 @@
 import { cn } from '@/lib/cn';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { AlertTriangle, CalendarClock, ClipboardList } from 'lucide-react';
+import { LuTriangleAlert, LuCalendarClock, LuClipboardList } from '@/lib/icons';
 import { Panel } from '@/components/ui/Panel';
 import { StatCard } from '@/components/ui/StatCard';
 import { Chip } from '@/components/ui/Chip';
@@ -291,7 +291,7 @@ function UnpostedJesPanel({
  actions={<Link className="text-xs text-link hover:underline" to="/accounting/journal-entries?status=draft">Open →</Link>}
  >
  <div className="flex items-start gap-3">
- <div className="shrink-0 mt-0.5 text-muted"><ClipboardList size={20} /></div>
+ <div className="shrink-0 mt-0.5 text-muted"><LuClipboardList size={20} /></div>
  <div>
  <div className="text-2xl font-medium font-mono tabular-nums">{data?.count ?? '—'}</div>
  {data?.count === 0 ? (
@@ -331,7 +331,7 @@ function ApDuePanel({
  >
  <div className="flex items-baseline justify-between mb-2">
  <div className="flex items-center gap-2">
- <CalendarClock size={16} className="text-muted" />
+ <LuCalendarClock size={16} className="text-muted" />
  <span className="text-sm text-muted">{data?.count ?? '—'} bills</span>
  </div>
  <div className="font-mono tabular-nums font-medium">{formatPeso(data?.total)}</div>
@@ -393,7 +393,7 @@ function BudgetVsActualPanel({
  <Td align="right">
        <Chip variant={utilizationTone(r.variance_pct)}>
        {r.variance_pct != null && r.variance_pct > 100 && (
-         <AlertTriangle size={12} className="mr-1 inline" aria-hidden="true" />
+         <LuTriangleAlert size={12} className="mr-1 inline" aria-hidden="true" />
        )}
        {r.variance_pct == null ? '—' : `${r.variance_pct.toFixed(1)}%`}
        </Chip>

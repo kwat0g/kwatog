@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
-import { Download, Printer } from 'lucide-react';
+import { LuDownload, LuPrinter } from '@/lib/icons';
 import { statementsApi } from '@/api/accounting/statements';
 import { downloadAuthenticatedFile } from '@/api/download';
 import { Button } from '@/components/ui/Button';
@@ -35,8 +35,8 @@ export default function IncomeStatementPage() {
  backLabel="Journal Entries"
  actions={
  <div className="flex gap-1.5">
- <Button variant="secondary" size="sm" icon={<Download size={14} />} onClick={() => void downloadAuthenticatedFile(statementsApi.csvUrl('income-statement', { from, to }), { errorMessage: 'Failed to export income statement.' })}>CSV</Button>
- <Button variant="secondary" size="sm" icon={<Printer size={14} />} onClick={() => void downloadAuthenticatedFile(statementsApi.pdfUrl('income-statement', { from, to }), { openInNewTab: true, errorMessage: 'Failed to generate income statement PDF.' })}>PDF</Button>
+ <Button variant="secondary" size="sm" icon={<LuDownload size={14} />} onClick={() => void downloadAuthenticatedFile(statementsApi.csvUrl('income-statement', { from, to }), { errorMessage: 'Failed to export income statement.' })}>CSV</Button>
+ <Button variant="secondary" size="sm" icon={<LuPrinter size={14} />} onClick={() => void downloadAuthenticatedFile(statementsApi.pdfUrl('income-statement', { from, to }), { openInNewTab: true, errorMessage: 'Failed to generate income statement PDF.' })}>PDF</Button>
  </div>
  }
  />

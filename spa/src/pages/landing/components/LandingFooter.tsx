@@ -2,14 +2,14 @@
  * LandingFooter — closing band for the marketing site.
  *
  * Carries the live brand/address, the section map, careers,
- * certifications, legal links, a newsletter signup, and a single discreet
- * "Staff login" text link for internal users.
+ * certifications, legal links, a newsletter signup, and clear employee and
+ * partner portal entry points.
  */
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { ArrowRight, CheckCircle } from 'lucide-react';
+import { LuArrowRight, LuCircleCheck } from '@/lib/icons';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { landingApi } from '@/api/landing';
 import { focusRingLanding } from '@/lib/focus';
@@ -168,7 +168,7 @@ export function LandingFooter() {
             </p>
             {newsletterStatus === 'success' ? (
               <div className="mt-4 flex items-center gap-2 text-[13px] text-success">
-                <CheckCircle size={16} />
+                <LuCircleCheck size={16} />
                 <span>You&apos;re subscribed.</span>
               </div>
             ) : (
@@ -188,7 +188,7 @@ export function LandingFooter() {
                     aria-label="Subscribe"
                     className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-default bg-surface text-accent transition-colors hover:bg-elevated hover:border-accent/40 disabled:opacity-60 cursor-pointer', focusRingLanding)}
                   >
-                    <ArrowRight size={16} />
+                    <LuArrowRight size={16} />
                   </button>
                 </div>
                 {newsletterStatus === 'error' && (
@@ -218,6 +218,22 @@ export function LandingFooter() {
                   className="font-mono text-[11px] uppercase tracking-[0.18em] text-text-subtle underline-offset-4 transition-colors hover:text-secondary hover:underline"
                 >
                   Staff login →
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/portal/customer/login"
+                  className="font-mono text-[11px] uppercase tracking-[0.18em] text-text-subtle underline-offset-4 transition-colors hover:text-secondary hover:underline"
+                >
+                  Customer portal →
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/portal/supplier/login"
+                  className="font-mono text-[11px] uppercase tracking-[0.18em] text-text-subtle underline-offset-4 transition-colors hover:text-secondary hover:underline"
+                >
+                  Supplier portal →
                 </Link>
               </li>
             </ul>

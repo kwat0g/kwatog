@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import toast from 'react-hot-toast';
-import { Plus, Trash2 } from 'lucide-react';
+import { LuPlus, LuTrash2 } from '@/lib/icons';
 import type { FiscalYear } from '@/types/budgeting';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { formatCompactCurrency } from '@/lib/formatNumber';
@@ -195,7 +195,7 @@ export default function BudgetCreatePage() {
  <Panel
  title="Line Items"
  meta={
- <Button size="sm" onClick={addLineItem}><Plus size={14} /> Add Line</Button>
+ <Button size="sm" onClick={addLineItem}><LuPlus size={14} /> Add Line</Button>
  }
  >
  <div className="overflow-x-auto">
@@ -248,7 +248,7 @@ export default function BudgetCreatePage() {
  variant="ghost"
  size="sm"
  iconOnly
- icon={<Trash2 size={14} />}
+ icon={<LuTrash2 size={14} />}
  onClick={() => removeLineItem(i)}
  title="Remove line"
  aria-label="Remove line"

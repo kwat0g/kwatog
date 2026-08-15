@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react';
+import { LuChevronRight } from '@/lib/icons';
 
 /**
  * Path-derived breadcrumbs. Splits the current pathname into segments
@@ -122,7 +122,7 @@ export function Breadcrumbs() {
  const last = i === crumbs.length - 1;
  return (
  <span key={c.to} className="flex items-center gap-1">
- {i > 0 && <ChevronRight size={12} className="text-subtle" />}
+ {i > 0 && <LuChevronRight size={12} className="text-subtle" />}
  {last ? (
  <span className="text-primary font-medium">{c.label}</span>
  ) : (

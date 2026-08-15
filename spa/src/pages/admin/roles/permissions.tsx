@@ -3,22 +3,22 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import {
-  Save,
-  ChevronDown,
-  ChevronRight,
-  Lock,
-  Search,
-  CheckSquare,
-  Square,
-  Eye,
-  RotateCcw,
-  Sparkles,
-  SlidersHorizontal,
-  PlusCircle,
-  MinusCircle,
-  X,
-  Check,
-} from 'lucide-react';
+  LuSave,
+  LuChevronDown,
+  LuChevronRight,
+  LuLock,
+  LuSearch,
+  LuSquareCheck,
+  LuSquare,
+  LuEye,
+  LuRotateCcw,
+  LuSparkles,
+  LuSlidersHorizontal,
+  LuCirclePlus,
+  LuCircleMinus,
+  LuX,
+  LuCheck,
+} from '@/lib/icons';
 import { rolesApi } from '@/api/admin/roles';
 import { formatDateTime } from '@/lib/formatDate';
 import { permissionsApi, type PermissionRow } from '@/api/admin/permissions';
@@ -354,7 +354,7 @@ export default function RolePermissionsPage() {
               <Button
                 variant="secondary"
                 size="sm"
-                icon={<RotateCcw size={14} />}
+                icon={<LuRotateCcw size={14} />}
                 onClick={resetToBaseline}
                 disabled={isSystem || save.isPending}
               >
@@ -367,7 +367,7 @@ export default function RolePermissionsPage() {
             <Button
               variant="primary"
               size="sm"
-              icon={<Save size={14} />}
+              icon={<LuSave size={14} />}
               loading={save.isPending}
               disabled={diff.total === 0 || save.isPending || isSystem}
               onClick={() => save.mutate()}
@@ -400,7 +400,7 @@ export default function RolePermissionsPage() {
               <Panel
                 title={
                   <span className="flex items-center gap-2 text-warning-fg">
-                    <Lock size={14} /> System role — read-only
+                    <LuLock size={14} /> System role — read-only
                   </span>
                 }
                 className="mb-4"
@@ -430,7 +430,7 @@ export default function RolePermissionsPage() {
                 title={
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-2 text-warning-fg">
-                      <SlidersHorizontal size={15} /> Unsaved Permission Changes Summary (
+                      <LuSlidersHorizontal size={15} /> Unsaved Permission Changes Summary (
                       {diff.total})
                     </span>
                     <button
@@ -438,7 +438,7 @@ export default function RolePermissionsPage() {
                       onClick={() => setShowDiffDrawer(false)}
                       className="text-muted hover:text-primary cursor-pointer p-1"
                     >
-                      <X size={14} />
+                      <LuX size={14} />
                     </button>
                   </div>
                 }
@@ -448,7 +448,7 @@ export default function RolePermissionsPage() {
                   {diff.added.length > 0 && (
                     <div>
                       <h4 className="flex items-center gap-1.5 font-mono text-xs font-medium text-success-fg uppercase tracking-wider mb-2">
-                        <PlusCircle size={14} /> Adding Permissions ({diff.added.length})
+                        <LuCirclePlus size={14} /> Adding Permissions ({diff.added.length})
                       </h4>
                       <ul className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                         {diff.added.map((slug) => {
@@ -469,7 +469,7 @@ export default function RolePermissionsPage() {
                   {diff.removed.length > 0 && (
                     <div>
                       <h4 className="flex items-center gap-1.5 font-mono text-xs font-medium text-danger-fg uppercase tracking-wider mb-2">
-                        <MinusCircle size={14} /> Removing Permissions ({diff.removed.length})
+                        <LuCircleMinus size={14} /> Removing Permissions ({diff.removed.length})
                       </h4>
                       <ul className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                         {diff.removed.map((slug) => {
@@ -515,7 +515,7 @@ export default function RolePermissionsPage() {
                       <Button
                         variant="secondary"
                         size="sm"
-                        icon={<Eye size={12} />}
+                        icon={<LuEye size={12} />}
                         onClick={() => applyPreset('read_only')}
                       >
                         Read-Only
@@ -523,7 +523,7 @@ export default function RolePermissionsPage() {
                       <Button
                         variant="secondary"
                         size="sm"
-                        icon={<Sparkles size={12} />}
+                        icon={<LuSparkles size={12} />}
                         onClick={() => applyPreset('standard_editor')}
                       >
                         Editor
@@ -531,7 +531,7 @@ export default function RolePermissionsPage() {
                       <Button
                         variant="secondary"
                         size="sm"
-                        icon={<CheckSquare size={12} />}
+                        icon={<LuSquareCheck size={12} />}
                         onClick={() => applyPreset('full_access')}
                       >
                         Grant All
@@ -539,7 +539,7 @@ export default function RolePermissionsPage() {
                       <Button
                         variant="secondary"
                         size="sm"
-                        icon={<Square size={12} />}
+                        icon={<LuSquare size={12} />}
                         onClick={() => applyPreset('clear_all')}
                       >
                         Clear All
@@ -557,7 +557,7 @@ export default function RolePermissionsPage() {
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     aria-label="Search permissions"
-                    prefix={<Search size={14} className="text-muted" />}
+                    prefix={<LuSearch size={14} className="text-muted" />}
                     containerClassName="sm:col-span-6"
                   />
                   <Select
@@ -634,9 +634,9 @@ export default function RolePermissionsPage() {
                       className="text-xs text-secondary hover:text-primary"
                     >
                       {allVisibleSelected ? (
-                        <Square size={13} className="mr-1" />
+                        <LuSquare size={13} className="mr-1" />
                       ) : (
-                        <CheckSquare size={13} className="mr-1" />
+                        <LuSquareCheck size={13} className="mr-1" />
                       )}
                       {allVisibleSelected
                         ? 'Deselect visible'
@@ -698,9 +698,9 @@ export default function RolePermissionsPage() {
                           )}
                         >
                           {isCollapsed ? (
-                            <ChevronRight size={16} className="text-muted" />
+                            <LuChevronRight size={16} className="text-muted" />
                           ) : (
-                            <ChevronDown size={16} className="text-muted" />
+                            <LuChevronDown size={16} className="text-muted" />
                           )}
                           <span className=" uppercase tracking-wider text-xs">{module}</span>
                           <span className="text-2xs font-mono text-muted font-normal">
@@ -829,7 +829,7 @@ export default function RolePermissionsPage() {
                                 <div className="shrink-0 flex items-center gap-2">
                                   {isGranted ? (
                                     <span className="hidden sm:inline-flex items-center gap-1 font-mono text-[10px] uppercase text-success-fg font-medium mr-2">
-                                      <Check size={12} /> Granted
+                                      <LuCheck size={12} /> Granted
                                     </span>
                                   ) : (
                                     <span className="hidden sm:inline-flex items-center gap-1 font-mono text-[10px] uppercase text-muted font-normal mr-2">

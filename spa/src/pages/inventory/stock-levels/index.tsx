@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { ArrowLeftRight } from 'lucide-react';
+import { LuArrowLeftRight } from '@/lib/icons';
 import { StockMovementsTab } from '@/pages/inventory/movements';
 import type { StockLevel } from '@/types/inventory';
 
@@ -71,7 +71,7 @@ export default function StockLevelsPage() {
  title={view === 'levels' ? 'Stock levels' : 'Stock movements'}
  subtitle={view === 'levels' ? (data ? `${data.meta.total} entries` : undefined) : undefined}
  actions={
- <Button variant="secondary" size="sm" icon={<ArrowLeftRight size={14} />}
+ <Button variant="secondary" size="sm" icon={<LuArrowLeftRight size={14} />}
  onClick={toggleView}>
  {view === 'levels' ? 'Movements' : 'Stock Levels'}
  </Button>

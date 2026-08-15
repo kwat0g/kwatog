@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Check, X } from 'lucide-react';
+import { LuCheck, LuX } from '@/lib/icons';
 import { loansApi } from '@/api/loans';
 import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
@@ -84,8 +84,8 @@ export default function LoanDetailPage() {
  <>
  {isPending && can('loans.approve') && (
  <>
- <Button variant="primary" size="xs" icon={<Check size={12} />} disabled={approve.isPending} loading={approve.isPending} onClick={() => setConfirmApprove(true)}>Approve</Button>
- <Button variant="danger" size="xs" icon={<X size={12} />} onClick={() => setReject(true)}>Reject</Button>
+ <Button variant="primary" size="xs" icon={<LuCheck size={12} />} disabled={approve.isPending} loading={approve.isPending} onClick={() => setConfirmApprove(true)}>Approve</Button>
+ <Button variant="danger" size="xs" icon={<LuX size={12} />} onClick={() => setReject(true)}>Reject</Button>
  </>
  )}
  {(isPending || loan.status === 'active') && can('loans.approve') && (

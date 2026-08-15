@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
-import { Plus, ShoppingCart, Zap } from 'lucide-react';
+import { LuPlus, LuShoppingCart, LuZap } from '@/lib/icons';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { vendorsApi } from '@/api/accounting/vendors';
@@ -127,7 +127,7 @@ export default function PurchaseRequestsListPage() {
  <div>
  <span className="font-mono">{r.pr_number}</span>
  {r.is_auto_generated && <Chip variant="warning" className="ml-2">AUTO</Chip>}
- {r.is_urgent && <Chip variant="danger" className="ml-1"><Zap size={10} className="inline mr-0.5" />URGENT</Chip>}
+ {r.is_urgent && <Chip variant="danger" className="ml-1"><LuZap size={10} className="inline mr-0.5" />URGENT</Chip>}
  </div>
  ) },
  { key: 'date', header: 'Date', cell: (r) => <span className="font-mono">{formatDate(r.date)}</span> },
@@ -136,7 +136,7 @@ export default function PurchaseRequestsListPage() {
  { key: 'priority', header: 'Priority', cell: (r) => (
  <span className="flex items-center gap-1">
  <Chip variant={priorityVariant[r.priority]}>{r.priority_label ?? r.priority}</Chip>
- {r.is_urgent && <Zap size={12} className="text-danger-fg" />}
+ {r.is_urgent && <LuZap size={12} className="text-danger-fg" />}
  </span>
  ) },
  { key: 'status', header: 'Status', cell: (r) => (
@@ -159,7 +159,7 @@ export default function PurchaseRequestsListPage() {
  <Button
  size="sm"
  variant="secondary"
- icon={<ShoppingCart size={13} />}
+ icon={<LuShoppingCart size={13} />}
  onClick={() => openConversion(r)}
  >
  Convert to PO
@@ -185,7 +185,7 @@ export default function PurchaseRequestsListPage() {
  <div>
  <PageHeader title="Purchase requests" subtitle={data ? `${data.meta.total} requests` : undefined}
  actions={can('purchasing.pr.create') ? (
- <Button variant="primary" size="xs" icon={<Plus size={14} />} onClick={() => navigate('/purchasing/purchase-requests/create')}>New PR</Button>
+ <Button variant="primary" size="xs" icon={<LuPlus size={14} />} onClick={() => navigate('/purchasing/purchase-requests/create')}>New PR</Button>
  ) : null} />
  <FilterBar filters={filterConfig} values={filters}
  onSearch={(s) => setFilters(f => ({ ...f, search: s, page: 1 }))}

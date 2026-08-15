@@ -13,7 +13,7 @@ import { useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { AxiosError } from 'axios';
-import { Plus, Trash2 } from 'lucide-react';
+import { LuPlus, LuTrash2 } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { onFormInvalid } from '@/lib/formErrors';
 import { Button } from '@/components/ui/Button';
@@ -258,7 +258,7 @@ export default function EditSalesOrderPage() {
  variant="ghost"
  size="sm"
  iconOnly
- icon={<Trash2 size={14} />}
+ icon={<LuTrash2 size={14} />}
  aria-label="Remove line"
  onClick={() => remove(i)}
  disabled={fields.length === 1}
@@ -276,7 +276,7 @@ export default function EditSalesOrderPage() {
  type="button"
  variant="secondary"
  size="sm"
- icon={<Plus size={14} />}
+ icon={<LuPlus size={14} />}
  onClick={() => append({ product_id: '', quantity: '', delivery_date: '' })}
  >
  Add line

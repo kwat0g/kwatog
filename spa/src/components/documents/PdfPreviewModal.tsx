@@ -7,7 +7,7 @@
  * browser will not retain them in disk cache after the modal closes.
  */
 
-import { Download } from 'lucide-react';
+import { LuDownload } from '@/lib/icons';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { downloadAuthenticatedFile } from '@/api/download';
@@ -42,7 +42,7 @@ export function PdfPreviewModal({ isOpen, onClose, document }: PdfPreviewModalPr
  </span>
  )}
  </div>
- <Button variant="primary" size="sm" icon={<Download size={14} />}
+ <Button variant="primary" size="sm" icon={<LuDownload size={14} />}
  onClick={() => void downloadAuthenticatedFile(document.download_url, { filename: document.file_name, errorMessage: 'Failed to download document.' })}>
  Download
  </Button>

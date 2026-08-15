@@ -13,7 +13,7 @@
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Search, Workflow, ArrowRight, AlertTriangle, Clock, RotateCcw } from 'lucide-react';
+import { LuSearch, LuWorkflow, LuArrowRight, LuTriangleAlert, LuClock, LuRotateCcw } from '@/lib/icons';
 import { salesOrdersApi } from '@/api/crm/salesOrders';
 import { chainApi } from '@/api/chain';
 import { formatPeso, formatInt } from '@/lib/formatNumber';
@@ -130,7 +130,7 @@ function ChainPicker({ onPick }: { onPick: (id: string) => void }) {
  <Input
  label="Search"
  placeholder="Search SO number or customer…"
- prefix={<Search size={12} />}
+ prefix={<LuSearch size={12} />}
  value={search}
  onChange={(e) => setSearch(e.target.value)}
  autoFocus
@@ -154,12 +154,12 @@ function ChainPicker({ onPick }: { onPick: (id: string) => void }) {
  onClick={() => onPick(so.id)}
  className={cn('flex w-full items-center gap-3 py-2.5 text-left transition-colors hover:bg-subtle cursor-pointer', focusRingInset)}
  >
- <Workflow size={15} className="shrink-0 text-muted" />
+ <LuWorkflow size={15} className="shrink-0 text-muted" />
  <span className="font-mono text-sm text-primary">{so.so_number}</span>
  <span className="flex-1 truncate text-sm text-secondary">{so.customer?.name ?? '—'}</span>
  <Chip variant={SO_STATUS_VARIANT[so.status] ?? 'neutral'}>{so.status_label}</Chip>
  <span className="hidden font-mono text-xs tabular-nums text-muted sm:inline">{peso(so.total_amount)}</span>
- <ArrowRight size={14} className="shrink-0 text-text-subtle" />
+ <LuArrowRight size={14} className="shrink-0 text-text-subtle" />
  </button>
  ))
  )}
@@ -176,7 +176,7 @@ function ChainPicker({ onPick }: { onPick: (id: string) => void }) {
  ) : bottlenecks.isError ? (
  <div className="py-4">
  <EmptyState icon="alert-circle" title="Couldn’t load bottlenecks" description="Try refreshing." action={
- <LinkButton onClick={() => bottlenecks.refetch()} icon={<RotateCcw size={13} />} className="text-sm">
+ <LinkButton onClick={() => bottlenecks.refetch()} icon={<LuRotateCcw size={13} />} className="text-sm">
  Retry
  </LinkButton>
  } />
@@ -200,12 +200,12 @@ function ChainPicker({ onPick }: { onPick: (id: string) => void }) {
  to={bottleneckHref(row)}
  className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-subtle"
  >
- <AlertTriangle size={13} className="shrink-0 text-warning-fg" />
+ <LuTriangleAlert size={13} className="shrink-0 text-warning-fg" />
  <span className="font-mono text-xs text-primary">{row.doc_number}</span>
  <span className="flex-1 truncate text-xs text-secondary">{row.label}</span>
  {row.hours_stuck != null && (
  <span className="inline-flex items-center gap-1 font-mono text-2xs tabular-nums text-muted">
- <Clock size={11} /> {Math.round(row.hours_stuck)}h
+ <LuClock size={11} /> {Math.round(row.hours_stuck)}h
  </span>
  )}
  </Link>
@@ -244,7 +244,7 @@ function ChainDetail({ id, onClear }: { id: string; onClear: () => void }) {
  title="Couldn’t load that order"
  description="It may have been removed, or you may not have access."
  action={
- <LinkButton onClick={onClear} icon={<ArrowRight size={13} className="rotate-180" />} className="text-sm">
+ <LinkButton onClick={onClear} icon={<LuArrowRight size={13} className="rotate-180" />} className="text-sm">
  Back to search
  </LinkButton>
  }
@@ -262,7 +262,7 @@ function ChainDetail({ id, onClear }: { id: string; onClear: () => void }) {
  <span className="font-mono text-lg font-medium text-primary">{so.so_number}</span>
  <Chip variant={SO_STATUS_VARIANT[so.status] ?? 'neutral'}>{so.status_label}</Chip>
  </div>
- <Button variant="secondary" size="md" icon={<Search size={13} />} onClick={onClear}>
+ <Button variant="secondary" size="md" icon={<LuSearch size={13} />} onClick={onClear}>
  Track another
  </Button>
  </div>
@@ -293,7 +293,7 @@ function ChainDetail({ id, onClear }: { id: string; onClear: () => void }) {
  </dl>
  <div className="mt-4 border-t border-subtle pt-3">
  <Link to={`/crm/sales-orders/${so.id}`} className="inline-flex items-center gap-1.5 text-sm text-accent hover:underline">
- Open full sales order <ArrowRight size={13} />
+ Open full sales order <LuArrowRight size={13} />
  </Link>
  </div>
  </Panel>

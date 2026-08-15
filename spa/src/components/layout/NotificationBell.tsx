@@ -13,7 +13,7 @@
  * the websocket pops a toast + invalidates the query; the poll is the fallback.
  */
 import { useEffect, useRef, useState } from 'react';
-import { Bell } from 'lucide-react';
+import { LuBell } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Link, useNavigate } from 'react-router-dom';
@@ -104,7 +104,7 @@ export function NotificationBell() {
  onClick={() => setOpen((v) => !v)}
  className="relative text-muted hover:text-primary"
  >
- <Bell size={14} />
+ <LuBell size={14} />
  {unread > 0 && (
  <span
  className="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-accent text-accent-fg text-2xs font-medium font-mono tabular-nums leading-none"

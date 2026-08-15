@@ -5,7 +5,7 @@ import { cn } from '@/lib/cn';
  * 60s polling if Reverb is unavailable.
  */
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Activity } from 'lucide-react';
+import { LuActivity } from '@/lib/icons';
 import { Link, useNavigate } from 'react-router-dom';
 import { productionDashboardApi } from '@/api/production/dashboard';
 import { Button } from '@/components/ui/Button';
@@ -275,7 +275,7 @@ export default function ProductionDashboardPage() {
         </div>
 
         <div className="text-2xs text-muted flex items-center gap-1">
-          <Activity size={10} />
+          <LuActivity size={10} />
           Live updates via WebSocket on production.dashboard channel.
         </div>
       </div>

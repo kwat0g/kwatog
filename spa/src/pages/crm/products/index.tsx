@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
-import { ArchiveRestore, Pencil, Plus, Trash2 } from 'lucide-react';
+import { LuArchiveRestore, LuPencil, LuPlus, LuTrash2 } from '@/lib/icons';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { productsApi, type ProductListParams } from '@/api/crm/products';
@@ -89,7 +89,7 @@ export default function ProductsListPage() {
  variant="ghost"
  size="sm"
  iconOnly
- icon={<Pencil size={14} />}
+ icon={<LuPencil size={14} />}
  aria-label={`Edit ${r.part_number}`}
  onClick={() => navigate(`/crm/products/${r.id}/edit`)}
  className="text-muted hover:text-primary"
@@ -102,7 +102,7 @@ export default function ProductsListPage() {
   aria-label={`${scope === 'only' ? 'Restore' : 'Delete'} ${r.part_number}`}
   onClick={() => scope === 'only' ? restore.mutate(r.id) : setConfirmDelete(r)}
   className={scope === 'only' ? 'text-muted hover:text-primary' : 'text-muted hover:text-danger-fg'}
-  icon={scope === 'only' ? <ArchiveRestore size={14} /> : <Trash2 size={14} />}
+  icon={scope === 'only' ? <LuArchiveRestore size={14} /> : <LuTrash2 size={14} />}
   />
   </div>
   ) }] : []),
@@ -123,7 +123,7 @@ export default function ProductsListPage() {
  title="Products"
  subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'product' : 'products'}` : undefined}
  actions={canManage ? (
- <Button variant="primary" size="xs" icon={<Plus size={14} />} onClick={() => navigate('/crm/products/create')}>
+ <Button variant="primary" size="xs" icon={<LuPlus size={14} />} onClick={() => navigate('/crm/products/create')}>
  New product
  </Button>
  ) : null}

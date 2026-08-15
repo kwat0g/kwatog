@@ -1,0 +1,34 @@
+[
+  { "method": "GET", "path": "/asset-transfers/options", "status": "scope_cut", "reason": "Legacy asset-transfer client is not mounted by the current product surface." },
+  { "method": "GET", "path": "/asset-transfers", "status": "scope_cut", "reason": "Legacy asset-transfer client is not mounted by the current product surface." },
+  { "method": "GET", "path": "/asset-transfers/{value}", "status": "scope_cut", "reason": "Legacy asset-transfer client is not mounted by the current product surface." },
+  { "method": "POST", "path": "/asset-transfers", "status": "scope_cut", "reason": "Legacy asset-transfer client is not mounted by the current product surface." },
+  { "method": "POST", "path": "/asset-transfers/{value}/approve", "status": "scope_cut", "reason": "Legacy asset-transfer client is not mounted by the current product surface." },
+  { "method": "POST", "path": "/asset-transfers/{value}/reject", "status": "scope_cut", "reason": "Legacy asset-transfer client is not mounted by the current product surface." },
+
+  { "method": "GET", "path": "/hr/directory", "status": "scope_cut", "reason": "Directory client is retained for a deferred HR surface and has no reachable route." },
+  { "method": "GET", "path": "/hr/directory/org-chart", "status": "scope_cut", "reason": "Directory client is retained for a deferred HR surface and has no reachable route." },
+
+  { "method": "GET", "path": "/hr/employees/{value}/property", "status": "scope_cut", "reason": "Employee-property CRUD client is deferred; property effects are handled through controlled separation flows." },
+  { "method": "POST", "path": "/hr/employees/{value}/property", "status": "scope_cut", "reason": "Employee-property CRUD client is deferred; property effects are handled through controlled separation flows." },
+  { "method": "PUT", "path": "/hr/employees/{value}/property/{value}", "status": "scope_cut", "reason": "Employee-property CRUD client is deferred; property effects are handled through controlled separation flows." },
+  { "method": "GET", "path": "/hr/employees/{value}/property/{value}", "status": "scope_cut", "reason": "Employee-property CRUD client is deferred; property effects are handled through controlled separation flows." },
+  { "method": "DELETE", "path": "/hr/employees/{value}/property/{value}", "status": "scope_cut", "reason": "Employee-property CRUD client is deferred; property effects are handled through controlled separation flows." },
+  { "method": "PATCH", "path": "/hr/employees/{value}/property/{value}/restore", "status": "scope_cut", "reason": "Employee-property CRUD client is deferred; property effects are handled through controlled separation flows." },
+
+  { "method": "POST", "path": "/inventory/stock-transfers", "status": "superseded", "reason": "The current inventory transfer workflow uses transfer orders; this legacy mutation is intentionally unreachable." },
+
+  { "method": "GET", "path": "/maintenance/condition-readings/options", "status": "scope_cut", "reason": "Condition-reading client belongs to a deferred maintenance monitoring surface." },
+  { "method": "GET", "path": "/maintenance/condition-readings", "status": "scope_cut", "reason": "Condition-reading client belongs to a deferred maintenance monitoring surface." },
+  { "method": "POST", "path": "/maintenance/condition-readings", "status": "scope_cut", "reason": "Condition-reading client belongs to a deferred maintenance monitoring surface." },
+  { "method": "GET", "path": "/maintenance/condition-readings/trend", "status": "scope_cut", "reason": "Condition-reading client belongs to a deferred maintenance monitoring surface." },
+  { "method": "GET", "path": "/maintenance/condition-readings/health-snapshot", "status": "scope_cut", "reason": "Condition-reading client belongs to a deferred maintenance monitoring surface." },
+
+  { "method": "GET", "path": "/purchasing/pr-templates", "status": "scope_cut", "reason": "Purchase-request templates are a deferred authoring surface and are not reachable in the current release." },
+  { "method": "GET", "path": "/purchasing/pr-templates/active", "status": "scope_cut", "reason": "Purchase-request templates are a deferred authoring surface and are not reachable in the current release." },
+  { "method": "GET", "path": "/purchasing/pr-templates/{value}", "status": "scope_cut", "reason": "Purchase-request templates are a deferred authoring surface and are not reachable in the current release." },
+  { "method": "POST", "path": "/purchasing/pr-templates", "status": "scope_cut", "reason": "Purchase-request templates are a deferred authoring surface and are not reachable in the current release." },
+  { "method": "PUT", "path": "/purchasing/pr-templates/{value}", "status": "scope_cut", "reason": "Purchase-request templates are a deferred authoring surface and are not reachable in the current release." },
+  { "method": "DELETE", "path": "/purchasing/pr-templates/{value}", "status": "scope_cut", "reason": "Purchase-request templates are a deferred authoring surface and are not reachable in the current release." },
+  { "method": "PATCH", "path": "/purchasing/pr-templates/{value}/restore", "status": "scope_cut", "reason": "Purchase-request templates are a deferred authoring surface and are not reachable in the current release." }
+]

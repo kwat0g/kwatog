@@ -1,6 +1,6 @@
 import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { RefreshCw } from 'lucide-react';
+import { LuRefreshCw } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { supplierPerformanceApi } from '@/api/purchasing/supplier-performance';
 import { Button } from '@/components/ui/Button';
@@ -64,7 +64,7 @@ export default function SupplierPerformancePage() {
           <Button
             variant="secondary"
             size="sm"
-            icon={<RefreshCw size={14} />}
+            icon={<LuRefreshCw size={14} />}
             disabled={recompute.isPending}
             onClick={() => recompute.mutate()}
           >

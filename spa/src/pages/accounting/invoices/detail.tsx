@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { onFormInvalid } from '@/lib/formErrors';
-import { Printer, Coins, Ban, CheckCircle2 } from 'lucide-react';
+import { LuPrinter, LuCoins, LuBan, LuCircleCheck } from '@/lib/icons';
 import { invoicesApi } from '@/api/accounting/invoices';
 import { accountingOptionsApi } from '@/api/accounting/options';
 import { downloadAuthenticatedFile } from '@/api/download';
@@ -128,17 +128,17 @@ export default function InvoiceDetailPage() {
  ]}
  actions={
  <div className="flex gap-1.5">
- <Button variant="secondary" size="sm" icon={<Printer size={14} />} onClick={() => void downloadAuthenticatedFile(invoicesApi.pdfUrl(invoice.id), { openInNewTab: true, errorMessage: 'Failed to generate invoice PDF.' })}>Print</Button>
+ <Button variant="secondary" size="sm" icon={<LuPrinter size={14} />} onClick={() => void downloadAuthenticatedFile(invoicesApi.pdfUrl(invoice.id), { openInNewTab: true, errorMessage: 'Failed to generate invoice PDF.' })}>Print</Button>
  {isDraft && can('accounting.invoices.create') && (
- <Button variant="primary" size="sm" icon={<CheckCircle2 size={14} />} onClick={() => setShowFinalize(true)} disabled={finalizeMut.isPending}>
+ <Button variant="primary" size="sm" icon={<LuCircleCheck size={14} />} onClick={() => setShowFinalize(true)} disabled={finalizeMut.isPending}>
  Finalize
  </Button>
  )}
  {isOpen && can('accounting.invoices.collect') && (
- <Button variant="primary" size="sm" icon={<Coins size={14} />} onClick={() => setShowCollect(true)}>Record collection</Button>
+ <Button variant="primary" size="sm" icon={<LuCoins size={14} />} onClick={() => setShowCollect(true)}>Record collection</Button>
  )}
  {invoice.amount_paid === '0.00' && invoice.status !== 'cancelled' && can('accounting.invoices.update') && (
- <Button variant="danger" size="sm" icon={<Ban size={14} />} onClick={() => setShowCancelConfirm(true)}>Cancel</Button>
+ <Button variant="danger" size="sm" icon={<LuBan size={14} />} onClick={() => setShowCancelConfirm(true)}>Cancel</Button>
  )}
  </div>
  }
@@ -181,7 +181,8 @@ export default function InvoiceDetailPage() {
  </Panel>
 
  <Panel title="Line items">
- <table className={tableCls}>
+ <div className="overflow-x-auto">
+ <table className={`${tableCls} min-w-[680px]`}>
  <thead>
  <tr className={theadTrCls}>
  <Th>#</Th>
@@ -208,6 +209,7 @@ export default function InvoiceDetailPage() {
  <tr className={totalsTrCls}><Td align="right" mono colSpan={5}>Total</Td><Td align="right" mono>{formatPeso(invoice.total_amount)}</Td></tr>
  </tbody>
  </table>
+ </div>
  </Panel>
  </div>
 

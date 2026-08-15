@@ -332,7 +332,7 @@ export const EMPTY_STATE_COPY: Record<string, EmptyStateCopy> = {
  description:
  'Users are system accounts with permission to log in. Most users are auto-provisioned from employee records.',
  permission: 'admin.users.manage',
- actionLabel: 'Add First User',
+ actionLabel: 'Add First LuUser',
  actionRoute: '/admin/users/create',
  },
  '/admin/audit-logs': {

@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { LuChevronDown, LuChevronRight } from '@/lib/icons';
 import { accountsApi } from '@/api/accounting/accounts';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -167,7 +167,7 @@ function TreeRow({
  aria-expanded={isOpen}
  className={cn('text-muted hover:text-primary cursor-pointer rounded', focusRing)}
  >
- {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+ {isOpen ? <LuChevronDown size={12} /> : <LuChevronRight size={12} />}
  </button>
  ) : (
  <span className="w-3" />

@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { factoryApi } from '@/api/factory';
 import toast from 'react-hot-toast';
-import { ArrowLeft } from 'lucide-react';
+import { LuArrowLeft } from '@/lib/icons';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/Input';
@@ -85,7 +85,7 @@ export default function RecordOutput() {
           focusRing,
         )}
       >
-        <ArrowLeft className="w-4 h-4" />
+        <LuArrowLeft className="w-4 h-4" />
         Back to orders
       </Link>
 

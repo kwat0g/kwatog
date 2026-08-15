@@ -8,7 +8,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
-import { Check, Ban, Plus } from 'lucide-react';
+import { LuCheck, LuBan, LuPlus } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import type { AxiosError } from 'axios';
 import { ncrsApi } from '@/api/quality/ncrs';
@@ -206,12 +206,12 @@ export default function NcrDetailPage() {
  actions={
  <div className="flex items-center gap-2">
  {!isTerminal && data.disposition && can('quality.ncr.manage') && (
- <Button variant="primary" size="sm" icon={<Check size={14} />} onClick={() => setConfirmClose(true)}>
+ <Button variant="primary" size="sm" icon={<LuCheck size={14} />} onClick={() => setConfirmClose(true)}>
  Close NCR
  </Button>
  )}
  {!isTerminal && can('quality.ncr.manage') && (
- <Button variant="secondary" size="sm" icon={<Ban size={14} />} onClick={() => setConfirmCancel(true)}>
+ <Button variant="secondary" size="sm" icon={<LuBan size={14} />} onClick={() => setConfirmCancel(true)}>
  Cancel
  </Button>
  )}
@@ -319,7 +319,7 @@ export default function NcrDetailPage() {
  <Button
  variant="secondary"
  size="sm"
- icon={<Plus size={14} />}
+ icon={<LuPlus size={14} />}
  disabled={!actionDesc}
  loading={addAction.isPending}
  onClick={() => addAction.mutate()}

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, XCircle, Calendar, Download, MessageSquare, UserPlus } from 'lucide-react';
+import { LuArrowRight, LuCircleX, LuCalendar, LuDownload, LuMessageSquare, LuUserPlus } from '@/lib/icons';
 import { recruitmentApi } from '@/api/recruitment';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -138,19 +138,19 @@ export default function ApplicationDetailPage() {
  <>
  <Button
  size="sm"
- icon={<ArrowRight size={12} />}
+ icon={<LuArrowRight size={12} />}
  onClick={() => application.stage === 'screening' ? setShowAdvanceInterview(true) : setShowAdvanceConfirm(true)}
  disabled={advanceMutation.isPending}
  loading={advanceMutation.isPending}
  >
  {nextStage ? `Move to ${stageLabel.get(nextStage) ?? nextStage}` : 'Advance'}
  </Button>
- <Button variant="danger" size="xs" icon={<XCircle size={12} />} onClick={() => setShowRejectDialog(true)}>
+ <Button variant="danger" size="xs" icon={<LuCircleX size={12} />} onClick={() => setShowRejectDialog(true)}>
  Reject
  </Button>
  </>
  ) : application.stage === 'hired' && can('hr.recruitment.hire') && !application.converted_employee ? (
- <Button size="sm" icon={<UserPlus size={12} />} onClick={() => navigate(`/hr/employees/create?from_application=${id}`)}>
+ <Button size="sm" icon={<LuUserPlus size={12} />} onClick={() => navigate(`/hr/employees/create?from_application=${id}`)}>
  Convert to Employee
  </Button>
  ) : undefined
@@ -258,7 +258,7 @@ export default function ApplicationDetailPage() {
  <Button
  variant="secondary"
  size="sm"
- icon={<Download size={12} />}
+ icon={<LuDownload size={12} />}
  onClick={() => {
  recruitmentApi.downloadResume(id!).then((res) => {
  const url = URL.createObjectURL(res.data);
@@ -280,7 +280,7 @@ export default function ApplicationDetailPage() {
  title={`Interviews (${application.interviews?.length ?? 0})`}
  actions={
  can('hr.recruitment.applications') && application.stage === 'interview' ? (
- <Button variant="ghost" size="sm" icon={<Calendar size={12} />} onClick={() => setShowInterviewForm(!showInterviewForm)}>
+ <Button variant="ghost" size="sm" icon={<LuCalendar size={12} />} onClick={() => setShowInterviewForm(!showInterviewForm)}>
  Schedule
  </Button>
  ) : undefined
@@ -354,7 +354,7 @@ export default function ApplicationDetailPage() {
  <Panel
  title={
  <span className="flex items-center gap-1.5">
- <MessageSquare size={14} />
+ <LuMessageSquare size={14} />
  Notes ({application.notes?.length ?? 0})
  </span>
  }

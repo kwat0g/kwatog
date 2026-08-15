@@ -1,7 +1,7 @@
 import { cn } from '@/lib/cn';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Pencil, Plus } from 'lucide-react';
+import { LuPencil, LuPlus } from '@/lib/icons';
 import { customersApi } from '@/api/accounting/customers';
 import { invoicesApi } from '@/api/accounting/invoices';
 import { priceAgreementsApi } from '@/api/crm/priceAgreements';
@@ -125,7 +125,7 @@ export default function CustomerDetailPage() {
               <Button
                 variant="secondary"
                 size="sm"
-                icon={<Plus size={14} />}
+                icon={<LuPlus size={14} />}
                 onClick={() => navigate(`/accounting/invoices/create?customer_id=${customer.id}`)}
               >
                 New invoice
@@ -135,7 +135,7 @@ export default function CustomerDetailPage() {
               <Button
                 variant="primary"
                 size="sm"
-                icon={<Pencil size={14} />}
+                icon={<LuPencil size={14} />}
                 onClick={() => navigate(`/accounting/customers/${customer.id}/edit`)}
               >
                 Edit

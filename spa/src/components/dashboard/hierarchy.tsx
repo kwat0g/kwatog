@@ -23,7 +23,7 @@
  * shouting tiles have no lede. `StatBand` takes exactly one `lead`.
  */
 import { type ReactNode } from 'react';
-import { AlertTriangle, AlertCircle, CheckCircle2, ChevronRight, Info, Minus } from 'lucide-react';
+import { LuTriangleAlert, LuCircleAlert, LuCircleCheck, LuChevronRight, LuInfo, LuMinus } from '@/lib/icons';
 import { cn } from '@/lib/cn';
 import { Chip } from '@/components/ui/Chip';
 import { SEVERITY, type Severity } from './severity';
@@ -31,11 +31,11 @@ import { SEVERITY, type Severity } from './severity';
 /* ───────────────────────── Severity badge ───────────────────────── */
 
 const SEVERITY_ICON = {
-  critical: AlertCircle,
-  warning: AlertTriangle,
-  info: Info,
-  ok: CheckCircle2,
-  neutral: Minus,
+  critical: LuCircleAlert,
+  warning: LuTriangleAlert,
+  info: LuInfo,
+  ok: LuCircleCheck,
+  neutral: LuMinus,
 } as const;
 
 /**
@@ -238,7 +238,7 @@ export function DashTail({
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-sm',
         )}
       >
-        <ChevronRight
+        <LuChevronRight
           size={14}
           aria-hidden="true"
           className="shrink-0 transition-transform duration-fast group-open:rotate-90"

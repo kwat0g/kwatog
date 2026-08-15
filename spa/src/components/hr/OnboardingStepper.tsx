@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Check } from 'lucide-react';
+import { LuCheck } from '@/lib/icons';
 import { Panel, SkeletonBlock } from '@/components/ui';
 import { onboardingApi } from '@/api/hr/onboarding';
 import { cn } from '@/lib/cn';
@@ -72,7 +72,7 @@ function StepNode({ step }: { step: OnboardingStep; isLast: boolean }) {
  )}
  aria-hidden
  >
- {done ? <Check size={10} strokeWidth={3} /> : null}
+ {done ? <LuCheck size={10} strokeWidth={3} /> : null}
  </span>
  <div className="min-w-0">
  <div className={cn('text-xs leading-tight', done ? 'text-primary' : 'text-subtle')}>

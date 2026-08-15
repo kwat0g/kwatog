@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { workOrdersApi } from '@/api/maintenance/workOrders';
 import { useAuthStore } from '@/stores/authStore';
-import { RefreshCw, Clock, AlertTriangle } from 'lucide-react';
+import { LuRefreshCw, LuClock, LuTriangleAlert } from '@/lib/icons';
 import { formatDate } from '@/lib/formatDate';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -57,7 +57,7 @@ export default function MobileMaintenanceList() {
  variant="ghost"
  size="lg"
  className="min-h-[44px] text-secondary"
- icon={<RefreshCw className={cn('w-4 h-4', isFetching && 'animate-spin')} />}
+ icon={<LuRefreshCw className={cn('w-4 h-4', isFetching && 'animate-spin')} />}
  disabled={isFetching}
  onClick={() => refetch()}
  >
@@ -94,7 +94,7 @@ export default function MobileMaintenanceList() {
  variant="secondary"
  size="lg"
  className="min-h-[44px]"
- icon={<RefreshCw className="w-4 h-4" />}
+ icon={<LuRefreshCw className="w-4 h-4" />}
  onClick={() => refetch()}
  >
  Refresh
@@ -112,7 +112,7 @@ export default function MobileMaintenanceList() {
  <div className="flex items-center justify-between gap-2">
  <span className="font-mono tabular-nums text-sm font-medium">{wo.mwo_number}</span>
  <Chip variant={maintenancePriorityVariant[wo.priority]} className="gap-1">
- {wo.priority === 'critical' && <AlertTriangle className="w-3 h-3" aria-hidden />}
+ {wo.priority === 'critical' && <LuTriangleAlert className="w-3 h-3" aria-hidden />}
  {wo.priority_label ?? wo.priority}
  </Chip>
  </div>
@@ -128,7 +128,7 @@ export default function MobileMaintenanceList() {
  <span>{wo.assignee ? `Assigned: ${wo.assignee.name}` : 'Unassigned'}</span>
  {wo.created_at && (
  <span className="inline-flex items-center gap-1 font-mono tabular-nums">
- <Clock className="w-3 h-3" aria-hidden />
+ <LuClock className="w-3 h-3" aria-hidden />
  {formatDate(wo.created_at)}
  </span>
  )}

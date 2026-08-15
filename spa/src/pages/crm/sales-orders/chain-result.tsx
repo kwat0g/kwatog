@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, CheckCircle, ExternalLink, Info, Package, ShoppingCart } from 'lucide-react';
+import { LuTriangleAlert, LuCircleCheck, LuExternalLink, LuInfo, LuPackage, LuShoppingCart } from '@/lib/icons';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { Modal, ModalFooter } from '@/components/ui/Modal';
@@ -37,7 +37,7 @@ function SchedulingConflictsSection({ conflicts }: { conflicts: SoChainResult['s
  return (
  <div>
  <h4 className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-warning-fg font-medium mb-2">
- <AlertTriangle size={14} />
+ <LuTriangleAlert size={14} />
  Scheduling Conflicts ({conflicts.length})
  </h4>
  <div className="space-y-1.5">
@@ -65,19 +65,19 @@ function MaterialPlanningSection({ shortages, prs_created }: { shortages: number
  return (
  <div>
  <h4 className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted font-medium mb-2">
- <ShoppingCart size={14} />
+ <LuShoppingCart size={14} />
  Material Planning
  </h4>
  <div className="text-sm space-y-1">
  {shortages > 0 && (
  <p className="flex items-center gap-1.5 text-warning-fg">
- <AlertTriangle size={14} className="shrink-0" />
+ <LuTriangleAlert size={14} className="shrink-0" />
  {shortages} material shortage{shortages > 1 ? 's' : ''} detected
  </p>
  )}
  {prs_created > 0 && (
  <p className="flex items-center gap-1.5 text-muted">
- <CheckCircle size={14} className="shrink-0" />
+ <LuCircleCheck size={14} className="shrink-0" />
  {prs_created} Purchase Request{prs_created > 1 ? 's' : ''} auto-created
  </p>
  )}
@@ -119,13 +119,13 @@ export function ChainResultModal({ chainResult, onClose }: ChainResultModalProps
  <div className="py-4 space-y-4">
  {/* Success header */}
  <div className="flex items-center gap-2 text-sm">
- <CheckCircle size={16} className="text-success-fg" />
+ <LuCircleCheck size={16} className="text-success-fg" />
  <span className="text-success-fg font-medium">{chainResult.so_number} confirmed</span>
  </div>
 
  {planningQueued && (
  <div className="flex items-start gap-2 border border-info bg-info-bg rounded-md px-3 py-2.5 text-sm">
- <Info size={16} className="text-info-fg mt-0.5 shrink-0" />
+ <LuInfo size={16} className="text-info-fg mt-0.5 shrink-0" />
  <span className="text-muted">MRP material and work-order planning is queued and will update shortly.</span>
  </div>
  )}
@@ -133,7 +133,7 @@ export function ChainResultModal({ chainResult, onClose }: ChainResultModalProps
  {/* Warning banner for issues */}
  {(hasConflicts || hasManualWos) && (
  <div className="flex items-start gap-2 border border-warning bg-warning-bg rounded-md px-3 py-2.5 text-sm">
- <Info size={16} className="text-warning-fg mt-0.5 shrink-0" />
+ <LuInfo size={16} className="text-warning-fg mt-0.5 shrink-0" />
  <div className="text-muted">
  {hasManualWos && (
  <span>{chainResult.needs_manual} work order{chainResult.needs_manual > 1 ? 's' : ''} need manual machine assignment. </span>
@@ -148,7 +148,7 @@ export function ChainResultModal({ chainResult, onClose }: ChainResultModalProps
  {/* Work Orders summary */}
  <div>
  <h4 className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted font-medium mb-2">
- <Package size={14} />
+ <LuPackage size={14} />
  Work Orders ({chainResult.work_orders_created})
  </h4>
  {chainResult.work_orders.length > 0 ? (
@@ -175,10 +175,10 @@ export function ChainResultModal({ chainResult, onClose }: ChainResultModalProps
 
  {/* Actions */}
  <ModalFooter>
- <Button variant="secondary" size="sm" icon={<ExternalLink size={14} />} onClick={() => { onClose(); navigate('/production/work-orders'); }}>
+ <Button variant="secondary" size="sm" icon={<LuExternalLink size={14} />} onClick={() => { onClose(); navigate('/production/work-orders'); }}>
  View Work Orders
  </Button>
- <Button variant="secondary" size="sm" icon={<ExternalLink size={14} />} onClick={() => { onClose(); navigate('/mrp/plans'); }}>
+ <Button variant="secondary" size="sm" icon={<LuExternalLink size={14} />} onClick={() => { onClose(); navigate('/mrp/plans'); }}>
  View MRP Plan
  </Button>
  <Button variant="primary" size="sm" onClick={onClose}>
@@ -221,7 +221,7 @@ export function ChainErrorPanel({ error, onDismiss }: ChainErrorPanelProps) {
  <div className="border border-danger/30 bg-danger-bg/5 rounded-md px-4 py-3 space-y-2">
  <div className="flex items-start justify-between gap-2">
  <div className="flex items-start gap-2">
- <AlertTriangle size={16} className="text-danger-fg mt-0.5 shrink-0" />
+ <LuTriangleAlert size={16} className="text-danger-fg mt-0.5 shrink-0" />
  <div>
  <p className="text-sm font-medium text-danger-fg">Confirmation Failed</p>
  <p className="text-sm text-muted mt-1">{error.message}</p>

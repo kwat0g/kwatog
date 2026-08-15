@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { LuPlus } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { assetTransfersApi, type AssetTransferListParams } from '@/api/assets';
 import { Button } from '@/components/ui/Button';
@@ -113,7 +113,7 @@ export default function AssetTransfersListPage() {
  subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'transfer' : 'transfers'}` : undefined}
  actions={
  can('assets.transfer') ? (
- <Button variant="primary" size="xs" icon={<Plus size={14} />} onClick={() => navigate('/assets/transfers/create')}>
+ <Button variant="primary" size="xs" icon={<LuPlus size={14} />} onClick={() => navigate('/assets/transfers/create')}>
  New transfer
  </Button>
  ) : undefined

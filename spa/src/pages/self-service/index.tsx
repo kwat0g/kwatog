@@ -12,15 +12,15 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  Calendar,
-  FileText,
-  Receipt,
-  Clock,
-  FolderOpen,
-  Wallet,
-  ArrowRight,
-  CalendarDays,
-} from 'lucide-react';
+  LuCalendar,
+  LuFileText,
+  LuReceipt,
+  LuClock,
+  LuFolderOpen,
+  LuWallet,
+  LuArrowRight,
+  LuCalendarDays,
+} from '@/lib/icons';
 import { dashboardsApi } from '@/api/dashboards';
 import { selfServiceApi } from '@/api/self-service';
 import { useAuthStore } from '@/stores/authStore';
@@ -213,41 +213,41 @@ function QuickActionsPanel({ payslipSubtitle }: { payslipSubtitle: string }) {
     payroll &&
       can('payroll.view') && {
         to: '/self-service/payslips',
-        Icon: Receipt,
+        Icon: LuReceipt,
         title: 'Payslips',
         subtitle: payslipSubtitle,
       },
     leave && {
       to: '/self-service/leave',
-      Icon: FileText,
+      Icon: LuFileText,
       title: 'File a leave request',
       subtitle: 'Request leave or check approval status',
     },
     attendance && {
       to: '/self-service/overtime',
-      Icon: Clock,
+      Icon: LuClock,
       title: 'Apply for overtime',
       subtitle: 'Request OT and track approval',
     },
     attendance && {
       to: '/self-service/dtr',
-      Icon: Calendar,
+      Icon: LuCalendar,
       title: 'My attendance',
       subtitle: 'Daily time record this month',
     },
     loans && {
       to: '/self-service/loans',
-      Icon: Wallet,
+      Icon: LuWallet,
       title: 'Loans & cash advances',
       subtitle: 'Check balances or apply for a loan',
     },
     {
       to: '/self-service/documents',
-      Icon: FolderOpen,
+      Icon: LuFolderOpen,
       title: 'My documents',
       subtitle: 'Employment certificate, contributions, BIR 2316',
     },
-  ].filter((a): a is { to: string; Icon: typeof Receipt; title: string; subtitle: string } =>
+  ].filter((a): a is { to: string; Icon: typeof LuReceipt; title: string; subtitle: string } =>
     Boolean(a),
   );
 
@@ -271,7 +271,7 @@ function QuickActionsPanel({ payslipSubtitle }: { payslipSubtitle: string }) {
                 <span className="block text-sm font-medium text-primary">{title}</span>
                 <span className="block text-xs text-muted mt-0.5 line-clamp-2">{subtitle}</span>
               </span>
-              <ArrowRight
+              <LuArrowRight
                 size={14}
                 className="text-text-subtle shrink-0 mt-1 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-[opacity,transform] duration-fast"
                 aria-hidden="true"
@@ -392,7 +392,7 @@ function NextHolidayPanel({ name, date }: { name: string; date?: string }) {
           className="w-8 h-8 rounded-md bg-subtle flex items-center justify-center text-muted shrink-0"
           aria-hidden="true"
         >
-          <CalendarDays size={16} />
+          <LuCalendarDays size={16} />
         </span>
         <div className="min-w-0">
           <div className="text-sm font-medium text-primary truncate">{name}</div>

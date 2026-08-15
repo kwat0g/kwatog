@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { AxiosError } from 'axios';
-import { CheckCircle2, Play, Plus } from 'lucide-react';
+import { LuCircleCheck, LuPlay, LuPlus } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { stockCountApi } from '@/api/inventory/warehouseWms';
 import { warehouseApi } from '@/api/inventory/warehouse';
@@ -154,7 +154,7 @@ export function StockCountManager() {
  </div>
  <div className="flex items-center gap-2">
  {canManage && (
- <Button variant="primary" size="xs" icon={<Plus size={14} />} onClick={() => setShowCreateModal(true)}>
+ <Button variant="primary" size="xs" icon={<LuPlus size={14} />} onClick={() => setShowCreateModal(true)}>
  New session
  </Button>
  )}
@@ -207,7 +207,7 @@ export function StockCountManager() {
  title={`${activeSession.session_number} — ${activeSession.title}`}
  actions={
  canManage && activeSession.status === 'draft' ? (
- <Button size="sm" variant="primary" icon={<Play size={12} />} onClick={() => setConfirmAction('start')}>
+ <Button size="sm" variant="primary" icon={<LuPlay size={12} />} onClick={() => setConfirmAction('start')}>
  Start count
  </Button>
  ) : canManage && activeSession.status === 'in_progress' ? (
@@ -235,7 +235,7 @@ export function StockCountManager() {
  {/* Progress stats */}
  <div className="grid grid-cols-5 gap-2">
  <StatBox label="Total bins" value={activeSession.total_locations.toString()} />
- <StatBox label="Counted" value={activeSession.counted_locations.toString()} icon={<CheckCircle2 size={14} />} />
+ <StatBox label="Counted" value={activeSession.counted_locations.toString()} icon={<LuCircleCheck size={14} />} />
  <StatBox label="Pending" value={pendingItems.length.toString()} />
  <StatBox label="Variances" value={activeSession.variance_count.toString()} />
  <StatBox label="Completed" value={activeSession.completed_at ? formatDate(activeSession.completed_at) : '—'} />

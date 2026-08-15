@@ -7,7 +7,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Copy, ArchiveRestore } from 'lucide-react';
+import { LuPlus, LuPencil, LuTrash2, LuCopy, LuArchiveRestore } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { ncrTemplatesApi } from '@/api/quality/ncr-templates';
 import { Button } from '@/components/ui/Button';
@@ -117,7 +117,7 @@ const deleteMut = useMutation({
  <Button
  size="sm"
  variant="ghost"
- icon={<Copy size={13} />}
+ icon={<LuCopy size={13} />}
  onClick={() => { handleUseTemplate(r);
  }}
  >
@@ -128,7 +128,7 @@ const deleteMut = useMutation({
   <Button
   size="sm"
   variant="ghost"
-  icon={<Pencil size={13} />}
+  icon={<LuPencil size={13} />}
   onClick={() => { navigate(`/quality/ncr-templates/${r.id}/edit`);
   }}
   />
@@ -136,7 +136,7 @@ const deleteMut = useMutation({
   <Button
   size="sm"
   variant="ghost"
-  icon={<ArchiveRestore size={13} />}
+  icon={<LuArchiveRestore size={13} />}
   onClick={() => { setRestoreId(r.id);
   }}
   />
@@ -144,7 +144,7 @@ const deleteMut = useMutation({
   <Button
   size="sm"
   variant="ghost"
-  icon={<Trash2 size={13} />}
+  icon={<LuTrash2 size={13} />}
   onClick={() => { setDeleteId(r.id);
   }}
   />
@@ -166,7 +166,7 @@ const deleteMut = useMutation({
  <Button
  variant="primary"
  size="sm"
- icon={<Plus size={14} />}
+ icon={<LuPlus size={14} />}
  onClick={() => navigate('/quality/ncr-templates/new')}
  >
  New template

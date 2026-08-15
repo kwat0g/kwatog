@@ -4,7 +4,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { ArrowLeft, Upload, CheckCircle, Briefcase, MapPin } from 'lucide-react';
+import { LuArrowLeft, LuUpload, LuCircleCheck, LuBriefcase, LuMapPin } from '@/lib/icons';
 import { AxiosError } from 'axios';
 import { LandingNav } from '@/pages/landing/components/LandingNav';
 import { LandingFooter } from '@/pages/landing/components/LandingFooter';
@@ -90,7 +90,7 @@ export default function JobPostingDetailPage() {
  to="/careers"
  className="mb-8 inline-flex items-center gap-1.5 text-sm text-muted hover:text-primary"
  >
- <ArrowLeft size={14} /> Back to all positions
+ <LuArrowLeft size={14} /> Back to all positions
  </Link>
 
  {isLoading && (
@@ -108,10 +108,10 @@ export default function JobPostingDetailPage() {
  <h1 className="text-2xl font-medium tracking-tight text-primary">{posting.title}</h1>
  <div className="mt-3 flex flex-wrap gap-4 text-sm text-secondary">
  <span className="flex items-center gap-1.5">
- <MapPin size={14} /> {posting.department.name}
+ <LuMapPin size={14} /> {posting.department.name}
  </span>
  <span className="flex items-center gap-1.5">
- <Briefcase size={14} /> {posting.employment_type_label ?? posting.employment_type}
+ <LuBriefcase size={14} /> {posting.employment_type_label ?? posting.employment_type}
  </span>
  {posting.salary_range && (
  <span className="font-mono text-xs tabular-nums">
@@ -153,7 +153,7 @@ export default function JobPostingDetailPage() {
 
  {trackingCode ? (
  <div className="rounded-md border border-default bg-success-bg p-5 text-center">
- <CheckCircle className="mx-auto mb-3 text-success-fg" size={40} />
+ <LuCircleCheck className="mx-auto mb-3 text-success-fg" size={40} />
  <h2 className="text-xl font-medium text-primary">Application Submitted!</h2>
  <p className="mt-2 text-secondary">
  Your tracking code is:
@@ -202,7 +202,7 @@ export default function JobPostingDetailPage() {
  onClick={() => fileRef.current?.click()}
  className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-default px-4 py-3 text-sm text-secondary hover:border-strong"
  >
- <Upload size={16} />
+ <LuUpload size={16} />
  {resume ? resume.name : 'Click to upload (PDF, DOC, DOCX — max 5MB)'}
  </div>
  <input

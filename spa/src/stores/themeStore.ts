@@ -6,7 +6,7 @@ export type ThemeMode = 'light' | 'dark' | 'system';
 export type AppliedTheme = 'light' | 'dark' | 'floor';
 
 interface ThemeState {
- /** User-selected mode (light / dark / system). */
+ /** LuUser-selected mode (light / dark / system). */
  mode: ThemeMode;
  /** Effective theme after resolving 'system' against prefers-color-scheme. */
  resolvedTheme: 'light' | 'dark';

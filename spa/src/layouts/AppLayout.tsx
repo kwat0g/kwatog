@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Outlet, useNavigate } from 'react-router-dom';
-import { CircleHelp } from 'lucide-react';
+import { LuCircleHelp } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { Topbar } from '@/components/layout/Topbar';
 import { Sidebar } from '@/components/layout/Sidebar';
@@ -71,7 +71,7 @@ function AppLayoutInner() {
  variant="ghost"
  size="sm"
  iconOnly
- icon={<CircleHelp size={14} />}
+ icon={<LuCircleHelp size={14} />}
  aria-label="Keyboard shortcuts"
  onClick={() => setHelpOpen(true)}
  className="text-muted hover:text-primary"

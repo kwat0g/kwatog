@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components -- usePausedMutationCount is colocated with the banner that reports its count. */
 import { useEffect, useState } from 'react';
-import { WifiOff, CloudUpload } from 'lucide-react';
+import { LuWifiOff, LuCloudUpload } from '@/lib/icons';
 import { useMutationState } from '@tanstack/react-query';
 import { cn } from '@/lib/cn';
 
@@ -84,12 +84,12 @@ export function OfflineBanner({ placement = 'below-topbar' }: OfflineBannerProps
     >
       {offline ? (
         <>
-          <WifiOff size={14} aria-hidden />
+          <LuWifiOff size={14} aria-hidden />
           <span className="font-medium">You are offline.</span>
         </>
       ) : (
         <>
-          <CloudUpload size={14} aria-hidden />
+          <LuCloudUpload size={14} aria-hidden />
           <span className="font-medium">Waiting for the server.</span>
         </>
       )}

@@ -8,7 +8,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Copy, Plus } from 'lucide-react';
+import { LuCopy, LuPlus } from '@/lib/icons';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { routingsApi, type RoutingListParams } from '@/api/production/routings';
@@ -76,7 +76,7 @@ export default function RoutingsListPage() {
  <Button
  size="sm"
  variant="ghost"
- icon={<Copy size={14} />}
+ icon={<LuCopy size={14} />}
  onClick={() => { duplicateMut.mutate(r.id);
  }}
  disabled={duplicateMut.isPending}
@@ -97,7 +97,7 @@ export default function RoutingsListPage() {
  <Button
  size="sm"
  variant="primary"
- icon={<Plus size={14} />}
+ icon={<LuPlus size={14} />}
  onClick={() => navigate('/production/routings/create')}
  >
  New routing
@@ -126,7 +126,7 @@ export default function RoutingsListPage() {
  <Button
  variant="primary"
  size="sm"
- icon={<Plus size={14} />}
+ icon={<LuPlus size={14} />}
  onClick={() => navigate('/production/routings/create')}
  >
  New routing

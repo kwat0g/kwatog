@@ -7,17 +7,17 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
- User,
- Calendar,
- FileText,
- Receipt,
- Wallet,
- Clock,
- FolderOpen,
- LogOut,
- ChevronDown,
- LayoutDashboard,
-} from 'lucide-react';
+ LuUser,
+ LuCalendar,
+ LuFileText,
+ LuReceipt,
+ LuWallet,
+ LuClock,
+ LuFolderOpen,
+ LuLogOut,
+ LuChevronDown,
+ LuLayoutDashboard,
+} from '@/lib/icons';
 import { Avatar } from '@/components/ui/Avatar';
 import { cn } from '@/lib/cn';
 import { focusRing, focusRingInset } from '@/lib/focus';
@@ -28,14 +28,14 @@ interface ProfileDropdownProps {
 }
 
 const MENU_ITEMS = [
- { label: 'Dashboard', to: '/self-service', icon: LayoutDashboard },
- { label: 'DTR', to: '/self-service/dtr', icon: Calendar },
- { label: 'Leaves', to: '/self-service/leaves', icon: FileText },
- { label: 'Overtime', to: '/self-service/overtime', icon: Clock },
- { label: 'Payslips', to: '/self-service/payslips', icon: Receipt },
- { label: 'Loans', to: '/self-service/loans', icon: Wallet },
- { label: 'Documents', to: '/self-service/documents', icon: FolderOpen },
- { label: 'Profile', to: '/self-service/profile', icon: User },
+ { label: 'Dashboard', to: '/self-service', icon: LuLayoutDashboard },
+ { label: 'DTR', to: '/self-service/dtr', icon: LuCalendar },
+ { label: 'Leaves', to: '/self-service/leaves', icon: LuFileText },
+ { label: 'Overtime', to: '/self-service/overtime', icon: LuClock },
+ { label: 'Payslips', to: '/self-service/payslips', icon: LuReceipt },
+ { label: 'Loans', to: '/self-service/loans', icon: LuWallet },
+ { label: 'Documents', to: '/self-service/documents', icon: LuFolderOpen },
+ { label: 'Profile', to: '/self-service/profile', icon: LuUser },
 ] as const;
 
 export function ProfileDropdown({ user, onLogout }: ProfileDropdownProps) {
@@ -83,7 +83,7 @@ export function ProfileDropdown({ user, onLogout }: ProfileDropdownProps) {
  aria-haspopup="true"
  >
  <Avatar size="sm" name={user.name} />
- <ChevronDown
+ <LuChevronDown
  size={12}
  className={cn(
  'text-muted transition-transform duration-fast',
@@ -98,7 +98,7 @@ export function ProfileDropdown({ user, onLogout }: ProfileDropdownProps) {
  role="menu"
  className="absolute right-0 top-full mt-1 w-56 rounded-md border border-default bg-canvas z-50 py-1 animate-in fade-in slide-in-from-top-2 duration-150"
  >
- {/* User info header */}
+ {/* LuUser info header */}
  <div className="px-3 py-2 border-b border-default">
  <p className="text-sm font-medium truncate">{user.name}</p>
  <p className="text-xs text-muted truncate">{user.email}</p>
@@ -131,7 +131,7 @@ export function ProfileDropdown({ user, onLogout }: ProfileDropdownProps) {
  role="menuitem"
  className={cn('flex items-center gap-2.5 w-full px-3 py-1.5 text-sm text-danger-fg hover:bg-danger-bg transition-colors duration-fast cursor-pointer', focusRingInset)}
  >
- <LogOut size={14} className="shrink-0" />
+ <LuLogOut size={14} className="shrink-0" />
  Sign out
  </button>
  </div>

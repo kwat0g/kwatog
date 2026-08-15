@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
-import { ArchiveRestore, ListChecks, Pencil, Plus, Trash2 } from 'lucide-react';
+import { LuArchiveRestore, LuListChecks, LuPencil, LuPlus, LuTrash2 } from '@/lib/icons';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { itemsApi, type ItemListParams } from '@/api/inventory/items';
@@ -111,7 +111,7 @@ export default function ItemsListPage() {
  variant="ghost"
  size="sm"
  iconOnly
- icon={<Pencil size={14} />}
+ icon={<LuPencil size={14} />}
  aria-label={`Edit ${r.code}`}
  onClick={() => navigate(`/inventory/items/${r.id}/edit`)}
  className="text-muted hover:text-primary"
@@ -124,7 +124,7 @@ export default function ItemsListPage() {
  aria-label={`${scope === 'only' ? 'Restore' : 'Delete'} ${r.code}`}
  onClick={() => (scope === 'only' ? setConfirmRestore(r) : setConfirmDelete(r))}
  className={scope === 'only' ? 'text-muted hover:text-primary' : 'text-muted hover:text-danger-fg'}
- icon={scope === 'only' ? <ArchiveRestore size={14} /> : <Trash2 size={14} />}
+ icon={scope === 'only' ? <LuArchiveRestore size={14} /> : <LuTrash2 size={14} />}
  />
  </div>
  ) }] : []),
@@ -151,13 +151,13 @@ export default function ItemsListPage() {
  subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'item' : 'items'}` : undefined}
  actions={
  <>
- <Button variant="secondary" size="xs" icon={<ListChecks size={14} />} onClick={() => setShowCategories(true)}>
+ <Button variant="secondary" size="xs" icon={<LuListChecks size={14} />} onClick={() => setShowCategories(true)}>
  Categories
  </Button>
  {/* Warehouse Structure = master data (zones/locations). Warehouse Map (sidebar) is the live floor view. */}
  <Button variant="secondary" size="xs" onClick={() => navigate('/inventory/warehouse')}>Warehouse Structure</Button>
  {canManage && (
- <Button variant="primary" size="xs" icon={<Plus size={14} />} onClick={() => navigate('/inventory/items/create')}>
+ <Button variant="primary" size="xs" icon={<LuPlus size={14} />} onClick={() => navigate('/inventory/items/create')}>
  New item
  </Button>
  )}

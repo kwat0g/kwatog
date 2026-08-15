@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { Link } from 'react-router-dom';
-import { Menu, Moon, Sun, Search } from 'lucide-react';
+import { LuMenu, LuMoon, LuSun, LuSearch } from '@/lib/icons';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { Button } from '@/components/ui/Button';
 
@@ -63,7 +63,7 @@ export function Topbar({ user, onLogout, rightExtras }: TopbarProps) {
  variant="ghost"
  size="sm"
  iconOnly
- icon={<Menu size={14} />}
+ icon={<LuMenu size={14} />}
  aria-label="Toggle sidebar"
  onClick={handleMenuClick}
  className="text-muted hover:text-primary"
@@ -86,7 +86,7 @@ export function Topbar({ user, onLogout, rightExtras }: TopbarProps) {
  onClick={() => setPaletteOpen(true)}
  className={cn('hidden sm:flex items-center gap-2 h-7 w-44 px-2 rounded-md border border-default text-xs text-muted hover:bg-elevated cursor-pointer', focusRing)}
  >
- <Search size={12} />
+ <LuSearch size={12} />
  <span className="flex-1 text-left">Search…</span>
  <kbd className="font-mono text-2xs text-subtle">⌘K</kbd>
  </button>
@@ -96,7 +96,7 @@ export function Topbar({ user, onLogout, rightExtras }: TopbarProps) {
  variant="ghost"
  size="sm"
  iconOnly
- icon={resolvedTheme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+ icon={resolvedTheme === 'dark' ? <LuSun size={14} /> : <LuMoon size={14} />}
  aria-label="Toggle theme"
  onClick={toggle}
  className="text-muted hover:text-primary"

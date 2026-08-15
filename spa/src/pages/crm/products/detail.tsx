@@ -1,6 +1,6 @@
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Pencil } from 'lucide-react';
+import { LuPencil } from '@/lib/icons';
 import { productsApi } from '@/api/crm/products';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -78,7 +78,7 @@ export default function ProductDetailPage() {
  <Button
  variant="secondary"
  size="sm"
- icon={<Pencil size={14} />}
+ icon={<LuPencil size={14} />}
  onClick={() => navigate(`/crm/products/${data.id}/edit`)}
  >
  Edit

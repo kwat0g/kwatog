@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate} from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
+import { LuPlus } from '@/lib/icons';
 import { crmCustomersApi, type CustomerListParams } from '@/api/crm/customers';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -86,7 +86,7 @@ export default function CrmCustomersListPage() {
  <Button
  variant="primary"
  size="sm"
- icon={<Plus size={14} />}
+ icon={<LuPlus size={14} />}
  onClick={() => navigate('/crm/customers/create')}
  >
  New customer

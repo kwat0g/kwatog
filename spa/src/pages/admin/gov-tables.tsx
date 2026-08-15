@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Pencil, EyeOff, Eye } from 'lucide-react';
+import { LuPencil, LuEyeOff, LuEye } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { govTablesApi, type UpdateGovTableData } from '@/api/admin/gov-tables';
 import { Button } from '@/components/ui/Button';
@@ -143,14 +143,14 @@ function AgencyTable({ agency }: { agency: ContributionAgency }) {
  </Td>
  <Td align="right" mono>
  <div className="flex items-center justify-end gap-1">
- <Button size="sm" variant="ghost" icon={<Pencil size={12} />}
+ <Button size="sm" variant="ghost" icon={<LuPencil size={12} />}
  onClick={() => setEditing(row)}>Edit</Button>
  {row.is_active ? (
- <Button size="sm" variant="ghost" icon={<EyeOff size={12} />}
+ <Button size="sm" variant="ghost" icon={<LuEyeOff size={12} />}
  onClick={() => setConfirmDeactivate(row.id)}
  disabled={deactivate.isPending}>Deactivate</Button>
  ) : (
- <Button size="sm" variant="ghost" icon={<Eye size={12} />}
+ <Button size="sm" variant="ghost" icon={<LuEye size={12} />}
  onClick={() => setConfirmActivate(row.id)}
  disabled={activate.isPending}>Activate</Button>
  )}

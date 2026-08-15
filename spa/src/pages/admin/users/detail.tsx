@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
+import type { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { Button, Chip, ConfirmDialog, EmptyState, Panel, Select, SkeletonDetail, Td, Th } from '@/components/ui';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -14,7 +15,7 @@ import { tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 interface RoleOption { id: string; name: string }
 interface RolesResponse { data: RoleOption[] }
 
-/** U2 — Admin > User detail page. */
+/** U2 — Admin > LuUser detail page. */
 export default function AdminUserDetailPage() {
  const { id = '' } = useParams<{ id: string }>();
  const queryClient = useQueryClient();
@@ -74,13 +75,13 @@ export default function AdminUserDetailPage() {
  });
 
  const changeRole = useMutation({
- mutationFn: (roleId: string) => adminUsersApi.changeRole(id, roleId),
+ mutationFn: (roleId: string) => adminUsersApi.changeRole(id, roleId, userQuery.data?.role?.id ?? ''),
  onSuccess: () => {
  toast.success('Role updated.');
  queryClient.invalidateQueries({ queryKey: ['admin-user', id] });
  queryClient.invalidateQueries({ queryKey: ['admin-users'] });
  },
- onError: () => toast.error('Failed to update role.'),
+ onError: (error: AxiosError<{ message?: string }>) => toast.error(error.response?.data?.message ?? 'Failed to update role.'),
  });
 
  if (userQuery.isLoading) return <SkeletonDetail />;
@@ -253,7 +254,7 @@ export default function AdminUserDetailPage() {
  IP
  </Th>
  <Th>
- User Agent
+ LuUser Agent
  </Th>
  <Th>
  Reason

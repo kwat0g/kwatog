@@ -4,8 +4,8 @@
  * the ERP design system; theme-independent, built to win trust and quotes.
  *
  * Owns the page-level motion lifecycle (smooth scroll + reveals) and composes
- * the section stack. The only internal/ERP affordance is the single "Login"
- * button in the nav (+ a discreet staff link in the footer).
+ * the section stack. The nav keeps employee ERP access primary and exposes
+ * customer/supplier partner portals as a separate external-access group.
  */
 
 import { useEffect, useRef, useState } from 'react';

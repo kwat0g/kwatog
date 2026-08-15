@@ -1,3 +1,4 @@
+import { PortalTable } from '@/components/portal/PortalTable';
 import { useQuery } from '@tanstack/react-query';
 import { customerPortalApi } from '@/api/b2b/customer';
 import { Panel } from '@/components/ui/Panel';
@@ -72,7 +73,8 @@ export default function StatementOfAccountPage() {
  {/* Statement ledger */}
  <Panel title={`Transactions (${soa.transactions.length})`} noPadding>
  {soa.transactions.length > 0 ? (
- <table className={tableCls}>
+ <PortalTable>
+<table className={tableCls}>
  <thead>
  <tr className={theadTrCls}>
  <Th>Date</Th>
@@ -96,6 +98,7 @@ export default function StatementOfAccountPage() {
  ))}
  </tbody>
  </table>
+</PortalTable>
  ) : (
  <EmptyState icon="receipt" title="No statement activity" description="No invoices or payments exist through this date." />
  )}

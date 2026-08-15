@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeftRight, Download } from 'lucide-react';
+import { LuArrowLeftRight, LuDownload } from '@/lib/icons';
 import { rolesApi, type RoleCompareResult, type RolePermissionRow } from '@/api/admin/roles';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -114,7 +114,7 @@ export default function CompareRolesPage() {
  <Button
  variant="secondary"
  size="sm"
- icon={<Download size={14} />}
+ icon={<LuDownload size={14} />}
  onClick={exportCsv}
  disabled={!compare.data}
  >
@@ -141,7 +141,7 @@ export default function CompareRolesPage() {
  <Button
  variant="secondary"
  size="sm"
- icon={<ArrowLeftRight size={14} />}
+ icon={<LuArrowLeftRight size={14} />}
  onClick={swap}
  disabled={!a || !b}
  aria-label="Swap A and B"

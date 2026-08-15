@@ -1,5 +1,5 @@
 import { useEffect, useId, useState, type ReactNode } from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { LuTriangleAlert } from '@/lib/icons';
 import { Modal } from './Modal';
 import { Button } from './Button';
 import { Textarea } from './Textarea';
@@ -94,7 +94,7 @@ export function ReasonDialog({
  <div className="py-2">
  <div className="flex gap-4">
  <div className={`shrink-0 p-3 bg-canvas/50 rounded-full border border-default/50 ${iconClass}`} aria-hidden="true">
- <AlertTriangle size={24} />
+ <LuTriangleAlert size={24} />
  </div>
  <div className="space-y-2 mt-1 flex-1">
  <h2 id={titleId} className="text-lg font-medium tracking-tight text-primary">{title}</h2>

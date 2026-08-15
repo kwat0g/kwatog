@@ -1,6 +1,6 @@
-import { cn } from '@/lib/cn';
+import { PortalTable } from '@/components/portal/PortalTable';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { supplierPortalApi } from '@/api/b2b/supplier';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
@@ -13,7 +13,6 @@ import { CompanyName } from '@/components/brand/CompanyName';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 export default function SupplierInvoicesPage() {
-  const navigate = useNavigate();
   const {
     data: invoices,
     isLoading,
@@ -55,7 +54,8 @@ export default function SupplierInvoicesPage() {
         {!isLoading && !isError && (
           <Panel noPadding>
             {invoices && invoices.length > 0 ? (
-              <table className={tableCls}>
+              <PortalTable>
+<table className={tableCls}>
                 <thead>
                   <tr className={theadTrCls}>
                     <Th>Invoice #</Th>
@@ -70,13 +70,11 @@ export default function SupplierInvoicesPage() {
                   {invoices.map((inv) => (
                     <tr
                       key={inv.id}
-                      className={cn(trCls, 'cursor-pointer')}
-                      onClick={() => navigate(`/portal/supplier/invoices/${inv.id}`)}
+                      className={trCls}
                     >
                       <Td>
                         <Link
                           to={`/portal/supplier/invoices/${inv.id}`}
-                          onClick={(e) => e.stopPropagation()}
                           className="font-mono text-accent hover:underline font-medium"
                         >
                           {inv.bill_number}
@@ -99,6 +97,7 @@ export default function SupplierInvoicesPage() {
                   ))}
                 </tbody>
               </table>
+</PortalTable>
             ) : (
               <EmptyState
                 icon="receipt"

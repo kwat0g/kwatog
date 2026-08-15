@@ -1,9 +1,9 @@
-import { cn } from '@/lib/cn';
+import { PortalTable } from '@/components/portal/PortalTable';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { LuArrowRight } from '@/lib/icons';
 import { supplierPortalApi } from '@/api/b2b/supplier';
-import { Chip } from '@/components/ui/Chip';
+import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { formatPeso } from '@/lib/formatNumber';
 import { StatCard } from '@/components/ui/StatCard';
 import { Panel } from '@/components/ui/Panel';
@@ -14,7 +14,6 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 export default function SupplierDashboardPage() {
- const navigate = useNavigate();
  const { data: dashboard, isLoading, isError, refetch } = useQuery({
  queryKey: ['portal', 'supplier', 'dashboard'],
  queryFn: () => supplierPortalApi.dashboard(),
@@ -54,32 +53,37 @@ export default function SupplierDashboardPage() {
  label="Open POs"
  value={dashboard?.open_po_count ?? '—'}
  helper="Pending fulfillment"
+ linkTo="/portal/supplier/purchase-orders"
  />
  <StatCard
  label="Pending Deliveries"
  value={dashboard?.pending_delivery_count ?? '—'}
  helper="Awaited deliveries"
+ linkTo="/portal/supplier/deliveries"
  />
  <StatCard
  label="Unpaid Invoices"
  value={dashboard?.unpaid_invoice_count ?? '—'}
  helper="Invoices due"
+ linkTo="/portal/supplier/invoices"
  />
  <StatCard
  label="Total Unpaid"
  value={dashboard ? formatPeso(dashboard.total_unpaid_amount) : '—'}
  helper="Outstanding balance"
+ linkTo="/portal/supplier/statement-of-account"
  />
  </div>
 
  {/* Recent POs */}
  <Panel title="Recent Purchase Orders" actions={
  <Link to="/portal/supplier/purchase-orders" className="text-2xs text-accent hover:underline flex items-center gap-1">
- View all <ArrowRight size={11} />
+ View all <LuArrowRight size={11} />
  </Link>
  }>
  {dashboard?.recent_pos && dashboard.recent_pos.length > 0 ? (
- <table className={tableCls}>
+ <PortalTable>
+<table className={tableCls}>
  <thead>
  <tr className={theadTrCls}>
  <Th>PO #</Th>
@@ -90,21 +94,22 @@ export default function SupplierDashboardPage() {
  </thead>
  <tbody>
  {dashboard.recent_pos.map((po) => (
- <tr key={po.id} className={cn(trCls, "cursor-pointer")} onClick={() => navigate(`/portal/supplier/purchase-orders/${po.id}`)}>
+ <tr key={po.id} className={trCls}>
  <Td>
- 
+ <Link to={`/portal/supplier/purchase-orders/${po.id}`} className="font-mono font-medium text-accent hover:underline">
  {po.po_number}
- 
+ </Link>
  </Td>
  <Td className="text-muted">{po.date ?? '—'}</Td>
  <Td align="right" mono>{formatPeso(po.total_amount)}</Td>
  <Td align="right" mono>
- <Chip variant="neutral">{po.status}</Chip>
+ <Chip variant={chipVariantForStatus(po.status)}>{po.status_label ?? po.status.replace(/_/g, ' ')}</Chip>
  </Td>
  </tr>
  ))}
  </tbody>
  </table>
+</PortalTable>
  ) : (
  <EmptyState icon="file-text" title="No purchase orders yet" />
  )}
@@ -113,11 +118,12 @@ export default function SupplierDashboardPage() {
  {/* Recent Invoices */}
  <Panel title="Recent Invoices" actions={
  <Link to="/portal/supplier/invoices" className="text-2xs text-accent hover:underline flex items-center gap-1">
- View all <ArrowRight size={11} />
+ View all <LuArrowRight size={11} />
  </Link>
  }>
  {dashboard?.recent_invoices && dashboard.recent_invoices.length > 0 ? (
- <table className={tableCls}>
+ <PortalTable>
+<table className={tableCls}>
  <thead>
  <tr className={theadTrCls}>
  <Th>Invoice #</Th>
@@ -128,23 +134,24 @@ export default function SupplierDashboardPage() {
  </thead>
  <tbody>
  {dashboard.recent_invoices.map((inv) => (
- <tr key={inv.id} className={cn(trCls, "cursor-pointer")} onClick={() => navigate(`/portal/supplier/invoices/${inv.id}`)}>
+ <tr key={inv.id} className={trCls}>
  <Td>
- 
+ <Link to={`/portal/supplier/invoices/${inv.id}`} className="font-mono font-medium text-accent hover:underline">
  {inv.bill_number}
- 
+ </Link>
  </Td>
  <Td className="text-muted">{inv.date ?? '—'}</Td>
  <Td align="right" mono>{formatPeso(inv.total_amount)}</Td>
  <Td align="right" mono>
- <Chip variant={inv.status === 'paid' ? 'success' : inv.status === 'overdue' ? 'danger' : 'warning'}>
- {inv.status}
+ <Chip variant={chipVariantForStatus(inv.status)}>
+ {inv.status_label ?? inv.status.replace(/_/g, ' ')}
  </Chip>
  </Td>
  </tr>
  ))}
  </tbody>
  </table>
+</PortalTable>
  ) : (
  <EmptyState icon="receipt" title="No invoices yet" />
  )}

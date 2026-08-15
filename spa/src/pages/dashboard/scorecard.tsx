@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { TrendingUp, TrendingDown, Minus, RefreshCw } from 'lucide-react';
+import { LuTrendingUp, LuTrendingDown, LuMinus, LuRefreshCw } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import { Panel } from '@/components/ui/Panel';
@@ -129,7 +129,7 @@ export default function ScorecardPage() {
  variant="secondary"
  onClick={() => computeMut.mutate()}
  loading={computeMut.isPending}
- icon={<RefreshCw size={14} />}
+ icon={<LuRefreshCw size={14} />}
  >
  {computeMut.isPending ? 'Computing…' : 'Compute KPIs'}
  </Button>
@@ -188,7 +188,7 @@ function KpiCard({ item }: { item: KpiScorecardItem }) {
  ? def.direction === 'lower_is_better'
  : true; // flat is neutral
 
- const TrendIcon = trend === 'up' ? TrendingUp : trend === 'down' ? TrendingDown : Minus;
+ const TrendIcon = trend === 'up' ? LuTrendingUp : trend === 'down' ? LuTrendingDown : LuMinus;
  const trendColor = trend === 'flat'
  ? 'text-muted'
  : trendIsPositive ? 'text-success-fg' : 'text-danger-fg';

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AlertTriangle, X, Trash2, Copy, ChevronDown, ChevronRight } from 'lucide-react';
+import { LuTriangleAlert, LuX, LuTrash2, LuCopy, LuChevronDown, LuChevronRight } from '@/lib/icons';
 import { useErrorLogStore, type ServerErrorEntry } from '@/stores/errorLogStore';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
@@ -44,7 +44,7 @@ export function DevErrorPanel() {
  )}
  aria-label="Toggle server error log"
  >
- <AlertTriangle size={12} />
+ <LuTriangleAlert size={12} />
  <span className="font-mono tabular-nums">
  {entries.length}
  </span>
@@ -59,7 +59,7 @@ export function DevErrorPanel() {
  <div className="fixed bottom-16 right-4 z-50 w-[min(640px,calc(100vw-32px))] max-h-[70vh] flex flex-col rounded-md border border-default bg-canvas">
  <header className="flex items-center justify-between px-3 py-2 border-b border-default">
  <div className="flex items-center gap-2">
- <AlertTriangle size={14} className="text-danger-fg" />
+ <LuTriangleAlert size={14} className="text-danger-fg" />
  <h3 className="text-sm font-medium">Server errors</h3>
  <span className="text-xs text-muted font-mono tabular-nums">{entries.length}</span>
  </div>
@@ -68,7 +68,7 @@ export function DevErrorPanel() {
  variant="ghost"
  size="sm"
  iconOnly
- icon={<Trash2 size={12} />}
+ icon={<LuTrash2 size={12} />}
  aria-label="Clear log"
  onClick={clear}
  className="text-muted hover:text-primary"
@@ -77,7 +77,7 @@ export function DevErrorPanel() {
  variant="ghost"
  size="sm"
  iconOnly
- icon={<X size={12} />}
+ icon={<LuX size={12} />}
  aria-label="Close panel"
  onClick={() => setOpen(false)}
  className="text-muted hover:text-primary"
@@ -134,8 +134,8 @@ function ErrorRow({
  className={cn('w-full text-left px-3 py-2 hover:bg-elevated flex items-start gap-2 cursor-pointer', focusRingInset)}
  >
  {expanded
- ? <ChevronDown size={12} className="mt-0.5 text-muted shrink-0" />
- : <ChevronRight size={12} className="mt-0.5 text-muted shrink-0" />}
+ ? <LuChevronDown size={12} className="mt-0.5 text-muted shrink-0" />
+ : <LuChevronRight size={12} className="mt-0.5 text-muted shrink-0" />}
  <div className="min-w-0 flex-1">
  <div className="flex items-center gap-2">
  <span className={cn('font-mono tabular-nums', statusColor)}>{entry.status ?? '—'}</span>
@@ -185,7 +185,7 @@ function ErrorRow({
  onClick={copyAll}
  className={cn('inline-flex items-center gap-1 px-2 py-1 rounded border border-default text-muted hover:text-primary hover:bg-elevated cursor-pointer', focusRing)}
  >
- <Copy size={10} /> Copy JSON
+ <LuCopy size={10} /> Copy JSON
  </button>
  </div>
  </div>

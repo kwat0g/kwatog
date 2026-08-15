@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Ban, Check, Pencil, FileText } from 'lucide-react';
+import { LuBan, LuCheck, LuPencil, LuFileText } from '@/lib/icons';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { salesOrdersApi } from '@/api/crm/salesOrders';
@@ -159,19 +159,19 @@ export default function SalesOrderDetailPage() {
  actions={
  <div className="flex gap-1.5">
  {canEdit && (
- <Button size="sm" variant="secondary" icon={<Pencil size={14} />}
+ <Button size="sm" variant="secondary" icon={<LuPencil size={14} />}
  onClick={() => navigate(`/crm/sales-orders/${data.id}/edit`)}>
  Edit
  </Button>
  )}
  {canCancel && (
- <Button size="sm" variant="secondary" icon={<Ban size={14} />}
+ <Button size="sm" variant="secondary" icon={<LuBan size={14} />}
  onClick={() => setCancelOpen(true)}>
  Cancel
  </Button>
  )}
  {canConfirm && (
- <Button size="sm" variant="primary" icon={<Check size={14} />}
+ <Button size="sm" variant="primary" icon={<LuCheck size={14} />}
  onClick={() => setConfirmOpen(true)}>
  Confirm order
  </Button>
@@ -207,7 +207,7 @@ export default function SalesOrderDetailPage() {
   invoices; review and finalize them here (mirrors the P2P auto-bill banner). */}
  {data.invoices?.some((inv) => inv.status === 'draft') && (
  <div className="flex items-center gap-3 rounded-md border border-success/40 bg-success-bg/10 px-4 py-3 text-sm">
- <FileText size={16} className="shrink-0 text-success-fg" />
+ <LuFileText size={16} className="shrink-0 text-success-fg" />
  <div className="flex-1">
  <div className="font-medium">Customer invoice auto-created</div>
  <div className="text-muted">
@@ -217,7 +217,7 @@ export default function SalesOrderDetailPage() {
  <Link to={`/accounting/invoices/${inv.id}`} className="font-mono text-accent hover:underline">{inv.invoice_number ?? '(draft)'}</Link>
  <span className="font-mono tabular-nums">{formatPeso(inv.total_amount)}</span>
  {can('accounting.invoices.create') && (
- <Button variant="secondary" size="xs" icon={<Check size={11} />} onClick={() => setFinalizeInvoiceId(inv.id)}>
+ <Button variant="secondary" size="xs" icon={<LuCheck size={11} />} onClick={() => setFinalizeInvoiceId(inv.id)}>
  Finalize
  </Button>
  )}

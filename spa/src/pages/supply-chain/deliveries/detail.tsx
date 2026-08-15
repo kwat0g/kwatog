@@ -2,7 +2,7 @@
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams , useNavigate} from 'react-router-dom';
-import { Camera, Check, ArrowRight, Tag, Trash2, FileText, Image as ImageIcon, ShieldCheck, ArchiveRestore, AlertTriangle } from 'lucide-react';
+import { LuCamera, LuCheck, LuArrowRight, LuTag, LuTrash2, LuFileText, LuImage as ImageIcon, LuShieldCheck, LuArchiveRestore, LuTriangleAlert } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import type { AxiosError } from 'axios';
 import { downloadAuthenticatedFile } from '@/api/download';
@@ -179,7 +179,7 @@ const removeProof = useMutation({
  <Chip variant={STATUS_CHIP[data.status]} className="ml-3">{statusOptions.get(data.status)?.label ?? data.status.replace('_', ' ')}</Chip>
  {hasProof && (
  <Chip variant="success" className="ml-2">
- <ShieldCheck size={12} className="mr-0.5" />
+ <LuShieldCheck size={12} className="mr-0.5" />
  {proofs.length} {proofs.length === 1 ? 'proof' : 'proofs'}
  </Chip>
  )}
@@ -192,7 +192,7 @@ const removeProof = useMutation({
  actions={
  <div className="flex items-center gap-2">
  {next && canEdit && (
- <Button variant="secondary" size="sm" icon={<ArrowRight size={14} />}
+ <Button variant="secondary" size="sm" icon={<LuArrowRight size={14} />}
  loading={advance.isPending} onClick={() => advance.mutate(next)}>
  {next === 'delivered' ? 'Mark delivered' : `Mark ${statusOptions.get(next)?.label ?? next.replace('_', ' ')}`}
  </Button>
@@ -210,7 +210,7 @@ const removeProof = useMutation({
  e.target.value = '';
  }}
  />
- <Button variant="secondary" size="sm" icon={<Camera size={14} />}
+ <Button variant="secondary" size="sm" icon={<LuCamera size={14} />}
  loading={upload.isPending} onClick={() => fileInput.current?.click()}>
  {data.receipt_photo_url ? 'Replace receipt' : 'Quick photo'}
  </Button>
@@ -220,7 +220,7 @@ const removeProof = useMutation({
  <Button
  variant="primary"
  size="sm"
- icon={<Check size={14} />}
+ icon={<LuCheck size={14} />}
  disabled={!hasProof}
  title={hasProof ? undefined : 'At least one proof of delivery is required before confirming'}
  onClick={() => {
@@ -285,7 +285,7 @@ const removeProof = useMutation({
  <Panel
  title={
  <span className="inline-flex items-center gap-1.5">
- <ShieldCheck size={14} className={hasProof ? 'text-success-fg' : 'text-warning-fg'} />
+ <LuShieldCheck size={14} className={hasProof ? 'text-success-fg' : 'text-warning-fg'} />
  Proof of delivery
  </span>
  }
@@ -316,7 +316,7 @@ const removeProof = useMutation({
 
  {!hasProof && (
  <div className="text-xs text-muted mb-3 px-3 py-2 bg-subtle rounded-md border border-warning/30 flex items-start gap-2">
- <AlertTriangle size={14} className="mt-0.5 shrink-0 text-warning-fg" aria-hidden="true" />
+ <LuTriangleAlert size={14} className="mt-0.5 shrink-0 text-warning-fg" aria-hidden="true" />
  <span>No proof uploaded yet. After delivering the goods, upload the signed delivery
  receipt or a photo here. <strong>Required</strong> before the delivery can be confirmed.
  </span>
@@ -342,7 +342,7 @@ const removeProof = useMutation({
  errorMessage: 'Failed to open the delivery proof.',
  })}
  className={cn('flex w-full items-center justify-center aspect-video bg-subtle text-muted hover:text-accent cursor-pointer', focusRingInset)}>
- <FileText size={32} />
+ <LuFileText size={32} />
  </button>
  )}
  <div className="px-2.5 py-2 text-xs">
@@ -358,7 +358,7 @@ const removeProof = useMutation({
   <div className="mt-1.5 flex items-center gap-2">
   <LinkButton
   onClick={() => setRestoreProofId(p.id)}
-  icon={<ArchiveRestore size={12} />}
+  icon={<LuArchiveRestore size={12} />}
   className="text-2xs"
   >
   Restore
@@ -366,7 +366,7 @@ const removeProof = useMutation({
   <LinkButton
   tone="danger"
   onClick={() => setDeleteProofId(p.id)}
-  icon={<Trash2 size={12} />}
+  icon={<LuTrash2 size={12} />}
   className="text-2xs"
   >
   Archive
@@ -466,7 +466,7 @@ const removeProof = useMutation({
   invoice; review and finalize it here (mirrors the P2P auto-bill banner). */}
  {data.invoice && data.invoice.status === 'draft' && (
  <div className="flex items-center gap-3 rounded-md border border-success/40 bg-success-bg/10 px-4 py-3 text-sm">
- <FileText size={16} className="shrink-0 text-success-fg" />
+ <LuFileText size={16} className="shrink-0 text-success-fg" />
  <div className="flex-1">
  <div className="font-medium">Customer invoice auto-created</div>
  <div className="text-muted">
@@ -476,12 +476,12 @@ const removeProof = useMutation({
  </div>
  </div>
  {can('accounting.invoices.create') && (
- <Button variant="secondary" size="sm" icon={<Check size={14} />}
+ <Button variant="secondary" size="sm" icon={<LuCheck size={14} />}
  onClick={() => setFinalizeInvoiceId(data.invoice!.id)} loading={finalizeInvoice.isPending}>Finalize</Button>
  )}
  {data.invoice_handoff?.status === 'manual_required' && !data.invoice && (
  <div className="flex items-start gap-3 rounded-md border border-warning/40 bg-warning-bg/10 px-4 py-3 text-sm" role="alert">
- <AlertTriangle size={16} className="mt-0.5 shrink-0 text-warning-fg" />
+ <LuTriangleAlert size={16} className="mt-0.5 shrink-0 text-warning-fg" />
  <div>
  <div className="font-medium">Customer invoice needs Finance action</div>
  <div className="text-muted">
@@ -520,7 +520,7 @@ const removeProof = useMutation({
  <Panel
  title={
  <span className="inline-flex items-center gap-1.5">
- <Tag size={14} className="text-accent" />
+ <LuTag size={14} className="text-accent" />
  Shipment lot
  </span>
  }
@@ -639,7 +639,7 @@ const removeProof = useMutation({
  <Button variant="secondary" onClick={() => setConfirmModalOpen(false)}>Cancel</Button>
  <Button
  variant="primary"
- icon={<Check size={14} />}
+ icon={<LuCheck size={14} />}
  loading={confirm.isPending}
  disabled={!hasProof}
  onClick={() => confirm.mutate()}

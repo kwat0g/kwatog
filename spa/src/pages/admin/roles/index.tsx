@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Plus, ShieldCheck, Trash2, Copy, KeyRound, GitCompareArrows, ArchiveRestore } from 'lucide-react';
+import { LuPlus, LuShieldCheck, LuTrash2, LuCopy, LuKeyRound, LuGitCompareArrows, LuArchiveRestore } from '@/lib/icons';
 import { rolesApi, type Role } from '@/api/admin/roles';
 import { formatDateTime } from '@/lib/formatDate';
 import { Button } from '@/components/ui/Button';
@@ -90,7 +90,7 @@ const remove = useMutation({
  cell: (row) => (
  <div className="flex items-center gap-2">
  <span className="h-6 w-6 inline-flex items-center justify-center rounded-md bg-elevated text-muted">
- <ShieldCheck size={12} />
+ <LuShieldCheck size={12} />
  </span>
  <StackedCell
  primary={row.name}
@@ -155,7 +155,7 @@ const remove = useMutation({
  <Button
  variant="ghost"
  size="sm"
- icon={<KeyRound size={12} />}
+ icon={<LuKeyRound size={12} />}
  onClick={() => navigate(`/admin/roles/${row.id}/permissions`)}
  aria-label={`Edit permissions for ${row.name}`}
  >
@@ -167,7 +167,7 @@ const remove = useMutation({
  <Button
  variant="ghost"
  size="sm"
- icon={<Copy size={12} />}
+ icon={<LuCopy size={12} />}
  onClick={() =>
  navigate('/admin/roles/create', { state: { cloneFrom: row.id } })
  }
@@ -184,7 +184,7 @@ const remove = useMutation({
   <Button
   variant="ghost"
   size="sm"
-  icon={<ArchiveRestore size={12} />}
+  icon={<LuArchiveRestore size={12} />}
   onClick={() => setConfirmRestore(row)}
   aria-label={`Restore ${row.name}`}
   >
@@ -208,7 +208,7 @@ const remove = useMutation({
   <Button
   variant="ghost"
   size="sm"
-  icon={<Trash2 size={12} />}
+  icon={<LuTrash2 size={12} />}
   disabled={row.is_system || (row.users_count ?? 0) > 0}
   onClick={() => setConfirmDelete(row)}
   aria-label={`Delete ${row.name}`}
@@ -247,7 +247,7 @@ const remove = useMutation({
  <Button
  variant="secondary"
  size="sm"
- icon={<GitCompareArrows size={14} />}
+ icon={<LuGitCompareArrows size={14} />}
  onClick={() => navigate('/admin/roles/compare')}
  >
  Compare roles
@@ -255,7 +255,7 @@ const remove = useMutation({
  <Button
  variant="primary"
  size="sm"
- icon={<Plus size={14} />}
+ icon={<LuPlus size={14} />}
  onClick={() => navigate('/admin/roles/create')}
  >
  New role

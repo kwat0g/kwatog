@@ -12,7 +12,7 @@ import { StatCard } from '@/components/ui/StatCard';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
-import { Pencil } from 'lucide-react';
+import { LuPencil } from '@/lib/icons';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
@@ -103,7 +103,7 @@ export default function AssetDetailPage() {
             </Chip>
             {can('assets.create') && (
               <Button variant="secondary" size="xs" onClick={() => navigate(`/assets/${id}/edit`)}>
-                <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
+                <LuPencil className="h-3.5 w-3.5 mr-1" /> Edit
               </Button>
             )}
             {data.status === 'active' && can('assets.dispose') && (

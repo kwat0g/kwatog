@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useSearchParams} from 'react-router-dom';
-import { Plus, Printer } from 'lucide-react';
+import { LuPlus, LuPrinter } from '@/lib/icons';
 import { invoicesApi, type InvoiceListParams } from '@/api/accounting/invoices';
 import { bulkPrint } from '@/api/print';
 import { Button } from '@/components/ui/Button';
@@ -73,7 +73,7 @@ export default function InvoicesPage() {
  title="Invoices (AR)"
  subtitle={data ? `${data.meta.total} invoices` : undefined}
  actions={can('accounting.invoices.create') ? (
- <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/accounting/invoices/create')}>New invoice</Button>
+ <Button variant="primary" size="sm" icon={<LuPlus size={14} />} onClick={() => navigate('/accounting/invoices/create')}>New invoice</Button>
  ) : null}
  />
  <FilterBar
@@ -134,7 +134,7 @@ export default function InvoicesPage() {
  selectable
  bulkActions={[{
  label: 'Print PDFs',
- icon: <Printer size={14} />,
+ icon: <LuPrinter size={14} />,
  onClick: (rows) => bulkPrint('invoice', rows.map((r) => r.id)) } as BulkAction<Invoice>]}
  />
  </div>

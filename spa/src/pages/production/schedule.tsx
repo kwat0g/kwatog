@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AxiosError } from 'axios';
-import { Play, Check, AlertTriangle, X } from 'lucide-react';
+import { LuPlay, LuCheck, LuTriangleAlert, LuX } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { schedulerApi } from '@/api/mrp/scheduler';
 import { machinesApi } from '@/api/mrp/machines';
@@ -139,18 +139,18 @@ export default function ProductionSchedulePage() {
  ]}
  />
  {canRun && (
- <Button size="sm" variant="secondary" icon={<Play size={14} />}
+ <Button size="sm" variant="secondary" icon={<LuPlay size={14} />}
  onClick={() => run.mutate()} loading={run.isPending}>
  Run scheduler
  </Button>
  )}
  {canConfirm && latestProposal.length > 0 && (
  <>
- <Button size="sm" variant="primary" icon={<Check size={14} />}
+ <Button size="sm" variant="primary" icon={<LuCheck size={14} />}
  onClick={() => confirm.mutate(latestProposal.map((p) => p.id))} loading={confirm.isPending}>
  Confirm {latestProposal.length} schedule{latestProposal.length === 1 ? '' : 's'}
  </Button>
- <Button size="sm" variant="ghost" icon={<X size={14} />}
+ <Button size="sm" variant="ghost" icon={<LuX size={14} />}
  onClick={() => { setLatestProposal([]); setLatestConflicts([]); }}>
  Discard
  </Button>
@@ -169,7 +169,7 @@ export default function ProductionSchedulePage() {
  <div className="space-y-2">
  {latestConflicts.map((c) => (
  <div key={c.work_order_id} className="flex items-start gap-2 text-xs">
- <AlertTriangle size={14} className="text-danger-fg mt-0.5" />
+ <LuTriangleAlert size={14} className="text-danger-fg mt-0.5" />
  <div>
  <span className="font-mono">{c.wo_number}</span>
  <span className="ml-2 text-muted">— {c.reasons.join('; ')}</span>

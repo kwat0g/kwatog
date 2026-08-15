@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
-import { AlertTriangle, Check, Ban, FileDown, Lock, RefreshCw, Search } from 'lucide-react';
+import { LuTriangleAlert, LuCheck, LuBan, LuFileDown, LuLock, LuRefreshCw, LuSearch } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import type { AxiosError } from 'axios';
 import { complaintsApi, type EightDPatch } from '@/api/crm/complaints';
@@ -206,7 +206,7 @@ export default function ComplaintDetailPage() {
   <Button
    variant="secondary"
    size="sm"
-   icon={<RefreshCw size={14} className={retryNcrMut.isPending ? 'animate-spin' : ''} />}
+   icon={<LuRefreshCw size={14} className={retryNcrMut.isPending ? 'animate-spin' : ''} />}
    loading={retryNcrMut.isPending}
    onClick={() => retryNcrMut.mutate()}
   >
@@ -214,12 +214,12 @@ export default function ComplaintDetailPage() {
   </Button>
  )}
  <Link to="/quality/traceability">
- <Button variant="secondary" size="sm" icon={<Search size={14} />}>
+ <Button variant="secondary" size="sm" icon={<LuSearch size={14} />}>
  Trace
  </Button>
  </Link>
  {report && isFinalized && (
- <Button variant="secondary" size="sm" icon={<FileDown size={14} />}
+ <Button variant="secondary" size="sm" icon={<LuFileDown size={14} />}
  onClick={() => void downloadAuthenticatedFile(complaintsApi.pdfUrl(id), { openInNewTab: true, errorMessage: 'Failed to generate 8D report PDF.' })}>
  Download 8D PDF
  </Button>
@@ -230,12 +230,12 @@ export default function ComplaintDetailPage() {
  </Button>
  )}
  {canManage && !isTerminal && data.status === 'resolved' && (
- <Button variant="primary" size="sm" icon={<Check size={14} />} onClick={() => setConfirmClose(true)}>
+ <Button variant="primary" size="sm" icon={<LuCheck size={14} />} onClick={() => setConfirmClose(true)}>
  Close
  </Button>
  )}
  {canManage && !isTerminal && (
- <Button variant="secondary" size="sm" icon={<Ban size={14} />} onClick={() => setConfirmClose(true)}>
+ <Button variant="secondary" size="sm" icon={<LuBan size={14} />} onClick={() => setConfirmClose(true)}>
  Close
  </Button>
  )}
@@ -289,7 +289,7 @@ export default function ComplaintDetailPage() {
 
  {data.ncr_handoff?.status === 'manual_required' && (
   <div className="flex items-start gap-3 rounded-md border border-warning/40 bg-warning-bg/10 px-4 py-3 text-sm">
-   <AlertTriangle size={16} className="mt-0.5 shrink-0 text-warning-fg" />
+   <LuTriangleAlert size={16} className="mt-0.5 shrink-0 text-warning-fg" />
    <div className="flex-1">
     <div className="font-medium">Quality NCR handoff needs attention</div>
     <div className="text-muted">
@@ -300,7 +300,7 @@ export default function ComplaintDetailPage() {
     <Button
      variant="secondary"
      size="sm"
-     icon={<RefreshCw size={13} />}
+     icon={<LuRefreshCw size={13} />}
      loading={retryNcrMut.isPending}
      onClick={() => retryNcrMut.mutate()}
     >
@@ -361,11 +361,11 @@ export default function ComplaintDetailPage() {
  <div className="col-span-2 flex items-center justify-end gap-2 pt-3 border-t border-default">
  {isFinalized ? (
  <span className="text-xs text-muted">
- <Lock size={12} className="inline mr-1" />
+ <LuLock size={12} className="inline mr-1" />
  Finalised on {report?.finalized_at?.slice(0, 16).replace('T', ' ')}
  </span>
  ) : canManage ? (
- <Button variant="primary" size="sm" icon={<Lock size={14} />}
+ <Button variant="primary" size="sm" icon={<LuLock size={14} />}
  onClick={() => setConfirmFinalize(true)}>
  Finalise 8D
  </Button>

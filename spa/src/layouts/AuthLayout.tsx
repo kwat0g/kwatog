@@ -15,7 +15,7 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, type CSSProperties } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { LuArrowLeft } from '@/lib/icons';
 import { useThemeStore } from '@/stores/themeStore';
 import { reduceMotion } from '@/lib/motionPrefs';
 
@@ -70,6 +70,11 @@ export function AuthLayout() {
       '/forgot-password': 'Forgot password',
       '/reset-password': 'Reset password',
       '/change-password': 'Change password',
+      '/portal/supplier/login': 'Supplier sign in',
+      '/portal/supplier/forgot-password': 'Supplier password reset',
+      '/portal/customer/login': 'Customer sign in',
+      '/portal/customer/forgot-password': 'Customer password reset',
+      '/portal/password-reset': 'Portal password reset',
     };
     document.title = `${labels[location.pathname] ?? 'Account'} · ERP`;
   }, [location.pathname]);
@@ -265,7 +270,7 @@ export function AuthLayout() {
           to="/"
           className="mt-10 inline-flex items-center gap-1.5 rounded-md font-sans text-[13px] text-muted transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
         >
-          <ArrowLeft size={14} />
+          <LuArrowLeft size={14} />
           Back to {legalName || 'home'}
         </Link>
       </main>

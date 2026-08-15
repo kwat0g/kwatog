@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus } from 'lucide-react';
+import { LuPlus } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { PageHeader } from '@/components/layout/PageHeader';
 import {
@@ -124,7 +124,7 @@ export default function SelfServiceLoansPage() {
  title="Loans & Cash Advances"
  subtitle={data ? `${data.active.length} active · ${data.history.length} past` : undefined}
  actions={
- <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => setShowApply(true)}>
+ <Button variant="primary" size="sm" icon={<LuPlus size={14} />} onClick={() => setShowApply(true)}>
  Apply for a loan
  </Button>
  }
@@ -151,7 +151,7 @@ export default function SelfServiceLoansPage() {
  title="No loans yet"
  description="You have no loan history. Apply for a company loan or cash advance to get started."
  action={
- <Button variant="primary" icon={<Plus size={14} />} onClick={() => setShowApply(true)}>
+ <Button variant="primary" icon={<LuPlus size={14} />} onClick={() => setShowApply(true)}>
  Apply for a loan
  </Button>
  }

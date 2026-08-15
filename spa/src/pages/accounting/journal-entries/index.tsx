@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { LuPlus } from '@/lib/icons';
 import { journalEntriesApi, type JournalEntryListParams } from '@/api/accounting/journal-entries';
 import { Button } from '@/components/ui/Button';
 import { Chip, type ChipVariant } from '@/components/ui/Chip';
@@ -71,7 +71,7 @@ export default function JournalEntriesPage() {
  <Button variant="secondary" size="sm" onClick={() => navigate('/accounting/trial-balance')}>Trial Balance</Button>
  <Button variant="secondary" size="sm" onClick={() => navigate('/budgeting')}>Budgets</Button>
  {can('accounting.journal.create') && (
- <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/accounting/journal-entries/create')}>
+ <Button variant="primary" size="sm" icon={<LuPlus size={14} />} onClick={() => navigate('/accounting/journal-entries/create')}>
  New entry
  </Button>
  )}

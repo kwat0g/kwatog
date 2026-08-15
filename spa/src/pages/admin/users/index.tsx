@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { LuPlus } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import {
  Button,
@@ -61,10 +61,10 @@ export default function AdminUsersIndexPage() {
  staleTime: 5 * 60 * 1000 });
 
  const bulkChangeRole = useMutation({
- mutationFn: ({ userIds, roleId, reason }: { userIds: string[]; roleId: string; reason: string }) =>
- adminUsersApi.bulkChangeRole(userIds, roleId, reason),
+ mutationFn: ({ userIds, roleId, reason, expectedRoleIds }: { userIds: string[]; roleId: string; reason: string; expectedRoleIds: Record<string, string> }) =>
+ adminUsersApi.bulkChangeRole(userIds, roleId, reason, expectedRoleIds),
  onSuccess: (r) => {
- toast.success(`${r.updated} user(s) updated.`);
+ toast.success(`${r.updated} user(s) updated${r.conflicts.length ? `; ${r.conflicts.length} stale conflict(s) skipped.` : '.'}`);
  setBulkRoleModalOpen(false);
  setBulkReason('');
  setSelectedRoleId('');
@@ -149,7 +149,9 @@ export default function AdminUsersIndexPage() {
  bulkChangeRole.mutate({
  userIds: selectedRows.map((r) => r.id),
  roleId: selectedRoleId,
- reason: bulkReason });
+ reason: bulkReason,
+ expectedRoleIds: Object.fromEntries(selectedRows.map((r) => [r.id, r.role?.id ?? ''])),
+ });
  };
 
  const data = usersQuery.data;
@@ -157,17 +159,17 @@ export default function AdminUsersIndexPage() {
  return (
  <div>
  <PageHeader
- title="User Management"
+ title="LuUser Management"
  subtitle={data ? `${data.meta.total} users` : undefined}
  actions={
  can('admin.users.manage') && (
  <Button
  variant="primary"
  size="sm"
- icon={<Plus size={14} />}
+ icon={<LuPlus size={14} />}
  onClick={() => navigate('/admin/users/create')}
  >
- Create User
+ Create LuUser
  </Button>
  )
  }

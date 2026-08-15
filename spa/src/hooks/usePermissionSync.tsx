@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Key } from 'lucide-react';
+import { LuKey } from '@/lib/icons';
 import { useAuthStore } from '@/stores/authStore';
 import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -29,7 +29,7 @@ export function usePermissionSync() {
       const userChannel = echo.private(`user.${user.id}`);
       userChannel.listen('.PermissionsChanged', () => {
         toast('Your permissions have been updated.', {
-          icon: <Key size={16} className="text-muted" />,
+          icon: <LuKey size={16} className="text-muted" />,
         });
         refresh();
       });

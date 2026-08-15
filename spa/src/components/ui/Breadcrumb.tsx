@@ -13,7 +13,7 @@
  * ```
  */
 import { Link } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react';
+import { LuChevronRight } from '@/lib/icons';
 import { cn } from '@/lib/cn';
 
 export interface BreadcrumbSegment {
@@ -38,7 +38,7 @@ export function Breadcrumb({ segments, className }: BreadcrumbProps) {
         const isLast = i === segments.length - 1;
         return (
           <span key={`${seg.label}-${i}`} className="flex items-center gap-1">
-            {i > 0 && <ChevronRight size={12} className="text-subtle/50" aria-hidden />}
+            {i > 0 && <LuChevronRight size={12} className="text-subtle/50" aria-hidden />}
             {seg.href && !isLast ? (
               <Link
                 to={seg.href}

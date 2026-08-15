@@ -1,8 +1,10 @@
+import { PortalTable } from '@/components/portal/PortalTable';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { CheckCircle, Truck, FileDown, Upload, FileText, Send } from 'lucide-react';
+import { LuCircleCheck, LuTruck, LuFileDown, LuUpload, LuFileText, LuSend } from '@/lib/icons';
 import { supplierPortalApi } from '@/api/b2b/supplier';
+import type { PortalShippingDocument } from '@/types/b2b';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
@@ -26,6 +28,15 @@ function downloadBlob(blob: Blob, filename: string) {
  a.click();
  window.URL.revokeObjectURL(url);
  a.remove();
+}
+
+async function downloadShippingDoc(doc: PortalShippingDocument) {
+ try {
+ const blob = await supplierPortalApi.downloadShippingDocument(doc.id);
+ downloadBlob(blob, doc.original_filename);
+ } catch {
+ toast.error('Failed to download the shipping document.');
+ }
 }
 
 export default function SupplierPurchaseOrderDetailPage() {
@@ -147,21 +158,21 @@ export default function SupplierPurchaseOrderDetailPage() {
  backLabel="Purchase orders"
  actions={po ? (
  <div className="flex items-center gap-2">
- <Button variant="ghost" size="sm" icon={<FileDown size={14} />} onClick={downloadPdf}>
+ <Button variant="ghost" size="sm" icon={<LuFileDown size={14} />} onClick={downloadPdf}>
  PDF
  </Button>
  {canAcknowledge && (
- <Button variant="primary" size="sm" icon={<CheckCircle size={14} />} onClick={() => acknowledgeMut.mutate()} loading={acknowledgeMut.isPending}>
+ <Button variant="primary" size="sm" icon={<LuCircleCheck size={14} />} onClick={() => acknowledgeMut.mutate()} loading={acknowledgeMut.isPending}>
  Acknowledge PO
  </Button>
  )}
- <Button variant="secondary" size="sm" icon={<Truck size={14} />} onClick={() => setShowShipmentForm(!showShipmentForm)}>
+ <Button variant="secondary" size="sm" icon={<LuTruck size={14} />} onClick={() => setShowShipmentForm(!showShipmentForm)}>
  Update shipment
  </Button>
- <Button variant="secondary" size="sm" icon={<Upload size={14} />} onClick={() => setShowUploadForm(!showUploadForm)}>
+ <Button variant="secondary" size="sm" icon={<LuUpload size={14} />} onClick={() => setShowUploadForm(!showUploadForm)}>
  Upload doc
  </Button>
- <Button variant="secondary" size="sm" icon={<Send size={14} />} onClick={() => setShowInvoiceForm(!showInvoiceForm)}>
+ <Button variant="secondary" size="sm" icon={<LuSend size={14} />} onClick={() => setShowInvoiceForm(!showInvoiceForm)}>
  Submit invoice
  </Button>
  </div>
@@ -281,7 +292,7 @@ export default function SupplierPurchaseOrderDetailPage() {
  type="submit"
  variant="primary"
  size="sm"
- icon={<Send size={14} />}
+ icon={<LuSend size={14} />}
  disabled={!billNumber || !billDate}
  loading={submitInvoiceMut.isPending}
  className="self-start"
@@ -295,7 +306,8 @@ export default function SupplierPurchaseOrderDetailPage() {
  {/* Items */}
  <Panel title={`Items (${po.items?.length ?? 0})`} noPadding>
  {po.items && po.items.length > 0 ? (
- <table className={tableCls}>
+ <PortalTable>
+<table className={tableCls}>
  <thead>
  <tr className={theadTrCls}>
  <Th>Part #</Th>
@@ -319,6 +331,7 @@ export default function SupplierPurchaseOrderDetailPage() {
  ))}
  </tbody>
  </table>
+</PortalTable>
  ) : (
  <EmptyState icon="package" title="No items" />
  )}
@@ -331,16 +344,16 @@ export default function SupplierPurchaseOrderDetailPage() {
  {shippingDocs.map((doc) => (
  <div key={doc.id} className="flex items-center justify-between py-2 px-3">
  <div className="flex items-center gap-3 min-w-0">
- <FileText size={14} className="text-muted shrink-0" />
+ <LuFileText size={14} className="text-muted shrink-0" />
  <div className="min-w-0">
  <p className="text-xs font-medium truncate">{doc.original_filename}</p>
  <p className="text-2xs text-muted">{doc.document_type_label} · {doc.file_size_formatted}</p>
  </div>
  </div>
- <a href={doc.download_url} target="_blank" rel="noopener noreferrer"
+ <button type="button" onClick={() => void downloadShippingDoc(doc)}
  className="text-xs text-accent hover:underline shrink-0 ml-3">
  Download
- </a>
+ </button>
  </div>
  ))}
  </div>
@@ -350,7 +363,8 @@ export default function SupplierPurchaseOrderDetailPage() {
  {/* GRNs */}
  {po.goods_receipt_notes && po.goods_receipt_notes.length > 0 && (
  <Panel title="Goods Receipt Notes" noPadding>
- <table className={tableCls}>
+ <PortalTable>
+<table className={tableCls}>
  <thead>
  <tr className={theadTrCls}>
  <Th>GRN #</Th>
@@ -366,13 +380,15 @@ export default function SupplierPurchaseOrderDetailPage() {
  ))}
  </tbody>
  </table>
+</PortalTable>
  </Panel>
  )}
 
  {/* Bills */}
  {po.bills && po.bills.length > 0 && (
  <Panel title="Bills / Invoices" noPadding>
- <table className={tableCls}>
+ <PortalTable>
+<table className={tableCls}>
  <thead>
  <tr className={theadTrCls}>
  <Th>Bill #</Th>
@@ -398,6 +414,7 @@ export default function SupplierPurchaseOrderDetailPage() {
  ))}
  </tbody>
  </table>
+</PortalTable>
  </Panel>
  )}
  </>

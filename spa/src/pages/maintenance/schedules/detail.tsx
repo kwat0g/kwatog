@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Pencil, Trash2 } from 'lucide-react';
+import { LuPencil, LuTrash2 } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { schedulesApi } from '@/api/maintenance/schedules';
 import { Button } from '@/components/ui/Button';
@@ -63,10 +63,10 @@ await schedulesApi.destroy(id);
  can('maintenance.schedules.manage') ? (
  <div className="flex gap-2">
  <Button variant="secondary" size="sm" onClick={() => navigate(`/maintenance/schedules/${id}/edit`)}>
- <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
+ <LuPencil className="h-3.5 w-3.5 mr-1" /> Edit
  </Button>
 <Button variant="danger" size="sm" onClick={() => setShowDeleteConfirm(true)} loading={deleting}>
-  <Trash2 className="h-3.5 w-3.5 mr-1" /> Archive
+  <LuTrash2 className="h-3.5 w-3.5 mr-1" /> Archive
   </Button>
  </div>
  ) : undefined

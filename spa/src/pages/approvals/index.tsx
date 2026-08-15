@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ExternalLink, Clock, AlertTriangle } from 'lucide-react';
+import { LuExternalLink, LuClock, LuTriangleAlert } from '@/lib/icons';
 import { approvalsApi } from '@/api/approvals';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -267,7 +267,7 @@ function ActiveCard({
           <span className="inline-flex items-center gap-1 font-mono tabular-nums">
             {hasSla ? (
               <>
-                {remaining <= 0 ? <AlertTriangle size={10} /> : <Clock size={10} />}
+                {remaining <= 0 ? <LuTriangleAlert size={10} /> : <LuClock size={10} />}
                 {formatSla(remaining)}
               </>
             ) : (
@@ -297,7 +297,7 @@ function ActiveCard({
         </div>
       )}
       <div className="text-2xs text-muted mt-1.5 flex items-center gap-1">
-        <ExternalLink size={10} />
+        <LuExternalLink size={10} />
         Open record to act
       </div>
     </button>

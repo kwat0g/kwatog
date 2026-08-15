@@ -4,6 +4,7 @@ export interface SupplierPortalUser {
  id: string;
  name: string;
  email: string;
+ must_change_password: boolean;
  phone: string | null;
  vendor: { id: string; name: string } | null;
  last_login_at: string | null;
@@ -14,6 +15,7 @@ export interface CustomerPortalUser {
  id: string;
  name: string;
  email: string;
+ must_change_password: boolean;
  phone: string | null;
  company_name: string | null;
  customer: { id: string; name: string } | null;
@@ -61,6 +63,15 @@ export interface PortalPoDetail extends PortalPoSummary {
  status_label?: string;
  due_date: string | null;
  }>;
+}
+
+export interface SupplierDeliverySummary {
+ id: string;
+ grn_number: string;
+ received_date: string | null;
+ status: string;
+ status_label: string;
+ purchase_order: { id: string; po_number: string } | null;
 }
 
 // ── Customer portal: Sales Order types ────────────────

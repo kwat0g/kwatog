@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { factoryApi } from '@/api/factory';
-import { RefreshCw } from 'lucide-react';
+import { LuRefreshCw } from '@/lib/icons';
 import type { WorkOrder } from '@/types/production';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -25,7 +25,7 @@ export default function ActiveOrders() {
       variant="ghost"
       size="lg"
       className="min-h-[44px] text-secondary"
-      icon={<RefreshCw className={cn('w-4 h-4', isFetching && 'animate-spin')} />}
+      icon={<LuRefreshCw className={cn('w-4 h-4', isFetching && 'animate-spin')} />}
       disabled={isFetching}
       onClick={() => refetch()}
     >
@@ -72,7 +72,7 @@ export default function ActiveOrders() {
               variant="secondary"
               size="lg"
               className="min-h-[44px]"
-              icon={<RefreshCw className="w-4 h-4" />}
+              icon={<LuRefreshCw className="w-4 h-4" />}
               onClick={() => refetch()}
             >
               Refresh

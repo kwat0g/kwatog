@@ -1,13 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { RotateCcw } from 'lucide-react';
+import { LuRotateCcw } from '@/lib/icons';
 import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { DashboardShell, PanelRow } from '@/components/dashboard/DashboardShell';
+import { DashboardShell } from '@/components/dashboard/DashboardShell';
+import { DashboardGrid, DashboardGridItem } from '@/components/dashboard/DashboardGrid';
 import { FinanceSection } from '@/components/dashboard/FinanceSection';
 import { LiveDashboardWidget } from '@/components/dashboard/registry';
 import { WidgetErrorBoundary } from '@/components/ui/WidgetErrorBoundary';
+import { DashboardPicker } from '@/components/dashboard/DashboardPicker';
 import { dashboardLayoutApi } from '@/api/dashboard-layout';
 import { useAuthStore } from '@/stores/authStore';
 import { usePermission } from '@/hooks/usePermission';
@@ -34,13 +36,14 @@ export default function DashboardDefaultPage() {
  const { can } = usePermission();
  const canSeeFinance = can('accounting.dashboard.view');
  const canResetLayout = can('dashboard.layout.reset');
+ const roleLabel = user?.role?.name ?? 'Your';
 
  const layout = useQuery({
  queryKey: ['dashboard', 'layout', { rich: true }],
  queryFn: () => dashboardLayoutApi.layout({ rich: true }),
  });
 
- const widgetKeys = layout.data?.map((widget) => widget.key) ?? [];
+ const widgetKeys = layout.data?.items.map((widget) => widget.key) ?? [];
  const widgetData = useQuery({
  queryKey: ['dashboard', 'widget-data', widgetKeys],
  queryFn: () => dashboardLayoutApi.data(widgetKeys),
@@ -49,7 +52,7 @@ export default function DashboardDefaultPage() {
  });
 
  const reset = useMutation({
- mutationFn: () => dashboardLayoutApi.reset(),
+ mutationFn: () => dashboardLayoutApi.reset(layout.data?.version ?? ''),
  onSuccess: () => {
  toast.success('Dashboard reset to your role default.');
  queryClient.invalidateQueries({ queryKey: ['dashboard', 'layout'] });
@@ -59,7 +62,7 @@ export default function DashboardDefaultPage() {
 
  const subtitle = canSeeFinance
  ? 'Foundation + Hire-to-Retire + Lean Accounting are live.'
- : 'Your widgets reflect the default layout for your role. You can save a personal layout to override.';
+ : `${roleLabel} priorities are shown from the data and permissions available to this account.`;
 
  return (
  <DashboardShell<Awaited<ReturnType<typeof dashboardLayoutApi.layout>>>
@@ -68,21 +71,26 @@ export default function DashboardDefaultPage() {
  query={layout}
  refreshingQueryKey={['dashboard', 'layout']}
  kpiCount={3}
- actions={
- canResetLayout && layout.data && layout.data.some((w) => w.source === 'user') ? (
+ actions={layout.data ? (
+ <div className="flex flex-wrap items-center justify-end gap-2">
+ <DashboardPicker layout={layout.data.items} layoutVersion={layout.data.version} />
+ {canResetLayout && layout.data.items.some((w) => w.source === 'user') && (
  <Button
- variant="secondary"
- icon={<RotateCcw size={14} />}
+ variant="ghost"
+ icon={<LuRotateCcw size={14} />}
  onClick={() => reset.mutate()}
  loading={reset.isPending}
  aria-label="Reset dashboard layout to role default"
  >
- Reset to default
+ Reset
  </Button>
- ) : undefined
- }
+ )}
+ </div>
+ ) : undefined}
  >
- {(widgets) => (
+ {(snapshot) => {
+ const widgets = snapshot.items;
+ return (
  <>
  {widgets.length === 0 ? (
  <Panel title="No widgets configured">
@@ -94,10 +102,10 @@ export default function DashboardDefaultPage() {
  />
  </Panel>
  ) : (
- <PanelRow cols={3}>
+ <DashboardGrid>
  {widgets.map((item) => {
  return (
- <div key={item.key} className="min-h-[120px]">
+ <DashboardGridItem key={item.key} width={item.w} height={item.h}>
  <WidgetErrorBoundary>
  <LiveDashboardWidget
  widget={item}
@@ -105,16 +113,17 @@ export default function DashboardDefaultPage() {
  loading={widgetData.isLoading}
  />
  </WidgetErrorBoundary>
- </div>
+ </DashboardGridItem>
  );
  })}
- </PanelRow>
+ </DashboardGrid>
  )}
 
  {/* Sprint 4 / Task 37 finance block — kept until widget-ised separately. */}
  {canSeeFinance && <FinanceSection />}
  </>
- )}
+ );
+ }}
  </DashboardShell>
  );
 }

@@ -4,7 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Trash2 } from 'lucide-react';
+import { LuPlus, LuTrash2 } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
 import { prTemplatesApi } from '@/api/purchasing/purchase-requests';
@@ -212,7 +212,7 @@ export default function PrTemplateFormPage() {
               type="button"
               size="sm"
               variant="secondary"
-              icon={<Plus size={14} />}
+              icon={<LuPlus size={14} />}
               onClick={() =>
                 append({
                   item_id: '',
@@ -289,7 +289,7 @@ export default function PrTemplateFormPage() {
                     variant="ghost"
                     size="sm"
                     iconOnly
-                    icon={<Trash2 size={14} />}
+                    icon={<LuTrash2 size={14} />}
                     aria-label="Remove line"
                     onClick={() => remove(i)}
                     disabled={fields.length <= 1}

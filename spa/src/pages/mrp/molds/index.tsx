@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { LuPlus } from '@/lib/icons';
 import { moldsApi, type MoldListParams } from '@/api/mrp/molds';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -89,7 +89,7 @@ export default function MoldsListPage() {
  <PageHeader title="Molds"
  subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'mold' : 'molds'}` : undefined}
  actions={canManage ? (
- <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/mrp/molds/create')}>
+ <Button variant="primary" size="sm" icon={<LuPlus size={14} />} onClick={() => navigate('/mrp/molds/create')}>
  New mold
  </Button>
  ) : null} />

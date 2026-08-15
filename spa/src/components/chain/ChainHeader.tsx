@@ -12,12 +12,14 @@ interface ChainHeaderProps {
 const dotClass = (step: ChainStep) => {
  if (step.is_overdue) return 'bg-danger-bg border-danger animate-pulse ring-2 ring-danger/30';
  if (step.state === 'done') return 'bg-success-bg border-success';
+ if (step.state === 'rejected') return 'bg-danger-bg border-danger';
+ if (step.state === 'skipped') return 'bg-muted border-default';
  if (step.state === 'active') return 'bg-accent border-accent';
  return 'bg-canvas border-strong';
 };
 
 const lineClass = (left: ChainStep) =>
- left.state === 'done' ? 'bg-success-bg' : 'bg-strong';
+ left.state === 'done' ? 'bg-success-bg' : left.state === 'rejected' ? 'bg-danger' : 'bg-strong';
 
 export function ChainHeader({ steps, className }: ChainHeaderProps) {
  if (steps.length === 0) return null;
@@ -47,7 +49,15 @@ export function ChainHeader({ steps, className }: ChainHeaderProps) {
  <div
  className={cn(
  'text-xs',
- step.is_overdue ? 'text-danger-fg font-medium' : step.state === 'pending' ? 'text-subtle' : 'text-primary',
+ step.is_overdue
+ ? 'text-danger-fg font-medium'
+ : step.state === 'rejected'
+ ? 'text-danger-fg font-medium'
+ : step.state === 'skipped'
+ ? 'text-muted'
+ : step.state === 'pending'
+ ? 'text-subtle'
+ : 'text-primary',
  step.state === 'active' && 'font-medium',
  isInteractive && 'hover:underline underline-offset-2',
  )}

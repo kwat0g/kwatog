@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AxiosError } from 'axios';
-import { X } from 'lucide-react';
+import { LuX } from '@/lib/icons';
 import { recruitmentApi } from '@/api/recruitment';
 import { departmentsApi } from '@/api/hr/departments';
 import { positionsApi } from '@/api/hr/positions';
@@ -217,7 +217,7 @@ export default function PostingCreatePage() {
  onClick={() => removeTag(i)}
  className={cn('ml-2 text-muted hover:text-danger-fg transition-colors shrink-0 cursor-pointer rounded', focusRing)}
  >
- <X size={14} />
+ <LuX size={14} />
  </button>
  </li>
  ))}

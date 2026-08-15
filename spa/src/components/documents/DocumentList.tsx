@@ -5,7 +5,7 @@
 
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Eye, Download } from 'lucide-react';
+import { LuEye, LuDownload } from '@/lib/icons';
 import { client } from '@/api/client';
 import { downloadAuthenticatedFile } from '@/api/download';
 import { Button } from '@/components/ui/Button';
@@ -79,12 +79,12 @@ export function DocumentList({ endpoint = '/documents', filters }: DocumentListP
  <Button
  size="sm"
  variant="ghost"
- icon={<Eye size={14} />}
+ icon={<LuEye size={14} />}
  onClick={() => setPreviewing(row)}
  >
  View
  </Button>
- <Button size="sm" variant="ghost" icon={<Download size={14} />}
+ <Button size="sm" variant="ghost" icon={<LuDownload size={14} />}
  onClick={() => void downloadAuthenticatedFile(row.download_url, { filename: row.file_name, errorMessage: 'Failed to download document.' })}>
  Download
  </Button>

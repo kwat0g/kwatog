@@ -2,16 +2,16 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
- CheckCircle2,
- Clock3,
- ExternalLink,
- GitBranch,
- RefreshCw,
- RotateCcw,
- Search,
- ShieldCheck,
- StickyNote,
-} from 'lucide-react';
+ LuCircleCheck,
+ LuClock3,
+ LuExternalLink,
+ LuGitBranch,
+ LuRefreshCw,
+ LuRotateCcw,
+ LuSearch,
+ LuShieldCheck,
+ LuStickyNote,
+} from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { chainApi } from '@/api/chain';
 import { usePermission } from '@/hooks/usePermission';
@@ -145,7 +145,7 @@ export default function ChainRecoveryPage() {
  size="sm"
  onClick={() => query.refetch()}
  disabled={query.isFetching}
- icon={<RefreshCw size={13} className={cn(query.isFetching && 'animate-spin')} />}
+ icon={<LuRefreshCw size={13} className={cn(query.isFetching && 'animate-spin')} />}
  >
  Refresh
  </Button>
@@ -179,14 +179,14 @@ export default function ChainRecoveryPage() {
  setSearch(event.target.value);
  setPage(1);
  }}
- prefix={<Search size={12} />}
+ prefix={<LuSearch size={12} />}
  containerClassName="w-full lg:ml-auto lg:w-80"
  />
  </div>
 
  <div className="mt-4 rounded-md border border-info/30 bg-info-bg/30 px-3 py-2 text-xs text-secondary">
  <div className="flex items-start gap-2">
- <ShieldCheck size={14} className="mt-0.5 shrink-0 text-info-fg" />
+ <LuShieldCheck size={14} className="mt-0.5 shrink-0 text-info-fg" />
  <span>
  Replay is scoped to the selected listener. It leaves the published outbox message and sibling listeners untouched.
  A replay creates a new run linked to the source run.
@@ -314,10 +314,10 @@ function ListenerRunRow({
  <pre className="mt-2 max-h-24 overflow-auto whitespace-pre-wrap break-words rounded bg-danger-bg/40 px-2 py-1.5 text-2xs text-danger-fg">{run.queue.last_error}</pre>
  )}
  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-muted">
- <span className="inline-flex items-center gap-1"><Clock3 size={11} /> {formatRelative(run.created_at)}</span>
+ <span className="inline-flex items-center gap-1"><LuClock3 size={11} /> {formatRelative(run.created_at)}</span>
  <span>{run.queue.attempts} attempt{run.queue.attempts === 1 ? '' : 's'}</span>
  {run.outcome.code && <span className="font-mono">{run.outcome.code}</span>}
- {run.replay.count > 0 && <span className="inline-flex items-center gap-1"><RotateCcw size={11} /> {run.replay.count} replay{run.replay.count === 1 ? '' : 's'}</span>}
+ {run.replay.count > 0 && <span className="inline-flex items-center gap-1"><LuRotateCcw size={11} /> {run.replay.count} replay{run.replay.count === 1 ? '' : 's'}</span>}
  </div>
  </div>
 
@@ -327,18 +327,18 @@ function ListenerRunRow({
  {run.correlation.replayed_from_id && <Correlation label="Replayed from" value={run.correlation.replayed_from_id} />}
  {run.chain_step && (
  <div className="flex items-center gap-1.5 min-w-0">
- <GitBranch size={11} className="shrink-0" />
+ <LuGitBranch size={11} className="shrink-0" />
  <span className="truncate">{run.chain_step.chain} · {run.chain_step.step} · {run.chain_step.entity_type}</span>
  {entityLink && (
  <Link to={entityLink} className="shrink-0 text-accent hover:underline" aria-label="Open correlated record">
- <ExternalLink size={11} />
+ <LuExternalLink size={11} />
  </Link>
  )}
  </div>
  )}
  {run.resolution.resolved_by && (
  <div className="flex items-center gap-1.5 min-w-0">
- <StickyNote size={11} className="shrink-0" />
+ <LuStickyNote size={11} className="shrink-0" />
  <span className="truncate">Resolved by {run.resolution.resolved_by} · {formatDateTime(run.resolution.resolved_at)}</span>
  </div>
  )}
@@ -350,7 +350,7 @@ function ListenerRunRow({
  <Button
  size="sm"
  variant="secondary"
- icon={<RotateCcw size={12} />}
+ icon={<LuRotateCcw size={12} />}
  onClick={onReplay}
  disabled={!isActionable || run.resolution.status === 'resolved'}
  title={!isActionable ? 'Only failed or manual-handoff runs can be replayed.' : undefined}
@@ -360,7 +360,7 @@ function ListenerRunRow({
  <Button
  size="sm"
  variant="primary"
- icon={<CheckCircle2 size={12} />}
+ icon={<LuCircleCheck size={12} />}
  onClick={onResolve}
  disabled={!isActionable || run.resolution.status === 'resolved'}
  title={!isActionable ? 'Only failed or manual-handoff runs can be resolved.' : undefined}

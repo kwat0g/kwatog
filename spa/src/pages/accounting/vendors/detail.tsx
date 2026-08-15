@@ -1,6 +1,6 @@
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Pencil, Plus } from 'lucide-react';
+import { LuPencil, LuPlus } from '@/lib/icons';
 import { vendorsApi } from '@/api/accounting/vendors';
 import { billsApi } from '@/api/accounting/bills';
 import { Button } from '@/components/ui/Button';
@@ -64,12 +64,12 @@ export default function VendorDetailPage() {
  actions={
  <div className="flex gap-1.5">
  {can('accounting.bills.create') && (
- <Button variant="secondary" size="sm" icon={<Plus size={14} />} onClick={() => navigate(`/accounting/bills/create?vendor_id=${vendor.id}`)}>
+ <Button variant="secondary" size="sm" icon={<LuPlus size={14} />} onClick={() => navigate(`/accounting/bills/create?vendor_id=${vendor.id}`)}>
  New bill
  </Button>
  )}
  {can('accounting.vendors.manage') && (
- <Button variant="primary" size="sm" icon={<Pencil size={14} />} onClick={() => navigate(`/accounting/vendors/${vendor.id}/edit`)}>
+ <Button variant="primary" size="sm" icon={<LuPencil size={14} />} onClick={() => navigate(`/accounting/vendors/${vendor.id}/edit`)}>
  Edit
  </Button>
  )}

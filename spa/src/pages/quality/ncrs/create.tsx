@@ -13,7 +13,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import toast from 'react-hot-toast';
 import { onFormInvalid } from '@/lib/formErrors';
-import { Copy } from 'lucide-react';
+import { LuCopy } from '@/lib/icons';
 import type { AxiosError } from 'axios';
 import { ncrsApi } from '@/api/quality/ncrs';
 import { ncrTemplatesApi } from '@/api/quality/ncr-templates';
@@ -133,7 +133,7 @@ export default function CreateNcrPage() {
  <Button
  size="sm"
  variant="secondary"
- icon={<Copy size={12} />}
+ icon={<LuCopy size={12} />}
  onClick={() => setTemplatePickerOpen(true)}
  disabled={templates.isLoading}
  >

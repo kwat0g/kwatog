@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
-import { AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { LuTriangleAlert, LuCircleCheck } from '@/lib/icons';
 import { payrollAnomaliesApi } from '@/api/payroll/anomalies';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -103,7 +103,7 @@ export function AnomalyReviewPanel({ periodId }: Props) {
  {flags.length > 0 && (
  <ul className="divide-y divide-subtle">
  {flags.map((f) => {
- const Icon = f.is_resolved ? CheckCircle2 : AlertTriangle;
+ const Icon = f.is_resolved ? LuCircleCheck : LuTriangleAlert;
  const Detail = (k: string) => (f.details as Record<string, unknown>)[k];
  const previous = Detail('previous');
  const current = Detail('current');

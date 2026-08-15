@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { LuPlus } from '@/lib/icons';
 import { vendorsApi, type VendorListParams } from '@/api/accounting/vendors';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -49,7 +49,7 @@ export default function VendorsPage() {
  title="Vendors"
  subtitle={data ? `${data.meta.total} vendors` : undefined}
  actions={can('accounting.vendors.manage') ? (
- <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/accounting/vendors/create')}>
+ <Button variant="primary" size="sm" icon={<LuPlus size={14} />} onClick={() => navigate('/accounting/vendors/create')}>
  New vendor
  </Button>
  ) : null}

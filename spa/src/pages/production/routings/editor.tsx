@@ -12,7 +12,7 @@ import { useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { AxiosError } from 'axios';
-import { Plus, Trash2, GripVertical } from 'lucide-react';
+import { LuPlus, LuTrash2, LuGripVertical } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { onFormInvalid } from '@/lib/formErrors';
 import { Button } from '@/components/ui/Button';
@@ -282,7 +282,7 @@ export default function RoutingEditorPage() {
  <tr key={field.id} className={cn(trCls, 'align-top')}>
  <Td>
  <div className="flex items-center gap-1 text-muted">
- <GripVertical size={12} className="shrink-0" aria-hidden />
+ <LuGripVertical size={12} className="shrink-0" aria-hidden />
  <Input
  {...register(`operations.${i}.sequence` as const)}
  error={errors.operations?.[i]?.sequence?.message}
@@ -378,7 +378,7 @@ export default function RoutingEditorPage() {
  variant="ghost"
  size="sm"
  iconOnly
- icon={<Trash2 size={14} />}
+ icon={<LuTrash2 size={14} />}
  aria-label="Remove operation"
  onClick={() => remove(i)}
  disabled={fields.length === 1}
@@ -396,7 +396,7 @@ export default function RoutingEditorPage() {
  type="button"
  variant="secondary"
  size="sm"
- icon={<Plus size={14} />}
+ icon={<LuPlus size={14} />}
  onClick={() => {
  const nextSeq = fields.length > 0
  ? String((Math.max(...fields.map((_, i) => {

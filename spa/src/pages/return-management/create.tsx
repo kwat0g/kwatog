@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
-import { Plus, Trash2 } from 'lucide-react';
+import { LuPlus, LuTrash2 } from '@/lib/icons';
 import { returnManagementApi } from '@/api/returnManagement';
 import { productsApi } from '@/api/crm/products';
 import { customersApi } from '@/api/accounting/customers';
@@ -266,7 +266,7 @@ export default function CreateReturnRequestPage() {
  type="button"
  variant="secondary"
  size="sm"
- icon={<Plus size={14} />}
+ icon={<LuPlus size={14} />}
  onClick={() =>
  append({ product_id: '', item_id: '', quantity: '' as unknown as number, unit_price: '' as unknown as number, reason: '', condition: '' })
  }
@@ -359,7 +359,7 @@ export default function CreateReturnRequestPage() {
  variant="ghost"
  size="sm"
  iconOnly
- icon={<Trash2 size={14} />}
+ icon={<LuTrash2 size={14} />}
  aria-label="Remove line"
  onClick={() => remove(idx)}
  className="text-muted hover:text-danger-fg"

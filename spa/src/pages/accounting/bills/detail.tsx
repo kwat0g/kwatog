@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { onFormInvalid } from '@/lib/formErrors';
-import { Printer, Receipt, Ban, Send } from 'lucide-react';
+import { LuPrinter, LuReceipt, LuBan, LuSend } from '@/lib/icons';
 import { billsApi } from '@/api/accounting/bills';
 import { accountingOptionsApi } from '@/api/accounting/options';
 import { downloadAuthenticatedFile } from '@/api/download';
@@ -153,12 +153,12 @@ export default function BillDetailPage() {
  { label: bill.bill_number },
  ]}  actions={
    <div className="flex gap-1.5">
-   <Button variant="secondary" size="sm" icon={<Printer size={14} />} onClick={() => void downloadAuthenticatedFile(billsApi.pdfUrl(bill.id), { openInNewTab: true, errorMessage: 'Failed to generate bill PDF.' })}>Print</Button>
+   <Button variant="secondary" size="sm" icon={<LuPrinter size={14} />} onClick={() => void downloadAuthenticatedFile(billsApi.pdfUrl(bill.id), { openInNewTab: true, errorMessage: 'Failed to generate bill PDF.' })}>Print</Button>
  {bill.status === 'draft' && can('accounting.bills.create') && (
     <Button
      variant="primary"
      size="sm"
-     icon={<Send size={14} />}
+     icon={<LuSend size={14} />}
      onClick={() => {
       if (bill.three_way_review_status === 'manual_review' || match?.overall_status === 'blocked') {
        setShowPostOverride(true);
@@ -169,10 +169,10 @@ export default function BillDetailPage() {
     >Post bill</Button>
    )}
    {isOpen && can('accounting.bills.pay') && (
- <Button variant="primary" size="sm" icon={<Receipt size={14} />} onClick={() => setShowPay(true)}>Record payment</Button>
+ <Button variant="primary" size="sm" icon={<LuReceipt size={14} />} onClick={() => setShowPay(true)}>Record payment</Button>
  )}
  {bill.amount_paid === '0.00' && bill.status !== 'cancelled' && can('accounting.bills.update') && (
- <Button variant="danger" size="sm" icon={<Ban size={14} />} onClick={() => setShowCancelConfirm(true)}>
+ <Button variant="danger" size="sm" icon={<LuBan size={14} />} onClick={() => setShowCancelConfirm(true)}>
  Cancel
  </Button>
  )}
@@ -228,7 +228,8 @@ export default function BillDetailPage() {
  </Panel>
 
  <Panel title="Line items">
- <table className={tableCls}>
+ <div className="overflow-x-auto">
+ <table className={`${tableCls} min-w-[680px]`}>
  <thead>
  <tr className={theadTrCls}>
  <Th>#</Th>
@@ -257,6 +258,7 @@ export default function BillDetailPage() {
  <tr className={totalsTrCls}><Td align="right" mono colSpan={5}>Total</Td><Td align="right" mono>{formatPeso(bill.total_amount)}</Td></tr>
  </tbody>
  </table>
+ </div>
  </Panel>
  </div>
 
@@ -292,7 +294,8 @@ export default function BillDetailPage() {
  ) : !match || match.lines.length === 0 ? (
  <p className="text-sm text-muted">No match snapshot available.</p>
  ) : (
- <table className={tableCls}>
+ <div className="overflow-x-auto">
+ <table className={`${tableCls} min-w-[980px]`}>
  <thead>
  <tr className={theadTrCls}>
  <Th>Item</Th>
@@ -331,6 +334,7 @@ export default function BillDetailPage() {
  })}
  </tbody>
  </table>
+ </div>
  )}
  </Panel>
  )}

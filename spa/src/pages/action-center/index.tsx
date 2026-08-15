@@ -1,24 +1,25 @@
+import { IconType } from '@/lib/icons';
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
- AlertTriangle,
- BellRing,
- CheckCheck,
- ChevronRight,
- ClipboardCheck,
- Clock4,
- ExternalLink,
- Factory,
- ListChecks,
- RefreshCw,
- Search,
- ShieldCheck,
- Truck,
- UserCheck,
- Wrench,
- type LucideIcon,
-} from 'lucide-react';
+ LuTriangleAlert,
+ LuBellRing,
+ LuCheckCheck,
+ LuChevronRight,
+ LuClipboardCheck,
+ LuClock4,
+ LuExternalLink,
+ LuFactory,
+ LuListChecks,
+ LuRefreshCw,
+ LuSearch,
+ LuShieldCheck,
+ LuTruck,
+ LuUserCheck,
+ LuWrench,
+
+} from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { actionCenterApi } from '@/api/actionCenter';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -35,13 +36,13 @@ import { formatDateTime, formatRelative } from '@/lib/formatDate';
 import { focusRingInset } from '@/lib/focus';
 import type { ActionCategory, ActionCenterItem, ActionPriority } from '@/types/actionCenter';
 
-const CATEGORY_ICONS: Record<ActionCategory, LucideIcon> = {
- approval: ClipboardCheck,
- alert: BellRing,
- quality: ShieldCheck,
- maintenance: Wrench,
- production: Factory,
- supply_chain: Truck,
+const CATEGORY_ICONS: Record<ActionCategory, IconType> = {
+ approval: LuClipboardCheck,
+ alert: LuBellRing,
+ quality: LuShieldCheck,
+ maintenance: LuWrench,
+ production: LuFactory,
+ supply_chain: LuTruck,
 };
 
 const PRIORITY_VARIANT: Record<ActionPriority, ChipVariant> = {
@@ -116,7 +117,7 @@ export default function ActionCenterPage() {
  refreshingQueryKey={['action-center']}
  actions={(
  <Button variant="secondary" size="sm" onClick={() => query.refetch()} disabled={query.isFetching}>
- <RefreshCw size={13} className={cn(query.isFetching && 'animate-spin')} />
+ <LuRefreshCw size={13} className={cn(query.isFetching && 'animate-spin')} />
  Refresh
  </Button>
  )}
@@ -136,10 +137,10 @@ export default function ActionCenterPage() {
  {query.data && (
  <div className="p-5 space-y-4">
  <section className="grid grid-cols-2 lg:grid-cols-4 gap-2" aria-label="Action summary">
- <SummaryCard label="Open actions" value={summary?.total ?? 0} icon={ListChecks} />
- <SummaryCard label="Critical" value={summary?.critical ?? 0} icon={AlertTriangle} tone="danger" />
- <SummaryCard label="High priority" value={summary?.high ?? 0} icon={BellRing} tone="warning" />
- <SummaryCard label="Overdue" value={summary?.overdue ?? 0} icon={RefreshCw} tone="danger" />
+ <SummaryCard label="Open actions" value={summary?.total ?? 0} icon={LuListChecks} />
+ <SummaryCard label="Critical" value={summary?.critical ?? 0} icon={LuTriangleAlert} tone="danger" />
+ <SummaryCard label="High priority" value={summary?.high ?? 0} icon={LuBellRing} tone="warning" />
+ <SummaryCard label="Overdue" value={summary?.overdue ?? 0} icon={LuRefreshCw} tone="danger" />
  </section>
 
  <section className="rounded-md border border-default bg-canvas">
@@ -172,7 +173,7 @@ export default function ActionCenterPage() {
  placeholder="Search work, reference, or owner…"
  value={search}
  onChange={(event) => setSearch(event.target.value)}
- prefix={<Search size={12} />}
+ prefix={<LuSearch size={12} />}
  containerClassName="w-full lg:w-72"
  />
  </div>
@@ -183,14 +184,14 @@ export default function ActionCenterPage() {
  {selected.size} selected · {summary?.overdue ?? 0} overdue · {summary?.unassigned ?? 0} unassigned
  </span>
  <Button size="sm" variant="secondary" disabled={!selected.size} onClick={() => triage.mutate({ action: 'claim' })}>
- <UserCheck size={12} /> Claim
+ <LuUserCheck size={12} /> Claim
  </Button>
  <Button size="sm" variant="secondary" disabled={!selected.size} onClick={() => triage.mutate({ action: 'acknowledge' })}>
- <CheckCheck size={12} /> Acknowledge
+ <LuCheckCheck size={12} /> Acknowledge
  </Button>
  <Button size="sm" variant="secondary" disabled={!selected.size}
  onClick={() => triage.mutate({ action: 'snooze', snoozed_until: new Date(Date.now() + 4 * 3600_000).toISOString() })}>
- <Clock4 size={12} /> Snooze 4h
+ <LuClock4 size={12} /> Snooze 4h
  </Button>
  <Button size="sm" variant="primary" disabled={!selected.size} onClick={() => triage.mutate({ action: 'resolve' })}>
  Resolve
@@ -264,10 +265,10 @@ export default function ActionCenterPage() {
  variant="secondary"
  onClick={() => navigate(item.link)}
  >
- <ExternalLink size={12} />
+ <LuExternalLink size={12} />
  </Button>
  ) : (
- <ChevronRight size={14} className="mt-2 shrink-0 text-subtle group-hover:text-primary" />
+ <LuChevronRight size={14} className="mt-2 shrink-0 text-subtle group-hover:text-primary" />
  )}
  </div>
  );
@@ -295,7 +296,7 @@ function SummaryCard({
 }: {
  label: string;
  value: number;
- icon: LucideIcon;
+ icon: IconType;
  tone?: 'default' | 'danger' | 'warning';
 }) {
  return (

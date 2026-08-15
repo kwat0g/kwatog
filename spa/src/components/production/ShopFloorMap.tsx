@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Activity, AlertTriangle, ArrowRight, CheckCircle2, Wrench, X } from 'lucide-react';
+import { LuActivity, LuTriangleAlert, LuArrowRight, LuCircleCheck, LuWrench, LuX } from '@/lib/icons';
 import { Chip } from '@/components/ui/Chip';
 import { Button } from '@/components/ui/Button';
 
@@ -43,13 +43,13 @@ export function ShopFloorMap({ machines, onSelectMachine }: ShopFloorMapProps) {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'running':
-        return <CheckCircle2 className="w-3.5 h-3.5 text-success-fg" />;
+        return <LuCircleCheck className="w-3.5 h-3.5 text-success-fg" />;
       case 'breakdown':
-        return <AlertTriangle className="w-3.5 h-3.5 text-danger-fg" />;
+        return <LuTriangleAlert className="w-3.5 h-3.5 text-danger-fg" />;
       case 'maintenance':
-        return <Wrench className="w-3.5 h-3.5 text-warning-fg" />;
+        return <LuWrench className="w-3.5 h-3.5 text-warning-fg" />;
       default:
-        return <Activity className="w-3.5 h-3.5 text-muted" />;
+        return <LuActivity className="w-3.5 h-3.5 text-muted" />;
     }
   };
 
@@ -136,7 +136,7 @@ export function ShopFloorMap({ machines, onSelectMachine }: ShopFloorMapProps) {
         <div className="flex items-center justify-between text-[10px] text-subtle pt-1 border-t border-default/40">
           <span>WO: {m.active_wo ?? '—'}</span>
           <span className="group-hover:text-accent flex items-center gap-0.5">
-            Details <ArrowRight className="w-2.5 h-2.5" />
+            Details <LuArrowRight className="w-2.5 h-2.5" />
           </span>
         </div>
       </button>
@@ -186,7 +186,7 @@ export function ShopFloorMap({ machines, onSelectMachine }: ShopFloorMapProps) {
             onClick={() => setSelectedMachine(null)}
             className="absolute top-3 right-3 text-muted hover:text-primary p-1 rounded-md hover:bg-elevated"
           >
-            <X className="w-4 h-4" />
+            <LuX className="w-4 h-4" />
           </button>
 
           <div className="flex items-center gap-3">

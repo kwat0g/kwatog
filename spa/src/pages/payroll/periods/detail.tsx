@@ -2,19 +2,19 @@ import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Play,
-  CheckCircle2,
-  Lock,
-  Download,
-  AlertCircle,
-  Upload,
-  Eye,
-  ArchiveRestore,
-  Trash2,
-  Banknote,
-  Ban,
-  RefreshCw,
-} from 'lucide-react';
+  LuPlay,
+  LuCircleCheck,
+  LuLock,
+  LuDownload,
+  LuCircleAlert,
+  LuUpload,
+  LuEye,
+  LuArchiveRestore,
+  LuTrash2,
+  LuBanknote,
+  LuBan,
+  LuRefreshCw,
+} from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { periodsApi } from '@/api/payroll/periods';
 import { downloadAuthenticatedFile } from '@/api/download';
@@ -522,7 +522,7 @@ export default function PayrollPeriodDetailPage() {
               <Button
                 variant="primary"
                 size="sm"
-                icon={<Play size={14} />}
+                icon={<LuPlay size={14} />}
                 onClick={() => computeMutation.mutate()}
                 disabled={computeMutation.isPending}
                 loading={computeMutation.isPending}
@@ -534,7 +534,7 @@ export default function PayrollPeriodDetailPage() {
               <Button
                 variant="secondary"
                 size="sm"
-                icon={<RefreshCw size={14} />}
+                icon={<LuRefreshCw size={14} />}
                 onClick={() => setShowRecomputeDialog(true)}
                 disabled={computeMutation.isPending}
                 loading={computeMutation.isPending}
@@ -555,7 +555,7 @@ export default function PayrollPeriodDetailPage() {
               <Button
                 variant="primary"
                 size="sm"
-                icon={<CheckCircle2 size={14} />}
+                icon={<LuCircleCheck size={14} />}
                 onClick={() => setShowApproveDialog(true)}
                 disabled={approveMutation.isPending}
                 loading={approveMutation.isPending}
@@ -567,7 +567,7 @@ export default function PayrollPeriodDetailPage() {
               <Button
                 variant="primary"
                 size="sm"
-                icon={<Lock size={14} />}
+                icon={<LuLock size={14} />}
                 onClick={() => setShowFinalizeDialog(true)}
                 disabled={finalizeMutation.isPending}
                 loading={finalizeMutation.isPending}
@@ -579,7 +579,7 @@ export default function PayrollPeriodDetailPage() {
               <Button
                 variant="secondary"
                 size="sm"
-                icon={<RefreshCw size={14} />}
+                icon={<LuRefreshCw size={14} />}
                 onClick={() => retryGlMutation.mutate()}
                 disabled={retryGlMutation.isPending}
                 loading={retryGlMutation.isPending}
@@ -607,7 +607,7 @@ export default function PayrollPeriodDetailPage() {
                 <Button
                   variant="secondary"
                   size="sm"
-                  icon={<Download size={14} />}
+                  icon={<LuDownload size={14} />}
                   onClick={() =>
                     void downloadAuthenticatedFile(periodsApi.bankFileUrl(period.id, bankFormat), {
                       filename: `payroll-bank-file-${period.id}-${bankFormat || bankFileOptions?.default_format || 'bank'}.csv`,
@@ -649,7 +649,7 @@ export default function PayrollPeriodDetailPage() {
               <Button
                 variant="secondary"
                 size="sm"
-                icon={<Upload size={14} />}
+                icon={<LuUpload size={14} />}
                 onClick={() => setShowUploadModal(true)}
               >
                 Upload Proof
@@ -659,7 +659,7 @@ export default function PayrollPeriodDetailPage() {
               <Button
                 variant="primary"
                 size="sm"
-                icon={<Banknote size={14} />}
+                icon={<LuBanknote size={14} />}
                 onClick={() => setShowDisbursedDialog(true)}
                 disabled={markDisbursedMutation.isPending}
                 loading={markDisbursedMutation.isPending}
@@ -671,7 +671,7 @@ export default function PayrollPeriodDetailPage() {
               <Button
                 variant="danger"
                 size="sm"
-                icon={<Ban size={14} />}
+                icon={<LuBan size={14} />}
                 onClick={() => setShowVoidModal(true)}
                 disabled={voidMutation.isPending}
                 loading={voidMutation.isPending}
@@ -713,7 +713,7 @@ export default function PayrollPeriodDetailPage() {
 
           {period.bank_file_status === 'pending' && (
             <div className="flex items-start gap-2 px-3 py-2 mb-4 bg-info-bg text-info-fg rounded-md text-xs">
-              <AlertCircle size={14} className="mt-0.5 shrink-0" />
+              <LuCircleAlert size={14} className="mt-0.5 shrink-0" />
               <div>
                 <span className="font-medium">Bank file generation is pending.</span>{' '}
                 The finalized payroll is queued for automatic generation. If it remains pending,
@@ -724,7 +724,7 @@ export default function PayrollPeriodDetailPage() {
 
           {period.bank_file_status === 'manual_required' && (
             <div className="flex items-start gap-2 px-3 py-2 mb-4 bg-warning-bg text-warning-fg rounded-md text-xs">
-              <AlertCircle size={14} className="mt-0.5 shrink-0" />
+              <LuCircleAlert size={14} className="mt-0.5 shrink-0" />
               <div>
                 <span className="font-medium">Manual bank file generation required.</span>{' '}
                 {period.bank_file_note ?? 'Automatic generation did not produce a bank file.'}{' '}
@@ -735,7 +735,7 @@ export default function PayrollPeriodDetailPage() {
 
           {period.gl_handoff_status === 'pending' && (
             <div className="flex items-start gap-2 px-3 py-2 mb-4 bg-info-bg text-info-fg rounded-md text-xs">
-              <AlertCircle size={14} className="mt-0.5 shrink-0" />
+              <LuCircleAlert size={14} className="mt-0.5 shrink-0" />
               <div>
                 <span className="font-medium">GL posting is pending.</span>{' '}
                 The finalized payroll is queued for Accounting. The payroll rows are already locked;
@@ -746,7 +746,7 @@ export default function PayrollPeriodDetailPage() {
 
           {period.gl_handoff_status === 'manual_required' && (
             <div className="flex items-start gap-2 px-3 py-2 mb-4 bg-warning-bg text-warning-fg rounded-md text-xs">
-              <AlertCircle size={14} className="mt-0.5 shrink-0" />
+              <LuCircleAlert size={14} className="mt-0.5 shrink-0" />
               <div>
                 <span className="font-medium">Manual GL recovery required.</span>{' '}
                 {period.gl_handoff_note ?? 'Automatic posting did not produce a journal entry.'}{' '}
@@ -757,7 +757,7 @@ export default function PayrollPeriodDetailPage() {
 
           {period.gl_handoff_status === 'not_required' && (
             <div className="flex items-start gap-2 px-3 py-2 mb-4 bg-warning-bg text-warning-fg rounded-md text-xs">
-              <AlertCircle size={14} className="mt-0.5 shrink-0" />
+              <LuCircleAlert size={14} className="mt-0.5 shrink-0" />
               <div>
                 <span className="font-medium">GL posting was not required.</span>{' '}
                 Accounting was disabled when this handoff ran. Enable Accounting, then use Retry GL
@@ -768,7 +768,7 @@ export default function PayrollPeriodDetailPage() {
 
           {period.gl_handoff_status === 'posted' && period.gl_entry_number && (
             <div className="flex items-start gap-2 px-3 py-2 mb-4 bg-success-bg text-success-fg rounded-md text-xs">
-              <CheckCircle2 size={14} className="mt-0.5 shrink-0" />
+              <LuCircleCheck size={14} className="mt-0.5 shrink-0" />
               <div>
                 <span className="font-medium">Posted to the General Ledger.</span>{' '}
                 Entry <span className="font-mono">{period.gl_entry_number}</span> is linked to this
@@ -779,7 +779,7 @@ export default function PayrollPeriodDetailPage() {
 
           {period.status === 'voided' && (
             <div className="flex items-start gap-2 px-3 py-2 mb-4 bg-danger-bg text-danger-fg rounded-md text-xs">
-              <Ban size={14} className="mt-0.5 shrink-0" />
+              <LuBan size={14} className="mt-0.5 shrink-0" />
               <div>
                 <span className="font-medium">This period was voided</span>
                 {period.voided_at && (
@@ -799,7 +799,7 @@ export default function PayrollPeriodDetailPage() {
 
           {summary && summary.failed_count > 0 && (
             <div className="flex items-center gap-2 px-3 py-2 mb-4 bg-danger-bg text-danger-fg rounded-md text-xs">
-              <AlertCircle size={14} />
+              <LuCircleAlert size={14} />
               <span>
                 {summary.failed_count} employee(s) failed during computation. Review the Failures
                 tab.
@@ -901,7 +901,7 @@ export default function PayrollPeriodDetailPage() {
                   <Button
                     variant="secondary"
                     size="sm"
-                    icon={<Upload size={14} />}
+                    icon={<LuUpload size={14} />}
                     onClick={() => setShowUploadModal(true)}
                   >
                     Upload Deposit Slip / Bank Confirmation
@@ -928,7 +928,7 @@ export default function PayrollPeriodDetailPage() {
                   <Button
                     variant="secondary"
                     size="sm"
-                    icon={<Upload size={14} />}
+                    icon={<LuUpload size={14} />}
                     onClick={() => setShowUploadModal(true)}
                   >
                     Upload Another
@@ -1239,7 +1239,7 @@ function DisbursementProofCard({
   return (
     <div className="flex items-start gap-3 rounded-md border border-default bg-canvas p-3">
       <div className="shrink-0 flex h-10 w-10 items-center justify-center rounded border border-default bg-elevated">
-        <Download size={16} className="text-muted" />
+        <LuDownload size={16} className="text-muted" />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
@@ -1264,7 +1264,7 @@ function DisbursementProofCard({
             variant="ghost"
             size="sm"
             iconOnly
-            icon={<ArchiveRestore size={14} />}
+            icon={<LuArchiveRestore size={14} />}
             aria-label="Restore proof"
             onClick={() => restoreMutation.mutate()}
             disabled={restoreMutation.isPending}
@@ -1277,7 +1277,7 @@ function DisbursementProofCard({
               variant="ghost"
               size="sm"
               iconOnly
-              icon={<Eye size={14} />}
+              icon={<LuEye size={14} />}
               aria-label="View disbursement proof"
               onClick={() =>
                 void downloadAuthenticatedFile(periodsApi.downloadProof(periodId, proof.id), {
@@ -1292,7 +1292,7 @@ function DisbursementProofCard({
               variant="ghost"
               size="sm"
               iconOnly
-              icon={<Trash2 size={14} />}
+              icon={<LuTrash2 size={14} />}
               aria-label="Archive proof"
               onClick={() => setShowDeleteConfirm(true)}
               disabled={deleteMutation.isPending}
@@ -1488,7 +1488,7 @@ function VoidPeriodModal({
       <div className="space-y-3 py-3">
         {stakes && <div className="text-sm text-muted">Voiding {stakes}.</div>}
         <div className="flex items-start gap-2 px-3 py-2 bg-danger-bg text-danger-fg rounded-md text-xs">
-          <Ban size={14} className="mt-0.5 shrink-0" />
+          <LuBan size={14} className="mt-0.5 shrink-0" />
           <span>
             Voiding transitions this period to <strong>Voided</strong>.
             {hasGlPosting

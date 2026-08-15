@@ -1,6 +1,6 @@
-import { cn } from '@/lib/cn';
+import { PortalTable } from '@/components/portal/PortalTable';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { customerPortalApi } from '@/api/b2b/customer';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
@@ -13,7 +13,6 @@ import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells
 import { CompanyName } from '@/components/brand/CompanyName';
 
 export default function CustomerOrdersPage() {
-  const navigate = useNavigate();
   const {
     data: orders,
     isLoading,
@@ -55,7 +54,8 @@ export default function CustomerOrdersPage() {
         {!isLoading && !isError && (
           <Panel noPadding>
             {orders && orders.length > 0 ? (
-              <table className={tableCls}>
+              <PortalTable>
+<table className={tableCls}>
                 <thead>
                   <tr className={theadTrCls}>
                     <Th>Order #</Th>
@@ -68,13 +68,11 @@ export default function CustomerOrdersPage() {
                   {orders.map((order) => (
                     <tr
                       key={order.id}
-                      className={cn(trCls, 'cursor-pointer')}
-                      onClick={() => navigate(`/portal/customer/orders/${order.id}`)}
+                      className={trCls}
                     >
                       <Td>
                         <Link
                           to={`/portal/customer/orders/${order.id}`}
-                          onClick={(e) => e.stopPropagation()}
                           className="font-mono text-accent hover:underline font-medium"
                         >
                           {order.so_number}
@@ -93,6 +91,7 @@ export default function CustomerOrdersPage() {
                   ))}
                 </tbody>
               </table>
+</PortalTable>
             ) : (
               <EmptyState
                 icon="package"
