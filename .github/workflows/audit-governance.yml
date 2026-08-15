@@ -4,7 +4,10 @@ on:
   pull_request:
     paths:
       - 'docs/SYSTEM-AUDIT-FINDING-LIFECYCLE.json'
-      - 'docs/SYSTEM-AUDIT-FINDINGS-2026-08-13.md'
+      # Glob, not a pinned filename: each audit gets its own dated register and
+      # the lifecycle validator discovers them all. Naming one file would let a
+      # PR touching only a newer register skip this job.
+      - 'docs/SYSTEM-AUDIT-FINDINGS-*.md'
       - 'scripts/verify-audit-finding-lifecycle.mjs'
       - 'docs/AUDIT-ACCEPTANCE-MANIFEST-2026-08-13.json'
       - 'scripts/verify-audit-acceptance-manifest.mjs'
