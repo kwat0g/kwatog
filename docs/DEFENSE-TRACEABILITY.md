@@ -1,12 +1,12 @@
 # OGAMI ERP — Defense Traceability Matrix
 
-> Maps each of the 12 mandatory adviser items (panel review, March 2026 — see
-> `docs/ADVISER-TASKS.md`) to the shipped implementation: the screen the panel
+> Maps each of the 12 mandatory adviser items from the March 2026 panel review
+> to the shipped implementation: the screen the panel
 > can click, the API route that backs it, and the automated test that proves it
 > works. Every item is implemented end-to-end (backend + SPA + tests).
 >
-> Companion docs: `docs/DEMO-SCRIPT.md` (live walk-through), `docs/ADVISER-TASKS.md`
-> (original requirements).
+> Companion doc: `docs/DEMO-SCRIPT.md` (live walk-through). The original task
+> queue was removed after completion; this matrix preserves the requirements.
 
 ## Status summary
 
@@ -134,6 +134,6 @@ Every hop above is a real screen with a real record after the demo seeder runs.
 
 ## Supporting credibility
 
-- **Automated tests:** full backend suite (see `docs/TEST-COVERAGE-REPORT.md`); run `make test` or the PHPUnit filter per module.
+- **Automated tests:** run `make test` or the relevant PHPUnit filter; current audit-specific gates are listed in `docs/AUDIT-ACCEPTANCE-MANIFEST-2026-08-13.json`.
 - **Security:** Sanctum SPA cookie auth (no bearer tokens), HashID-obfuscated IDs, encrypted government IDs, server-side permission enforcement, separate portal guards.
 - **Chains:** all three business chains (Order-to-Cash, Procure-to-Pay, Hire-to-Retire) wired end-to-end with IATF quality touchpoints woven in.

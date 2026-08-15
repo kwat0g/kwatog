@@ -104,8 +104,15 @@ sudo certbot renew --dry-run
 ```bash
 cd /opt/ogami-erp
 cp .env.production.example .env
-nano .env   # fill in DB_PASSWORD, APP_KEY, HASHIDS_SALT, MAIL_*, etc.
+nano .env   # fill in DB_PASSWORD, APP_KEY, HASHIDS_SALT, and SES MAIL_*, etc.
 ```
+
+For Amazon SES SMTP, use the username and password from the downloaded SES
+SMTP credentials CSV as `MAIL_USERNAME` and `MAIL_PASSWORD`. Use a verified
+sender/domain for `MAIL_FROM_ADDRESS`. The relay settings are the SES SMTP
+endpoint for the selected region (for example,
+`MAIL_HOST=email-smtp.ap-southeast-2.amazonaws.com`), `MAIL_PORT=587`, and
+`MAIL_SCHEME=smtp`.
 
 Generate values:
 

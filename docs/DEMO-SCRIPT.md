@@ -84,7 +84,7 @@ Click through, one line each:
 
 ## 7. Close (1 min)
 - All 12 adviser items implemented end-to-end (backend + SPA + automated tests) — hand panel `docs/DEFENSE-TRACEABILITY.md`.
-- Full automated test suite green (state the latest count from `docs/SYSTEM-AUDIT-2026-07-27.md`).
+- Audit acceptance gates are mapped in `docs/AUDIT-ACCEPTANCE-MANIFEST-2026-08-13.json`; state only results from the current run.
 - Scope discipline: cut cost-accounting, bank-rec, tax calendars deliberately — thesis ships a coherent, production-grade core.
 
 ---

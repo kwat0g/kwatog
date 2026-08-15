@@ -112,7 +112,47 @@ Run against a **throwaway / staging** database, never production.
 
 ---
 
-## 5. Follow-up recommendation (out of scope for OGAMI-018)
+## 5. Release evidence harness (F-030)
+
+`scripts/release-evidence.sh --run` is the reproducible release-evidence
+entrypoint. It refuses to run unless the operator supplies a real dump,
+`DB_DATABASE` exactly matches a disposable name of the form
+`ogami_release_evidence_<id>`, `SCRATCH_CONFIRM=I_UNDERSTAND_SCRATCH_ONLY`, a
+non-broad `EVIDENCE_DIR`, and an explicitly non-production `DB_HOST`. The
+restore helper is therefore still destructive, but only against the named
+scratch database. Do not point it at `docker-compose.prod.yml`'s live database.
+
+Example (staging host with an isolated database/container):
+
+```bash
+BACKUP_FILE=backups/ogami-<timestamp>.sql.gz \
+SCRATCH_DB=ogami_release_evidence_20260813 \
+SCRATCH_CONFIRM=I_UNDERSTAND_SCRATCH_ONLY \
+EVIDENCE_DIR="$PWD/artifacts/release-evidence" \
+DB_HOST=<scratch-db-host> DB_PORT=5432 DB_USERNAME=ogami DB_PASSWORD='***' \
+DB_DATABASE=ogami_release_evidence_20260813 \
+API_HEALTH_URL=https://<scratch-host>/api/v1/health \
+AUTH_CHECK_COMMAND='...' QUEUE_CHECK_COMMAND='...' \
+SCHEDULER_CHECK_COMMAND='...' UPLOAD_CHECK_COMMAND='...' \
+MIGRATION_CHECK_COMMAND='...' \
+scripts/release-evidence.sh --run
+```
+
+The command hooks are intentionally explicit: authentication, a real queue
+job, a scheduler tick/health check, upload + restart verification, and
+migration upgrade/rollback must be supplied by the staging operator because
+credentials, employee IDs, storage mounts, and compose topology are external
+to this repository. Missing hooks are recorded as `not_run` and make the run
+fail. The timestamped JSON report and log are artifacts, not evidence that a
+run happened until the files are retained and reviewed.
+
+The deploy workflow's `release-evidence-contract` job only checks the harness
+and shell contract on GitHub; it makes no restore, authentication, worker, or
+production-readiness claim. A failed post-swap deploy records the previous
+release and attempts a bounded symlink rollback; if no validated prior release
+exists, the workflow fails with an explicit manual-recovery signal.
+
+## 6. Follow-up recommendation (out of scope for OGAMI-018)
 
 `audit:prune` no longer deletes, by design. If true physical pruning of very
 old `audit_logs` ever becomes a hard storage requirement, it must be done by an

@@ -363,8 +363,19 @@ All animations respect `prefers-reduced-motion: reduce`.
 - Active: `--text-primary`, `--bg-elevated`, 2px left border `--accent`, weight 500
 - Hover: `--bg-elevated`
 
-**Rail (56px)** below 1280px or collapsed: 16px Lucide icons, 36px square targets,
+**Rail (56px)** below 1280px or collapsed: 16px Tabler Icons, 36px square targets,
 `rounded-md`, 2px clay indicator on the active item, tooltip on hover.
+
+### Icons
+
+The SPA uses `@tabler/icons-react` through `spa/src/lib/icons.ts`. Tabler's
+consistent 24px outline grid matches the Atelier interface and gives feature
+areas precise concepts instead of generic symbols: deliveries use trucks,
+receiving uses package-import, invoices use file-invoice, quality work uses
+clipboard-check, and warehouse maps use map. Prefer the most specific familiar
+icon for the destination or action; do not use an icon only because its shape
+looks similar. Keep icon-only controls labelled and inherit colour from the
+surrounding semantic text token.
 
 ### Shop-floor PWAs
 

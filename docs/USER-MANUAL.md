@@ -313,6 +313,6 @@ make manual-pdf
 ```
 
 The thesis appendix bundle additionally includes:
-- `plans/sprint-8-polish-dss-and-defense-tasks-69-85.md` and prior sprint plans
+- `docs/SYSTEM-AUDIT-EXECUTIVE-SUMMARY-2026-08-13.md`
 - `docs/SCHEMA.md`, `docs/PATTERNS.md`, `docs/DESIGN-SYSTEM.md`
-- Architecture diagrams from `docs/diagrams/`
+- Current evidence from `docs/defense-screenshots/`

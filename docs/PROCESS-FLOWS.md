@@ -1722,6 +1722,7 @@ scheduler cannot treat an incomplete batch as successful.
 
 Production startup applies migrations before API/queue/scheduler consumers.
 The Redis retry lease must exceed the longest job timeout (payroll currently
-30 minutes; shipped default lease 40 minutes). See the [failure-path
-matrix](PROCESS-FAILURE-MATRIX-2026-08-11.md) for the scenario-by-scenario
-recovery map and the remaining external-provider limitations.
+30 minutes; shipped default lease 40 minutes). See the current
+[findings register](SYSTEM-AUDIT-FINDINGS-2026-08-13.md) and
+[lifecycle registry](SYSTEM-AUDIT-FINDING-LIFECYCLE.json) for recovery-control
+status and the remaining external-evidence limitations.
