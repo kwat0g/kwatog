@@ -198,6 +198,10 @@ class BadgeControllerTest extends TestCase
         ]);
 
         // ── MRP plans (SO + generator required) ────────────────────────
+        // Migration 2026_08_15_121000 allows only one active plan per sales
+        // order, so the negative case needs its own SO. It must stay 'active':
+        // the badge counts active plans WITH shortages, and this row is what
+        // proves the discriminator is shortages_found rather than status.
         $so = SalesOrder::factory()->create();
         DB::table('mrp_plans')->insert([
             'mrp_plan_no'    => 'MRP-TEST-0001',
@@ -209,9 +213,10 @@ class BadgeControllerTest extends TestCase
             'created_at'     => now(),
             'updated_at'     => now(),
         ]);
+        $soWithoutShortages = SalesOrder::factory()->create();
         DB::table('mrp_plans')->insert([
             'mrp_plan_no'    => 'MRP-TEST-0002',
-            'sales_order_id' => $so->id,
+            'sales_order_id' => $soWithoutShortages->id,
             'status'         => 'active',
             'shortages_found'=> 0,
             'generated_by'   => $user->id,
