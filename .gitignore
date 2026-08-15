@@ -52,3 +52,9 @@ graphify-out/
 
 # Atelier rebrand — pre-change visual reference
 docs/atelier-baseline/
+
+# Agent/tool scratch artifacts (local only)
+.impeccable/
+codex/
+.antigravitycli/
+.playwright-mcp/
