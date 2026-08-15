@@ -264,6 +264,18 @@ export default function WorkOrderDetailPage() {
  </div>
  </Panel>
  )}
+ {data.production_readiness && !data.production_readiness.ready && (
+ <div className="rounded-md border border-warning/30 bg-warning-bg/10 px-3 py-2 text-sm">
+ <div className="font-medium text-warning-fg">Waiting for subassembly production</div>
+ <div className="mt-1 text-muted">
+ {data.production_readiness.blocking_work_orders.map((child) => (
+ <span key={child.id} className="mr-2 inline-block font-mono">
+ {child.wo_number} ({formatInt(child.quantity_good)} / {formatInt(child.quantity_target)} good)
+ </span>
+ ))}
+ </div>
+ </div>
+ )}
  <Panel title="Overview">
  <dl className="grid grid-cols-3 gap-x-4 gap-y-3 text-sm">
  <dt className="text-muted">Product</dt>

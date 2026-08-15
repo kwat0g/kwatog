@@ -22,7 +22,8 @@ use Illuminate\Support\Facades\DB;
  *
  * Algorithm (priority-first greedy):
  *  1. Take all 'planned' work orders (or a subset by id).
- *  2. Sort by priority desc, then planned_start asc.
+ *  2. Sort by dependency order (children before parents), then priority desc
+ *     and planned_start asc within each dependency branch.
  *  3. For each WO:
  *       a. Find compatible molds: product_id matches AND status IN
  *          (available, in_use) AND current_shot_count + qty <= max_shots.
@@ -79,6 +80,8 @@ class CapacityPlanningService
                 return ['scheduled' => [], 'conflicts' => []];
             }
 
+            $workOrders = $this->orderWorkOrdersByDependencies($workOrders);
+
             // Scheduler runs, manual reassignments, and machine/mold lifecycle
             // changes must serialize on the same resource rows. This makes the
             // persisted-window check below meaningful under concurrent requests.
@@ -97,11 +100,30 @@ class CapacityPlanningService
 
             // Track machine end-of-last-job per machine for the simulation.
             $machineCursor = []; // [machine_id => Carbon]
+            $dependencyReadyAt = []; // [parent_work_order_id => latest child end]
+            $dependencyFailed = []; // [work_order_id => true]
             $scheduled = [];
             $conflicts = [];
 
             foreach ($workOrders as $wo) {
-                $placement = $this->placeWorkOrder($wo, $machineCursor, $blockedWindowsByMachine);
+                if (isset($dependencyFailed[(int) $wo->id])) {
+                    $conflicts[] = [
+                        'work_order_id' => $wo->hash_id,
+                        'wo_number' => $wo->wo_number,
+                        'reasons' => ['subassembly_dependency_unscheduled'],
+                    ];
+                    if ($wo->parent_wo_id) {
+                        $dependencyFailed[(int) $wo->parent_wo_id] = true;
+                    }
+                    continue;
+                }
+
+                $placement = $this->placeWorkOrder(
+                    $wo,
+                    $machineCursor,
+                    $blockedWindowsByMachine,
+                    $dependencyReadyAt,
+                );
                 if ($placement['ok']) {
                     // Supersede any existing pending schedule for this WO.
                     ProductionSchedule::where('work_order_id', $wo->id)
@@ -126,12 +148,23 @@ class CapacityPlanningService
                     $machineCursor[$placement['machine_id']] = Carbon::parse($placement['end']);
                     $this->addScheduleWindow($blockedWindowsByMachine, $row);
                     $scheduled[] = $this->scheduleSummary($row, $wo);
+
+                    if ($wo->parent_wo_id) {
+                        $parentId = (int) $wo->parent_wo_id;
+                        $childEnd = Carbon::parse($placement['end']);
+                        if (! isset($dependencyReadyAt[$parentId]) || $childEnd->gt($dependencyReadyAt[$parentId])) {
+                            $dependencyReadyAt[$parentId] = $childEnd;
+                        }
+                    }
                 } else {
                     $conflicts[] = [
                         'work_order_id' => $wo->hash_id,
                         'wo_number'     => $wo->wo_number,
                         'reasons'       => $placement['reasons'],
                     ];
+                    if ($wo->parent_wo_id) {
+                        $dependencyFailed[(int) $wo->parent_wo_id] = true;
+                    }
                 }
             }
 
@@ -178,8 +211,17 @@ class CapacityPlanningService
                 ->get()
                 ->keyBy('id');
 
+            $rowsByWorkOrderId = $rows->keyBy('work_order_id');
+            $orderedWorkOrders = $this->orderWorkOrdersByDependencies(
+                $rows->map(fn (ProductionSchedule $row): WorkOrder => WorkOrder::findOrFail($row->work_order_id))
+            );
+            $orderedRows = $orderedWorkOrders
+                ->map(fn (WorkOrder $wo): ?ProductionSchedule => $rowsByWorkOrderId->get($wo->id))
+                ->filter()
+                ->values();
+
             $confirmed = collect();
-            foreach ($rows as $row) {
+            foreach ($orderedRows as $row) {
                 $wo = WorkOrder::lockForUpdate()->find($row->work_order_id);
                 $machine = $machines->get((int) $row->machine_id);
                 $mold = $molds->get((int) $row->mold_id);
@@ -307,6 +349,48 @@ class CapacityPlanningService
 
     // ────────────────────────────────────────────────────────────────────
     // Internal — slot finder
+
+    /**
+     * Topologically order a selected set of work orders so every child is
+     * placed before its parent. The query's priority ordering is preserved
+     * for unrelated work orders and siblings.
+     *
+     * @param Collection<int, WorkOrder> $workOrders
+     * @return Collection<int, WorkOrder>
+     */
+    private function orderWorkOrdersByDependencies(Collection $workOrders): Collection
+    {
+        $childrenByParent = $workOrders->groupBy(
+            static fn (WorkOrder $wo): int => $wo->parent_wo_id ? (int) $wo->parent_wo_id : 0,
+        );
+        $visited = [];
+        $visiting = [];
+        $ordered = collect();
+
+        $visit = function (WorkOrder $wo) use (&$visit, &$visited, &$visiting, &$ordered, $childrenByParent): void {
+            $id = (int) $wo->id;
+            if (isset($visited[$id])) {
+                return;
+            }
+            if (isset($visiting[$id])) {
+                throw new BusinessRuleException("Circular subassembly dependency detected at work order {$wo->wo_number}.");
+            }
+
+            $visiting[$id] = true;
+            foreach ($childrenByParent->get($id, collect()) as $child) {
+                $visit($child);
+            }
+            unset($visiting[$id]);
+            $visited[$id] = true;
+            $ordered->push($wo);
+        };
+
+        foreach ($workOrders as $wo) {
+            $visit($wo);
+        }
+
+        return $ordered;
+    }
 
     /**
      * Index every active persisted window before placing new work orders.
@@ -452,7 +536,15 @@ class CapacityPlanningService
      * Try to place one WO. Returns ['ok'=>bool, ...] with placement details
      * or reasons array.
      */
-    private function placeWorkOrder(WorkOrder $wo, array &$machineCursor, array &$blockedWindowsByMachine): array
+    /**
+     * @param array<int, Carbon> $dependencyReadyAt
+     */
+    private function placeWorkOrder(
+        WorkOrder $wo,
+        array &$machineCursor,
+        array &$blockedWindowsByMachine,
+        array $dependencyReadyAt,
+    ): array
     {
         $reasons = [];
 
@@ -496,6 +588,10 @@ class CapacityPlanningService
                 $desiredStart = $cursor && $cursor->gt($plannedStart)
                     ? $cursor->copy()
                     : $plannedStart;
+                $dependencyStart = $dependencyReadyAt[(int) $wo->id] ?? null;
+                if ($dependencyStart && $dependencyStart->gt($desiredStart)) {
+                    $desiredStart = $dependencyStart->copy();
+                }
                 $slot = $this->nextFreeSlot(
                     $desiredStart,
                     $durationMinutes,

@@ -52,8 +52,12 @@ class WorkOrderResource extends JsonResource
                 'wo_number' => $child->wo_number,
                 'product_id' => (int) $child->product_id,
                 'quantity_target' => (int) $child->quantity_target,
+                'quantity_good' => (int) $child->quantity_good,
                 'status' => (string) $child->status?->value,
             ])->values()),
+            'production_readiness' => $this->whenLoaded('children', fn () =>
+                app(WorkOrderService::class)->productionReadiness($this->resource)
+            ),
             'quantity_target'     => (int) $this->quantity_target,
             'quantity_produced'   => (int) $this->quantity_produced,
             'quantity_good'       => (int) $this->quantity_good,

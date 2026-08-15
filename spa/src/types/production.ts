@@ -77,8 +77,19 @@ export interface WorkOrder {
   wo_number: string;
   product_id: number;
   quantity_target: number;
+  quantity_good: number;
   status: WorkOrderStatus;
  }>;
+ production_readiness?: {
+  ready: boolean;
+  blocking_work_orders: Array<{
+   id: string;
+   wo_number: string;
+   status: WorkOrderStatus;
+   quantity_target: number;
+   quantity_good: number;
+  }>;
+ };
  sales_order?: { id: string; so_number: string } | null;
  machine?: { id: string; machine_code: string; name: string } | null;
  mold?: { id: string; mold_code: string; name: string } | null;

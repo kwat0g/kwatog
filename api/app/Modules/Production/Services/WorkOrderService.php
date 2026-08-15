@@ -128,7 +128,7 @@ class WorkOrderService
         return $wo->load([
             'product', 'salesOrder', 'salesOrderItem',
             'machine', 'mold', 'parent:id,wo_number',
-            'children:id,wo_number,product_id,parent_wo_id,status,quantity_target',
+            'children:id,wo_number,product_id,parent_wo_id,status,quantity_target,quantity_good',
             'creator:id,name,role_id',
             'materials.item:id,code,name,unit_of_measure',
             'outputs.recorder:id,name,role_id', 'outputs.defects.defectType',
@@ -237,6 +237,7 @@ class WorkOrderService
             }
 
             $this->assertAssignmentValid($lockedWo, $machine, $mold);
+            $this->assertProductionDependenciesReady($lockedWo);
 
             $lockedWo->forceFill([
                 'status' => WorkOrderStatus::Confirmed->value,
@@ -317,6 +318,7 @@ class WorkOrderService
             $this->assertTransition($lockedWo, WorkOrderStatus::InProgress);
             $from = $lockedWo->status?->value ?? 'confirmed';
             $this->assertMaterialPlan($lockedWo);
+            $this->assertProductionDependenciesReady($lockedWo);
 
             $machine = $lockedWo->machine_id ? Machine::lockForUpdate()->find($lockedWo->machine_id) : null;
             $mold    = $lockedWo->mold_id    ? Mold::lockForUpdate()->find($lockedWo->mold_id)       : null;
@@ -635,6 +637,55 @@ class WorkOrderService
             return;
         }
         throw new BusinessRuleException('Standard stock-producing work orders require an effective BOM/material plan before start.');
+    }
+
+    /**
+     * A parent work order may only be confirmed or started after every direct
+     * subassembly has produced its required good quantity. A completed child
+     * below target remains blocking; a cancelled child is also blocking until
+     * a replacement plan is created.
+     *
+     * @return array{ready: bool, blocking_work_orders: list<array{id: string, wo_number: string, status: string, quantity_target: int, quantity_good: int}>}
+     */
+    public function productionReadiness(WorkOrder $wo): array
+    {
+        $children = $wo->relationLoaded('children')
+            ? $wo->children
+            : $wo->children()->get([
+                'id', 'wo_number', 'status', 'quantity_target', 'quantity_good', 'parent_wo_id',
+            ]);
+
+        $blocking = $children->filter(static function (WorkOrder $child): bool {
+            return $child->status === WorkOrderStatus::Cancelled
+                || (int) $child->quantity_good < (int) $child->quantity_target;
+        })->values();
+
+        return [
+            'ready' => $blocking->isEmpty(),
+            'blocking_work_orders' => $blocking->map(static fn (WorkOrder $child): array => [
+                'id' => $child->hash_id,
+                'wo_number' => (string) $child->wo_number,
+                'status' => (string) ($child->status?->value ?? $child->status),
+                'quantity_target' => (int) $child->quantity_target,
+                'quantity_good' => (int) $child->quantity_good,
+            ])->all(),
+        ];
+    }
+
+    private function assertProductionDependenciesReady(WorkOrder $wo): void
+    {
+        $readiness = $this->productionReadiness($wo);
+        if ($readiness['ready']) {
+            return;
+        }
+
+        $numbers = collect($readiness['blocking_work_orders'])
+            ->pluck('wo_number')
+            ->implode(', ');
+
+        throw new BusinessRuleException(
+            "Work order {$wo->wo_number} is waiting for subassembly work orders: {$numbers}."
+        );
     }
 
     /**
