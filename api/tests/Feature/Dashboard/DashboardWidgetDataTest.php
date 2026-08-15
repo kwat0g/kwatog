@@ -6,9 +6,11 @@ namespace Tests\Feature\Dashboard;
 
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\Dashboard\Enums\RenderKind;
 use App\Modules\Dashboard\Models\DashboardWidget;
 use App\Modules\Dashboard\Services\DashboardLayoutService;
 use App\Modules\Dashboard\Services\DashboardWidgetDataService;
+use App\Modules\Dashboard\Services\WidgetAnalyticsService;
 use App\Modules\HR\Models\Employee;
 use Database\Seeders\DashboardWidgetSeeder;
 use Database\Seeders\RolePermissionSeeder;
@@ -118,5 +120,31 @@ class DashboardWidgetDataTest extends TestCase
         $companyWide = $service->summaries(['loans.outstanding'], $finance)['loans.outstanding'];
         $this->assertSame('5000.00', $companyWide['value']);
         $this->assertSame('outstanding across all active loans', $companyWide['helper']);
+    }
+
+    public function test_hr_widgets_follow_the_employee_department_scope(): void
+    {
+        $own = Employee::factory()->create(['status' => 'active']);
+        $other = Employee::factory()->create(['status' => 'active']);
+        $this->assertNotSame($own->department_id, $other->department_id);
+
+        $head = User::factory()->create([
+            'role_id' => Role::where('slug', 'department_head')->firstOrFail()->id,
+            'employee_id' => $own->id,
+        ]);
+
+        $scalar = app(DashboardWidgetDataService::class)
+            ->summaries(['hr.headcount'], $head)['hr.headcount'];
+        $this->assertSame('1', $scalar['value']);
+        $this->assertSame('active employees in your department', $scalar['helper']);
+
+        $rich = app(WidgetAnalyticsService::class)
+            ->payload('hr.headcount', RenderKind::Breakdown, $head);
+        $this->assertSame(1, $rich['total']);
+        $this->assertCount(1, $rich['segments']);
+
+        $available = collect(app(DashboardLayoutService::class)->listAvailableWidgets($head))
+            ->pluck('key');
+        $this->assertFalse($available->contains('hr.on_leave_today'));
     }
 }

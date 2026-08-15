@@ -99,7 +99,7 @@ class PayrollGlHandoffTest extends TestCase
 
         $outbox = DB::table('event_outbox')
             ->where('event_type', PayrollGlPostingRequested::class)
-            ->where('dedupe_key', 'payroll-gl-finalize:'.$period->id)
+            ->where('dedupe_key', 'like', 'payroll-gl-finalize:'.$period->id.'%')
             ->first();
         $this->assertNotNull($outbox);
         $this->assertDatabaseHas('chain_step_runs', [

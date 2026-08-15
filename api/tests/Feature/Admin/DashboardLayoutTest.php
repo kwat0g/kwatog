@@ -73,7 +73,7 @@ class DashboardLayoutTest extends TestCase
 
         $service->saveUserLayout($user, [
             ['key' => 'approvals.pending', 'x' => 0, 'y' => 0, 'w' => 12, 'h' => 4],
-        ]);
+        ], $service->userLayoutVersion($user));
 
         $effective = $service->getEffectiveLayout($user);
         $this->assertCount(1, $effective);
@@ -88,11 +88,13 @@ class DashboardLayoutTest extends TestCase
 
         $service->saveUserLayout($user, [
             ['key' => 'approvals.pending', 'x' => 0, 'y' => 0, 'w' => 12, 'h' => 4],
-        ]);
+        ], $service->userLayoutVersion($user));
         $this->assertSame('user', $service->getEffectiveLayout($user)[0]['source']);
 
         $this->actingAs($user)
-            ->postJson('/api/v1/dashboard/layout/reset')
+            ->postJson('/api/v1/dashboard/layout/reset', [
+                'layout_version' => $service->userLayoutVersion($user),
+            ])
             ->assertOk();
 
         $effective = $service->getEffectiveLayout($user);
@@ -121,6 +123,7 @@ class DashboardLayoutTest extends TestCase
 
         $this->actingAs($user)
             ->putJson('/api/v1/dashboard/layout', [
+                'layout_version' => app(DashboardLayoutService::class)->userLayoutVersion($user),
                 'widgets' => [
                     ['key' => 'approvals.pending', 'x' => 0, 'y' => 0, 'w' => 12, 'h' => 4],
                     ['key' => 'this.does.not.exist', 'x' => 0, 'y' => 1, 'w' => 12, 'h' => 4],
@@ -134,6 +137,77 @@ class DashboardLayoutTest extends TestCase
             ->get();
         $this->assertCount(1, $rows);
         $this->assertSame('approvals.pending', $rows->first()->widget_key);
+    }
+
+    public function test_save_layout_strips_widget_keys_outside_the_callers_permissions(): void
+    {
+        $user = $this->seedUserWithRole('employee');
+
+        $this->actingAs($user)
+            ->putJson('/api/v1/dashboard/layout', [
+                'layout_version' => app(DashboardLayoutService::class)->userLayoutVersion($user),
+                'widgets' => [
+                    ['key' => 'finance.cash_position', 'x' => 0, 'y' => 0, 'w' => 12, 'h' => 4],
+                    ['key' => 'self.payslip_summary', 'x' => 0, 'y' => 1, 'w' => 4, 'h' => 4],
+                ],
+            ])
+            ->assertOk();
+
+        $keys = DashboardLayout::query()
+            ->where('owner_type', DashboardLayout::OWNER_USER)
+            ->where('owner_id', $user->id)
+            ->pluck('widget_key')
+            ->all();
+
+        $this->assertSame(['self.payslip_summary'], $keys);
+    }
+
+    public function test_layout_falls_back_to_role_default_when_saved_rows_are_no_longer_visible(): void
+    {
+        $user = $this->seedUserWithRole('employee');
+
+        DashboardLayout::query()->create([
+            'owner_type' => DashboardLayout::OWNER_USER,
+            'owner_id' => $user->id,
+            'widget_key' => 'finance.cash_position',
+            'position_x' => 0,
+            'position_y' => 0,
+            'width' => 12,
+            'height' => 4,
+        ]);
+
+        $effective = app(DashboardLayoutService::class)->getEffectiveLayout($user);
+
+        $this->assertNotEmpty($effective);
+        $this->assertSame('role', $effective[0]['source']);
+        $this->assertStringStartsWith('self.', $effective[0]['key']);
+    }
+
+    public function test_stale_layout_save_returns_conflict_without_overwriting_the_winner(): void
+    {
+        $user = $this->seedUserWithRole('hr_officer');
+        $version = app(DashboardLayoutService::class)->userLayoutVersion($user);
+
+        $this->actingAs($user)->putJson('/api/v1/dashboard/layout', [
+            'layout_version' => $version,
+            'widgets' => [
+                ['key' => 'approvals.pending', 'x' => 0, 'y' => 0, 'w' => 12, 'h' => 4],
+            ],
+        ])->assertOk();
+
+        $this->actingAs($user)->putJson('/api/v1/dashboard/layout', [
+            'layout_version' => $version,
+            'widgets' => [
+                ['key' => 'self.payslip_summary', 'x' => 0, 'y' => 0, 'w' => 4, 'h' => 4],
+            ],
+        ])->assertConflict()
+            ->assertJsonPath('meta.layout_version', app(DashboardLayoutService::class)->userLayoutVersion($user));
+
+        $this->assertSame(['approvals.pending'], DashboardLayout::query()
+            ->where('owner_type', DashboardLayout::OWNER_USER)
+            ->where('owner_id', $user->id)
+            ->pluck('widget_key')
+            ->all());
     }
 
     private function seedUserWithRole(string $slug): User

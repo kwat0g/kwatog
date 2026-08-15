@@ -10,6 +10,7 @@ use App\Modules\Payroll\Services\Government\PhilhealthComputationService;
 use App\Modules\Payroll\Services\Government\SssComputationService;
 use Database\Seeders\GovernmentTableSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
@@ -17,8 +18,9 @@ use Tests\TestCase;
  * Reference cases for the four government deduction services.
  *
  * Values are pinned to the seeded 2024 SSS / PhilHealth / Pag-IBIG rows and
- * the TRAIN-Law BIR semi-monthly table. Update the assertions if the seed
- * data changes (which itself should be a rare, audited event).
+ * the effective-dated TRAIN-Law BIR semi-monthly tables. Update the
+ * assertions if the seed data changes (which itself should be a rare,
+ * audited event).
  */
 class GovComputationServicesTest extends TestCase
 {
@@ -135,29 +137,53 @@ class GovComputationServicesTest extends TestCase
     public function test_bir_15percent_bracket(): void
     {
         $svc = app(BirTaxComputationService::class);
-        // 15000 - 10416 = 4584; 4584 × 0.15 = 687.60
-        $this->assertSame('687.60', $svc->compute('15000'));
+        // 2026 uses Annex E: 15000 - 10417 = 4583; × 0.15 = 687.45.
+        $this->assertSame('687.45', $svc->compute('15000'));
     }
 
     public function test_bir_20percent_bracket(): void
     {
         $svc = app(BirTaxComputationService::class);
-        // 25000 - 16666 = 8334; 8334 × 0.20 = 1666.80; 937.50 + 1666.80 = 2604.30
-        $this->assertSame('2604.30', $svc->compute('25000'));
+        // 25000 - 16667 = 8333; 8333 × 0.20 = 1666.60; 937.50 + 1666.60 = 2604.10
+        $this->assertSame('2604.10', $svc->compute('25000'));
     }
 
     public function test_bir_25percent_bracket(): void
     {
         $svc = app(BirTaxComputationService::class);
-        // 50000 - 33332 = 16668; 16668 × 0.25 = 4167.00; 4270.83 + 4167.00 = 8437.83
-        $this->assertSame('8437.83', $svc->compute('50000'));
+        // 50000 - 33333 = 16667; 16667 × 0.25 = 4166.75; 4270.70 + 4166.75 = 8437.45
+        $this->assertSame('8437.45', $svc->compute('50000'));
     }
 
     public function test_bir_30percent_bracket(): void
     {
         $svc = app(BirTaxComputationService::class);
-        // 100000 - 83332 = 16668; 16668 × 0.30 = 5000.40; 16770.83 + 5000.40 = 21771.23
-        $this->assertSame('21771.23', $svc->compute('100000'));
+        // 100000 - 83333 = 16667; 16667 × 0.30 = 5000.10; 16770.70 + 5000.10 = 21770.80
+        $this->assertSame('21770.80', $svc->compute('100000'));
+    }
+
+    public function test_bir_effective_date_and_boundary_use_annex_d_then_annex_e(): void
+    {
+        $svc = app(BirTaxComputationService::class);
+
+        // Annex D applies through 2022; Annex E starts on 2023-01-01.
+        $this->assertSame(
+            '1250.00',
+            $svc->compute('16667', 'semi_monthly', Carbon::parse('2022-12-31')),
+        );
+        $this->assertSame(
+            '937.50',
+            $svc->compute('16667', 'semi_monthly', Carbon::parse('2023-01-01')),
+        );
+
+        // Cent-compatible boundaries are contiguous and the Annex E fixed
+        // amounts are returned at the lower bound of each taxable bracket.
+        $this->assertSame('0.00', $svc->compute('10416.99', 'semi_monthly', Carbon::parse('2023-06-01')));
+        $this->assertSame('0.00', $svc->compute('10417.00', 'semi_monthly', Carbon::parse('2023-06-01')));
+        $this->assertSame('937.50', $svc->compute('16667.00', 'semi_monthly', Carbon::parse('2023-06-01')));
+        $this->assertSame('4270.70', $svc->compute('33333.00', 'semi_monthly', Carbon::parse('2023-06-01')));
+        $this->assertSame('16770.70', $svc->compute('83333.00', 'semi_monthly', Carbon::parse('2023-06-01')));
+        $this->assertSame('91770.70', $svc->compute('333333.00', 'semi_monthly', Carbon::parse('2023-06-01')));
     }
 
     public function test_bir_zero_taxable_is_zero(): void

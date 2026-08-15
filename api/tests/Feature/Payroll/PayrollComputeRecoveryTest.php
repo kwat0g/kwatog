@@ -191,6 +191,21 @@ class PayrollComputeRecoveryTest extends TestCase
         $this->assertSame(PayrollPeriodStatus::Processing, $period->fresh()->status);
     }
 
+    public function test_reaper_does_not_release_a_fresh_takeover_from_an_old_stale_snapshot(): void
+    {
+        $period = $this->period(PayrollPeriodStatus::Processing->value, now()->subHours(3)->toDateTimeString());
+        $staleSnapshot = $period->fresh();
+        $periods = app(PayrollPeriodService::class);
+
+        $currentOwner = $periods->claimForCompute($period->fresh());
+        $released = $periods->reapStaleClaim($staleSnapshot, now()->subMinutes(45));
+
+        $this->assertNull($released);
+        $this->assertSame(PayrollPeriodStatus::Processing, $currentOwner->fresh()->status);
+        $this->assertSame($currentOwner->processing_token, $currentOwner->fresh()->processing_token);
+        $this->assertTrue($currentOwner->fresh()->processing_started_at->greaterThan(now()->subMinutes(5)));
+    }
+
     /* ── 2. Durable compute request ──────────────────────────────── */
 
     /**

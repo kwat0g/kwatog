@@ -11,6 +11,8 @@ use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
+use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Production\Models\WorkOrderOutput;
 use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
@@ -138,14 +140,40 @@ class CreateDeliveryDriverGateTest extends TestCase
             'delivery_date'  => now()->toDateString(),
         ]);
 
+        $workOrder = WorkOrder::create([
+            'wo_number' => 'WO-GT-' . substr(uniqid(), -8),
+            'product_id' => $product->id,
+            'sales_order_id' => $so->id,
+            'sales_order_item_id' => $soItem->id,
+            'quantity_target' => 10,
+            'quantity_produced' => 10,
+            'quantity_good' => 10,
+            'quantity_rejected' => 0,
+            'planned_start' => now()->subDay(),
+            'planned_end' => now(),
+            'status' => 'completed',
+            'created_by' => $user->id,
+        ]);
+
+        $output = WorkOrderOutput::create([
+            'work_order_id' => $workOrder->id,
+            'recorded_by' => $user->id,
+            'recorded_at' => now(),
+            'good_count' => 10,
+            'reject_count' => 0,
+            'batch_code' => 'GT-BATCH-' . substr(uniqid(), -8),
+        ]);
+
         Inspection::create([
             'inspection_number' => 'QC-GT-' . substr(uniqid(), -8),
             'stage'             => InspectionStage::Outgoing->value,
             'status'            => InspectionStatus::Passed->value,
             'product_id'        => $product->id,
             'entity_type'       => InspectionEntityType::WorkOrder->value,
-            'entity_id'         => $so->id,
+            'entity_id'         => $workOrder->id,
+            'work_order_output_id' => $output->id,
             'batch_quantity'    => 10,
+            'accepted_quantity' => 10,
             'sample_size'       => 5,
             'accept_count'      => 0,
             'reject_count'      => 0,
@@ -158,12 +186,24 @@ class CreateDeliveryDriverGateTest extends TestCase
 
     private function payload(SalesOrderItem $soItem, User $driver): array
     {
+        $workOrderId = WorkOrder::query()
+            ->where('sales_order_item_id', $soItem->id)
+            ->value('id');
+        $inspection = Inspection::query()
+            ->where('entity_type', InspectionEntityType::WorkOrder->value)
+            ->where('entity_id', $workOrderId)
+            ->firstOrFail();
+
         return [
             'sales_order_id' => $soItem->salesOrder->hash_id,
             'driver_id'      => $driver->hash_id,
             'scheduled_date' => now()->toDateString(),
             'items'          => [
-                ['sales_order_item_id' => $soItem->hash_id, 'quantity' => 5],
+                [
+                    'sales_order_item_id' => $soItem->hash_id,
+                    'quantity' => 5,
+                    'inspection_id' => $inspection->hash_id,
+                ],
             ],
         ];
     }

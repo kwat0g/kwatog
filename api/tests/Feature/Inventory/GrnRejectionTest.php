@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Inventory;
 
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
@@ -57,6 +58,13 @@ class GrnRejectionTest extends TestCase
         parent::setUp();
 
         $role = Role::firstOrCreate(['slug' => 'qc_inspector'], ['name' => 'QC Inspector']);
+        // Terminal QC submission is gated on quality.inspections.manage — grant
+        // it so these tests exercise the GRN acceptance/rejection paths.
+        $permission = Permission::firstOrCreate(
+            ['slug' => 'quality.inspections.manage'],
+            ['name' => 'Quality Inspections Manage', 'module' => 'quality']
+        );
+        $role->permissions()->syncWithoutDetaching([$permission->id]);
         $this->user = User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
 
         // Product with a dimensional inspection spec (one critical parameter).

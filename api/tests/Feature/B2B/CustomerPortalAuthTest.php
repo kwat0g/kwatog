@@ -60,7 +60,7 @@ class CustomerPortalAuthTest extends TestCase
         ]);
 
         $response->assertOk();
-        $response->assertJsonStructure(['data' => ['token', 'user' => ['id', 'name', 'email', 'customer_id']]]);
+        $response->assertJsonStructure(['data' => ['token', 'user' => ['id', 'name', 'email', 'customer_id', 'must_change_password']]]);
 
         $payload = $response->json('data');
         $this->assertNotEmpty($payload['token']);
@@ -71,6 +71,49 @@ class CustomerPortalAuthTest extends TestCase
 
         $this->assertIsString($payload['user']['customer_id']);
         $this->assertNotSame((string) $user->customer_id, $payload['user']['customer_id']);
+    }
+
+    public function test_first_login_account_is_marked_for_password_change(): void
+    {
+        $password = 'CustomerPass-1!';
+        $user = $this->makeUser($password, ['must_change_password' => true]);
+        $this->clearAuthThrottle($user->email);
+
+        $login = $this->postJson('/api/v1/b2b/customer/login', [
+            'email' => $user->email,
+            'password' => $password,
+        ])->assertOk()->assertJsonPath('data.user.must_change_password', true);
+
+        $this->withToken($login->json('data.token'))
+            ->getJson('/api/v1/b2b/customer/dashboard')
+            ->assertStatus(403)
+            ->assertJsonPath('code', 'password_change_required');
+    }
+
+    public function test_first_login_user_can_change_password_and_force_flag_is_cleared(): void
+    {
+        $password = 'CustomerPass-1!';
+        $user = $this->makeUser($password, ['must_change_password' => true]);
+        $this->clearAuthThrottle($user->email);
+        $login = $this->postJson('/api/v1/b2b/customer/login', [
+            'email' => $user->email,
+            'password' => $password,
+        ])->assertOk();
+
+        $this->withToken($login->json('data.token'))
+            ->postJson('/api/v1/b2b/customer/change-password', [
+                'current_password' => $password,
+                'new_password' => 'Replacement-2!',
+                'new_password_confirmation' => 'Replacement-2!',
+            ])->assertOk();
+
+        $fresh = $user->fresh();
+        $this->assertFalse($fresh->must_change_password);
+        $this->assertTrue(Hash::check('Replacement-2!', $fresh->password));
+        $this->assertDatabaseMissing('personal_access_tokens', [
+            'tokenable_type' => CustomerPortalUser::class,
+            'tokenable_id' => $user->id,
+        ]);
     }
 
     public function test_five_wrong_attempts_locks_account(): void

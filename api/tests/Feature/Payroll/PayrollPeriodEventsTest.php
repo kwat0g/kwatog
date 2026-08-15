@@ -7,6 +7,7 @@ namespace Tests\Feature\Payroll;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
+use App\Modules\Payroll\Enums\PayrollGlHandoffStatus;
 use App\Modules\Payroll\Events\PayrollPeriodDisbursed;
 use App\Modules\Payroll\Events\PayrollPeriodFinalized;
 use App\Modules\Payroll\Models\DisbursementProof;
@@ -72,6 +73,7 @@ class PayrollPeriodEventsTest extends TestCase
             'payroll_date' => '2026-08-15',
             'is_first_half' => true,
             'status'       => PayrollPeriodStatus::Finalized->value,
+            'gl_handoff_status' => PayrollGlHandoffStatus::NotRequired->value,
         ]);
 
         DisbursementProof::create([
@@ -165,6 +167,17 @@ class PayrollPeriodEventsTest extends TestCase
         $svc->markDisbursed($period, $user);
 
         Event::assertDispatched(PayrollPeriodDisbursed::class, 1);
+    }
+
+    public function test_mark_disbursed_rejects_an_unfinished_gl_handoff_even_with_proof(): void
+    {
+        $user = $this->makeUser();
+        $period = $this->makeFinalizedPeriodWithProof($user);
+        $period->forceFill(['gl_handoff_status' => PayrollGlHandoffStatus::Pending->value])->save();
+
+        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->expectExceptionMessage('Payroll cannot be disbursed while GL handoff');
+        app(PayrollPeriodService::class)->markDisbursed($period->fresh(), $user);
     }
 
     public function test_markDisbursed_does_not_dispatch_PayrollPeriodFinalized(): void

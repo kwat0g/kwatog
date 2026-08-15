@@ -7,6 +7,7 @@ namespace Tests\Feature\Attendance;
 use App\Modules\Attendance\Models\OvertimeRequest;
 use App\Modules\Attendance\Models\Shift;
 use App\Modules\Attendance\Services\AttendanceService;
+use App\Modules\Attendance\Services\OvertimeService;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\HR\Models\Employee;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -91,6 +92,52 @@ class AutoDetectOvertimeFeatureTest extends TestCase
             ->whereDate('date', '2026-06-15')
             ->count();
         $this->assertSame(1, $count);
+    }
+
+    public function test_replaying_biometric_attendance_detection_does_not_duplicate_auto_ot(): void
+    {
+        $employee = Employee::factory()->create();
+        $shift = $this->makeShift();
+        $attendance = app(AttendanceService::class)->create([
+            'employee_id' => $employee->id,
+            'date' => '2026-06-15',
+            'time_in' => '2026-06-15 08:00:00',
+            'time_out' => '2026-06-15 17:45:00',
+            'shift_id' => $shift->id,
+        ]);
+
+        // Import retries and attendance recomputation can replay the same
+        // source row without recreating its auto-detected OT request.
+        app(OvertimeService::class)->autoDetectFromAttendance($attendance->fresh());
+        app(OvertimeService::class)->autoDetectFromAttendance($attendance->fresh());
+
+        $this->assertSame(1, OvertimeRequest::query()
+            ->where('employee_id', $employee->id)
+            ->whereDate('date', '2026-06-15')
+            ->where('is_auto_detected', true)
+            ->count());
+    }
+
+    public function test_distinct_employee_sources_on_same_date_each_create_auto_ot(): void
+    {
+        $shift = $this->makeShift();
+        $first = Employee::factory()->create();
+        $second = Employee::factory()->create();
+
+        foreach ([$first, $second] as $employee) {
+            app(AttendanceService::class)->create([
+                'employee_id' => $employee->id,
+                'date' => '2026-06-15',
+                'time_in' => '2026-06-15 08:00:00',
+                'time_out' => '2026-06-15 17:45:00',
+                'shift_id' => $shift->id,
+            ]);
+        }
+
+        $this->assertSame(2, OvertimeRequest::query()
+            ->whereDate('date', '2026-06-15')
+            ->where('is_auto_detected', true)
+            ->count());
     }
 
     public function test_attendance_save_skips_when_below_threshold(): void

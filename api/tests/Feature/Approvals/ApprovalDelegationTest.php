@@ -181,4 +181,89 @@ class ApprovalDelegationTest extends TestCase
             ->where('step_order', 1)->first();
         $this->assertSame('approved', $step1->action);
     }
+
+    public function test_employee_cannot_post_a_foreign_role_delegation(): void
+    {
+        $employee = $this->makeUser('employee');
+        $delegate = $this->makeUser('employee');
+
+        $response = $this->actingAs($employee, 'sanctum')->postJson('/api/v1/approval-delegations', [
+            'delegate_user_id' => $delegate->hash_id,
+            'role_slug'        => 'department_head',
+            'starts_at'        => now()->subDay()->toDateString(),
+            'ends_at'          => now()->addDay()->toDateString(),
+        ]);
+
+        $response->assertStatus(422);
+        $this->assertDatabaseMissing('approval_delegations', [
+            'delegator_user_id' => $employee->id,
+            'delegate_user_id'  => $delegate->id,
+            'role_slug'         => 'department_head',
+        ]);
+    }
+
+    public function test_http_creation_allows_delegating_the_current_role(): void
+    {
+        $delegator = $this->makeUser('department_head');
+        $delegate  = $this->makeUser('employee');
+
+        $response = $this->actingAs($delegator, 'sanctum')->postJson('/api/v1/approval-delegations', [
+            'delegate_user_id' => $delegate->hash_id,
+            'role_slug'        => 'department_head',
+            'starts_at'        => now()->subDay()->toDateString(),
+            'ends_at'          => now()->addDay()->toDateString(),
+        ]);
+
+        $response->assertCreated();
+        $this->assertDatabaseHas('approval_delegations', [
+            'delegator_user_id' => $delegator->id,
+            'delegate_user_id'  => $delegate->id,
+            'role_slug'         => 'department_head',
+            'is_active'         => true,
+        ]);
+    }
+
+    public function test_system_admin_cannot_assign_a_role_the_target_delegator_lacks(): void
+    {
+        $admin     = $this->makeUser('system_admin');
+        $delegator = $this->makeUser('employee');
+        $delegate  = $this->makeUser('employee');
+
+        $response = $this->actingAs($admin, 'sanctum')->postJson('/api/v1/approval-delegations', [
+            'delegator_user_id' => $delegator->hash_id,
+            'delegate_user_id'  => $delegate->hash_id,
+            'role_slug'         => 'department_head',
+            'starts_at'         => now()->subDay()->toDateString(),
+            'ends_at'           => now()->addDay()->toDateString(),
+        ]);
+
+        $response->assertStatus(422);
+        $this->assertDatabaseMissing('approval_delegations', [
+            'delegator_user_id' => $delegator->id,
+            'delegate_user_id'  => $delegate->id,
+            'role_slug'         => 'department_head',
+        ]);
+    }
+
+    public function test_exact_delegation_stops_working_after_delegator_role_changes(): void
+    {
+        $requester = $this->makeUser('employee');
+        $delegator = $this->makeUser('department_head');
+        $delegate  = $this->makeUser('employee');
+        $pr        = $this->pendingPurchaseRequest($requester);
+
+        ApprovalDelegation::create([
+            'delegator_user_id' => $delegator->id,
+            'delegate_user_id'  => $delegate->id,
+            'role_slug'         => 'department_head',
+            'starts_at'         => now()->subDay()->toDateString(),
+            'ends_at'           => now()->addDay()->toDateString(),
+            'is_active'         => true,
+        ]);
+
+        $delegator->update(['role_id' => Role::where('slug', 'employee')->value('id')]);
+
+        $this->expectExceptionMessage("Only users with role 'department_head' can approve this step.");
+        app(ApprovalService::class)->approve($pr, $delegate, 'Stale delegation must fail');
+    }
 }

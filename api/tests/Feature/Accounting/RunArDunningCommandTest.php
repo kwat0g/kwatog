@@ -8,7 +8,9 @@ use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Mail\InvoiceDunningMail;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Auth\Models\User;
 use App\Modules\Accounting\Services\ArDunningService;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -125,5 +127,52 @@ class RunArDunningCommandTest extends TestCase
         app(ArDunningService::class)->run();
 
         Mail::assertNothingQueued();
+    }
+
+    public function test_missing_customer_email_creates_an_ar_in_app_fallback(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        Mail::fake();
+
+        $officer = User::factory()->withRole('finance_officer')->create();
+        $customer = Customer::factory()->create(['email' => null]);
+        $invoice = Invoice::factory()->create([
+            'customer_id' => $customer->id,
+            'status' => 'finalized',
+            'due_date' => Carbon::now()->subDays(8)->toDateString(),
+            'balance' => 1000,
+            'last_dunning_tier' => 0,
+        ]);
+
+        $result = app(ArDunningService::class)->run();
+
+        $this->assertSame(1, $result['blocked']);
+        Mail::assertNothingQueued();
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $officer->id,
+            'type' => 'email.delivery_failed',
+        ]);
+        $this->assertSame(0, (int) $invoice->fresh()->last_dunning_tier);
+    }
+
+    public function test_queued_customer_reminder_failure_creates_an_ar_in_app_fallback(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $officer = User::factory()->withRole('finance_officer')->create();
+        $customer = Customer::factory()->create(['email' => 'customer@example.test']);
+        $invoice = Invoice::factory()->create([
+            'customer_id' => $customer->id,
+            'status' => 'finalized',
+            'due_date' => Carbon::now()->subDays(8)->toDateString(),
+            'balance' => 1000,
+        ]);
+
+        (new InvoiceDunningMail($invoice, 7, 8, [$officer->id]))
+            ->failed(new \RuntimeException('Brevo delivery failed'));
+
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $officer->id,
+            'type' => 'email.delivery_failed',
+        ]);
     }
 }

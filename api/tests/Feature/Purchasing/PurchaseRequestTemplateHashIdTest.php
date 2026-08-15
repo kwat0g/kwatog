@@ -18,7 +18,7 @@ use Tests\TestCase;
  *
  * The SPA sends `template_id`/`department_id` as hash_ids (per the
  * ID-obfuscation rule). PR templates CRUD was HIDDEN 2026-08-08 (scope cut —
- * see SCOPE-CUT-AUDIT PASS 4), but the live purchase-request creation path that
+ * the legacy template client was intentionally removed, but the live purchase-request creation path that
  * consumes a template (`template_id` FK, purchase-request lines copied from the
  * template) stays. This pins the hash-id contract on that surviving path.
  */

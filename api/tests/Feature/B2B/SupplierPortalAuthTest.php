@@ -63,7 +63,7 @@ class SupplierPortalAuthTest extends TestCase
         ]);
 
         $response->assertOk();
-        $response->assertJsonStructure(['data' => ['token', 'user' => ['id', 'name', 'email', 'vendor_id']]]);
+        $response->assertJsonStructure(['data' => ['token', 'user' => ['id', 'name', 'email', 'vendor_id', 'must_change_password']]]);
 
         $payload = $response->json('data');
         $this->assertNotEmpty($payload['token']);

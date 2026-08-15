@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Payroll;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\Money;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -100,6 +101,64 @@ class ThirteenthMonthTest extends TestCase
             'accrued_amount'     => Money::div($totalBasicEarned, '12', 2), // running estimate
             'is_paid'            => false,
         ]);
+    }
+
+    public function test_13th_month_below_and_at_exemption_has_no_tax_correction(): void
+    {
+        foreach ([['below', '1079988.00'], ['at', '1080000.00']] as [$label, $total]) {
+            $emp = $this->makeEmployee();
+            $this->seedAccrual($emp, 2025, $total);
+            $period = $this->svc->computeAndPay(2025, $this->adminUser);
+            $payroll = Payroll::where('payroll_period_id', $period->id)->where('employee_id', $emp->id)->firstOrFail();
+
+            $this->assertSame('0.00', (string) $payroll->withholding_tax);
+            $this->assertSame('0.00', (string) $payroll->thirteenth_month_taxable_excess);
+            $this->assertSame('0.00', (string) $payroll->thirteenth_month_correction_delta);
+            $this->assertSame((string) $payroll->gross_pay, (string) $payroll->net_pay);
+        }
+    }
+
+    public function test_13th_month_above_exemption_posts_annual_tax_correction(): void
+    {
+        $emp = $this->makeEmployee();
+        // 1,000,000 payout -> 910,000 excess over the ₱90,000 exemption.
+        // Annex E annual tax: 102,500 + 25% × (910,000 - 800,000) = 130,000.
+        $this->seedAccrual($emp, 2025, '12000000.00');
+        $period = $this->svc->computeAndPay(2025, $this->adminUser);
+        $payroll = Payroll::where('payroll_period_id', $period->id)->where('employee_id', $emp->id)->firstOrFail();
+
+        $this->assertSame('910000.00', (string) $payroll->thirteenth_month_taxable_excess);
+        $this->assertSame('130000.00', (string) $payroll->withholding_tax);
+        $this->assertSame('130000.00', (string) $payroll->thirteenth_month_correction_delta);
+        $this->assertSame('870000.00', (string) $payroll->net_pay);
+    }
+
+    public function test_2018_to_2022_annex_d_schedule_is_selected_by_pay_date(): void
+    {
+        $emp = $this->makeEmployee();
+        $this->seedAccrual($emp, 2022, '12000000.00');
+        $period = $this->svc->computeAndPay(2022, $this->adminUser);
+        $payroll = Payroll::where('payroll_period_id', $period->id)->where('employee_id', $emp->id)->firstOrFail();
+
+        // Annex D: 130,000 + 30% × (910,000 - 800,000) = 163,000.
+        $this->assertSame('163000.00', (string) $payroll->withholding_tax);
+    }
+
+    public function test_void_and_recompute_reposts_the_same_tax_correction_once(): void
+    {
+        $emp = $this->makeEmployee();
+        $this->seedAccrual($emp, 2025, '12000000.00');
+        $periods = app(\App\Modules\Payroll\Services\PayrollPeriodService::class);
+        $checker = User::factory()->create(['role_id' => Role::where('slug', 'finance_officer')->value('id')]);
+        $period = $this->svc->computeAndPay(2025, $this->adminUser);
+        $periods->approve($period->fresh(), $checker);
+        $periods->finalize($period->fresh(), $checker);
+        $periods->void($period->fresh(), $checker, 'Correction run');
+
+        $replacement = $this->svc->computeAndPay(2025, $this->adminUser);
+        $payroll = Payroll::where('payroll_period_id', $replacement->id)->where('employee_id', $emp->id)->firstOrFail();
+        $this->assertSame('130000.00', (string) $payroll->withholding_tax);
+        $this->assertSame(1, Payroll::where('payroll_period_id', $replacement->id)->where('employee_id', $emp->id)->count());
     }
 
     // ─── Tests ────────────────────────────────────────────────────────────────
@@ -320,6 +379,77 @@ class ThirteenthMonthTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('already finalized');
         $this->svc->computeAndPay(2025, $this->adminUser);
+    }
+
+    /** A live worker owns Processing; a replay must not wipe its rows. */
+    public function test_does_not_wipe_an_in_flight_processing_period(): void
+    {
+        $period = PayrollPeriod::create([
+            'period_start' => '2025-12-01',
+            'period_end' => '2025-12-31',
+            'payroll_date' => '2025-12-01',
+            'is_first_half' => false,
+            'is_thirteenth_month' => true,
+            'created_by' => $this->adminUser->id,
+        ]);
+        // Keep a stale in-memory copy to model a replay whose initial read
+        // happened before another worker claimed the period.
+        $stale = $period->fresh();
+        $period->forceFill(['status' => PayrollPeriodStatus::Processing->value])->save();
+
+        try {
+            $this->svc->computeAndPay(2025, $this->adminUser);
+            $this->fail('A processing 13th-month period must not be wiped by a replay.');
+        } catch (BusinessRuleException $e) {
+            $this->assertStringContainsString('already being computed', $e->getMessage());
+        }
+
+        $this->assertSame(PayrollPeriodStatus::Draft, $stale->status);
+        $this->assertSame(PayrollPeriodStatus::Processing, $period->fresh()->status);
+    }
+
+    /** Approved output has passed maker-checker and is not a safe rerun target. */
+    public function test_does_not_recompute_an_approved_period(): void
+    {
+        $period = PayrollPeriod::create([
+            'period_start' => '2025-12-01',
+            'period_end' => '2025-12-31',
+            'payroll_date' => '2025-12-01',
+            'is_first_half' => false,
+            'is_thirteenth_month' => true,
+            'created_by' => $this->adminUser->id,
+        ]);
+        $period->forceFill(['status' => PayrollPeriodStatus::Approved->value])->save();
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('approved');
+        $this->svc->computeAndPay(2025, $this->adminUser);
+    }
+
+    /** The PostgreSQL partial unique index is the schema-level invariant. */
+    public function test_postgres_has_the_live_thirteenth_month_year_unique_index(): void
+    {
+        if (DB::getDriverName() !== 'pgsql') {
+            $this->markTestSkipped('The partial expression index is PostgreSQL-specific.');
+        }
+
+        $rows = DB::select(
+            "SELECT indexdef FROM pg_indexes
+              WHERE schemaname = current_schema()
+                AND indexname = 'payroll_periods_thirteenth_month_year_unique'"
+        );
+
+        $this->assertCount(1, $rows);
+        $definition = strtolower($rows[0]->indexdef);
+        $this->assertStringContainsString('unique', $definition);
+        $this->assertStringContainsString('extract', $definition);
+        $this->assertStringContainsString('is_thirteenth_month', $definition);
+        // pg_get_indexdef() normalizes the predicate with casts, e.g.
+        // ((status)::text <> 'voided'::text), so assert semantic tokens rather
+        // than one driver-specific rendering of the expression.
+        $this->assertStringContainsString('status', $definition);
+        $this->assertStringContainsString('<>', $definition);
+        $this->assertStringContainsString('voided', $definition);
     }
 
     /**

@@ -7,6 +7,9 @@ namespace Tests\Feature\Notifications;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillItem;
+use App\Modules\Accounting\Models\InvoiceItem;
+use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
@@ -16,6 +19,7 @@ use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\WarehouseLocation;
+use App\Modules\Inventory\Models\WarehouseZone;
 use App\Modules\Inventory\Services\StockMovementService;
 use App\Modules\Inventory\Support\StockMovementInput;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
@@ -277,8 +281,8 @@ class SupplierReturnShipNotificationTest extends TestCase
         $item = Item::factory()->create();
         $loc = WarehouseLocation::factory()->create();
 
-        $customer = \App\Modules\Accounting\Models\Customer::create(['name' => 'Ship-Notify Customer', 'payment_terms_days' => 30]);
-        $invoice = \App\Modules\Accounting\Models\Invoice::create([
+        $customer = Customer::create(['name' => 'Ship-Notify Customer', 'payment_terms_days' => 30]);
+        $invoice = Invoice::create([
             'invoice_number' => 'INV-SN-' . substr(uniqid(), -5),
             'customer_id'    => $customer->id,
             'status'         => 'finalized',
@@ -290,6 +294,14 @@ class SupplierReturnShipNotificationTest extends TestCase
             'due_date'       => now()->addDays(30)->toDateString(),
             'created_by'     => $admin->id,
         ]);
+        $invoiceLine = InvoiceItem::create([
+            'invoice_id' => $invoice->id,
+            'revenue_account_id' => Account::query()->where('code', '4010')->firstOrFail()->id,
+            'description' => 'Returned stock',
+            'quantity' => '8.00',
+            'unit_price' => '100.00',
+            'total' => '800.00',
+        ]);
         $rma = ReturnRequest::create([
             'rma_number'  => 'RMA-SN-' . substr(uniqid(), -5),
             'type'        => 'customer_return',
@@ -300,13 +312,31 @@ class SupplierReturnShipNotificationTest extends TestCase
             'return_date' => now()->toDateString(),
             'created_by'  => $admin->id,
         ]);
-        ReturnRequestItem::create([
+        $line = ReturnRequestItem::create([
             'return_request_id' => $rma->id,
             'item_id'           => $item->id,
             'quantity'          => '8.000',
             'returned_quantity' => '8.000',
             'unit_price'        => '100.00',
             'total'             => '800.00',
+            'source_invoice_item_id' => $invoiceLine->id,
+        ]);
+        $zone = \App\Modules\Inventory\Models\WarehouseZone::factory()->create(['zone_type' => 'quarantine']);
+        $quarantine = WarehouseLocation::factory()->create(['zone_id' => $zone->id]);
+        $movement = app(StockMovementService::class)->move(new StockMovementInput(
+            type: StockMovementType::AdjustmentIn,
+            itemId: $item->id,
+            toLocationId: $quarantine->id,
+            quantity: '8.000',
+            unitCost: '0.00',
+            referenceType: 'return_request',
+            referenceId: $rma->id,
+            createdBy: $admin->id,
+        ));
+        $line->update([
+            'quarantine_location_id' => $quarantine->id,
+            'quarantine_movement_id' => $movement->id,
+            'quarantine_status' => 'held',
         ]);
         $rma->load('items');
 

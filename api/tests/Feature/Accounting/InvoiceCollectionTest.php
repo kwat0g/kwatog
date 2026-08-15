@@ -68,6 +68,8 @@ class InvoiceCollectionTest extends TestCase
         $invoiceDate = $date ?? '2026-04-01';
         $invoice = $svc->create([
             'customer_id' => $customer->hash_id,
+            'lifecycle_type' => 'prebill',
+            'prebill_reason' => 'Collection accounting test fixture',
             'date'        => $invoiceDate,
             'due_date'    => $dueDate ?? '2026-04-30',
             'is_vatable'  => $isVatable,
@@ -305,6 +307,8 @@ class InvoiceCollectionTest extends TestCase
         $makeInvoice = function (string $dueDate) use ($svc, $user, $customer, $revenueId): \App\Modules\Accounting\Models\Invoice {
             $invoice = $svc->create([
                 'customer_id' => $customer->hash_id,
+                'lifecycle_type' => 'prebill',
+                'prebill_reason' => 'Aging report test fixture',
                 'date'        => '2026-01-01',
                 'due_date'    => $dueDate,
                 'is_vatable'  => false,

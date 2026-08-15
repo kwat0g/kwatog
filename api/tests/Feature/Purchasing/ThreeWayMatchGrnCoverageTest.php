@@ -84,6 +84,9 @@ class ThreeWayMatchGrnCoverageTest extends TestCase
             'purchase_order_id' => $po->id,
             'vendor_id'         => $this->vendor->id,
             'received_by'       => $this->user->id,
+            'status'            => 'accepted',
+            'accepted_by'       => $this->user->id,
+            'accepted_at'       => now(),
         ]);
         GrnItem::create([
             'goods_receipt_note_id'  => $grn->id,
@@ -178,6 +181,11 @@ class ThreeWayMatchGrnCoverageTest extends TestCase
                 'purchase_order_id' => $po->hash_id,
                 'date'              => '2026-04-10',
                 'is_vatable'        => false,
+                'provenance_type'   => 'stock',
+                'goods_receipt_note_id' => GoodsReceiptNote::query()
+                    ->where('purchase_order_id', $po->id)
+                    ->where('status', 'accepted')
+                    ->value('id'),
                 'items'             => [[
                     'expense_account_id' => $this->expenseAccount->hash_id,
                     'item_id'            => $this->item->hash_id,
@@ -199,6 +207,11 @@ class ThreeWayMatchGrnCoverageTest extends TestCase
             'date'              => '2026-04-10',
             'is_vatable'        => false,
             'allow_override'    => true,
+            'provenance_type'   => 'stock',
+            'goods_receipt_note_id' => GoodsReceiptNote::query()
+                ->where('purchase_order_id', $po->id)
+                ->where('status', 'accepted')
+                ->value('id'),
             'items'             => [[
                 'expense_account_id' => $this->expenseAccount->hash_id,
                 'item_id'            => $this->item->hash_id,

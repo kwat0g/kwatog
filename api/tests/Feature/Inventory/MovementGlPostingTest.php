@@ -16,6 +16,7 @@ use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Events\StockMovementGlPostingRequested;
 use App\Modules\Inventory\Listeners\PostStockMovementToGlOnRequested;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\WarehouseLocation;
@@ -88,7 +89,7 @@ class MovementGlPostingTest extends TestCase
             toLocationId: $this->location->id,
             quantity: '10.000',
             unitCost: '5.00',
-            referenceType: 'adjustment',
+            referenceType: 'opening',
             createdBy: User::factory()->create()->id,
         ));
 
@@ -113,7 +114,7 @@ class MovementGlPostingTest extends TestCase
             toLocationId: null,
             quantity: '4.000',
             unitCost: '5.00',
-            referenceType: 'work_order',
+            referenceType: 'opening',
         ));
 
         $this->assertMovementPosted($m, '5010', '20.00', '1200', '20.00');
@@ -137,7 +138,7 @@ class MovementGlPostingTest extends TestCase
             toLocationId: null,
             quantity: '2.000',
             unitCost: '5.00',
-            referenceType: 'return_request',
+            referenceType: 'opening',
         ));
 
         $this->assertMovementPosted($m, '2110', '10.00', '1200', '10.00');
@@ -163,7 +164,7 @@ class MovementGlPostingTest extends TestCase
             toLocationId: $other->id,
             quantity: '3.000',
             unitCost: '5.00',
-            referenceType: 'transfer_order',
+            referenceType: 'opening',
         ));
 
         $this->assertNull($m->journal_entry_id, 'location moves have no ledger impact');
@@ -179,7 +180,7 @@ class MovementGlPostingTest extends TestCase
             toLocationId: $this->location->id,
             quantity: '5.000',
             unitCost: '0.00',
-            referenceType: 'return_request',
+            referenceType: 'opening',
         ));
 
         $this->assertNull($m->journal_entry_id);
@@ -198,6 +199,7 @@ class MovementGlPostingTest extends TestCase
             quantity: '10.000',
             unitCost: '5.00',
             referenceType: 'goods_receipt_note',
+            referenceId: GoodsReceiptNote::factory()->create()->id,
         ));
 
         $this->assertNull($m->journal_entry_id);
@@ -223,7 +225,7 @@ class MovementGlPostingTest extends TestCase
             fromLocationId: $this->location->id,
             quantity: '4.000',
             unitCost: '5.00',
-            referenceType: 'work_order',
+            referenceType: 'opening',
         ));
 
         $this->assertSame(MovementGlHandoffStatus::ManualRequired, $movement->gl_handoff_status);
@@ -283,7 +285,7 @@ class MovementGlPostingTest extends TestCase
             toLocationId: $this->location->id,
             quantity: '5.000',
             unitCost: '5.00',
-            referenceType: 'manual_adjustment',
+            referenceType: 'opening',
         ));
 
         $this->assertSame(MovementGlHandoffStatus::NotRequired, $movement->gl_handoff_status);
@@ -302,7 +304,7 @@ class MovementGlPostingTest extends TestCase
             toLocationId: $this->location->id,
             quantity: '2.000',
             unitCost: '5.00',
-            referenceType: 'manual_adjustment',
+            referenceType: 'opening',
         ));
         app(SettingsService::class)->set('accounting.accounts.inventory_raw_material_code', '1200', 'accounting');
 

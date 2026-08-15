@@ -52,7 +52,7 @@ class StockLevelOptimisticLockTest extends TestCase
             fromLocationId:      null,
             toLocationId:        (int) $this->location->id,
             unitCost:            $unitCost,
-            referenceType:       'test',
+            referenceType:       'opening',
             expectedToVersion:   $expectedToVersion,
         ));
     }

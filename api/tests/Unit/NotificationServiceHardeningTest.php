@@ -283,4 +283,24 @@ class NotificationServiceHardeningTest extends TestCase
         // Both still get the in-app row; only the mail channel differs.
         $this->assertSame(2, DB::table('notifications')->where('type', 'test.optin')->count());
     }
+
+    public function test_in_app_fallback_never_queues_email_even_when_email_is_enabled(): void
+    {
+        $user = User::factory()->create(['email' => 'fallback@ogami.test']);
+        $this->enableEmailFor($user, 'email.delivery_failed');
+
+        Event::fake();
+        Mail::fake();
+
+        $this->service->sendInApp($user, 'email.delivery_failed', [
+            'title' => 'Email delivery failed',
+            'message' => 'Use an approved alternate channel.',
+        ]);
+
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $user->id,
+            'type' => 'email.delivery_failed',
+        ]);
+        Mail::assertNothingQueued();
+    }
 }

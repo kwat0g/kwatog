@@ -11,6 +11,8 @@ use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
+use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Production\Models\WorkOrderOutput;
 use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
@@ -98,12 +100,160 @@ class DeliveryQuantityReconciliationTest extends TestCase
         $this->assertSame('6.000', (string) $first->items->first()->quantity);
     }
 
+    public function test_output_inspection_capacity_is_independent_and_partial_reservations_cannot_overrun_it(): void
+    {
+        [$user, $so, $soItem, $inspection] = $this->arrange(quantity: '10');
+        $soItem->update(['quantity' => '20']);
+
+        $this->service->create([
+            'sales_order_id' => $so->id,
+            'scheduled_date' => now()->toDateString(),
+            'items' => [[
+                'sales_order_item_id' => $soItem->id,
+                'quantity' => '6',
+                'inspection_id' => $inspection->id,
+            ]],
+        ], $user);
+
+        try {
+            $this->service->create([
+                'sales_order_id' => $so->id,
+                'scheduled_date' => now()->addDay()->toDateString(),
+                'items' => [[
+                    'sales_order_item_id' => $soItem->id,
+                    'quantity' => '5',
+                    'inspection_id' => $inspection->id,
+                ]],
+            ], $user);
+            $this->fail('A delivery must not reserve more than the passed output quantity.');
+        } catch (BusinessRuleException $e) {
+            $this->assertStringContainsString('remaining accepted quantity (4.00)', $e->getMessage());
+        }
+    }
+
+    public function test_cancelled_reservation_releases_output_inspection_capacity(): void
+    {
+        [$user, $so, $soItem, $inspection] = $this->arrange(quantity: '10');
+        $delivery = $this->service->create([
+            'sales_order_id' => $so->id,
+            'scheduled_date' => now()->toDateString(),
+            'items' => [[
+                'sales_order_item_id' => $soItem->id,
+                'quantity' => '6',
+                'inspection_id' => $inspection->id,
+            ]],
+        ], $user);
+        $this->service->updateStatus($delivery, DeliveryStatus::Cancelled);
+
+        $replacement = $this->service->create([
+            'sales_order_id' => $so->id,
+            'scheduled_date' => now()->addDay()->toDateString(),
+            'items' => [[
+                'sales_order_item_id' => $soItem->id,
+                'quantity' => '10',
+                'inspection_id' => $inspection->id,
+            ]],
+        ], $user);
+
+        $this->assertSame(DeliveryStatus::Scheduled, $replacement->status);
+        $this->assertSame('10.000', (string) $replacement->items->first()->quantity);
+    }
+
+    public function test_legacy_passed_inspection_cannot_authorize_delivery(): void
+    {
+        [$user, $so, $soItem, $inspection] = $this->arrange(quantity: '10');
+        $inspection->update(['work_order_output_id' => null]);
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('Legacy product/WO-only inspections cannot authorize');
+        $this->service->create([
+            'sales_order_id' => $so->id,
+            'scheduled_date' => now()->toDateString(),
+            'items' => [[
+                'sales_order_item_id' => $soItem->id,
+                'quantity' => '1',
+                'inspection_id' => $inspection->id,
+            ]],
+        ], $user);
+    }
+
+    public function test_inspection_for_different_product_cannot_authorize_delivery(): void
+    {
+        [$user, $so, $soItem, $inspection] = $this->arrange(quantity: '10');
+        $otherProduct = Product::create([
+            'part_number' => strtoupper(substr(uniqid('OTHER-'), 0, 18)),
+            'name' => 'Other product',
+            'unit_of_measure' => 'pcs',
+            'standard_cost' => '50.00',
+            'is_active' => true,
+        ]);
+        $inspection->update(['product_id' => $otherProduct->id]);
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('not provenance-linked');
+        $this->service->create([
+            'sales_order_id' => $so->id,
+            'scheduled_date' => now()->toDateString(),
+            'items' => [[
+                'sales_order_item_id' => $soItem->id,
+                'quantity' => '1',
+                'inspection_id' => $inspection->id,
+            ]],
+        ], $user);
+    }
+
+    public function test_inspection_bound_to_different_work_order_cannot_authorize_delivery(): void
+    {
+        [$user, $so, $soItem, $inspection] = $this->arrange(quantity: '10');
+        $inspection->update(['entity_id' => $inspection->entity_id + 999999]);
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('not provenance-linked');
+        $this->service->create([
+            'sales_order_id' => $so->id,
+            'scheduled_date' => now()->toDateString(),
+            'items' => [[
+                'sales_order_item_id' => $soItem->id,
+                'quantity' => '1',
+                'inspection_id' => $inspection->id,
+            ]],
+        ], $user);
+    }
+
+    public function test_output_work_order_for_different_sales_order_cannot_authorize_delivery(): void
+    {
+        [$user, $so, $soItem, $inspection] = $this->arrange(quantity: '10');
+        $otherSo = SalesOrder::create([
+            'so_number' => 'SO-OTHER-'.substr(uniqid(), -8),
+            'customer_id' => $so->customer_id,
+            'date' => now()->toDateString(),
+            'subtotal' => '0.00',
+            'vat_amount' => '0.00',
+            'total_amount' => '0.00',
+            'status' => 'confirmed',
+            'created_by' => $user->id,
+        ]);
+        WorkOrder::query()->whereKey($inspection->entity_id)->update(['sales_order_id' => $otherSo->id]);
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('not provenance-linked');
+        $this->service->create([
+            'sales_order_id' => $so->id,
+            'scheduled_date' => now()->toDateString(),
+            'items' => [[
+                'sales_order_item_id' => $soItem->id,
+                'quantity' => '1',
+                'inspection_id' => $inspection->id,
+            ]],
+        ], $user);
+    }
+
     public function test_delivered_transition_reconciles_sales_order_quantity(): void
     {
         [$user, $so, $soItem] = $this->arrange(quantity: '10');
 
         $delivery = Delivery::create([
-            'delivery_number' => 'DL-QTY-' . substr(uniqid(), -8),
+            'delivery_number' => 'DL-QTY-'.substr(uniqid(), -8),
             'sales_order_id' => $so->id,
             'status' => DeliveryStatus::InTransit->value,
             'scheduled_date' => now()->toDateString(),
@@ -126,7 +276,7 @@ class DeliveryQuantityReconciliationTest extends TestCase
     {
         [$user, $so, $soItem] = $this->arrange(quantity: '10');
         $delivery = Delivery::create([
-            'delivery_number' => 'DL-QTY-' . substr(uniqid(), -8),
+            'delivery_number' => 'DL-QTY-'.substr(uniqid(), -8),
             'sales_order_id' => $so->id,
             'status' => DeliveryStatus::Delivered->value,
             'scheduled_date' => now()->toDateString(),
@@ -162,18 +312,18 @@ class DeliveryQuantityReconciliationTest extends TestCase
         $role = Role::firstOrCreate(['slug' => 'delivery_qty_test'], ['name' => 'Delivery Quantity Test']);
         $user = User::factory()->create(['role_id' => $role->id]);
         $customer = Customer::create([
-            'name' => 'Delivery Quantity Customer ' . uniqid(),
+            'name' => 'Delivery Quantity Customer '.uniqid(),
             'is_active' => true,
         ]);
         $product = Product::create([
             'part_number' => strtoupper(substr(uniqid('PT-'), 0, 12)),
-            'name' => 'Delivery Quantity Product ' . uniqid(),
+            'name' => 'Delivery Quantity Product '.uniqid(),
             'unit_of_measure' => 'pcs',
             'standard_cost' => '50.00',
             'is_active' => true,
         ]);
         $so = SalesOrder::create([
-            'so_number' => 'SO-QTY-' . substr(uniqid(), -8),
+            'so_number' => 'SO-QTY-'.substr(uniqid(), -8),
             'customer_id' => $customer->id,
             'date' => now()->toDateString(),
             'subtotal' => '500.00',
@@ -191,14 +341,38 @@ class DeliveryQuantityReconciliationTest extends TestCase
             'quantity_delivered' => '0.00',
             'delivery_date' => now()->addDays(7)->toDateString(),
         ]);
+        $wo = WorkOrder::create([
+            'wo_number' => 'WO-QTY-'.substr(uniqid(), -8),
+            'product_id' => $product->id,
+            'sales_order_id' => $so->id,
+            'sales_order_item_id' => $soItem->id,
+            'quantity_target' => $quantity,
+            'quantity_produced' => $quantity,
+            'quantity_good' => $quantity,
+            'quantity_rejected' => 0,
+            'planned_start' => now()->subDay(),
+            'planned_end' => now(),
+            'status' => 'completed',
+            'created_by' => $user->id,
+        ]);
+        $output = WorkOrderOutput::create([
+            'work_order_id' => $wo->id,
+            'recorded_by' => $user->id,
+            'recorded_at' => now(),
+            'good_count' => (int) $quantity,
+            'reject_count' => 0,
+            'batch_code' => 'QTY-BATCH-001',
+        ]);
         $inspection = Inspection::create([
-            'inspection_number' => 'QC-QTY-' . substr(uniqid(), -8),
+            'inspection_number' => 'QC-QTY-'.substr(uniqid(), -8),
             'stage' => InspectionStage::Outgoing->value,
             'status' => InspectionStatus::Passed->value,
             'product_id' => $product->id,
             'entity_type' => InspectionEntityType::WorkOrder->value,
-            'entity_id' => $so->id,
+            'entity_id' => $wo->id,
+            'work_order_output_id' => $output->id,
             'batch_quantity' => (float) $quantity,
+            'accepted_quantity' => (int) $quantity,
             'sample_size' => 1,
             'accept_count' => 1,
             'reject_count' => 0,

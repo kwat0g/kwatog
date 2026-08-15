@@ -6,6 +6,8 @@ namespace Tests\Feature\ReturnManagement;
 
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Accounting\Models\InvoiceItem;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\StockMovementType;
@@ -13,6 +15,9 @@ use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
+use App\Modules\Inventory\Models\WarehouseZone;
+use App\Modules\Inventory\Services\StockMovementService;
+use App\Modules\Inventory\Support\StockMovementInput;
 use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\ReturnManagement\Models\ReturnRequestItem;
@@ -83,13 +88,41 @@ class CustomerReturnRestockOnDisposeTest extends TestCase
             'created_by'  => $by->id,
         ]);
 
-        ReturnRequestItem::create([
+        $invoiceLine = InvoiceItem::create([
+            'invoice_id' => $inv->id,
+            'revenue_account_id' => Account::query()->where('code', '4010')->firstOrFail()->id,
+            'description' => 'Returned stock',
+            'quantity' => '10.00',
+            'unit_price' => '100.00',
+            'total' => '1000.00',
+        ]);
+
+        $line = ReturnRequestItem::create([
             'return_request_id' => $rma->id,
             'item_id'           => $item->id,
             'quantity'          => 10,
             'returned_quantity' => 8,
             'unit_price'        => '100.00',
             'total'             => '1000.00',
+            'source_invoice_item_id' => $invoiceLine->id,
+        ]);
+
+        $zone = WarehouseZone::factory()->create(['zone_type' => 'quarantine']);
+        $quarantine = WarehouseLocation::factory()->create(['zone_id' => $zone->id]);
+        $movement = app(StockMovementService::class)->move(new StockMovementInput(
+            type: \App\Modules\Inventory\Enums\StockMovementType::AdjustmentIn,
+            itemId: $item->id,
+            toLocationId: $quarantine->id,
+            quantity: '8.000',
+            unitCost: '0.00',
+            referenceType: 'return_request',
+            referenceId: $rma->id,
+            createdBy: $by->id,
+        ));
+        $line->update([
+            'quarantine_location_id' => $quarantine->id,
+            'quarantine_movement_id' => $movement->id,
+            'quarantine_status' => 'held',
         ]);
 
         return $rma->load('items');
@@ -186,7 +219,7 @@ class CustomerReturnRestockOnDisposeTest extends TestCase
 
         $this->assertSame(ReturnRequestStatus::Completed, $rma->fresh()->status);
         $this->assertSame(
-            1,
+            2,
             StockMovement::query()
                 ->where('reference_type', 'return_request')
                 ->where('reference_id', $rma->id)
@@ -212,12 +245,18 @@ class CustomerReturnRestockOnDisposeTest extends TestCase
 
         $this->assertSame('disposed', $rma->fresh()->disposition_status);
         $this->assertSame(
-            0,
+            1,
             StockMovement::query()
                 ->where('reference_type', 'return_request')
                 ->where('reference_id', $rma->id)
+                ->where('movement_type', StockMovementType::AdjustmentIn->value)
                 ->count(),
-            'Scrapped lines never touch the inventory ledger.',
+            'Quarantine receipt is recorded before a scrap disposition.',
         );
+        $this->assertSame(1, StockMovement::query()
+            ->where('reference_type', 'return_request')
+            ->where('reference_id', $rma->id)
+            ->where('movement_type', StockMovementType::Scrap->value)
+            ->count());
     }
 }

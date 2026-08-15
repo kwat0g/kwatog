@@ -57,6 +57,8 @@ class InvoiceDraftNumberingTest extends TestCase
     {
         return $svc->create([
             'customer_id' => $customer->hash_id,
+            'lifecycle_type' => 'prebill',
+            'prebill_reason' => 'Approved manual invoice numbering regression.',
             'date'        => '2026-04-01',
             'due_date'    => '2026-04-30',
             'is_vatable'  => false,
@@ -105,6 +107,28 @@ class InvoiceDraftNumberingTest extends TestCase
             $finalized->invoice_number,
             'Finalized invoice must use INV-YYYYMM-NNNN format.',
         );
+    }
+
+    public function test_standard_invoice_cannot_finalize_without_confirmed_delivery_provenance(): void
+    {
+        $user = $this->newUser();
+        $customer = Customer::create(['name' => 'Undelivered Customer', 'payment_terms_days' => 30]);
+        $invoice = app(InvoiceService::class)->create([
+            'customer_id' => $customer->hash_id,
+            'date' => '2026-04-01',
+            'lifecycle_type' => 'standard',
+            'is_vatable' => false,
+            'items' => [[
+                'revenue_account_id' => $this->accountHashId('4010'),
+                'description' => 'Undelivered goods',
+                'quantity' => '1',
+                'unit_price' => '100.00',
+            ]],
+        ], $user);
+
+        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->expectExceptionMessage('confirmed delivered quantity');
+        app(InvoiceService::class)->finalize($invoice, $user);
     }
 
     public function test_cancelled_draft_does_not_burn_a_sequence_number(): void

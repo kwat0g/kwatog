@@ -159,19 +159,28 @@ class StockAdjustmentReasonTest extends TestCase
         $this->svc->approve($adj->fresh(), $staff);
     }
 
-    public function test_legacy_adjust_in_still_works_without_reason_code(): void
+    public function test_ordinary_adjustment_uses_the_gated_create_boundary(): void
     {
         app(SettingsService::class)->set('inventory.adjustment_approval_threshold', 0);
 
-        $mvmt = $this->svc->adjustIn(
-            $this->item->id,
-            $this->location->id,
-            '5',
-            '10.00',
-            'Legacy path with no reason code',
-            $this->admin,
+        $adj = $this->svc->create(
+            itemId: $this->item->id,
+            locationId: $this->location->id,
+            direction: 'in',
+            qty: '5',
+            unitCost: '10.00',
+            reason: 'Ordinary adjustment through the gated boundary',
+            by: $this->admin,
         );
 
-        $this->assertSame('adjustment_in', $mvmt->movement_type->value);
+        $this->assertSame('approved', $adj->getRawOriginal('status'));
+        $this->assertNotNull($adj->stock_movement_id);
+    }
+
+    public function test_generic_legacy_immediate_adjustment_methods_are_gone(): void
+    {
+        $this->assertFalse(method_exists(StockAdjustmentService::class, 'adjustIn'));
+        $this->assertFalse(method_exists(StockAdjustmentService::class, 'adjustOut'));
+        $this->assertTrue(method_exists(StockAdjustmentService::class, 'reconcileStockCountItem'));
     }
 }

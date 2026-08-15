@@ -11,11 +11,13 @@ use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\Production\Events\WorkOrderCompleted;
 use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Production\Models\WorkOrderOutput;
 use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Listeners\TriggerOutgoingQC;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Services\InspectionService;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
 use Tests\TestCase;
@@ -51,8 +53,11 @@ class OutgoingQcIdempotencyTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+
     private Product $product;
+
     private WorkOrder $workOrder;
+
     private TriggerOutgoingQC $listener;
 
     protected function setUp(): void
@@ -63,11 +68,11 @@ class OutgoingQcIdempotencyTest extends TestCase
         $this->user = User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
 
         $this->product = Product::create([
-            'part_number'     => 'P3-7-TEST-001',
-            'name'            => 'Idempotency Test Part',
+            'part_number' => 'P3-7-TEST-001',
+            'name' => 'Idempotency Test Part',
             'unit_of_measure' => 'pcs',
-            'standard_cost'   => '5.00',
-            'is_active'       => true,
+            'standard_cost' => '5.00',
+            'is_active' => true,
         ]);
 
         // A minimal SalesOrder so the listener's $wo->sales_order_id guard passes.
@@ -75,17 +80,34 @@ class OutgoingQcIdempotencyTest extends TestCase
 
         // Build a minimal WorkOrder row directly — no WO lifecycle needed.
         $this->workOrder = WorkOrder::create([
-            'wo_number'         => 'WO-TEST-P37-0001',
-            'product_id'        => $this->product->id,
-            'sales_order_id'    => $so->id,
-            'quantity_target'   => 100,
+            'wo_number' => 'WO-TEST-P37-0001',
+            'product_id' => $this->product->id,
+            'sales_order_id' => $so->id,
+            'quantity_target' => 100,
             'quantity_produced' => 100,
-            'quantity_good'     => 98,
+            'quantity_good' => 98,
             'quantity_rejected' => 2,
-            'planned_start'     => now()->subDay(),
-            'planned_end'       => now(),
-            'status'            => 'completed',
-            'created_by'        => $this->user->id,
+            'planned_start' => now()->subDay(),
+            'planned_end' => now(),
+            'status' => 'completed',
+            'created_by' => $this->user->id,
+        ]);
+
+        WorkOrderOutput::create([
+            'work_order_id' => $this->workOrder->id,
+            'recorded_by' => $this->user->id,
+            'recorded_at' => now(),
+            'good_count' => 40,
+            'reject_count' => 0,
+            'batch_code' => 'BATCH-001',
+        ]);
+        WorkOrderOutput::create([
+            'work_order_id' => $this->workOrder->id,
+            'recorded_by' => $this->user->id,
+            'recorded_at' => now(),
+            'good_count' => 58,
+            'reject_count' => 0,
+            'batch_code' => 'BATCH-002',
         ]);
 
         $this->listener = app(TriggerOutgoingQC::class);
@@ -114,9 +136,9 @@ class OutgoingQcIdempotencyTest extends TestCase
             ->count();
 
         $this->assertSame(
-            1,
+            2,
             $countAfterFirst,
-            'First handle() call must create exactly one outgoing inspection.'
+            'First handle() call must create one outgoing inspection per good output.'
         );
 
         // Second call — must be a no-op.
@@ -129,9 +151,9 @@ class OutgoingQcIdempotencyTest extends TestCase
             ->count();
 
         $this->assertSame(
-            1,
+            2,
             $countAfterSecond,
-            'Second handle() call must NOT create a duplicate outgoing inspection. ' .
+            'Second handle() call must NOT create duplicate output inspections. '.
             'The unique constraint + firstOrCreate guard must suppress the duplicate.'
         );
     }
@@ -146,18 +168,18 @@ class OutgoingQcIdempotencyTest extends TestCase
     public function test_wo_without_sales_order_id_creates_no_inspection(): void
     {
         $internalWo = WorkOrder::create([
-            'wo_number'         => 'WO-TEST-P37-INTERNAL',
-            'product_id'        => $this->product->id,
-            'sales_order_id'    => null,
-            'parent_ncr_id'     => null,
-            'quantity_target'   => 50,
+            'wo_number' => 'WO-TEST-P37-INTERNAL',
+            'product_id' => $this->product->id,
+            'sales_order_id' => null,
+            'parent_ncr_id' => null,
+            'quantity_target' => 50,
             'quantity_produced' => 50,
-            'quantity_good'     => 48,
+            'quantity_good' => 48,
             'quantity_rejected' => 2,
-            'planned_start'     => now()->subDay(),
-            'planned_end'       => now(),
-            'status'            => 'completed',
-            'created_by'        => $this->user->id,
+            'planned_start' => now()->subDay(),
+            'planned_end' => now(),
+            'status' => 'completed',
+            'created_by' => $this->user->id,
         ]);
 
         $event = new WorkOrderCompleted($internalWo);
@@ -186,21 +208,24 @@ class OutgoingQcIdempotencyTest extends TestCase
     {
         $base = [
             'inspection_number' => 'QC-P37-IDX-001',
-            'stage'             => InspectionStage::Outgoing->value,
-            'status'            => 'draft',
-            'product_id'        => $this->product->id,
-            'entity_type'       => InspectionEntityType::WorkOrder->value,
-            'entity_id'         => $this->workOrder->id,
-            'batch_quantity'    => 100,
-            'sample_size'       => 13,
-            'accept_count'      => 0,
-            'reject_count'      => 1,
-            'defect_count'      => 0,
+            'stage' => InspectionStage::Outgoing->value,
+            'status' => 'draft',
+            'product_id' => $this->product->id,
+            'entity_type' => InspectionEntityType::WorkOrder->value,
+            'entity_id' => $this->workOrder->id,
+            'work_order_output_id' => WorkOrderOutput::query()
+                ->where('work_order_id', $this->workOrder->id)
+                ->firstOrFail()->id,
+            'batch_quantity' => 100,
+            'sample_size' => 13,
+            'accept_count' => 0,
+            'reject_count' => 1,
+            'defect_count' => 0,
         ];
 
         Inspection::create($base);
 
-        $this->expectException(\Illuminate\Database\QueryException::class);
+        $this->expectException(QueryException::class);
 
         // Same stage + entity_type + entity_id but different inspection_number.
         Inspection::create(array_merge($base, [
@@ -217,26 +242,29 @@ class OutgoingQcIdempotencyTest extends TestCase
     public function test_in_process_and_outgoing_inspections_coexist_for_same_wo(): void
     {
         $base = [
-            'status'         => 'draft',
-            'product_id'     => $this->product->id,
-            'entity_type'    => InspectionEntityType::WorkOrder->value,
-            'entity_id'      => $this->workOrder->id,
+            'status' => 'draft',
+            'product_id' => $this->product->id,
+            'entity_type' => InspectionEntityType::WorkOrder->value,
+            'entity_id' => $this->workOrder->id,
             'batch_quantity' => 100,
-            'sample_size'    => 13,
-            'accept_count'   => 0,
-            'reject_count'   => 1,
-            'defect_count'   => 0,
+            'sample_size' => 13,
+            'accept_count' => 0,
+            'reject_count' => 1,
+            'defect_count' => 0,
         ];
 
         $inProcess = Inspection::create(array_merge($base, [
             'inspection_number' => 'QC-P37-IP-001',
-            'stage'             => InspectionStage::InProcess->value,
+            'stage' => InspectionStage::InProcess->value,
         ]));
 
         // Must NOT throw — different stage value = different composite key.
         $outgoing = Inspection::create(array_merge($base, [
             'inspection_number' => 'QC-P37-OG-001',
-            'stage'             => InspectionStage::Outgoing->value,
+            'stage' => InspectionStage::Outgoing->value,
+            'work_order_output_id' => WorkOrderOutput::query()
+                ->where('work_order_id', $this->workOrder->id)
+                ->firstOrFail()->id,
         ]));
 
         $this->assertNotNull($inProcess->id);
@@ -258,9 +286,12 @@ class OutgoingQcIdempotencyTest extends TestCase
             'quantity_good' => 0,
             'quantity_produced' => 0,
         ])->save();
+        WorkOrderOutput::query()
+            ->where('work_order_id', $this->workOrder->id)
+            ->update(['good_count' => 0]);
 
         $this->expectException(BusinessRuleException::class);
-        $this->expectExceptionMessage('positive good/produced quantity');
+        $this->expectExceptionMessage('no good output batch');
 
         $this->listener->handle(new WorkOrderCompleted($this->workOrder));
     }
@@ -272,7 +303,7 @@ class OutgoingQcIdempotencyTest extends TestCase
 
         $this->listener->handle(new WorkOrderCompleted($staleWo));
 
-        $this->assertSame(1, Inspection::query()
+        $this->assertSame(2, Inspection::query()
             ->where('stage', InspectionStage::Outgoing->value)
             ->where('entity_type', InspectionEntityType::WorkOrder->value)
             ->where('entity_id', $this->workOrder->id)
@@ -324,7 +355,7 @@ class OutgoingQcIdempotencyTest extends TestCase
 
         $this->listener->handle($staleEvent);
 
-        $this->assertSame(1, Inspection::query()
+        $this->assertSame(2, Inspection::query()
             ->where('stage', InspectionStage::Outgoing->value)
             ->where('entity_type', InspectionEntityType::WorkOrder->value)
             ->where('entity_id', $this->workOrder->id)

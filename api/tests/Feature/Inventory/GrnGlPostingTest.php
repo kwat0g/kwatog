@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Inventory;
 
 use App\Common\Services\SettingsService;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\GrnStatus;
@@ -58,6 +59,13 @@ class GrnGlPostingTest extends TestCase
         $this->seed(ChartOfAccountsSeeder::class);
 
         $role = Role::firstOrCreate(['slug' => 'warehouse'], ['name' => 'Warehouse']);
+        // Terminal QC submission is gated on quality.inspections.manage — grant
+        // it so these tests exercise the GRN→GL money path (pre-existing gap).
+        $permission = Permission::firstOrCreate(
+            ['slug' => 'quality.inspections.manage'],
+            ['name' => 'Quality Inspections Manage', 'module' => 'quality']
+        );
+        $role->permissions()->syncWithoutDetaching([$permission->id]);
         $this->user = User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
 
         $this->grnSvc = app(GrnService::class);

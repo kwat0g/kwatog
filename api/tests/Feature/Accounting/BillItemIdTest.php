@@ -52,6 +52,9 @@ class BillItemIdTest extends TestCase
             'vendor_id'   => $vendor->hash_id,
             'date'        => '2026-04-10',
             'is_vatable'  => false,
+            'provenance_type' => 'service',
+            'exception_evidence' => 'Bill item persistence test fixture',
+            'exception_approved' => true,
             'items'       => [
                 [
                     'expense_account_id' => $expenseId,
@@ -81,6 +84,9 @@ class BillItemIdTest extends TestCase
             'vendor_id'   => $vendor->hash_id,
             'date'        => '2026-04-10',
             'is_vatable'  => false,
+            'provenance_type' => 'service',
+            'exception_evidence' => 'Miscellaneous bill persistence test fixture',
+            'exception_approved' => true,
             'items'       => [
                 [
                     'expense_account_id' => $expenseId,

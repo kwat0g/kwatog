@@ -171,6 +171,39 @@ class AuthSecurityTest extends TestCase
         $this->assertNull($fresh->locked_until);
     }
 
+    public function test_expired_lock_starts_a_fresh_failure_window(): void
+    {
+        $user = $this->makeUser('CorrectHorse-1!', [
+            'failed_login_attempts' => 5,
+            'locked_until' => now()->subMinute(),
+        ]);
+        $this->clearAuthThrottle($user->email);
+
+        $this->postLogin($user->email, 'wrong-after-expiry')->assertStatus(422);
+
+        $fresh = $user->fresh();
+        $this->assertSame(1, (int) $fresh->failed_login_attempts);
+        $this->assertNull($fresh->locked_until);
+    }
+
+    public function test_login_rechecks_authoritative_lock_against_a_stale_user_snapshot(): void
+    {
+        $password = 'CorrectHorse-1!';
+        $user = $this->makeUser($password);
+        $stale = $user->fresh();
+        $user->forceFill([
+            'failed_login_attempts' => 5,
+            'locked_until' => now()->addMinutes(15),
+        ])->save();
+        $this->clearAuthThrottle($user->email);
+
+        $this->postLogin($stale->email, $password)->assertStatus(423);
+
+        $fresh = $user->fresh();
+        $this->assertSame(5, (int) $fresh->failed_login_attempts);
+        $this->assertTrue($fresh->locked_until->isFuture());
+    }
+
     public function test_change_password_rejects_password_used_in_history(): void
     {
         $original = 'Original-1!';

@@ -13,6 +13,7 @@ use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Production\Models\WorkOrderOutput;
 use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
@@ -65,6 +66,8 @@ class CreateDeliveryDraftOnQcPassTest extends TestCase
             (string) $item->unit_price,
             'unit_price must be copied from the SalesOrderItem, not hardcoded 0.00.',
         );
+        $this->assertSame('10.000', (string) $item->quantity);
+        $this->assertSame($inspection->id, $item->inspection_id);
     }
 
     public function test_auto_draft_does_not_bypass_sales_order_remaining_quantity(): void
@@ -73,7 +76,7 @@ class CreateDeliveryDraftOnQcPassTest extends TestCase
         $soItem = SalesOrderItem::query()->whereKey($wo->sales_order_item_id)->firstOrFail();
 
         $existing = Delivery::create([
-            'delivery_number' => 'DL-L7-' . substr(uniqid(), -8),
+            'delivery_number' => 'DL-L7-'.substr(uniqid(), -8),
             'sales_order_id' => $wo->sales_order_id,
             'status' => 'scheduled',
             'scheduled_date' => now()->toDateString(),
@@ -131,6 +134,17 @@ class CreateDeliveryDraftOnQcPassTest extends TestCase
             ->count());
     }
 
+    public function test_legacy_product_only_pass_does_not_draft_delivery(): void
+    {
+        [$wo, $inspection] = $this->arrange(unitPrice: '75.00');
+        $inspection->update(['work_order_output_id' => null, 'accepted_quantity' => 0]);
+
+        (new CreateDeliveryDraftOnQcPass(app(DocumentSequenceService::class)))
+            ->handle(new InspectionPassed($inspection->fresh()));
+
+        $this->assertSame(0, Delivery::query()->where('sales_order_id', $wo->sales_order_id)->count());
+    }
+
     // ─── Helpers ───────────────────────────────────────────────────────────────
 
     /**
@@ -145,68 +159,79 @@ class CreateDeliveryDraftOnQcPassTest extends TestCase
         $user = User::factory()->create(['role_id' => $role->id]);
 
         $customer = Customer::create([
-            'name'               => 'Cust ' . uniqid(),
-            'is_active'          => true,
+            'name' => 'Cust '.uniqid(),
+            'is_active' => true,
             'payment_terms_days' => 30,
         ]);
 
         $product = Product::create([
-            'part_number'     => strtoupper(substr(uniqid('PT-'), 0, 12)),
-            'name'            => 'Wiper Bushing ' . uniqid(),
+            'part_number' => strtoupper(substr(uniqid('PT-'), 0, 12)),
+            'name' => 'Wiper Bushing '.uniqid(),
             'unit_of_measure' => 'pcs',
-            'standard_cost'   => '50.00',
-            'is_active'       => true,
+            'standard_cost' => '50.00',
+            'is_active' => true,
         ]);
 
         $so = SalesOrder::create([
-            'so_number'    => 'SO-L7-' . substr(uniqid(), -10),
-            'customer_id'  => $customer->id,
-            'date'         => now()->toDateString(),
-            'subtotal'     => '0.00',
-            'vat_amount'   => '0.00',
+            'so_number' => 'SO-L7-'.substr(uniqid(), -10),
+            'customer_id' => $customer->id,
+            'date' => now()->toDateString(),
+            'subtotal' => '0.00',
+            'vat_amount' => '0.00',
             'total_amount' => '0.00',
-            'status'       => 'in_production',
-            'created_by'   => $user->id,
+            'status' => 'in_production',
+            'created_by' => $user->id,
         ]);
 
         $soItem = SalesOrderItem::create([
-            'sales_order_id'     => $so->id,
-            'product_id'         => $product->id,
-            'quantity'           => '10',
-            'unit_price'         => $unitPrice,
-            'total'              => bcmul('10', $unitPrice, 2),
+            'sales_order_id' => $so->id,
+            'product_id' => $product->id,
+            'quantity' => '10',
+            'unit_price' => $unitPrice,
+            'total' => bcmul('10', $unitPrice, 2),
             'quantity_delivered' => 0,
-            'delivery_date'      => now()->addDays(7)->toDateString(),
+            'delivery_date' => now()->addDays(7)->toDateString(),
         ]);
 
         $wo = WorkOrder::create([
-            'wo_number'           => 'WO-L7-' . substr(uniqid(), -8),
-            'product_id'          => $product->id,
-            'sales_order_id'      => $so->id,
+            'wo_number' => 'WO-L7-'.substr(uniqid(), -8),
+            'product_id' => $product->id,
+            'sales_order_id' => $so->id,
             'sales_order_item_id' => $soItem->id,
-            'quantity_target'     => 10,
-            'quantity_produced'   => 10,
-            'quantity_good'       => 10,
-            'quantity_rejected'   => 0,
-            'planned_start'       => now()->subDay(),
-            'planned_end'         => now(),
-            'status'              => 'completed',
-            'created_by'          => $user->id,
+            'quantity_target' => 10,
+            'quantity_produced' => 10,
+            'quantity_good' => 10,
+            'quantity_rejected' => 0,
+            'planned_start' => now()->subDay(),
+            'planned_end' => now(),
+            'status' => 'completed',
+            'created_by' => $user->id,
+        ]);
+
+        $output = WorkOrderOutput::create([
+            'work_order_id' => $wo->id,
+            'recorded_by' => $user->id,
+            'recorded_at' => now(),
+            'good_count' => 10,
+            'reject_count' => 0,
+            'batch_code' => 'L7-BATCH-001',
         ]);
 
         $inspection = Inspection::create([
-            'inspection_number' => 'QC-L7-' . substr(uniqid(), -8),
-            'stage'             => InspectionStage::Outgoing->value,
-            'status'            => InspectionStatus::Passed->value,
-            'product_id'        => $product->id,
-            'entity_type'       => InspectionEntityType::WorkOrder->value,
-            'entity_id'         => $wo->id,
-            'batch_quantity'    => 10,
-            'sample_size'       => 5,
-            'accept_count'      => 0,
-            'reject_count'      => 1,
-            'defect_count'      => 0,
-            'completed_at'      => now(),
+            'inspection_number' => 'QC-L7-'.substr(uniqid(), -8),
+            'stage' => InspectionStage::Outgoing->value,
+            'status' => InspectionStatus::Passed->value,
+            'product_id' => $product->id,
+            'entity_type' => InspectionEntityType::WorkOrder->value,
+            'entity_id' => $wo->id,
+            'work_order_output_id' => $output->id,
+            'batch_quantity' => 10,
+            'accepted_quantity' => 10,
+            'sample_size' => 5,
+            'accept_count' => 0,
+            'reject_count' => 1,
+            'defect_count' => 0,
+            'completed_at' => now(),
         ]);
 
         return [$wo, $inspection];

@@ -6,11 +6,17 @@ namespace Tests\Feature\Notifications;
 
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Accounting\Models\InvoiceItem;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\WarehouseLocation;
+use App\Modules\Inventory\Models\WarehouseZone;
+use App\Modules\Inventory\Enums\StockMovementType;
+use App\Modules\Inventory\Services\StockMovementService;
+use App\Modules\Inventory\Support\StockMovementInput;
 use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\ReturnManagement\Models\ReturnRequestItem;
@@ -83,6 +89,14 @@ class ReturnRestockNotificationTest extends TestCase
             'due_date'       => now()->addDays(30)->toDateString(),
             'created_by'     => $by->id,
         ]);
+        $invoiceLine = InvoiceItem::create([
+            'invoice_id' => $invoice->id,
+            'revenue_account_id' => Account::query()->where('code', '4010')->firstOrFail()->id,
+            'description' => 'Returned stock',
+            'quantity' => '8.00',
+            'unit_price' => '100.00',
+            'total' => '800.00',
+        ]);
 
         $rma = ReturnRequest::create([
             'rma_number'  => 'RMA-NTF-' . substr(uniqid(), -5),
@@ -95,13 +109,32 @@ class ReturnRestockNotificationTest extends TestCase
             'created_by'  => $by->id,
         ]);
 
-        ReturnRequestItem::create([
+        $line = ReturnRequestItem::create([
             'return_request_id' => $rma->id,
             'item_id'           => $item->id,
             'quantity'          => '8.000',
             'returned_quantity' => '8.000',
             'unit_price'        => '100.00',
             'total'             => '800.00',
+            'source_invoice_item_id' => $invoiceLine->id,
+        ]);
+
+        $zone = WarehouseZone::factory()->create(['zone_type' => 'quarantine']);
+        $quarantine = WarehouseLocation::factory()->create(['zone_id' => $zone->id]);
+        $movement = app(StockMovementService::class)->move(new StockMovementInput(
+            type: StockMovementType::AdjustmentIn,
+            itemId: $item->id,
+            toLocationId: $quarantine->id,
+            quantity: '8.000',
+            unitCost: '0.00',
+            referenceType: 'return_request',
+            referenceId: $rma->id,
+            createdBy: $by->id,
+        ));
+        $line->update([
+            'quarantine_location_id' => $quarantine->id,
+            'quarantine_movement_id' => $movement->id,
+            'quarantine_status' => 'held',
         ]);
 
         return $rma->load('items');

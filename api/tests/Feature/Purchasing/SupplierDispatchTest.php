@@ -6,6 +6,7 @@ namespace Tests\Feature\Purchasing;
 
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\B2B\Models\SupplierPortalUser;
+use App\Modules\Auth\Models\User;
 use App\Modules\Purchasing\Contracts\SupplierDispatchGateway;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Enums\SupplierDispatchStatus;
@@ -17,6 +18,7 @@ use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\SupplierOrderDispatch;
 use App\Modules\Purchasing\Services\SupplierDispatchService;
 use App\Modules\Purchasing\Support\SupplierDispatchResult;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use RuntimeException;
@@ -62,6 +64,20 @@ class SupplierDispatchTest extends TestCase
         $this->assertSame('manual', $dispatch->channel);
         $this->assertStringContainsString('No active supplier portal user', (string) $dispatch->last_error);
         $this->assertSame('send_pdf_and_confirm', $dispatch->metadata['next_action']);
+    }
+
+    public function test_missing_supplier_portal_recipient_creates_a_purchasing_in_app_alert(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $purchasingUser = User::factory()->withRole('purchasing_officer')->create();
+        $po = $this->approvedPo();
+
+        app(SupplierDispatchService::class)->prepareForApproved($po);
+
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $purchasingUser->id,
+            'type' => 'supplier.dispatch_action_required',
+        ]);
     }
 
     public function test_replayed_approval_after_po_is_sent_only_reconciles_and_does_not_publish(): void

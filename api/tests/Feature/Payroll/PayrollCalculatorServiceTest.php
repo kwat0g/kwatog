@@ -326,6 +326,36 @@ class PayrollCalculatorServiceTest extends TestCase
         $this->assertDatabaseCount('payrolls', 1);
     }
 
+    public function test_recompute_reverses_and_reapplies_one_authoritative_loan_deduction(): void
+    {
+        $emp = $this->makeEmployee();
+        $period = $this->makePeriod(true, '2026-04-01', '2026-04-15');
+        $this->attendanceFor($emp, '2026-04-01', '2026-04-15');
+
+        $loan = EmployeeLoan::create([
+            'loan_no'              => 'LN-RECOMPUTE-0001',
+            'employee_id'          => $emp->id,
+            'loan_type'            => LoanType::CompanyLoan->value,
+            'principal'            => '6000.00',
+            'monthly_amortization' => '1000.00',
+            'total_paid'           => '0.00',
+            'balance'              => '6000.00',
+            'pay_periods_total'    => 12,
+            'pay_periods_remaining' => 12,
+            'start_date'           => '2026-04-01',
+        ]);
+        $loan->forceFill(['status' => LoanStatus::Active->value])->save();
+
+        $this->calc->computeForEmployee($period, $emp);
+        $this->calc->computeForEmployee($period, $emp);
+
+        $loan->refresh();
+        $this->assertDatabaseCount('loan_payments', 1);
+        $this->assertSame('500.00', (string) $loan->total_paid);
+        $this->assertSame('5500.00', (string) $loan->balance);
+        $this->assertSame(11, $loan->pay_periods_remaining);
+    }
+
     public function test_finalized_period_blocks_compute(): void
     {
         $emp = $this->makeEmployee();

@@ -13,6 +13,10 @@ use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
+use App\Modules\Inventory\Models\WarehouseZone;
+use App\Modules\Quality\Enums\InspectionEntityType;
+use App\Modules\Quality\Enums\InspectionStage;
+use App\Modules\Quality\Models\Inspection;
 use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\ReturnManagement\Models\ReturnRequestItem;
@@ -100,6 +104,24 @@ class ReturnRequestScenarioTest extends TestCase
             'total'             => '1000.00',
         ]);
 
+        // Disposition is gated on a passed product-linked return inspection.
+        if ($p) {
+            Inspection::create([
+                'inspection_number' => 'QC-RMA-'.substr(uniqid(), -8),
+                'stage'             => InspectionStage::CustomerReturn->value,
+                'status'            => 'passed',
+                'product_id'        => $p->id,
+                'entity_type'       => InspectionEntityType::ReturnRequest->value,
+                'entity_id'         => $rma->id,
+                'batch_quantity'    => 8,
+                'sample_size'       => 8,
+                'accept_count'      => 0,
+                'reject_count'      => 0,
+                'defect_count'      => 0,
+                'inspector_id'      => $by->id,
+            ]);
+        }
+
         return $rma->load('items');
     }
 
@@ -115,6 +137,8 @@ class ReturnRequestScenarioTest extends TestCase
             ->postJson('/api/v1/return-management/return-requests', [
                 'type'        => 'customer_return',
                 'customer_id' => $customer->hash_id,
+                'finance_only' => true,
+                'finance_only_reason' => 'Customer supplied a non-stock service credit.',
                 'reason_code' => 'defective',
                 'return_date' => now()->toDateString(),
                 'items'       => [[
@@ -144,7 +168,7 @@ class ReturnRequestScenarioTest extends TestCase
             ->assertJsonCount(1, 'data');
     }
 
-    public function test_complete_accepts_a_warehouse_location_hash_id(): void
+    public function test_complete_rejects_stockable_return_without_quarantine_lineage(): void
     {
         $admin = $this->admin();
         $item  = Item::factory()->create();
@@ -157,7 +181,7 @@ class ReturnRequestScenarioTest extends TestCase
             ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/complete", [
                 'location_id' => $loc->hash_id,
             ])
-            ->assertOk();
+            ->assertStatus(422);
     }
 
     /* ───────────────── Receiving ───────────────── */
@@ -177,6 +201,30 @@ class ReturnRequestScenarioTest extends TestCase
             ->assertOk();
 
         $this->assertSame('6.000', $line->fresh()->returned_quantity);
+    }
+
+    public function test_receive_puts_stockable_customer_returns_in_quarantine(): void
+    {
+        $admin = $this->admin();
+        $item = Item::factory()->create();
+        $rma = $this->inspectedRma($admin, $this->customer(), null, null, $item);
+        $rma->forceFill(['status' => ReturnRequestStatus::Approved->value])->save();
+        $zone = WarehouseZone::factory()->create(['zone_type' => 'quarantine']);
+        $location = WarehouseLocation::factory()->create(['zone_id' => $zone->id]);
+        $line = $rma->items->first();
+
+        $this->actingAs($admin)
+            ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/receive", [
+                'received_quantities' => [$line->hash_id => 6],
+                'quarantine_location_id' => $location->hash_id,
+            ])
+            ->assertOk();
+
+        $line = $line->fresh();
+        $this->assertSame('held', $line->quarantine_status);
+        $this->assertNotNull($line->quarantine_movement_id);
+        $this->assertSame($location->id, $line->quarantine_location_id);
+        $this->assertSame('adjustment_in', $line->quarantineMovement->movement_type->value);
     }
 
     public function test_receive_rejects_a_quantity_larger_than_the_requested_quantity(): void
@@ -227,6 +275,11 @@ class ReturnRequestScenarioTest extends TestCase
         $customer = $this->customer();
         $invoice  = $this->invoice($customer, $admin);
         $rma      = $this->inspectedRma($admin, $customer, $invoice, $this->product());
+        $rma->forceFill([
+            'finance_only' => true,
+            'finance_only_reason' => 'Legacy product-only credit scenario is non-stock.',
+            'finance_only_approved_by' => $admin->id,
+        ])->save();
         $loc      = WarehouseLocation::factory()->create();
 
         $this->actingAs($admin)
@@ -249,6 +302,11 @@ class ReturnRequestScenarioTest extends TestCase
         $customer = $this->customer();
         $invoice  = $this->invoice($customer, $admin);
         $rma      = $this->inspectedRma($admin, $customer, $invoice, $this->product());
+        $rma->forceFill([
+            'finance_only' => true,
+            'finance_only_reason' => 'Legacy product-only credit scenario is non-stock.',
+            'finance_only_approved_by' => $admin->id,
+        ])->save();
 
         $this->actingAs($admin)
             ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/dispose", [
@@ -284,32 +342,20 @@ class ReturnRequestScenarioTest extends TestCase
     {
         $admin = $this->admin();
         $item  = Item::factory()->create();
-        $loc   = WarehouseLocation::factory()->create();
+        $zone  = WarehouseZone::factory()->create(['zone_type' => 'quarantine']);
+        $loc   = WarehouseLocation::factory()->create(['zone_id' => $zone->id]);
         $rma   = $this->inspectedRma($admin, $this->customer(), null, null, $item);
-        $rma->items->each->update(['disposition' => 'scrap']);
-        $rma->forceFill(['disposition_status' => 'disposed'])->save();
-
-        $this->actingAs($admin)
-            ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/complete", [
-                'location_id' => $loc->hash_id,
-            ])
+        $rma->forceFill(['status' => ReturnRequestStatus::Approved->value])->save();
+        $line = $rma->items->first();
+        $this->actingAs($admin)->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/receive", [
+            'received_quantities' => [$line->hash_id => 8],
+            'quarantine_location_id' => $loc->hash_id,
+        ])->assertOk();
+        $this->actingAs($admin)->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/inspect")
             ->assertOk();
-
-        $this->assertSame(0, StockMovement::query()
-            ->where('reference_type', 'return_request')
-            ->where('reference_id', $rma->id)
-            ->where('movement_type', StockMovementType::AdjustmentIn->value)
-            ->count());
-    }
-
-    public function test_complete_restocks_only_the_returned_quantity(): void
-    {
-        $admin = $this->admin();
-        $item  = Item::factory()->create();
-        $loc   = WarehouseLocation::factory()->create();
-        $rma   = $this->inspectedRma($admin, $this->customer(), null, null, $item);
-        $rma->items->each->update(['disposition' => 'restock']);
-        $rma->forceFill(['disposition_status' => 'disposed'])->save();
+        $this->actingAs($admin)->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/dispose", [
+            'dispositions' => [['item_id' => $line->hash_id, 'disposition' => 'scrap']],
+        ])->assertOk();
 
         $this->actingAs($admin)
             ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/complete", [
@@ -320,6 +366,42 @@ class ReturnRequestScenarioTest extends TestCase
         $this->assertSame('8.000', StockMovement::query()
             ->where('reference_type', 'return_request')
             ->where('reference_id', $rma->id)
+            ->where('movement_type', StockMovementType::Scrap->value)
+            ->value('quantity'));
+        $this->assertSame('scrapped', $line->fresh()->quarantine_status);
+    }
+
+    public function test_complete_restocks_only_the_returned_quantity(): void
+    {
+        $admin = $this->admin();
+        $item  = Item::factory()->create();
+        $zone  = WarehouseZone::factory()->create(['zone_type' => 'quarantine']);
+        $loc   = WarehouseLocation::factory()->create(['zone_id' => $zone->id]);
+        $destination = WarehouseLocation::factory()->create();
+        $rma   = $this->inspectedRma($admin, $this->customer(), null, null, $item);
+        $rma->forceFill(['status' => ReturnRequestStatus::Approved->value])->save();
+        $line = $rma->items->first();
+        $this->actingAs($admin)->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/receive", [
+            'received_quantities' => [$line->hash_id => 8],
+            'quarantine_location_id' => $loc->hash_id,
+        ])->assertOk();
+        $this->actingAs($admin)->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/inspect")
+            ->assertOk();
+        $this->actingAs($admin)->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/dispose", [
+            'dispositions' => [['item_id' => $line->hash_id, 'disposition' => 'restock']],
+            'location_id' => $destination->hash_id,
+        ])->assertOk();
+
+        $this->actingAs($admin)
+            ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/complete", [
+                'location_id' => $loc->hash_id,
+            ])
+            ->assertOk();
+
+        $this->assertSame('8.000', StockMovement::query()
+            ->where('reference_type', 'return_request')
+            ->where('reference_id', $rma->id)
+            ->where('movement_type', StockMovementType::Transfer->value)
             ->value('quantity'));
     }
 
@@ -459,6 +541,8 @@ class ReturnRequestScenarioTest extends TestCase
                 'customer_id'    => $customer->hash_id,
                 'sales_order_id' => $so->hash_id,
                 'invoice_id'     => $invoice->hash_id,
+                'finance_only' => true,
+                'finance_only_reason' => 'Product-only legacy source-line coverage.',
                 'reason_code'    => 'defective',
                 'return_date'    => now()->toDateString(),
                 'items'          => [[

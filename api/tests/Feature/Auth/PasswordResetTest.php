@@ -9,11 +9,14 @@ use App\Modules\Auth\Models\PasswordResetRequest;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Auth\Notifications\PasswordResetLinkNotification;
+use App\Modules\Auth\Services\PasswordResetService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class PasswordResetTest extends TestCase
@@ -198,6 +201,39 @@ class PasswordResetTest extends TestCase
         ])
             ->assertStatus(422)
             ->assertJsonValidationErrorFor('token');
+    }
+
+    public function test_stale_preloaded_token_cannot_bypass_locked_used_at_guard(): void
+    {
+        $user = $this->makeUser();
+        $raw  = 'stale-raw-token-abcdefghijklmnopqrstuvwxyz0123456789gh';
+        PasswordResetRequest::create([
+            'user_id'    => $user->id,
+            'token_hash' => hash('sha256', $raw),
+            'expires_at' => now()->addMinutes(60),
+            'ip_address' => '127.0.0.1',
+        ]);
+
+        // Simulate a concurrent request that preloaded the still-valid row,
+        // then committed used_at before this consumer entered its mutation.
+        $stale = PasswordResetRequest::query()
+            ->where('token_hash', hash('sha256', $raw))
+            ->firstOrFail();
+        PasswordResetRequest::query()->whereKey($stale->id)->update(['used_at' => now()]);
+
+        try {
+            app(PasswordResetService::class)->reset(
+                $raw,
+                'NewStr0ng!Pass',
+                Request::create('/api/v1/auth/reset-password', 'POST'),
+            );
+            $this->fail('A used password-reset token must be rejected.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('token', $exception->errors());
+        }
+
+        $this->assertFalse(Hash::check('NewStr0ng!Pass', $user->fresh()->password));
+        $this->assertNotNull($stale->fresh()->used_at);
     }
 
     public function test_reset_password_rejects_password_in_history(): void

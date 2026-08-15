@@ -107,12 +107,20 @@ class SalesOrderStatusTransitionsTest extends TestCase
         $this->assertSame(SalesOrderStatus::PartiallyDelivered->value, $so->fresh()->status->value);
     }
 
-    public function test_backwards_transition_is_silent_noop(): void
+    public function test_backwards_transition_returns_typed_skipped_result_and_records_reason(): void
     {
         $so = $this->makeSo(SalesOrderStatus::Delivered);
-        $this->soService->markInProduction($so->id);
+        $result = $this->soService->markInProduction($so->id);
 
         $this->assertSame(SalesOrderStatus::Delivered->value, $so->fresh()->status->value);
+        $this->assertSame('skipped', $result->outcome);
+        $this->assertSame(409, $result->statusCode);
+        $this->assertDatabaseHas('sales_order_transition_rejections', [
+            'sales_order_id' => $so->id,
+            'from_status' => SalesOrderStatus::Delivered->value,
+            'to_status' => SalesOrderStatus::InProduction->value,
+            'reason_code' => 'illegal_transition',
+        ]);
     }
 
     public function test_delivery_confirm_promotes_so_to_delivered_when_fully_covered(): void
@@ -154,13 +162,15 @@ class SalesOrderStatusTransitionsTest extends TestCase
     public function test_invoice_finalize_promotes_so_to_invoiced(): void
     {
         $user = $this->makeArClerk();
-        [$so] = $this->makeSoWithLine(
+        [$so, $soItem] = $this->makeSoWithLine(
             qty: '5',
             price: '100.00',
             status: SalesOrderStatus::Delivered,
         );
 
         $revenueId = (int) Account::query()->where('code', '4010')->value('id');
+        [$delivery, $deliveryItem] = $this->makeDelivery($so, $soItem, qty: '5', user: $user);
+        $delivery->forceFill(['status' => DeliveryStatus::Confirmed->value])->save();
 
         $svc = app(InvoiceService::class);
         $invoice = $svc->create([
@@ -172,9 +182,10 @@ class SalesOrderStatusTransitionsTest extends TestCase
                 'description'        => 'Test line',
                 'quantity'           => '5',
                 'unit_price'         => '100.00',
+                'source_delivery_item_id' => $deliveryItem->hash_id,
             ]],
             'sales_order_id' => app('hashids')->encode((int) $so->id),
-            'delivery_id'    => null,
+            'delivery_id'    => $delivery->hash_id,
         ], $user);
 
         $this->assertSame((int) $so->id, (int) $invoice->fresh()->sales_order_id,

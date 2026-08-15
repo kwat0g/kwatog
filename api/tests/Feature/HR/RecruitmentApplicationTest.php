@@ -9,11 +9,16 @@ use App\Modules\Auth\Models\User;
 use App\Modules\HR\Enums\ApplicationStage;
 use App\Modules\HR\Enums\JobPostingStatus;
 use App\Modules\HR\Models\Department;
+use App\Modules\HR\Models\ApplicationInterview;
 use App\Modules\HR\Models\JobApplication;
 use App\Modules\HR\Models\JobPosting;
+use App\Modules\HR\Mail\ApplicationStatusUpdatedMail;
+use App\Modules\HR\Mail\InterviewDetailsUpdatedMail;
+use App\Modules\HR\Mail\InterviewScheduledMail;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 class RecruitmentApplicationTest extends TestCase
@@ -29,6 +34,7 @@ class RecruitmentApplicationTest extends TestCase
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
         $this->seed(SettingsSeeder::class);
+        Mail::fake();
 
         $hrRole = Role::where('slug', 'hr_officer')->firstOrFail();
         $this->hrUser = User::factory()->create(['role_id' => $hrRole->id, 'is_active' => true]);
@@ -81,6 +87,11 @@ class RecruitmentApplicationTest extends TestCase
 
         $response->assertOk();
         $response->assertJsonPath('data.stage', 'screening');
+        Mail::assertQueued(ApplicationStatusUpdatedMail::class, fn (ApplicationStatusUpdatedMail $mail): bool =>
+            $mail->hasTo('juan@test.com')
+            && $mail->previousStage === 'new'
+            && $mail->currentStage === 'screening'
+        );
     }
 
     public function test_hr_can_reject_application(): void
@@ -97,6 +108,10 @@ class RecruitmentApplicationTest extends TestCase
             'id'                => $this->application->id,
             'rejected_at_stage' => 'new',
         ]);
+        Mail::assertQueued(ApplicationStatusUpdatedMail::class, fn (ApplicationStatusUpdatedMail $mail): bool =>
+            $mail->hasTo('juan@test.com')
+            && $mail->currentStage === 'rejected'
+        );
     }
 
     public function test_hr_can_schedule_interview(): void
@@ -114,6 +129,40 @@ class RecruitmentApplicationTest extends TestCase
         $response->assertStatus(201);
         $response->assertJsonPath('data.interviewer_name', 'Maria Santos');
         $this->assertDatabaseCount('application_interviews', 1);
+        Mail::assertQueued(InterviewScheduledMail::class, fn (InterviewScheduledMail $mail): bool =>
+            $mail->hasTo('juan@test.com')
+            && $mail->interview->interviewer_name === 'Maria Santos'
+        );
+    }
+
+    public function test_hr_can_reschedule_interview_and_candidate_update_email_is_queued(): void
+    {
+        $this->application->stage = ApplicationStage::Interview;
+        $this->application->save();
+        $interview = ApplicationInterview::create([
+            'job_application_id' => $this->application->id,
+            'scheduled_at' => now()->addDays(2),
+            'location' => 'HR Office',
+            'interviewer_name' => 'Maria Santos',
+            'created_by' => $this->hrUser->id,
+        ]);
+
+        $response = $this->actingAs($this->hrUser)
+            ->patchJson("/api/v1/hr/recruitment/interviews/{$interview->hash_id}", [
+                'scheduled_at' => now()->addDays(4)->toIso8601String(),
+                'location' => 'Zoom interview',
+                'interviewer_name' => 'Ana Reyes',
+                'outcome' => 'passed',
+            ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('data.location', 'Zoom interview');
+        $response->assertJsonPath('data.interviewer_name', 'Ana Reyes');
+        Mail::assertQueued(InterviewDetailsUpdatedMail::class, fn (InterviewDetailsUpdatedMail $mail): bool =>
+            $mail->hasTo('juan@test.com')
+            && $mail->interview->location === 'Zoom interview'
+            && $mail->interview->outcome?->value === 'passed'
+        );
     }
 
     public function test_hr_can_add_note(): void

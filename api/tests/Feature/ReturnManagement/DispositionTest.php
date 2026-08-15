@@ -19,6 +19,7 @@ use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\WarehouseLocation;
+use App\Modules\Inventory\Models\WarehouseZone;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
@@ -339,6 +340,7 @@ class DispositionTest extends TestCase
             'unit_price'        => '10.00',
             'total'             => '1000.00',
             'quantity_received' => '100.00',
+            'quantity_accepted' => '100.000',
         ]);
 
         $grn = GoodsReceiptNote::factory()->create([
@@ -522,12 +524,13 @@ class DispositionTest extends TestCase
     {
         $by = $this->makeUser();
         $item = Item::factory()->create();
+        $quarantineZone = WarehouseZone::factory()->create(['zone_type' => 'quarantine']);
+        $quarantine = WarehouseLocation::factory()->create(['zone_id' => $quarantineZone->id]);
         $location = WarehouseLocation::factory()->create();
         $rma = ReturnRequest::create([
             'rma_number'        => 'RMA-REPLAY-'.substr(uniqid(), -5),
             'type'              => ReturnRequestType::CustomerReturn->value,
-            'status'            => ReturnRequestStatus::Inspected->value,
-            'disposition_status'=> 'disposed',
+            'status'            => ReturnRequestStatus::Approved->value,
             'reason_code'       => 'defective',
             'return_date'       => now()->toDateString(),
             'created_by'        => $by->id,
@@ -539,16 +542,23 @@ class DispositionTest extends TestCase
             'returned_quantity'  => '2.000',
             'unit_price'         => '10.00',
             'total'              => '20.00',
-            'disposition'       => 'restock',
         ]);
 
-        // Keep a stale aggregate with an unsent movement stamp. Before the
-        // authoritative completion lock, replaying this object could issue a
-        // second AdjustmentIn movement.
-        $stale = $rma->fresh()->load('items.product');
         $service = app(ReturnRequestService::class);
+        $line = $rma->items()->firstOrFail();
+        $received = $service->receive($rma, [$line->id => '2.000'], $quarantine->id, $by);
+        $inspected = $service->inspect($received, null, $by);
+        $disposed = $service->dispose($inspected, [[
+            'item_id' => $line->hash_id,
+            'disposition' => 'restock',
+        ]], $by, false, $location->id);
 
-        $service->complete($rma, $by, $location->id);
+        // Keep a stale aggregate at the final transition boundary. The receipt
+        // and release are already stamped, so completion/replay cannot issue a
+        // second stock movement.
+        $stale = $disposed->fresh()->load('items.product');
+
+        $service->complete($disposed, $by, $location->id);
 
         try {
             $service->complete($stale, $by, $location->id);
@@ -557,7 +567,7 @@ class DispositionTest extends TestCase
             $this->assertStringContainsString('Expected status inspected, got completed', $e->getMessage());
         }
 
-        $this->assertSame(1, \App\Modules\Inventory\Models\StockMovement::query()
+        $this->assertSame(2, \App\Modules\Inventory\Models\StockMovement::query()
             ->where('reference_type', 'return_request')
             ->where('reference_id', $rma->id)
             ->count());

@@ -35,14 +35,14 @@ class AuthEventsAuditTest extends TestCase
     private function makeUser(string $password = 'CorrectHorse-1!', array $overrides = []): User
     {
         return User::factory()->create(array_merge([
-            'role_id'               => Role::where('slug', 'system_admin')->value('id'),
-            'email'                 => 'audit+'.uniqid().'@t.test',
-            'password'              => Hash::make($password),
-            'password_changed_at'   => now(),
-            'is_active'             => true,
+            'role_id' => Role::where('slug', 'system_admin')->value('id'),
+            'email' => 'audit+'.uniqid().'@t.test',
+            'password' => Hash::make($password),
+            'password_changed_at' => now(),
+            'is_active' => true,
             'failed_login_attempts' => 0,
-            'locked_until'          => null,
-            'must_change_password'  => false,
+            'locked_until' => null,
+            'must_change_password' => false,
         ], $overrides));
     }
 
@@ -58,11 +58,11 @@ class AuthEventsAuditTest extends TestCase
 
         return $this->withSession(['_token' => $token])
             ->withHeaders([
-                'Origin'       => 'http://localhost',
+                'Origin' => 'http://localhost',
                 'X-CSRF-TOKEN' => $token,
             ])
             ->postJson('/api/v1/auth/login', [
-                'email'    => $email,
+                'email' => $email,
                 'password' => $password,
             ]);
     }
@@ -128,6 +128,26 @@ class AuthEventsAuditTest extends TestCase
         $this->assertSame(1, $lockout, '5th failure writes one login.locked_threshold row');
     }
 
+    public function test_expired_lock_does_not_emit_a_second_threshold_event(): void
+    {
+        $user = $this->makeUser('CorrectHorse-1!', [
+            'failed_login_attempts' => 5,
+            'locked_until' => now()->subMinute(),
+        ]);
+        $this->clearAuthThrottle($user->email);
+
+        $this->postLogin($user->email, 'wrong-after-expiry')->assertStatus(422);
+
+        $this->assertSame(1, AuditLog::where('model_type', 'auth.event')
+            ->where('action', 'login.failed')
+            ->where('model_id', $user->id)
+            ->count());
+        $this->assertSame(0, AuditLog::where('model_type', 'auth.event')
+            ->where('action', 'login.locked_threshold')
+            ->where('model_id', $user->id)
+            ->count());
+    }
+
     public function test_logout_writes_audit_row(): void
     {
         $password = 'CorrectHorse-1!';
@@ -139,7 +159,7 @@ class AuthEventsAuditTest extends TestCase
         $token = 'test-csrf-token';
         $this->withSession(['_token' => $token])
             ->withHeaders([
-                'Origin'       => 'http://localhost',
+                'Origin' => 'http://localhost',
                 'X-CSRF-TOKEN' => $token,
             ])
             ->postJson('/api/v1/auth/logout')
@@ -161,9 +181,9 @@ class AuthEventsAuditTest extends TestCase
 
         $this->actingAs($user)
             ->postJson('/api/v1/auth/change-password', [
-                'current_password'           => $original,
-                'new_password'               => 'NewPass-9!',
-                'new_password_confirmation'  => 'NewPass-9!',
+                'current_password' => $original,
+                'new_password' => 'NewPass-9!',
+                'new_password_confirmation' => 'NewPass-9!',
             ])->assertOk();
 
         $row = AuditLog::where('model_type', 'auth.event')

@@ -27,7 +27,7 @@ use Tests\TestCase;
  * Task 9 — Maintenance Mobile view backend tests.
  * Tests the API endpoints used by the mobile maintenance tech PWA (work-order
  * flow) plus the service-level condition-reading automation (kept code — the
- * condition-reading HTTP surface was hidden 2026-08-08, see SCOPE-CUT-AUDIT).
+     * condition-reading HTTP surface was intentionally hidden on 2026-08-08).
  */
 class MobileMaintenanceTest extends TestCase
 {

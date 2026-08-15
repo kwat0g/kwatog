@@ -11,6 +11,7 @@ use App\Modules\HR\Enums\JobPostingStatus;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\JobApplication;
 use App\Modules\HR\Models\JobPosting;
+use App\Modules\HR\Services\RecruitmentService;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -87,6 +88,37 @@ class PublicRecruitmentTest extends TestCase
         ]);
     }
 
+    public function test_public_cannot_submit_duplicate_email_for_same_position(): void
+    {
+        Storage::fake('local');
+        Mail::fake();
+
+        $payload = [
+            'first_name' => 'Juan',
+            'last_name'  => 'Dela Cruz',
+            'email'      => ' Candidate@Example.com ',
+            'phone'      => '09171234567',
+            'resume'     => UploadedFile::fake()->create('resume.pdf', 1024, 'application/pdf'),
+        ];
+
+        $this->postJson("/api/v1/public/recruitment/job-postings/{$this->posting->hash_id}/apply", $payload)
+            ->assertCreated();
+
+        $duplicate = $this->postJson("/api/v1/public/recruitment/job-postings/{$this->posting->hash_id}/apply", [
+            ...$payload,
+            'email' => 'candidate@example.com',
+            'resume' => UploadedFile::fake()->create('resume-copy.pdf', 1024, 'application/pdf'),
+        ]);
+
+        $duplicate
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['email'])
+            ->assertJsonPath('errors.email.0', 'You have already applied for this position.');
+
+        $this->assertDatabaseCount('job_applications', 1);
+        $this->assertDatabaseHas('job_applications', ['email' => 'candidate@example.com']);
+    }
+
     public function test_public_cannot_apply_to_closed_posting(): void
     {
         $this->posting->status = JobPostingStatus::Closed;
@@ -130,5 +162,44 @@ class PublicRecruitmentTest extends TestCase
     {
         $response = $this->getJson('/api/v1/public/recruitment/applications/track/INVALID');
         $response->assertStatus(404);
+    }
+
+    public function test_expired_open_posting_is_not_publicly_listed_or_viewable(): void
+    {
+        $this->posting->closes_at = now()->subMinute();
+        $this->posting->save();
+
+        $this->getJson('/api/v1/public/recruitment/job-postings')
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+
+        $this->getJson("/api/v1/public/recruitment/job-postings/{$this->posting->hash_id}")
+            ->assertNotFound();
+    }
+
+    public function test_hr_is_notified_when_candidate_confirmation_email_fails(): void
+    {
+        Storage::fake('local');
+        Mail::shouldReceive('to')
+            ->once()
+            ->andThrow(new \RuntimeException('Brevo rejected the recipient'));
+
+        app(RecruitmentService::class)->submitApplication($this->posting, [
+            'first_name' => 'NoEmail',
+            'last_name' => 'Candidate',
+            'email' => 'unreachable@example.test',
+            'phone' => '09170000000',
+        ], UploadedFile::fake()->create('resume.pdf', 512, 'application/pdf'));
+
+        $hrUser = User::where('role_id', Role::where('slug', 'hr_officer')->value('id'))->firstOrFail();
+
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $hrUser->id,
+            'type' => 'recruitment.new_application',
+        ]);
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $hrUser->id,
+            'type' => 'email.delivery_failed',
+        ]);
     }
 }

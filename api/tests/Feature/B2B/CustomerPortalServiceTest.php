@@ -354,6 +354,29 @@ class CustomerPortalServiceTest extends TestCase
         $this->assertSame('submitted', $schedule->status);
     }
 
+    public function test_store_delivery_schedule_is_idempotent_for_same_month(): void
+    {
+        $customer = Customer::factory()->create();
+        $user = $this->makePortalUser($customer);
+
+        $this->actAs($user);
+
+        $payload = [
+            'month' => '2026-08',
+            'lines' => [['product_name' => 'Relay Cover', 'quantity' => 500]],
+        ];
+
+        $first = $this->postJson('/api/v1/b2b/customer/delivery-schedules', $payload);
+        $first->assertStatus(201);
+
+        // A double-click or a retried request must not stack a second row.
+        $second = $this->postJson('/api/v1/b2b/customer/delivery-schedules', $payload);
+        $second->assertStatus(201);
+
+        $this->assertDatabaseCount('delivery_schedules', 1);
+        $this->assertSame($first->json('data.id'), $second->json('data.id'));
+    }
+
     /* ─── Auth guard ─────────────────────────────────────────────── */
 
     public function test_unauthenticated_returns_401(): void

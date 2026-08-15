@@ -30,7 +30,7 @@ class PayrollPeriodLifecycleTest extends TestCase
         // Sprint 6 audit: users.role_id is NOT NULL — pick the System Admin
         // role that RolePermissionSeeder seeded in setUp(). This unblocks the
         // 16 pre-existing PHPUnit failures on this test file documented in
-        // plans/SPRINT-6-STATUS.md §Known gaps.
+        // Regression for the historical Sprint 6 lifecycle gap.
         $roleId = Role::query()->orderBy('id')->value('id');
         return User::create([
             'name'     => 'Tester '.uniqid(),

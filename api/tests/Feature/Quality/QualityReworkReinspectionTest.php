@@ -9,6 +9,7 @@ use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
 use App\Modules\Production\Events\WorkOrderCompleted;
 use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Production\Models\WorkOrderOutput;
 use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Listeners\TriggerOutgoingQC;
@@ -75,6 +76,15 @@ class QualityReworkReinspectionTest extends TestCase
             'planned_end'       => now(),
             'status'            => 'completed',
             'created_by'        => $this->user->id,
+        ]);
+
+        WorkOrderOutput::create([
+            'work_order_id' => $reworkWo->id,
+            'recorded_by' => $this->user->id,
+            'recorded_at' => now(),
+            'good_count' => 50,
+            'reject_count' => 0,
+            'batch_code' => 'REWORK-'.substr(uniqid(), -8),
         ]);
 
         $this->listener->handle(new WorkOrderCompleted($reworkWo));

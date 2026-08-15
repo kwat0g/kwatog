@@ -21,7 +21,7 @@ use Tests\TestCase;
 /**
  * F-01 — cycle-count overages must be valued at the location's WAC.
  *
- * completeSession() used to call adjustIn with unit cost '0'. Because the
+ * completeSession() used to reconcile overages with unit cost '0'. Because the
  * weighted-average blend weights the added value against the new quantity,
  * every overage counted at zero dragged the location WAC toward 0.00 (10 @
  * 50.00 + 5 @ 0.00 → 33.33). The overage must inherit the current WAC so the

@@ -12,12 +12,17 @@ use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\DeliverySchedule;
 use App\Modules\B2B\Models\SupplierPortalUser;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\GoodsReceiptNote;
+use App\Modules\Inventory\Models\GrnItem;
+use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -229,7 +234,7 @@ class SupplierPortalServiceTest extends TestCase
         $item = Item::factory()->create();
         $po = PurchaseOrder::factory()->create(['vendor_id' => $vendor->id]);
         $po->forceFill(['status' => 'sent'])->save();
-        PurchaseOrderItem::create([
+        $poItem = PurchaseOrderItem::create([
             'purchase_order_id' => $po->id,
             'item_id' => $item->id,
             'description' => 'Resin Type A',
@@ -238,6 +243,22 @@ class SupplierPortalServiceTest extends TestCase
             'unit_price' => '100.00',
             'total' => '200.00',
             'quantity_received' => '0.00',
+        ]);
+        $grn = GoodsReceiptNote::factory()->create([
+            'purchase_order_id' => $po->id,
+            'vendor_id' => $vendor->id,
+            'status' => 'accepted',
+            'accepted_by' => User::factory()->create()->id,
+            'accepted_at' => now(),
+        ]);
+        GrnItem::create([
+            'goods_receipt_note_id' => $grn->id,
+            'purchase_order_item_id' => $poItem->id,
+            'item_id' => $item->id,
+            'location_id' => WarehouseLocation::factory()->create()->id,
+            'quantity_received' => '2.00',
+            'quantity_accepted' => '2.00',
+            'unit_cost' => '100.00',
         ]);
 
         $this->actAs($user);
@@ -431,18 +452,70 @@ class SupplierPortalServiceTest extends TestCase
         $response->assertStatus(403);
     }
 
+    public function test_deliveries_are_scoped_and_use_the_supplier_allowlist(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $otherVendor = Vendor::factory()->create();
+        $user = $this->makePortalUser($vendor);
+
+        $purchaseOrder = PurchaseOrder::factory()->create(['vendor_id' => $vendor->id]);
+        $ownDelivery = GoodsReceiptNote::factory()->create([
+            'vendor_id' => $vendor->id,
+            'purchase_order_id' => $purchaseOrder->id,
+            'received_date' => '2026-08-12',
+            'status' => 'accepted',
+            'remarks' => 'Internal receiving remarks must not cross the portal boundary.',
+            'rejected_reason' => 'Internal rejection reason must not cross the portal boundary.',
+        ]);
+
+        $otherPurchaseOrder = PurchaseOrder::factory()->create(['vendor_id' => $otherVendor->id]);
+        $otherDelivery = GoodsReceiptNote::factory()->create([
+            'vendor_id' => $otherVendor->id,
+            'purchase_order_id' => $otherPurchaseOrder->id,
+            'grn_number' => 'GRN-OTHER-0001',
+        ]);
+
+        $this->actAs($user);
+
+        $response = $this->getJson('/api/v1/b2b/supplier/deliveries');
+
+        $response->assertOk();
+        $this->assertCount(1, $response->json('data'));
+        $response->assertJsonMissing(['grn_number' => $otherDelivery->grn_number]);
+        $row = $response->json('data.0');
+        $this->assertSame([
+            'id', 'grn_number', 'received_date', 'status', 'status_label', 'purchase_order',
+        ], array_keys($row));
+        $this->assertSame($ownDelivery->hash_id, $row['id']);
+        $this->assertSame($ownDelivery->grn_number, $row['grn_number']);
+        $this->assertSame('2026-08-12', $row['received_date']);
+        $this->assertSame('accepted', $row['status']);
+        $this->assertSame('Accepted', $row['status_label']);
+        $this->assertSame([
+            'id' => $purchaseOrder->hash_id,
+            'po_number' => $purchaseOrder->po_number,
+        ], $row['purchase_order']);
+
+        foreach ([
+            'numeric_id', 'vendor_id', 'received_by', 'accepted_by', 'qc_inspection_id',
+            'journal_entry_id', 'rejected_reason', 'remarks', 'incoming_qc_handoff_message',
+            'created_at', 'updated_at',
+        ] as $sensitiveField) {
+            $this->assertArrayNotHasKey($sensitiveField, $row);
+        }
+    }
+
     /* ─── Delivery Schedules ─────────────────────────────────────── */
 
     public function test_delivery_schedules_scoped_to_own_vendor(): void
     {
         $vendor = Vendor::factory()->create();
         $user = $this->makePortalUser($vendor);
-        $customer = Customer::factory()->create();
 
         $po = PurchaseOrder::factory()->create(['vendor_id' => $vendor->id]);
 
         DeliverySchedule::create([
-            'customer_id' => $customer->id,
+            'customer_id' => null, // supplier-submitted rows have no customer link
             'vendor_id' => $vendor->id,
             'purchase_order_id' => $po->id,
             'month' => '2026-07',
@@ -454,7 +527,7 @@ class SupplierPortalServiceTest extends TestCase
         $other = Vendor::factory()->create();
         $otherPo = PurchaseOrder::factory()->create(['vendor_id' => $other->id]);
         DeliverySchedule::create([
-            'customer_id' => $customer->id,
+            'customer_id' => null, // supplier-submitted rows have no customer link
             'vendor_id' => $other->id,
             'purchase_order_id' => $otherPo->id,
             'month' => '2026-07',
@@ -489,6 +562,89 @@ class SupplierPortalServiceTest extends TestCase
             'vendor_id' => $vendor->id,
             'purchase_order_id' => $otherPo->id,
         ]);
+    }
+
+    public function test_store_delivery_schedule_is_idempotent_for_same_po_and_month(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $user = $this->makePortalUser($vendor);
+        $po = PurchaseOrder::factory()->create(['vendor_id' => $vendor->id]);
+
+        $this->actAs($user);
+
+        $payload = [
+            'purchase_order_id' => $po->hash_id,
+            'month' => '2026-08',
+            'lines' => [['product_name' => 'Relay Cover', 'quantity' => 500]],
+        ];
+
+        $first = $this->postJson('/api/v1/b2b/supplier/delivery-schedules', $payload);
+        $first->assertStatus(201);
+
+        // A double-click or a retried request must not stack a second row.
+        $second = $this->postJson('/api/v1/b2b/supplier/delivery-schedules', $payload);
+        $second->assertStatus(201);
+
+        $this->assertDatabaseCount('delivery_schedules', 1);
+        $this->assertSame($first->json('data.id'), $second->json('data.id'));
+    }
+
+    public function test_shipping_document_upload_is_idempotent_for_same_file(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $user = $this->makePortalUser($vendor);
+        $po = PurchaseOrder::factory()->create(['vendor_id' => $vendor->id]);
+        $this->actAs($user);
+        Storage::fake('local');
+
+        $endpoint = "/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/shipping-documents";
+        $payload = fn () => [
+            'document_type' => 'packing_list',
+            'file' => UploadedFile::fake()->create('packing-list.pdf', 120),
+        ];
+
+        $first = $this->postJson($endpoint, $payload());
+        $first->assertStatus(201);
+
+        // A double-click or a retried request with the same file must not
+        // stack a second document row (or orphan a second stored file).
+        $second = $this->postJson($endpoint, $payload());
+        $second->assertStatus(201);
+
+        $this->assertDatabaseCount('portal_shipping_documents', 1);
+        $this->assertSame($first->json('data.id'), $second->json('data.id'));
+    }
+
+    public function test_shipping_document_download_scoped_to_own_vendor(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $user = $this->makePortalUser($vendor);
+        $po = PurchaseOrder::factory()->create(['vendor_id' => $vendor->id]);
+        // Create fixtures before acting as the portal user: HasAuditLog reads
+        // Auth::id() (the portal guard after Sanctum::actingAs) and would hit
+        // the audit_logs.users FK for portal-user ids.
+        $other = Vendor::factory()->create();
+        $this->actAs($user);
+        Storage::fake('local');
+
+        $upload = $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/shipping-documents", [
+            'document_type' => 'packing_list',
+            'file' => UploadedFile::fake()->create('packing-list.pdf', 120),
+        ]);
+        $upload->assertStatus(201);
+        $docId = $upload->json('data.id');
+
+        // Own vendor can download the stored file (the SPA fetches this with
+        // the portal Bearer token — never as a bare new-tab link).
+        $download = $this->get("/api/v1/b2b/supplier/shipping-documents/{$docId}/download");
+        $download->assertOk();
+        $this->assertStringContainsString('packing-list.pdf', (string) $download->headers->get('content-disposition'));
+
+        // Another vendor must be blocked from downloading it — the tenancy
+        // middleware scopes PortalShippingDocument to the current vendor, so
+        // the cross-tenant lookup 404s (no existence leak).
+        $this->actAs($this->makePortalUser($other));
+        $this->get("/api/v1/b2b/supplier/shipping-documents/{$docId}/download")->assertStatus(404);
     }
 
     /* ─── Auth guard ─────────────────────────────────────────────── */

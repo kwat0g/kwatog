@@ -38,6 +38,15 @@ class BillServiceTest extends TestCase
         ]);
     }
 
+    private function serviceException(): array
+    {
+        return [
+            'provenance_type' => 'service',
+            'exception_evidence' => 'Approved service completion report for this test bill.',
+            'exception_approved' => true,
+        ];
+    }
+
     public function test_bill_creates_balanced_je_and_recording_payment_settles_balance(): void
     {
         $user = $this->newUser();
@@ -48,6 +57,7 @@ class BillServiceTest extends TestCase
         $svc = app(BillService::class);
 
         $bill = $svc->create([
+            ...$this->serviceException(),
             'bill_number' => 'INV-2026-001',
             'vendor_id'   => $vendor->hash_id,
             'date'        => '2026-04-10',
@@ -108,6 +118,7 @@ class BillServiceTest extends TestCase
 
         $svc = app(BillService::class);
         $bill = $svc->create([
+            ...$this->serviceException(),
             'bill_number' => 'B-1', 'vendor_id' => $vendor->hash_id,
             'date' => '2026-04-10', 'is_vatable' => false,
             'items' => [['expense_account_id' => $expenseId, 'description' => 'x', 'quantity' => '1', 'unit_price' => '100.00']],
@@ -122,6 +133,30 @@ class BillServiceTest extends TestCase
         ], $user);
     }
 
+    public function test_service_bill_exception_requires_an_authorized_approver(): void
+    {
+        $role = Role::create(['name' => 'AP Encoder', 'slug' => 'ap_encoder_'.uniqid()]);
+        $user = User::factory()->create(['role_id' => $role->id]);
+        $vendor = Vendor::create(['name' => 'Service Vendor']);
+        $expenseId = Account::query()->where('code', '5010')->firstOrFail()->hash_id;
+
+        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->expectExceptionMessage('not authorized');
+        app(BillService::class)->create([
+            ...$this->serviceException(),
+            'bill_number' => 'SVC-UNAUTHORIZED-1',
+            'vendor_id' => $vendor->hash_id,
+            'date' => '2026-04-10',
+            'is_vatable' => false,
+            'items' => [[
+                'expense_account_id' => $expenseId,
+                'description' => 'Consulting service',
+                'quantity' => '1',
+                'unit_price' => '100.00',
+            ]],
+        ], $user);
+    }
+
     public function test_record_payment_rejects_a_stale_open_bill_after_it_is_paid(): void
     {
         $user      = $this->newUser();
@@ -130,6 +165,7 @@ class BillServiceTest extends TestCase
         $cashId    = Account::query()->where('code', '1020')->firstOrFail()->hash_id;
         $svc       = app(BillService::class);
         $bill      = $svc->create([
+            ...$this->serviceException(),
             'bill_number' => 'B-STALE-1', 'vendor_id' => $vendor->hash_id,
             'date' => '2026-04-10', 'is_vatable' => false,
             'items' => [['expense_account_id' => $expenseId, 'description' => 'Resin', 'quantity' => '1', 'unit_price' => '100.00']],
@@ -171,6 +207,7 @@ class BillServiceTest extends TestCase
         $cashId    = Account::query()->where('code', '1020')->firstOrFail()->hash_id;
         $svc       = app(BillService::class);
         $bill      = $svc->create([
+            ...$this->serviceException(),
             'bill_number' => 'B-LOCKED-1', 'vendor_id' => $vendor->hash_id,
             'date' => '2026-04-10', 'is_vatable' => false,
             'items' => [['expense_account_id' => $expenseId, 'description' => 'Resin', 'quantity' => '1', 'unit_price' => '100.00']],
@@ -220,6 +257,7 @@ class BillServiceTest extends TestCase
 
         $this->expectException(\Illuminate\Validation\ValidationException::class);
         $svc->create([
+            ...$this->serviceException(),
             'bill_number'       => 'INV-CANCEL-1',
             'vendor_id'         => $vendor->hash_id,
             'purchase_order_id' => $po->hash_id,

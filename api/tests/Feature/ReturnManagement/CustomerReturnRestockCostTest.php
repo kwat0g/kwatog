@@ -6,12 +6,15 @@ namespace Tests\Feature\ReturnManagement;
 
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Accounting\Models\InvoiceItem;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
+use App\Modules\Inventory\Models\WarehouseZone;
 use App\Modules\Inventory\Services\StockMovementService;
 use App\Modules\Inventory\Support\StockMovementInput;
 use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
@@ -77,6 +80,7 @@ class CustomerReturnRestockCostTest extends TestCase
         Invoice $invoice,
         int $itemId,
         int $returnedQuantity,
+        string $quarantineUnitCost = '0.00',
     ): ReturnRequest {
         $rma = ReturnRequest::create([
             'rma_number'  => 'RMA-T-' . substr(uniqid(), -5),
@@ -89,7 +93,16 @@ class CustomerReturnRestockCostTest extends TestCase
             'created_by'  => $by->id,
         ]);
 
-        ReturnRequestItem::create([
+        $invoiceLine = InvoiceItem::create([
+            'invoice_id' => $invoice->id,
+            'revenue_account_id' => Account::query()->where('code', '4010')->firstOrFail()->id,
+            'description' => 'Returned stock',
+            'quantity' => '10.00',
+            'unit_price' => '100.00',
+            'total' => '1000.00',
+        ]);
+
+        $line = ReturnRequestItem::create([
             'return_request_id' => $rma->id,
             'item_id'           => $itemId,
             'quantity'          => 10,
@@ -98,9 +111,28 @@ class CustomerReturnRestockCostTest extends TestCase
             'total'             => (float) $returnedQuantity * 100.00,
             'reason'            => 'defective',
             'condition'         => 'damaged',
+            'source_invoice_item_id' => $invoiceLine->id,
             // complete() now restocks only lines dispose() marked as kept, and
             // refuses to run at all until every line has been dispositioned.
             'disposition'       => 'restock',
+        ]);
+
+        $quarantineZone = WarehouseZone::factory()->create(['zone_type' => 'quarantine']);
+        $quarantine = WarehouseLocation::factory()->create(['zone_id' => $quarantineZone->id]);
+        $movement = app(StockMovementService::class)->move(new StockMovementInput(
+            type: StockMovementType::AdjustmentIn,
+            itemId: $itemId,
+            toLocationId: $quarantine->id,
+            quantity: (string) $returnedQuantity,
+            unitCost: $quarantineUnitCost,
+            referenceType: 'return_request',
+            referenceId: $rma->id,
+            createdBy: $by->id,
+        ));
+        $line->update([
+            'quarantine_location_id' => $quarantine->id,
+            'quarantine_movement_id' => $movement->id,
+            'quarantine_status' => 'held',
         ]);
 
         $rma->forceFill(['disposition_status' => 'disposed'])->save();
@@ -127,7 +159,7 @@ class CustomerReturnRestockCostTest extends TestCase
             createdBy: $by->id,
         ));
 
-        $rma = $this->makeInspectedRma($by, $customer, $invoice, $item->id, 8);
+        $rma = $this->makeInspectedRma($by, $customer, $invoice, $item->id, 8, '100.00');
 
         $completed = app(ReturnRequestService::class)->complete($rma, $by, $location->id);
 
@@ -136,9 +168,10 @@ class CustomerReturnRestockCostTest extends TestCase
         $movement = StockMovement::query()
             ->where('reference_type', 'return_request')
             ->where('reference_id', $rma->id)
+            ->where('to_location_id', $location->id)
             ->firstOrFail();
 
-        $this->assertSame(StockMovementType::AdjustmentIn, $movement->movement_type);
+        $this->assertSame(StockMovementType::Transfer, $movement->movement_type);
         $this->assertSame('100.0000', (string) $movement->unit_cost, 'Restock must inherit the destination WAC');
         $this->assertSame('800.00', (string) $movement->total_cost, '8 units × 100.00');
 

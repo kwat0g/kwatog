@@ -171,6 +171,9 @@ class BudgetEnforcementWiringTest extends TestCase
                 'date'          => now()->toDateString(),
                 'due_date'      => now()->addDays(30)->toDateString(),
                 'department_id' => $dept->hash_id,
+                'provenance_type' => 'service',
+                'exception_evidence' => 'Budget enforcement test fixture',
+                'exception_approved' => true,
                 'items'         => [
                     [
                         'description'        => 'Office supplies',

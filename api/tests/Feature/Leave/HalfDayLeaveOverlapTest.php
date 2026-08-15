@@ -12,6 +12,7 @@ use Database\Seeders\LeaveTypeSeeder;
 use Database\Seeders\PositionSeeder;
 use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -100,6 +101,29 @@ class HalfDayLeaveOverlapTest extends TestCase
             'leave_type_id'   => $type->id,
             'half_day_period' => 'am',
         ]);
+    }
+
+    public function test_submit_locks_authoritative_employee_before_overlap_check(): void
+    {
+        [$emp, $type] = $this->makeFixtures();
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        app(LeaveRequestService::class)->submit($emp->id, [
+            'start_date' => now()->addWeek()->toDateString(),
+            'end_date' => now()->addWeek()->toDateString(),
+            'leave_type_id' => $type->id,
+        ]);
+
+        $employeeLock = collect(DB::getQueryLog())->first(
+            fn (array $query): bool => str_contains(strtolower($query['query']), 'from "employees"')
+                && str_contains(strtolower($query['query']), 'for update')
+        );
+
+        $this->assertNotNull(
+            $employeeLock,
+            'Leave submission must serialize on the employee row so two empty-gap overlap checks cannot both win.'
+        );
     }
 
     private function makeFixtures(): array

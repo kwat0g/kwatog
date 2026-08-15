@@ -17,9 +17,9 @@ use Tests\TestCase;
 /**
  * OGAMI-015 — mrp:reap-stale-runs.
  *
- * Marks Running mrp_runs older than the stale threshold as Failed and cancels
- * the orphan draft auto-PRs created during the dead run's window. Fresh Running
- * rows, already-finished rows, and non-orphan PRs are left untouched.
+ * Marks Running mrp_runs whose heartbeat is older than the stale threshold as
+ * Failed. Draft auto-PRs remain untouched because timestamp windows cannot
+ * safely establish ownership across overlapping runs.
  */
 class MrpReaperTest extends TestCase
 {
@@ -91,15 +91,15 @@ class MrpReaperTest extends TestCase
         $this->assertSame(MrpRunStatus::Completed, $done->fresh()->status);
     }
 
-    public function test_orphan_draft_auto_pr_in_run_window_is_cancelled(): void
+    public function test_draft_auto_pr_in_run_window_is_kept_without_durable_run_link(): void
     {
         $this->makeRun(MrpRunStatus::Running, Carbon::now()->subHours(3));
-        // Draft auto-PR created after the run started → orphan.
+        // A timestamp overlap does not prove this PR belongs to the stale run.
         $orphan = $this->autoPr(PurchaseRequestStatus::Draft->value, Carbon::now()->subHours(2));
 
         $this->artisan('mrp:reap-stale-runs')->assertSuccessful();
 
-        $this->assertSame(PurchaseRequestStatus::Cancelled, $orphan->fresh()->status);
+        $this->assertSame(PurchaseRequestStatus::Draft, $orphan->fresh()->status);
     }
 
     public function test_non_draft_auto_pr_is_not_cancelled(): void
