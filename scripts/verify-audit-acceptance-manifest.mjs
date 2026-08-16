@@ -34,6 +34,6 @@ for (const row of lifecycle) if (!ids.has(row.id)) errors.push(`${row.id}: missi
 for (const id of ids) if (!lifecycle.some((row) => row.id === id)) errors.push(`${id}: gate has no lifecycle finding`);
 // Kept explicit by decision: growing the registry stays a deliberate,
 // reviewable edit rather than one absorbed silently.
-if (manifest.gates?.length !== 43) errors.push(`expected 43 gates, got ${manifest.gates?.length ?? 0}`);
+if (manifest.gates?.length !== 45) errors.push(`expected 45 gates, got ${manifest.gates?.length ?? 0}`);
 if (errors.length) { console.error(errors.join('\n')); process.exit(1); }
-console.log('Audit acceptance manifest clean: 43 findings mapped; F-030 remains external-evidence-only.');
+console.log('Audit acceptance manifest clean: 45 findings mapped; F-030 remains external-evidence-only.');
