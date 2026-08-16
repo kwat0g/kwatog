@@ -77,9 +77,13 @@ class BudgetEnforcementService
         // DISPLAY ONLY, and deliberately plain float math: rounding it is
         // precisely what misclassified the 99.95%-99.99% band as exhausted, so
         // routing it through Money would imply a precision that must never
-        // matter here. Unreachable when $allocated is zero — the available <= 0
-        // guard above returns first — so this cannot divide by zero.
-        $pct = round(((float) Money::add($spent, $committed, $amount) / (float) $allocated) * 100, 1);
+        // matter here. Guarded on $allocated because the available <= 0 check
+        // above is NOT sufficient: available = allocated - spent - committed, so
+        // a negative spent/committed gives available > 0 with allocated == 0,
+        // and dividing there is a DivisionByZeroError on PHP 8.
+        $pct = Money::isZero($allocated)
+            ? 0.0
+            : round(((float) Money::add($spent, $committed, $amount) / (float) $allocated) * 100, 1);
 
         return match ($level) {
             BudgetConsumptionLevel::OVERDRAWN => [false, $level, "Budget {$pct}% consumed. VP approval required."],
