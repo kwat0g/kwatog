@@ -54,11 +54,6 @@ await schedulesApi.destroy(id);
  title={data.description}
  backTo="/maintenance/schedules"
  backLabel="Schedules"
- breadcrumbs={[
- { label: 'Maintenance', href: '/maintenance' },
- { label: 'Schedules', href: '/maintenance/schedules' },
- { label: data.description },
- ]}
  actions={
  can('maintenance.schedules.manage') ? (
  <div className="flex gap-2">

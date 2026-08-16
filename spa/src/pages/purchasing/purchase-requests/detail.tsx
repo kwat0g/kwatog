@@ -103,7 +103,6 @@ export default function PurchaseRequestDetailPage() {
  <PageHeader
  title={<span className="font-mono">{data.pr_number}</span>}
  backTo="/purchasing/purchase-requests" backLabel="Purchase requests"
- breadcrumbs={[{ label: 'Purchasing', href: '/purchasing' }, { label: 'Purchase requests', href: '/purchasing/purchase-requests' }, { label: data.pr_number }]}
  actions={
  <div className="flex items-center gap-2">
  <Chip variant={statusVariant[data.status]}>{data.status_label ?? data.status}</Chip>

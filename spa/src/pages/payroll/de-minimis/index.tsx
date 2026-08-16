@@ -20,6 +20,7 @@ import { formatPeso } from '@/lib/formatNumber';
 import toast from 'react-hot-toast';
 import type { ListParams } from '@/types';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 interface DeMinimisRow {
   id: string;
   employee: { id: string; full_name: string } | null;
@@ -58,7 +59,7 @@ export function DeMinimisManager() {
   const qc = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [scope, setScope] = useState<ArchiveScope>('active');
-  const [filters, setFilters] = useState<ListParams & { period_year?: string; period_month?: string; benefit_type?: string }>({ per_page: 25 });
+  const [filters, setFilters] = useUrlFilters<ListParams & { period_year?: string; period_month?: string; benefit_type?: string }>({ per_page: 25 });
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['de-minimis', filters, { trashed: archiveToTrashed(scope) }],

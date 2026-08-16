@@ -19,6 +19,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { adminUsersApi } from '@/api/admin/users';
 import { client } from '@/api/client';
 import { formatDateTime } from '@/lib/formatDate';
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 import type {
  AdminUserListItem,
  AdminUserListFilters,
@@ -36,7 +37,7 @@ export default function AdminUsersIndexPage() {
  const navigate = useNavigate();
  const queryClient = useQueryClient();
  const { can } = usePermission();
- const [filters, setFilters] = useState<AdminUserListFilters>({
+ const [filters, setFilters] = useUrlFilters<AdminUserListFilters>({
  page: 1,
  per_page: 25,
  sort: 'last_activity',

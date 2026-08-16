@@ -202,7 +202,6 @@ export default function NcrDetailPage() {
  </span>
  }
  subtitle={data.product ? `${data.product.part_number} — ${data.product.name}` : labelFor(options?.sources, data.source)}
- breadcrumbs={[{ label: 'Quality', href: '/quality' }, { label: 'NCRs', href: '/quality/ncrs' }, { label: data.ncr_number }]}
  actions={
  <div className="flex items-center gap-2">
  {!isTerminal && data.disposition && can('quality.ncr.manage') && (

@@ -328,7 +328,6 @@ export default function PayrollPeriodDetailPage() {
           title="Loading…"
           backTo="/payroll/periods"
           backLabel="Payroll"
-          breadcrumbs={[{ label: 'Payroll', href: '/payroll/periods' }, { label: 'Period' }]}
         />
         <div className="px-5 py-4">
           <SkeletonTable columns={6} rows={6} />
@@ -344,7 +343,6 @@ export default function PayrollPeriodDetailPage() {
           title="Payroll Period"
           backTo="/payroll/periods"
           backLabel="Payroll"
-          breadcrumbs={[{ label: 'Payroll', href: '/payroll/periods' }, { label: 'Period' }]}
         />
         <EmptyState
           icon="alert-circle"
@@ -496,11 +494,6 @@ export default function PayrollPeriodDetailPage() {
         }
         backTo="/payroll/periods"
         backLabel="Payroll"
-        breadcrumbs={[
-          { label: 'Payroll', href: '/payroll/periods' },
-          { label: 'Periods', href: '/payroll/periods' },
-          { label: period.label },
-        ]}
         actions={
           <>
             <Chip variant={periodStatusVariant(period.status)} className="mr-2">

@@ -85,7 +85,6 @@ export default function ChainTrackerPage() {
  <PageHeader
  title="Chain Tracker"
  subtitle="Follow a sales order end-to-end across every module — order to cash."
- breadcrumbs={[{ label: 'Chain Tracker' }]}
  />
  <div className="px-5 py-4">
  {selectedId ? (

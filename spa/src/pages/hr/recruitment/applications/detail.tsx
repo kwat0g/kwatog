@@ -127,12 +127,6 @@ export default function ApplicationDetailPage() {
  subtitle={<span className="font-mono">{application.application_number} · {application.job_posting?.title ?? '—'}</span>}
  backTo="/hr/recruitment/applications"
  backLabel="Applications"
- breadcrumbs={[
- { label: 'HR', href: '/hr/employees' },
- { label: 'Recruitment', href: '/hr/recruitment' },
- { label: 'Applications', href: '/hr/recruitment/applications' },
- { label: application.full_name },
- ]}
  actions={
  can('hr.recruitment.applications') && !isTerminal ? (
  <>

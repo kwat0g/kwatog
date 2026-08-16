@@ -78,12 +78,6 @@ export default function EditMaintenanceSchedulePage() {
  title="Edit schedule"
  backTo={`/maintenance/schedules/${id}`}
  backLabel="Schedule"
- breadcrumbs={[
- { label: 'Maintenance', href: '/maintenance' },
- { label: 'Schedules', href: '/maintenance/schedules' },
- { label: data.description, href: `/maintenance/schedules/${id}` },
- { label: 'Edit' },
- ]}
  />
  <form onSubmit={handleSubmit((v) => mutation.mutate(v), onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-4">
  <div className="mb-6 p-3 bg-subtle rounded-md text-sm">

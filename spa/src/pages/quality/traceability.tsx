@@ -45,7 +45,6 @@ export default function TraceabilityPage() {
  <PageHeader
  title="Traceability search"
  subtitle="Trace a production batch, shipment lot, or supplier material lot end-to-end."
- breadcrumbs={[{ label: 'Quality', href: '/quality' }, { label: 'Traceability' }]}
  />
 
  <div className="px-5 pt-4">

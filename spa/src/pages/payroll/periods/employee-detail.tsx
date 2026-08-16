@@ -40,7 +40,7 @@ export default function PayrollEmployeeDetailPage() {
  if (isError || !data) {
  return (
  <div>
- <PageHeader title="Employee payroll" backTo={`/payroll/periods/${id}`} backLabel="Period" breadcrumbs={[{ label: 'Payroll', href: '/payroll/periods' }, { label: 'Periods', href: '/payroll/periods' }, { label: 'Employee Detail' }]} />
+ <PageHeader title="Employee payroll" backTo={`/payroll/periods/${id}`} backLabel="Period" />
  <EmptyState icon="alert-circle" title="Failed to load payroll"
  action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />
  </div>
@@ -66,11 +66,6 @@ export default function PayrollEmployeeDetailPage() {
  {emp.position && <> · {emp.position}</>}
  </> : null}
  backTo={`/payroll/periods/${id}`} backLabel="Period"
- breadcrumbs={[
- { label: 'Payroll', href: '/payroll/periods' },
- { label: 'Periods', href: '/payroll/periods' },
- { label: emp ? emp.full_name : 'Employee' },
- ]}
  actions={
  <>
  {data.error_message ? <Chip variant="danger">Failed</Chip> : <Chip variant="success">Computed</Chip>}

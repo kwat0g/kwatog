@@ -74,7 +74,7 @@ export default function CreateAccountPage() {
  return (
  <div>
  <PageHeader title="New account" backTo="/accounting/coa" backLabel="Chart of Accounts"
- breadcrumbs={[{ label: 'Finance', href: '/accounting/coa' }, { label: 'COA', href: '/accounting/coa' }, { label: 'New' }]} />
+ />
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())}
  className="max-w-2xl mx-auto px-5 py-4 space-y-4">
 

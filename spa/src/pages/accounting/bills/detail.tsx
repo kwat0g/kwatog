@@ -147,11 +147,7 @@ export default function BillDetailPage() {
  }
  backTo="/accounting/bills"
  backLabel="Bills"
- breadcrumbs={[
- { label: 'Accounting', href: '/accounting' },
- { label: 'Bills', href: '/accounting/bills' },
- { label: bill.bill_number },
- ]}  actions={
+  actions={
    <div className="flex gap-1.5">
    <Button variant="secondary" size="sm" icon={<LuPrinter size={14} />} onClick={() => void downloadAuthenticatedFile(billsApi.pdfUrl(bill.id), { openInNewTab: true, errorMessage: 'Failed to generate bill PDF.' })}>Print</Button>
  {bill.status === 'draft' && can('accounting.bills.create') && (

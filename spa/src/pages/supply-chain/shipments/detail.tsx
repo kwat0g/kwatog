@@ -156,10 +156,6 @@ export default function ShipmentDetailPage() {
         subtitle={data.purchase_order ? `PO ${data.purchase_order.po_number}` : undefined}
         backTo="/supply-chain/shipments"
         backLabel="Shipments"
-        breadcrumbs={[
-          { label: 'Shipments', href: '/supply-chain/shipments' },
-          { label: data.shipment_number },
-        ]}
         actions={
           nextStatus && canManage ? (
             <Button

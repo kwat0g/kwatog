@@ -136,7 +136,6 @@ export default function BudgetCreatePage() {
  subtitle="Set up a new budget with monthly allocations per account"
  backTo="/budgeting"
  backLabel="Budgeting"
- breadcrumbs={[{ label: 'Budgeting', href: '/budgeting' }, { label: 'Create Budget' }]}
  />
 
  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

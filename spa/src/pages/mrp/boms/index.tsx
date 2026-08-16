@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
 import { LuPlus } from '@/lib/icons';
@@ -14,10 +13,11 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { formatPeso } from '@/lib/formatNumber';
 import type { Bom } from '@/types/mrp';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 export default function BomsListPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
- const [filters, setFilters] = useState<BomListParams>({ page: 1, per_page: 25 });
+ const [filters, setFilters] = useUrlFilters<BomListParams>({ page: 1, per_page: 25 });
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['mrp', 'boms', filters],

@@ -19,11 +19,12 @@ import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
 import type { MaintenanceSchedule } from '@/types/maintenance';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 export default function MaintenanceSchedulesListPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
  const qc = useQueryClient();
-const [filters, setFilters] = useState<ScheduleListParams>({ page: 1, per_page: 25 });
+const [filters, setFilters] = useUrlFilters<ScheduleListParams>({ page: 1, per_page: 25 });
  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
  const [restoreTarget, setRestoreTarget] = useState<string | null>(null);
  const [scope, setScope] = useState<ArchiveScope>('active');

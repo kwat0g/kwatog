@@ -50,11 +50,11 @@ export default function MrpPlanDetailPage() {
  }, [data]);
 
  if (isLoading) return <div><PageHeader title="MRP plan" backTo="/mrp/plans" backLabel="Plans"
- breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'Plans', href: '/mrp/plans' }, { label: 'Loading…' }]} /><SkeletonDetail /></div>;
+ /><SkeletonDetail /></div>;
  if (isError || !data) return (
  <div>
  <PageHeader title="MRP plan" backTo="/mrp/plans" backLabel="Plans"
- breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'Plans', href: '/mrp/plans' }, { label: 'Error' }]} />
+ />
  <EmptyState icon="alert-circle" title="Failed to load plan"
  action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />
  </div>
@@ -74,7 +74,6 @@ export default function MrpPlanDetailPage() {
  subtitle={data.sales_order ? `for ${data.sales_order.so_number}` : undefined}
  backTo="/mrp/plans"
  backLabel="Plans"
- breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'Plans', href: '/mrp/plans' }, { label: data.mrp_plan_no }]}
  actions={can('mrp.plans.run') ? (
  <Button variant="primary" size="sm" icon={<LuRefreshCw size={14} />}
  onClick={() => rerun.mutate()} loading={rerun.isPending}>

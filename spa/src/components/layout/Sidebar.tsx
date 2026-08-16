@@ -97,13 +97,6 @@ export interface NavItem {
   anyPermissions?: string[];
   /** Optional feature flag (e.g. 'hr', 'inventory'). */
   feature?: string;
-  /**
-   * Optional role allowlist. When set, only users whose role.slug is in this
-   * array see the item regardless of permission. Used to hide high-volume
-   * operational pages from roles that never need them directly. RESERVED:
-   * enforced in isVisible() but no item currently sets it (system_admin bypasses).
-   */
-  roles?: string[];
 }
 
 export interface NavSection {
@@ -114,10 +107,13 @@ export interface NavSection {
 /**
  * Sidebar — workflow pages only.
  *
- * Items with `roles` are only shown to those roles; items without `roles` are
- * visible to any role that passes the permission/feature gates. Standalone
- * "dashboard" sub-pages (Production Dashboard, Quality Dashboard) are removed
- * — users reach their role dashboard via the top-level /dashboard redirect.
+ * Visibility is decided by permission + feature flag, never by role name:
+ * `isNavItemVisible` reads `roleSlug` only for the system_admin bypass that
+ * mirrors User::hasPermission. A per-item role allowlist used to exist here and
+ * was never set by a single item — dead code that invited role-name coupling
+ * back into navigation. Standalone "dashboard" sub-pages (Production Dashboard,
+ * Quality Dashboard) are removed — users reach their role dashboard via the
+ * top-level /dashboard redirect.
  */
 export const SECTIONS: NavSection[] = [
   {
@@ -722,7 +718,6 @@ export function isNavItemVisible(
     !item.anyPermissions.some((permission) => permissions.has(permission))
   )
     return false;
-  if (!isAdmin && item.roles && roleSlug && !item.roles.includes(roleSlug)) return false;
   return true;
 }
 

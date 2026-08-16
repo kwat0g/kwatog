@@ -120,11 +120,6 @@ export default function NotificationPreferencesPage() {
  }
  backTo="/self-service/profile"
  backLabel="Profile"
- breadcrumbs={[
- { label: 'Self-service', href: '/self-service' },
- { label: 'Profile', href: '/self-service/profile' },
- { label: 'Notifications' },
- ]}
  />
 
  <div className="px-5 py-4 space-y-4">

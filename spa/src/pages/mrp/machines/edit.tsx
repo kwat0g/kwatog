@@ -14,16 +14,12 @@ export default function EditMachinePage() {
  });
 
  if (isLoading) return <div><PageHeader title="Edit machine" backTo="/mrp/machines" backLabel="Machines"
- breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'Machines', href: '/mrp/machines' }, { label: 'Loading…' }]} /><SkeletonDetail /></div>;
+ /><SkeletonDetail /></div>;
 
  return (
  <div>
  <PageHeader title={`Edit ${data?.machine_code ?? 'machine'}`} backTo={`/mrp/machines/${id}`} backLabel="Machine"
- breadcrumbs={[
- { label: 'MRP' },
- { label: 'Machines', href: '/mrp/machines' },
- { label: data?.machine_code ?? 'Edit' },
- ]} />
+ />
  {isError || !data ? (
  <div className="px-5 py-4 text-sm text-muted">Could not load machine.</div>
  ) : (

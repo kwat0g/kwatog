@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
 import { LuPlus } from '@/lib/icons';
@@ -15,10 +14,11 @@ import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
 import type { EmployeeLoan } from '@/types/loans';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 export default function LoansPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
- const [filters, setFilters] = useState<LoanListParams>({ page: 1, per_page: 25, sort: 'created_at', direction: 'desc' });
+ const [filters, setFilters] = useUrlFilters<LoanListParams>({ page: 1, per_page: 25, sort: 'created_at', direction: 'desc' });
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['loans', filters],

@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -16,6 +15,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import type { Machine, MachineStatus } from '@/types/mrp';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 const variant: Record<MachineStatus, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
  running: 'success', idle: 'neutral', maintenance: 'info', breakdown: 'danger', offline: 'neutral' };
 
@@ -25,7 +25,7 @@ export default function MachinesListPage() {
  const { can } = usePermission();
  const canManage = can('production.machines.manage');
  const canTransition = can('production.machines.transition');
- const [filters, setFilters] = useState<MachineListParams>({ page: 1, per_page: 25 });
+ const [filters, setFilters] = useUrlFilters<MachineListParams>({ page: 1, per_page: 25 });
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['mrp', 'machines', filters],

@@ -142,11 +142,11 @@ export default function WorkOrderDetailPage() {
  });
 
  if (isLoading) return <div> <PageHeader title="Work order" backTo="/production/work-orders" backLabel="Work orders"
- breadcrumbs={[{ label: 'Production', href: '/production' }, { label: 'Work orders', href: '/production/work-orders' }, { label: 'Loading…' }]} /><SkeletonDetail /></div>;
+ /><SkeletonDetail /></div>;
  if (isError || !data) return (
  <div>
  <PageHeader title="Work order" backTo="/production/work-orders" backLabel="Work orders"
- breadcrumbs={[{ label: 'Production', href: '/production' }, { label: 'Work orders', href: '/production/work-orders' }, { label: 'Error' }]} />
+ />
  <EmptyState icon="alert-circle" title="Failed to load work order"
  action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />
  </div>
@@ -173,7 +173,6 @@ export default function WorkOrderDetailPage() {
  subtitle={data.product ? `${data.product.part_number} — ${data.product.name}` : undefined}
  backTo="/production/work-orders"
  backLabel="Work orders"
- breadcrumbs={[{ label: 'Production', href: '/production' }, { label: 'Work orders', href: '/production/work-orders' }, { label: data.wo_number }]}
  actions={
  <div className="flex gap-1.5">
  {showConfirm && <Button size="sm" variant="primary" icon={<LuCheck size={14} />} onClick={() => {

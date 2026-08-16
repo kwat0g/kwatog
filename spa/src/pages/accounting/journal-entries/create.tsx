@@ -102,11 +102,7 @@ export default function CreateJournalEntryPage() {
  return (
  <div>
  <PageHeader title="New journal entry" backTo="/accounting/journal-entries" backLabel="Journal Entries"
- breadcrumbs={[
- { label: 'Accounting' },
- { label: 'Journal Entries', href: '/accounting/journal-entries' },
- { label: 'New entry' },
- ]} />
+ />
 
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-5xl mx-auto px-5 py-4 space-y-4">
  <Panel title="Header">

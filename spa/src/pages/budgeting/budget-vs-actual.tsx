@@ -72,7 +72,6 @@ export default function BudgetVsActualPage() {
  <PageHeader
  title="Budget vs Actual"
  subtitle="P&L comparison — budgeted amounts vs actuals"
- breadcrumbs={[{ label: 'Budgeting', href: '/budgeting' }, { label: 'Budget vs Actual' }]}
  actions={
  <div className="flex items-center gap-2">
  {can('budgeting.manage') && (

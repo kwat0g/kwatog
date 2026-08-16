@@ -92,12 +92,6 @@ export default function OvertimeDetailPage() {
  subtitle={`${ot.employee?.full_name ?? '—'} · ${formatDate(ot.date)}`}
  backTo="/hr/attendance/overtime"
  backLabel="Overtime"
- breadcrumbs={[
- { label: 'HR', href: '/hr/employees' },
- { label: 'Attendance', href: '/hr/attendance' },
- { label: 'Overtime', href: '/hr/attendance/overtime' },
- { label: formatDate(ot.date) },
- ]}
  actions={
  <>
  {canApprove && (

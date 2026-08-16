@@ -19,12 +19,13 @@ import { usePermission } from '@/hooks/usePermission';
 import type { Product } from '@/types/crm';
 import { formatPeso } from '@/lib/formatNumber';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 export default function ProductsListPage() {
  const navigate = useNavigate();
  const qc = useQueryClient();
  const { can } = usePermission();
  const canManage = can('crm.products.manage');
- const [filters, setFilters] = useState<ProductListParams>({ page: 1, per_page: 25, is_active: 'true' });
+ const [filters, setFilters] = useUrlFilters<ProductListParams>({ page: 1, per_page: 25, is_active: 'true' });
  const [confirmDelete, setConfirmDelete] = useState<Product | null>(null);
  const [scope, setScope] = useState<ArchiveScope>('active');
 

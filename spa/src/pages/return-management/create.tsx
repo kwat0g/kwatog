@@ -154,10 +154,6 @@ export default function CreateReturnRequestPage() {
  title="New Return Request"
  subtitle="Create a customer or supplier return"
  backTo="/return-management"
- breadcrumbs={[
- { label: 'Returns', href: '/return-management' },
- { label: 'New Return Request' },
- ]}
  />
 
  <form

@@ -146,11 +146,6 @@ export default function CapabilityStudyPage() {
  <PageHeader
  title="Capability Study"
  subtitle="Compute Cp/Cpk indices for a product dimension"
- breadcrumbs={[
- { label: 'Quality', href: '/quality' },
- { label: 'SPC', href: '/quality/spc' },
- { label: 'Capability Study' },
- ]}
  />
 
  <div className="px-5 py-4 space-y-4">

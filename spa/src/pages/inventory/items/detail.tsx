@@ -41,7 +41,6 @@ export default function ItemDetailPage() {
  <PageHeader
  title={<span><span className="font-mono">{data.code}</span> · {data.name}</span>}
  backTo="/inventory/items" backLabel="Items"
- breadcrumbs={[{ label: 'Inventory', href: '/inventory' }, { label: 'Items', href: '/inventory/items' }, { label: data.code }]}
  actions={
  <div className="flex items-center gap-2">
  <Chip variant={stockChipVariant[data.stock_status]}>{stockStatusLabel ?? data.stock_status}</Chip>

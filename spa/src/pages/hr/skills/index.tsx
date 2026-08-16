@@ -21,6 +21,7 @@ import { z } from 'zod';
 import type { ApiValidationError } from '@/types';
 import { AxiosError } from 'axios';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 const createSchema = z.object({
  name: z.string().min(1, 'Required').max(200),
  category: z.string().max(100).optional().or(z.literal('')),
@@ -32,7 +33,7 @@ export default function SkillsListPage() {
  const { can } = usePermission();
  const qc = useQueryClient();
  const [showCreate, setShowCreate] = useState(false);
- const [filters, setFilters] = useState<ListParams>({ page: 1, per_page: 25 });
+ const [filters, setFilters] = useUrlFilters<ListParams>({ page: 1, per_page: 25 });
 
  const { data, isLoading, isError } = useQuery({
  queryKey: ['hr', 'skills', filters],

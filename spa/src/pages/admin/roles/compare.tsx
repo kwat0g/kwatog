@@ -105,11 +105,6 @@ export default function CompareRolesPage() {
  subtitle="Side-by-side permission diff. Useful before cloning a role or auditing access drift."
  backTo="/admin/roles"
  backLabel="Roles"
- breadcrumbs={[
- { label: 'Admin', href: '/admin/users' },
- { label: 'Roles', href: '/admin/roles' },
- { label: 'Compare' },
- ]}
  actions={
  <Button
  variant="secondary"

@@ -19,6 +19,7 @@ import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
 import type { PayrollPeriod } from '@/types/payroll';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 const periodStatusVariant = (status: string | null | undefined): ChipVariant => {
  switch (status) {
  case 'finalized': return 'success';
@@ -34,7 +35,7 @@ export default function PayrollPeriodsPage() {
  const navigate = useNavigate();
  const qc = useQueryClient();
  const { can } = usePermission();
- const [filters, setFilters] = useState<PeriodListParams>({
+ const [filters, setFilters] = useUrlFilters<PeriodListParams>({
  page: 1, per_page: 25, sort: 'period_start', direction: 'desc',
  });
  const [showThirteenth, setShowThirteenth] = useState(false);

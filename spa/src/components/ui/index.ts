@@ -34,8 +34,6 @@ export { Switch } from './Switch';
 export { Tabs, type TabItem } from './Tabs';
 export { Textarea, type TextareaProps } from './Textarea';
 export { TabNavigation, type Tab } from './TabNavigation';
-export { Breadcrumb } from './Breadcrumb';
-export type { BreadcrumbSegment } from './Breadcrumb';
 export { Tooltip } from './Tooltip';
 export { SpecToleranceBar, type SpecToleranceBarProps } from './SpecToleranceBar';
 export { Th, Td, thCls, tdCls, trCls, theadTrCls, tableCls } from './table-cells';

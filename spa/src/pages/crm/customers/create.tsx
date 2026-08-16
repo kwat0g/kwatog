@@ -76,11 +76,6 @@ export default function CrmCustomerCreatePage() {
  title="New customer"
  backTo="/crm/customers"
  backLabel="Customers"
- breadcrumbs={[
- { label: 'CRM' },
- { label: 'Customers', href: '/crm/customers' },
- { label: 'New customer' },
- ]}
  />
  <FormProvider {...methods}>
  <form onSubmit={handleSubmit((v) => mutation.mutate(v), onFormInvalid<FormValues>())}>

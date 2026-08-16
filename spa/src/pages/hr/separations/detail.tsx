@@ -84,11 +84,6 @@ export default function SeparationDetailPage() {
  subtitle={data.employee?.full_name ?? undefined}
  backTo="/hr/separations"
  backLabel="Separations"
- breadcrumbs={[
- { label: 'HR', href: '/hr/employees' },
- { label: 'Separations', href: '/hr/separations' },
- { label: data.clearance_no },
- ]}
  actions={
  <div className="flex gap-1.5 items-center">
  <Chip variant={STATUS_CHIP[data.status]}>{statusLabel ?? data.status}</Chip>

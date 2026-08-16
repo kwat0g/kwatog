@@ -97,11 +97,6 @@ export default function CrmCustomerEditPage() {
  title={data ? `Edit ${data.name}` : 'Edit customer'}
  backTo={backTo}
  backLabel={data?.name ?? 'Customers'}
- breadcrumbs={[
- { label: 'CRM' },
- { label: 'Customers', href: '/crm/customers' },
- { label: data ? `Edit ${data.name}` : 'Edit customer' },
- ]}
  />
  {isLoading && <SkeletonDetail />}
  {isError && (

@@ -128,7 +128,7 @@ export default function EditBomPage() {
  if (isLoading) return (
  <div>
  <PageHeader title="Edit BOM" backTo="/mrp/boms" backLabel="BOMs"
- breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'BOMs', href: '/mrp/boms' }, { label: 'Loading…' }]} />
+ />
  <SkeletonDetail />
  </div>
  );
@@ -136,7 +136,7 @@ export default function EditBomPage() {
  if (isError || !data) return (
  <div>
  <PageHeader title="Edit BOM" backTo="/mrp/boms" backLabel="BOMs"
- breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'BOMs', href: '/mrp/boms' }, { label: 'Error' }]} />
+ />
  <EmptyState icon="alert-circle" title="Failed to load BOM"
  action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />
  </div>
@@ -153,12 +153,6 @@ export default function EditBomPage() {
  }
  backTo={`/mrp/boms/${id}`}
  backLabel="BOM"
- breadcrumbs={[
- { label: 'MRP', href: '/mrp' },
- { label: 'BOMs', href: '/mrp/boms' },
- { label: data.product?.part_number ?? 'BOM', href: `/mrp/boms/${id}` },
- { label: 'Edit' },
- ]}
  />
  <form
  onSubmit={handleSubmit((v) => update.mutate(v), onFormInvalid<FormValues>())}

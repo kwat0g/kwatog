@@ -160,11 +160,6 @@ export default function PrTemplateFormPage() {
         title={isEdit ? 'Edit Template' : 'New PR Template'}
         backTo="/purchasing/pr-templates"
         backLabel="PR Templates"
-        breadcrumbs={[
-          { label: 'Purchasing', href: '/purchasing' },
-          { label: 'PR Templates', href: '/purchasing/pr-templates' },
-          { label: isEdit ? 'Edit Template' : 'New PR Template' },
-        ]}
       />
       <form
         onSubmit={handleSubmit((d) => save.mutate(d), onFormInvalid<FormValues>())}

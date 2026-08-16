@@ -195,11 +195,6 @@ export default function ComplaintDetailPage() {
  subtitle={data.customer ? `Customer: ${data.customer.name}` : undefined}
  backTo="/crm/complaints"
  backLabel="Complaints"
- breadcrumbs={[
- { label: 'CRM' },
- { label: 'Complaints', href: '/crm/complaints' },
- { label: data.complaint_number },
- ]}
  actions={
  <div className="flex items-center gap-2">
  {canManage && data.ncr_handoff?.status === 'manual_required' && (

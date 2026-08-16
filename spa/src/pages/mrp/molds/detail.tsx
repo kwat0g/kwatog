@@ -77,11 +77,11 @@ export default function MoldDetailPage() {
  });
 
  if (detail.isLoading) return <div><PageHeader title="Mold" backTo="/mrp/molds" backLabel="Molds"
- breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'Molds', href: '/mrp/molds' }, { label: 'Loading…' }]} /><SkeletonDetail /></div>;
+ /><SkeletonDetail /></div>;
  if (detail.isError || !detail.data) return (
  <div>
  <PageHeader title="Mold" backTo="/mrp/molds" backLabel="Molds"
- breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'Molds', href: '/mrp/molds' }, { label: 'Error' }]} />
+ />
  <EmptyState
  icon="alert-circle"
  title="Failed to load mold"
@@ -107,7 +107,6 @@ export default function MoldDetailPage() {
  }
  backTo="/mrp/molds"
  backLabel="Molds"
- breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'Molds', href: '/mrp/molds' }, { label: m.mold_code }]}
  actions={canManage ? (
  <Button variant="secondary" size="sm" icon={<LuPencil size={14} />}
  onClick={() => navigate(`/mrp/molds/${m.id}/edit`)}>

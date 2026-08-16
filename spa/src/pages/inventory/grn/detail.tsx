@@ -181,7 +181,6 @@ export default function GrnDetailPage() {
   <PageHeader
   title={<span className="font-mono">{data.grn_number}</span>}
   backTo="/inventory/grn" backLabel="GRNs"
-  breadcrumbs={[{ label: 'Inventory', href: '/inventory' }, { label: 'GRNs', href: '/inventory/grn' }, { label: data.grn_number }]}
   actions={
    <div className="flex items-center gap-2">
    <Chip variant={variant}>{grnOptions?.statuses.find((option) => option.value === data.status)?.label ?? data.status}</Chip>

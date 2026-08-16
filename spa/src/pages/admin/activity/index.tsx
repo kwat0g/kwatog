@@ -65,10 +65,6 @@ export default function AdminActivityFeedPage() {
  <PageHeader
  title="System activity"
  subtitle={data ? `${formatInt(data.meta.total)} events` : undefined}
- breadcrumbs={[
- { label: 'Admin', href: '/admin/audit-logs' },
- { label: 'Activity' },
- ]}
  actions={
  isFetching ? (
  <span className="text-xs text-muted">Refreshing…</span>

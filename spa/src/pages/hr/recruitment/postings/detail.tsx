@@ -121,12 +121,6 @@ export default function PostingDetailPage() {
  subtitle={<span className="font-mono">{posting.posting_number} · {posting.department?.name ?? ''}</span>}
  backTo="/hr/recruitment/postings"
  backLabel="Postings"
- breadcrumbs={[
- { label: 'HR', href: '/hr/employees' },
- { label: 'Recruitment', href: '/hr/recruitment' },
- { label: 'Postings', href: '/hr/recruitment/postings' },
- { label: posting.title },
- ]}
  actions={
  can('hr.recruitment.manage') ? (
  <>

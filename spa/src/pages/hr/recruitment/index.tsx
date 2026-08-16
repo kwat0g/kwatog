@@ -80,10 +80,6 @@ export default function RecruitmentDashboard() {
  <PageHeader
  title="Recruitment"
  subtitle="Manage job postings and applications"
- breadcrumbs={[
- { label: 'HR', href: '/hr/employees' },
- { label: 'Recruitment' },
- ]}
  actions={
  can('hr.recruitment.manage') ? (
  <Button variant="primary" size="sm" icon={<LuPlus size={14} />} onClick={() => navigate('/hr/recruitment/postings/create')}>

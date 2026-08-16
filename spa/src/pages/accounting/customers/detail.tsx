@@ -114,11 +114,6 @@ export default function CustomerDetailPage() {
         }
         backTo="/accounting/customers"
         backLabel="Customers"
-        breadcrumbs={[
-          { label: 'Accounting' },
-          { label: 'Customers', href: '/accounting/customers' },
-          { label: customer.name },
-        ]}
         actions={
           <div className="flex gap-1.5">
             {can('accounting.invoices.create') && (

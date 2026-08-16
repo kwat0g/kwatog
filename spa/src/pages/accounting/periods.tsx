@@ -60,7 +60,6 @@ export default function AccountingPeriodsPage() {
  <PageHeader
  title="Accounting Periods"
  subtitle="Close a month to lock its entries; reopening requires a reason and is recorded."
- breadcrumbs={[{ label: 'Accounting' }, { label: 'Periods' }]}
  />
 
  <div className="px-5 py-4">

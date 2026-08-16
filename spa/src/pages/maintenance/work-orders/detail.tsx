@@ -120,11 +120,6 @@ export default function MaintenanceWorkOrderDetailPage() {
         }
         backTo="/maintenance/work-orders"
         backLabel="Work orders"
-        breadcrumbs={[
-          { label: 'Maintenance', href: '/maintenance' },
-          { label: 'Work Orders', href: '/maintenance/work-orders' },
-          { label: data.mwo_number },
-        ]}
         actions={
           <div className="flex gap-1.5">
             <Chip variant={STATUS_CHIP[data.status]}>

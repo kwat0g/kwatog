@@ -56,11 +56,6 @@ export default function VendorDetailPage() {
  }
  backTo="/accounting/vendors"
  backLabel="Vendors"
- breadcrumbs={[
- { label: 'Accounting' },
- { label: 'Vendors', href: '/accounting/vendors' },
- { label: vendor.name },
- ]}
  actions={
  <div className="flex gap-1.5">
  {can('accounting.bills.create') && (

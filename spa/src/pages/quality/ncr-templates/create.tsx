@@ -121,11 +121,6 @@ export default function NcrTemplateFormPage() {
         title={isEdit ? 'Edit NCR template' : 'New NCR template'}
         backTo="/quality/ncr-templates"
         backLabel="NCR templates"
-        breadcrumbs={[
-          { label: 'Quality', href: '/quality' },
-          { label: 'NCR templates', href: '/quality/ncr-templates' },
-          { label: isEdit ? 'Edit NCR template' : 'New NCR template' },
-        ]}
       />
       <form
         onSubmit={handleSubmit((d) => createMut.mutate(d), onFormInvalid<FormValues>())}

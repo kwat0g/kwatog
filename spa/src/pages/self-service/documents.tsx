@@ -84,7 +84,6 @@ export default function SelfServiceDocumentsPage() {
  }
  backTo="/self-service"
  backLabel="Self-service"
- breadcrumbs={[{ label: 'Self-service', href: '/self-service' }, { label: 'Documents' }]}
  />
 
  <div className="px-5 py-4 space-y-4">

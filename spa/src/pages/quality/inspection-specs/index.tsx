@@ -5,7 +5,6 @@
  * editor (always /quality/inspection-specs/{product_hash_id} — keyed on
  * product because there is exactly one active spec per product).
  */
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
 import { LuPlus } from '@/lib/icons';
@@ -20,10 +19,11 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import type { InspectionSpec } from '@/types/quality';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 export default function InspectionSpecsListPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
- const [filters, setFilters] = useState<InspectionSpecListParams>({ page: 1, per_page: 25 });
+ const [filters, setFilters] = useUrlFilters<InspectionSpecListParams>({ page: 1, per_page: 25 });
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['quality', 'inspection-specs', filters],

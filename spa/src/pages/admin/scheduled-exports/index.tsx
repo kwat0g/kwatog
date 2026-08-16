@@ -24,11 +24,17 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { formatDateTime } from '@/lib/formatDate';
 import type { ScheduledExport } from '@/types/exports';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 export default function ScheduledExportsPage() {
-const [page, setPage] = useState(1);
+const [filters, setFilters] = useUrlFilters<{ page: number; scope: ArchiveScope }>({
+ page: 1,
+ scope: 'active',
+ });
+ const { page, scope } = filters;
+ const setPage = (next: number) => setFilters((f) => ({ ...f, page: next }));
+ const setScope = (next: ArchiveScope) => setFilters((f) => ({ ...f, scope: next, page: 1 }));
  const [deleteTarget, setDeleteTarget] = useState<ScheduledExport | null>(null);
  const [restoreTarget, setRestoreTarget] = useState<ScheduledExport | null>(null);
- const [scope, setScope] = useState<ArchiveScope>('active');
  const queryClient = useQueryClient();
 
  const { data, isLoading, isError, refetch } = useQuery({

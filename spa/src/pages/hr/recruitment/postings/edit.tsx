@@ -170,12 +170,6 @@ export default function PostingEditPage() {
  subtitle={<span className="font-mono">{posting?.posting_number ?? ''}</span>}
  backTo={`/hr/recruitment/postings/${id}`}
  backLabel="Posting"
- breadcrumbs={[
- { label: 'HR', href: '/hr/employees' },
- { label: 'Recruitment', href: '/hr/recruitment' },
- { label: 'Postings', href: '/hr/recruitment/postings' },
- { label: posting?.title ?? 'Edit' },
- ]}
  />
 
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormData>())} className="max-w-5xl mx-auto px-5 py-4 space-y-4">

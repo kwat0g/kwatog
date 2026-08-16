@@ -29,6 +29,7 @@ import type { ApiValidationError, ListParams } from '@/types';
 import { onFormInvalid } from '@/lib/formErrors';
 import type { Position } from '@/types/hr';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 const schema = z.object({
  title: z.string().trim().min(1, 'Title is required').max(100)
  .regex(/^[\p{L}0-9\s.&,()/-]+$/u, 'Letters, digits, spaces, and . & - , ( ) /'),
@@ -43,7 +44,7 @@ export default function PositionsPage() {
  const { can } = usePermission();
  const qc = useQueryClient();
 
- const [filters, setFilters] = useState<PositionFilterParams>({
+ const [filters, setFilters] = useUrlFilters<PositionFilterParams>({
   page: 1, per_page: 25, sort: 'title', direction: 'asc',
  });
  const [modalOpen, setModalOpen] = useState(false);

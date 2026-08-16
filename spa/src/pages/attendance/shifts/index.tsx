@@ -27,6 +27,7 @@ import type { ApiValidationError, ListParams } from '@/types';
 import { onFormInvalid } from '@/lib/formErrors';
 import type { Shift } from '@/types/attendance';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 const schema = z.object({
  name: z.string().trim().min(1, 'Name is required').max(50)
  .regex(/^[A-Za-z0-9\s\-_().]+$/, 'Letters, digits, spaces, and -_().'),
@@ -45,7 +46,7 @@ export default function ShiftsPage() {
  const { can } = usePermission();
  const navigate = useNavigate();
  const qc = useQueryClient();
- const [filters, setFilters] = useState<ListParams>({ page: 1, per_page: 25 });
+ const [filters, setFilters] = useUrlFilters<ListParams>({ page: 1, per_page: 25 });
  const [editing, setEditing] = useState<Shift | null>(null);
  const [modalOpen, setModalOpen] = useState(false);
  const [pendingDelete, setPendingDelete] = useState<Shift | null>(null);

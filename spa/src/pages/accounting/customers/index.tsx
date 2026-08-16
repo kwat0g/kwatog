@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
 import { LuPlus } from '@/lib/icons';
@@ -14,10 +13,11 @@ import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 import type { Customer } from '@/types/accounting';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 export default function CustomersPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
- const [filters, setFilters] = useState<CustomerListParams>({ page: 1, per_page: 25 });
+ const [filters, setFilters] = useUrlFilters<CustomerListParams>({ page: 1, per_page: 25 });
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['accounting', 'customers', filters],

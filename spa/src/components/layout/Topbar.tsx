@@ -74,11 +74,12 @@ export function Topbar({ user, onLogout, rightExtras }: TopbarProps) {
  <span className="text-sm font-medium text-primary hidden sm:inline">{contact?.legal_name ?? '—'}</span>
  </Link>
 
- <div className="hidden md:flex h-full items-center pl-3 ml-1 border-l border-default">
+ {/* The trail was `hidden md:flex`, so below 768px the only wayfinding left
+ was PageHeader's optional back link. Breadcrumbs now shed ancestors
+ instead of disappearing — see Breadcrumbs' per-crumb classes. */}
+ <div className="flex h-full min-w-0 flex-1 items-center pl-3 ml-1 border-l border-default">
  <Breadcrumbs />
  </div>
-
- <div className="flex-1" />
 
  {/* Search trigger — opens the global command palette (Sprint 8 — Task 75). */}
  <button

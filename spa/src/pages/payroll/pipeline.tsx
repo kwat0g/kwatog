@@ -82,11 +82,6 @@ export default function PayrollPipelinePage() {
  subtitle={`${year} · ${data.periods.filter((p) => p.exists).length} of ${data.periods.length} periods created`}
  backTo="/payroll/periods"
  backLabel="Payroll"
- breadcrumbs={[
- { label: 'Payroll' },
- { label: 'Periods', href: '/payroll/periods' },
- { label: 'Pipeline' },
- ]}
  actions={
  <div className="flex items-center gap-2">
  <Button variant="secondary" size="sm" onClick={() => setYear((y) => y - 1)}>

@@ -93,7 +93,6 @@ export default function ImportsPage() {
  <PageHeader
  title="Master-Data Import"
  subtitle="Load chart of accounts, items, customers, and vendors from CSV at go-live."
- breadcrumbs={[{ label: 'Administration' }, { label: 'Import' }]}
  />
 
  <div className="px-5 py-4 grid grid-cols-1 lg:grid-cols-[420px_1fr] gap-5">

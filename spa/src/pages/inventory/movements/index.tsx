@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AxiosError } from 'axios';
 import { LuRefreshCw } from '@/lib/icons';
@@ -15,6 +14,7 @@ import type { ListParams } from '@/types';
 import type { StockMovement } from '@/types/inventory';
 import { usePermission } from '@/hooks/usePermission';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 const chip = (t: string): 'success' | 'info' | 'warning' | 'danger' | 'neutral' => {
   if (['grn_receipt', 'production_receipt', 'adjustment_in'].includes(t)) return 'success';
   if (['material_issue', 'delivery'].includes(t)) return 'info';
@@ -49,7 +49,7 @@ export function StockMovementsTab({
 }) {
  const qc = useQueryClient();
  const { can } = usePermission();
- const [filters, setFilters] = useState<StockMovementListParams>({
+ const [filters, setFilters] = useUrlFilters<StockMovementListParams>({
  ...DEFAULT_FILTERS,
  item_id: initialItemId || undefined,
  movement_type: initialMovementType || undefined,

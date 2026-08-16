@@ -80,11 +80,7 @@ export default function CreateComplaintPage() {
  return (
  <div>
  <PageHeader title="File complaint" subtitle="An NCR will be auto-created on submit." backTo="/crm/complaints" backLabel="Complaints"
- breadcrumbs={[
- { label: 'CRM' },
- { label: 'Complaints', href: '/crm/complaints' },
- { label: 'File complaint' },
- ]} />
+ />
  <form
  onSubmit={handleSubmit((v) =>
  submit.mutate({

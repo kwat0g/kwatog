@@ -80,11 +80,6 @@ export default function MrbDetailPage() {
  title={<span className="font-mono">{data.mrb_number}</span>}
  backTo="/inventory/mrb"
  backLabel="MRB / Quarantine"
- breadcrumbs={[
- { label: 'Warehouse', href: '/inventory/items' },
- { label: 'MRB / Quarantine', href: '/inventory/mrb' },
- { label: data.mrb_number },
- ]}
  actions={
  <div className="flex items-center gap-2">
  <Chip variant={mrbStatusVariant(data.status)}>{data.status_label}</Chip>

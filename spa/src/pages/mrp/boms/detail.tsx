@@ -65,11 +65,11 @@ const handleDelete = async () => {
  };
 
  if (isLoading) return <div><PageHeader title="BOM" backTo="/mrp/boms" backLabel="BOMs"
- breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'BOMs', href: '/mrp/boms' }, { label: 'Loading…' }]} /><SkeletonDetail /></div>;
+ /><SkeletonDetail /></div>;
  if (isError || !data) return (
  <div>
  <PageHeader title="BOM" backTo="/mrp/boms" backLabel="BOMs"
- breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'BOMs', href: '/mrp/boms' }, { label: 'Error' }]} />
+ />
  <EmptyState icon="alert-circle" title="Failed to load BOM"
  action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />
  </div>
@@ -87,7 +87,6 @@ const handleDelete = async () => {
  }
  backTo="/mrp/boms"
  backLabel="BOMs"
- breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'BOMs', href: '/mrp/boms' }, { label: data.product?.part_number ?? 'BOM' }]}
 actions={
   <div className="flex gap-2">
   <Button variant="secondary" size="sm" onClick={() => recalculate.mutate()} loading={recalculate.isPending}>

@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { LuDownload } from '@/lib/icons';
@@ -15,6 +14,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { formatDateTime } from '@/lib/formatDate';
 import { formatInt } from '@/lib/formatNumber';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 const actionVariant = {
  created: 'success',
  updated: 'info',
@@ -65,7 +65,7 @@ const columns: Column<AuditLogEntry>[] = [
 
 export default function AuditLogsPage() {
  const navigate = useNavigate();
- const [filters, setFilters] = useState<AuditLogParams>({ page: 1, per_page: 25 });
+ const [filters, setFilters] = useUrlFilters<AuditLogParams>({ page: 1, per_page: 25 });
 
  const { data, isLoading, isError } = useQuery({
  queryKey: ['admin', 'audit-logs', filters],

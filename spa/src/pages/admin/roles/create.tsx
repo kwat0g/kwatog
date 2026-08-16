@@ -131,11 +131,6 @@ export default function CreateRolePage() {
  subtitle="Define a custom role users can be assigned to. You configure its permissions on the next screen."
  backTo="/admin/roles"
  backLabel="Roles"
- breadcrumbs={[
- { label: 'Admin', href: '/admin/users' },
- { label: 'Roles', href: '/admin/roles' },
- { label: 'New Role' },
- ]}
  />
 
  <form

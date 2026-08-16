@@ -75,11 +75,6 @@ export default function LoanDetailPage() {
  subtitle={`${loan.employee?.full_name} · ${loan.loan_type_label ?? loan.loan_type}`}
  backTo="/hr/loans"
  backLabel="Loans"
- breadcrumbs={[
- { label: 'HR', href: '/hr/employees' },
- { label: 'Loans', href: '/hr/loans' },
- { label: loan.loan_no },
- ]}
  actions={
  <>
  {isPending && can('loans.approve') && (

@@ -108,11 +108,7 @@ export default function SalesOrderDetailPage() {
  return (
  <div>
  <PageHeader title="Sales order" backTo="/crm/sales-orders" backLabel="Sales orders"
- breadcrumbs={[
- { label: 'CRM' },
- { label: 'Sales orders', href: '/crm/sales-orders' },
- { label: 'Sales order' },
- ]} />
+ />
  <SkeletonDetail />
  </div>
  );
@@ -121,11 +117,7 @@ export default function SalesOrderDetailPage() {
  return (
  <div>
  <PageHeader title="Sales order" backTo="/crm/sales-orders" backLabel="Sales orders"
- breadcrumbs={[
- { label: 'CRM' },
- { label: 'Sales orders', href: '/crm/sales-orders' },
- { label: 'Sales order' },
- ]} />
+ />
  <EmptyState
  icon="alert-circle"
  title="Failed to load sales order"
@@ -151,11 +143,6 @@ export default function SalesOrderDetailPage() {
  subtitle={data.customer?.name}
  backTo="/crm/sales-orders"
  backLabel="Sales orders"
- breadcrumbs={[
- { label: 'CRM' },
- { label: 'Sales orders', href: '/crm/sales-orders' },
- { label: data.so_number },
- ]}
  actions={
  <div className="flex gap-1.5">
  {canEdit && (

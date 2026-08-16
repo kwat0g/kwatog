@@ -40,11 +40,6 @@ export default function MaterialIssueDetailPage() {
  title={<span className="font-mono">{data.slip_number}</span>}
  backTo="/inventory/material-issues"
  backLabel="Material Issues"
- breadcrumbs={[
- { label: 'Warehouse', href: '/inventory/items' },
- { label: 'Material Issues', href: '/inventory/material-issues' },
- { label: data.slip_number },
- ]}
  actions={<Chip variant={statusVariant(data.status)}>{data.status_label ?? data.status}</Chip>}
  />
 

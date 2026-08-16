@@ -224,7 +224,7 @@ export default function CreateBillPage() {
 
  return (
  <div>
- <PageHeader title="New bill" backTo="/accounting/bills" backLabel="Bills" breadcrumbs={[{ label: 'Accounting', href: '/accounting' }, { label: 'Bills', href: '/accounting/bills' }, { label: 'New Bill' }]} />
+ <PageHeader title="New bill" backTo="/accounting/bills" backLabel="Bills" />
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-5xl mx-auto px-5 py-4 space-y-4">
  <Panel title="Header">
  <div className="grid grid-cols-3 gap-3">

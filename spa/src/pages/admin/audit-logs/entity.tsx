@@ -107,11 +107,6 @@ export default function EntityAuditTrailPage() {
  title="Entity audit trail"
  backTo="/admin/audit-logs"
  backLabel="Audit logs"
- breadcrumbs={[
- { label: 'Admin', href: '/admin/users' },
- { label: 'Audit Logs', href: '/admin/audit-logs' },
- { label: 'Entity Trail' },
- ]}
  />
  <div className="px-5 py-4">
  <EmptyState
@@ -131,11 +126,6 @@ export default function EntityAuditTrailPage() {
  subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'entry' : 'entries'}` : undefined}
  backTo="/admin/audit-logs"
  backLabel="Audit logs"
- breadcrumbs={[
- { label: 'Admin', href: '/admin/users' },
- { label: 'Audit Logs', href: '/admin/audit-logs' },
- { label: `${modelType} Trail` },
- ]}
  actions={
  <div className="flex items-center gap-2">
  <Button

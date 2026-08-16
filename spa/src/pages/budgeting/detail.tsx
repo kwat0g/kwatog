@@ -129,7 +129,6 @@ export default function BudgetDetailPage() {
             </span>
           </div>
         }
-        breadcrumbs={[{ label: 'Budgeting', href: '/budgeting' }, { label: budget.name }]}
         actions={
           <div className="flex items-center gap-2">
             <Link

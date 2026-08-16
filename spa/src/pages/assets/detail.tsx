@@ -87,7 +87,6 @@ export default function AssetDetailPage() {
         subtitle={data.name}
         backTo="/assets"
         backLabel="Assets"
-        breadcrumbs={[{ label: 'Assets', href: '/assets' }, { label: data.asset_code }]}
         actions={
           <div className="flex gap-1.5 items-center">
             <Chip

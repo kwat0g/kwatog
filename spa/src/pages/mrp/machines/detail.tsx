@@ -31,11 +31,11 @@ export default function MachineDetailPage() {
  const canManage = can('production.machines.manage');
 
  if (isLoading) return <div><PageHeader title="Machine" backTo="/mrp/machines" backLabel="Machines"
- breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'Machines', href: '/mrp/machines' }, { label: 'Loading…' }]} /><SkeletonDetail /></div>;
+ /><SkeletonDetail /></div>;
  if (isError || !data) return (
  <div>
  <PageHeader title="Machine" backTo="/mrp/machines" backLabel="Machines"
- breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'Machines', href: '/mrp/machines' }, { label: 'Error' }]} />
+ />
  <EmptyState
  icon="alert-circle"
  title="Failed to load machine"
@@ -56,7 +56,6 @@ export default function MachineDetailPage() {
  }
  backTo="/mrp/machines"
  backLabel="Machines"
- breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'Machines', href: '/mrp/machines' }, { label: data.machine_code }]}
  actions={canManage ? (
  <Button variant="secondary" size="sm" icon={<LuPencil size={14} />}
  onClick={() => navigate(`/mrp/machines/${data.id}/edit`)}>

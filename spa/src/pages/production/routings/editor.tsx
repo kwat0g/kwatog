@@ -176,11 +176,6 @@ export default function RoutingEditorPage() {
  title="Loading routing..."
  backTo="/production/routings"
  backLabel="Routings"
- breadcrumbs={[
- { label: 'Production', href: '/production' },
- { label: 'Routings', href: '/production/routings' },
- { label: 'Loading...' },
- ]}
  />
  <SkeletonForm />
  </div>
@@ -194,11 +189,6 @@ export default function RoutingEditorPage() {
  title="Routing"
  backTo="/production/routings"
  backLabel="Routings"
- breadcrumbs={[
- { label: 'Production', href: '/production' },
- { label: 'Routings', href: '/production/routings' },
- { label: 'Error' },
- ]}
  />
  <EmptyState
  icon="alert-circle"
@@ -219,11 +209,6 @@ export default function RoutingEditorPage() {
  title={pageTitle}
  backTo="/production/routings"
  backLabel="Routings"
- breadcrumbs={[
- { label: 'Production', href: '/production' },
- { label: 'Routings', href: '/production/routings' },
- { label: isEdit ? 'Edit' : 'New routing' },
- ]}
  />
 
  <form

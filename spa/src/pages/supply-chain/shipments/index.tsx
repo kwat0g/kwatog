@@ -1,5 +1,4 @@
 /** Sprint 7 — Task 67 — Shipments list (inbound, imported POs). */
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { LuPlus } from '@/lib/icons';
@@ -15,6 +14,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import type { Shipment, ShipmentStatus } from '@/types/supplyChain';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 const STATUS_CHIP: Record<ShipmentStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
  ordered: 'neutral', shipped: 'info', in_transit: 'info',
  customs: 'warning', cleared: 'info', received: 'success', cancelled: 'neutral',
@@ -23,7 +23,7 @@ const STATUS_CHIP: Record<ShipmentStatus, 'success' | 'danger' | 'warning' | 'ne
 export default function ShipmentsListPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
- const [filters, setFilters] = useState<ShipmentListParams>({ page: 1, per_page: 25 });
+ const [filters, setFilters] = useUrlFilters<ShipmentListParams>({ page: 1, per_page: 25 });
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['supply-chain', 'shipments', filters],
  queryFn: () => shipmentsApi.list(filters),

@@ -16,6 +16,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import type { AssetTransfer, AssetTransferStatus } from '@/types/assets';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 const STATUS_CHIP: Record<AssetTransferStatus, 'warning' | 'info' | 'danger' | 'success'> = {
  pending: 'warning',
  approved: 'info',
@@ -27,7 +28,7 @@ export default function AssetTransfersListPage() {
  const navigate = useNavigate();
  const qc = useQueryClient();
  const { can } = usePermission();
- const [filters, setFilters] = useState<AssetTransferListParams>({ page: 1, per_page: 25 });
+ const [filters, setFilters] = useUrlFilters<AssetTransferListParams>({ page: 1, per_page: 25 });
  const [confirmApprove, setConfirmApprove] = useState<string | null>(null);
  const [confirmReject, setConfirmReject] = useState<string | null>(null);
 

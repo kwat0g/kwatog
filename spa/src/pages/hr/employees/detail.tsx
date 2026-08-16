@@ -111,11 +111,6 @@ export default function EmployeeDetailPage() {
         }
         backTo="/hr/employees"
         backLabel="Employees"
-        breadcrumbs={[
-          { label: 'HR', href: '/hr/employees' },
-          { label: 'Employees', href: '/hr/employees' },
-          { label: employee.full_name },
-        ]}
         actions={
           <>
             {can('hr.employees.edit') && (

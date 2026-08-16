@@ -123,10 +123,6 @@ export default function CreateDeliveryPage() {
  title="New delivery"
  backTo="/supply-chain/deliveries"
  backLabel="Deliveries"
- breadcrumbs={[
- { label: 'Deliveries', href: '/supply-chain/deliveries' },
- { label: 'New delivery' },
- ]}
  />
 
  <form

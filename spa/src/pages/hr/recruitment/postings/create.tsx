@@ -132,12 +132,6 @@ export default function PostingCreatePage() {
  subtitle="Post a new open position"
  backTo="/hr/recruitment/postings"
  backLabel="Postings"
- breadcrumbs={[
- { label: 'HR', href: '/hr/employees' },
- { label: 'Recruitment', href: '/hr/recruitment' },
- { label: 'Postings', href: '/hr/recruitment/postings' },
- { label: 'Create' },
- ]}
  />
 
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormData>())} className="max-w-5xl mx-auto px-5 py-4 space-y-4">

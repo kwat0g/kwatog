@@ -54,7 +54,7 @@ export default function CrmCustomerDetailPage() {
  if (isLoading) return (
  <div>
  <PageHeader title="Customer" backTo="/crm/customers" backLabel="Customers"
- breadcrumbs={[{ label: 'CRM' }, { label: 'Customers', href: '/crm/customers' }, { label: 'Customer' }]} />
+ />
  <SkeletonDetail />
  </div>
  );
@@ -62,7 +62,7 @@ export default function CrmCustomerDetailPage() {
  if (isError || !customer) return (
  <div>
  <PageHeader title="Customer" backTo="/crm/customers" backLabel="Customers"
- breadcrumbs={[{ label: 'CRM' }, { label: 'Customers', href: '/crm/customers' }, { label: 'Customer' }]} />
+ />
  <EmptyState
  icon="alert-circle"
  title="Failed to load customer"
@@ -136,11 +136,6 @@ export default function CrmCustomerDetailPage() {
  }
  backTo="/crm/customers"
  backLabel="Customers"
- breadcrumbs={[
- { label: 'CRM' },
- { label: 'Customers', href: '/crm/customers' },
- { label: customer.name },
- ]}
  actions={
  <div className="flex gap-1.5">
  {can('crm.sales_orders.create') && (

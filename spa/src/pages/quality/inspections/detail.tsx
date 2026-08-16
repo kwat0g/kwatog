@@ -205,7 +205,6 @@ export default function InspectionDetailPage() {
  ? `${data.item.code} — ${data.item.name} (${stageLabel ?? data.stage})`
  : stageLabel ?? data.stage
  }
- breadcrumbs={[{ label: 'Quality', href: '/quality' }, { label: 'Inspections', href: '/quality/inspections' }, { label: data.inspection_number }]}
  actions={
  <div className="flex items-center gap-2">
  {!isTerminal && can('quality.inspections.manage') && (

@@ -111,11 +111,6 @@ export default function AdminUserDetailPage() {
  }
  backTo="/admin/users"
  backLabel="Users"
- breadcrumbs={[
- { label: 'Admin', href: '/admin/users' },
- { label: 'Users', href: '/admin/users' },
- { label: user.name },
- ]}
  actions={
  <div className="flex gap-1.5">
  {user.is_locked && (

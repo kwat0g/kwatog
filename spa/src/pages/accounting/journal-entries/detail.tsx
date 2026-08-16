@@ -90,11 +90,6 @@ export default function JournalEntryDetailPage() {
  }
  backTo="/accounting/journal-entries"
  backLabel="Journal Entries"
- breadcrumbs={[
- { label: 'Accounting' },
- { label: 'Journal Entries', href: '/accounting/journal-entries' },
- { label: je.entry_number },
- ]}
  actions={
  <div className="flex gap-1.5">
  <Button variant="secondary" size="sm" icon={<LuPrinter size={14} />} onClick={() => void downloadAuthenticatedFile(journalEntriesApi.pdfUrl(je.id), { openInNewTab: true, errorMessage: 'Failed to generate journal entry PDF.' })}>Print</Button>

@@ -121,11 +121,6 @@ export default function InvoiceDetailPage() {
  }
  backTo="/accounting/invoices"
  backLabel="Invoices"
- breadcrumbs={[
- { label: 'Accounting' },
- { label: 'Invoices', href: '/accounting/invoices' },
- { label: invoice.invoice_number ?? 'Draft' },
- ]}
  actions={
  <div className="flex gap-1.5">
  <Button variant="secondary" size="sm" icon={<LuPrinter size={14} />} onClick={() => void downloadAuthenticatedFile(invoicesApi.pdfUrl(invoice.id), { openInNewTab: true, errorMessage: 'Failed to generate invoice PDF.' })}>Print</Button>

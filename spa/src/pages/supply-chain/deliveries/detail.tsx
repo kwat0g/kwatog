@@ -188,7 +188,6 @@ const removeProof = useMutation({
  subtitle={data.sales_order ? `SO ${data.sales_order.so_number}` : undefined}
  backTo="/supply-chain/deliveries"
  backLabel="Deliveries"
- breadcrumbs={[{ label: 'Deliveries', href: '/supply-chain/deliveries' }, { label: data.delivery_number }]}
  actions={
  <div className="flex items-center gap-2">
  {next && canEdit && (
