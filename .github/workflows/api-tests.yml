@@ -12,6 +12,12 @@ on:
     branches: [main]
     paths:
       - 'api/**'
+      # The workflow's own file must retrigger it on push, not only on PR.
+      # Without this, a commit that fixes this workflow and touches nothing
+      # under api/ does not run it — so the fix cannot be observed. That is
+      # exactly how F-043 hid: the job had never executed its suite, and the
+      # first attempt to prove the fix silently did not trigger.
+      - '.github/workflows/api-tests.yml'
 
 permissions:
   contents: read

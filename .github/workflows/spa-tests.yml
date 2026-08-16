@@ -13,6 +13,9 @@ on:
     branches: [main]
     paths:
       - 'spa/**'
+      # Symmetry with pull_request above, and with api-tests.yml: a push that
+      # changes only this workflow must still run it. See F-043.
+      - '.github/workflows/spa-tests.yml'
 
 permissions:
   contents: read
