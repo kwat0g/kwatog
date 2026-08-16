@@ -50,6 +50,22 @@ jobs:
       run:
         working-directory: api
 
+    # APP_ENV must be set for EVERY step, not just the PHPUnit one. api/.env is
+    # untracked, so in CI `config('app.env')` falls back to its
+    # `env('APP_ENV', 'production')` default (api/config/app.php). That makes
+    # ProductionAssertions::assertSafeOrFail() fire (AppServiceProvider.php:185)
+    # on any step that boots the framework — and two steps do:
+    #   * `composer install --optimize-autoloader` runs the post-autoload-dump
+    #     hook `artisan package:discover`, which boots the app;
+    #   * larastan's bootstrap boots the kernel for `phpstan analyse`.
+    # Both then die on "Production boot blocked: HASHIDS_SALT must be set to a
+    # non-default value ...". The guard is correct — it is catching a
+    # production-shaped boot — so the environment is what needs fixing, not the
+    # assertion. Job scope covers both steps; the PHPUnit step's own env block
+    # re-declares APP_ENV harmlessly. See finding F-043.
+    env:
+      APP_ENV: testing
+
     steps:
       - uses: actions/checkout@v4
 
