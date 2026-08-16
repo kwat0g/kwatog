@@ -56,21 +56,43 @@ jobs:
       run:
         working-directory: api
 
-    # APP_ENV must be set for EVERY step, not just the PHPUnit one. api/.env is
-    # untracked, so in CI `config('app.env')` falls back to its
-    # `env('APP_ENV', 'production')` default (api/config/app.php). That makes
-    # ProductionAssertions::assertSafeOrFail() fire (AppServiceProvider.php:185)
-    # on any step that boots the framework — and two steps do:
+    # This block must be JOB-scoped, not step-scoped. api/.env and
+    # api/.env.testing are both untracked, so in CI no env file is loaded at all
+    # and every value falls back to its config/*.php default. Any step that
+    # boots the framework then boots with production-shaped defaults — and two
+    # steps do:
     #   * `composer install --optimize-autoloader` runs the post-autoload-dump
     #     hook `artisan package:discover`, which boots the app;
     #   * larastan's bootstrap boots the kernel for `phpstan analyse`.
-    # Both then die on "Production boot blocked: HASHIDS_SALT must be set to a
-    # non-default value ...". The guard is correct — it is catching a
-    # production-shaped boot — so the environment is what needs fixing, not the
-    # assertion. Job scope covers both steps; the PHPUnit step's own env block
-    # re-declares APP_ENV harmlessly. See finding F-043.
+    # Concretely, before this block existed: APP_ENV defaulted to 'production'
+    # (api/config/app.php:5) so ProductionAssertions::assertSafeOrFail() threw
+    # (AppServiceProvider.php:185), and BROADCAST_CONNECTION defaulted to
+    # 'reverb' (api/config/broadcasting.php:31) so boot tried to build a Pusher
+    # client with a null REVERB_APP_KEY. Both killed `composer install`, which is
+    # why PHPStan and PHPUnit had never once executed in CI. See finding F-043.
+    #
+    # These values mirror api/phpunit.xml's <env> block, which is the same
+    # environment the suite declares for itself. Keep the two in step.
     env:
       APP_ENV: testing
+      APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_DATABASE: ogami_test
+      DB_USERNAME: ogami
+      DB_PASSWORD: ogami_ci_pw
+      CACHE_STORE: array
+      SESSION_DRIVER: array
+      QUEUE_CONNECTION: sync
+      MAIL_MAILER: array
+      # 'log', not 'null': Laravel's env() converts the literal string "null"
+      # to PHP null, which would leave broadcasting.default unset and fail on
+      # resolution rather than selecting the 'null' connection. 'log' is a real
+      # connection (api/config/broadcasting.php:90) needing no credentials.
+      BROADCAST_CONNECTION: log
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
 
     steps:
       - uses: actions/checkout@v4
@@ -108,19 +130,8 @@ jobs:
         run: vendor/bin/phpstan analyse app --memory-limit=1G
 
       - name: Run PHPUnit
-        env:
-          APP_ENV: testing
-          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
-          DB_CONNECTION: pgsql
-          DB_HOST: 127.0.0.1
-          DB_PORT: 5432
-          DB_DATABASE: ogami_test
-          DB_USERNAME: ogami
-          DB_PASSWORD: ogami_ci_pw
-          CACHE_STORE: array
-          SESSION_DRIVER: array
-          QUEUE_CONNECTION: sync
-          MAIL_MAILER: array
-          REDIS_HOST: 127.0.0.1
-          REDIS_PORT: 6379
+        # Environment comes from the job-scoped env block above, which every
+        # framework-booting step needs. Do not reintroduce a step-scoped copy:
+        # a second declaration is what let the two earlier steps boot with
+        # production defaults for as long as they did (F-043).
         run: vendor/bin/phpunit --colors=always
