@@ -12,7 +12,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import toast from 'react-hot-toast';
-import { onFormInvalid } from '@/lib/formErrors';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { LuCopy } from '@/lib/icons';
 import type { AxiosError } from 'axios';
 import { ncrsApi } from '@/api/quality/ncrs';
@@ -67,7 +67,7 @@ export default function CreateNcrPage() {
  });
 
  const {
- register, handleSubmit, formState: { errors }, reset, watch, setValue,
+ register, handleSubmit, formState: { errors }, reset, watch, setValue, setError,
  } = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
@@ -120,7 +120,9 @@ export default function CreateNcrPage() {
  navigate(`/quality/ncrs/${ncr.id}`);
  },
  onError: (e: AxiosError<{ message?: string }>) => {
- toast.error(e.response?.data?.message ?? 'Failed to open NCR');
+ // A rejected NCR used to surface only the top-level message, so a bad
+ // field left the form unmarked and the user guessing which one.
+ applyServerValidationErrors(e, setError, 'Failed to open NCR.');
  },
  });
 

@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import toast from 'react-hot-toast';
+import { focusFirstInvalidField, reportMutationError } from '@/lib/formErrors';
 import { LuPlus, LuTrash2 } from '@/lib/icons';
 import type { FiscalYear } from '@/types/budgeting';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
@@ -63,32 +64,52 @@ export default function BudgetCreatePage() {
  const [budgetType, setBudgetType] = useState('');
  const [name, setName] = useState('');
  const [lineItems, setLineItems] = useState<LineItemForm[]>([emptyLineItem()]);
+ /**
+  * Client validation used to `throw new Error(...)` inside `mutationFn` and
+  * surface `err.message` in a toast. That worked for these four sentences and
+  * failed for everything else: the same handler received Axios rejections, so
+  * a rejected save told the user "Request failed with status code 422". It
+  * also meant no field was ever marked, on a form with 14 inputs.
+  */
+ const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
  const createMutation = useMutation({
- mutationFn: async () => {
- if (!fiscalYearId) throw new Error('Please select a fiscal year.');
- if (!budgetType) throw new Error('Please select a budget type.');
- if (!name.trim()) throw new Error('Please enter a budget name.');
- const validItems = lineItems.filter((li) => li.account_id > 0);
- if (validItems.length === 0) throw new Error('Please add at least one line item with an account.');
- return budgetingApi.create({
+ mutationFn: async () =>
+ budgetingApi.create({
  fiscal_year_id: fiscalYearId,
  department_id: departmentId || null,
  budget_type: budgetType,
  name: name.trim(),
- line_items: validItems,
- });
- },
+ line_items: lineItems.filter((li) => li.account_id > 0),
+ }),
  onSuccess: (budget) => {
+ setFieldErrors({});
  queryClient.invalidateQueries({ queryKey: ['budgets'] });
  queryClient.invalidateQueries({ queryKey: ['budget-overview'] });
  toast.success('Budget created.');
  navigate(`/budgeting/${budget.id}`);
  },
- onError: (err: Error) => {
- toast.error(err.message || 'Failed to create budget.');
+ onError: (err) => {
+ reportMutationError(err, 'Failed to create budget.');
  },
  });
+
+ /** Marks the offending field instead of firing a toast at a form with 14 inputs. */
+ const submit = () => {
+ const next: Record<string, string> = {};
+ if (!fiscalYearId) next.fiscal_year_id = 'Select a fiscal year.';
+ if (!name.trim()) next.name = 'Enter a budget name.';
+ if (!budgetType) next.budget_type = 'Select a budget type.';
+ if (lineItems.filter((li) => li.account_id > 0).length === 0) {
+ next.line_items = 'Add at least one line item with an account.';
+ }
+ setFieldErrors(next);
+ if (Object.keys(next).length > 0) {
+ focusFirstInvalidField();
+ return;
+ }
+ createMutation.mutate();
+ };
 
  const updateLineItem = (index: number, field: string, value: number) => {
  setLineItems((prev) =>
@@ -127,6 +148,7 @@ export default function BudgetCreatePage() {
  value={String(fiscalYearId)}
  onChange={(e) => setFiscalYearId(Number(e.target.value))}
  required
+ error={fieldErrors.fiscal_year_id}
  >
  <option value={0}>Select fiscal year...</option>
  {(fiscalYears ?? []).map((fy) => (
@@ -142,9 +164,10 @@ export default function BudgetCreatePage() {
  onChange={(e) => setName(e.target.value)}
  placeholder="Annual operating budget"
  required
+ error={fieldErrors.name}
  />
 
- <Select label="Budget Type" value={budgetType} onChange={(e) => setBudgetType(e.target.value)} required>
+ <Select label="Budget Type" value={budgetType} onChange={(e) => setBudgetType(e.target.value)} required error={fieldErrors.budget_type}>
  <option value="">— Select budget type —</option>
  {(budgetOptions?.budget_types ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
  </Select>
@@ -198,6 +221,9 @@ export default function BudgetCreatePage() {
  <Button size="sm" onClick={addLineItem}><LuPlus size={14} /> Add Line</Button>
  }
  >
+ {fieldErrors.line_items && (
+ <p className="mb-2 text-xs text-danger-fg" role="alert">{fieldErrors.line_items}</p>
+ )}
  <div className="overflow-x-auto">
  <table className={tableCls}>
  <thead>
@@ -273,7 +299,7 @@ export default function BudgetCreatePage() {
  </Button>
  <Button
  variant="primary"
- onClick={() => createMutation.mutate()}
+ onClick={submit}
  loading={createMutation.isPending}
  disabled={!fiscalYearId || !name.trim()}
  >

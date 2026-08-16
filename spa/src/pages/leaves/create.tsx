@@ -16,7 +16,7 @@ import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import type { ApiValidationError } from '@/types';
-import { onFormInvalid } from '@/lib/formErrors';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 
 const schema = z.object({
  employee_id: z.string().min(1, 'Employee is required'),
@@ -109,16 +109,7 @@ export default function CreateLeavePage() {
  navigate(`/hr/leaves/${req.id}`);
  },
  onError: (e: AxiosError<ApiValidationError>) => {
- if (e.response?.status === 422) {
- const data = e.response.data;
- if (data.errors) {
- Object.entries(data.errors).forEach(([f, msgs]) =>
- setError(f as keyof FormValues, { type: 'server', message: msgs[0] }),
- );
- } else if (data.message) {
- toast.error(data.message);
- }
- } else toast.error('Failed to submit leave request.');
+ applyServerValidationErrors(e, setError, 'Failed to submit leave request.');
  },
  });
 
