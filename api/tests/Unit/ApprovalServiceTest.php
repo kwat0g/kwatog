@@ -51,7 +51,7 @@ class ApprovalServiceTest extends TestCase
         ]);
 
         $approvable = $this->fakeApprovable();
-        app(ApprovalService::class)->submit($approvable, 'purchase_order', amount: 10000.00);
+        app(ApprovalService::class)->submit($approvable, 'purchase_order', amount: '10000.00');
 
         $records = app(ApprovalService::class)->chain($approvable);
         $this->assertSame('pending', $records[0]->action);

@@ -7,6 +7,7 @@ namespace App\Common\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\ApprovalRecord;
 use App\Common\Models\WorkflowDefinition;
+use App\Common\Support\Money;
 use App\Modules\Auth\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
@@ -19,8 +20,17 @@ class ApprovalService
      *
      * Steps that are gated by `amount_threshold` are skipped (status = 'skipped')
      * if the supplied amount is below the threshold.
+     *
+     * $amount is a decimal string, never a float — it is compared against a
+     * step threshold to decide whether that step is skipped, and a float
+     * comparison at the boundary depends on binary representation.
+     *
+     * A step threshold lives in the `steps` JSON column as `threshold`. Store it
+     * as a JSON **string** (`"50000.00"`): a JSON number is decoded to a PHP
+     * float before this method ever sees it, so precision is lost upstream of
+     * any comparison we can make here.
      */
-    public function submit(Model $approvable, string $workflowType, ?float $amount = null): void
+    public function submit(Model $approvable, string $workflowType, ?string $amount = null): void
     {
         DB::transaction(function () use ($approvable, $workflowType, $amount) {
             $workflow = WorkflowDefinition::where('workflow_type', $workflowType)->firstOrFail();
@@ -36,8 +46,8 @@ class ApprovalService
                 ->forceDelete();
 
             foreach ($workflow->steps as $step) {
-                $threshold = isset($step['threshold']) ? (float) $step['threshold'] : null;
-                $action = ($threshold !== null && $amount !== null && $amount < $threshold)
+                $threshold = isset($step['threshold']) ? (string) $step['threshold'] : null;
+                $action = ($threshold !== null && $amount !== null && Money::lt($amount, $threshold))
                     ? 'skipped'
                     : 'pending';
 
