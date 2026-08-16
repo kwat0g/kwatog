@@ -26,7 +26,14 @@ jobs:
   phpunit:
     name: PHP quality + PHPUnit (Laravel 12 / PHP 8.3 / PostgreSQL + Redis)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Calibrated against a real run, not a guess. Before F-043 the job died
+    # at `composer install` in ~41s, so this cap had never been exercised by a
+    # run that reached PHPUnit. The first one that did was cancelled at 20m21s
+    # with the suite still going: setup + install + audit + lint + PHPStan take
+    # ~2 min, then 1,772 tests need ~18-21 min on a GitHub-hosted runner versus
+    # ~14.8 min locally. 35 leaves headroom for runner variance and suite growth
+    # while still failing fast on a genuine hang.
+    timeout-minutes: 35
 
     services:
       postgres:
