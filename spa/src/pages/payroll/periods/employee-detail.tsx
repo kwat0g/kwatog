@@ -106,7 +106,7 @@ export default function PayrollEmployeeDetailPage() {
  </div>
  )}
 
- <div className="grid grid-cols-3 gap-3">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
  <StatCard label="Gross Pay" value={formatPeso(data.gross_pay)} />
  <StatCard label="Total Deductions" value={formatPeso(data.total_deductions)} />
  <StatCard label="Net Pay" value={formatPeso(data.net_pay)} />

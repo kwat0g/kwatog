@@ -218,7 +218,7 @@ export default function SalesOrderDetailPage() {
  <div className="grid gap-4 lg:grid-cols-3">
  <div className="lg:col-span-2 space-y-4">
  <Panel title="Overview">
- <dl className="grid grid-cols-3 gap-x-4 gap-y-3 text-sm">
+ <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3 text-sm">
  <dt className="text-muted">SO number</dt>
  <dd className="col-span-2 font-mono">{data.so_number}</dd>
  <dt className="text-muted">Customer</dt>

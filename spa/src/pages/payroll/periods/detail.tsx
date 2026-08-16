@@ -694,7 +694,7 @@ export default function PayrollPeriodDetailPage() {
             />
           )}
 
-          <div className="grid grid-cols-4 gap-3 mb-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-5">
             <StatCard label="Employees" value={summary ? summary.employee_count : '—'} />
             <StatCard label="Total Gross" value={summary ? formatPeso(summary.total_gross) : '—'} />
             <StatCard

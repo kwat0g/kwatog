@@ -161,7 +161,7 @@ export default function WarehouseMapPage() {
             </div>
 
             {isLoading && !data && (
-              <div className="grid grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                 {Array.from({ length: 4 }).map((_, i) => (
                   <SkeletonBlock key={i} className="h-48" />
                 ))}
@@ -199,7 +199,7 @@ export default function WarehouseMapPage() {
                   />
                 )}
 
-                <div className="grid grid-cols-12 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
                   {/* Zone sidebar */}
                   <div className="col-span-3 space-y-1">
                     <div className="text-2xs uppercase tracking-wider text-muted font-medium px-1 mb-1">

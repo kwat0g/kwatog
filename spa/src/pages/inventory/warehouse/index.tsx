@@ -171,7 +171,7 @@ export default function WarehousePage() {
  />
  )}
  {data && data.length > 0 && wh && (
- <div className="grid grid-cols-12 gap-4">
+ <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
  {/* Warehouses column */}
  <Panel title="Warehouses" className="col-span-3">
  <ul className="text-sm">
@@ -439,7 +439,7 @@ function IconBtn({ children, label, danger, onClick }: { children: React.ReactNo
 
 function SkeletonTree() {
  return (
- <div className="grid grid-cols-12 gap-4">
+ <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
  <SkeletonBlock className="col-span-3 h-64" />
  <SkeletonBlock className="col-span-4 h-64" />
  <SkeletonBlock className="col-span-5 h-64" />

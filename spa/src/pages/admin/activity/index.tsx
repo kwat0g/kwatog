@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { activityApi } from '@/api/admin/activity';
@@ -12,6 +12,8 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { cn } from '@/lib/cn';
 import { formatDate } from '@/lib/formatDate';
 import { formatInt } from '@/lib/formatNumber';
+import { useDebounce } from '@/hooks/useDebounce';
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 import type {
  ActivityEvent,
  ActivitySeverity,
@@ -40,10 +42,20 @@ function relTime(iso: string): string {
 
 export default function AdminActivityFeedPage() {
  const navigate = useNavigate();
- const [filters, setFilters] = useState<ActivityFeedParams>({
+ const [filters, setFilters] = useUrlFilters<ActivityFeedParams>({
  page: 1,
  per_page: 50,
  });
+ // The search box wrote straight into `filters`, which is the query key, so
+ // every keystroke hit the activity feed. Keep the input responsive by holding
+ // the typed value locally and only promoting it once typing settles.
+ const [searchInput, setSearchInput] = useState(filters.search ?? '');
+ const debouncedSearch = useDebounce(searchInput, 300);
+ useEffect(() => {
+ setFilters((f) => (f.search === (debouncedSearch || undefined)
+ ? f
+ : { ...f, search: debouncedSearch || undefined, page: 1 }));
+ }, [debouncedSearch, setFilters]);
 
  const { data, isLoading, isError, refetch, isFetching } = useQuery({
  queryKey: ['admin', 'activity', filters],
@@ -77,8 +89,8 @@ export default function AdminActivityFeedPage() {
  <Input
  label="Search"
  placeholder="Search summary…"
- value={filters.search ?? ''}
- onChange={(e: { target: { value: string } }) => update({ search: e.target.value })}
+ value={searchInput}
+ onChange={(e: { target: { value: string } }) => setSearchInput(e.target.value)}
  />
  <Select
  label="Type"

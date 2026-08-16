@@ -280,10 +280,10 @@ function MonthGrid({ year, month, holidays }: { year: number; month: number; hol
  return (
  <Panel title={format(ref, 'MMMM yyyy')} noPadding>
  <div className="p-2">
- <div className="grid grid-cols-7 text-2xs uppercase tracking-wider text-muted text-center mb-1">
+ <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 text-2xs uppercase tracking-wider text-muted text-center mb-1">
  {['S','M','T','W','T','F','S'].map((d, i) => <div key={i} className="h-5 leading-5">{d}</div>)}
  </div>
- <div className="grid grid-cols-7 gap-px">
+ <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-px">
  {cells.map((d, i) => {
  const key = d ? format(d, 'yyyy-MM-dd') : `empty-${i}`;
  const matches = d ? byDay.get(key) ?? [] : [];

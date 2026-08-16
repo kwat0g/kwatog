@@ -39,7 +39,7 @@ export function RoleDashboard({ role }: { role: Role }) {
  if (isLoading) {
  return (
  <div className="px-5 py-4 space-y-4">
- <div className="grid grid-cols-4 gap-2">
+ <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
  {[1, 2, 3, 4].map((i) => <SkeletonBlock key={i} className="h-16 rounded-md" />)}
  </div>
  <SkeletonBlock className="h-64 rounded-md" />
@@ -59,7 +59,7 @@ export function RoleDashboard({ role }: { role: Role }) {
  <div>
  <PageHeader title={TITLES[role]} subtitle="Live · refreshes every 60s" />
  <div className="px-5 py-4 space-y-4">
- <section className="grid grid-cols-4 gap-2">
+ <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
  {data.kpis.map((k) => (
  <StatCard
  key={k.label}

@@ -13,6 +13,7 @@ function item(overrides: Partial<DashboardLayoutItem>): DashboardLayoutItem {
     module: 'platform',
     permission: null,
     render_kind: 'scalar',
+    link_path: '/self-service',
     data: null,
     x: 0,
     y: 0,
@@ -133,5 +134,48 @@ describe('LiveDashboardWidget', () => {
     wrap(<LiveDashboardWidget widget={item({ render_kind: 'trend' })} loading={false} />);
 
     expect(screen.getByText('Live data unavailable')).toBeInTheDocument();
+  });
+
+  /**
+   * "Open →" comes from the widget row, not from a map in this file. A 51-entry
+   * `WIDGET_LINKS` literal used to live here with nothing binding it to the
+   * seeder, so a widget added on the backend rendered a tile with no way out.
+   */
+  it('takes the Open link from the widget row', () => {
+    wrap(<LiveDashboardWidget widget={item({ link_path: '/quality/ncrs' })} loading={false} />);
+
+    expect(screen.getByRole('link', { name: /open/i })).toHaveAttribute('href', '/quality/ncrs');
+  });
+
+  it('omits the Open link when the widget has no deeper page', () => {
+    wrap(<LiveDashboardWidget widget={item({ link_path: null })} loading={false} />);
+
+    expect(screen.queryByRole('link', { name: /open/i })).not.toBeInTheDocument();
+  });
+
+  /** A KPI trend reads only against its target, and status is words, not colour. */
+  it('renders a KPI trend with its target and status label', () => {
+    wrap(
+      <LiveDashboardWidget
+        widget={item({
+          render_kind: 'trend',
+          data: {
+            points: [
+              { label: '2026-07', value: 82.5 },
+              { label: '2026-08', value: 88 },
+            ],
+            delta: 6.7,
+            kind: 'percent',
+            target: 85,
+            status: 'on_target',
+          },
+        })}
+        loading={false}
+      />,
+    );
+
+    expect(screen.getByText('88.0%')).toBeInTheDocument();
+    expect(screen.getByText(/Target 85\.0%/)).toBeInTheDocument();
+    expect(screen.getByText(/On target/)).toBeInTheDocument();
   });
 });

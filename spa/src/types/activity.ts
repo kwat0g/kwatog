@@ -38,6 +38,9 @@ export interface ActivityFeedParams {
  search?: string;
  page?: number;
  per_page?: number;
+ // Index signature so this can bind to the URL via useUrlFilters, matching
+ // every other list page.
+ [key: string]: unknown;
 }
 
 export interface ActivityFeedResponse {

@@ -168,7 +168,7 @@ function CreateCreditNoteModal({ onClose, onCreated }: { onClose: () => void; on
  return (
  <Modal isOpen onClose={onClose} title="New credit note" size="xl">
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="space-y-4">
- <div className="grid grid-cols-3 gap-3">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
  <Select label="Type" required {...register('type')} error={errors.type?.message}>
  <option value="">— Select type —</option>
  {(accountingOptions?.credit_note_types ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
@@ -192,14 +192,14 @@ function CreateCreditNoteModal({ onClose, onCreated }: { onClose: () => void; on
  </div>
 
  <div className="border border-default rounded-md overflow-hidden">
- <div className="grid grid-cols-12 gap-2 h-row px-2.5 bg-subtle text-2xs uppercase tracking-wider text-muted font-medium border-b border-default items-center">
+ <div className="grid grid-cols-1 md:grid-cols-12 gap-2 h-row px-2.5 bg-subtle text-2xs uppercase tracking-wider text-muted font-medium border-b border-default items-center">
  <div className="col-span-5">{type === 'customer' ? 'Revenue account' : 'Expense account'}</div>
  <div className="col-span-4">Description</div>
  <div className="col-span-2 text-right">Amount</div>
  <div className="col-span-1" />
  </div>
  {fields.map((field, idx) => (
- <div key={field.id} className="grid grid-cols-12 gap-2 px-2.5 py-1.5 border-b border-subtle items-start">
+ <div key={field.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 px-2.5 py-1.5 border-b border-subtle items-start">
  <div className="col-span-5">
  <Select {...register(`lines.${idx}.account_id` as const)} error={errors.lines?.[idx]?.account_id?.message}>
  <option value="">— Account —</option>

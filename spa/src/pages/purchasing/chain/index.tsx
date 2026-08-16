@@ -76,7 +76,7 @@ export default function ProcurementChainPage() {
 
       <div className="px-5 py-4 space-y-6">
         {/* ── Pipeline Stages ── */}
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
           <StatCard
             label="Material Requirements"
             value={mr.pr_pending + mr.po_draft}

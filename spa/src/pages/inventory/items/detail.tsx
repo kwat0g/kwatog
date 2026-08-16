@@ -59,14 +59,14 @@ export default function ItemDetailPage() {
  }
  />
  <div className="px-5 py-4 space-y-4">
- <div className="grid grid-cols-4 gap-3">
+ <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
  <StatCard label="On hand" value={Number(data.on_hand_quantity).toFixed(3)} helper={data.unit_of_measure} />
  <StatCard label="Reserved" value={Number(data.reserved_quantity).toFixed(3)} helper={data.unit_of_measure} />
  <StatCard label="Available" value={Number(data.available_quantity).toFixed(3)} helper={data.unit_of_measure} />
  <StatCard label="Standard cost" value={Number(data.standard_cost).toFixed(4)} />
  </div>
  <Panel title="Specifications">
- <dl className="grid grid-cols-3 gap-y-3 gap-x-6 text-sm">
+ <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-3 gap-x-6 text-sm">
  <div><dt className="text-2xs uppercase tracking-wider text-muted">Category</dt><dd>{data.category?.name ?? '—'}</dd></div>
  <div><dt className="text-2xs uppercase tracking-wider text-muted">Item type</dt><dd>{data.item_type_label}</dd></div>
  <div><dt className="text-2xs uppercase tracking-wider text-muted">Unit of measure</dt><dd>{data.unit_of_measure}</dd></div>

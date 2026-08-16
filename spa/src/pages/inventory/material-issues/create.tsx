@@ -134,7 +134,7 @@ export default function CreateMaterialIssuePage() {
  className="max-w-5xl mx-auto px-5 py-4 space-y-4"
  >
  <Panel title="Reference">
- <div className="grid grid-cols-3 gap-3">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
  <Select
  label="Work order"
  {...register('work_order_id')}
@@ -176,7 +176,7 @@ export default function CreateMaterialIssuePage() {
 
  <Panel title="Line items">
  <div className="border border-default rounded-md overflow-hidden">
- <div className="grid grid-cols-12 h-row px-2.5 bg-subtle text-2xs uppercase tracking-wider text-muted font-medium border-b border-default items-center">
+ <div className="grid grid-cols-1 md:grid-cols-12 h-row px-2.5 bg-subtle text-2xs uppercase tracking-wider text-muted font-medium border-b border-default items-center">
  <div className="col-span-4">Item</div>
  <div className="col-span-3">Location</div>
  <div className="col-span-2 text-right">Qty issued</div>
@@ -184,7 +184,7 @@ export default function CreateMaterialIssuePage() {
  <div className="col-span-1" />
  </div>
  {fields.map((field, idx) => (
- <div key={field.id} className="grid grid-cols-12 gap-2 px-2.5 py-1.5 border-b border-subtle items-start">
+ <div key={field.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 px-2.5 py-1.5 border-b border-subtle items-start">
  <div className="col-span-4">
  <Select required {...register(`items.${idx}.item_id` as const)} error={errors.items?.[idx]?.item_id?.message}>
  <option value="">— Select item —</option>

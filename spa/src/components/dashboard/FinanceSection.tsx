@@ -27,7 +27,7 @@ export function FinanceSection() {
  if (isLoading && !data) {
  return (
  <div className="px-5 py-4 space-y-4">
- <div className="grid grid-cols-4 gap-4">{[1, 2, 3, 4].map((i) => <SkeletonBlock key={i} className="h-20" />)}</div>
+ <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">{[1, 2, 3, 4].map((i) => <SkeletonBlock key={i} className="h-20" />)}</div>
  <SkeletonBlock className="h-48" />
  </div>
  );
@@ -39,7 +39,7 @@ export function FinanceSection() {
 
  return (
  <div className="px-5 py-4 space-y-4">
- <div className="grid grid-cols-4 gap-4">
+ <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
  <StatCard label="Cash Balance" value={formatPeso(data.cash_balance)} linkTo={kpiLink('Cash Balance')} />
  <StatCard label="AR Outstanding" value={formatPeso(data.ar_outstanding)} linkTo={kpiLink('AR Outstanding')} />
  <StatCard label="AP Outstanding" value={formatPeso(data.ap_outstanding)} linkTo={kpiLink('AP Outstanding')} />

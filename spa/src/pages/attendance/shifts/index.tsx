@@ -286,7 +286,7 @@ function ShiftFormModal({ editing, onClose, onSaved }: { editing: Shift | null; 
  <Modal isOpen onClose={onClose} title={isEdit ? 'Edit shift' : 'Add shift'}>
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="space-y-3 py-2">
  <Input label="Name" required {...register('name')} error={errors.name?.message} />
- <div className="grid grid-cols-3 gap-3">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
  <Input label="Start" type="time" {...register('start_time')} error={errors.start_time?.message} className="font-mono" />
  <Input label="End" type="time" {...register('end_time')} error={errors.end_time?.message} className="font-mono" />
  <Input label="Break (min)" type="number" {...register('break_minutes')} error={errors.break_minutes?.message} className="font-mono" />

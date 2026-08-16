@@ -263,7 +263,7 @@ export function SkeletonLandingPage() {
  <div className="flex justify-center items-center my-auto">
  <SkeletonBlock className="h-36 w-36 rounded-full" />
  </div>
- <div className="grid grid-cols-3 gap-4 border-t border-subtle pt-4">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 border-t border-subtle pt-4">
  <SkeletonBlock className="h-4 w-full rounded-sm" />
  <SkeletonBlock className="h-4 w-full rounded-sm" />
  <SkeletonBlock className="h-4 w-full rounded-sm" />

@@ -102,14 +102,14 @@ export default function SeparationDetailPage() {
  />
  <div className="px-5 pt-3 pb-4"><ChainHeader steps={steps} /></div>
 
- <div className="px-5 pb-4 grid grid-cols-4 gap-2">
+ <div className="px-5 pb-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
  <StatCard label="Progress" value={`${data.progress_pct}%`} />
  <StatCard label="Cleared" value={`${data.cleared_count} / ${data.items_total}`} />
  <StatCard label="Reason" value={reasonLabel ?? data.separation_reason} />
  <StatCard label="Final pay" value={data.final_pay_amount ? formatPeso(data.final_pay_amount) : '—'} />
  </div>
 
- <div className="px-5 pb-6 grid grid-cols-3 gap-4">
+ <div className="px-5 pb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
  <div className="col-span-2 space-y-4">
  {Object.entries(grouped).map(([dept, items]) => (
  <Panel key={dept} title={dept}>

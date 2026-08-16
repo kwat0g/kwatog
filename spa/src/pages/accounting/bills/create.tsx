@@ -227,7 +227,7 @@ export default function CreateBillPage() {
  <PageHeader title="New bill" backTo="/accounting/bills" backLabel="Bills" />
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-5xl mx-auto px-5 py-4 space-y-4">
  <Panel title="Header">
- <div className="grid grid-cols-3 gap-3">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
  <Select label="Bill provenance" required {...register('provenance_type')} error={errors.provenance_type?.message}>
  <option value="stock">Stock/item — PO + accepted GRN</option>
  <option value="service">Service/non-stock — approved exception</option>
@@ -272,7 +272,7 @@ export default function CreateBillPage() {
 
  <Panel title="Line items">
  <div className="border border-default rounded-md overflow-hidden">
- <div className="grid grid-cols-12 gap-2 h-row px-2.5 bg-subtle text-2xs uppercase tracking-wider text-muted font-medium border-b border-default items-center">
+ <div className="grid grid-cols-1 md:grid-cols-12 gap-2 h-row px-2.5 bg-subtle text-2xs uppercase tracking-wider text-muted font-medium border-b border-default items-center">
  <div className="col-span-3">Description</div>
  <div className="col-span-3">Expense account</div>
  <div className="col-span-1 text-right">Qty</div>
@@ -285,7 +285,7 @@ export default function CreateBillPage() {
  const it = items[idx] ?? ({} as FormValues['items'][number]);
  const lineTotal = ((Number(it.quantity) || 0) * (Number(it.unit_price) || 0)).toFixed(2);
  return (
- <div key={field.id} className="grid grid-cols-12 gap-2 px-2.5 py-1.5 border-b border-subtle items-start">
+ <div key={field.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 px-2.5 py-1.5 border-b border-subtle items-start">
  {/* REC-02 — hidden PO item FK carried through to the payload. */}
  <input type="hidden" {...register(`items.${idx}.item_id` as const)} />
  <div className="col-span-3"><Input {...register(`items.${idx}.description` as const)} /></div>

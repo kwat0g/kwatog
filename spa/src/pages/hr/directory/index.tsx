@@ -17,17 +17,22 @@ import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { focusRing } from '@/lib/focus';
 
+import { useDebounce } from '@/hooks/useDebounce';
 type ViewMode = 'grid' | 'list' | 'org';
 
 export default function EmployeeDirectoryPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
  const [search, setSearch] = useState('');
+ // The query key used the raw input, so every keystroke fetched up to 200
+ // employees. FilterBar debounces internally; this page has a bespoke input,
+ // so it debounces here.
+ const debouncedSearch = useDebounce(search, 300);
  const [view, setView] = useState<ViewMode>('grid');
 
  const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['hr', 'directory', search],
- queryFn: () => directoryApi.list({ search: search || undefined, per_page: 200 }),
+ queryKey: ['hr', 'directory', debouncedSearch],
+ queryFn: () => directoryApi.list({ search: debouncedSearch || undefined, per_page: 200 }),
  placeholderData: (prev) => prev,
  });
 
@@ -103,8 +108,8 @@ export default function EmployeeDirectoryPage() {
  {data && data.data.length === 0 && (
  <EmptyState
  icon="users"
- title={search ? `No matches for “${search}”` : 'No employees yet'}
- description={search ? 'Try a different name or department.' : 'Once HR adds employees, they appear here.'}
+ title={debouncedSearch ? `No matches for “${debouncedSearch}”` : 'No employees yet'}
+ description={debouncedSearch ? 'Try a different name or department.' : 'Once HR adds employees, they appear here.'}
  />
  )}
 

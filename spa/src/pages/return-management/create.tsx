@@ -277,7 +277,7 @@ export default function CreateReturnRequestPage() {
  </div>
  ) : (
  <div className="border border-default rounded-md overflow-hidden">
- <div className="grid grid-cols-12 gap-2 h-row px-2.5 bg-subtle text-2xs uppercase tracking-wider text-muted font-medium border-b border-default items-center">
+ <div className="grid grid-cols-1 md:grid-cols-12 gap-2 h-row px-2.5 bg-subtle text-2xs uppercase tracking-wider text-muted font-medium border-b border-default items-center">
  <div className="col-span-4">{isSupplierReturn ? 'Item' : 'Product'}</div>
  <div className="col-span-2 text-right">Qty</div>
  <div className="col-span-2 text-right">Unit Price</div>
@@ -288,7 +288,7 @@ export default function CreateReturnRequestPage() {
  {fields.map((field, idx) => (
  <div
  key={field.id}
- className="grid grid-cols-12 gap-2 px-2.5 py-1.5 border-b border-subtle items-start"
+ className="grid grid-cols-1 md:grid-cols-12 gap-2 px-2.5 py-1.5 border-b border-subtle items-start"
  >
  <div className="col-span-4">
  {isSupplierReturn ? (

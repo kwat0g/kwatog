@@ -117,7 +117,7 @@ export default function CreateInvoicePage() {
  />
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-5xl mx-auto px-5 py-4 space-y-4">
  <Panel title="Header">
- <div className="grid grid-cols-3 gap-3">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
  <Select label="Customer" required {...register('customer_id')} error={errors.customer_id?.message}>
  <option value="">— Select customer —</option>
  {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -134,7 +134,7 @@ export default function CreateInvoicePage() {
 
  <Panel title="Line items">
  <div className="border border-default rounded-md overflow-hidden">
- <div className="grid grid-cols-12 gap-2 h-row px-2.5 bg-subtle text-2xs uppercase tracking-wider text-muted font-medium border-b border-default items-center">
+ <div className="grid grid-cols-1 md:grid-cols-12 gap-2 h-row px-2.5 bg-subtle text-2xs uppercase tracking-wider text-muted font-medium border-b border-default items-center">
  <div className="col-span-3">Description</div>
  <div className="col-span-3">Revenue account</div>
  <div className="col-span-1 text-right">Qty</div>
@@ -147,7 +147,7 @@ export default function CreateInvoicePage() {
  const it = items[idx] ?? ({} as FormValues['items'][number]);
  const lineTotal = ((Number(it.quantity) || 0) * (Number(it.unit_price) || 0)).toFixed(2);
  return (
- <div key={field.id} className="grid grid-cols-12 gap-2 px-2.5 py-1.5 border-b border-subtle items-start">
+ <div key={field.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 px-2.5 py-1.5 border-b border-subtle items-start">
  <div className="col-span-3"><Input {...register(`items.${idx}.description` as const)} /></div>
  <div className="col-span-3">
  <Select {...register(`items.${idx}.revenue_account_id` as const)}>

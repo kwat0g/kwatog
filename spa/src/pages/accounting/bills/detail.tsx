@@ -192,17 +192,17 @@ export default function BillDetailPage() {
  </Panel>
  </div>
 
- <div className="px-5 py-4 grid grid-cols-4 gap-4">
+ <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
  <StatCard label="Total" value={formatPeso(bill.total_amount)} />
  <StatCard label="Paid" value={formatPeso(bill.amount_paid)} />
  <StatCard label="Balance" value={formatPeso(bill.balance)} delta={bill.is_overdue ? { value: 'OVERDUE', direction: 'down' } : undefined} />
  <StatCard label="Aging" value={bill.aging_bucket.replace('_', '–').replace('d', '')} />
  </div>
 
- <div className="px-5 grid grid-cols-3 gap-4">
+ <div className="px-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
  <div className="col-span-2 space-y-4">
  <Panel title="Details">
- <dl className="grid grid-cols-3 gap-3 text-sm">
+ <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
  <div><dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">Vendor</dt><dd>{bill.vendor?.name}</dd></div>
  <div><dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">Date</dt><dd className="font-mono">{formatDate(bill.date)}</dd></div>
  <div><dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">Due date</dt><dd className="font-mono">{formatDate(bill.due_date)}</dd></div>

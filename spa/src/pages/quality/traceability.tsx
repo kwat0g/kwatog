@@ -138,7 +138,7 @@ function BatchView({ result }: { result: TraceabilityResult }) {
  if (!wo) return null;
 
  return (
- <div className="grid grid-cols-3 gap-4">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
  <div className="col-span-1">
  <SectionCard icon={<LuPackage size={14} />} title="Backward — materials">
  {materials.length === 0
@@ -245,7 +245,7 @@ function LotView({ result }: { result: TraceabilityResult }) {
  if (!lot) return null;
 
  return (
- <div className="grid grid-cols-3 gap-4">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
  <div className="col-span-1">
  <SectionCard icon={<LuLayers size={14} />} title="Backward — production batches">
  {woRows.length === 0
@@ -325,7 +325,7 @@ function MaterialLotView({ result }: { result: TraceabilityResult }) {
  if (!ml) return null;
 
  return (
- <div className="grid grid-cols-3 gap-4">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
  <div className="col-span-1">
  <SectionCard icon={<LuBuilding2 size={14} />} title="Backward — supplier GRN">
  {!grn

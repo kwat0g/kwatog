@@ -158,7 +158,7 @@ export default function MaintenanceWorkOrderDetailPage() {
         <ChainHeader steps={chainSteps} />
       </div>
 
-      <div className="px-5 pb-6 grid grid-cols-3 gap-4">
+      <div className="px-5 pb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <div className="col-span-2 space-y-4">
           <Panel title="Description">
             <p className="text-sm whitespace-pre-line">{data.description}</p>

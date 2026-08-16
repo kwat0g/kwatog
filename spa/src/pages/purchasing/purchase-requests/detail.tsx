@@ -227,10 +227,10 @@ export default function PurchaseRequestDetailPage() {
  <ChainHeader steps={buildPrChainSteps(data)} />
  </Panel>
  </div>
- <div className="px-5 grid grid-cols-3 gap-4 pb-6">
+ <div className="px-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-6">
  <div className="col-span-2 space-y-4">
  <Panel title="Header">
- <dl className="grid grid-cols-3 gap-y-3 gap-x-6 text-sm">
+ <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-3 gap-x-6 text-sm">
  <div><dt className="text-2xs uppercase tracking-wider text-muted">Date</dt><dd className="font-mono">{formatDate(data.date)}</dd></div>
  <div><dt className="text-2xs uppercase tracking-wider text-muted">Priority</dt><dd className="flex items-center gap-1">{data.priority_label ?? data.priority}{data.is_urgent && <span title={data.urgency_reason ?? ''}><LuTriangleAlert size={12} className="text-danger-fg" /></span>}</dd></div>
  <div><dt className="text-2xs uppercase tracking-wider text-muted">Department</dt><dd>{data.department?.name ?? '—'}</dd></div>

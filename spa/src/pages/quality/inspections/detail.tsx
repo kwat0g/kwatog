@@ -269,10 +269,10 @@ export default function InspectionDetailPage() {
  </div>
  )}
 
- <div className="px-5 grid grid-cols-3 gap-4">
+ <div className="px-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
  <div className="col-span-2 space-y-4">
  <Panel title="Sample plan">
- <dl className="grid grid-cols-4 gap-x-4 gap-y-3 text-sm">
+ <dl className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-x-4 gap-y-3 text-sm">
  <div>
  <dt className="text-2xs uppercase tracking-wider text-muted">Stage</dt>
  <dd className="font-mono">{data.stage_label ?? data.stage}</dd>

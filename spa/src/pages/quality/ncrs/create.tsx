@@ -157,7 +157,7 @@ export default function CreateNcrPage() {
  >
  <div className="space-y-4 max-w-3xl">
  <Panel title="Classification">
- <div className="grid grid-cols-3 gap-3">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
  <Select label="Source" required {...register('source')} error={errors.source?.message}>
  {(ncrOptions.data?.sources ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
  </Select>

@@ -32,6 +32,7 @@ import type { SalesOrderStatus } from '@/types/crm';
 import type { ChainBottleneckRow } from '@/types/chain';
 import { cn } from '@/lib/cn';
 
+import { useDebounce } from '@/hooks/useDebounce';
 const SO_STATUS_VARIANT: Record<SalesOrderStatus, ChipVariant> = {
  draft: 'neutral',
  confirmed: 'info',
@@ -108,10 +109,12 @@ export default function ChainTrackerPage() {
 
 function ChainPicker({ onPick }: { onPick: (id: string) => void }) {
  const [search, setSearch] = useState('');
+ // One sales-order lookup per keystroke, unthrottled, against a search index.
+ const debouncedSearch = useDebounce(search, 300);
 
  const results = useQuery({
- queryKey: ['chains', 'so-search', search],
- queryFn: () => salesOrdersApi.list({ search: search || undefined, per_page: 8 }),
+ queryKey: ['chains', 'so-search', debouncedSearch],
+ queryFn: () => salesOrdersApi.list({ search: debouncedSearch || undefined, per_page: 8 }),
  placeholderData: (prev) => prev,
  });
 
@@ -280,7 +283,7 @@ function ChainDetail({ id, onClear }: { id: string; onClear: () => void }) {
  <div className="grid gap-4 lg:grid-cols-3">
  <div className="space-y-4 lg:col-span-2">
  <Panel title="Order">
- <dl className="grid grid-cols-3 gap-x-4 gap-y-3 text-sm">
+ <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3 text-sm">
  <dt className="text-muted">Customer</dt>
  <dd className="col-span-2 font-medium">{so.customer?.name ?? '—'}</dd>
  <dt className="text-muted">Date</dt>

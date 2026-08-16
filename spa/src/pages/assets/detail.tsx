@@ -114,14 +114,14 @@ export default function AssetDetailPage() {
         }
       />
 
-      <div className="px-5 pt-3 pb-4 grid grid-cols-4 gap-2">
+      <div className="px-5 pt-3 pb-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
         <StatCard label="Acquisition" value={formatPeso(data.acquisition_cost)} />
         <StatCard label="Accumulated dep." value={formatPeso(data.accumulated_depreciation)} />
         <StatCard label="Book value" value={formatPeso(data.book_value)} />
         <StatCard label="Monthly dep." value={formatPeso(data.monthly_depreciation)} />
       </div>
 
-      <div className="px-5 pb-6 grid grid-cols-3 gap-4">
+      <div className="px-5 pb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <div className="col-span-2">
           <Panel
             title="Depreciation history"

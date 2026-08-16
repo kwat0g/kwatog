@@ -37,7 +37,7 @@ export function ForecastAccuracyPanel({ year = new Date().getFullYear() }: Props
  if (query.isLoading) {
  return (
  <Panel title="Forecast Accuracy" meta={String(year)} actions={detailsLink}>
- <div className="grid grid-cols-3 gap-2">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
  {[1, 2, 3].map((item) => <SkeletonBlock key={item} className="h-14 rounded-md" />)}
  </div>
  </Panel>
@@ -83,7 +83,7 @@ export function ForecastAccuracyPanel({ year = new Date().getFullYear() }: Props
 
  return (
  <Panel title="Forecast Accuracy" meta={String(year)} actions={detailsLink}>
- <dl className="grid grid-cols-3 gap-2">
+ <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
  <div className="rounded-md bg-subtle px-3 py-2">
  <dt className="text-2xs uppercase tracking-wide text-muted">MAPE</dt>
  <dd className="mt-1 font-mono text-lg font-medium tabular-nums text-primary">

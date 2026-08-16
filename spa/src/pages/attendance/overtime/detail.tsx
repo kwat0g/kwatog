@@ -137,7 +137,7 @@ export default function OvertimeDetailPage() {
  <Item label="Shift" value={attendance.shift?.name ?? '—'} />
  <Item label="Day type" value={attendance.is_rest_day ? 'Rest day' : (attendance.holiday_type ? attendance.holiday_type : 'Regular')} />
  </dl>
- <dl className="grid grid-cols-3 gap-4 text-sm mt-4">
+ <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm mt-4">
  <Item label="Regular" value={attendance.regular_hours} mono />
  <Item label="OT" value={attendance.overtime_hours} mono />
  <Item label="Night diff" value={attendance.night_diff_hours} mono />

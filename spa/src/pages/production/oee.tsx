@@ -186,7 +186,7 @@ export default function OeeReportPage() {
       {/* ─── Loading ─── */}
       {isLoading && !data && (
         <div className="px-5 py-4 space-y-4">
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
             {[1, 2, 3, 4].map((i) => (
               <SkeletonBlock key={i} className="h-20" />
             ))}

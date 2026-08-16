@@ -28,6 +28,7 @@ import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { DataTablePagination } from '@/components/ui/DataTablePagination';
 import { formatDateTime, formatRelative } from '@/lib/formatDate';
 import { cn } from '@/lib/cn';
+import { useDebounce } from '@/hooks/useDebounce';
 import type {
  ChainListenerOutcomeStatus,
  ChainListenerQueueStatus,
@@ -92,6 +93,9 @@ export default function ChainRecoveryPage() {
  const [page, setPage] = useState(1);
  const [attention, setAttention] = useState<'attention' | 'all'>('attention');
  const [search, setSearch] = useState('');
+ // One listener-run query per keystroke against a table that also polls
+ // every 30s — the two compounded into a request per character typed.
+ const debouncedSearch = useDebounce(search, 300);
  const [replayTarget, setReplayTarget] = useState<ChainListenerRun | null>(null);
  const [resolveTarget, setResolveTarget] = useState<ChainListenerRun | null>(null);
  const queryClient = useQueryClient();
@@ -99,12 +103,12 @@ export default function ChainRecoveryPage() {
  const canManage = can('dashboard.chain_recovery.manage');
 
  const query = useQuery<ChainListenerRunsData>({
- queryKey: ['chain', 'listener-runs', attention, page, search],
+ queryKey: ['chain', 'listener-runs', attention, page, debouncedSearch],
  queryFn: () => chainApi.listenerRuns({
  attention: attention === 'attention',
  page,
  per_page: 25,
- search: search || undefined,
+ search: debouncedSearch || undefined,
  }),
  placeholderData: (previous) => previous,
  refetchInterval: 30_000,

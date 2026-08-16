@@ -254,7 +254,7 @@ export default function DemandForecastingPage() {
       <div className="p-5 space-y-4">
         {/* MAPE accuracy stats */}
         {accuracyQ.data?.data?.mape !== null && accuracyQ.data?.data?.mape !== undefined && (
-          <section className="grid grid-cols-3 gap-2">
+          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
             <StatCard
               label={`MAPE (${currentYear})`}
               value={`${accuracyQ.data.data.mape.toFixed(1)}%`}

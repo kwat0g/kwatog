@@ -151,7 +151,7 @@ export default function CapabilityStudyPage() {
  <div className="px-5 py-4 space-y-4">
  {/* ─── Input panel ─── */}
  <Panel title="Parameters">
- <div className="grid grid-cols-3 gap-4 items-end">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
  <Select
  label="Product"
  value={selectedProductId}
@@ -209,7 +209,7 @@ export default function CapabilityStudyPage() {
  {result && thresholds && (
  <>
  {/* Stats row */}
- <div className="grid grid-cols-5 gap-4">
+ <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4">
  <StatCard
  label="Cp"
  value={

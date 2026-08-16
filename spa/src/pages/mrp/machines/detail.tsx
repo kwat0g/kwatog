@@ -64,10 +64,10 @@ export default function MachineDetailPage() {
  ) : null}
  />
 
- <div className="px-5 py-4 grid grid-cols-3 gap-4">
+ <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
  <div className="col-span-2 space-y-4">
  <Panel title="Specifications">
- <dl className="grid grid-cols-3 gap-y-2 gap-x-3 text-sm">
+ <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-2 gap-x-3 text-sm">
  <dt className="text-muted">Code</dt>
  <dd className="col-span-2 font-mono">{data.machine_code}</dd>
  <dt className="text-muted">Name</dt>

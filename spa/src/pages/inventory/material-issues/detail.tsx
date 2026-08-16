@@ -43,7 +43,7 @@ export default function MaterialIssueDetailPage() {
  actions={<Chip variant={statusVariant(data.status)}>{data.status_label ?? data.status}</Chip>}
  />
 
- <div className="px-5 pt-3 pb-4 grid grid-cols-4 gap-2">
+ <div className="px-5 pt-3 pb-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
  <StatCard label="Total value" value={formatPeso(data.total_value)} />
  <StatCard label="Issued date" value={formatDate(data.issued_date)} />
  <StatCard label="Issued by" value={data.issuer?.name ?? '—'} />

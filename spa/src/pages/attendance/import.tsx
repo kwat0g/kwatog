@@ -99,7 +99,7 @@ export default function AttendanceImportPage() {
 
  {result && (
  <Panel title="Import summary">
- <div className="grid grid-cols-3 gap-3 mb-4">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
  <Stat label="Total" value={result.total} />
  <Stat label="Imported" value={result.imported} variant="success" />
  <Stat label="Skipped" value={result.skipped} variant={result.skipped > 0 ? 'danger' : 'neutral'} />

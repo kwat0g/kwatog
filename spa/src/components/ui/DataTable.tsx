@@ -1,6 +1,7 @@
 import {
   Fragment,
   useCallback,
+  useEffect,
   useRef,
   useMemo,
   useState,
@@ -217,6 +218,21 @@ export function DataTable<T>({
   const allOnPageSelected = data.length > 0 && data.every((r) => selected.has(idOf(r)));
   const selectedRows = data.filter((r) => selected.has(idOf(r)));
 
+  // Selection is scoped to what is on screen, because that is all a bulk action
+  // can actually receive: `selectedRows` filters `data`, so ids retained from a
+  // previous page were counted by nothing and acted on by nothing. Keeping them
+  // was worse than dropping them — a user who ticked 10 rows on page 1, paged
+  // to 2, ticked 10 more and hit Approve approved only the visible 10, with a
+  // badge that agreed. Reset when the visible set changes so the count on
+  // screen is always the count that will be submitted.
+  const visibleIds = data.map((r, i) => idOf(r, i)).join(' ');
+  const lastVisibleIds = useRef(visibleIds);
+  useEffect(() => {
+    if (lastVisibleIds.current === visibleIds) return;
+    lastVisibleIds.current = visibleIds;
+    setSelected((prev) => (prev.size === 0 ? prev : new Set()));
+  }, [visibleIds]);
+
   const toggleAll = () => {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -247,11 +263,29 @@ export function DataTable<T>({
   const sortIndicator = (col: Column<T>) => {
     if (!col.sortable) return null;
     const active = currentSort === col.key;
+    // An unsorted column used to render the same down-arrow at 30% opacity,
+    // which reads as "sorted descending" rather than "sortable". Show the
+    // neutral up/down pair until the column is actually the sort key.
+    if (!active) {
+      return (
+        <span className="inline-flex flex-col leading-none ml-1 opacity-40" aria-hidden="true">
+          <LuArrowUp size={8} />
+          <LuArrowDown size={8} />
+        </span>
+      );
+    }
     return (
-      <span className={cn('inline-block ml-1', !active && 'opacity-30')}>
-        {active && currentDirection === 'asc' ? <LuArrowUp size={10} /> : <LuArrowDown size={10} />}
+      <span className="inline-block ml-1" aria-hidden="true">
+        {currentDirection === 'asc' ? <LuArrowUp size={10} /> : <LuArrowDown size={10} />}
       </span>
     );
+  };
+
+  /** `aria-sort` is the only way a screen reader learns a column is ordered. */
+  const ariaSortFor = (col: Column<T>): 'ascending' | 'descending' | 'none' | undefined => {
+    if (!col.sortable || !onSort) return undefined;
+    if (currentSort !== col.key) return 'none';
+    return currentDirection === 'asc' ? 'ascending' : 'descending';
   };
 
   const handleHeaderClick = (col: Column<T>) => {
@@ -381,28 +415,42 @@ export function DataTable<T>({
               )}
               {orderedColumns.map((col) => {
                 const isPinned = col.pinned === 'left';
+                const isSortable = Boolean(col.sortable && onSort);
                 return (
                   <th
                     key={col.key}
                     scope="col"
+                    aria-sort={ariaSortFor(col)}
                     style={isPinned ? { left: pinnedOffsets[col.key] } : undefined}
                     className={cn(
                       'px-2.5 text-2xs uppercase tracking-wider text-muted font-medium select-none',
                       rowHeight.default,
                       alignClass[col.align ?? 'left'],
-                      col.sortable &&
-                        onSort &&
-                        'cursor-pointer hover:text-primary transition-colors duration-fast',
                       isPinned && pinnedTHClass,
                       isPinned && 'border-r border-default',
                       col.className,
                     )}
-                    onClick={() => handleHeaderClick(col)}
                   >
-                    <span className="inline-flex items-center gap-1">
-                      {col.header}
-                      {sortIndicator(col)}
-                    </span>
+                    {/* Sorting used to live on the <th>'s onClick, so it was
+                        mouse-only — DESIGN-SYSTEM.md requires every
+                        interactive element be keyboard reachable. A real
+                        <button> gets Enter/Space and the focus ring free. */}
+                    {isSortable ? (
+                      <button
+                        type="button"
+                        onClick={() => handleHeaderClick(col)}
+                        className={cn(
+                          'inline-flex items-center gap-1 cursor-pointer rounded-sm',
+                          'hover:text-primary transition-colors duration-fast',
+                          focusRingInset,
+                        )}
+                      >
+                        {col.header}
+                        {sortIndicator(col)}
+                      </button>
+                    ) : (
+                      <span className="inline-flex items-center gap-1">{col.header}</span>
+                    )}
                   </th>
                 );
               })}

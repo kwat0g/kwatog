@@ -259,10 +259,10 @@ export default function ComplaintDetailPage() {
 
  <div className="px-5 py-4">
  {tab === 'overview' && (
- <div className="grid grid-cols-3 gap-4">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
  <div className="col-span-2 space-y-4">
  <Panel title="Details">
- <dl className="grid grid-cols-3 gap-x-4 gap-y-3 text-sm">
+ <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3 text-sm">
  <div>
  <dt className="text-2xs uppercase tracking-wider text-muted">Received</dt>
  <dd className="font-mono tabular-nums">{data.received_date ?? '—'}</dd>
@@ -370,7 +370,7 @@ export default function ComplaintDetailPage() {
  )}
 
  {tab === 'linked' && (
- <div className="grid grid-cols-3 gap-4">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
  <div className="col-span-2">
  <Panel title="Linked records">
  <LinkedRecords groups={linkedGroups} />

@@ -326,7 +326,7 @@ export default function ReturnRequestDetailPage() {
  <div className="lg:col-span-2 space-y-4">
  {/* Details Panel */}
  <Panel title="RMA Details">
- <dl className="grid grid-cols-3 gap-y-3 gap-x-6 text-sm mt-2">
+ <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-3 gap-x-6 text-sm mt-2">
  <div>
  <dt className="text-2xs uppercase tracking-wider text-muted">Type</dt>
  <dd>{rma.type_label}</dd>
@@ -546,7 +546,7 @@ export default function ReturnRequestDetailPage() {
   )}
 
  <Panel title="Outcome">
- <dl className="grid grid-cols-3 gap-y-3 gap-x-6 text-sm mt-2">
+ <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-3 gap-x-6 text-sm mt-2">
  <div>
  <dt className="text-2xs uppercase tracking-wider text-muted">Disposition</dt>
  <dd>

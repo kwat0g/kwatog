@@ -228,7 +228,7 @@ export default function PrTemplateFormPage() {
           )}
           <div className="divide-y divide-subtle">
             {fields.map((field, i) => (
-              <div key={field.id} className="p-3 grid grid-cols-12 gap-2 items-start">
+              <div key={field.id} className="p-3 grid grid-cols-1 md:grid-cols-12 gap-2 items-start">
                 <div className="col-span-3">
                   <Select
                     value={watched[i]?.item_id ?? ''}

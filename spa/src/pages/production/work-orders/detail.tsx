@@ -211,7 +211,7 @@ export default function WorkOrderDetailPage() {
  been started (batch_number is generated on first start). */}
  {data.batch_number && (
  <Panel title="Production batch" meta="IATF 16949 traceability">
- <dl className="grid grid-cols-3 gap-x-4 gap-y-3 text-sm">
+ <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3 text-sm">
  <dt className="text-muted">Batch no.</dt>
  <dd className="col-span-2 font-mono tabular-nums">{data.batch_number}</dd>
  <dt className="text-muted">Machine / Mold</dt>
@@ -278,7 +278,7 @@ export default function WorkOrderDetailPage() {
  </div>
  )}
  <Panel title="Overview">
- <dl className="grid grid-cols-3 gap-x-4 gap-y-3 text-sm">
+ <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3 text-sm">
  <dt className="text-muted">Product</dt>
  <dd className="col-span-2"><span className="font-mono">{data.product?.part_number}</span> — {data.product?.name}</dd>
  <dt className="text-muted">Sales order</dt>
@@ -306,7 +306,7 @@ export default function WorkOrderDetailPage() {
 
  <Panel title="Materials" meta={`${data.materials?.length ?? 0} lines`} noPadding>
  {data.material_cost_summary && (
- <div className="grid grid-cols-3 gap-3 border-b border-default px-4 py-3 text-sm">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 border-b border-default px-4 py-3 text-sm">
  <div><div className="text-2xs uppercase text-muted">Standard</div><div className="mt-1 font-mono">{formatPeso(data.material_cost_summary.standard_cost)}</div></div>
  <div><div className="text-2xs uppercase text-muted">Actual issued</div><div className="mt-1 font-mono">{formatPeso(data.material_cost_summary.actual_cost)}</div></div>
  <div><div className="text-2xs uppercase text-muted">Cost variance</div><div className={`mt-1 font-mono ${Number(data.material_cost_summary.cost_variance) > 0 ? 'text-danger-fg' : 'text-success-fg'}`}>{formatPeso(data.material_cost_summary.cost_variance)}</div></div>

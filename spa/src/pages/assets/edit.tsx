@@ -153,7 +153,7 @@ export default function EditAssetPage() {
 
  <fieldset className="mb-6">
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Acquisition</legend>
- <div className="grid grid-cols-3 gap-3">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
  <Input
  label="Acquisition date"
  type="date"

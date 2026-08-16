@@ -125,7 +125,7 @@ export default function CreditNoteDetailPage() {
  />
 
  <div className="max-w-4xl mx-auto px-5 py-4 space-y-4">
- <div className="grid grid-cols-4 gap-3">
+ <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
  <StatCard label="Type" value={cn.type_label} />
  <StatCard label="Total" value={formatPeso(cn.total_amount)} />
  <StatCard label="Applied" value={formatPeso(cn.applied_amount)} />

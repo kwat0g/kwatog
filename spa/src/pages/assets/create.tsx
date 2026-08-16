@@ -105,7 +105,7 @@ export default function CreateAssetPage() {
 
  <fieldset className="mb-6">
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Acquisition</legend>
- <div className="grid grid-cols-3 gap-3">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
  <Input label="Acquisition date" type="date" {...register('acquisition_date')} error={errors.acquisition_date?.message} required />
  <Input label="Acquisition cost" {...register('acquisition_cost')} error={errors.acquisition_cost?.message}
  className="font-mono" placeholder="0.00" required />

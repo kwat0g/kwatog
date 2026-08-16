@@ -173,7 +173,7 @@ export function StockCountManager() {
  />
  )}
  {sessions && sessions.length > 0 && (
- <div className="grid grid-cols-12 gap-4">
+ <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
  {/* Sessions list */}
  <div className="col-span-3 space-y-1">
  <div className="text-2xs uppercase tracking-wider text-muted font-medium px-1 mb-1">
@@ -233,7 +233,7 @@ export function StockCountManager() {
  </Panel>
 
  {/* Progress stats */}
- <div className="grid grid-cols-5 gap-2">
+ <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2">
  <StatBox label="Total bins" value={activeSession.total_locations.toString()} />
  <StatBox label="Counted" value={activeSession.counted_locations.toString()} icon={<LuCircleCheck size={14} />} />
  <StatBox label="Pending" value={pendingItems.length.toString()} />

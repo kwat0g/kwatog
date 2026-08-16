@@ -224,10 +224,10 @@ export default function NcrDetailPage() {
  </Panel>
  </div>
 
- <div className="px-5 grid grid-cols-3 gap-4">
+ <div className="px-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
  <div className="col-span-2 space-y-4">
  <Panel title="Details">
- <dl className="grid grid-cols-3 gap-x-4 gap-y-3 text-sm">
+ <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3 text-sm">
  <div>
  <dt className="text-2xs uppercase tracking-wider text-muted">Source</dt>
  <dd>{labelFor(options?.sources, data.source)}</dd>
@@ -261,7 +261,7 @@ export default function NcrDetailPage() {
 
  {!isTerminal && can('quality.ncr.manage') && (
  <Panel title="Set disposition">
- <div className="grid grid-cols-3 gap-3">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
  <Select
  label="Disposition"
  value={disposition}
@@ -299,7 +299,7 @@ export default function NcrDetailPage() {
 
  {!isTerminal && can('quality.ncr.manage') && (
  <Panel title="Add action">
- <div className="grid grid-cols-3 gap-3">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
  <Select
  label="Type"
  value={actionType}

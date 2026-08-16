@@ -188,12 +188,12 @@ export default function CalendarPage() {
 
  {data && (
  <div className="px-5 py-4">
- <div className="grid grid-cols-7 text-2xs uppercase tracking-wider text-muted font-medium border-b border-default">
+ <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 text-2xs uppercase tracking-wider text-muted font-medium border-b border-default">
  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
  <div key={d} className="px-2 py-1.5">{d}</div>
  ))}
  </div>
- <div className="grid grid-cols-7 grid-rows-6 border-l border-t border-default">
+ <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 grid-rows-6 border-l border-t border-default">
  {grid.flat().map((d, i) => {
  const key = fmtDate(d);
  const inMonth = d.getMonth() === cursor.getMonth();
