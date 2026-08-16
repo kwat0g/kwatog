@@ -275,15 +275,23 @@ class BudgetController extends Controller
     {
         $this->decodeHashIds($request);
 
+        // `amount` is forwarded to the enforcement gate as a decimal string and
+        // compared there with bcmath, whose grammar is narrower than `numeric`:
+        // '1e3' and ' 1' satisfy `numeric` but make bccomp raise ValueError. The
+        // regex pins the wire format to a canonical peso figure so a malformed
+        // amount is a 422 naming the field, not an HTTP 500 — and, unlike the
+        // `(float)` cast this replaces, nothing coerces the value on the way in.
         $validated = $request->validate([
             'department_id' => 'required|exists:departments,id',
-            'amount'        => 'required|numeric|min:0',
+            'amount'        => ['required', 'numeric', 'min:0', 'regex:/^\d+(\.\d+)?$/'],
             'fiscal_year_id' => 'nullable|exists:fiscal_years,id',
+        ], [
+            'amount.regex' => 'The amount must be a plain decimal figure, e.g. 1000 or 1000.50.',
         ]);
 
         [$canProceed, $level, $message] = $this->enforcementService->checkAvailability(
             (int) $validated['department_id'],
-            (float) $validated['amount'],
+            (string) $validated['amount'],
             isset($validated['fiscal_year_id']) ? (int) $validated['fiscal_year_id'] : null,
         );
 

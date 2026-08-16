@@ -197,7 +197,7 @@ class LoanService
             // status is non-fillable (service-only mutation); forceFill + save.
             $loan->forceFill(['status' => LoanStatus::Pending->value])->save();
 
-            $this->approvals->submit($loan, $type->workflowType(), (float) $data['principal']);
+            $this->approvals->submit($loan, $type->workflowType(), (string) $data['principal']);
 
             app(OutboxService::class)->record(
                 new LoanSubmitted($loan->fresh(['employee'])),

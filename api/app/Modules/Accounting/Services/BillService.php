@@ -142,7 +142,7 @@ class BillService
                     ? $data['department_id']
                     : HashIdFilter::decode($data['department_id'], Department::class);
                 if ($deptId) {
-                    [$canProceed, , $message] = $this->budget->checkAvailability($deptId, (float) $total);
+                    [$canProceed, , $message] = $this->budget->checkAvailability($deptId, (string) $total);
                     if (! $canProceed) {
                         throw ValidationException::withMessages([
                             'budget' => [$message],
