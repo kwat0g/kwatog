@@ -7,6 +7,7 @@ namespace Tests\Feature\Accounting;
 use App\Modules\Accounting\Models\Budget;
 use App\Modules\Accounting\Models\FiscalYear;
 use App\Modules\Accounting\Services\BudgetEnforcementService;
+use App\Modules\Accounting\Services\BudgetService;
 use App\Modules\HR\Models\Department;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -131,5 +132,25 @@ class BudgetEnforcementBoundaryTest extends TestCase
         $this->assertSame('exhausted', $this->level($department, '0.30'));
         // 0.29 is 96.67% — critical, not exhausted.
         $this->assertSame('critical', $this->level($department, '0.29'));
+    }
+
+    public function test_check_consumption_agrees_with_the_enforcement_gate(): void
+    {
+        // Same figures through both decision paths must yield the same level.
+        // checkConsumption looks at the budget as it stands, so the comparable
+        // enforcement call is one with a zero amount.
+        $department = $this->budgetFor('1000000.00', '900000.00', '99950.00');
+        $budget = Budget::query()
+            ->where('department_id', $department->id)
+            ->firstOrFail();
+
+        $service = app(BudgetService::class);
+
+        $this->assertSame(
+            $this->level($department, '0.00'),
+            $service->checkConsumption($budget),
+            'checkConsumption and checkAvailability must classify identical figures identically.',
+        );
+        $this->assertSame('critical', $service->checkConsumption($budget));
     }
 }
