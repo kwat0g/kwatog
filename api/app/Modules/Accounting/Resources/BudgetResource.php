@@ -27,7 +27,7 @@ class BudgetResource extends JsonResource
             'total_allocated'  => (float) $this->total_allocated,
             'total_spent'      => (float) $this->total_spent,
             'total_committed'  => (float) $this->total_committed,
-            'available'        => $this->available,
+            'available'        => (float) $this->available,
             'utilization_pct'  => $this->utilization_percent,
             'status'           => $this->status,
             'status_label'     => BudgetStatus::tryFrom((string) $this->status)?->label() ?? (string) $this->status,
