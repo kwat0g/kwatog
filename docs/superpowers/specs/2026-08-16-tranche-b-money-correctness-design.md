@@ -51,14 +51,25 @@ Worked example. A department with `total_allocated = 1,000,000.00` and
 
 The department genuinely had `1,000.00` available and asked for `500.00`.
 
-**Severity depends on enforcement mode, and the default is not `block`.**
-`BUDGETING_ENFORCEMENT_MODE` defaults to `warn` (`.env.example`), and
-`BudgetEnforcementService::assess()` only throws when the mode is `block`. So in
-the current configuration this defect does **not** reject the request — it stamps
-a false `exhausted` level and message onto the document
-(`budget_warning_level` / `budget_warning_message`) and demands a Finance
-acknowledgment that is not warranted. Under `block` it rejects outright. Both
-outcomes are wrong; only the second is loud.
+**The false label is a hard block in every enforcement mode.** This correction
+supersedes two earlier, weaker readings in the drafting of this spec; it is the
+measured behaviour.
+
+`budgeting.enforcement_mode` is live at `"warn"` (settings row seeded by
+`0306_seed_runtime_enforcement_policy_settings.php`), and under `warn`
+`assess()` does not throw. But `assess()` stamps the level unconditionally —
+the `forceFill(['budget_warning_level' => …])` at `:83-88` has no mode guard —
+and `assertAcknowledged()` (`:124-131`) also has no mode guard. It is called at
+`PurchaseOrderService.php:347` and `PurchaseRequestService.php:356`, where it
+throws `RuntimeException` whenever `budget_warning_level` is `exhausted` or
+`overdrawn` and `budget_acknowledged_at` is null.
+
+So the full chain for a department at 99.95%: false `exhausted` label stamped →
+PO/PR reaches its approval step → `assertAcknowledged()` throws → **the document
+cannot be approved** until Finance acknowledges an overrun that does not exist.
+Setting the mode to `off` does not help: only `enforce()` early-returns on
+`off`; neither `assess()`'s labelling nor `assertAcknowledged()` consults the
+mode at all.
 
 Verified live threshold values: `budget.warning_ratio 0.8`,
 `critical_ratio 0.95`, `exhausted_ratio 1`, `overdrawn_ratio 1.2` — so the
