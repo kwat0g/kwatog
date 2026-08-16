@@ -11,9 +11,11 @@ Remove float arithmetic and premature rounding from the two paths that decide
 whether a purchase is permitted and how many approval levels it needs, so those
 decisions are exact at the cent.
 
-This is the only finding in the 2026-08-16 audit that produces a **wrong
-business outcome** rather than a maintainability, performance, or observability
-cost.
+D1 below is the only finding in the 2026-08-16 audit that produces a **wrong
+business outcome** today rather than a maintainability, performance, or
+observability cost. D2 is latent — disabled by current configuration — and is
+fixed here because the call sites are already open, not because it is currently
+misbehaving.
 
 ## The two defects
 
@@ -46,11 +48,23 @@ Worked example. A department with `total_allocated = 1,000,000.00` and
 
 - true consumption after the request: `999,500.00 / 1,000,000.00` = **99.95%**
 - `round(99.95, 1)` = `100.0` → `1.0 >= 1.00` → `[false, 'exhausted', …]`
-- `BudgetEnforcementService::assess()` with `BUDGETING_ENFORCEMENT_MODE=block`
-  rejects the request
 
-The department genuinely had `1,000.00` available and asked for `500.00`. This
-requires no floating-point imprecision at all — rounding to one decimal
+The department genuinely had `1,000.00` available and asked for `500.00`.
+
+**Severity depends on enforcement mode, and the default is not `block`.**
+`BUDGETING_ENFORCEMENT_MODE` defaults to `warn` (`.env.example`), and
+`BudgetEnforcementService::assess()` only throws when the mode is `block`. So in
+the current configuration this defect does **not** reject the request — it stamps
+a false `exhausted` level and message onto the document
+(`budget_warning_level` / `budget_warning_message`) and demands a Finance
+acknowledgment that is not warranted. Under `block` it rejects outright. Both
+outcomes are wrong; only the second is loud.
+
+Verified live threshold values: `budget.warning_ratio 0.8`,
+`critical_ratio 0.95`, `exhausted_ratio 1`, `overdrawn_ratio 1.2` — so the
+99.95%–99.99% band is genuinely reachable in this database.
+
+This requires no floating-point imprecision at all — rounding to one decimal
 deliberately discards 0.05% of resolution, and the threshold sits exactly on the
 boundary that loss lands on.
 
@@ -90,8 +104,28 @@ The same class appears in the approval chain:
 - `api/app/Modules/Purchasing/Services/PurchaseRequestService.php:294` — `$maySkip = $limit > 0 && $total <= $limit;`
 
 `workflow_definitions.amount_threshold` is `decimal(15, 2)`
-(`api/database/migrations/0009_create_workflow_definitions_table.php:18`), so the
-stored threshold is exact and only the comparison is lossy.
+(`api/database/migrations/0009_create_workflow_definitions_table.php:18`), but
+`ApprovalService` does not read that column — it reads
+`(float) $step['threshold']` out of the `steps` JSON column
+(`ApprovalService.php:39`).
+
+**D2 is currently latent, and the spec says so rather than overstating it.**
+Verified against the live database:
+
+- every `workflow_definitions.amount_threshold` is `NULL`, and no `steps` JSON
+  entry contains a `threshold` key — they hold only `order`, `role`, `label`. So
+  `isset($step['threshold'])` is always false, `$threshold` is always `null`, and
+  **no approval step is ever skipped by amount today**.
+- `purchasing.urgent_skip_limit` is `0`, and `submitUrgent()` gates on
+  `$limit > 0`, so `$maySkip` is always false and that comparison decides nothing
+  either.
+
+Both of D2's mechanisms are therefore disabled by configuration. It is worth
+fixing regardless — each is a loaded gun that becomes lossy the moment an
+operator sets a workflow threshold or a non-zero urgent limit, and the fix is
+nearly free while the call sites are already open — but it is **not** producing
+wrong outcomes now. D1 is the active defect and the reason this tranche is
+prioritised.
 
 Both violate `CLAUDE.md`'s explicit rule: *"Money: `decimal(15, 2)` — **NEVER
 float**."* The repository already owns the correct tool,
@@ -131,7 +165,7 @@ so a future reader does not reintroduce them as an input.
 | `BudgetEnforcementService::checkAvailability()` (`:24`) | Signature `float $amount` → `string $amount`. Sum `$available` with `Money::add` over the collection rather than `Collection::sum`. Replace `$available <= 0` with `Money::lte($available, '0')` and `$amount > $available` with `Money::gt`. Replace the four `$pct / 100 >= $ratio` comparisons with amount comparisons. |
 | `BudgetEnforcementService::assess()` (`:78`), `::enforce()` (`:143`) | Signature `float $amount` → `string $amount`. The `document->forceFill([... 'amount' => $amount])` audit payload carries the exact string. |
 | `BudgetService::checkConsumption()` (`:82`) | Same amount-based classification, so the two paths cannot drift apart again. Takes its figures from the `Budget`'s exact string columns rather than `utilization_percent`. |
-| `ApprovalService::submit()` (`:23`) | `?float $amount` → `?string $amount`. Threshold comparison via `Money::lt($amount, $threshold)`. |
+| `ApprovalService::submit()` (`:23`) | `?float $amount` → `?string $amount`. Stop float-casting the threshold at `:39`: read `(string) $step['threshold']` and compare with `Money::lt($amount, $threshold)`. Note the threshold lives in the `steps` JSON column, so if an operator stores it as a JSON *number* its precision is already bounded by `json_decode` before this code sees it — the design therefore also documents, in the method's docblock, that a step threshold should be written as a JSON **string** (`"50000.00"`). No data migration: no threshold exists yet. |
 | `HasApprovalWorkflow::submitForApproval()` (`:21`) | `?float $amount` → `?string $amount`. |
 | `PurchaseRequestService` | `:215` drop `(float)` from `$total = (float) $pr->totalEstimatedAmount()`. `:287` `submitUrgent(float $total)` → `string $total`. `:294` `$total <= $limit` → `Money::lte($total, $limit)`. |
 | `PurchaseOrderService:329`, `LoanService:200`, `SalaryAdjustmentService:55` | Drop the `(float)` cast; pass the decimal string through. |
@@ -162,7 +196,9 @@ should be communicated to Finance rather than discovered.
 2. **Exact-boundary requests resolve deterministically.** `amount == available`
    to the cent is no longer `overdrawn`; `amount == available + 0.01` is. Under
    the float comparison the boundary case depended on representation.
-3. **Approval-level skipping is exact.** `ApprovalService` skips a step when
+3. **Approval-level skipping is exact — a latent change, not an observable one.**
+   No workflow currently defines a threshold and `purchasing.urgent_skip_limit`
+   is `0`, so nothing observable changes today. `ApprovalService` skips a step when
    `$amount < $threshold` (strict), so a total exactly equal to a step's
    `amount_threshold` is **retained**, not skipped. That semantic is unchanged —
    what changes is that the boundary now resolves deterministically via
@@ -198,7 +234,7 @@ test below is an addition, with nothing to rewrite.** TDD per
 | one cent over | `amount == available + 0.01` → `overdrawn`. |
 | unchanged bands | 80.00% → `warning`, 95.00% → `critical`, 120.00% → `overdrawn`, proving only the boundary behaviour moved. |
 | zero allocation | `total_allocated = 0.00` → `ok`, no division. |
-| approval threshold boundary | total exactly `amount_threshold` → step **retained** (strict `<`); one cent below → skipped; one cent above → retained. Deterministic at all three. |
+| approval threshold boundary | The test must **seed a workflow whose `steps` JSON carries a `threshold`**, because none exists in the shipped data. Total exactly the threshold → step **retained** (strict `<`); one cent below → skipped; one cent above → retained. Deterministic at all three. |
 | `checkConsumption` parity | the same figures through both decision paths yield the same level, locking the duplication closed. |
 | multi-budget sum | two active budgets for one department sum with `Money::add`; cent values that would drift under `Collection::sum` on floats. |
 
