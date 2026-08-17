@@ -28,6 +28,24 @@ use RuntimeException;
 class BusinessRuleException extends RuntimeException
 {
     /**
+     * Stable machine-readable identifier for this violation, e.g. `missing_bom`.
+     *
+     * The SPA needs to react differently to different rules — a missing BOM
+     * wants a link to /mrp/boms, an exceeded credit limit wants the customer
+     * record — and without a code it had no choice but to guess from the prose.
+     * `ChainErrorPanel` classified sales-order failures with
+     * `error.message.toLowerCase().includes('bom')`, so rewording a sentence
+     * silently removed the button that fixed the problem.
+     *
+     * Null keeps the envelope unchanged for the many rules that need no
+     * client-side branch.
+     */
+    public function errorCode(): ?string
+    {
+        return null;
+    }
+
+    /**
      * Errors-bag key used when rendering. Defaults to a non-field key so the SPA
      * shows the message without highlighting an unrelated input.
      */

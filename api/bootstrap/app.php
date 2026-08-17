@@ -94,10 +94,13 @@ return Application::configure(basePath: dirname(__DIR__))
                 return null;
             }
 
-            return response()->json([
+            return response()->json(array_filter([
                 'message' => $e->getMessage(),
                 'errors'  => [$e->errorKey() => [$e->getMessage()]],
-            ], 422);
+                // Omitted entirely when the rule declares none, so the envelope
+                // is byte-identical for every existing caller.
+                'code'    => $e->errorCode(),
+            ], static fn ($v) => $v !== null), 422);
         });
     })
     ->booted(function () {

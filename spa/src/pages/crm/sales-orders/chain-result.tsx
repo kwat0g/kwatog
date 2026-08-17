@@ -195,6 +195,11 @@ export function ChainResultModal({ chainResult, onClose }: ChainResultModalProps
 interface MrpErrorInfo {
  message: string;
  errors?: Record<string, string[]>;
+ /**
+  * Machine-readable rule identifier from BusinessRuleException::errorCode().
+  * Present only for rules the client is expected to branch on.
+  */
+ code?: string;
 }
 
 interface ChainErrorPanelProps {
@@ -212,10 +217,17 @@ export function ChainErrorPanel({ error, onDismiss }: ChainErrorPanelProps) {
 
  if (!error) return null;
 
- const isMissingBom = error.message.toLowerCase().includes('bom')
- || error.message.toLowerCase().includes('bill of material');
- const isNoSupplier = error.message.toLowerCase().includes('supplier');
- const isCreditLimit = error.message.toLowerCase().includes('credit limit');
+ // These were substring matches on the message — `.includes('bom')`,
+ // `.includes('credit limit')` — so rewording a backend sentence silently
+ // removed the button that fixes the problem, and a Tagalog or reworded
+ // message would have removed all of them at once. The API already identifies
+ // these two structurally: a code from BusinessRuleException, and the errors-bag
+ // key ValidationException::withMessages() was given.
+ const isMissingBom = error.code === 'missing_bom' || Boolean(error.errors?.bom);
+ const isCreditLimit = Boolean(error.errors?.credit_limit);
+ // No structured signal exists for this one yet, so it stays a text match and
+ // says so, rather than looking as reliable as the two above.
+ const isNoSupplier = !isMissingBom && error.message.toLowerCase().includes('supplier');
 
  return (
  <div className="border border-danger/30 bg-danger-bg/5 rounded-md px-4 py-3 space-y-2">
