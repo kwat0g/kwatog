@@ -47,8 +47,13 @@ export function FinanceSection() {
  </div>
 
  <div className="grid grid-cols-2 gap-4">
+ {/* Aging is omitted for a viewer without the AR/AP reads: the server gates
+     each panel on its own grant (PanelGate), so an accounting-dashboard
+     viewer can arrive here holding neither. */}
+ {(data.ar_aging_summary || data.ap_aging_summary) && (
  <Panel title="Aging" meta="AR · AP">
  <div className="text-sm">
+ {data.ar_aging_summary && (
  <div className="font-mono tabular-nums">
  <Row label="AR — Current" value={data.ar_aging_summary.current} />
  <Row label="AR — 1–30" value={data.ar_aging_summary.d1_30} />
@@ -57,6 +62,8 @@ export function FinanceSection() {
  <Row label="AR — 91+" value={data.ar_aging_summary.d91_plus} danger />
  <Row label="AR Total" value={data.ar_aging_summary.total} bold />
  </div>
+ )}
+ {data.ap_aging_summary && (
  <div className="font-mono tabular-nums mt-3 pt-3 border-t border-default">
  <Row label="AP — Current" value={data.ap_aging_summary.current} />
  <Row label="AP — 1–30" value={data.ap_aging_summary.d1_30} />
@@ -65,9 +72,12 @@ export function FinanceSection() {
  <Row label="AP — 91+" value={data.ap_aging_summary.d91_plus} danger />
  <Row label="AP Total" value={data.ap_aging_summary.total} bold />
  </div>
+ )}
  </div>
  </Panel>
+ )}
 
+ {data.recent_journal_entries && (
  <Panel title="Recent Journal Entries" meta={`last ${data.recent_journal_entries.length}`}>
  {data.recent_journal_entries.length === 0 ? (
  <p className="text-sm text-muted">No entries yet.</p>
@@ -87,9 +97,10 @@ export function FinanceSection() {
  </ul>
  )}
  </Panel>
+ )}
  </div>
 
- {data.top_overdue_customers.length > 0 && (
+ {(data.top_overdue_customers?.length ?? 0) > 0 && data.top_overdue_customers && (
  <Panel title="Top overdue customers">
  <table className={tableCls}>
  <thead>

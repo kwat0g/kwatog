@@ -7,6 +7,7 @@ namespace App\Modules\Dashboard\Services;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Services\Concerns\DashboardQueries;
+use App\Modules\Dashboard\Support\PanelGate;
 use App\Modules\Dashboard\Services\ForecastingDashboardService;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use Illuminate\Support\Carbon;
@@ -29,13 +30,21 @@ class HrDashboardService
     public function __construct(
         private readonly ForecastingDashboardService $forecastingService,
         private readonly SettingsService $settings,
+        private readonly PanelGate $gate,
     ) {}
 
     public function hr(User $user): array
     {
-        // REC-05 — payroll KPIs are gated: only HR users who can see payroll get
-        // them, so the cache key is split by that capability.
-        $canPayroll = $user->hasPermission('payroll.view');
+        /*
+         * REC-05 gated the payroll panel on `payroll.view` — which is in
+         * RolePermissionSeeder::selfService(), so EVERY seeded role holds it.
+         * The company's latest payroll run, its net-pay total and its pending
+         * salary adjustments were therefore gated on the permission to read
+         * your own payslip, i.e. not gated at all for anyone who reached this
+         * page. `payroll.periods.view` is the payroll-run read (hr_officer,
+         * finance_officer, admin) and is what the payroll.upcoming widget uses.
+         */
+        $canPayroll = $user->hasPermission('payroll.periods.view');
 
         return Cache::remember("dashboard:hr:{$user->id}:" . ($canPayroll ? 'p' : 'n'), self::CACHE_TTL, function () use ($user, $canPayroll) {
             $headcount         = $this->safeCount('employees', fn ($q) => $q->where('status', 'active'));
@@ -46,22 +55,27 @@ class HrDashboardService
             $pendingLeave      = $this->safeCount('leave_requests', fn ($q) => $q->whereIn('status', ['pending_dept', 'pending_hr', 'pending']));
             $pendingSeparation = $this->safeCount('clearances',     fn ($q) => $q->whereIn('status', ['pending', 'in_progress', 'completed']));
 
-            $panels = [
-                'probation_horizon_days' => $this->settings->requiredInt('dashboard.widgets.probation_horizon_days', 0),
-                'by_department'      => $this->headcountByDepartment(),
-                'recent_hires'       => $this->recentHires(),
-                'pending_leaves'     => $this->pendingLeaves(),
-                'attendance_summary' => $this->hrAttendanceSummary(),
-                'probation_alerts'   => $this->hrProbationAlerts(),
-                'leave_calendar_week'=> $this->hrLeaveCalendarWeek(),
+            $panels = $this->gate->panels($user, [
+                // Configured windows, not data.
+                'probation_horizon_days' => [null,                fn () => $this->settings->requiredInt('dashboard.widgets.probation_horizon_days', 0)],
+                'by_department'      => ['hr.employees.view',     fn () => $this->headcountByDepartment()],
+                'recent_hires'       => ['hr.employees.view',     fn () => $this->recentHires()],
+                'pending_leaves'     => ['leave.view',            fn () => $this->pendingLeaves()],
+                'attendance_summary' => ['attendance.view',       fn () => $this->hrAttendanceSummary()],
+                'probation_alerts'   => ['hr.employees.view',     fn () => $this->hrProbationAlerts()],
+                'leave_calendar_week'=> ['leave.view',            fn () => $this->hrLeaveCalendarWeek()],
                 // The leave calendar's window is an operator setting, not a
                 // calendar week, so the panel cannot label itself honestly
                 // without being told the number the query actually used.
-                'leave_calendar_horizon_days' => $this->settings->requiredInt('dashboard.widgets.leave_calendar_horizon_days', 0),
-                'hr_calendar_events' => $this->hrCalendarEvents(),
-                'pending_my_action'  => $this->hrPendingMyAction($user),
-                'headcount_forecast' => $this->forecastingService->headcountForecast(),
-            ];
+                'leave_calendar_horizon_days' => [null,           fn () => $this->settings->requiredInt('dashboard.widgets.leave_calendar_horizon_days', 0)],
+                'hr_calendar_events' => ['calendar.view',         fn () => $this->hrCalendarEvents()],
+                // Self-scoped: the caller's own queue, resolved from their id.
+                'pending_my_action'  => [null,                    fn () => $this->hrPendingMyAction($user)],
+                // A projection OF headcount, gated like headcount — the rule the
+                // forecast.headcount widget follows. hr_officer holds no
+                // forecasting grant and must still see its own forecast.
+                'headcount_forecast' => ['hr.employees.view',     fn () => $this->forecastingService->headcountForecast()],
+            ]);
 
             // REC-05 — surface a payroll signal on the HR dashboard for HR users
             // who can view payroll (the brief expected "HR sees payroll KPIs").
@@ -70,12 +84,12 @@ class HrDashboardService
             }
 
             return [
-                'kpis' => [
-                    $this->kpi('Active Headcount', (string) $headcount,        'count'),
-                    $this->kpi('On Leave Today',   (string) $onLeaveToday,     'count'),
-                    $this->kpi('Pending Leave',    (string) $pendingLeave,     'count'),
-                    $this->kpi('Open Clearances',  (string) $pendingSeparation, 'count'),
-                ],
+                'kpis' => $this->gate->kpis($user, [
+                    ['hr.employees.view',   fn () => $this->kpi('Active Headcount', (string) $headcount,        'count')],
+                    ['leave.view',          fn () => $this->kpi('On Leave Today',   (string) $onLeaveToday,     'count')],
+                    ['leave.view',          fn () => $this->kpi('Pending Leave',    (string) $pendingLeave,     'count')],
+                    ['hr.separation.view',  fn () => $this->kpi('Open Clearances',  (string) $pendingSeparation, 'count')],
+                ]),
                 'panels' => $panels,
             ];
         });

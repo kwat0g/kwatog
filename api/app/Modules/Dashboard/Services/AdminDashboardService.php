@@ -8,6 +8,7 @@ use App\Modules\Auth\Models\User;
 use App\Common\Services\SettingsService;
 use App\Modules\Admin\Enums\LoginHistoryStatus;
 use App\Modules\Dashboard\Services\Concerns\DashboardQueries;
+use App\Modules\Dashboard\Support\PanelGate;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -27,28 +28,41 @@ class AdminDashboardService
 
     private const CACHE_TTL = 30;
 
-    public function __construct(private readonly SettingsService $settings) {}
+    public function __construct(
+        private readonly SettingsService $settings,
+        private readonly PanelGate $gate,
+    ) {}
 
     public function admin(User $user): array
     {
-        return Cache::remember("dashboard:admin:{$user->id}", self::CACHE_TTL, function () {
+        return Cache::remember("dashboard:admin:{$user->id}", self::CACHE_TTL, function () use ($user) {
             return [
-                'kpis'   => $this->systemKpis(),
-                'panels' => [
-                    'active_sessions'   => $this->activeSessions(),
-                    'account_security'  => $this->accountSecurity(),
-                    'auth_events'       => $this->authEvents(),
-                    'queue_health'      => $this->queueHealth(),
-                    'recent_audit'      => $this->recentAuditEvents(),
-                    'open_alerts'       => $this->openSystemAlerts(),
-                ],
+                'kpis'   => $this->systemKpis($user),
+                'panels' => $this->gate->panels($user, [
+                    // Who is signed in, and from where — user administration.
+                    'active_sessions'   => ['admin.users.manage',     fn () => $this->activeSessions()],
+                    'account_security'  => ['admin.users.manage',     fn () => $this->accountSecurity()],
+                    // Login history is a security trail: the audit read, not the
+                    // user-management one.
+                    'auth_events'       => ['admin.audit_logs.view',  fn () => $this->authEvents()],
+                    'queue_health'      => ['admin.settings.manage',  fn () => $this->queueHealth()],
+                    'recent_audit'      => ['admin.audit_logs.view',  fn () => $this->recentAuditEvents()],
+                    'open_alerts'       => ['alerts.view',            fn () => $this->openSystemAlerts()],
+                ]),
             ];
         });
     }
 
     // ── KPIs ────────────────────────────────────────────────────────────────
 
-    private function systemKpis(): array
+    /**
+     * system_admin bypasses every gate (User::hasPermission), so today these
+     * gates change nothing for the only holder of `dashboard.admin.view`. They
+     * exist for the role that grant will eventually be given to — an auditor who
+     * should read the audit trail without also reading every account's lock
+     * state.
+     */
+    private function systemKpis(User $user): array
     {
         $activeWindowMinutes = $this->activeWindowMinutes();
         $activeSessions = $this->safeCount('sessions', fn ($q) =>
@@ -72,12 +86,12 @@ class AdminDashboardService
         // Failed background jobs
         $failedJobs = $this->safeCount('failed_jobs');
 
-        return [
-            $this->kpi('Active Sessions',     (string) $activeSessions, 'sessions'),
-            $this->kpi('Locked Accounts',     (string) $lockedAccounts, 'accounts'),
-            $this->kpi("Failed Logins ({$authWindowHours}h)", (string) $failedLogins,   'attempts'),
-            $this->kpi('Failed Jobs',         (string) $failedJobs,     'jobs'),
-        ];
+        return $this->gate->kpis($user, [
+            ['admin.users.manage',    fn () => $this->kpi('Active Sessions',     (string) $activeSessions, 'sessions')],
+            ['admin.users.manage',    fn () => $this->kpi('Locked Accounts',     (string) $lockedAccounts, 'accounts')],
+            ['admin.audit_logs.view', fn () => $this->kpi("Failed Logins ({$authWindowHours}h)", (string) $failedLogins,   'attempts')],
+            ['admin.settings.manage', fn () => $this->kpi('Failed Jobs',         (string) $failedJobs,     'jobs')],
+        ]);
     }
 
     // ── Active Sessions ──────────────────────────────────────────────────────

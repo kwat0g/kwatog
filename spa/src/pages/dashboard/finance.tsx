@@ -47,20 +47,33 @@ export default function FinanceDashboardPage() {
  refreshingQueryKey={['dashboard', 'finance']}
  >
  {(data) => {
- const arAgingChartData = [
- { label: 'Current', amount: parseFloat(data.ar_aging_summary.current) },
- { label: '1-30d', amount: parseFloat(data.ar_aging_summary.d1_30) },
- { label: '31-60d', amount: parseFloat(data.ar_aging_summary.d31_60) },
- { label: '61-90d', amount: parseFloat(data.ar_aging_summary.d61_90) },
- { label: '90+d', amount: parseFloat(data.ar_aging_summary.d91_plus) },
- ];
- const apAgingChartData = [
- { label: 'Current', amount: parseFloat(data.ap_aging_summary.current) },
- { label: '1-30d', amount: parseFloat(data.ap_aging_summary.d1_30) },
- { label: '31-60d', amount: parseFloat(data.ap_aging_summary.d31_60) },
- { label: '61-90d', amount: parseFloat(data.ap_aging_summary.d61_90) },
- { label: '90+d', amount: parseFloat(data.ap_aging_summary.d91_plus) },
- ];
+ /*
+  * FinanceDashboardService gates each panel on the caller's own grant and
+  * omits what they may not read (PanelGate) — reaching this page needs
+  * accounting.dashboard.view, which does not itself carry the AR, AP,
+  * journal, payroll or budget reads. Every block below renders only if its
+  * data arrived; a missing panel must not draw as ₱0.00.
+  */
+ const arAging = data.ar_aging_summary;
+ const apAging = data.ap_aging_summary;
+ const arAgingChartData = arAging
+ ? [
+ { label: 'Current', amount: parseFloat(arAging.current) },
+ { label: '1-30d', amount: parseFloat(arAging.d1_30) },
+ { label: '31-60d', amount: parseFloat(arAging.d31_60) },
+ { label: '61-90d', amount: parseFloat(arAging.d61_90) },
+ { label: '90+d', amount: parseFloat(arAging.d91_plus) },
+ ]
+ : [];
+ const apAgingChartData = apAging
+ ? [
+ { label: 'Current', amount: parseFloat(apAging.current) },
+ { label: '1-30d', amount: parseFloat(apAging.d1_30) },
+ { label: '31-60d', amount: parseFloat(apAging.d31_60) },
+ { label: '61-90d', amount: parseFloat(apAging.d61_90) },
+ { label: '90+d', amount: parseFloat(apAging.d91_plus) },
+ ]
+ : [];
 
  return (
  <>
@@ -77,8 +90,8 @@ export default function FinanceDashboardPage() {
 
  {/* Row 2 — AR / AP aging side by side. */}
  <PanelRow>
- <AgingPanel title="AR aging" buckets={data.ar_aging_summary} listHref="/accounting/invoices" />
- <AgingPanel title="AP aging" buckets={data.ap_aging_summary} listHref="/accounting/bills" />
+ {arAging && <AgingPanel title="AR aging" buckets={arAging} listHref="/accounting/invoices" />}
+ {apAging && <AgingPanel title="AP aging" buckets={apAging} listHref="/accounting/bills" />}
  </PanelRow>
 
  {/* Row 3 — Payroll pipeline + unposted JEs + AP due this week. */}
@@ -97,7 +110,7 @@ export default function FinanceDashboardPage() {
  {/* Row 4 — Budget vs Actual + Recent JEs. */}
  <PanelRow>
  <BudgetVsActualPanel rows={data.budget_vs_actual_top ?? null} />
- <RecentJesPanel entries={data.recent_journal_entries} />
+ {data.recent_journal_entries && <RecentJesPanel entries={data.recent_journal_entries} />}
  </PanelRow>
 
  {/* Row 4.5 — Chart visualizations */}
@@ -133,7 +146,7 @@ export default function FinanceDashboardPage() {
  />
 
  {/* Row 6 — Top overdue customers. */}
- {data.top_overdue_customers.length > 0 && (
+ {data.top_overdue_customers && data.top_overdue_customers.length > 0 && (
  <Panel title="Top overdue customers" noPadding bodyClassName="px-1.5 pb-2">
  <div className="overflow-x-auto">
  <table className={tableCls}>

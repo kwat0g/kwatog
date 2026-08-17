@@ -29,6 +29,58 @@ class RoleDashboardServiceTest extends TestCase
         return app(RoleDashboardService::class);
     }
 
+    /**
+     * A user holding exactly $permissions.
+     *
+     * Needed since the bespoke dashboards gate each panel and KPI on the grant
+     * for its data (PanelGate): a bare User::factory() user reaches the page but
+     * receives none of the panels, so a test asserting a figure has to say which
+     * grant it is asserting it under.
+     */
+    private function userWithPermissions(array $permissions): User
+    {
+        // Other tests in this file insert roles/users with hard-coded ids, which
+        // leaves the Postgres identity sequences behind the tables and makes the
+        // next generated id collide. Resync before generating any.
+        $this->resyncSequences(['roles', 'permissions', 'users']);
+
+        $roleId = DB::table('roles')->insertGetId([
+            'name' => 'Test Role '.substr(uniqid(), -6),
+            'slug' => 'tr-'.substr(uniqid(), -6),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        foreach ($permissions as $slug) {
+            $permissionId = DB::table('permissions')->where('slug', $slug)->value('id')
+                ?? DB::table('permissions')->insertGetId([
+                    'slug' => $slug,
+                    'name' => $slug,
+                    'module' => explode('.', $slug)[0],
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+
+            DB::table('role_permissions')->insertOrIgnore([
+                'role_id' => $roleId,
+                'permission_id' => $permissionId,
+            ]);
+        }
+
+        return User::factory()->create(['role_id' => $roleId]);
+    }
+
+    /** @param array<int, string> $tables */
+    private function resyncSequences(array $tables): void
+    {
+        foreach ($tables as $table) {
+            DB::statement(
+                "SELECT setval(pg_get_serial_sequence(?, 'id'), GREATEST((SELECT COALESCE(MAX(id), 1) FROM {$table}), 1))",
+                [$table],
+            );
+        }
+    }
+
     /** OTD must read `delivered_at`, not the non-existent `actual_delivery_date`. */
     public function test_otd_rate_counts_on_time_deliveries_using_delivered_at(): void
     {
@@ -313,7 +365,9 @@ class RoleDashboardServiceTest extends TestCase
                 'total_amount' => 5000, 'balance' => 0, 'created_at' => now(), 'updated_at' => now()],
         ]);
 
-        $user = User::factory()->create();
+        // Revenue is money, so it renders only for a viewer holding the
+        // accounting read — this test asserts the arithmetic, not the gate.
+        $user = $this->userWithPermissions(['accounting.dashboard.view']);
 
         // plantManager is still callable on the facade for integration-style tests.
         $today = $this->service()->plantManager($user, 'today');

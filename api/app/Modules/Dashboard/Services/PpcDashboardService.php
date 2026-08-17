@@ -6,6 +6,7 @@ namespace App\Modules\Dashboard\Services;
 
 use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Services\Concerns\DashboardQueries;
+use App\Modules\Dashboard\Support\PanelGate;
 use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Production\Enums\WorkOrderStatus;
@@ -29,11 +30,14 @@ class PpcDashboardService
 
     private const CACHE_TTL = 30;
 
-    public function __construct(private readonly SettingsService $settings) {}
+    public function __construct(
+        private readonly SettingsService $settings,
+        private readonly PanelGate $gate,
+    ) {}
 
     public function ppc(User $user): array
     {
-        return Cache::remember("dashboard:ppc:{$user->id}", self::CACHE_TTL, function () {
+        return Cache::remember("dashboard:ppc:{$user->id}", self::CACHE_TTL, function () use ($user) {
             $activeWos    = $this->safeCount('work_orders', fn ($q) => $q->whereIn('status', [
                 WorkOrderStatus::Planned->value,
                 WorkOrderStatus::Confirmed->value,
@@ -49,47 +53,57 @@ class PpcDashboardService
             $capacityUsed = $this->capacityUtilization();
 
             return [
-                'kpis' => [
-                    $this->kpi('Active WOs',         (string) $activeWos,    'count'),
-                    $this->kpi('Material Shortages',  (string) $shortages,   'count'),
-                    $this->kpi('Capacity Used',       $capacityUsed,          'pct'),
-                    $this->kpi('Molds ≥ '.round($this->settings->requiredFloat('alerts.mold.warning_ratio', 0, 1) * 100, 1).'%', (string) $moldsAtLimit, 'count'),
-                ],
-                'panels' => [
-                    'chain_stages'         => $this->chainStageBreakdown(),
-                    'alerts'               => $this->alerts(),
-                    'machine_util'         => $this->machineUtilization(),
-                    'mrp_last_run'         => $mrpLastRun,
-                    'unplanned_wos'        => $unplannedWos,
-                    'production_gantt'     => $this->productionGantt(),
-                    'mrp_shortages'        => $this->ppcMrpShortages(),
-                    'machine_availability' => $this->machineAvailabilityGrid(),
-                    'gantt_horizon_days'    => $this->ganttHorizonDays(),
-                    'wo_status_breakdown'  => $this->woStatusBreakdown(),
-                ],
+                'kpis' => $this->gate->kpis($user, [
+                    ['production.work_orders.view', fn () => $this->kpi('Active WOs',         (string) $activeWos,    'count')],
+                    // Sourced from auto-generated PRs but read as MRP's shortage
+                    // signal — the same gate `mrp.shortages` uses. ppc_head holds
+                    // no purchasing grant, and does not need one to see that
+                    // material is short.
+                    ['mrp.plans.view',              fn () => $this->kpi('Material Shortages',  (string) $shortages,   'count')],
+                    ['mrp.view',                    fn () => $this->kpi('Capacity Used',       $capacityUsed,          'pct')],
+                    ['mrp.molds.view',              fn () => $this->kpi('Molds ≥ '.round($this->settings->requiredFloat('alerts.mold.warning_ratio', 0, 1) * 100, 1).'%', (string) $moldsAtLimit, 'count')],
+                ]),
+                'panels' => $this->gate->panels($user, [
+                    'chain_stages'         => ['dashboard.view_bottlenecks',   fn () => $this->chainStageBreakdown()],
+                    'alerts'               => ['alerts.view',                  fn () => $this->alerts()],
+                    // The machine master is MRP's (App\Modules\MRP\Models\Machine),
+                    // and ppc_head holds no production.dashboard.view — gating on
+                    // that would have stripped the machine panels from the role
+                    // that schedules the machines.
+                    'machine_util'         => ['mrp.machines.view',            fn () => $this->machineUtilization()],
+                    'mrp_last_run'         => ['mrp.plans.view',               fn () => $mrpLastRun],
+                    'unplanned_wos'        => ['production.work_orders.view',  fn () => $unplannedWos],
+                    'production_gantt'     => ['production.schedule.view',     fn () => $this->productionGantt()],
+                    'mrp_shortages'        => ['mrp.plans.view',               fn () => $this->ppcMrpShortages()],
+                    'machine_availability' => ['mrp.machines.view',            fn () => $this->machineAvailabilityGrid()],
+                    // A configured horizon, not data.
+                    'gantt_horizon_days'   => [null,                           fn () => $this->ganttHorizonDays()],
+                    'wo_status_breakdown'  => ['production.work_orders.view',  fn () => $this->woStatusBreakdown()],
+                ]),
             ];
         });
     }
 
     public function accounting(User $user): array
     {
-        return Cache::remember("dashboard:accounting:{$user->id}", self::CACHE_TTL, function () {
+        return Cache::remember("dashboard:accounting:{$user->id}", self::CACHE_TTL, function () use ($user) {
             $cashBalance = $this->cashBalance();
             $arOpen      = $this->safeSum('invoices', 'balance', fn ($q) => $q->whereIn('status', [InvoiceStatus::Finalized->value, InvoiceStatus::Partial->value]));
             $apOpen      = $this->safeSum('bills',    'balance', fn ($q) => $q->whereIn('status', [BillStatus::Unpaid->value, BillStatus::Partial->value]));
             $jeDraft     = $this->safeCount('journal_entries', fn ($q) => $q->where('status', 'draft'));
 
             return [
-                'kpis' => [
-                    $this->kpi('Cash Balance',   $cashBalance,       $this->functionalCurrency()),
-                    $this->kpi('AR Outstanding',  $arOpen,           $this->functionalCurrency()),
-                    $this->kpi('AP Outstanding',  $apOpen,           $this->functionalCurrency()),
-                    $this->kpi('Draft JEs',       (string) $jeDraft, 'count'),
-                ],
-                'panels' => [
-                    'recent_jes'     => $this->recentJournalEntries(),
-                    'top_overdue_ar' => $this->topOverdueArCustomers(),
-                ],
+                'kpis' => $this->gate->kpis($user, [
+                    ['accounting.dashboard.view', fn () => $this->kpi('Cash Balance',   $cashBalance,       $this->functionalCurrency())],
+                    ['accounting.invoices.view',  fn () => $this->kpi('AR Outstanding',  $arOpen,           $this->functionalCurrency())],
+                    ['accounting.bills.view',     fn () => $this->kpi('AP Outstanding',  $apOpen,           $this->functionalCurrency())],
+                    ['accounting.journal.view',   fn () => $this->kpi('Draft JEs',       (string) $jeDraft, 'count')],
+                ]),
+                'panels' => $this->gate->panels($user, [
+                    'recent_jes'     => ['accounting.journal.view',  fn () => $this->recentJournalEntries()],
+                    // Named customers with overdue balances — AR's to disclose.
+                    'top_overdue_ar' => ['accounting.invoices.view', fn () => $this->topOverdueArCustomers()],
+                ]),
             ];
         });
     }

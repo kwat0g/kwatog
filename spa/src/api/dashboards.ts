@@ -58,14 +58,18 @@ export interface AdminAuditEvent {
 
 export interface AdminDashboardData {
  kpis: Array<{ label: string; value: string; unit: string }>;
+ /**
+  * Panels are OPTIONAL: the server gates each on the viewer's grant and omits
+  * what they may not read (PanelGate). Render what arrives.
+  */
  panels: {
- active_sessions: {
+ active_sessions?: {
  sessions: AdminSession[];
  total: number;
  unique_users: number;
  active_window_minutes?: number;
  };
- account_security: {
+ account_security?: {
  total: number;
  active: number;
  inactive: number;
@@ -74,21 +78,21 @@ export interface AdminDashboardData {
  must_change_password: number;
  locked_accounts: AdminLockedAccount[];
  };
- auth_events: {
+ auth_events?: {
  breakdown_24h: Record<string, number>;
  success_trend_24h: number[];
  window_hours?: number;
  recent_failures: AdminFailedLogin[];
  status_options: Array<{ value: string; label: string }>;
  };
- queue_health: {
+ queue_health?: {
  pending_jobs: number;
  failed_jobs: number;
  recent_failed: AdminFailedJob[];
  healthy: boolean;
  };
- recent_audit: AdminAuditEvent[];
- open_alerts: {
+ recent_audit?: AdminAuditEvent[];
+ open_alerts?: {
  total: number;
  critical: number;
  warning: number;

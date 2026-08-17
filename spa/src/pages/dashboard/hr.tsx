@@ -107,16 +107,28 @@ export default function HrDashboard() {
       refreshingQueryKey={['dashboard', 'hr']}
     >
       {({ kpis, panels }) => {
-        const departmentDonutData = panels.by_department
+        /*
+         * Panels are gated per grant and omitted when refused (PanelGate), so
+         * this page's HR reads (hr.employees.view), leave reads (leave.view) and
+         * attendance reads (attendance.view) can arrive independently. Charts
+         * derive from empty defaults; the panels themselves render only when
+         * present, so an absent one never draws as a zeroed fact.
+         */
+        const departments = panels.by_department ?? [];
+        const attendance = panels.attendance_summary;
+
+        const departmentDonutData = departments
           .map((d) => ({ name: d.label, value: d.count, color: 'var(--accent)' }))
           .slice(0, 6);
 
-        const attendanceDonutData = [
-          { name: 'Present', value: panels.attendance_summary.present, color: 'var(--success)' },
-          { name: 'Late', value: panels.attendance_summary.late, color: 'var(--warning)' },
-          { name: 'Absent', value: panels.attendance_summary.absent, color: 'var(--danger)' },
-          { name: 'On Leave', value: panels.attendance_summary.on_leave, color: 'var(--info)' },
-        ].filter((i) => i.value > 0);
+        const attendanceDonutData = attendance
+          ? [
+              { name: 'Present', value: attendance.present, color: 'var(--success)' },
+              { name: 'Late', value: attendance.late, color: 'var(--warning)' },
+              { name: 'Absent', value: attendance.absent, color: 'var(--danger)' },
+              { name: 'On Leave', value: attendance.on_leave, color: 'var(--info)' },
+            ].filter((i) => i.value > 0)
+          : [];
 
         return (
           <>
@@ -132,32 +144,36 @@ export default function HrDashboard() {
 
             {/* Row 2 — Attendance summary + pending my action */}
             <PanelRow>
-              <AttendanceSummaryPanel data={panels.attendance_summary} />
-              <PendingMyActionPanel data={panels.pending_my_action} />
+              {attendance && <AttendanceSummaryPanel data={attendance} />}
+              {panels.pending_my_action && <PendingMyActionPanel data={panels.pending_my_action} />}
             </PanelRow>
 
             {/* Row 3 — Department headcount + probation alerts */}
             <PanelRow>
-              <DepartmentHeadcountPanel departments={panels.by_department} />
-              <ProbationAlertsPanel
-                alerts={panels.probation_alerts}
-                horizonDays={panels.probation_horizon_days ?? 0}
-              />
+              {panels.by_department && <DepartmentHeadcountPanel departments={panels.by_department} />}
+              {panels.probation_alerts && (
+                <ProbationAlertsPanel
+                  alerts={panels.probation_alerts}
+                  horizonDays={panels.probation_horizon_days ?? 0}
+                />
+              )}
             </PanelRow>
 
             {/* Row 4 — Leave calendar this week + calendar events */}
             <PanelRow>
-              <LeaveCalendarPanel
-                leaves={panels.leave_calendar_week}
-                horizonDays={panels.leave_calendar_horizon_days}
-              />
-              <CalendarEventsPanel events={panels.hr_calendar_events} />
+              {panels.leave_calendar_week && (
+                <LeaveCalendarPanel
+                  leaves={panels.leave_calendar_week}
+                  horizonDays={panels.leave_calendar_horizon_days}
+                />
+              )}
+              {panels.hr_calendar_events && <CalendarEventsPanel events={panels.hr_calendar_events} />}
             </PanelRow>
 
             {/* Row 5 — Recent hires + pending leaves */}
             <PanelRow>
-              <RecentHiresPanel hires={panels.recent_hires} />
-              <PendingLeavesPanel leaves={panels.pending_leaves} />
+              {panels.recent_hires && <RecentHiresPanel hires={panels.recent_hires} />}
+              {panels.pending_leaves && <PendingLeavesPanel leaves={panels.pending_leaves} />}
             </PanelRow>
 
             {/* Row 5.5 — Chart visualizations */}
@@ -220,7 +236,7 @@ export default function HrDashboard() {
 function AttendanceSummaryPanel({
   data,
 }: {
-  data: HrDashboardData['panels']['attendance_summary'];
+  data: NonNullable<HrDashboardData['panels']['attendance_summary']>;
 }) {
   const items: Array<{ label: string; value: number; color: string }> = [
     { label: 'Present', value: data.present, color: 'text-success-fg' },
@@ -267,7 +283,7 @@ function AttendanceSummaryPanel({
   );
 }
 
-function PendingMyActionPanel({ data }: { data: HrDashboardData['panels']['pending_my_action'] }) {
+function PendingMyActionPanel({ data }: { data: NonNullable<HrDashboardData['panels']['pending_my_action']> }) {
   const items: Array<{ label: string; value: number; href: string }> = [
     { label: 'Leave requests', value: data.leave_requests, href: '/hr/leaves' },
     { label: 'Profile updates', value: data.profile_updates, href: '/hr/profile-update-requests' },
@@ -312,7 +328,7 @@ function PendingMyActionPanel({ data }: { data: HrDashboardData['panels']['pendi
 function DepartmentHeadcountPanel({
   departments,
 }: {
-  departments: HrDashboardData['panels']['by_department'];
+  departments: NonNullable<HrDashboardData['panels']['by_department']>;
 }) {
   if (departments.length === 0) {
     return (
@@ -363,7 +379,7 @@ function ProbationAlertsPanel({
   alerts,
   horizonDays,
 }: {
-  alerts: HrDashboardData['panels']['probation_alerts'];
+  alerts: NonNullable<HrDashboardData['panels']['probation_alerts']>;
   horizonDays: number;
 }) {
   return (
@@ -407,7 +423,7 @@ function LeaveCalendarPanel({
   leaves,
   horizonDays,
 }: {
-  leaves: HrDashboardData['panels']['leave_calendar_week'];
+  leaves: NonNullable<HrDashboardData['panels']['leave_calendar_week']>;
   /**
    * `dashboard.widgets.leave_calendar_horizon_days`. The old "This Week" title
    * was wrong twice over: the window is an operator setting rather than a
@@ -462,7 +478,7 @@ function LeaveCalendarPanel({
 function CalendarEventsPanel({
   events,
 }: {
-  events: HrDashboardData['panels']['hr_calendar_events'];
+  events: NonNullable<HrDashboardData['panels']['hr_calendar_events']>;
 }) {
   return (
     <Panel
@@ -527,7 +543,7 @@ function CalendarEventsPanel({
   );
 }
 
-function RecentHiresPanel({ hires }: { hires: HrDashboardData['panels']['recent_hires'] }) {
+function RecentHiresPanel({ hires }: { hires: NonNullable<HrDashboardData['panels']['recent_hires']> }) {
   return (
     <Panel
       title="Recent Hires"
@@ -565,7 +581,7 @@ function RecentHiresPanel({ hires }: { hires: HrDashboardData['panels']['recent_
   );
 }
 
-function PendingLeavesPanel({ leaves }: { leaves: HrDashboardData['panels']['pending_leaves'] }) {
+function PendingLeavesPanel({ leaves }: { leaves: NonNullable<HrDashboardData['panels']['pending_leaves']> }) {
   const statusVariant = (status: string): 'warning' | 'danger' | 'neutral' | 'success' | 'info' => {
     if (status === 'pending_hr') return 'danger';
     if (status === 'pending_dept') return 'warning';

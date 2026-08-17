@@ -7,6 +7,7 @@ namespace App\Modules\Dashboard\Services;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Services\Concerns\DashboardQueries;
+use App\Modules\Dashboard\Support\PanelGate;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -21,34 +22,47 @@ class WarehouseDashboardService
 {
     use DashboardQueries;
 
-    public function __construct(private readonly SettingsService $settings) {}
+    public function __construct(
+        private readonly SettingsService $settings,
+        private readonly PanelGate $gate,
+    ) {}
 
     private const CACHE_TTL = 30;
 
     public function warehouse(User $user): array
     {
-        return Cache::remember("dashboard:warehouse:{$user->id}", self::CACHE_TTL, function () {
+        return Cache::remember("dashboard:warehouse:{$user->id}", self::CACHE_TTL, function () use ($user) {
             $pendingGrns = $this->safeCount('goods_receipt_notes', fn ($q) => $q->where('status', 'pending'));
             $issuesToday = $this->safeCount('stock_movements', fn ($q) => $q->where('movement_type', 'issue')->whereDate('created_at', today()));
             $lowStock = $this->lowStockItemCount();
             $pendingTransfers = $this->safeCount('stock_movements', fn ($q) => $q->where('movement_type', 'transfer')->whereNull('to_location_id'));
 
             return [
-                'kpis' => [
-                    $this->kpi('Pending GRNs', (string) $pendingGrns, 'count'),
-                    $this->kpi('Issues Today', (string) $issuesToday, 'count'),
-                    $this->kpi('Low Stock Items', (string) $lowStock, 'count'),
-                    $this->kpi('Pending Transfers', (string) $pendingTransfers, 'count'),
-                ],
-                'panels' => [
-                    'delivery_horizon_days' => $this->settings->requiredInt('dashboard.widgets.delivery_horizon_days', 0),
-                    'zone_utilization_warning_pct' => round($this->settings->requiredFloat('inventory.dashboard.zone_utilization_warning_ratio', 0, 1) * 100, 1),
-                    'zone_utilization_critical_pct' => round($this->settings->requiredFloat('inventory.dashboard.zone_utilization_critical_ratio', 0, 1) * 100, 1),
-                    'incoming_queue' => $this->warehouseIncomingQueue(),
-                    'outgoing_queue' => $this->warehouseOutgoingQueue(),
-                    'low_stock_alerts' => $this->warehouseLowStockAlerts(),
-                    'zone_utilization' => $this->warehouseZoneUtilization(),
-                ],
+                'kpis' => $this->gate->kpis($user, [
+                    ['inventory.view', fn () => $this->kpi('Pending GRNs', (string) $pendingGrns, 'count')],
+                    ['inventory.view', fn () => $this->kpi('Issues Today', (string) $issuesToday, 'count')],
+                    ['inventory.view', fn () => $this->kpi('Low Stock Items', (string) $lowStock, 'count')],
+                    ['inventory.view', fn () => $this->kpi('Pending Transfers', (string) $pendingTransfers, 'count')],
+                ]),
+                'panels' => $this->gate->panels($user, [
+                    // Configured thresholds, not data.
+                    'delivery_horizon_days' => [null, fn () => $this->settings->requiredInt('dashboard.widgets.delivery_horizon_days', 0)],
+                    'zone_utilization_warning_pct' => [null, fn () => round($this->settings->requiredFloat('inventory.dashboard.zone_utilization_warning_ratio', 0, 1) * 100, 1)],
+                    'zone_utilization_critical_pct' => [null, fn () => round($this->settings->requiredFloat('inventory.dashboard.zone_utilization_critical_ratio', 0, 1) * 100, 1)],
+                    // Inbound POs awaiting receipt. Gated on inventory rather
+                    // than purchasing: the panel exists to drive GRN creation,
+                    // which is exactly what warehouse_staff holds.
+                    'incoming_queue' => ['inventory.view', fn () => $this->warehouseIncomingQueue()],
+                    // Deliveries joined to sales orders and CUSTOMER names — the
+                    // one panel here that is not inventory data. warehouse_staff
+                    // holds no supply_chain grant, so this is omitted for it;
+                    // same underlying gap as the supply.delivery_schedule widget
+                    // dropped from its default layout. A narrower
+                    // supply_chain.deliveries.view would restore both.
+                    'outgoing_queue' => ['supply_chain.view', fn () => $this->warehouseOutgoingQueue()],
+                    'low_stock_alerts' => ['inventory.view', fn () => $this->warehouseLowStockAlerts()],
+                    'zone_utilization' => ['inventory.view', fn () => $this->warehouseZoneUtilization()],
+                ]),
             ];
         });
     }
