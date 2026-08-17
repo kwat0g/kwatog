@@ -17,7 +17,19 @@ use Illuminate\Support\Str;
 
 class KpiSnapshotService
 {
-    private const MODULE_PERMISSIONS = [
+    /**
+     * The read boundary for each KPI module.
+     *
+     * Public because it is the ONE definition of who may see a KPI, and the
+     * widget registry has to gate `kpi.*` tiles on exactly the same grant the
+     * scorecard endpoint enforces (DashboardWidgetSeeder::kpiWidgets). A second
+     * copy would let a tile and the page it links to disagree.
+     *
+     * A module absent from this map is ungated on the scorecard.
+     *
+     * @var array<string, string>
+     */
+    public const MODULE_PERMISSIONS = [
         'production' => 'production.dashboard.view',
         'quality' => 'dashboard.quality.view',
         'supply_chain' => 'dashboard.ppc.view',

@@ -6,10 +6,12 @@ namespace App\Modules\Dashboard\Services;
 
 use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Enums\RenderKind;
+use App\Modules\Dashboard\Services\Analytics\ApprovalsWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\AssetWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\BudgetWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\CoreWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\CrmWidgetAnalytics;
+use App\Modules\Dashboard\Services\Analytics\KpiWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\LoanWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\ReturnWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\SupplyChainWidgetAnalytics;
@@ -33,6 +35,8 @@ final class WidgetAnalyticsService
         private readonly ReturnWidgetAnalytics $returns,
         private readonly BudgetWidgetAnalytics $budgets,
         private readonly LoanWidgetAnalytics $loans,
+        private readonly KpiWidgetAnalytics $kpis,
+        private readonly ApprovalsWidgetAnalytics $approvals,
     ) {}
 
     /**
@@ -70,7 +74,7 @@ final class WidgetAnalyticsService
     }
 
     /**
-     * @return list<CoreWidgetAnalytics|CrmWidgetAnalytics|AssetWidgetAnalytics|SupplyChainWidgetAnalytics|ReturnWidgetAnalytics|BudgetWidgetAnalytics|LoanWidgetAnalytics>
+     * @return list<CoreWidgetAnalytics|CrmWidgetAnalytics|AssetWidgetAnalytics|SupplyChainWidgetAnalytics|ReturnWidgetAnalytics|BudgetWidgetAnalytics|LoanWidgetAnalytics|KpiWidgetAnalytics|ApprovalsWidgetAnalytics>
      */
     private function providers(): array
     {
@@ -82,6 +86,8 @@ final class WidgetAnalyticsService
             $this->returns,
             $this->budgets,
             $this->loans,
+            $this->kpis,
+            $this->approvals,
         ];
     }
 }

@@ -21,6 +21,15 @@ export interface WidgetTrendData {
  points: Array<{ label: string; value: number }>;
  delta: number | null;
  kind: WidgetValueKind;
+ /**
+  * Scorecard KPIs only (`kpi.*`, KpiWidgetAnalytics). The target in force for
+  * the LATEST period, not the definition's current one — a target raised this
+  * quarter must not retroactively rescore earlier months. Absent for the
+  * production-output trend, which has no target.
+  */
+ target?: number | null;
+ /** Backend KpiStatus: 'on_target' | 'warning' | 'off_target'. */
+ status?: string | null;
 }
 
 export interface WidgetTableData {
@@ -55,6 +64,8 @@ export interface DashboardWidgetMeta {
  module: string;
  permission: string | null;
  render_kind: WidgetRenderKind;
+ /** Where the tile's "Open →" goes. Server-owned; null when there is no deeper page. */
+ link_path: string | null;
  default_w: number;
  default_h: number;
 }
@@ -66,6 +77,14 @@ export interface DashboardLayoutItem {
  module: string;
  permission: string | null;
  render_kind: WidgetRenderKind;
+ /**
+  * Where the tile's "Open →" goes, from `dashboard_widgets.link_path`.
+  *
+  * Was a 51-entry `WIDGET_LINKS` literal in components/dashboard/registry.tsx
+  * that nothing bound to the seeder, so a new widget rendered a tile with no
+  * way out of it. The widget row owns its destination now.
+  */
+ link_path: string | null;
  /** Only populated when the layout was fetched with `{ rich: true }`. */
  data: WidgetData | null;
  x: number;

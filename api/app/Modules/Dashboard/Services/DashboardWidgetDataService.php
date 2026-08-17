@@ -25,6 +25,7 @@ use App\Modules\CRM\Enums\ComplaintStatus;
 use App\Modules\Loans\Enums\LoanStatus;
 use App\Modules\Dashboard\Support\WidgetScope;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Throwable;
 
 /** Resolves configurable dashboard widgets from live transactional tables. */
@@ -61,6 +62,15 @@ class DashboardWidgetDataService
     /** @return array{value:string|null,kind:string,helper:?string} */
     private function summary(string $key, User $user): array
     {
+        // KPI tiles are keyed by their definition code, so a match arm per KPI
+        // would be a second copy of the scorecard catalog. Handled by prefix
+        // instead. The rich monthly trend is the real rendering
+        // (Analytics\KpiWidgetAnalytics); this scalar is what shows before the
+        // first snapshot is computed, and if that provider ever degrades.
+        if (str_starts_with($key, 'kpi.')) {
+            return $this->kpiLatest(substr($key, 4));
+        }
+
         $today = now()->toDateString();
         $ganttDays = $this->settings->requiredInt('dashboard.widgets.gantt_horizon_days', 0);
         $payablesDays = $this->settings->requiredInt('dashboard.widgets.payables_horizon_days', 0);
@@ -268,8 +278,59 @@ class DashboardWidgetDataService
             : 'outstanding in your department');
     }
 
-    private function number(mixed $value, ?string $helper): array { return ['value' => (string) (int) $value, 'kind' => 'number', 'helper' => $helper]; }
-    private function decimal(mixed $value, ?string $helper): array { return ['value' => number_format((float) $value, 2, '.', ''), 'kind' => 'decimal', 'helper' => $helper]; }
+    /**
+     * The latest computed value for a scorecard KPI.
+     *
+     * Reads `kpi_snapshots` rather than recomputing: the monthly compute is a
+     * scheduled process (`dashboard:compute-kpis` → KpiSnapshotService::computeAll)
+     * and a dashboard tile must not run an OEE aggregation on page load.
+     *
+     * Visibility is NOT checked here — `dashboard_widgets.permission` already
+     * gated this widget before the layout included it. Duplicating the check
+     * would let the two boundaries drift.
+     *
+     * @return array{value:string|null,kind:string,helper:?string}
+     */
+    private function kpiLatest(string $code): array
+    {
+        $definition = DB::table('kpi_definitions')->where('code', $code)->first(['id', 'unit', 'target_value']);
+        if (! $definition) {
+            return ['value' => null, 'kind' => 'number', 'helper' => 'This KPI is no longer defined'];
+        }
+
+        $kind = match ((string) $definition->unit) {
+            'percentage' => 'percent',
+            'currency' => 'currency',
+            'count' => 'count',
+            default => 'decimal',
+        };
+
+        $snapshot = DB::table('kpi_snapshots')
+            ->where('definition_id', $definition->id)
+            ->orderByDesc('period_year')
+            ->orderByDesc('period_month')
+            ->first(['actual_value', 'target_value', 'period_year', 'period_month', 'status']);
+
+        if (! $snapshot) {
+            return ['value' => null, 'kind' => $kind, 'helper' => 'Not computed for any period yet'];
+        }
+
+        $target = $snapshot->target_value ?? $definition->target_value;
+
+        return [
+            'value' => number_format((float) $snapshot->actual_value, 2, '.', ''),
+            'kind' => $kind,
+            'helper' => sprintf(
+                '%04d-%02d · target %s · %s',
+                (int) $snapshot->period_year,
+                (int) $snapshot->period_month,
+                $target === null ? 'none' : number_format((float) $target, 2, '.', ''),
+                Str::headline((string) $snapshot->status),
+            ),
+        ];
+    }
+
+    private function number(mixed $value, ?string $helper): array { return ['value' => (string) (int) $value, 'kind' => 'number', 'helper' => $helper]; }    private function decimal(mixed $value, ?string $helper): array { return ['value' => number_format((float) $value, 2, '.', ''), 'kind' => 'decimal', 'helper' => $helper]; }
     private function currency(mixed $value, ?string $helper): array { return ['value' => number_format((float) $value, 2, '.', ''), 'kind' => 'currency', 'helper' => $helper]; }
     private function hours(mixed $value, ?string $helper): array
     {

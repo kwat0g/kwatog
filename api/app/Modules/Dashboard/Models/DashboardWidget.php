@@ -20,6 +20,7 @@ class DashboardWidget extends Model
         'module',
         'permission',
         'render_kind',
+        'link_path',
         'default_w',
         'default_h',
     ];

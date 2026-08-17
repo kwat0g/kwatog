@@ -24,3 +24,21 @@ if (typeof window !== 'undefined' && !window.matchMedia) {
 if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = () => {};
 }
+
+// jsdom doesn't implement ResizeObserver, and recharts' ResponsiveContainer
+// constructs one in a mount effect — so ANY test that renders a real chart
+// (SparkLine, DonutBreakdown, gauges) threw before its assertions ran. The stub
+// never fires a callback, which is correct here: jsdom reports zero-size boxes,
+// so a resize notification would carry no usable dimensions anyway.
+if (typeof globalThis !== 'undefined' && !('ResizeObserver' in globalThis)) {
+  class ResizeObserverStub {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  }
+
+  Object.defineProperty(globalThis, 'ResizeObserver', {
+    writable: true,
+    value: ResizeObserverStub,
+  });
+}

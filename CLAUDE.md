@@ -636,6 +636,13 @@ Explicit `Event::listen($EventClass, [$ListenerClass, 'handle'])` in `AppService
 - `App\Modules\Quality\Services\InspectionService::recordMeasurements()` — tolerance auto-eval + status transition + defect counting.
 - `App\Common\Services\NotificationService::send($recipients, string $type, array $data)` — single notification entry point. Recipients = `User|Collection|array`.
 
+### Dashboards are permission-derived — never add a role-name branch
+- **Landing page:** `DashboardDispatchService::resolve()` picks the bespoke dashboard from `DashboardCatalog` (keyed by permission). When several qualify, rarest permission wins — rarity is counted live from `role_permissions`. A new role needs no code change.
+- **Widget visibility:** a `dashboard_widgets` row declares four independent things — `permission` (who), `render_kind` (how it draws), `link_path` (where "Open →" goes), `module` (picker grouping). None names a role. `DashboardLayoutService` strips anything the caller's `hasPermission` refuses, on both the plain and rich paths.
+- **Adding a widget:** row in `DashboardWidgetSeeder` (+ `LINK_BY_KEY` entry) → scalar arm in `DashboardWidgetDataService` → rich provider in `Services/Analytics/*` if non-scalar → register the provider in BOTH `WidgetAnalyticsService::providers()` and `WidgetSeedIntegrityTest::handledKeys()`.
+- `WidgetSeedIntegrityTest` is the drift guard: rich↔provider bijection, every row has a `link_path`, KPI widgets match `kpi_definitions`, KPI gates match `KpiSnapshotService::MODULE_PERMISSIONS`, and no role default references a widget that role cannot see.
+- Role defaults (`DashboardRoleLayoutSeeder`) are a UX seed, NOT an access decision. A leaky default is stripped at render, so it fails silently — the test above is what catches it.
+
 ### Cron inventory (post-Track-3)
 ```
 mrp:run-daily                            (06:00)
@@ -653,7 +660,7 @@ docs:check-reviews                       (06:45)
 ```
 
 ### Migration numbering
-Recent additions use 4-digit numbered (`0186_*`, `0187_*`, …). Highest as of 2026-08-04 = **0441**. New migrations use highest+1. Mixed timestamp-style migrations (`2026_06_09_*`) coexist for older HR/Payroll changes — don't introduce more.
+Recent additions use 4-digit numbered (`0186_*`, `0187_*`, …). Highest as of 2026-08-17 = **0472**. New migrations use highest+1. Mixed timestamp-style migrations (`2026_06_09_*`, `2026_08_16_*`) coexist for older HR/Payroll changes and recent BOM-costing work — don't introduce more.
 
 ### Test runner + suite size
 Full suite as of 2026-08-04: **1242 tests / 0 fail / ~9 min runtime**. Use `--filter='Foo|Bar'` for tight loops. Re-run full suite only at end of feature.

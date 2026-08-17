@@ -550,6 +550,14 @@ class RolePermissionSeeder extends Seeder
                     [
                         'production.view', 'production.work_orders.view',
                         'production.wo.create', 'production.wo.confirm',
+                        // The scheduler endpoints PPC owns (/mrp/scheduler/*)
+                        // are gated on this slug, but it lives in the
+                        // `production` permission bucket — so $this->module('mrp')
+                        // above never picked it up and the role that "owns the
+                        // schedule" could not read it. Its own Gantt widget
+                        // (production.gantt_mini) was stripped from its default
+                        // dashboard for the same reason.
+                        'production.schedule.view',
                         // Routings (process plans) are PPC's to author.
                         'production.routings.view', 'production.routings.manage',
                         'dashboard.ppc.view', 'maintenance.view', 'assets.view',

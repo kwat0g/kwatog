@@ -31,7 +31,7 @@ class DashboardLayoutService
     ) {}
 
     /**
-     * @return array<int, array{key: string, name: string, description: ?string, module: string, render_kind: string, x: int, y: int, w: int, h: int, source: string}>
+     * @return array<int, array{key: string, name: string, description: ?string, module: string, render_kind: string, link_path: ?string, x: int, y: int, w: int, h: int, source: string}>
      */
     public function getEffectiveLayout(User $user): array
     {
@@ -232,7 +232,7 @@ class DashboardLayoutService
     }
 
     /**
-     * @return array<int, array{key: string, name: string, description: ?string, module: string, permission: ?string}>
+     * @return array<int, array{key: string, name: string, description: ?string, module: string, permission: ?string, render_kind: string, link_path: ?string, default_w: int, default_h: int}>
      */
     public function listAvailableWidgets(User $user): array
     {
@@ -250,6 +250,7 @@ class DashboardLayoutService
                 'module'      => $w->module,
                 'permission'  => $w->permission,
                 'render_kind' => $w->render_kind->value,
+                'link_path'   => $w->link_path,
                 'default_w'   => (int) $w->default_w,
                 'default_h'   => (int) $w->default_h,
             ])
@@ -263,7 +264,7 @@ class DashboardLayoutService
      * the exact same visibility boundary.
      *
      * @param Collection<int, DashboardLayout> $layout
-     * @return array<int, array{key: string, name: string, description: ?string, module: string, render_kind: string, x: int, y: int, w: int, h: int, source: string}>
+     * @return array<int, array{key: string, name: string, description: ?string, module: string, render_kind: string, link_path: ?string, x: int, y: int, w: int, h: int, source: string}>
      */
     private function hydrateVisibleLayout(User $user, Collection $layout, string $source): array
     {
@@ -291,6 +292,9 @@ class DashboardLayoutService
                 'module'      => $widget->module,
                 'permission'  => $widget->permission,
                 'render_kind' => $widget->render_kind->value,
+                // The widget's own "Open →" target. Previously a hard-coded map
+                // in the SPA with nothing binding it to this table.
+                'link_path'   => $widget->link_path,
                 'x'           => (int) $row->position_x,
                 'y'           => (int) $row->position_y,
                 'w'           => (int) $row->width,
