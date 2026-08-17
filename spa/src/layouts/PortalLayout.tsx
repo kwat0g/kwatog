@@ -12,6 +12,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { Button } from '@/components/ui/Button';
 import { landingApi } from '@/api/landing';
+import { ErrorBoundary } from '@/components/guards/ErrorBoundary';
 import {
  DashboardIcon,
  OrderIcon,
@@ -234,7 +235,12 @@ export default function PortalLayout({ type, user, onLogout, title, subtitle, ch
  {/* Content — no padding here. Portal pages own the same anatomy as app
  pages: a full-bleed <PageHeader /> followed by a `px-5 py-4` body. */}
  <div className="flex-1 min-w-0">
+ {/* A supplier or customer who crashes a portal page has no sidebar to fall
+ back on; keep the failure inside the content column so the portal nav
+ and sign-out survive. */}
+ <ErrorBoundary>
  {children}
+ </ErrorBoundary>
  </div>
  </main>
  </div>

@@ -27,8 +27,8 @@ export default function ItemDetailPage() {
  queryFn: itemsApi.options,
  staleTime: 300_000,
  });
- const reorderMethodLabel = itemOptions?.reorder_methods.find((option) => option.value === data?.reorder_method)?.label;
- const stockStatusLabel = itemOptions?.stock_statuses.find((option) => option.value === data?.stock_status)?.label;
+ const reorderMethodLabel = itemOptions?.reorder_methods?.find((option) => option.value === data?.reorder_method)?.label;
+ const stockStatusLabel = itemOptions?.stock_statuses?.find((option) => option.value === data?.stock_status)?.label;
 
  if (isLoading) return <SkeletonTable rows={6} columns={4} />;
  if (isError || !data) return (

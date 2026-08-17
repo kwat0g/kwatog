@@ -113,7 +113,7 @@ export default function ApplicationDetailPage() {
  const pipelineStages = (recruitmentOptions?.application_stages ?? []).filter((stage) => !stage.is_terminal);
  const stageLabel = new Map((recruitmentOptions?.application_stages ?? []).map((stage) => [stage.value, stage.label]));
  const currentIdx = pipelineStages.findIndex((stage) => stage.value === application.stage);
- const nextStage = recruitmentOptions?.application_stages.find((stage) => stage.value === application.stage)?.next;
+ const nextStage = recruitmentOptions?.application_stages?.find((stage) => stage.value === application.stage)?.next;
 
  return (
  <div>

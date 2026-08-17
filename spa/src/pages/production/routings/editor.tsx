@@ -227,7 +227,7 @@ export default function RoutingEditorPage() {
  disabled={isEdit}
  >
  <option value="">Select product...</option>
- {products.data?.data.map((p) => (
+ {products.data?.data?.map((p) => (
  <option key={p.id} value={p.id}>{p.part_number} — {p.name}</option>
  ))}
  </Select>
@@ -296,7 +296,7 @@ export default function RoutingEditorPage() {
  error={errors.operations?.[i]?.machine_id?.message}
  >
  <option value="">—</option>
- {machines.data?.data.map((m) => (
+ {machines.data?.data?.map((m) => (
  <option key={m.id} value={m.id}>{m.machine_code} — {m.name}</option>
  ))}
  </Select>
@@ -307,7 +307,7 @@ export default function RoutingEditorPage() {
  error={errors.operations?.[i]?.mold_id?.message}
  >
  <option value="">—</option>
- {molds.data?.data.map((m) => (
+ {molds.data?.data?.map((m) => (
  <option key={m.id} value={m.id}>{m.mold_code} — {m.name}</option>
  ))}
  </Select>

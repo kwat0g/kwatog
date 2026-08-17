@@ -22,6 +22,13 @@ export function usePageFocus() {
  if (!target.hasAttribute('tabindex')) {
  target.setAttribute('tabindex', '-1');
  }
+ // …and that focusing it does not draw a ring. The browser's default outline
+ // on a `tabindex="-1"` element put a hard black rectangle around the page
+ // title on every navigation — off-brand against the warm focus ring in
+ // lib/focus.ts, and misleading, since the user never tabbed here. Nothing is
+ // lost: an element with a negative tabindex cannot be reached by Tab, so it
+ // has no keyboard-focus state worth indicating.
+ target.classList.add('outline-none');
  target.focus({ preventScroll: true });
  }, 50);
 

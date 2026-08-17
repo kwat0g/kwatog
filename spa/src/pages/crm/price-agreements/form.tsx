@@ -98,7 +98,7 @@ export function PriceAgreementForm({ initial, mode }: Props) {
  error={errors.product_id?.message}
  >
  <option value="">— select product —</option>
- {productsData?.data.map((p) => (
+ {productsData?.data?.map((p) => (
  <option key={p.id} value={p.id}>
  {p.part_number} — {p.name}
  </option>
@@ -113,7 +113,7 @@ export function PriceAgreementForm({ initial, mode }: Props) {
  error={errors.customer_id?.message}
  >
  <option value="">— select customer —</option>
- {customersData?.data.map((c) => (
+ {customersData?.data?.map((c) => (
  <option key={c.id} value={c.id}>
  {c.code ? `${c.code} — ` : ''}{c.name}
  </option>

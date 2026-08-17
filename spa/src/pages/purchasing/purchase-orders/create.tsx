@@ -269,7 +269,7 @@ export default function CreatePurchaseOrderPage() {
               error={errors.vendor_id?.message}
             >
               <option value="">Select vendor…</option>
-              {vendors.data?.data.map((v) => (
+              {vendors.data?.data?.map((v) => (
                 <option key={v.id} value={v.id}>
                   {v.name}
                 </option>
@@ -344,7 +344,7 @@ export default function CreatePurchaseOrderPage() {
                       onChange={(e) => onLineItemChange(i, e.target.value)}
                     >
                       <option value="">—</option>
-                      {items.data?.data.map((it) => (
+                      {items.data?.data?.map((it) => (
                         <option key={it.id} value={it.id}>
                           {it.code} — {it.name}
                         </option>

@@ -88,7 +88,7 @@ export default function CreateSalesOrderPage() {
  const selectedCustomerId = watch('customer_id');
 
  useEffect(() => {
- const customer = customers.data?.data.find((row) => row.id === selectedCustomerId);
+ const customer = customers.data?.data?.find((row) => row.id === selectedCustomerId);
  if (customer) {
  setValue('payment_terms_days', String(customer.payment_terms_days));
  } else if (policies.data) {
@@ -148,7 +148,7 @@ export default function CreateSalesOrderPage() {
  for (const it of watchedItems) {
  const qty = Number(it.quantity || 0);
  if (qty > 0 && it.product_id) {
- const p = products.data?.data.find((pp) => pp.id === it.product_id);
+ const p = products.data?.data?.find((pp) => pp.id === it.product_id);
  if (p) total += qty * Number(p.standard_cost || 0);
  }
  }
@@ -169,7 +169,7 @@ export default function CreateSalesOrderPage() {
  <div className="grid grid-cols-2 gap-3">
  <Select label="Customer" required {...register('customer_id')} error={errors.customer_id?.message}>
  <option value="">Select customer…</option>
- {customers.data?.data.map((c) => (
+ {customers.data?.data?.map((c) => (
  <option key={c.id} value={c.id}>{c.name}</option>
  ))}
  </Select>
@@ -212,7 +212,7 @@ export default function CreateSalesOrderPage() {
  error={errors.items?.[i]?.product_id?.message}
  >
  <option value="">Select product…</option>
- {products.data?.data.map((p) => (
+ {products.data?.data?.map((p) => (
  <option key={p.id} value={p.id}>{p.part_number} — {p.name}</option>
  ))}
  </Select>

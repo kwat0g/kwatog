@@ -43,7 +43,7 @@ export default function DashboardDefaultPage() {
  queryFn: () => dashboardLayoutApi.layout({ rich: true }),
  });
 
- const widgetKeys = layout.data?.items.map((widget) => widget.key) ?? [];
+ const widgetKeys = layout.data?.items?.map((widget) => widget.key) ?? [];
  const widgetData = useQuery({
  queryKey: ['dashboard', 'widget-data', widgetKeys],
  queryFn: () => dashboardLayoutApi.data(widgetKeys),

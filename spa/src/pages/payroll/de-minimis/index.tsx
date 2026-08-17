@@ -146,7 +146,7 @@ export function DeMinimisManager() {
           <form onSubmit={handleSubmit((d) => createMutation.mutate(d))} className="space-y-3 py-2">
             <Select label="Employee" required {...register('employee_id')} error={errors.employee_id?.message}>
               <option value="">— Select Employee —</option>
-              {employees?.data.map((e) => (
+              {employees?.data?.map((e) => (
                 <option key={e.id} value={e.id}>{e.first_name} {e.last_name}</option>
               ))}
             </Select>

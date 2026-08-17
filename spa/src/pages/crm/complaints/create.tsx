@@ -106,13 +106,13 @@ export default function CreateComplaintPage() {
  <div className="grid grid-cols-2 gap-3">
  <Select label="Customer" required {...register('customer_id')} error={errors.customer_id?.message}>
  <option value="">Select…</option>
- {customers.data?.data.map((c) => (
+ {customers.data?.data?.map((c) => (
  <option key={c.id} value={c.id}>{c.name}</option>
  ))}
  </Select>
  <Select label="Product (optional)" {...register('product_id')} error={errors.product_id?.message}>
  <option value="">— None —</option>
- {products.data?.data.map((p) => (
+ {products.data?.data?.map((p) => (
  <option key={p.id} value={p.id}>{p.part_number} — {p.name}</option>
  ))}
  </Select>

@@ -43,7 +43,7 @@ export default function InvoicesPage() {
  staleTime: 5 * 60 * 1000 });
  const statusLabels = new Map((invoiceOptions?.statuses ?? []).map((option) => [option.value, option.label]));
  const statusLabel = (value: string) => statusLabels.get(value) ?? value.replaceAll('_', ' ');
- const outstandingBalance = data?.data.some((invoice) => invoice.balance != null)
+ const outstandingBalance = data?.data?.some((invoice) => invoice.balance != null)
   ? formatPeso(data.data.reduce((sum, invoice) => sum + Number(invoice.balance ?? 0), 0))
   : '—';
 

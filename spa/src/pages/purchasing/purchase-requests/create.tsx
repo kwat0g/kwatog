@@ -243,7 +243,7 @@ export default function CreatePurchaseRequestPage() {
                       onChange={(e) => onLineItemChange(i, e.target.value)}
                     >
                       <option value="">— ad hoc —</option>
-                      {items.data?.data.map((it) => (
+                      {items.data?.data?.map((it) => (
                         <option key={it.id} value={it.id}>
                           {it.code} — {it.name}
                         </option>

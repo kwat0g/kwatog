@@ -112,7 +112,7 @@ export default function CreateBomPage() {
 
  // Auto-fill UOM when an item is picked.
  const handleItemPicked = (rowIndex: number, itemId: string) => {
- const picked = items.data?.data.find((it: { id: string; unit_of_measure?: string }) => it.id === itemId);
+ const picked = items.data?.data?.find((it: { id: string; unit_of_measure?: string }) => it.id === itemId);
  if (picked && watchedItems[rowIndex] && !watchedItems[rowIndex].unit) {
  const ev = { target: { value: picked.unit_of_measure, name: `items.${rowIndex}.unit` } };
  register(`items.${rowIndex}.unit`).onChange(ev as never);
@@ -132,7 +132,7 @@ export default function CreateBomPage() {
  <div className="grid grid-cols-2 gap-3">
  <Select label="Finished good" required {...register('product_id')} error={errors.product_id?.message}>
  <option value="">Select product…</option>
- {products.data?.data.map((p: { id: string; part_number: string; name: string }) => (
+ {products.data?.data?.map((p: { id: string; part_number: string; name: string }) => (
  <option key={p.id} value={p.id}>{p.part_number} — {p.name}</option>
  ))}
  </Select>
@@ -174,7 +174,7 @@ export default function CreateBomPage() {
  error={errors.items?.[i]?.item_id?.message}
  >
  <option value="">Select item…</option>
- {items.data?.data.map((it: { id: string; code: string; name: string }) => (
+ {items.data?.data?.map((it: { id: string; code: string; name: string }) => (
  <option key={it.id} value={it.id}>{it.code} — {it.name}</option>
  ))}
  </Select>

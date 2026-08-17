@@ -53,7 +53,7 @@ export default function CreateAccountPage() {
  code: data.code,
  name: data.name,
  type: data.type as AccountType,
- normal_balance: (data.normal_balance || options?.account_types.find((t) => t.value === data.type)?.default_normal_balance) as 'debit' | 'credit' | undefined,
+ normal_balance: (data.normal_balance || options?.account_types?.find((t) => t.value === data.type)?.default_normal_balance) as 'debit' | 'credit' | undefined,
  parent_id: data.parent_id || null,
  description: data.description || undefined,
  }),
@@ -80,7 +80,7 @@ export default function CreateAccountPage() {
  <Input label="Account code" {...register('code')} error={errors.code?.message} required
  placeholder="Account code" className="font-mono" />
  <Select label="Type" {...register('type', {
- onChange: (e) => setValue('normal_balance', options?.account_types.find((t) => t.value === e.target.value)?.default_normal_balance || ''),
+ onChange: (e) => setValue('normal_balance', options?.account_types?.find((t) => t.value === e.target.value)?.default_normal_balance || ''),
  })} error={errors.type?.message} required>
  <option value="">Select type</option>
  {(options?.account_types ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}

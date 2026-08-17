@@ -233,7 +233,7 @@ export default function PurchaseRequestsListPage() {
  onChange={(event) => setVendorMap((current) => ({ ...current, [item.id]: event.target.value }))}
  >
  <option value="">Select supplier…</option>
- {vendors.data?.data.map((vendor) => <option key={vendor.id} value={vendor.id}>{vendor.name}</option>)}
+ {vendors.data?.data?.map((vendor) => <option key={vendor.id} value={vendor.id}>{vendor.name}</option>)}
  </Select>
  </div>
  ))}

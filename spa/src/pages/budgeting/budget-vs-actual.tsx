@@ -54,7 +54,7 @@ export default function BudgetVsActualPage() {
 
  // Group rows
  const grouped: Record<string, { rows: BudgetVsActualRow[]; budgeted: number; actual: number }> = {};
- data?.rows.forEach((row) => {
+ data?.rows?.forEach((row) => {
  const key = groupBy === 'department' ? row.department : row.budget_type;
  if (!grouped[key]) grouped[key] = { rows: [], budgeted: 0, actual: 0 };
  grouped[key].rows.push(row);

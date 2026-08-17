@@ -181,7 +181,7 @@ export function MoldForm({ initial, mode }: Props) {
             disabled={products.isLoading}
           >
             <option value="">Select a product…</option>
-            {products.data?.data.map((p) => (
+            {products.data?.data?.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.part_number} — {p.name}
               </option>

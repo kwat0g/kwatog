@@ -61,7 +61,7 @@ export default function ShiftsPage() {
  });
 
  const selected = useMemo(
- () => data?.data.find((s) => s.id === selectedId) ?? null,
+ () => data?.data?.find((s) => s.id === selectedId) ?? null,
  [data, selectedId],
  );
 

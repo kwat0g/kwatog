@@ -172,7 +172,7 @@ export default function CapabilityStudyPage() {
  }}
  >
  <option value="">Select product</option>
- {productsQuery.data?.data.map((p) => (
+ {productsQuery.data?.data?.map((p) => (
  <option key={p.id} value={p.id}>
  {p.part_number} -- {p.name}
  </option>

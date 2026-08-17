@@ -38,8 +38,8 @@ export default function SeparationDetailPage() {
  queryFn: separationsApi.options,
  staleTime: 300_000,
  });
- const statusLabel = separationOptions?.statuses.find((option) => option.value === data?.status)?.label;
- const reasonLabel = separationOptions?.reasons.find((option) => option.value === data?.separation_reason)?.label;
+ const statusLabel = separationOptions?.statuses?.find((option) => option.value === data?.status)?.label;
+ const reasonLabel = separationOptions?.reasons?.find((option) => option.value === data?.separation_reason)?.label;
 
  const sign = useMutation({
  mutationFn: (item_key: string) => separationsApi.signItem(id, item_key),

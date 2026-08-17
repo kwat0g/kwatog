@@ -124,7 +124,7 @@ export default function EditBomPage() {
 
  // Auto-fill UOM when a new item row's item is picked.
  const handleItemPicked = (rowIndex: number, itemId: string) => {
- const picked = items.data?.data.find((it: { id: string; unit_of_measure?: string }) => it.id === itemId);
+ const picked = items.data?.data?.find((it: { id: string; unit_of_measure?: string }) => it.id === itemId);
  if (picked?.unit_of_measure && !watchedItems[rowIndex]?.unit) {
  setValue(`items.${rowIndex}.unit`, picked.unit_of_measure);
  }
@@ -216,7 +216,7 @@ export default function EditBomPage() {
  error={errors.items?.[i]?.item_id?.message}
  >
  <option value="">Select item…</option>
- {items.data?.data.map((it: { id: string; code: string; name: string }) => (
+ {items.data?.data?.map((it: { id: string; code: string; name: string }) => (
  <option key={it.id} value={it.id}>{it.code} — {it.name}</option>
  ))}
  </Select>

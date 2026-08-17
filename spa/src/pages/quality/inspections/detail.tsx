@@ -80,8 +80,8 @@ export default function InspectionDetailPage() {
  queryFn: capabilityApi.options,
  staleTime: 300_000,
  });
- const statusLabel = inspectionOptions?.statuses.find((option) => option.value === data?.status)?.label;
- const stageLabel = inspectionOptions?.stages.find((option) => option.value === data?.stage)?.label;
+ const statusLabel = inspectionOptions?.statuses?.find((option) => option.value === data?.status)?.label;
+ const stageLabel = inspectionOptions?.stages?.find((option) => option.value === data?.stage)?.label;
  const measurementResultLabels = new Map((inspectionOptions?.measurement_results ?? []).map((option) => [option.value, option.label]));
  const cpkThresholds = spcOptions?.capability_thresholds;
 

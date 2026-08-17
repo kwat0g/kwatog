@@ -189,7 +189,7 @@ export default function EditSalesOrderPage() {
  <div className="grid grid-cols-2 gap-3">
  <Select label="Customer" required {...register('customer_id')} error={errors.customer_id?.message}>
  <option value="">Select customer…</option>
- {customers.data?.data.map((c) => (
+ {customers.data?.data?.map((c) => (
  <option key={c.id} value={c.id}>{c.name}</option>
  ))}
  </Select>
@@ -221,7 +221,7 @@ export default function EditSalesOrderPage() {
  <Td>
  <Select {...register(`items.${i}.product_id` as const)} error={errors.items?.[i]?.product_id?.message}>
  <option value="">Select product…</option>
- {products.data?.data.map((p) => (
+ {products.data?.data?.map((p) => (
  <option key={p.id} value={p.id}>{p.part_number} — {p.name}</option>
  ))}
  </Select>

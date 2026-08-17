@@ -187,7 +187,7 @@ export default function MachineHealthPage() {
 
   const machineOptions = [
     { value: '', label: 'Select a machine…' },
-    ...(machines?.data.map((m) => ({
+    ...(machines?.data?.map((m) => ({
       value: String(m.id),
       label: `${m.machine_code} — ${m.name}`,
     })) ?? []),
@@ -264,7 +264,7 @@ export default function MachineHealthPage() {
           {/* Trend charts per metric */}
           <div className="px-5 py-4 space-y-4">
             {metrics.map((metric) => {
-              const metricReadings = readings?.data.filter((r) => r.metric === metric) ?? [];
+              const metricReadings = readings?.data?.filter((r) => r.metric === metric) ?? [];
               const trendPoints: ConditionTrendPoint[] = metricReadings
                 .slice(0, 30)
                 .reverse()

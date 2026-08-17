@@ -129,7 +129,7 @@ export default function CreateWorkOrderPage() {
  <div className="grid grid-cols-2 gap-3">
  <Select label="Product" required {...register('product_id')} error={errors.product_id?.message}>
  <option value="">Select product…</option>
- {products.data?.data.map((p) => (
+ {products.data?.data?.map((p) => (
  <option key={p.id} value={p.id}>{p.part_number} — {p.name}</option>
  ))}
  </Select>
@@ -170,13 +170,13 @@ export default function CreateWorkOrderPage() {
  <div className="grid grid-cols-2 gap-3">
  <Select label="Machine" {...register('machine_id')} error={errors.machine_id?.message}>
  <option value="">Pick later</option>
- {machines.data?.data.map((m) => (
+ {machines.data?.data?.map((m) => (
  <option key={m.id} value={m.id}>{m.machine_code} — {m.name}{m.tonnage ? ` · ${m.tonnage}T` : ''}</option>
  ))}
  </Select>
  <Select label="Mold" {...register('mold_id')} error={errors.mold_id?.message}>
  <option value="">Pick later</option>
- {molds.data?.data.map((m) => (
+ {molds.data?.data?.map((m) => (
  <option key={m.id} value={m.id}>{m.mold_code} — {m.name}</option>
  ))}
  </Select>

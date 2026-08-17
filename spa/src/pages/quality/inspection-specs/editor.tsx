@@ -177,7 +177,7 @@ export default function InspectionSpecEditorPage() {
  });
 
  const productLabel = useMemo(() => {
- const p = products.data?.data.find((pp: { id: string; part_number: string; name: string }) => pp.id === productId);
+ const p = products.data?.data?.find((pp: { id: string; part_number: string; name: string }) => pp.id === productId);
  return p ? `${p.part_number} — ${p.name}` : '';
  }, [products.data, productId]);
 
@@ -195,7 +195,7 @@ export default function InspectionSpecEditorPage() {
  onChange={(e) => setPickedProductId(e.target.value)}
  >
  <option value="">Select product…</option>
- {products.data?.data.map((p: { id: string; part_number: string; name: string }) => (
+ {products.data?.data?.map((p: { id: string; part_number: string; name: string }) => (
  <option key={p.id} value={p.id}>{p.part_number} — {p.name}</option>
  ))}
  </Select>

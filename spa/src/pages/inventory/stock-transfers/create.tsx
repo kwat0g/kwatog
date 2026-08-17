@@ -88,7 +88,7 @@ export default function CreateStockTransferPage() {
  <div className="grid grid-cols-2 gap-3">
  <Select label="Item" required {...register('item_id')} error={errors.item_id?.message}>
  <option value="">Select item…</option>
- {items.data?.data.map((it) => (
+ {items.data?.data?.map((it) => (
  <option key={it.id} value={it.id}>{it.code} — {it.name}</option>
  ))}
  </Select>

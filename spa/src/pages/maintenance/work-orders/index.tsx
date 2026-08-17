@@ -40,7 +40,7 @@ export default function MaintenanceWorkOrdersListPage() {
  queryFn: () => workOrdersApi.options() });
  const typeLabels = new Map((options?.types ?? []).map((type) => [type.value, type.label]));
  const priorityLabels = new Map((options?.priorities ?? []).map((priority) => [priority.value, priority.label]));
- const totalCost = data?.data.some((workOrder) => workOrder.cost != null)
+ const totalCost = data?.data?.some((workOrder) => workOrder.cost != null)
   ? formatPeso(data.data.reduce((sum, workOrder) => sum + Number(workOrder.cost ?? 0), 0))
   : '—';
 

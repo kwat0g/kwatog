@@ -183,7 +183,7 @@ export default function GrnDetailPage() {
   backTo="/inventory/grn" backLabel="GRNs"
   actions={
    <div className="flex items-center gap-2">
-   <Chip variant={variant}>{grnOptions?.statuses.find((option) => option.value === data.status)?.label ?? data.status}</Chip>
+   <Chip variant={variant}>{grnOptions?.statuses?.find((option) => option.value === data.status)?.label ?? data.status}</Chip>
    {incomingQcNeedsAttention && can('quality.inspections.manage') && (
     <Button variant="secondary" size="sm" icon={<LuRefreshCw size={14} />} onClick={() => retryIncomingQc.mutate()} loading={retryIncomingQc.isPending}>
      Retry incoming QC

@@ -283,7 +283,7 @@ export default function CreateReturnRequestPage() {
  </div>
  ) : (
  <div className="border border-default rounded-md overflow-hidden">
- <div className="grid grid-cols-1 md:grid-cols-12 gap-2 h-row px-2.5 bg-subtle text-2xs uppercase tracking-wider text-muted font-medium border-b border-default items-center">
+ <div className="hidden md:grid md:grid-cols-12 gap-2 h-row px-2.5 bg-subtle text-2xs uppercase tracking-wider text-muted font-medium border-b border-default items-center">
  <div className="col-span-4">{isSupplierReturn ? 'Item' : 'Product'}</div>
  <div className="col-span-2 text-right">Qty</div>
  <div className="col-span-2 text-right">Unit Price</div>

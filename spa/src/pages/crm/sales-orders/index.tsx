@@ -47,7 +47,7 @@ export default function SalesOrdersListPage() {
  staleTime: 5 * 60 * 1000 });
  const statusLabels = new Map((salesOrderOptions?.statuses ?? []).map((option) => [option.value, option.label]));
  const statusLabel = (value: string) => statusLabels.get(value) ?? value.replaceAll('_', ' ');
- const totalValue = data?.data.some((order) => order.total_amount != null)
+ const totalValue = data?.data?.some((order) => order.total_amount != null)
   ? formatPeso(data.data.reduce((sum, order) => sum + Number(order.total_amount ?? 0), 0))
   : '—';
 

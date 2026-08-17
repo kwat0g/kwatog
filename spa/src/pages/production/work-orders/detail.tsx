@@ -558,7 +558,7 @@ export default function WorkOrderDetailPage() {
  onChange={(e) => setSelectedMachineId(e.target.value)}
  >
  <option value="">Select a machine…</option>
- {machineList.data?.data.map((m) => (
+ {machineList.data?.data?.map((m) => (
  <option key={m.id} value={m.id}>
  {m.machine_code} — {m.name} ({m.tonnage}t)
  </option>

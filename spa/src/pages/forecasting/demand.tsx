@@ -121,7 +121,7 @@ export default function DemandForecastingPage() {
     enabled: !!productId,
   });
 
-  const selectedProduct = productsQ.data?.data.find((product) => product.id === productId);
+  const selectedProduct = productsQ.data?.data?.find((product) => product.id === productId);
 
   const mrpInclusionM = useMutation({
     mutationFn: (include: boolean) => forecastingApi.updateMrpInclusion(productId, include),

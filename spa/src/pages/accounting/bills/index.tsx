@@ -39,7 +39,7 @@ export default function BillsPage() {
  staleTime: 5 * 60 * 1000 });
  const statusLabels = new Map((billOptions?.statuses ?? []).map((option) => [option.value, option.label]));
  const statusLabel = (value: string) => statusLabels.get(value) ?? value.replaceAll('_', ' ');
- const outstandingBalance = data?.data.some((bill) => bill.balance != null)
+ const outstandingBalance = data?.data?.some((bill) => bill.balance != null)
   ? formatPeso(data.data.reduce((sum, bill) => sum + Number(bill.balance ?? 0), 0))
   : '—';
 

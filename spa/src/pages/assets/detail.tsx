@@ -49,8 +49,8 @@ export default function AssetDetailPage() {
     queryFn: assetsApi.options,
     staleTime: 300_000,
   });
-  const statusLabel = assetOptions?.statuses.find((option) => option.value === data?.status)?.label;
-  const categoryLabel = assetOptions?.categories.find(
+  const statusLabel = assetOptions?.statuses?.find((option) => option.value === data?.status)?.label;
+  const categoryLabel = assetOptions?.categories?.find(
     (option) => option.value === data?.category,
   )?.label;
 

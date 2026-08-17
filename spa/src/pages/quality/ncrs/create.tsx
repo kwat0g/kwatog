@@ -182,7 +182,7 @@ export default function CreateNcrPage() {
  <Panel title="Subject">
  <Select label="Product (optional)" {...register('product_id')} error={errors.product_id?.message}>
  <option value="">— None —</option>
- {products.data?.data.map((p) => (
+ {products.data?.data?.map((p) => (
  <option key={p.id} value={p.id}>
  {p.part_number} — {p.name}
  </option>

@@ -69,7 +69,7 @@ export default function PositionsPage() {
  });
 
  const selected = useMemo(
- () => data?.data.find((p) => p.id === selectedId) ?? null,
+ () => data?.data?.find((p) => p.id === selectedId) ?? null,
  [data, selectedId],
  );
 

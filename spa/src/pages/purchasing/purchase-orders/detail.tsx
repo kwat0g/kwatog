@@ -49,7 +49,7 @@ export default function PurchaseOrderDetailPage() {
  queryFn: purchaseOrdersApi.options,
  staleTime: 300_000,
  });
- const statusLabel = purchaseOrderOptions?.statuses.find((option) => option.value === data?.status)?.label;
+ const statusLabel = purchaseOrderOptions?.statuses?.find((option) => option.value === data?.status)?.label;
 
  // Series C — Task C4. Real-time chain progress.
  useChainProgress('purchase_order', id, ['purchasing', 'purchase-orders', id]);

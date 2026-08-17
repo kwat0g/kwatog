@@ -168,7 +168,7 @@ export default function NcrTemplateFormPage() {
                 error={errors.product_id?.message}
               >
                 <option value="">— None —</option>
-                {products.data?.data.map((p) => (
+                {products.data?.data?.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.code} — {p.name}
                   </option>
