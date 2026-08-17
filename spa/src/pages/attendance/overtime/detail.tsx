@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import toast from 'react-hot-toast';
+import { useQuery } from '@tanstack/react-query';
 import { LuCheck, LuX, LuRotateCcw } from '@/lib/icons';
 import { overtimeApi } from '@/api/attendance/overtime';
 import { attendancesApi } from '@/api/attendance/attendances';
@@ -18,9 +17,9 @@ import { usePermission } from '@/hooks/usePermission';
 import { useAuthStore } from '@/stores/authStore';
 import { formatDate, formatDateTime, formatTime } from '@/lib/formatDate';
 
+import { useOptimisticStatusAction } from '@/hooks/useOptimisticStatusAction';
 export default function OvertimeDetailPage() {
  const { id = '' } = useParams<{ id: string }>();
- const qc = useQueryClient();
  const user = useAuthStore((s) => s.user);
  const { can } = usePermission();
  const [reject, setReject] = useState(false);
@@ -44,31 +43,28 @@ export default function OvertimeDetailPage() {
 
  const detailKey = ['attendance', 'overtime', 'request', id];
 
- function useActionMutation<TVar = void>(
- fn: (v: TVar) => Promise<unknown>,
- nextStatus: string,
- opts: { successMsg: string; errorMsg: string; afterSuccess?: () => void },
- ) {
- return useMutation<unknown, unknown, TVar, { prev?: unknown }>({
- mutationFn: fn,
- onMutate: async () => {
- await qc.cancelQueries({ queryKey: detailKey });
- const prev = qc.getQueryData(detailKey);
- qc.setQueryData(detailKey, (old: typeof ot) => old ? { ...old, status: nextStatus } : old);
- return { prev };
- },
- onError: (_e, _v, ctx) => {
- if (ctx?.prev) qc.setQueryData(detailKey, ctx.prev);
- toast.error(opts.errorMsg);
- },
- onSuccess: () => { toast.success(opts.successMsg); opts.afterSuccess?.(); },
- onSettled: () => { qc.invalidateQueries({ queryKey: ['attendance', 'overtime'] }); },
- });
- }
 
- const approveMut = useActionMutation(() => overtimeApi.approve(id), 'approved', { successMsg: 'Overtime approved.', errorMsg: 'Failed to approve.' });
- const rejectMut = useActionMutation(() => overtimeApi.reject(id, reason), 'rejected', { successMsg: 'Overtime rejected.', errorMsg: 'Failed to reject.', afterSuccess: () => { setReject(false); setReason(''); } });
- const cancelMut = useActionMutation(() => overtimeApi.cancel(id, reason || undefined), 'rejected', { successMsg: 'Overtime request cancelled.', errorMsg: 'Failed to cancel.', afterSuccess: () => { setReason(''); } });
+ const approveMut = useOptimisticStatusAction({
+      detailKey,
+      invalidateKey: ['attendance', 'overtime'],
+      mutationFn: () => overtimeApi.approve(id),
+      nextStatus: 'approved',
+      successMsg: 'Overtime approved.', errorMsg: 'Failed to approve.',
+    });
+ const rejectMut = useOptimisticStatusAction({
+      detailKey,
+      invalidateKey: ['attendance', 'overtime'],
+      mutationFn: () => overtimeApi.reject(id, reason),
+      nextStatus: 'rejected',
+      successMsg: 'Overtime rejected.', errorMsg: 'Failed to reject.', afterSuccess: () => { setReject(false); setReason(''); },
+    });
+ const cancelMut = useOptimisticStatusAction({
+      detailKey,
+      invalidateKey: ['attendance', 'overtime'],
+      mutationFn: () => overtimeApi.cancel(id, reason || undefined),
+      nextStatus: 'rejected',
+      successMsg: 'Overtime request cancelled.', errorMsg: 'Failed to cancel.', afterSuccess: () => { setReason(''); },
+    });
 
  if (isLoading) return <SkeletonDetail />;
  if (isError || !ot) {

@@ -25,6 +25,7 @@ import type { PurchaseRequest, PurchaseRequestStatus } from '@/types/purchasing'
 import type { ChainStep } from '@/types/chain';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
+import { useOptimisticStatusAction } from '@/hooks/useOptimisticStatusAction';
 const errMsg = (e: unknown, fallback: string) =>
  (e instanceof AxiosError ? e.response?.data?.message : undefined) ?? fallback;
 
@@ -51,32 +52,31 @@ export default function PurchaseRequestDetailPage() {
 
  const detailKey = ['purchasing', 'purchase-requests', id];
 
- function useOptimisticAction<TVar = void>(
- fn: (v: TVar) => Promise<unknown>,
- nextStatus: string,
- opts: { successMsg: string; errorMsg: string; afterSuccess?: () => void },
- ) {
- return useMutation<unknown, unknown, TVar, { prev?: unknown }>({
- mutationFn: fn,
- onMutate: async () => {
- await qc.cancelQueries({ queryKey: detailKey });
- const prev = qc.getQueryData(detailKey);
- qc.setQueryData(detailKey, (old: typeof data) => old ? { ...old, status: nextStatus } : old);
- return { prev };
- },
- onError: (e, _v, ctx) => {
- if (ctx?.prev) qc.setQueryData(detailKey, ctx.prev);
- toast.error(errMsg(e, opts.errorMsg));
- },
- onSuccess: () => { toast.success(opts.successMsg); opts.afterSuccess?.(); },
- onSettled: () => { qc.invalidateQueries({ queryKey: detailKey }); },
- });
- }
 
- const submit = useOptimisticAction(() => purchaseRequestsApi.submit(id), 'pending', { successMsg: 'Submitted for approval.', errorMsg: 'Failed to submit.', afterSuccess: () => setConfirm(null) });
- const approve = useOptimisticAction(() => purchaseRequestsApi.approve(id), 'approved', { successMsg: 'Purchase request approved.', errorMsg: 'Failed to approve.', afterSuccess: () => setConfirm(null) });
- const reject = useOptimisticAction<string>((reason) => purchaseRequestsApi.reject(id, reason), 'rejected', { successMsg: 'Purchase request rejected.', errorMsg: 'Failed to reject.', afterSuccess: () => setRejectOpen(false) });
- const cancel = useOptimisticAction(() => purchaseRequestsApi.cancel(id), 'cancelled', { successMsg: 'Purchase request cancelled.', errorMsg: 'Failed to cancel.', afterSuccess: () => setConfirm(null) }); const acknowledgeBudget = useMutation({
+ const submit = useOptimisticStatusAction({
+      detailKey,
+      mutationFn: () => purchaseRequestsApi.submit(id),
+      nextStatus: 'pending',
+      successMsg: 'Submitted for approval.', errorMsg: 'Failed to submit.', afterSuccess: () => setConfirm(null),
+    });
+ const approve = useOptimisticStatusAction({
+      detailKey,
+      mutationFn: () => purchaseRequestsApi.approve(id),
+      nextStatus: 'approved',
+      successMsg: 'Purchase request approved.', errorMsg: 'Failed to approve.', afterSuccess: () => setConfirm(null),
+    });
+ const reject = useOptimisticStatusAction<string>({
+      detailKey,
+      mutationFn: (reason) => purchaseRequestsApi.reject(id, reason),
+      nextStatus: 'rejected',
+      successMsg: 'Purchase request rejected.', errorMsg: 'Failed to reject.', afterSuccess: () => setRejectOpen(false),
+    });
+ const cancel = useOptimisticStatusAction({
+      detailKey,
+      mutationFn: () => purchaseRequestsApi.cancel(id),
+      nextStatus: 'cancelled',
+      successMsg: 'Purchase request cancelled.', errorMsg: 'Failed to cancel.', afterSuccess: () => setConfirm(null),
+    }); const acknowledgeBudget = useMutation({
   mutationFn: () => purchaseRequestsApi.acknowledgeBudget(id),
   onSuccess: () => { qc.invalidateQueries({ queryKey: detailKey }); toast.success('Budget warning acknowledged.'); },
   onError: (e) => toast.error(errMsg(e, 'Failed to acknowledge budget warning.')),
