@@ -22,6 +22,7 @@ import type { ListParams, ApiValidationError } from '@/types';
 import type { LeaveType } from '@/types/leave';
 
 import { QueryErrorState } from '@/components/ui/QueryErrorState';
+import { showUndoToast } from '@/lib/undoToast';
 const schema = z.object({
  name: z.string().min(1, 'Required').max(100),
  code: z.string().min(1, 'Required').max(10).regex(/^[A-Z0-9_]+$/, 'Uppercase letters, digits, or underscores'),
@@ -89,7 +90,13 @@ export function LeaveTypesManager() {
 
  const deleteMutation = useMutation({
  mutationFn: (id: string) => leaveTypesApi.delete(id),
- onSuccess: () => { qc.invalidateQueries({ queryKey: ['leave-types'] }); toast.success('Leave type archived.'); },
+ onSuccess: (_data, archivedId: string) => { qc.invalidateQueries({ queryKey: ['leave-types'] }); showUndoToast({
+    message: 'Leave type archived.',
+    // Archiving is reversible and one click; the restore endpoint is right
+    // here. An undo is the honest price for it — a modal asking whether the
+    // user meant it is a toll booth on something trivially taken back.
+    onUndo: () => restoreMutation.mutate(archivedId),
+  }); },
  });
 
  const restoreMutation = useMutation({

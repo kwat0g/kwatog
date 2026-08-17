@@ -29,6 +29,7 @@ import { onFormInvalid } from '@/lib/formErrors';
 import type { Holiday } from '@/types/attendance';
 import { cn } from '@/lib/cn';
 
+import { showUndoToast } from '@/lib/undoToast';
 const schema = z.object({
  name: z.string().min(1).max(100),
  date: z.string().min(1, 'Required'),
@@ -58,9 +59,15 @@ export default function HolidaysPage() {
 
  const deleteMutation = useMutation({
  mutationFn: (id: string) => holidaysApi.delete(id),
- onSuccess: () => {
+ onSuccess: (_data, archivedId: string) => {
  qc.invalidateQueries({ queryKey: ['attendance', 'holidays'] });
- toast.success('Holiday archived.');
+ showUndoToast({
+    message: 'Holiday archived.',
+    // Archiving is reversible and one click; the restore endpoint is right
+    // here. An undo is the honest price for it — a modal asking whether the
+    // user meant it is a toll booth on something trivially taken back.
+    onUndo: () => restoreMutation.mutate(archivedId),
+  });
  setPendingDelete(null);
  },
  onError: () => toast.error('Failed to archive holiday.'),

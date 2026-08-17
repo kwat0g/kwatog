@@ -28,6 +28,7 @@ import { cn } from '@/lib/cn';
 import { focusRing } from '@/lib/focus';
 
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
+import { showUndoToast } from '@/lib/undoToast';
 const schema = z.object({
  name: z.string().trim().min(1, 'Name is required').max(100)
  .regex(/^[\p{L}0-9\s.&\-,()]+$/u, 'Letters, digits, spaces, and . & - , ( )'),
@@ -70,7 +71,6 @@ export default function DepartmentsPage() {
  const [selectedId, setSelectedId] = useState<string | null>(null);
  const [editingId, setEditingId] = useState<string | null>(null);
  const [modalOpen, setModalOpen] = useState(false);
- const [pendingDelete, setPendingDelete] = useState<Department | null>(null);
  const [pendingRestore, setPendingRestore] = useState<Department | null>(null);
  const [scope, setScope] = useState<ArchiveScope>('active');
 
@@ -108,10 +108,15 @@ export default function DepartmentsPage() {
 
  const deleteMutation = useMutation({
   mutationFn: (id: string) => departmentsApi.delete(id),
-  onSuccess: () => {
+  onSuccess: (_data, archivedId: string) => {
   qc.invalidateQueries({ queryKey: ['hr', 'departments'] });
-  toast.success('Department archived.');
-  setPendingDelete(null);
+  showUndoToast({
+    message: 'Department archived.',
+    // Archiving is reversible and one click; the restore endpoint is right
+    // here. An undo is the honest price for it — a modal asking whether the
+    // user meant it is a toll booth on something trivially taken back.
+    onUndo: () => restoreMutation.mutate(archivedId),
+  });
   setSelectedId(null);
   },
   onError: (e: AxiosError<{ message?: string }>) => {
@@ -232,7 +237,7 @@ export default function DepartmentsPage() {
   Restore
   </Button>
   ) : (
-  <Button variant="danger" size="sm" onClick={() => setPendingDelete(selected)} icon={<LuTrash2 size={12} />}>
+  <Button variant="danger" size="sm" onClick={() => deleteMutation.mutate(selected.id)} icon={<LuTrash2 size={12} />}>
   Delete
   </Button>
   )}
@@ -255,18 +260,7 @@ export default function DepartmentsPage() {
  />
  )}
 
-{pendingDelete && (
-  <ConfirmDialog
-  isOpen
-  onClose={() => setPendingDelete(null)}
-  onConfirm={() => deleteMutation.mutate(pendingDelete.id)}
-  title="Archive department?"
-  description={<>Archive <span className="font-medium">{pendingDelete.name}</span>? It will be hidden and can be restored later.</>}
-  variant="danger"
-  confirmLabel="Archive"
-  pending={deleteMutation.isPending}
-  />
- )}
+
 
  {pendingRestore && (
   <ConfirmDialog

@@ -25,6 +25,7 @@ import { formatDateTime } from '@/lib/formatDate';
 import type { ScheduledExport } from '@/types/exports';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { showUndoToast } from '@/lib/undoToast';
 export default function ScheduledExportsPage() {
 const [filters, setFilters] = useUrlFilters<{ page: number; scope: ArchiveScope }>({
  page: 1,
@@ -45,9 +46,15 @@ const [filters, setFilters] = useUrlFilters<{ page: number; scope: ArchiveScope 
 
  const deleteMutation = useMutation({
   mutationFn: (id: string) => scheduledExportsApi.destroy(id),
-  onSuccess: () => {
+  onSuccess: (_data, archivedId: string) => {
   queryClient.invalidateQueries({ queryKey: ['scheduled-exports'] });
-  toast.success('Scheduled export archived.');
+  showUndoToast({
+    message: 'Scheduled export archived.',
+    // Archiving is reversible and one click; the restore endpoint is right
+    // here. An undo is the honest price for it — a modal asking whether the
+    // user meant it is a toll booth on something trivially taken back.
+    onUndo: () => restoreMutation.mutate(archivedId),
+  });
   setDeleteTarget(null);
   },
   onError: () => {

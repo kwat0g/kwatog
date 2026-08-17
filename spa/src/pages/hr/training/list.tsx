@@ -19,6 +19,7 @@ import type { Training } from '@/types/hr';
 
 import { QueryErrorState } from '@/components/ui/QueryErrorState';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { showUndoToast } from '@/lib/undoToast';
 export default function TrainingListPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
@@ -38,9 +39,15 @@ const [deleteTarget, setDeleteTarget] = useState<Training | null>(null);
 
  const deleteMutation = useMutation({
   mutationFn: (id: string) => trainingsApi.delete(id),
-  onSuccess: () => {
+  onSuccess: (_data, archivedId: string) => {
   qc.invalidateQueries({ queryKey: ['hr', 'trainings'] });
-  toast.success('Training archived.');
+  showUndoToast({
+    message: 'Training archived.',
+    // Archiving is reversible and one click; the restore endpoint is right
+    // here. An undo is the honest price for it — a modal asking whether the
+    // user meant it is a toll booth on something trivially taken back.
+    onUndo: () => restoreMutation.mutate(archivedId),
+  });
   setDeleteTarget(null);
   },
   onError: () => toast.error('Failed to archive training.'),

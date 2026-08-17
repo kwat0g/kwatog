@@ -28,6 +28,7 @@ import { onFormInvalid } from '@/lib/formErrors';
 import type { Shift } from '@/types/attendance';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { showUndoToast } from '@/lib/undoToast';
 const schema = z.object({
  name: z.string().trim().min(1, 'Name is required').max(50)
  .regex(/^[A-Za-z0-9\s\-_().]+$/, 'Letters, digits, spaces, and -_().'),
@@ -49,7 +50,6 @@ export default function ShiftsPage() {
  const [filters, setFilters] = useUrlFilters<ListParams>({ page: 1, per_page: 25 });
  const [editing, setEditing] = useState<Shift | null>(null);
  const [modalOpen, setModalOpen] = useState(false);
- const [pendingDelete, setPendingDelete] = useState<Shift | null>(null);
  const [pendingRestore, setPendingRestore] = useState<Shift | null>(null);
  const [scope, setScope] = useState<ArchiveScope>('active');
  const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -67,10 +67,15 @@ export default function ShiftsPage() {
 
  const deleteMutation = useMutation({
  mutationFn: (id: string) => shiftsApi.delete(id),
- onSuccess: () => {
+ onSuccess: (_data, archivedId: string) => {
  qc.invalidateQueries({ queryKey: ['attendance', 'shifts'] });
- toast.success('Shift archived.');
- setPendingDelete(null);
+ showUndoToast({
+    message: 'Shift archived.',
+    // Archiving is reversible and one click; the restore endpoint is right
+    // here. An undo is the honest price for it — a modal asking whether the
+    // user meant it is a toll booth on something trivially taken back.
+    onUndo: () => restoreMutation.mutate(archivedId),
+  });
  setSelectedId(null);
  },
  onError: (e: AxiosError<{ message?: string }>) => {
@@ -190,7 +195,7 @@ export default function ShiftsPage() {
  {scope === 'only' ? (
  <Button variant="secondary" size="sm" onClick={() => setPendingRestore(selected)} icon={<LuArchiveRestore size={12} />}>Restore</Button>
  ) : (
- <Button variant="danger" size="sm" onClick={() => setPendingDelete(selected)} icon={<LuTrash2 size={12} />}>Archive</Button>
+ <Button variant="danger" size="sm" onClick={() => deleteMutation.mutate(selected.id)} icon={<LuTrash2 size={12} />}>Archive</Button>
  )}
  </ModalFooter>
  )}
@@ -210,18 +215,7 @@ export default function ShiftsPage() {
  }}
  />
  )}
- {pendingDelete && (
- <ConfirmDialog
- isOpen
- onClose={() => setPendingDelete(null)}
- onConfirm={() => deleteMutation.mutate(pendingDelete.id)}
- title="Archive shift?"
- description={<>Archive <span className="font-medium">{pendingDelete.name}</span>? It will be moved to archive and can be restored later.</>}
- variant="danger"
- confirmLabel="Archive"
- pending={deleteMutation.isPending}
- />
- )}
+ 
  {pendingRestore && (
  <ConfirmDialog
  isOpen
