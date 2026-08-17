@@ -25,6 +25,7 @@ import { numberInputProps } from '@/lib/numberInput';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const itemSchema = z.object({
  expense_account_id: z.string().min(1, 'Required'),
  // REC-02 — hidden PO item FK; empty for manually added free-text lines.
@@ -200,7 +201,7 @@ export default function CreateBillPage() {
  navigate(`/accounting/bills/${b.id}`);
  },
  onError: (e) => {
-   applyServerValidationErrors(e, setError, 'Failed to save. Please try again.');
+   applyServerValidationErrors(e, setError, 'Failed to create the bill.');
  },
  });
  const safety = useFormSafety({ form, saved: mutation.isSuccess });
@@ -310,12 +311,12 @@ export default function CreateBillPage() {
  </div>
  </Panel>
 
- <div className="flex justify-end gap-2 pt-2">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/accounting/bills')}>Cancel</Button>
  <Button type="submit" variant="primary" loading={mutation.isPending} disabled={isSubmitting || mutation.isPending}>
  Create bill
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

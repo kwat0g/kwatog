@@ -24,6 +24,7 @@ import { cn } from '@/lib/cn';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  title: z.string().min(1, 'Title is required').max(200),
  department_id: z.string().min(1, 'Department is required'),
@@ -268,14 +269,14 @@ export default function PostingEditPage() {
  </Panel>
  </div>
 
- <div className="flex justify-end gap-2 pt-2">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate(`/hr/recruitment/postings/${id}`)}>
  Cancel
  </Button>
  <Button type="submit" variant="primary" disabled={mutation.isPending} loading={mutation.isPending}>
  {mutation.isPending ? 'Saving…' : 'Save Changes'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

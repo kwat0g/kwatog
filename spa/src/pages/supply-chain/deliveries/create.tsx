@@ -19,6 +19,7 @@ import { formatPeso } from '@/lib/formatNumber';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 // ─── Validation ──────────────────────────────────────────────────────────────
 
 const itemSchema = z.object({
@@ -309,7 +310,7 @@ export default function CreateDeliveryPage() {
  </fieldset>
 
  {/* ── Actions ── */}
- <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+ <FormActions>
  <Button
  type="button"
  variant="secondary"
@@ -325,7 +326,7 @@ export default function CreateDeliveryPage() {
  >
  {mutation.isPending ? 'Creating…' : 'Create delivery'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

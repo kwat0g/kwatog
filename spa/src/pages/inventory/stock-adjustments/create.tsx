@@ -20,6 +20,7 @@ import { numberInputProps } from '@/lib/numberInput';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  item_id: z.string().min(1, 'Item is required.'),
  location_id: z.string().min(1, 'Location is required.'),
@@ -139,10 +140,10 @@ export default function CreateStockAdjustmentPage() {
  />
  </div>
  </Panel>
- <div className="flex justify-end gap-2">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => nav('/inventory/stock-levels?view=movements')}>Cancel</Button>
  <Button type="submit" variant="primary" disabled={isSubmitting}>Record adjustment</Button>
- </div>
+ </FormActions>
  </form>
 
  <ConfirmDialog

@@ -19,6 +19,7 @@ import type { CreateItemData, ItemType, ReorderMethod } from '@/types/inventory'
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  code: z.string().min(2).max(30).regex(/^[A-Z0-9-]+$/, 'Use uppercase letters, digits, hyphens.'),
  name: z.string().min(1).max(200),
@@ -103,7 +104,7 @@ export default function ItemFormPage({ mode }: { mode: 'create' | 'edit' }) {
  navigate(`/inventory/items/${it.id}`);
  },
  onError: (e) => {
-   applyServerValidationErrors(e, setError, 'Failed to save. Please try again.');
+   applyServerValidationErrors(e, setError, 'Failed to save the item.');
  },
  });
  const safety = useFormSafety({ form, saved: mutation.isSuccess });
@@ -169,14 +170,14 @@ export default function ItemFormPage({ mode }: { mode: 'create' | 'edit' }) {
  </div>
  </Panel>
 
- <div className="flex justify-end gap-2 pt-2">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/inventory/items')}>Cancel</Button>
  <Button type="submit" variant="primary"
  loading={mutation.isPending}
  disabled={isSubmitting || mutation.isPending}>
  {mode === 'create' ? 'Create item' : 'Save changes'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

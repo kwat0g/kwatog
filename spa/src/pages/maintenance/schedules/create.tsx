@@ -16,6 +16,7 @@ import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
   maintainable_type: z.string().min(1, 'Target type required'),
   maintainable_id: z.string().min(1, 'Target ID required'),
@@ -54,7 +55,7 @@ export default function CreateMaintenanceSchedulePage() {
  navigate('/maintenance/schedules');
  },
  onError: (err) => {
-   applyServerValidationErrors(err, setError, 'Failed to save. Please try again.');
+   applyServerValidationErrors(err, setError, 'Failed to create the maintenance schedule.');
  },
  });
  const safety = useFormSafety({ form, saved: mutation.isSuccess });
@@ -90,12 +91,12 @@ export default function CreateMaintenanceSchedulePage() {
  </div>
  </fieldset>
 
- <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/maintenance/schedules')}>Cancel</Button>
  <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending} loading={mutation.isPending}>
  {mutation.isPending ? 'Creating…' : 'Create schedule'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

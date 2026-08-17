@@ -24,6 +24,7 @@ import { numberInputProps } from '@/lib/numberInput';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const itemSchema = z.object({
  revenue_account_id: z.string().min(1, 'Required'),
  description: z.string().min(1, 'Required').max(200),
@@ -106,7 +107,7 @@ export default function CreateInvoicePage() {
  navigate(`/accounting/invoices/${inv.id}`);
  },
  onError: (e) => {
-   applyServerValidationErrors(e, setError, 'Failed to save. Please try again.');
+   applyServerValidationErrors(e, setError, 'Failed to create the invoice.');
  },
  });
  const safety = useFormSafety({ form, saved: mutation.isSuccess });
@@ -187,10 +188,10 @@ export default function CreateInvoicePage() {
  </div>
  </Panel>
 
- <div className="flex justify-end gap-2 pt-2">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/accounting/invoices')}>Cancel</Button>
  <Button type="submit" variant="primary" loading={mutation.isPending} disabled={isSubmitting || mutation.isPending}>Save draft</Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

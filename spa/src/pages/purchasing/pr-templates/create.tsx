@@ -19,6 +19,7 @@ import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const lineSchema = z.object({
   item_id: z.string().optional().or(z.literal('')),
   description: z.string().trim().min(2, 'Description is required.').max(200),
@@ -141,7 +142,7 @@ export default function PrTemplateFormPage() {
       navigate('/purchasing/pr-templates');
     },
     onError: (err) => {
-      applyServerValidationErrors(err, setError, 'Failed to save. Please try again.');
+      applyServerValidationErrors(err, setError, 'Failed to save the PR template.');
     },
   });
   const safety = useFormSafety({ form, saved: save.isSuccess });
@@ -292,7 +293,7 @@ export default function PrTemplateFormPage() {
           </div>
         </Panel>
 
-        <div className="flex items-center justify-end gap-2 pt-2">
+        <FormActions>
           <Button
             type="button"
             variant="secondary"
@@ -314,7 +315,7 @@ export default function PrTemplateFormPage() {
                 ? 'Update Template'
                 : 'Create Template'}
           </Button>
-        </div>
+        </FormActions>
       </form>
     </div>
   );

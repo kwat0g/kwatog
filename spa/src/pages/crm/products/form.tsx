@@ -23,6 +23,7 @@ import type { Product, CreateProductData, UpdateProductData } from '@/types/crm'
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
   part_number: z
     .string()
@@ -207,7 +208,7 @@ export function ProductForm({ initial, mode }: Props) {
         />
       </fieldset>
 
-      <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+      <FormActions>
         <Button type="button" variant="secondary" onClick={() => navigate('/crm/products')}>
           Cancel
         </Button>
@@ -225,7 +226,7 @@ export function ProductForm({ initial, mode }: Props) {
               ? 'Create product'
               : 'Save changes'}
         </Button>
-      </div>
+      </FormActions>
     </form>
   );
 }

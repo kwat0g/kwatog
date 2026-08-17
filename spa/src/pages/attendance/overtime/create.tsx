@@ -19,6 +19,7 @@ import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 function todayIso(): string {
  const d = new Date();
  const off = d.getTimezoneOffset() * 60_000;
@@ -163,12 +164,12 @@ export default function OvertimeCreatePage() {
  </div>
  </Panel>
  )}
- <div className="flex justify-end gap-2 pt-4">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/hr/attendance/overtime')}>Cancel</Button>
  <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending || optionsLoading || optionsError || !options} loading={mutation.isPending}>
  {mutation.isPending ? 'Submitting…' : 'Submit request'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

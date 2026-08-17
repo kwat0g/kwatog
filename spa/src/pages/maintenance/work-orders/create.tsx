@@ -16,6 +16,7 @@ import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
   maintainable_type: z.string().min(1, 'Target type is required'),
   maintainable_id: z.string().min(1, 'Target ID required'),
@@ -54,7 +55,7 @@ export default function CreateMaintenanceWorkOrderPage() {
  navigate(`/maintenance/work-orders/${wo.id}`);
  },
  onError: (error) => {
-   applyServerValidationErrors(error, setError, 'Failed to save. Please try again.');
+   applyServerValidationErrors(error, setError, 'Failed to create the maintenance work order.');
  },
  });
  const safety = useFormSafety({ form, saved: mutation.isSuccess });
@@ -94,12 +95,12 @@ export default function CreateMaintenanceWorkOrderPage() {
  <Textarea label="Description" {...register('description')} rows={5} error={errors.description?.message} required />
  </fieldset>
 
- <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/maintenance/work-orders')}>Cancel</Button>
  <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending} loading={mutation.isPending}>
  {mutation.isPending ? 'Creating…' : 'Create work order'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

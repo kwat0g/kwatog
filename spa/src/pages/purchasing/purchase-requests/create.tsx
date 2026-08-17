@@ -24,6 +24,7 @@ import { formatPeso } from '@/lib/formatNumber';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const lineSchema = z.object({
   item_id: z.string().optional().or(z.literal('')),
   description: z.string().trim().min(2, 'Description is required.').max(200),
@@ -339,7 +340,7 @@ export default function CreatePurchaseRequestPage() {
             </tbody>
           </table>
         </Panel>
-        <div className="flex justify-end gap-2">
+        <FormActions>
           <Button
             type="button"
             variant="secondary"
@@ -364,7 +365,7 @@ export default function CreatePurchaseRequestPage() {
           >
             Submit for approval
           </Button>
-        </div>
+        </FormActions>
       </form>
 
       <ConfirmDialog

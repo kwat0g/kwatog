@@ -14,6 +14,7 @@ import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { CustomerForm, customerSchema, type CustomerFormValues } from './form';
 
+import { FormActions } from '@/components/ui/FormActions';
 type FormValues = CustomerFormValues;
 
 export default function CrmCustomerEditPage() {
@@ -78,7 +79,7 @@ export default function CrmCustomerEditPage() {
  navigate(`/crm/customers/${customer.id}`);
  },
  onError: (e) => {
-   applyServerValidationErrors(e, setError, 'Failed to save. Please try again.');
+   applyServerValidationErrors(e, setError, 'Failed to save the customer.');
  },
  });
  const safety = useFormSafety({ form: methods, saved: mutation.isSuccess });
@@ -105,7 +106,7 @@ export default function CrmCustomerEditPage() {
  <FormProvider {...methods}>
  <form onSubmit={handleSubmit((v) => mutation.mutate(v), onFormInvalid<FormValues>())}>
  <CustomerForm />
- <div className="max-w-3xl mx-auto px-5 pb-6 flex justify-end gap-2">
+ <FormActions>
  <Button
  type="button"
  variant="secondary"
@@ -121,7 +122,7 @@ export default function CrmCustomerEditPage() {
  >
  {mutation.isPending ? 'Saving…' : 'Save changes'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </FormProvider>
  )}

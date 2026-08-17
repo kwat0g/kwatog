@@ -16,6 +16,7 @@ import { onFormInvalid, applyServerValidationErrors } from '@/lib/formErrors';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  purchase_order_id: z.string().min(1, 'Purchase order is required'),
  carrier: z.string().max(100).optional().or(z.literal('')),
@@ -187,7 +188,7 @@ export default function CreateShipmentPage() {
  />
  </fieldset>
 
- <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+ <FormActions>
  <Button
  type="button"
  variant="secondary"
@@ -203,7 +204,7 @@ export default function CreateShipmentPage() {
  >
  {mutation.isPending ? 'Creating…' : 'Create shipment'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

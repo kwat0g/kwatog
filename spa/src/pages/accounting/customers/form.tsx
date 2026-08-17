@@ -18,6 +18,7 @@ import { numberInputProps } from '@/lib/numberInput';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  name: z.string().min(1).max(200),
  contact_person: z.string().max(100).optional().or(z.literal('')),
@@ -71,7 +72,7 @@ export default function CustomerFormPage({ mode }: { mode: 'create' | 'edit' }) 
  navigate(`/accounting/customers/${c.id}`);
  },
  onError: (e) => {
-   applyServerValidationErrors(e, setError, 'Failed to save. Please try again.');
+   applyServerValidationErrors(e, setError, 'Failed to save the customer.');
  },
  });
  const safety = useFormSafety({ form, saved: mutation.isSuccess });
@@ -95,12 +96,12 @@ export default function CustomerFormPage({ mode }: { mode: 'create' | 'edit' }) 
  </div>
  <div className="mt-3"><Switch label="Active" {...register('is_active')} /></div>
  </Panel>
- <div className="flex justify-end gap-2 pt-2">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/accounting/customers')}>Cancel</Button>
  <Button type="submit" variant="primary" loading={mutation.isPending} disabled={isSubmitting || mutation.isPending}>
  {mode === 'create' ? 'Create customer' : 'Save changes'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

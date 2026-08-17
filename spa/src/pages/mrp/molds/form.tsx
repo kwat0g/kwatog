@@ -22,6 +22,7 @@ import type { Mold, CreateMoldData, UpdateMoldData } from '@/types/mrp';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const intField = (max: number, msg: string) =>
   z
     .string()
@@ -260,7 +261,7 @@ export function MoldForm({ initial, mode }: Props) {
         </div>
       </fieldset>
 
-      <div className="flex items-center justify-end gap-2">
+      <FormActions>
         <Button type="button" variant="secondary" onClick={() => navigate(-1)}>
           Cancel
         </Button>
@@ -271,7 +272,7 @@ export function MoldForm({ initial, mode }: Props) {
               ? 'Create mold'
               : 'Save changes'}
         </Button>
-      </div>
+      </FormActions>
     </form>
   );
 }

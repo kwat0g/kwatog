@@ -35,6 +35,7 @@ import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const itemSchema = z.object({
  product_id: z.string().min(1, 'Product is required'),
  quantity: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Use a positive decimal with up to 2 places').refine((v) => Number(v) > 0, 'Must be greater than 0'),
@@ -285,7 +286,7 @@ export default function CreateSalesOrderPage() {
  />
  </fieldset>
 
- <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/crm/sales-orders')}>
  Cancel
  </Button>
@@ -307,7 +308,7 @@ export default function CreateSalesOrderPage() {
  >
  {create.isPending && submitMode === 'confirm' ? 'Confirming…' : 'Save & confirm'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

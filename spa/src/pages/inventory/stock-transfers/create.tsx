@@ -20,6 +20,7 @@ import { numberInputProps } from '@/lib/numberInput';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  item_id: z.string().min(1, 'Item is required.'),
  from_location_id: z.string().min(1, 'Source location is required.'),
@@ -121,10 +122,10 @@ export default function CreateStockTransferPage() {
  />
  </div>
  </Panel>
- <div className="flex justify-end gap-2">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => nav('/inventory/movements')}>Cancel</Button>
  <Button type="submit" variant="primary" disabled={isSubmitting}>Transfer</Button>
- </div>
+ </FormActions>
  </form>
 
  <ConfirmDialog

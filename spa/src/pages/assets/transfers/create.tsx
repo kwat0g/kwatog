@@ -18,6 +18,7 @@ import type { CreateTransferData } from '@/types/assets';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  asset_id: z.string().min(1, 'Asset is required'),
  from_department_id: z.string().min(1, 'From department is required'),
@@ -109,12 +110,12 @@ export default function CreateAssetTransferPage() {
  </div>
  </fieldset>
 
- <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/assets/transfers')}>Cancel</Button>
  <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending} loading={mutation.isPending}>
  {mutation.isPending ? 'Creating...' : 'Create transfer'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

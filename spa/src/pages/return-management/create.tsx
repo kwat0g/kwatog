@@ -20,6 +20,7 @@ import { onFormInvalid, applyServerValidationErrors } from '@/lib/formErrors';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const itemSchema = z.object({
  // A supplier return moves raw materials (items); a customer return moves
  // finished goods (products). The backend requires one or the other per line.
@@ -376,7 +377,7 @@ export default function CreateReturnRequestPage() {
  </Panel>
 
  {/* Submit footer */}
- <div className="flex justify-end gap-2 pt-2">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/return-management')}>
  Cancel
  </Button>
@@ -388,7 +389,7 @@ export default function CreateReturnRequestPage() {
  >
  {mutation.isPending ? 'Creating...' : 'Create Return Request'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

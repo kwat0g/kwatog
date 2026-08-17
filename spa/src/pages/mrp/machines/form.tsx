@@ -19,6 +19,7 @@ import type { Machine, CreateMachineData, UpdateMachineData } from '@/types/mrp'
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
   machine_code: z
     .string()
@@ -189,7 +190,7 @@ export function MachineForm({ initial, mode }: Props) {
         </div>
       </fieldset>
 
-      <div className="flex items-center justify-end gap-2">
+      <FormActions>
         <Button type="button" variant="secondary" onClick={() => navigate(-1)}>
           Cancel
         </Button>
@@ -200,7 +201,7 @@ export function MachineForm({ initial, mode }: Props) {
               ? 'Create machine'
               : 'Save changes'}
         </Button>
-      </div>
+      </FormActions>
     </form>
   );
 }

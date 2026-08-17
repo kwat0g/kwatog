@@ -15,6 +15,7 @@ import type { PriceAgreement, CreatePriceAgreementData } from '@/types/crm';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  product_id: z.string().min(1, 'Select a product'),
  customer_id: z.string().min(1, 'Select a customer'),
@@ -146,7 +147,7 @@ export function PriceAgreementForm({ initial, mode }: Props) {
  </div>
  </fieldset>
 
- <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/crm/price-agreements')}>
  Cancel
  </Button>
@@ -160,7 +161,7 @@ export function PriceAgreementForm({ initial, mode }: Props) {
  ? mode === 'create' ? 'Creating…' : 'Saving…'
  : mode === 'create' ? 'Create agreement' : 'Save changes'}
  </Button>
- </div>
+ </FormActions>
  </form>
  );
 }

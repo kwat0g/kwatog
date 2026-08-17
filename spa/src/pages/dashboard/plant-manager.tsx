@@ -104,8 +104,19 @@ export default function PlantManagerDashboard() {
       actions={<PeriodControl value={range} onChange={setRange} />}
     >
       {(data) => {
+        /*
+         * A panel the viewer may not read is absent, not empty — the server
+         * omits it (PanelGate). Derived values default to empty so the maths
+         * below is unchanged, but each PANEL is rendered conditionally further
+         * down: an absent panel must not draw as "no machines" / "₱0.00", which
+         * reads as a fact rather than as a panel you cannot see.
+         */
+        const machines = data.panels.machine_util ?? [];
+        const alerts = data.panels.alerts ?? [];
+        const defects = data.panels.defect_pareto ?? [];
+
         const machineStatusCounts: Record<string, number> = {};
-        data.panels.machine_util.forEach((m) => {
+        machines.forEach((m) => {
           machineStatusCounts[m.status] = (machineStatusCounts[m.status] || 0) + 1;
         });
         // ONE severity table drives the donut, the bars and the dots. This file
@@ -122,12 +133,12 @@ export default function PlantManagerDashboard() {
         // A machine down blocks Chain 1 outright, so it promotes the whole floor
         // band rather than sitting as one chip among twelve identical tiles.
         const floorSeverity = worstSeverity(
-          data.panels.machine_util.map((m) => machineSeverity(m.status)),
+          machines.map((m) => machineSeverity(m.status)),
         );
-        const downMachines = data.panels.machine_util.filter(
+        const downMachines = machines.filter(
           (m) => machineSeverity(m.status) === 'critical',
         );
-        const alertSeverity = worstSeverity(data.panels.alerts.map((a) => toSeverity(a.severity)));
+        const alertSeverity = worstSeverity(alerts.map((a) => toSeverity(a.severity)));
 
         return (
           <>
@@ -167,31 +178,41 @@ export default function PlantManagerDashboard() {
               }
               meta={rangeLabel(range)}
             >
-              <PanelEmphasis severity={floorSeverity}>
-                <MachineUtilPanel machines={data.panels.machine_util} />
-              </PanelEmphasis>
-              <PanelRow>
-                <PanelEmphasis severity={alertSeverity}>
-                  <AlertsPanel alerts={data.panels.alerts} />
+              {data.panels.machine_util && (
+                <PanelEmphasis severity={floorSeverity}>
+                  <MachineUtilPanel machines={data.panels.machine_util} />
                 </PanelEmphasis>
-                <DefectParetoPanel defects={data.panels.defect_pareto} />
+              )}
+              <PanelRow>
+                {data.panels.alerts && (
+                  <PanelEmphasis severity={alertSeverity}>
+                    <AlertsPanel alerts={data.panels.alerts} />
+                  </PanelEmphasis>
+                )}
+                {data.panels.defect_pareto && <DefectParetoPanel defects={data.panels.defect_pareto} />}
               </PanelRow>
             </DashSection>
 
             {/* ── Orders & money ── */}
             <DashSection title="Orders & money" meta={rangeLabel(range)}>
-              <Panel
-                title="Order-to-Cash Chain"
-                actions={
-                  <Link className="text-xs text-link hover:underline" to="/approvals">
-                    View board →
-                  </Link>
-                }
-              >
-                <StageBar stages={data.panels.chain_stages} />
-              </Panel>
+              {data.panels.chain_stages && (
+                <Panel
+                  title="Order-to-Cash Chain"
+                  actions={
+                    <Link className="text-xs text-link hover:underline" to="/approvals">
+                      View board →
+                    </Link>
+                  }
+                >
+                  <StageBar stages={data.panels.chain_stages} />
+                </Panel>
+              )}
               <PanelRow>
-                <FinancialSnapshotPanel snapshot={data.panels.financial_snapshot} />
+                {/* Cash, AR, AP and revenue. Omitted unless the viewer holds
+                    accounting.dashboard.view — production_manager does not. */}
+                {data.panels.financial_snapshot && (
+                  <FinancialSnapshotPanel snapshot={data.panels.financial_snapshot} />
+                )}
                 <Panel title="Machine Status Breakdown">
                   {machineStatusData.length === 0 ? (
                     <EmptyState
@@ -204,7 +225,7 @@ export default function PlantManagerDashboard() {
                     <DonutBreakdown
                       data={machineStatusData}
                       centerLabel="Machines"
-                      centerValue={String(data.panels.machine_util.length)}
+                      centerValue={String(machines.length)}
                     />
                   )}
                 </Panel>
@@ -220,7 +241,7 @@ export default function PlantManagerDashboard() {
               summary="Defect chart, demand and stock-out outlook"
             >
               <Panel title="Top Defects">
-                {data.panels.defect_pareto.length === 0 ? (
+                {defects.length === 0 ? (
                   <EmptyState
                     size="compact"
                     icon="check-circle"
@@ -229,7 +250,7 @@ export default function PlantManagerDashboard() {
                   />
                 ) : (
                   <BarComparison
-                    data={data.panels.defect_pareto
+                    data={defects
                       .slice(0, 8)
                       .map((d) => ({ label: d.code, count: d.count }))}
                     bars={[{ dataKey: 'count', color: SEVERITY.critical.chart, label: 'Defects' }]}
@@ -255,7 +276,7 @@ export default function PlantManagerDashboard() {
 
 /* ── Sub-panels ─────────────────────────────────────────────────────────── */
 
-function StageBar({ stages }: { stages: PlantManagerData['panels']['chain_stages'] }) {
+function StageBar({ stages }: { stages: NonNullable<PlantManagerData['panels']['chain_stages']> }) {
   if (stages.length === 0) {
     return (
       <EmptyState
@@ -289,7 +310,7 @@ function StageBar({ stages }: { stages: PlantManagerData['panels']['chain_stages
   );
 }
 
-function MachineUtilPanel({ machines }: { machines: PlantManagerData['panels']['machine_util'] }) {
+function MachineUtilPanel({ machines }: { machines: NonNullable<PlantManagerData['panels']['machine_util']> }) {
   const statusVariant = (status: string): 'success' | 'warning' | 'danger' | 'neutral' | 'info' => {
     switch (status) {
       case 'running':
@@ -342,7 +363,7 @@ function MachineUtilPanel({ machines }: { machines: PlantManagerData['panels']['
   );
 }
 
-function DefectParetoPanel({ defects }: { defects: PlantManagerData['panels']['defect_pareto'] }) {
+function DefectParetoPanel({ defects }: { defects: NonNullable<PlantManagerData['panels']['defect_pareto']> }) {
   if (defects.length === 0) {
     return (
       <Panel title="Defect Pareto (top 8)">
@@ -390,7 +411,7 @@ function DefectParetoPanel({ defects }: { defects: PlantManagerData['panels']['d
   );
 }
 
-function AlertsPanel({ alerts }: { alerts: PlantManagerData['panels']['alerts'] }) {
+function AlertsPanel({ alerts }: { alerts: NonNullable<PlantManagerData['panels']['alerts']> }) {
   return (
     <Panel
       title="Alerts & Attention"
@@ -433,7 +454,7 @@ function AlertsPanel({ alerts }: { alerts: PlantManagerData['panels']['alerts'] 
 function FinancialSnapshotPanel({
   snapshot,
 }: {
-  snapshot: PlantManagerData['panels']['financial_snapshot'];
+  snapshot: NonNullable<PlantManagerData['panels']['financial_snapshot']>;
 }) {
   const rows: Array<{ label: string; value: string; href: string }> = [
     { label: 'Cash on hand', value: snapshot.cash_balance, href: '/accounting/coa' },

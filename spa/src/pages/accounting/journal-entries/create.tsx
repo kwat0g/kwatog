@@ -20,6 +20,7 @@ import { numberInputProps } from '@/lib/numberInput';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const lineSchema = z.object({
  account_id: z.string().min(1, 'Account is required'),
  debit: z.preprocess((value) => value === '' || value == null ? undefined : value, z.coerce.number({ invalid_type_error: 'Number' }).min(0, 'Min 0').optional()),
@@ -90,7 +91,7 @@ export default function CreateJournalEntryPage() {
  navigate(`/accounting/journal-entries/${je.id}`);
  },
  onError: (e) => {
-   applyServerValidationErrors(e, setError, 'Failed to save. Please try again.');
+   applyServerValidationErrors(e, setError, 'Failed to post the journal entry.');
  },
  });
  const safety = useFormSafety({ form, saved: mutation.isSuccess });
@@ -175,14 +176,14 @@ export default function CreateJournalEntryPage() {
  </div>
  </Panel>
 
- <div className="flex justify-end gap-2 pt-2">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/accounting/journal-entries')}>Cancel</Button>
  <Button type="submit" variant="primary"
  disabled={!totals.balanced || isSubmitting || mutation.isPending}
  loading={mutation.isPending}>
  {mutation.isPending ? 'Saving…' : 'Save draft'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

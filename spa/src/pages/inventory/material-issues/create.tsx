@@ -21,6 +21,7 @@ import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const itemSchema = z.object({
  item_id: z.string().min(1, 'Item required'),
  location_id: z.string().min(1, 'Location required'),
@@ -115,7 +116,7 @@ export default function CreateMaterialIssuePage() {
  nav(`/inventory/material-issues/${slip.id}`);
  },
  onError: (e) => {
-   applyServerValidationErrors(e, setError, 'Failed to save. Please try again.');
+   applyServerValidationErrors(e, setError, 'Failed to record the material issue.');
  },
  });
  const safety = useFormSafety({ form, saved: mutation.isSuccess });
@@ -249,14 +250,14 @@ export default function CreateMaterialIssuePage() {
  </div>
  </Panel>
 
- <div className="flex justify-end gap-2 pt-2">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => nav('/inventory/material-issues')} disabled={mutation.isPending}>
  Cancel
  </Button>
  <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending} loading={mutation.isPending}>
  {mutation.isPending ? 'Saving…' : 'Create issue'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

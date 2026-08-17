@@ -20,6 +20,7 @@ import type { CreateComplaintData, ComplaintSeverity } from '@/types/crm';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  customer_id: z.string().min(1, 'Customer is required'),
  product_id: z.string().optional().or(z.literal('')),
@@ -136,12 +137,12 @@ export default function CreateComplaintPage() {
  {...register('description')} error={errors.description?.message} />
  </Panel>
 
- <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+ <FormActions>
  <Button variant="secondary" type="button" onClick={() => navigate(-1)}>Cancel</Button>
  <Button variant="primary" type="submit" loading={submit.isPending}>
  {submit.isPending ? 'Opening...' : 'Open complaint'}
  </Button>
- </div>
+ </FormActions>
  </div>
  </form>
  </div>

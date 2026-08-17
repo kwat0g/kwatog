@@ -20,6 +20,7 @@ import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  employee_id: z.string().min(1, 'Employee is required'),
  leave_type_id: z.string().min(1, 'Leave type is required'),
@@ -167,12 +168,12 @@ export default function CreateLeavePage() {
  </div>
  )}
  </Panel>
- <div className="flex justify-end gap-2 pt-2">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/hr/leaves')}>Cancel</Button>
  <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending} loading={mutation.isPending}>
  {mutation.isPending ? 'Submitting…' : 'Submit request'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

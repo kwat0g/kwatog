@@ -17,6 +17,7 @@ import type { ApiValidationError } from '@/types';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  period_start: z.string().min(1, 'Start date is required'),
  period_end: z.string().min(1, 'End date is required'),
@@ -320,14 +321,14 @@ export default function CreatePayrollPeriodPage() {
  </div>
  )}
 
- <div className="flex justify-end gap-2 pt-4 border-t border-default">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/payroll/periods')} disabled={busy}>
  Cancel
  </Button>
  <Button type="submit" variant="primary" disabled={busy || blocked} loading={mutation.isPending}>
  {mutation.isPending ? 'Creating…' : 'Create period'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

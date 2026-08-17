@@ -28,6 +28,7 @@ import type { CreateWorkOrderData } from '@/types/production';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  product_id: z.string().min(1, 'Product is required'),
  quantity_target: z.string().regex(/^\d+$/, 'Use a positive integer').refine((v) => Number(v) > 0, 'Must be greater than 0'),
@@ -182,7 +183,7 @@ export default function CreateWorkOrderPage() {
  </div>
  </fieldset>
 
- <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/production/work-orders')}>
  Cancel
  </Button>
@@ -194,7 +195,7 @@ export default function CreateWorkOrderPage() {
  >
  {create.isPending ? 'Creating…' : 'Create work order'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

@@ -15,6 +15,7 @@ import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  description: z.string().min(1).max(200),
  interval_type: z.string().min(1, 'Interval type required'),
@@ -102,12 +103,12 @@ export default function EditMaintenanceSchedulePage() {
  </div>
  </fieldset>
 
- <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate(`/maintenance/schedules/${id}`)}>Cancel</Button>
  <Button type="submit" variant="primary" loading={mutation.isPending}>
  {mutation.isPending ? 'Saving…' : 'Save changes'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

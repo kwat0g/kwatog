@@ -16,6 +16,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { applyServerValidationErrors } from '@/lib/formErrors';
+import { FormActions } from '@/components/ui/FormActions';
 /**
  * Series R — Task R1.
  *
@@ -115,7 +116,7 @@ export default function CreateRolePage() {
  navigate(`/admin/roles/${role.id}/permissions`);
  },
  onError: (error) => {
-   applyServerValidationErrors(error, setError, 'Failed to save. Please try again.');
+   applyServerValidationErrors(error, setError, 'Failed to create the role.');
  },
  });
  const safety = useFormSafety({ form, saved: submit.isSuccess });
@@ -199,7 +200,7 @@ export default function CreateRolePage() {
  </fieldset>
 
  {/* ─── Actions ───────────────────────────────────── */}
- <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+ <FormActions>
  <Button
  type="button"
  variant="secondary"
@@ -216,7 +217,7 @@ export default function CreateRolePage() {
  >
  {submit.isPending ? 'Creating…' : 'Create role'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

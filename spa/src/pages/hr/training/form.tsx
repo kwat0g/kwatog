@@ -23,6 +23,7 @@ import { onFormInvalid } from '@/lib/formErrors';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  name: z.string().min(1, 'Name is required').max(200),
  description: z.string().max(1000).optional().or(z.literal('')),
@@ -124,12 +125,12 @@ export default function TrainingFormPage() {
  <Switch label="Is certification" {...register('is_certification')} />
  </div>
  </Panel>
- <div className="flex justify-end gap-2 pt-4">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/hr/trainings')}>Cancel</Button>
  <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending} loading={mutation.isPending}>
  {isEdit ? 'Save changes' : 'Create training'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

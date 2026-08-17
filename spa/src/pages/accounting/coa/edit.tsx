@@ -15,6 +15,7 @@ import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  name: z.string().min(1, 'Name required').max(100),
  description: z.string().max(500).optional().or(z.literal('')),
@@ -91,10 +92,10 @@ export default function EditAccountPage() {
  <option value="false">Inactive</option>
  </Select>
 
- <div className="flex justify-end gap-2 pt-2 border-t border-default">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/accounting/coa')}>Cancel</Button>
  <Button type="submit" variant="primary" loading={mutation.isPending}>Save changes</Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

@@ -16,6 +16,7 @@ import type { AccountType } from '@/types/accounting';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  code: z.string().min(1, 'Code required').max(20),
  name: z.string().min(1, 'Name required').max(100),
@@ -107,10 +108,10 @@ export default function CreateAccountPage() {
  <Textarea label="Description (optional)" {...register('description')} rows={2}
  error={errors.description?.message} />
 
- <div className="flex justify-end gap-2 pt-2 border-t border-default">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/accounting/coa')}>Cancel</Button>
  <Button type="submit" variant="primary" loading={mutation.isPending}>Create account</Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

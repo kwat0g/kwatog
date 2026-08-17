@@ -30,6 +30,7 @@ import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells
 import { cn } from '@/lib/cn';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormActions } from '@/components/ui/FormActions';
 const lineSchema = z.object({
   item_id: z.string().min(1, 'Item is required.'),
   description: z.string().trim().min(2, 'Description is required.').max(200),
@@ -442,7 +443,7 @@ export default function CreatePurchaseOrderPage() {
             </tbody>
           </table>
         </Panel>
-        <div className="flex justify-end gap-2">
+        <FormActions>
           <Button
             type="button"
             variant="secondary"
@@ -459,7 +460,7 @@ export default function CreatePurchaseOrderPage() {
           >
             Create PO
           </Button>
-        </div>
+        </FormActions>
       </form>
       )}
 

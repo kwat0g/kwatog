@@ -17,6 +17,7 @@ import type { ApiValidationError } from '@/types';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  original_payroll_id: z.string().min(1, 'Source payroll is required'),
  type: z.string().min(1, 'Adjustment type is required'),
@@ -123,7 +124,7 @@ export default function CreatePayrollAdjustmentPage() {
  </p>
  </fieldset>
 
- <div className="flex justify-end gap-2 pt-4 border-t border-default">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/payroll/adjustments')}
  disabled={submitting || mutation.isPending}>
  Cancel
@@ -132,7 +133,7 @@ export default function CreatePayrollAdjustmentPage() {
  disabled={submitting || mutation.isPending} loading={mutation.isPending}>
  {mutation.isPending ? 'Submitting…' : 'Submit adjustment'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

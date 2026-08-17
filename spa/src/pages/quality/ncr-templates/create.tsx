@@ -21,6 +21,7 @@ import type { CreateNcrTemplateData } from '@/types/quality';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
   name: z.string().trim().min(1, 'Template name is required.').max(200),
   source: z.string().min(1, 'Source is required.'),
@@ -101,7 +102,7 @@ export default function NcrTemplateFormPage() {
       navigate('/quality/ncr-templates');
     },
     onError: (err) => {
-      applyServerValidationErrors(err, setError, 'Failed to save. Please try again.');
+      applyServerValidationErrors(err, setError, 'Failed to save the NCR template.');
     },
   });
   const safety = useFormSafety({ form, saved: createMut.isSuccess });
@@ -197,7 +198,7 @@ export default function NcrTemplateFormPage() {
             </div>
           </Panel>
 
-          <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+          <FormActions>
             <Button
               variant="secondary"
               type="button"
@@ -214,7 +215,7 @@ export default function NcrTemplateFormPage() {
             >
               {isEdit ? 'Update template' : 'Create template'}
             </Button>
-          </div>
+          </FormActions>
         </div>
       </form>
     </div>

@@ -17,6 +17,7 @@ import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  name: z.string().min(1, 'Name is required').max(200),
  description: z.string().max(5000).optional().or(z.literal('')),
@@ -70,7 +71,7 @@ export default function CreateAssetPage() {
  navigate(`/assets/${asset.id}`);
  },
  onError: (err) => {
-   applyServerValidationErrors(err, setError, 'Failed to save. Please try again.');
+   applyServerValidationErrors(err, setError, 'Failed to create the asset.');
  },
  });
  const safety = useFormSafety({ form, saved: mutation.isSuccess });
@@ -116,12 +117,12 @@ export default function CreateAssetPage() {
  </div>
  </fieldset>
 
- <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/assets')}>Cancel</Button>
  <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending} loading={mutation.isPending}>
  {mutation.isPending ? 'Creating…' : 'Create asset'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

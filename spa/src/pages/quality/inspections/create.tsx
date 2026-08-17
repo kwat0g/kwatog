@@ -27,6 +27,7 @@ import type { CreateInspectionData, InspectionStage, AqlPlan } from '@/types/qua
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  stage: z.string().min(1, 'Stage is required'),
  product_id: z.string().min(1, 'Product is required'),
@@ -166,14 +167,14 @@ export default function CreateInspectionPage() {
  </Panel>
  </div>
 
- <div className="col-span-3 flex items-center justify-end gap-2 border-t border-default pt-4">
+ <FormActions>
  <Button variant="secondary" type="button" onClick={() => navigate(-1)}>
  Cancel
  </Button>
  <Button variant="primary" type="submit" loading={submit.isPending}>
  Open inspection
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

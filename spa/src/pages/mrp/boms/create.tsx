@@ -30,6 +30,7 @@ import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const itemSchema = z.object({
  item_id: z.string().min(1, 'Item is required'),
  quantity_per_unit: z.string().regex(/^\d+(\.\d{1,4})?$/, 'Use a positive decimal with up to 4 places').refine((v) => Number(v) > 0, 'Must be greater than 0'),
@@ -238,7 +239,7 @@ export default function CreateBomPage() {
  {errors.items?.message && <p className="mt-2 text-xs text-danger-fg">{errors.items.message as string}</p>}
  </fieldset>
 
- <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/mrp/boms')}>
  Cancel
  </Button>
@@ -250,7 +251,7 @@ export default function CreateBomPage() {
  >
  {create.isPending ? 'Saving…' : 'Save BOM'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );
