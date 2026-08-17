@@ -17,6 +17,7 @@ use App\Modules\Leave\Events\LeaveRequestApproved;
 use App\Modules\Leave\Events\LeaveRequestPendingHR;
 use App\Modules\Leave\Events\LeaveRequestRejected;
 use App\Modules\Leave\Events\LeaveRequestSubmitted;
+use App\Common\Support\DepartmentScope;
 use App\Common\Support\TrashedFilter;
 use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Leave\Models\LeaveType;
@@ -64,29 +65,28 @@ class LeaveRequestService
         if (!empty($filters['from'])) $q->where('start_date', '>=', $filters['from']);
         if (!empty($filters['to'])) $q->where('end_date', '<=', $filters['to']);
 
-        // Row-level filtering. Admin and HR Officer see everything.
-        // Department Head sees own + their department's requests.
-        // Everyone else sees only their own.
-        if ($user) {
-            $roleSlug = $user->role?->slug;
-            $isAdmin = $roleSlug === 'system_admin';
-            $isHr    = $user->hasPermission('leave.approve_hr');
-            if (! $isAdmin && ! $isHr) {
-                $isDeptHead = $user->hasPermission('leave.approve_dept');
-                $employeeId = $user->employee_id;
-                if ($isDeptHead) {
-                    $deptId = \App\Modules\HR\Models\Employee::query()->whereKey($employeeId)->value('department_id');
-                    $q->where(function ($qq) use ($employeeId, $deptId) {
-                        $qq->where('employee_id', $employeeId);
-                        if ($deptId) {
-                            $qq->orWhereHas('employee', fn ($e) => $e->where('department_id', $deptId));
-                        }
-                    });
-                } else {
-                    $q->where('employee_id', $employeeId);
-                }
-            }
-        }
+        /*
+         * Row-level filtering, delegated to the shared three-tier scope:
+         *   leave.approve_hr  → every request
+         *   leave.approve_dept→ own department (via the employee relation) + own
+         *   otherwise         → own only, and nothing at all when unlinked
+         *
+         * This was a hand-rolled copy of that ladder, and it opened with
+         * `role?->slug === 'system_admin'` — a term that could never change the
+         * outcome, since hasPermission('leave.approve_hr') is already true for
+         * that role. `leave_requests` carries no department of its own, which is
+         * why DepartmentScope now takes a relation to reach it.
+         */
+        DepartmentScope::apply(
+            $q,
+            $user,
+            viewAllPermission: 'leave.approve_hr',
+            departmentPermission: 'leave.approve_dept',
+            deptColumn: 'department_id',
+            selfColumn: 'employee_id',
+            selfId: $user?->employee_id ? (int) $user->employee_id : null,
+            deptRelation: 'employee',
+        );
 
         return $q->orderByDesc('created_at')->paginate(min((int) ($filters['per_page'] ?? 25), 100));
     }

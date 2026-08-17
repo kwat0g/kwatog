@@ -28,8 +28,10 @@ class LeaveBalanceController
     public function forEmployee(Employee $employee, Request $request): AnonymousResourceCollection
     {
         $user = $request->user();
-        $canView = $user?->role?->slug === 'system_admin'
-            || $user?->hasPermission('leave.approve_hr')
+        // No `role->slug === 'system_admin'` term: User::hasPermission already
+        // returns true for that role, so the branch could never change an
+        // outcome — it only coupled this check to a role NAME.
+        $canView = $user?->hasPermission('leave.approve_hr')
             || (int) $user?->employee_id === (int) $employee->id;
 
         if (! $canView && $user?->hasPermission('leave.approve_dept') && $user->employee_id) {

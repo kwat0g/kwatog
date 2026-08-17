@@ -43,8 +43,9 @@ class LeaveRequestController
     {
         $d = $request->validatedData();
         $user = $request->user();
-        $canFileForOthers = $user?->role?->slug === 'system_admin'
-            || $user?->hasPermission('leave.approve_hr');
+        // hasPermission short-circuits for system_admin, so the administrator
+        // reaches this through the same grant HR does.
+        $canFileForOthers = $user?->hasPermission('leave.approve_hr') ?? false;
         abort_unless(
             $canFileForOthers || (int) $user?->employee_id === (int) $d['employee_id'],
             403,
@@ -63,10 +64,9 @@ class LeaveRequestController
     public function show(LeaveRequest $leaveRequest, Request $request): LeaveRequestResource
     {
         $user = $request->user();
-        $isAdmin = $user?->role?->slug === 'system_admin';
         $isHr = $user?->hasPermission('leave.approve_hr') ?? false;
 
-        if (! $isAdmin && ! $isHr) {
+        if (! $isHr) {
             $isDeptHead = $user?->hasPermission('leave.approve_dept') ?? false;
             $isOwn = (int) $leaveRequest->employee_id === (int) $user?->employee_id;
             $isDeptMember = false;
