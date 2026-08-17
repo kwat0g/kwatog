@@ -14,6 +14,7 @@ import { formatPeso } from '@/lib/formatNumber';
 import type { Customer } from '@/types/accounting';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 export default function CustomersPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
@@ -58,8 +59,7 @@ export default function CustomersPage() {
  {isLoading && !data && <SkeletonTable columns={6} rows={6} />}
  {isError && <EmptyState icon="alert-circle" title="Failed to load customers" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />}
  {data && data.data.length === 0 && (
- <EmptyState icon="inbox" title="No customers yet" description={can('accounting.customers.manage') ? 'Add your first customer to issue invoices.' : 'Nothing here yet.'}
- action={can('accounting.customers.manage') ? <Button variant="primary" onClick={() => navigate('/accounting/customers/create')}>New customer</Button> : undefined} />
+ <ListEmptyState />
  )}
  {data && data.data.length > 0 && (
  <div className="px-5 py-4"><DataTable

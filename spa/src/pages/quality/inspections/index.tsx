@@ -21,6 +21,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import type { Inspection, InspectionStatus } from '@/types/quality';
 
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 const STATUS_CHIP: Record<InspectionStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
   draft: 'neutral',
   in_progress: 'info',
@@ -213,11 +214,7 @@ export default function InspectionsListPage() {
  )}
 
 {data && data.data.length === 0 && (
- <EmptyState
- icon="clipboard-check"
- title="No inspections yet"
- description="Create one from a GRN, work order, or finished batch to start logging measurements."
- />
+ <ListEmptyState />
  )}
 
  {data && data.data.length > 0 && (

@@ -16,6 +16,7 @@ import { usePermission } from '@/hooks/usePermission';
 import type { Machine, MachineStatus } from '@/types/mrp';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 const variant: Record<MachineStatus, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
  running: 'success', idle: 'neutral', maintenance: 'info', breakdown: 'danger', offline: 'neutral' };
 
@@ -110,7 +111,7 @@ export default function MachinesListPage() {
  {isError && <EmptyState icon="alert-circle" title="Failed to load machines"
  action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />}
  {data && data.data.length === 0 && (
- <EmptyState icon="cog" title="No machines configured" description="Add machine master records to begin production planning." />
+ <ListEmptyState />
  )}
  {data && data.data.length > 0 && (
  <div className="px-5 py-4">

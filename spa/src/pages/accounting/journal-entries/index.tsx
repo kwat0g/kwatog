@@ -15,6 +15,7 @@ import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import type { JournalEntry } from '@/types/accounting';
 
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 const STATUS_VARIANT: Record<string, ChipVariant> = {
  draft: 'warning',
  posted: 'success',
@@ -90,12 +91,7 @@ export default function JournalEntriesPage() {
  {isLoading && !data && <SkeletonTable columns={6} rows={8} />}
  {isError && <EmptyState icon="alert-circle" title="Failed to load journal entries" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />}
  {data && data.data.length === 0 && (
- <EmptyState
- icon="inbox"
- title="No journal entries"
- description={can('accounting.journal.create') ? 'Create the first entry to get started.' : 'Nothing here yet.'}
- action={can('accounting.journal.create') ? <Button variant="primary" onClick={() => navigate('/accounting/journal-entries/create')}>New entry</Button> : undefined}
- />
+ <ListEmptyState />
  )}
  {data && data.data.length > 0 && (
   <div className="px-5 py-4"><DataTable

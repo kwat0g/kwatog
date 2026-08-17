@@ -14,6 +14,7 @@ import { depreciationApi } from '@/api/assets';
 import { Button } from '@/components/ui/Button';
 import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
+import { PendingHint } from '@/components/ui/PendingHint';
 import { formatPeso } from '@/lib/formatNumber';export function DepreciationRunner({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
  const now = new Date();
  const [year, setYear] = useState<number>(now.getFullYear());
@@ -59,6 +60,9 @@ import { formatPeso } from '@/lib/formatNumber';export function DepreciationRunn
             className="font-mono tabular-nums"
           />
         </div>
+      </div>
+      <div className="px-5 pb-2">
+        <PendingHint active={run.isPending} label="the depreciation post" />
       </div>
       <ModalFooter>
         <Button variant="secondary" onClick={onClose} disabled={run.isPending}>

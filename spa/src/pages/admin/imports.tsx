@@ -21,6 +21,7 @@ import { formatDate } from '@/lib/formatDate';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { LinkButton } from '@/components/ui/LinkButton';
 
+import { PendingHint } from '@/components/ui/PendingHint';
 const batchStatusVariant = (s: string): ChipVariant =>
  s === 'committed' ? 'success' : 'neutral';
 
@@ -125,6 +126,11 @@ export default function ImportsPage() {
  className="block w-full text-xs text-muted file:mr-3 file:py-1 file:px-3 file:rounded file:border file:border-default file:text-xs file:bg-elevated file:text-primary hover:file:bg-strong"
  />
  </div>
+
+ <PendingHint
+ active={dryRunMut.isPending || commitMut.isPending}
+ label={dryRunMut.isPending ? 'validation' : 'the import'}
+ />
 
  <div className="flex gap-2 pt-1">
  <Button variant="secondary" size="sm" icon={<LuPlay size={14} />}

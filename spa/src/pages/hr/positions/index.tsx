@@ -30,6 +30,7 @@ import { onFormInvalid } from '@/lib/formErrors';
 import type { Position } from '@/types/hr';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 const schema = z.object({
  title: z.string().trim().min(1, 'Title is required').max(100)
  .regex(/^[\p{L}0-9\s.&,()/-]+$/u, 'Letters, digits, spaces, and . & - , ( ) /'),
@@ -176,12 +177,7 @@ export default function PositionsPage() {
  )}
 
  {data && data.data.length === 0 && (
- <EmptyState
- icon="inbox"
- title="No positions found"
- description={filters.search ? `No matches for "${filters.search}".` : 'Get started by adding a position.'}
- action={can('hr.positions.manage') ? <Button variant="primary" onClick={() => { setEditing(null); setModalOpen(true); }}>Add position</Button> : undefined}
- />
+ <ListEmptyState searchTerm={filters.search as string | undefined} />
  )}
 
  {data && data.data.length > 0 && (

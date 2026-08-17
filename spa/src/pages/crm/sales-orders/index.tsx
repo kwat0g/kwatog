@@ -15,6 +15,7 @@ import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { formatPeso } from '@/lib/formatNumber';
 import type { SalesOrder, SalesOrderStatus } from '@/types/crm';
 
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 const statusVariant: Record<SalesOrderStatus, 'success' | 'info' | 'warning' | 'neutral' | 'danger'> = {
  draft: 'neutral',
  confirmed: 'info',
@@ -129,12 +130,7 @@ export default function SalesOrdersListPage() {
   )}
 
 {data && data.data.length === 0 && (
- <EmptyState
- icon="file-text"
- title="No sales orders yet"
- description={canCreate ? 'Create the first sales order to start the order-to-cash chain.' : 'Nothing here yet.'}
- action={canCreate ? <Button variant="primary" onClick={() => navigate('/crm/sales-orders/create')}>New sales order</Button> : undefined}
- />
+ <ListEmptyState />
  )}
 
  {data && data.data.length > 0 && (

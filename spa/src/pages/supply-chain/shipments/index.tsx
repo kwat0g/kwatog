@@ -15,6 +15,7 @@ import { usePermission } from '@/hooks/usePermission';
 import type { Shipment, ShipmentStatus } from '@/types/supplyChain';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 const STATUS_CHIP: Record<ShipmentStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
  ordered: 'neutral', shipped: 'info', in_transit: 'info',
  customs: 'warning', cleared: 'info', received: 'success', cancelled: 'neutral',
@@ -89,7 +90,7 @@ export default function ShipmentsListPage() {
  {isError && <EmptyState icon="alert-circle" title="Failed to load shipments"
  action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />}
  {data && data.data.length === 0 && (
- <EmptyState icon="package" title="No shipments yet" description="Imported POs will appear here once an ImpEx Officer opens a shipment." />
+ <ListEmptyState />
  )}
  {data && data.data.length > 0 && (
  <div className="px-5 py-4">

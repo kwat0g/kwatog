@@ -14,6 +14,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { formatDate } from '@/lib/formatDate';
 import type { ListParams } from '@/types';
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 import type { GoodsReceiptNote, GrnStatus } from '@/types/inventory';const variant: Record<GrnStatus, 'neutral' | 'warning' | 'success' | 'info' | 'danger'> = {
  draft: 'neutral', pending_qc: 'warning', accepted: 'success', partial_accepted: 'info', rejected: 'danger' };
 
@@ -82,9 +83,7 @@ export default function GrnListPage() {
  {isLoading && !data && <SkeletonTable columns={6} rows={6} />}
  {isError && <EmptyState icon="alert-circle" title="Failed to load GRNs" action={<Button onClick={() => refetch()}>Retry</Button>} />}
  {data && data.data.length === 0 && (
- <EmptyState icon="inbox" title="No GRNs yet"
- description={can('inventory.grn.create') ? 'Create one against an approved PO.' : undefined}
- action={can('inventory.grn.create') ? <Button variant="primary" onClick={() => navigate('/inventory/grn/create')}>New GRN</Button> : undefined} />
+ <ListEmptyState />
  )}
  {data && data.data.length > 0 && (
  <div className="px-5 py-4">

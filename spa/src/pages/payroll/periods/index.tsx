@@ -20,6 +20,7 @@ import { formatDate } from '@/lib/formatDate';
 import type { PayrollPeriod } from '@/types/payroll';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 const periodStatusVariant = (status: string | null | undefined): ChipVariant => {
  switch (status) {
  case 'finalized': return 'success';
@@ -173,14 +174,7 @@ export default function PayrollPeriodsPage() {
  />
  )}
  {data && data.data.length === 0 && (
- <EmptyState
- icon="calendar"
- title="No payroll periods yet"
- description={canCreate ? 'Create the first period to begin processing payroll.' : 'Nothing here yet.'}
- action={canCreate
- ? <Button variant="primary" onClick={() => navigate('/payroll/periods/create')}>Create period</Button>
- : undefined}
- />
+ <ListEmptyState />
  )}
  {data && data.data.length > 0 && (
  <div className="px-5 py-4">

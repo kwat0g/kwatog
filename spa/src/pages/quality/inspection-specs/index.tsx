@@ -20,6 +20,7 @@ import { usePermission } from '@/hooks/usePermission';
 import type { InspectionSpec } from '@/types/quality';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 export default function InspectionSpecsListPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
@@ -82,11 +83,7 @@ export default function InspectionSpecsListPage() {
  action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
  />}
  {data && data.data.length === 0 && (
- <EmptyState
- icon="clipboard-check"
- title="No inspection specs yet"
- description="Create a spec from any product detail page or click 'New spec' above."
- />
+ <ListEmptyState />
  )}
  {data && data.data.length > 0 && (
  <div className="px-5 py-4">

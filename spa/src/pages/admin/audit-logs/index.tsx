@@ -15,6 +15,7 @@ import { formatDateTime } from '@/lib/formatDate';
 import { formatInt } from '@/lib/formatNumber';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 const actionVariant = {
  created: 'success',
  updated: 'info',
@@ -122,11 +123,7 @@ export default function AuditLogsPage() {
  )}
 
  {data && data.data.length === 0 && (
- <EmptyState
- icon="file-question"
- title="No audit log entries"
- description="Activity will appear here as users create, update, and delete records."
- />
+ <ListEmptyState />
  )}
 
  {data && data.data.length > 0 && (

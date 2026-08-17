@@ -22,6 +22,7 @@ import { formatDate } from '@/lib/formatDate';
 import { SalaryAdjustmentsTab } from '@/pages/hr/salary-adjustments';
 import type { Employee, BulkProvisionResponse } from '@/types/hr';
 
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 const DEFAULT_FILTERS: EmployeeListParams = {
   page: 1,
   per_page: 25,
@@ -310,22 +311,7 @@ export default function EmployeesListPage() {
           )}
 
           {data && data.data.length === 0 && (
-            <EmptyState
-              icon="users"
-              title="No employees found"
-              description={
-                filters.search
-                  ? `No matches for "${filters.search}".`
-                  : 'Add your first employee to get started.'
-              }
-              action={
-                can('hr.employees.create') ? (
-                  <Button variant="primary" onClick={() => navigate('/hr/employees/create')}>
-                    Add employee
-                  </Button>
-                ) : undefined
-              }
-            />
+            <ListEmptyState searchTerm={filters.search as string | undefined} />
           )}
 
           {data && data.data.length > 0 && (

@@ -19,6 +19,7 @@ import { cn } from '@/lib/cn';
 import type { ListParams } from '@/types';
 import type { PurchaseOrder, PurchaseOrderStatus } from '@/types/purchasing';
 
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 const variant: Record<PurchaseOrderStatus, 'neutral' | 'info' | 'warning' | 'success' | 'danger'> =
   {
     draft: 'neutral',
@@ -196,20 +197,7 @@ export default function PurchaseOrdersListPage() {
       )}
 
       {data && data.data.length === 0 && (
-        <EmptyState
-          icon="inbox"
-          title="No purchase orders"
-          action={
-            can('purchasing.po.create') ? (
-              <Button
-                variant="primary"
-                onClick={() => navigate('/purchasing/purchase-orders/create')}
-              >
-                New PO
-              </Button>
-            ) : undefined
-          }
-        />
+        <ListEmptyState />
       )}
 
       {data && data.data.length > 0 && (

@@ -19,6 +19,7 @@ import {
 import type { MaintenanceWorkOrder } from '@/types/maintenance';
 import { formatPeso } from '@/lib/formatNumber';
 
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 const DEFAULT_FILTERS: WorkOrderListParams = {
   page: 1, per_page: 25, status: 'open',
 };
@@ -162,12 +163,7 @@ export default function MaintenanceWorkOrdersListPage() {
   )}
 
 {data && data.data.length === 0 && (
- <EmptyState icon="wrench" title="No maintenance work orders"
- description={filters.search ? `No results for "${filters.search}".` : 'New preventive WOs are auto-created from due schedules. Corrective WOs can be filed manually.'}
- action={can('maintenance.wo.create') ? (
- <Button variant="primary" onClick={() => navigate('/maintenance/work-orders/create')}>New work order</Button>
- ) : undefined}
- />
+ <ListEmptyState searchTerm={filters.search as string | undefined} />
  )}
 
 

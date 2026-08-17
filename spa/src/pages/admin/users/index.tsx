@@ -20,6 +20,7 @@ import { adminUsersApi } from '@/api/admin/users';
 import { client } from '@/api/client';
 import { formatDateTime } from '@/lib/formatDate';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 import type {
  AdminUserListItem,
  AdminUserListFilters,
@@ -201,15 +202,7 @@ export default function AdminUsersIndexPage() {
  )}
 
  {data && data.data.length === 0 && (
- <EmptyState
- icon="inbox"
- title="No users found"
- description={
- filters.search
- ? `No users match "${filters.search}". Try a different search.`
- : 'No users match the current filters.'
- }
- />
+ <ListEmptyState searchTerm={filters.search as string | undefined} />
  )}
 
  {data && data.data.length > 0 && (

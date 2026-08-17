@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { materialIssuesApi } from '@/api/inventory/material-issues';
 import { Chip } from '@/components/ui/Chip';
 import { DataTable, type Column } from '@/components/ui/DataTable';
@@ -15,6 +15,7 @@ import type { ListParams } from '@/types';
 import type { MaterialIssueSlip } from '@/types/inventory';
 import { formatPeso } from '@/lib/formatNumber';
 
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 interface MaterialIssueListParams extends ListParams {
   search?: string;
   status?: string;
@@ -67,9 +68,7 @@ export default function MaterialIssuesListPage() {
  {isLoading && !data && <SkeletonTable rows={6} columns={5} />}
  {isError && <EmptyState icon="alert-circle" title="Failed to load" action={<Button onClick={() => refetch()}>Retry</Button>} />}
  {data && data.data.length === 0 && (
- <EmptyState icon="inbox" title="No issuance yet"
- description="Issue materials against a work order or a free-text reference."
- action={<Link to="/inventory/material-issues/create"><Button>New material issue</Button></Link>} />
+ <ListEmptyState />
  )}
  {data && data.data.length > 0 && (
  <div className="px-5 py-4">

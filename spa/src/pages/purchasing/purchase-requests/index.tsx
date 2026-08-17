@@ -22,6 +22,7 @@ import { formatPeso } from '@/lib/formatNumber';
 import type { ListParams } from '@/types';
 import type { PurchaseRequest, PurchaseRequestPriority, PurchaseRequestStatus } from '@/types/purchasing';
 
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 const statusVariant: Record<PurchaseRequestStatus, 'neutral' | 'warning' | 'info' | 'success' | 'danger'> = {
   draft: 'neutral', pending: 'info', approved: 'success', rejected: 'danger',
   converted: 'neutral', cancelled: 'neutral' };
@@ -194,8 +195,7 @@ export default function PurchaseRequestsListPage() {
  {isLoading && !data && <SkeletonTable columns={7} rows={6} />}
  {isError && <EmptyState icon="alert-circle" title="Failed to load PRs" action={<Button onClick={() => refetch()}>Retry</Button>} />}
  {data && data.data.length === 0 && (
- <EmptyState icon="inbox" title="No purchase requests"
- action={can('purchasing.pr.create') ? <Button variant="primary" onClick={() => navigate('/purchasing/purchase-requests/create')}>New PR</Button> : undefined} />
+ <ListEmptyState />
  )}
  {data && data.data.length > 0 && (
  <div className="px-5 py-4">

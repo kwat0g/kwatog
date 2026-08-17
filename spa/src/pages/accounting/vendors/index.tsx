@@ -14,6 +14,7 @@ import { formatPeso } from '@/lib/formatNumber';
 import type { Vendor } from '@/types/accounting';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 export default function VendorsPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
@@ -64,8 +65,7 @@ export default function VendorsPage() {
  {isLoading && !data && <SkeletonTable columns={6} rows={6} />}
  {isError && <EmptyState icon="alert-circle" title="Failed to load vendors" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />}
  {data && data.data.length === 0 && (
- <EmptyState icon="inbox" title="No vendors yet" description={can('accounting.vendors.manage') ? 'Add your first vendor to record bills.' : 'Nothing here yet.'}
- action={can('accounting.vendors.manage') ? <Button variant="primary" onClick={() => navigate('/accounting/vendors/create')}>New vendor</Button> : undefined} />
+ <ListEmptyState />
  )}
  {data && data.data.length > 0 && (
  <div className="px-5 py-4">

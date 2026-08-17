@@ -22,6 +22,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import type { Item } from '@/types/inventory';
 
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 const stockChip = (status: 'ok' | 'low' | 'critical') => ({
   ok: 'success' as const, low: 'warning' as const, critical: 'danger' as const }[status]);
 
@@ -205,10 +206,7 @@ export default function ItemsListPage() {
   )}
 
 {data && data.data.length === 0 && (
- <EmptyState icon="inbox" title="No items found"
- description={canManage ? 'Add your first item to start tracking stock.' : 'Nothing here yet.'}
- action={canManage ? <Button variant="primary" onClick={() => navigate('/inventory/items/create')}>New item</Button> : undefined}
- />
+ <ListEmptyState />
  )}
 
 

@@ -17,6 +17,7 @@ import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
 import type { Invoice } from '@/types/accounting';
 
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 const DEFAULT_FILTERS: InvoiceListParams = {
  page: 1, per_page: 25, status: 'unpaid',
 };
@@ -115,9 +116,7 @@ export default function InvoicesPage() {
   )}
 
 {data && data.data.length === 0 && (
- <EmptyState icon="inbox" title="No invoices yet"
- description={can('accounting.invoices.create') ? 'Issue invoices to track receivables.' : 'Nothing here yet.'}
- action={can('accounting.invoices.create') ? <Button variant="primary" onClick={() => navigate('/accounting/invoices/create')}>New invoice</Button> : undefined} />
+ <ListEmptyState />
  )}
 
 

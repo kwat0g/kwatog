@@ -20,6 +20,7 @@ import type { Product } from '@/types/crm';
 import { formatPeso } from '@/lib/formatNumber';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 export default function ProductsListPage() {
  const navigate = useNavigate();
  const qc = useQueryClient();
@@ -146,14 +147,7 @@ export default function ProductsListPage() {
  />
  )}
  {data && data.data.length === 0 && (
- <EmptyState
- icon="package"
- title="No products found"
- description={canManage ? 'Add your first product to start receiving sales orders.' : 'Nothing here yet.'}
- action={canManage ? (
- <Button variant="primary" onClick={() => navigate('/crm/products/create')}>New product</Button>
- ) : undefined}
- />
+ <ListEmptyState />
  )}
  {data && data.data.length > 0 && (
  <div className="px-5 py-4">

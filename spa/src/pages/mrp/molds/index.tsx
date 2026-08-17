@@ -14,6 +14,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { formatInt } from '@/lib/formatNumber';
 import type { Mold, MoldStatus } from '@/types/mrp';
 
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 const variant: Record<MoldStatus, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
  available: 'success', in_use: 'info', maintenance: 'warning', retired: 'neutral' };
 
@@ -103,7 +104,7 @@ export default function MoldsListPage() {
  {isLoading && !data && <SkeletonTable columns={8} rows={8} />}
  {isError && <EmptyState icon="alert-circle" title="Failed to load molds"
  action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />}
- {data && data.data.length === 0 && <EmptyState icon="package" title="No molds configured" />}
+ {data && data.data.length === 0 && <ListEmptyState />}
  {data && data.data.length > 0 && (
   <div className="px-5 py-4">
   <DataTable tableKey="molds" onRowClick={(r) => navigate(`/mrp/molds/${r.id}`)}

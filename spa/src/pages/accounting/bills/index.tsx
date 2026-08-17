@@ -17,6 +17,7 @@ import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
 import type { Bill } from '@/types/accounting';
 
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 const DEFAULT_FILTERS: BillListParams = {
  page: 1, per_page: 25, status: 'unpaid',
 };
@@ -107,9 +108,7 @@ export default function BillsPage() {
  )}
 
 {data && data.data.length === 0 && (
- <EmptyState icon="inbox" title="No bills yet"
- description={can('accounting.bills.create') ? 'Record vendor bills to track payables.' : 'Nothing here yet.'}
- action={can('accounting.bills.create') ? <Button variant="primary" onClick={() => navigate('/accounting/bills/create')}>New bill</Button> : undefined} />
+ <ListEmptyState />
  )}
 
  {data && data.data.length > 0 && (

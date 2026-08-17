@@ -9,6 +9,7 @@ import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatInt } from '@/lib/formatNumber';
 
+import { PendingHint } from '@/components/ui/PendingHint';
 export default function AttendanceImportPage() {
  const navigate = useNavigate();
  const [file, setFile] = useState<File | null>(null);
@@ -84,6 +85,11 @@ export default function AttendanceImportPage() {
  onClick={(e) => e.stopPropagation()}
  />
  </div>
+ <PendingHint
+ active={mutation.isPending}
+ label="the biometric import"
+ className="pt-3 mt-3 border-t border-default"
+ />
  <div className="flex justify-end gap-2 pt-3 mt-3 border-t border-default">
  <Button variant="secondary" onClick={() => navigate('/hr/attendance')}>Cancel</Button>
  <Button

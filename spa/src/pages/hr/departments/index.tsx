@@ -27,6 +27,7 @@ import type { Department } from '@/types/hr';
 import { cn } from '@/lib/cn';
 import { focusRing } from '@/lib/focus';
 
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 const schema = z.object({
  name: z.string().trim().min(1, 'Name is required').max(100)
  .regex(/^[\p{L}0-9\s.&\-,()]+$/u, 'Letters, digits, spaces, and . & - , ( )'),
@@ -167,12 +168,7 @@ export default function DepartmentsPage() {
  />
  )}
  {!isLoading && !isError && tree.length === 0 && (
- <EmptyState
- icon="inbox"
- title="No departments yet"
- description="Departments organise employees by function. Add your first one to get started."
- action={can('hr.departments.manage') ? <Button variant="primary" onClick={openCreate}>Add department</Button> : null}
- />
+ <ListEmptyState />
  )}
  {!isLoading && !isError && tree.length > 0 && (
  <ul className="py-2 text-sm">

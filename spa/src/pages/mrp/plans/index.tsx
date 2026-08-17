@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
-import { LuPlay, LuLoader } from '@/lib/icons';
+import { LuPlay } from '@/lib/icons';
 import { mrpPlansApi, type MrpPlanListParams } from '@/api/mrp/mrpPlans';
 import { mrpRunsApi } from '@/api/mrp-runs';
 import { Button } from '@/components/ui/Button';
@@ -17,6 +17,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import type { MrpPlan, MrpPlanStatus } from '@/types/mrp';
 
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 const variant: Record<MrpPlanStatus, 'success' | 'neutral' | 'danger'> = {
  active: 'success', superseded: 'neutral', cancelled: 'danger' };
 
@@ -32,22 +33,28 @@ export default function MrpPlansListPage() {
  // pre-filtered and the browser back button restores the previous view.
  const [filters, setFilters] = useUrlFilters<MrpPlanListParams>(DEFAULT_FILTERS);
 
- const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['mrp', 'plans', filters],
- queryFn: () => mrpPlansApi.list(filters),
- placeholderData: (prev) => prev });
- const { data: planOptions } = useQuery({
- queryKey: ['mrp', 'plans', 'options'],
- queryFn: mrpPlansApi.options,
- staleTime: 5 * 60 * 1000 });
- const statusLabels = new Map((planOptions?.statuses ?? []).map((option) => [option.value, option.label]));
-
  const latestRun = useQuery({
  queryKey: ['mrp', 'runs', 'latest'],
  queryFn: () => mrpRunsApi.latest(),
  enabled: can('mrp.runs.view'),
  staleTime: 5_000,
  refetchInterval: (query) => query.state.data?.status === 'running' ? 3_000 : 15_000 });
+ // Declared above the plans query, which follows a run in progress.
+ const runInProgress = latestRun.data?.status === 'running';
+
+ const { data, isLoading, isError, refetch } = useQuery({
+ queryKey: ['mrp', 'plans', filters],
+ queryFn: () => mrpPlansApi.list(filters),
+ placeholderData: (prev) => prev,
+ // A run writes plan rows. Without this the table caught up only on the next
+ // manual refresh — which is what the success toast used to instruct, and a
+ // screen that has to be told to refresh reads as one that cannot be trusted.
+ refetchInterval: runInProgress ? 3_000 : false });
+ const { data: planOptions } = useQuery({
+ queryKey: ['mrp', 'plans', 'options'],
+ queryFn: mrpPlansApi.options,
+ staleTime: 5 * 60 * 1000 });
+ const statusLabels = new Map((planOptions?.statuses ?? []).map((option) => [option.value, option.label]));
  const runHistory = useQuery({
  queryKey: ['mrp', 'runs', 'history'],
  queryFn: () => mrpRunsApi.list({ per_page: 8, page: 1 }),
@@ -59,7 +66,11 @@ export default function MrpPlansListPage() {
  const triggerRun = useMutation({
  mutationFn: () => mrpRunsApi.trigger(),
  onSuccess: () => {
- toast.success('MRP run started — refresh in a moment for results');
+ // This said "refresh in a moment for results". The page already polls the
+ // run status every 3s while a run is active and now polls the plan list
+ // too, so telling the user to refresh was both unnecessary and a signal
+ // that the screen could not be trusted to update itself.
+ toast.success('MRP run started. Results appear here as it completes.');
  queryClient.invalidateQueries({ queryKey: ['mrp', 'runs', 'latest'] });
  queryClient.invalidateQueries({ queryKey: ['mrp', 'runs', 'history'] });
  queryClient.invalidateQueries({ queryKey: ['mrp', 'plans'] });
@@ -110,7 +121,8 @@ export default function MrpPlansListPage() {
  <Button
  variant="primary"
  size="sm"
- icon={triggerRun.isPending ? <LuLoader size={14} className="animate-spin" /> : <LuPlay size={14} />}
+ icon={<LuPlay size={14} />}
+ loading={triggerRun.isPending}
  disabled={triggerRun.isPending}
  onClick={() => triggerRun.mutate()}
  >
@@ -130,8 +142,7 @@ export default function MrpPlansListPage() {
  {isError && <EmptyState icon="alert-circle" title="Failed to load MRP plans"
  action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />}
  {data && data.data.length === 0 && (
- <EmptyState icon="layers" title="No MRP plans yet"
- description="Plans are generated automatically when a sales order is confirmed." />
+ <ListEmptyState />
  )}
  {data && data.data.length > 0 && (
   <div className="px-5 py-4">

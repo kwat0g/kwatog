@@ -14,6 +14,7 @@ import { formatPeso } from '@/lib/formatNumber';
 import type { Bom } from '@/types/mrp';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 export default function BomsListPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
@@ -70,8 +71,7 @@ export default function BomsListPage() {
  {isError && <EmptyState icon="alert-circle" title="Failed to load BOMs"
  action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />}
  {data && data.data.length === 0 && (
- <EmptyState icon="inbox" title="No BOMs yet"
- description="BOMs are created from a product detail page once the product master is in place." />
+ <ListEmptyState />
  )}
  {data && data.data.length > 0 && (
  <div className="px-5 py-4">

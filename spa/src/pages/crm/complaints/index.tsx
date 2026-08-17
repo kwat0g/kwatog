@@ -14,6 +14,7 @@ import { usePermission } from '@/hooks/usePermission';
 import type { CustomerComplaint, ComplaintSeverity, ComplaintStatus } from '@/types/crm';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 const STATUS_CHIP: Record<ComplaintStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
  open: 'warning', investigating: 'info', resolved: 'info', closed: 'success', cancelled: 'neutral' };
 const SEVERITY_CHIP: Record<ComplaintSeverity, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
@@ -91,8 +92,7 @@ export default function ComplaintsListPage() {
  action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />
  )}
  {data && data.data.length === 0 && (
- <EmptyState icon="message-square" title="No complaints yet"
- description="Customer complaints filed by CRM officers will appear here. Each complaint auto-creates an NCR." />
+ <ListEmptyState />
  )}
  {data && data.data.length > 0 && (
  <div className="px-5 py-4">

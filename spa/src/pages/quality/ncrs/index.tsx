@@ -17,6 +17,7 @@ import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { cn } from '@/lib/cn';
 import type { Ncr, NcrSeverity, NcrStatus } from '@/types/quality';
 
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 const STATUS_CHIP: Record<NcrStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
   open: 'warning',
   in_progress: 'info',
@@ -201,11 +202,7 @@ export default function NcrsListPage() {
       {data && <EightDProgress rows={data.data} />}
 
       {data && data.data.length === 0 && (
-        <EmptyState
-          icon="alert-triangle"
-          title="No NCRs"
-          description="When an inspection fails or a customer complaint is filed, a non-conformance report will appear here."
-        />
+        <ListEmptyState />
       )}
 
       {data && data.data.length > 0 && (
