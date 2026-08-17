@@ -66,6 +66,15 @@ describe('Breadcrumbs', () => {
     expect(screen.getAllByRole('navigation', { name: 'Breadcrumb' })).toHaveLength(1);
   });
 
+  it('ignores the published label when the segment already names itself', () => {
+    // /payroll/periods titleizes to "Periods" while the heading reads "Payroll
+    // Periods"; taking the override there duplicated the heading into the trail.
+    renderAt('/payroll/periods', <PageHeader title="Payroll Periods" />);
+    const trail = screen.getByRole('navigation', { name: 'Breadcrumb' });
+    expect(trail).toHaveTextContent('Periods');
+    expect(trail).not.toHaveTextContent('Payroll Periods');
+  });
+
   it('ignores a label published for a different route', () => {
     useBreadcrumbStore.setState({ path: '/somewhere/else', label: 'Stale' });
     renderAt('/hr/employees');

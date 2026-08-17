@@ -10,8 +10,12 @@ export class BasePage {
   get sidebar(): Locator { return this.page.locator('aside').first(); }
   /** Top navbar with breadcrumb + user menu. */
   get topbar(): Locator { return this.page.locator('header').first(); }
-  /** "Forbidden" empty-state rendered by PermissionGuard. */
-  get forbiddenText(): Locator { return this.page.getByText('You do not have permission'); }
+  /**
+   * There is no "Forbidden" screen for a resource, by design: PermissionGuard
+   * renders the same not-found state a genuinely absent record does, so the UI
+   * never confirms that a record the user cannot read exists.
+   */
+  get deniedPageText(): Locator { return this.page.getByText(/page not found/i); }
   /** Generic toast container. */
   get toast(): Locator { return this.page.locator('[role="status"], .toast, [data-sonner-toaster]').first(); }
   /** Skeleton loading placeholder. */
@@ -22,9 +26,18 @@ export class BasePage {
     await this.page.locator(`text=${containsText}`).first().waitFor({ state: 'visible', timeout });
   }
 
-  /** Assert the 403 PermissionGuard is visible. */
-  async expectForbidden(): Promise<void> {
-    await this.forbiddenText.waitFor({ state: 'visible', timeout: 5000 });
+  /**
+   * Assert a route the user may not see is indistinguishable from one that does
+   * not exist. This used to assert a distinct "You do not have permission"
+   * screen and had been failing since the two were unified — asserting it back
+   * would be asserting the information leak back into place.
+   */
+  async expectDeniedAsNotFound(): Promise<void> {
+    await this.deniedPageText.waitFor({ state: 'visible', timeout: 5000 });
+    const leak = this.page.getByText(/forbidden|do not have permission|access denied/i);
+    if (await leak.count() > 0) {
+      throw new Error('Denied route revealed that the resource exists.');
+    }
   }
 
   /** Assert a 404/not-found state. */

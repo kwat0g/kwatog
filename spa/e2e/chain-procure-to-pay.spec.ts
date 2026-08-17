@@ -68,7 +68,7 @@ test.describe('Procure-to-Pay chain — PR lifecycle', () => {
   test('warehouse cannot view purchase requests (forbidden)', async ({ page }) => {
     await loginAs(page, 'warehouse', '/purchasing/purchase-requests');
     const base = new BasePage(page);
-    await base.expectForbidden();
+    await base.expectDeniedAsNotFound();
   });
 });
 

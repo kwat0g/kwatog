@@ -108,7 +108,12 @@ export function Breadcrumbs() {
  const lastIndex = segments.length - 1;
  const crumbs = segments.map((segment, i) => {
  let label: string;
- if (i === lastIndex && override) {
+ // The page-supplied label is only worth preferring when the segment cannot
+ // name itself. On /payroll/periods the segment titleizes to "Periods" and the
+ // heading reads "Payroll Periods", so taking the override there duplicated the
+ // heading into the trail — which also made every `getByText(title)` in the
+ // e2e suite a strict-mode violation.
+ if (i === lastIndex && override && looksLikeRecordId(segment)) {
  label = override;
  } else if (i === 0 && MODULE_LABELS[segment]) {
  label = MODULE_LABELS[segment];
