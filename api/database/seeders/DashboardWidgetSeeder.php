@@ -224,8 +224,13 @@ class DashboardWidgetSeeder extends Seeder
             ['key' => 'purchasing.open_prs',           'name' => 'Open Purchase Requests',    'module' => 'purchasing',  'permission' => 'purchasing.view'],
             ['key' => 'purchasing.open_pos',           'name' => 'Open Purchase Orders',      'module' => 'purchasing',  'permission' => 'purchasing.view', 'render_kind' => 'breakdown'],
             ['key' => 'purchasing.supplier_perf',      'name' => 'Supplier Performance',      'module' => 'purchasing',  'permission' => 'purchasing.view'],
-            ['key' => 'supply.overdue_deliveries',     'name' => 'Overdue Deliveries',        'module' => 'supply_chain', 'permission' => 'supply_chain.view', 'render_kind' => 'table'],
-            ['key' => 'supply.delivery_schedule',      'name' => 'Delivery Schedule',         'module' => 'supply_chain', 'permission' => 'supply_chain.view', 'render_kind' => 'table'],
+            // The narrow delivery read, not the whole module: this is what lets
+            // the warehouse see what ships today without also being handed
+            // shipments, fleet and customs documents. Everyone who held
+            // supply_chain.view was granted the narrow slug too, so no existing
+            // viewer loses these.
+            ['key' => 'supply.overdue_deliveries',     'name' => 'Overdue Deliveries',        'module' => 'supply_chain', 'permission' => 'supply_chain.deliveries.view', 'render_kind' => 'table'],
+            ['key' => 'supply.delivery_schedule',      'name' => 'Delivery Schedule',         'module' => 'supply_chain', 'permission' => 'supply_chain.deliveries.view', 'render_kind' => 'table'],
 
             // ─── Inventory / Warehouse ─────────────────────────────
             ['key' => 'inventory.low_stock',           'name' => 'Low Stock Alerts',          'module' => 'inventory',   'permission' => 'inventory.view'],

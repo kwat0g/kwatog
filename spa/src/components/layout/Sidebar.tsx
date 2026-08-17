@@ -394,7 +394,10 @@ export const SECTIONS: NavSection[] = [
         label: 'Deliveries',
         icon: LuTruck,
         feature: 'supply_chain',
-        permission: 'supply_chain.view',
+        // Either read reaches the page (see supplyChainRoutes). Warehouse staff
+        // hold only the narrow one, and an item they can open must be an item
+        // they can see.
+        anyPermissions: ['supply_chain.view', 'supply_chain.deliveries.view'],
         badgeKey: 'deliveries',
       },
       {

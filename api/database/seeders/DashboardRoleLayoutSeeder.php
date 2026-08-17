@@ -65,16 +65,15 @@ class DashboardRoleLayoutSeeder extends Seeder
                 'qc.pending_inspections', 'qc.pareto', 'qc.open_ncrs', 'qc.pass_rate',
                 'forecast.defect_rate', 'rma.open_returns', 'kpi.dppm',
             ],
-            // `supply.delivery_schedule` was listed here and never rendered:
-            // it needs `supply_chain.view`, a whole-module read (shipments,
-            // fleet, import docs, deliveries) that warehouse_staff does not
-            // hold. Dropped rather than granted — one outbound schedule does
-            // not justify opening the supply-chain module to the floor. If the
-            // warehouse genuinely needs it, the right fix is a narrower
-            // `supply_chain.deliveries.view` slug, not this default.
+            // `supply.delivery_schedule` is back, now that
+            // `supply_chain.deliveries.view` exists and warehouse_staff holds
+            // it. It was briefly dropped: the widget needed `supply_chain.view`,
+            // a whole-module read (shipments, fleet, customs docs) that the
+            // floor has no business holding, so the tile was silently stripped
+            // at render and the default was lying about it.
             'warehouse_staff' => [
                 'inventory.pending_grns', 'inventory.low_stock',
-                'inventory.pending_issues',
+                'inventory.pending_issues', 'supply.delivery_schedule',
                 'rma.open_returns', 'kpi.inventory_turnover',
             ],
             // Approvals-first: this role carries the second-most approve-type

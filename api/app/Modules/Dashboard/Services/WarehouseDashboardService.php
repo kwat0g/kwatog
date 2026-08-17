@@ -54,12 +54,11 @@ class WarehouseDashboardService
                     // which is exactly what warehouse_staff holds.
                     'incoming_queue' => ['inventory.view', fn () => $this->warehouseIncomingQueue()],
                     // Deliveries joined to sales orders and CUSTOMER names — the
-                    // one panel here that is not inventory data. warehouse_staff
-                    // holds no supply_chain grant, so this is omitted for it;
-                    // same underlying gap as the supply.delivery_schedule widget
-                    // dropped from its default layout. A narrower
-                    // supply_chain.deliveries.view would restore both.
-                    'outgoing_queue' => ['supply_chain.view', fn () => $this->warehouseOutgoingQueue()],
+                    // one panel here that is not inventory data. Gated on the
+                    // narrow delivery read rather than supply_chain.view, so the
+                    // warehouse can stage outbound loads without also receiving
+                    // shipments, fleet and customs documents.
+                    'outgoing_queue' => ['supply_chain.deliveries.view', fn () => $this->warehouseOutgoingQueue()],
                     'low_stock_alerts' => ['inventory.view', fn () => $this->warehouseLowStockAlerts()],
                     'zone_utilization' => ['inventory.view', fn () => $this->warehouseZoneUtilization()],
                 ]),
