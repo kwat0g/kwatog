@@ -222,12 +222,12 @@ class PurchaseRequestService
             // ADV6 — Pre-fill preferred suppliers on items before submission.
             $this->prefillSupplierOnItems($pr);
 
-            // ADV6 — Urgency escalation: urgent PRs skip Dept Head step.
-            // We do this by modifying the submit logic: the ApprovalService
-            // already handles threshold-based skipping via `amount_threshold`,
-            // so we inject an extra first-step skip for urgent PRs by setting
-            // a sentinel in the session — but the cleaner approach is to
-            // override the submit method locally.
+            // ADV6 — Urgency escalation: urgent PRs may skip the Dept Head step,
+            // which submitUrgent() does by rewriting that step's record after
+            // submission. This is separate from ApprovalService's own amount
+            // gating, which reads the per-step `threshold` key in the `steps`
+            // JSON (not the unread `workflow_definitions.amount_threshold`
+            // column) and is capped by purchasing.urgent_skip_limit.
             if ($pr->is_urgent) {
                 $this->submitUrgent($pr, $total);
             } else {

@@ -14,10 +14,16 @@ use Tests\TestCase;
 /**
  * Tranche B / F-045 — approval-step skipping must compare exact money.
  *
- * This must seed its own workflow: no shipped workflow_definitions row carries a
- * threshold, so the skip path is unreachable with the default data. The
- * semantic under test is strict: a step is skipped when amount < threshold, so
- * an amount exactly equal to the threshold is RETAINED.
+ * The skip path is live, not dead code: 2 of the 17 shipped workflow_definitions
+ * rows carry a threshold on their final VP step — purchase_request and
+ * purchase_order, seeded at WorkflowSeeder:65,75 — so this branch decides
+ * whether VP approval is skipped on the two highest-value approval chains.
+ *
+ * This must still seed its own workflow, because RefreshDatabase leaves
+ * workflow_definitions empty, and a threshold of its own lets the boundary be
+ * probed at centavo distance rather than only at the shipped rows' single value.
+ * The semantic under test is strict: a step is skipped when amount < threshold,
+ * so an amount exactly equal to the threshold is RETAINED.
  */
 class ApprovalThresholdBoundaryTest extends TestCase
 {
