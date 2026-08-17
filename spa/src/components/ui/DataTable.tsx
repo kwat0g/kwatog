@@ -82,7 +82,11 @@ export interface DataTableProps<T> {
   tableKey?: string;
   /** Renders an inline expandable detail row when set. The chevron column appears at the start. */
   renderExpanded?: (row: T) => ReactNode;
-  /** Right-click context menu items. Receives the row that was clicked. */
+  /**
+   * Row context-menu items. Opens on right-click, and from the keyboard via the
+   * ContextMenu key or Shift+F10 on the focused row — without that second path
+   * this would put row actions behind a gesture a keyboard user cannot make.
+   */
   rowContextMenu?: (row: T) => RowContextMenuItem[];
   /** Sticky `<thead>` while vertically scrolling the table container. Default true. */
   stickyHeader?: boolean;
@@ -307,6 +311,20 @@ export function DataTable<T>({
 
   const tbodyRef = useRef<HTMLTableSectionElement>(null);
 
+  // Rows are rendered from `data` in order, so a focused <tr>'s position among
+  // the focusable rows identifies its row. `tr[tabindex]` is the right selector
+  // precisely because an expanded detail row carries no tabindex and so does not
+  // shift the count. Needed by the keyboard context-menu path, which has an
+  // element but no click event to read the row off.
+  const rowForElement = useCallback(
+    (tr: HTMLElement): T | undefined => {
+      const rows = Array.from(tbodyRef.current?.querySelectorAll<HTMLElement>('tr[tabindex]') ?? []);
+      const index = rows.indexOf(tr);
+      return index === -1 ? undefined : data[index];
+    },
+    [data],
+  );
+
   const onRowKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTableSectionElement>) => {
       const target = e.target as HTMLElement;
@@ -337,8 +355,26 @@ export function DataTable<T>({
         e.preventDefault();
         target.click();
       }
+
+      // The context menu was right-click only, which is why `rowContextMenu`
+      // has no consumers: adopting it would have put row actions behind a
+      // gesture a keyboard user cannot make, breaking the design system's
+      // "all interactive elements keyboard reachable" rule on every list it
+      // was added to. ContextMenu key and Shift+F10 are the platform
+      // conventions for opening one from the keyboard.
+      if (rowContextMenu && (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10'))) {
+        const row = rowForElement(target);
+        if (row === undefined) return;
+        const items = rowContextMenu(row);
+        if (items.length === 0) return;
+        e.preventDefault();
+        // Anchor to the focused row rather than a stale cursor position, which
+        // for a keyboard user is wherever the mouse happens to be sitting.
+        const box = target.getBoundingClientRect();
+        setCtxMenu({ x: box.left + 8, y: box.bottom, items });
+      }
     },
-    [onRowClick, selectable, selected.size],
+    [onRowClick, selectable, selected.size, rowContextMenu, rowForElement],
   );
 
   return (
