@@ -10,6 +10,7 @@ use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
+use App\Common\Support\Money;
 use App\Common\Support\TrashedFilter;
 use App\Modules\Accounting\Services\BudgetEnforcementService;
 use App\Modules\Auth\Models\User;
@@ -212,7 +213,7 @@ class PurchaseRequestService
             throw new BusinessRuleException('Only draft PRs can be submitted.');
         }
         return DB::transaction(function () use ($pr) {
-            $total = (float) $pr->totalEstimatedAmount();
+            $total = (string) $pr->totalEstimatedAmount();
 
             if ($pr->department_id) {
                 $this->budget->assess($pr, (int) $pr->department_id, $total);
@@ -221,12 +222,13 @@ class PurchaseRequestService
             // ADV6 — Pre-fill preferred suppliers on items before submission.
             $this->prefillSupplierOnItems($pr);
 
-            // ADV6 — Urgency escalation: urgent PRs skip Dept Head step.
-            // We do this by modifying the submit logic: the ApprovalService
-            // already handles threshold-based skipping via `amount_threshold`,
-            // so we inject an extra first-step skip for urgent PRs by setting
-            // a sentinel in the session — but the cleaner approach is to
-            // override the submit method locally.
+            // ADV6 — Urgency escalation: urgent PRs may skip the Dept Head step,
+            // which submitUrgent() does by rewriting that step's record after
+            // submission, and only under the purchasing.urgent_skip_limit cap.
+            // That cap is unrelated to ApprovalService's own amount gating,
+            // which reads the per-step `threshold` key in the `steps` JSON (not
+            // the unread `workflow_definitions.amount_threshold` column) and
+            // reads no setting at all.
             if ($pr->is_urgent) {
                 $this->submitUrgent($pr, $total);
             } else {
@@ -284,14 +286,14 @@ class PurchaseRequestService
      * skip IS performed, the urgency_reason is stamped onto the skipped record
      * for the audit trail.
      */
-    private function submitUrgent(PurchaseRequest $pr, float $total): void
+    private function submitUrgent(PurchaseRequest $pr, string $total): void
     {
         $this->approvals->submit($pr, 'purchase_request', $total);
 
         // Resolve the cap. '0' disables skipping; any positive value is the
         // inclusive ceiling under which the Dept Head step may be skipped.
         $limit = $this->settings->requiredFloat('purchasing.urgent_skip_limit', 0);
-        $maySkip = $limit > 0 && $total <= $limit;
+        $maySkip = $limit > 0 && Money::lte($total, $limit);
 
         if (! $maySkip) {
             // Over the cap (or skipping disabled): keep the full chain. The PR

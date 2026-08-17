@@ -52,7 +52,7 @@ class SalaryAdjustmentService
             ]);
 
             $amount = $data['to_basic_monthly_salary'] ?? $data['to_semi_monthly_rate'] ?? null;
-            $this->approvals->submit($adjustment, self::WORKFLOW_TYPE, $amount !== null ? (float) $amount : null);
+            $this->approvals->submit($adjustment, self::WORKFLOW_TYPE, $amount !== null ? (string) $amount : null);
 
             // status is excluded from $fillable (mass-assignment hardening); the DB
             // default 'pending' applies on insert, so reload to surface it in-memory.

@@ -6,7 +6,9 @@ namespace App\Modules\Accounting\Services;
 
 use App\Common\Services\SettingsService;
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Support\Money;
 use App\Modules\Accounting\Models\Budget;
+use App\Modules\Accounting\Support\BudgetConsumptionLevel;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -21,7 +23,7 @@ class BudgetEnforcementService
      *
      * Levels are determined by the configured budget ratios.
      */
-    public function checkAvailability(int $departmentId, float $amount, ?int $fiscalYearId = null): array
+    public function checkAvailability(int $departmentId, string $amount, ?int $fiscalYearId = null): array
     {
         $fyId = $fiscalYearId ?? app(BudgetService::class)->getCurrentFiscalYear()?->id;
         if (! $fyId) {
@@ -38,44 +40,61 @@ class BudgetEnforcementService
             return [true, 'ok', 'No active budget for this department.'];
         }
 
-        $available = $budgets->sum(fn ($b) => $b->available);
-        $pct       = $available > 0
-            ? round(($amount + ($budgets->sum('total_spent') + $budgets->sum('total_committed'))) / $budgets->sum('total_allocated') * 100, 1)
-            : 0;
-
-        if ($available <= 0) {
-            return [false, 'exhausted', 'Budget exhausted. No remaining available funds ('.app(\App\Common\Services\CurrencyDisplayService::class)->format(0).' available).'];
+        // Exact sums. Collection::sum() on these columns coerces to float.
+        $available = Money::zero();
+        $spent = Money::zero();
+        $committed = Money::zero();
+        $allocated = Money::zero();
+        foreach ($budgets as $budget) {
+            $available = Money::add($available, $budget->available);
+            $spent     = Money::add($spent, (string) $budget->total_spent);
+            $committed = Money::add($committed, (string) $budget->total_committed);
+            $allocated = Money::add($allocated, (string) $budget->total_allocated);
         }
 
-        if ($amount > $available) {
-            return [false, 'overdrawn', 'Insufficient budget. Requested: '.app(\App\Common\Services\CurrencyDisplayService::class)->format($amount)
-                . ', Available: '.app(\App\Common\Services\CurrencyDisplayService::class)->format($available).'.'];
+        $currency = app(\App\Common\Services\CurrencyDisplayService::class);
+
+        if (Money::lte($available, '0')) {
+            return [false, BudgetConsumptionLevel::EXHAUSTED, 'Budget exhausted. No remaining available funds ('.$currency->format(0).' available).'];
         }
 
-        $warning = $this->settings->requiredFloat('budget.warning_ratio', 0, 1);
-        $critical = $this->settings->requiredFloat('budget.critical_ratio', $warning, 1);
-        $exhausted = $this->settings->requiredFloat('budget.exhausted_ratio', $critical, null);
-        $overdrawn = $this->settings->requiredFloat('budget.overdrawn_ratio', $exhausted, null);
-        if ($pct / 100 >= $overdrawn) {
-            return [false, 'overdrawn', "Budget {$pct}% consumed. VP approval required."];
+        if (Money::gt($amount, $available)) {
+            return [false, BudgetConsumptionLevel::OVERDRAWN, 'Insufficient budget. Requested: '.$currency->format($amount)
+                . ', Available: '.$currency->format($available).'.'];
         }
 
-        if ($pct / 100 >= $exhausted) {
-            return [false, 'exhausted', "Budget {$pct}% consumed. Finance acknowledgment required."];
-        }
+        $level = BudgetConsumptionLevel::classify(
+            Money::add($spent, $committed, $amount),
+            $allocated,
+            [
+                'warning'   => $this->settings->requiredFloat('budget.warning_ratio', 0, 1),
+                'critical'  => $this->settings->requiredFloat('budget.critical_ratio', $this->settings->requiredFloat('budget.warning_ratio', 0, 1), 1),
+                'exhausted' => $this->settings->requiredFloat('budget.exhausted_ratio', $this->settings->requiredFloat('budget.critical_ratio', 0, 1)),
+                'overdrawn' => $this->settings->requiredFloat('budget.overdrawn_ratio', $this->settings->requiredFloat('budget.exhausted_ratio', 0)),
+            ],
+        );
 
-        if ($pct / 100 >= $critical) {
-            return [false, 'critical', "Budget {$pct}% consumed. Finance acknowledgment required."];
-        }
+        // DISPLAY ONLY, and deliberately plain float math: rounding it is
+        // precisely what misclassified the 99.95%-99.99% band as exhausted, so
+        // routing it through Money would imply a precision that must never
+        // matter here. Guarded on $allocated because the available <= 0 check
+        // above is NOT sufficient: available = allocated - spent - committed, so
+        // a negative spent/committed gives available > 0 with allocated == 0,
+        // and dividing there is a DivisionByZeroError on PHP 8.
+        $pct = Money::isZero($allocated)
+            ? 0.0
+            : round(((float) Money::add($spent, $committed, $amount) / (float) $allocated) * 100, 1);
 
-        if ($pct / 100 >= $warning) {
-            return [true, 'warning', "Budget {$pct}% consumed. Warning sent to department head."];
-        }
-
-        return [true, 'ok', "Budget within limits ({$pct}% consumed). ".app(\App\Common\Services\CurrencyDisplayService::class)->format($available)." available."];
+        return match ($level) {
+            BudgetConsumptionLevel::OVERDRAWN => [false, $level, "Budget {$pct}% consumed. VP approval required."],
+            BudgetConsumptionLevel::EXHAUSTED => [false, $level, "Budget {$pct}% consumed. Finance acknowledgment required."],
+            BudgetConsumptionLevel::CRITICAL  => [false, $level, "Budget {$pct}% consumed. Finance acknowledgment required."],
+            BudgetConsumptionLevel::WARNING   => [true, $level, "Budget {$pct}% consumed. Warning sent to department head."],
+            default                           => [true, $level, "Budget within limits ({$pct}% consumed). ".$currency->format($available)." available."],
+        };
     }
 
-    public function assess(Model $document, int $departmentId, float $amount, ?int $fiscalYearId = null): array
+    public function assess(Model $document, int $departmentId, string $amount, ?int $fiscalYearId = null): array
     {
         [$canProceed, $level, $message] = $this->checkAvailability($departmentId, $amount, $fiscalYearId);
         $requiresAcknowledgment = in_array($level, ['exhausted', 'overdrawn'], true);
@@ -140,7 +159,7 @@ class BudgetEnforcementService
      * Graceful by design: when no budget exists for the department/fiscal-year,
      * checkAvailability() returns canProceed=true and nothing is blocked.
      */
-    public function enforce(int $departmentId, float $amount, ?int $fiscalYearId = null): void
+    public function enforce(int $departmentId, string $amount, ?int $fiscalYearId = null): void
     {
         $mode = $this->enforcementMode();
         if ($mode === 'off') {

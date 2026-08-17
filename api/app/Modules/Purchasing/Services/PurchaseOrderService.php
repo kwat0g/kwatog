@@ -196,7 +196,7 @@ class PurchaseOrderService
             // status is non-fillable; service-only.
             $po->forceFill(['status' => PurchaseOrderStatus::Draft])->save();
             if ($deptId) {
-                $this->budget->assess($po, $deptId, (float) $total);
+                $this->budget->assess($po, $deptId, (string) $total);
             }
             foreach ($lines as $row) {
                 PurchaseOrderItem::create(array_merge($row, ['purchase_order_id' => $po->id]));
@@ -326,7 +326,7 @@ class PurchaseOrderService
             throw new BusinessRuleException('Only draft POs can be submitted.');
         }
         return DB::transaction(function () use ($po) {
-            $this->approvals->submit($po, 'purchase_order', (float) $po->total_amount);
+            $this->approvals->submit($po, 'purchase_order', (string) $po->total_amount);
             $po->forceFill(['status' => PurchaseOrderStatus::PendingApproval])->save();
             return $po->fresh();
         });
@@ -354,7 +354,7 @@ class PurchaseOrderService
         $deptId = $po->purchaseRequest?->department_id
             ?? PurchaseRequest::find($po->purchase_request_id)?->department_id;
         if ($deptId !== null) {
-            $this->budget->enforce($deptId, (float) $po->total_amount);
+            $this->budget->enforce($deptId, (string) $po->total_amount);
         }
 
         // PPAP gate is controlled by the persisted quality.ppap_gate_enabled setting.

@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Modules\Accounting\Services;
 
 use App\Common\Services\SettingsService;
+use App\Common\Support\Money;
 use App\Modules\Accounting\Models\Budget;
 use App\Modules\Accounting\Models\BudgetLineItem;
 use App\Modules\Accounting\Models\FiscalYear;
+use App\Modules\Accounting\Support\BudgetConsumptionLevel;
 use Illuminate\Support\Facades\DB;
 
 class BudgetService
@@ -78,19 +80,24 @@ class BudgetService
     /**
      * Check budget consumption level and return warning severity.
      * Returns 'ok' | 'warning' | 'critical' | 'exhausted' | 'overdrawn'
+     *
+     * Delegates to BudgetConsumptionLevel so this and
+     * BudgetEnforcementService::checkAvailability cannot drift apart. It
+     * previously read $budget->utilization_percent, which is rounded to one
+     * decimal and therefore misclassified the 99.95%-99.99% band as exhausted.
      */
     public function checkConsumption(Budget $budget): string
     {
-        $pct = $budget->utilization_percent;
         $warning = $this->settings->requiredFloat('budget.warning_ratio', 0, 1);
         $critical = $this->settings->requiredFloat('budget.critical_ratio', $warning, 1);
         $exhausted = $this->settings->requiredFloat('budget.exhausted_ratio', $critical);
         $overdrawn = $this->settings->requiredFloat('budget.overdrawn_ratio', $exhausted);
-        if ($pct / 100 >= $overdrawn) return 'overdrawn';
-        if ($pct / 100 >= $exhausted) return 'exhausted';
-        if ($pct / 100 >= $critical) return 'critical';
-        if ($pct / 100 >= $warning) return 'warning';
-        return 'ok';
+
+        return BudgetConsumptionLevel::classify(
+            Money::add((string) $budget->total_spent, (string) $budget->total_committed),
+            (string) $budget->total_allocated,
+            compact('warning', 'critical', 'exhausted', 'overdrawn'),
+        );
     }
 
     /**

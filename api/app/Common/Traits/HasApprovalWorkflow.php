@@ -18,7 +18,7 @@ trait HasApprovalWorkflow
         return $this->morphMany(ApprovalRecord::class, 'approvable')->orderBy('step_order');
     }
 
-    public function submitForApproval(string $workflowType, ?float $amount = null): void
+    public function submitForApproval(string $workflowType, ?string $amount = null): void
     {
         app(ApprovalService::class)->submit($this, $workflowType, $amount);
     }

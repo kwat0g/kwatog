@@ -47,6 +47,8 @@
     {"id":"F-040","type":"focused_test","command":"cd api && php artisan test --filter=EmailBranding"},
     {"id":"F-041","type":"focused_test","command":"cd api && php artisan test --filter=BadgeControllerTest"},
     {"id":"F-042","type":"static_audit","command":"cd api && php -r '$x=simplexml_load_file(\"phpunit.xml\"); foreach($x->php->env as $e){ if((string)$e[\"name\"]===\"APP_ENV\"){ exit(((string)$e[\"force\"]===\"true\")?0:1);} } exit(1);'"},
-    {"id":"F-043","type":"ci_contract","command":"python3 -c \"import yaml,sys; w=yaml.safe_load(open('.github/workflows/api-tests.yml')); sys.exit(0 if w['jobs']['phpunit'].get('env',{}).get('APP_ENV')=='testing' else 1)\""}
+    {"id":"F-043","type":"ci_contract","command":"python3 -c \"import yaml,sys; w=yaml.safe_load(open('.github/workflows/api-tests.yml')); sys.exit(0 if w['jobs']['phpunit'].get('env',{}).get('APP_ENV')=='testing' else 1)\""},
+    {"id":"F-044","type":"focused_test","command":"cd api && php artisan test --filter=BudgetEnforcementBoundaryTest"},
+    {"id":"F-045","type":"focused_test","command":"cd api && php artisan test --filter=ApprovalThresholdBoundaryTest"}
   ]
 }
