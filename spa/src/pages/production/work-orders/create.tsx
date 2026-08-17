@@ -26,6 +26,8 @@ import { workOrdersApi } from '@/api/production/workOrders';
 import { businessPoliciesApi } from '@/api/businessPolicies';
 import type { CreateWorkOrderData } from '@/types/production';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 const schema = z.object({
  product_id: z.string().min(1, 'Product is required'),
  quantity_target: z.string().regex(/^\d+$/, 'Use a positive integer').refine((v) => Number(v) > 0, 'Must be greater than 0'),
@@ -61,10 +63,7 @@ export default function CreateWorkOrderPage() {
 
  const today = new Date().toISOString().slice(0, 16);
 
- const {
- register, handleSubmit, setError, setValue,
- formState: { errors, isSubmitting },
- } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  product_id: '',
@@ -76,6 +75,10 @@ export default function CreateWorkOrderPage() {
  priority: '',
  },
  });
+ const {
+ register, handleSubmit, setError, setValue,
+ formState: { errors, isSubmitting },
+ } = form;
  useEffect(() => {
  if (policies) setValue('priority', String(policies.mrp_work_order_normal_priority));
  }, [policies, setValue]);
@@ -109,11 +112,13 @@ export default function CreateWorkOrderPage() {
  }
  },
  });
+ const safety = useFormSafety({ form, saved: create.isSuccess });
 
  return (
  <div>
  <PageHeader title="New work order" backTo="/production/work-orders" backLabel="Work orders"
  />
+      <FormDraftBanner safety={safety} />
  <form
  onSubmit={handleSubmit((v) => create.mutate(v), onFormInvalid<FormValues>())}
  className="max-w-2xl mx-auto px-5 py-4"

@@ -26,6 +26,8 @@ import { onFormInvalid } from '@/lib/formErrors';
 import { numberInputProps } from '@/lib/numberInput';
 import type { ApiValidationError } from '@/types';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 const itemSchema = z.object({
  expense_account_id: z.string().min(1, 'Required'),
  // REC-02 — hidden PO item FK; empty for manually added free-text lines.
@@ -92,7 +94,7 @@ export default function CreateBillPage() {
  [posResp],
  );
 
- const { register, control, handleSubmit, watch, setError, setValue, getValues, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  bill_number: '', vendor_id: presetVendor, provenance_type: 'stock', purchase_order_id: '', goods_receipt_note_id: '',
@@ -102,6 +104,7 @@ export default function CreateBillPage() {
  items: [{ expense_account_id: '', item_id: '', description: '', quantity: undefined as unknown as number, unit: '', unit_price: undefined as unknown as number }],
  },
  });
+ const { register, control, handleSubmit, watch, setError, setValue, getValues, formState: { errors, isSubmitting } } = form;
  useEffect(() => {
  if (policies) setValue('is_vatable', vatConfigured);
  }, [policies, setValue, vatConfigured]);
@@ -221,10 +224,12 @@ export default function CreateBillPage() {
  } else toast.error(data?.message ?? 'Failed to create bill.');
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  return (
  <div>
  <PageHeader title="New bill" backTo="/accounting/bills" backLabel="Bills" />
+      <FormDraftBanner safety={safety} />
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-5xl mx-auto px-5 py-4 space-y-4">
  <Panel title="Header">
  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">

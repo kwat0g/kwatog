@@ -21,6 +21,8 @@ import { productsApi } from '@/api/crm/products';
 import { uomsApi } from '@/api/inventory/uoms';
 import type { Product, CreateProductData, UpdateProductData } from '@/types/crm';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 const schema = z.object({
   part_number: z
     .string()
@@ -51,14 +53,7 @@ export function ProductForm({ initial, mode }: Props) {
     staleTime: 300_000,
   });
 
-  const {
-    register,
-    handleSubmit,
-    setError,
-    watch,
-    reset,
-    formState: { errors, isSubmitting },
-  } = useForm<FormValues>({
+    const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       part_number: initial?.part_number ?? '',
@@ -69,6 +64,14 @@ export function ProductForm({ initial, mode }: Props) {
       is_active: initial?.is_active ?? true,
     },
   });
+  const {
+    register,
+    handleSubmit,
+    setError,
+    watch,
+    reset,
+    formState: { errors, isSubmitting },
+  } = form;
 
   // Re-sync defaults if initial changes (e.g. edit page after fetch).
   // `reset` rather than field-by-field `setValue`: one render instead of six,
@@ -117,12 +120,14 @@ export function ProductForm({ initial, mode }: Props) {
       }
     },
   });
+  const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
   return (
     <form
       onSubmit={handleSubmit((v) => mutation.mutate(v), onFormInvalid<FormValues>())}
       className="max-w-3xl mx-auto px-5 py-4"
     >
+      <FormDraftBanner safety={safety} inset={false} />
       <fieldset className="mb-8">
         <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">
           Identification

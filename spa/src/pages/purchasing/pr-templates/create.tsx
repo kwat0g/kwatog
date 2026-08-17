@@ -19,6 +19,8 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { onFormInvalid } from '@/lib/formErrors';
 import type { ApiValidationError } from '@/types';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 const lineSchema = z.object({
   item_id: z.string().optional().or(z.literal('')),
   description: z.string().trim().min(2, 'Description is required.').max(200),
@@ -65,15 +67,7 @@ export default function PrTemplateFormPage() {
     queryFn: () => departmentsApi.list({ per_page: 500 }),
   });
 
-  const {
-    register,
-    handleSubmit,
-    setError,
-    control,
-    watch,
-    setValue,
-    formState: { errors, isSubmitting },
-  } = useForm<FormValues>({
+    const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       name: '',
@@ -97,6 +91,15 @@ export default function PrTemplateFormPage() {
           }
         : undefined,
   });
+  const {
+    register,
+    handleSubmit,
+    setError,
+    control,
+    watch,
+    setValue,
+    formState: { errors, isSubmitting },
+  } = form;
 
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
   const watched = watch('items');
@@ -150,6 +153,7 @@ export default function PrTemplateFormPage() {
       }
     },
   });
+  const safety = useFormSafety({ form, saved: save.isSuccess });
 
   const depts = deptsData?.data ?? [];
   const items = itemsData?.data ?? [];
@@ -161,6 +165,7 @@ export default function PrTemplateFormPage() {
         backTo="/purchasing/pr-templates"
         backLabel="PR Templates"
       />
+      <FormDraftBanner safety={safety} />
       <form
         onSubmit={handleSubmit((d) => save.mutate(d), onFormInvalid<FormValues>())}
         className="px-5 py-4 max-w-3xl space-y-4"

@@ -20,6 +20,8 @@ import { onFormInvalid } from '@/lib/formErrors';
 import { numberInputProps } from '@/lib/numberInput';
 import type { ApiValidationError } from '@/types';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 const lineSchema = z.object({
  account_id: z.string().min(1, 'Account is required'),
  debit: z.preprocess((value) => value === '' || value == null ? undefined : value, z.coerce.number({ invalid_type_error: 'Number' }).min(0, 'Min 0').optional()),
@@ -48,7 +50,7 @@ export default function CreateJournalEntryPage() {
  });
  const accounts = accountsResp?.data ?? [];
 
- const { register, control, handleSubmit, watch, setError, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  date: new Date().toISOString().slice(0, 10),
@@ -59,6 +61,7 @@ export default function CreateJournalEntryPage() {
  ],
  },
  });
+ const { register, control, handleSubmit, watch, setError, formState: { errors, isSubmitting } } = form;
  const { fields, append, remove } = useFieldArray({ control, name: 'lines' });
  const lines = watch('lines');
 
@@ -98,11 +101,13 @@ export default function CreateJournalEntryPage() {
  }
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  return (
  <div>
  <PageHeader title="New journal entry" backTo="/accounting/journal-entries" backLabel="Journal Entries"
  />
+      <FormDraftBanner safety={safety} />
 
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-5xl mx-auto px-5 py-4 space-y-4">
  <Panel title="Header">

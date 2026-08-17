@@ -18,6 +18,8 @@ import { usePermission } from '@/hooks/usePermission';
 import type { ApiValidationError } from '@/types';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 const schema = z.object({
  employee_id: z.string().min(1, 'Employee is required'),
  leave_type_id: z.string().min(1, 'Leave type is required'),
@@ -54,15 +56,16 @@ export default function CreateLeavePage() {
  });
  const employees = employeesResp?.data ?? [];
 
- const {
- register, handleSubmit, watch, setError,
- formState: { errors, isSubmitting },
- } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  employee_id: user?.employee?.id ?? '',
  },
  });
+ const {
+ register, handleSubmit, watch, setError,
+ formState: { errors, isSubmitting },
+ } = form;
 
  const employeeId = watch('employee_id');
  const leaveTypeId = watch('leave_type_id');
@@ -112,10 +115,12 @@ export default function CreateLeavePage() {
  applyServerValidationErrors(e, setError, 'Failed to submit leave request.');
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  return (
  <div>
  <PageHeader title="Request leave" backTo="/hr/leaves" backLabel="Leaves" />
+      <FormDraftBanner safety={safety} />
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-4 space-y-4">
  <Panel title="Leave details">
  <div className="grid grid-cols-2 gap-3">

@@ -18,6 +18,8 @@ import { onFormInvalid } from '@/lib/formErrors';
 import { numberInputProps } from '@/lib/numberInput';
 import type { ApiValidationError } from '@/types';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 const schema = z.object({
  name: z.string().min(1, 'Name is required').max(200),
  contact_person: z.string().max(100).optional().or(z.literal('')),
@@ -42,7 +44,7 @@ export default function VendorFormPage({ mode }: { mode: 'create' | 'edit' }) {
  });
  const { data: policies } = useQuery({ queryKey: ['business-policies'], queryFn: businessPoliciesApi.get });
 
- const { register, handleSubmit, setError, setValue, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: existing ? {
  name: existing.name, contact_person: existing.contact_person ?? '', email: existing.email ?? '',
@@ -55,6 +57,7 @@ export default function VendorFormPage({ mode }: { mode: 'create' | 'edit' }) {
  payment_terms_days: existing.payment_terms_days, is_active: existing.is_active,
  } : undefined,
  });
+ const { register, handleSubmit, setError, setValue, formState: { errors, isSubmitting } } = form;
 
  useEffect(() => {
  if (mode === 'create' && policies) {
@@ -77,11 +80,13 @@ export default function VendorFormPage({ mode }: { mode: 'create' | 'edit' }) {
  }
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  return (
  <div>
  <PageHeader title={mode === 'create' ? 'New vendor' : `Edit ${existing?.name ?? 'vendor'}`} backTo="/accounting/vendors" backLabel="Vendors"
  />
+      <FormDraftBanner safety={safety} />
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-3xl mx-auto px-5 py-4 space-y-4">
  <Panel title="Identity">
  <div className="grid grid-cols-2 gap-3">

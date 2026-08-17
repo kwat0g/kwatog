@@ -19,6 +19,8 @@ import { numberInputProps } from '@/lib/numberInput';
 import type { ApiValidationError } from '@/types';
 import type { CreateItemData, ItemType, ReorderMethod } from '@/types/inventory';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 const schema = z.object({
  code: z.string().min(2).max(30).regex(/^[A-Z0-9-]+$/, 'Use uppercase letters, digits, hyphens.'),
  name: z.string().min(1).max(200),
@@ -79,11 +81,12 @@ export default function ItemFormPage({ mode }: { mode: 'create' | 'edit' }) {
  lead_time_days: undefined as unknown as number, is_critical: false, is_active: true,
  };
 
- const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: defaults,
  values: existing ? defaults : undefined,
  });
+ const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = form;
 
  const mutation = useMutation({
  mutationFn: (d: FormValues) => {
@@ -110,6 +113,7 @@ export default function ItemFormPage({ mode }: { mode: 'create' | 'edit' }) {
  }
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  return (
  <div>
@@ -117,6 +121,7 @@ export default function ItemFormPage({ mode }: { mode: 'create' | 'edit' }) {
  title={mode === 'create' ? 'New item' : `Edit ${existing?.code ?? 'item'}`}
  backTo="/inventory/items" backLabel="Items"
  />
+      <FormDraftBanner safety={safety} />
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())}
  className="max-w-3xl mx-auto px-5 py-4 space-y-4">
  <Panel title="Identity">

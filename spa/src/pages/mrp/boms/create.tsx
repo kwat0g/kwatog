@@ -28,6 +28,8 @@ import { bomsApi } from '@/api/mrp/boms';
 import type { CreateBomData } from '@/api/mrp/boms';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 const itemSchema = z.object({
  item_id: z.string().min(1, 'Item is required'),
  quantity_per_unit: z.string().regex(/^\d+(\.\d{1,4})?$/, 'Use a positive decimal with up to 4 places').refine((v) => Number(v) > 0, 'Must be greater than 0'),
@@ -58,10 +60,7 @@ export default function CreateBomPage() {
 
  const { data: uoms = [] } = useQuery({ queryKey: ['inventory', 'uoms'], queryFn: uomsApi.list, staleTime: 300_000 });
 
- const {
- register, control, handleSubmit, setError, watch,
- formState: { errors, isSubmitting },
- } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  product_id: '',
@@ -69,6 +68,10 @@ export default function CreateBomPage() {
  items: [{ item_id: '', quantity_per_unit: '', unit: '', waste_factor: '' }],
  },
  });
+ const {
+ register, control, handleSubmit, setError, watch,
+ formState: { errors, isSubmitting },
+ } = form;
  const { fields, append, remove } = useFieldArray({ control, name: 'items' });
 
  const watchedItems = watch('items');
@@ -104,6 +107,7 @@ export default function CreateBomPage() {
  }
  },
  });
+ const safety = useFormSafety({ form, saved: create.isSuccess });
 
  // Auto-fill UOM when an item is picked.
  const handleItemPicked = (rowIndex: number, itemId: string) => {
@@ -117,6 +121,7 @@ export default function CreateBomPage() {
  return (
  <div>
  <PageHeader title="New BOM" backTo="/mrp/boms" backLabel="BOMs" />
+      <FormDraftBanner safety={safety} />
  <form
  onSubmit={handleSubmit((v) => create.mutate(v), onFormInvalid<FormValues>())}
  className="max-w-4xl mx-auto px-5 py-4"

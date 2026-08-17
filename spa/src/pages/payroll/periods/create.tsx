@@ -15,6 +15,8 @@ import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { formatPeso } from '@/lib/formatNumber';
 import type { ApiValidationError } from '@/types';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 const schema = z.object({
  period_start: z.string().min(1, 'Start date is required'),
  period_end: z.string().min(1, 'End date is required'),
@@ -52,10 +54,11 @@ export default function CreatePayrollPeriodPage() {
  staleTime: 300_000,
  });
 
- const { register, handleSubmit, setError, watch, formState: { errors } } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: { scope_label: '' },
  });
+ const { register, handleSubmit, setError, watch, formState: { errors } } = form;
 
  const periodStart = watch('period_start');
  const periodEnd = watch('period_end');
@@ -134,6 +137,7 @@ export default function CreatePayrollPeriodPage() {
  }
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  const onSubmit = (data: FormValues) => {
  setSubmitting(true);
@@ -148,6 +152,7 @@ export default function CreatePayrollPeriodPage() {
  return (
  <div>
  <PageHeader title="New Payroll Period" backTo="/payroll/periods" backLabel="Payroll" />
+      <FormDraftBanner safety={safety} />
  <form onSubmit={handleSubmit(onSubmit, onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-4">
  <fieldset className="mb-8">
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Schedule</legend>

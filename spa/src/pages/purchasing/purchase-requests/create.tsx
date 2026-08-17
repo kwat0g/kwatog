@@ -22,6 +22,8 @@ import { cn } from '@/lib/cn';
 import type { PurchaseRequestPriority } from '@/types/purchasing';
 import { formatPeso } from '@/lib/formatNumber';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 const lineSchema = z.object({
   item_id: z.string().optional().or(z.literal('')),
   description: z.string().trim().min(2, 'Description is required.').max(200),
@@ -55,15 +57,7 @@ export default function CreatePurchaseRequestPage() {
     queryFn: () => itemsApi.list({ per_page: 200, is_active: 'true' }),
   });
 
-  const {
-    register,
-    handleSubmit,
-    setError,
-    control,
-    watch,
-    setValue,
-    formState: { errors, isSubmitting },
-  } = useForm<V>({
+    const form = useForm<V>({
     resolver: zodResolver(schema),
     defaultValues: {
       priority: '',
@@ -80,6 +74,15 @@ export default function CreatePurchaseRequestPage() {
       ],
     },
   });
+  const {
+    register,
+    handleSubmit,
+    setError,
+    control,
+    watch,
+    setValue,
+    formState: { errors, isSubmitting },
+  } = form;
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
   const watched = watch('items');
   const total = watched.reduce(
@@ -133,6 +136,7 @@ export default function CreatePurchaseRequestPage() {
       applyServerValidationErrors(e, setError, 'Failed to create PR.');
     },
   });
+  const safety = useFormSafety({ form, saved: create.isSuccess });
 
   const onValid = (values: V, submit: boolean) => {
     if (submit) {
@@ -156,6 +160,7 @@ export default function CreatePurchaseRequestPage() {
         backTo="/purchasing/purchase-requests"
         backLabel="Purchase requests"
       />
+      <FormDraftBanner safety={safety} />
       <form
         onSubmit={handleSubmit((d) => onValid(d, true), onFormInvalid<V>())}
         className="max-w-5xl mx-auto px-5 py-4 space-y-4"

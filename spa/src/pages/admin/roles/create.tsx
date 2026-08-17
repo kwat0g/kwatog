@@ -15,6 +15,8 @@ import { Switch } from '@/components/ui/Switch';
 import { PageHeader } from '@/components/layout/PageHeader';
 import type { ApiValidationError } from '@/types';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 /**
  * Series R — Task R1.
  *
@@ -56,14 +58,7 @@ export default function CreateRolePage() {
  ? String((location.state as { cloneFrom?: unknown }).cloneFrom ?? '')
  : '';
 
- const {
- register,
- handleSubmit,
- watch,
- setValue,
- setError,
- formState: { errors, isSubmitting },
- } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  clone: !!cloneFromState,
@@ -73,6 +68,14 @@ export default function CreateRolePage() {
  source_role_id: cloneFromState,
  },
  });
+ const {
+ register,
+ handleSubmit,
+ watch,
+ setValue,
+ setError,
+ formState: { errors, isSubmitting },
+ } = form;
 
  const cloneMode = watch('clone');
  const nameValue = watch('name');
@@ -123,6 +126,7 @@ export default function CreateRolePage() {
  // Other errors handled by axios interceptor.
  },
  });
+ const safety = useFormSafety({ form, saved: submit.isSuccess });
 
  return (
  <div>
@@ -132,6 +136,7 @@ export default function CreateRolePage() {
  backTo="/admin/roles"
  backLabel="Roles"
  />
+      <FormDraftBanner safety={safety} />
 
  <form
  onSubmit={handleSubmit((v) => submit.mutate(v))}

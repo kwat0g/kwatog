@@ -12,6 +12,8 @@ import { adminUsersApi } from '@/api/admin/users';
 import { client } from '@/api/client';
 import type { ApiValidationError } from '@/types';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 interface RoleOption { id: string; name: string }
 interface RolesResponse { data: RoleOption[] }
 
@@ -36,15 +38,16 @@ export default function AdminCreateUserPage() {
  staleTime: 60_000,
  });
 
+  const form = useForm<FormValues>({
+ resolver: zodResolver(schema),
+ defaultValues: { name: '', email: '', role_id: '', send_welcome: true },
+ });
  const {
  register,
  handleSubmit,
  setError,
  formState: { errors, isSubmitting },
- } = useForm<FormValues>({
- resolver: zodResolver(schema),
- defaultValues: { name: '', email: '', role_id: '', send_welcome: true },
- });
+ } = form;
 
  const mutation = useMutation({
  mutationFn: (v: FormValues) => adminUsersApi.create(v),
@@ -71,10 +74,12 @@ export default function AdminCreateUserPage() {
  }
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  return (
  <div>
  <PageHeader title="Create LuUser" backTo="/admin/users" backLabel="Users" />
+      <FormDraftBanner safety={safety} />
 
  <form
  onSubmit={handleSubmit((v) => mutation.mutate(v))}

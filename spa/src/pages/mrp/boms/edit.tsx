@@ -26,6 +26,8 @@ import type { CreateBomData } from '@/api/mrp/boms';
 import type { Path } from 'react-hook-form';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 const itemSchema = z.object({
  item_id: z.string().min(1, 'Item is required'),
  quantity_per_unit: z.string().regex(/^\d+(\.\d{1,4})?$/, 'Use a positive decimal with up to 4 places').refine((v) => Number(v) > 0, 'Must be greater than 0'),
@@ -61,10 +63,7 @@ export default function EditBomPage() {
  });
  const { data: uoms = [] } = useQuery({ queryKey: ['inventory', 'uoms'], queryFn: uomsApi.list, staleTime: 300_000 });
 
- const {
- register, control, handleSubmit, setError, setValue, watch,
- formState: { errors, isSubmitting },
- } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  values: data
  ? {
@@ -81,6 +80,10 @@ export default function EditBomPage() {
  }
  : undefined,
  });
+ const {
+ register, control, handleSubmit, setError, setValue, watch,
+ formState: { errors, isSubmitting },
+ } = form;
 
  const { fields, append, remove } = useFieldArray({ control, name: 'items' });
  const watchedItems = watch('items');
@@ -116,6 +119,7 @@ export default function EditBomPage() {
  }
  },
  });
+ const safety = useFormSafety({ form, saved: update.isSuccess });
 
  // Auto-fill UOM when a new item row's item is picked.
  const handleItemPicked = (rowIndex: number, itemId: string) => {
@@ -129,6 +133,7 @@ export default function EditBomPage() {
  <div>
  <PageHeader title="Edit BOM" backTo="/mrp/boms" backLabel="BOMs"
  />
+      <FormDraftBanner safety={safety} />
  <SkeletonDetail />
  </div>
  );

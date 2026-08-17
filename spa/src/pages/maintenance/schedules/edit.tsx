@@ -15,6 +15,8 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { onFormInvalid } from '@/lib/formErrors';
 import type { ApiValidationError } from '@/types';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 const schema = z.object({
  description: z.string().min(1).max(200),
  interval_type: z.string().min(1, 'Interval type required'),
@@ -35,7 +37,7 @@ export default function EditMaintenanceSchedulePage() {
  enabled: !!id,
  });
 
- const { register, handleSubmit, setError, formState: { errors } } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  values: data ? {
  description: data.description,
@@ -44,6 +46,7 @@ export default function EditMaintenanceSchedulePage() {
  is_active: data.is_active ? 'true' : 'false',
  } : undefined,
  });
+ const { register, handleSubmit, setError, formState: { errors } } = form;
 
  const mutation = useMutation({
  mutationFn: (values: FormValues) => schedulesApi.update(id, {
@@ -65,6 +68,7 @@ export default function EditMaintenanceSchedulePage() {
  }
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  if (isLoading) return <SkeletonDetail />;
  if (isError || !data) return (
@@ -79,6 +83,7 @@ export default function EditMaintenanceSchedulePage() {
  backTo={`/maintenance/schedules/${id}`}
  backLabel="Schedule"
  />
+      <FormDraftBanner safety={safety} />
  <form onSubmit={handleSubmit((v) => mutation.mutate(v), onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-4">
  <div className="mb-6 p-3 bg-subtle rounded-md text-sm">
  <span className="text-muted text-xs uppercase tracking-wider font-medium mr-2">Target</span>

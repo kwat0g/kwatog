@@ -17,6 +17,8 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { onFormInvalid } from '@/lib/formErrors';
 import type { ApiValidationError } from '@/types';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 const schema = z.object({
  name: z.string().min(1, 'Name is required').max(200),
  description: z.string().max(5000).optional().or(z.literal('')),
@@ -33,10 +35,11 @@ type FormValues = z.infer<typeof schema>;
 export default function CreateAssetPage() {
  const navigate = useNavigate();
  const qc = useQueryClient();
- const { register, handleSubmit, setError, watch, setValue, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: { category: '', salvage_value: '' },
  });
+ const { register, handleSubmit, setError, watch, setValue, formState: { errors, isSubmitting } } = form;
 
  const { data: deptData, isLoading: deptLoading } = useQuery({
  queryKey: ['hr', 'departments', 'list'],
@@ -76,10 +79,12 @@ export default function CreateAssetPage() {
  }
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  return (
  <div>
  <PageHeader title="New asset" backTo="/assets" backLabel="Assets" />
+      <FormDraftBanner safety={safety} />
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-3xl mx-auto px-5 py-4">
  <fieldset className="mb-6">
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Identification</legend>

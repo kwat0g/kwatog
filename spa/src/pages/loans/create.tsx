@@ -21,6 +21,8 @@ import type { AmortizationItem, LoanType } from '@/types/loans';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { cn } from '@/lib/cn';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 const schema = z.object({
  employee_id: z.string().min(1, 'Employee is required'),
  loan_type: z.string().min(1, 'Loan type is required'),
@@ -42,15 +44,16 @@ export default function CreateLoanPage() {
  });
  const employees = employeesResp?.data ?? [];
 
- const {
- register, handleSubmit, watch, setError, setValue,
- formState: { errors, isSubmitting },
- } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  // Period count is policy-driven; leave it blank until the selected
  // employee/type limits are loaded instead of inventing a default.
  defaultValues: { loan_type: '' },
  });
+ const {
+ register, handleSubmit, watch, setError, setValue,
+ formState: { errors, isSubmitting },
+ } = form;
 
  const employeeId = watch('employee_id');
  const loanType = watch('loan_type') as LoanType;
@@ -110,10 +113,12 @@ export default function CreateLoanPage() {
  } else toast.error('Failed to submit loan request.');
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  return (
  <div>
  <PageHeader title="New loan request" backTo="/hr/loans" backLabel="Loans" />
+      <FormDraftBanner safety={safety} />
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-3xl mx-auto px-5 py-4 space-y-4">
  <Panel title="Type & employee">
  <div className="space-y-3">

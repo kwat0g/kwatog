@@ -21,6 +21,8 @@ import type { AxiosError } from 'axios';
 import type { ApiValidationError } from '@/types';
 import type { CreateNcrTemplateData } from '@/types/quality';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 const schema = z.object({
   name: z.string().trim().min(1, 'Template name is required.').max(200),
   source: z.string().min(1, 'Source is required.'),
@@ -54,12 +56,7 @@ export default function NcrTemplateFormPage() {
     queryFn: () => itemsApi.list({ per_page: 200, item_type: 'product' }),
   });
 
-  const {
-    register,
-    handleSubmit,
-    setError,
-    formState: { errors, isSubmitting },
-  } = useForm<FormValues>({
+    const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       name: '',
@@ -81,6 +78,12 @@ export default function NcrTemplateFormPage() {
           }
         : undefined,
   });
+  const {
+    register,
+    handleSubmit,
+    setError,
+    formState: { errors, isSubmitting },
+  } = form;
 
   const createMut = useMutation({
     mutationFn: (data: FormValues) => {
@@ -110,6 +113,7 @@ export default function NcrTemplateFormPage() {
       }
     },
   });
+  const safety = useFormSafety({ form, saved: createMut.isSuccess });
 
   if (isEdit && loadingExisting) {
     return <SkeletonForm />;
@@ -122,6 +126,7 @@ export default function NcrTemplateFormPage() {
         backTo="/quality/ncr-templates"
         backLabel="NCR templates"
       />
+      <FormDraftBanner safety={safety} />
       <form
         onSubmit={handleSubmit((d) => createMut.mutate(d), onFormInvalid<FormValues>())}
         className="px-5 py-4"

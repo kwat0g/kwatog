@@ -16,6 +16,8 @@ import { onFormInvalid } from '@/lib/formErrors';
 import type { ApiValidationError } from '@/types';
 import type { AccountType } from '@/types/accounting';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 const schema = z.object({
  code: z.string().min(1, 'Code required').max(20),
  name: z.string().min(1, 'Name required').max(100),
@@ -41,10 +43,11 @@ export default function CreateAccountPage() {
  staleTime: 300_000,
  });
 
- const { register, handleSubmit, setValue, setError, formState: { errors } } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: { type: '', normal_balance: '' },
  });
+ const { register, handleSubmit, setValue, setError, formState: { errors } } = form;
 
  const mutation = useMutation({
  mutationFn: (data: FormValues) => accountsApi.create({
@@ -70,11 +73,13 @@ export default function CreateAccountPage() {
  }
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  return (
  <div>
  <PageHeader title="New account" backTo="/accounting/coa" backLabel="Chart of Accounts"
  />
+      <FormDraftBanner safety={safety} />
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())}
  className="max-w-2xl mx-auto px-5 py-4 space-y-4">
 

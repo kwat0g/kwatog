@@ -21,6 +21,8 @@ import { numberInputProps } from '@/lib/numberInput';
 import { onFormInvalid } from '@/lib/formErrors';
 import type { ApiValidationError } from '@/types';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 const itemSchema = z.object({
  item_id: z.string().min(1, 'Item required'),
  location_id: z.string().min(1, 'Location required'),
@@ -53,7 +55,7 @@ export default function CreateMaterialIssuePage() {
  const qc = useQueryClient();
  const [search] = useSearchParams();
 
- const { register, control, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  work_order_id: search.get('work_order_id') ?? '',
@@ -63,6 +65,7 @@ export default function CreateMaterialIssuePage() {
  items: [{ ...blankLine }],
  },
  });
+ const { register, control, handleSubmit, setError, formState: { errors, isSubmitting } } = form;
  const { fields, append, remove } = useFieldArray({ control, name: 'items' });
 
  const { data: workOrders } = useQuery({
@@ -124,10 +127,12 @@ export default function CreateMaterialIssuePage() {
  }
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  return (
  <div>
  <PageHeader title="New material issue" backTo="/inventory/material-issues" backLabel="Material issues" />
+      <FormDraftBanner safety={safety} />
 
  <form
  onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())}

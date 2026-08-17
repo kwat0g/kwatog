@@ -30,6 +30,8 @@ import { focusRingInset } from '@/lib/focus';
 import type { CreateNcrData, NcrTemplate, NcrSeverity, NcrSource } from '@/types/quality';
 import { cn } from '@/lib/cn';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 const schema = z.object({
  source: z.string().min(1, 'Source is required'),
  severity: z.string().min(1, 'Severity is required'),
@@ -66,9 +68,7 @@ export default function CreateNcrPage() {
  queryFn: () => ncrTemplatesApi.active(),
  });
 
- const {
- register, handleSubmit, formState: { errors }, reset, watch, setValue, setError,
- } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  source: '',
@@ -78,6 +78,9 @@ export default function CreateNcrPage() {
  affected_quantity: 0,
  },
  });
+ const {
+ register, handleSubmit, formState: { errors }, reset, watch, setValue, setError,
+ } = form;
 
  useEffect(() => {
  if (!watch('source') && ncrOptions.data?.sources?.length) setValue('source', ncrOptions.data.sources[0].value);
@@ -125,10 +128,12 @@ export default function CreateNcrPage() {
  applyServerValidationErrors(e, setError, 'Failed to open NCR.');
  },
  });
+ const safety = useFormSafety({ form, saved: submit.isSuccess });
 
  return (
  <div>
  <PageHeader title="Open NCR" subtitle="Use this for customer complaints or supplier issues. Inspection failures auto-create NCRs." />
+      <FormDraftBanner safety={safety} />
  {/* Template picker button */}
  <div className="px-5 py-2 flex items-center gap-2">
  <span className="text-xs text-muted">Quick-fill from template:</span>

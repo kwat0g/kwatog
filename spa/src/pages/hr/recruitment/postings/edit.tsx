@@ -22,6 +22,8 @@ import { focusRing } from '@/lib/focus';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/cn';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 const schema = z.object({
  title: z.string().min(1, 'Title is required').max(200),
  department_id: z.string().min(1, 'Department is required'),
@@ -58,14 +60,7 @@ export default function PostingEditPage() {
  });
  const employmentTypes = optionsResponse?.employment_types ?? [];
 
- const {
- register,
- handleSubmit,
- setError,
- setValue,
- watch,
- formState: { errors },
- } = useForm<FormData>({
+  const form = useForm<FormData>({
  resolver: zodResolver(schema),
  values: posting
  ? {
@@ -83,6 +78,14 @@ export default function PostingEditPage() {
  }
  : undefined,
  });
+ const {
+ register,
+ handleSubmit,
+ setError,
+ setValue,
+ watch,
+ formState: { errors },
+ } = form;
 
  const departmentId = watch('department_id');
 
@@ -160,6 +163,7 @@ export default function PostingEditPage() {
  }
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  if (isLoading) return <SkeletonForm />;
 
@@ -171,6 +175,7 @@ export default function PostingEditPage() {
  backTo={`/hr/recruitment/postings/${id}`}
  backLabel="Posting"
  />
+      <FormDraftBanner safety={safety} />
 
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormData>())} className="max-w-5xl mx-auto px-5 py-4 space-y-4">
  <Panel title="Job Details">

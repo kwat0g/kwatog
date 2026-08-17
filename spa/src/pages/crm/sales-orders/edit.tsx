@@ -29,6 +29,8 @@ import { salesOrdersApi } from '@/api/crm/salesOrders';
 import type { UpdateSalesOrderData } from '@/types/crm';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 const itemSchema = z.object({
  product_id: z.string().min(1, 'Product is required'),
  quantity: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Use a positive decimal with up to 2 places').refine((v) => Number(v) > 0, 'Must be greater than 0'),
@@ -65,10 +67,7 @@ export default function EditSalesOrderPage() {
  queryFn: () => productsApi.list({ per_page: 100, is_active: 'true' }),
  });
 
- const {
- register, control, handleSubmit, reset, setError,
- formState: { errors, isSubmitting },
- } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  customer_id: '',
@@ -79,6 +78,10 @@ export default function EditSalesOrderPage() {
  items: [{ product_id: '', quantity: '', delivery_date: '' }],
  },
  });
+ const {
+ register, control, handleSubmit, reset, setError,
+ formState: { errors, isSubmitting },
+ } = form;
  const { fields, append, remove } = useFieldArray({ control, name: 'items' });
 
  // Pre-fill once the SO loads.
@@ -132,6 +135,7 @@ export default function EditSalesOrderPage() {
  }
  },
  });
+ const safety = useFormSafety({ form, saved: update.isSuccess });
 
  const isDraft = useMemo(() => detail.data?.status === 'draft', [detail.data]);
 
@@ -140,6 +144,7 @@ export default function EditSalesOrderPage() {
  <div>
  <PageHeader title="Edit sales order" backTo="/crm/sales-orders" backLabel="Sales orders"
  />
+      <FormDraftBanner safety={safety} />
  <SkeletonForm />
  </div>
  );

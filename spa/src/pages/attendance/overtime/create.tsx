@@ -19,6 +19,8 @@ import { SkeletonBlock } from '@/components/ui/Skeleton';
 import type { ApiValidationError } from '@/types';
 import { onFormInvalid } from '@/lib/formErrors';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 function todayIso(): string {
  const d = new Date();
  const off = d.getTimezoneOffset() * 60_000;
@@ -82,16 +84,17 @@ export default function OvertimeCreatePage() {
  });
  }, [options]);
 
- const {
- register, handleSubmit, setError,
- formState: { errors, isSubmitting },
- } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  employee_id: user?.employee?.id ?? '',
  date: todayIso(),
  },
  });
+ const {
+ register, handleSubmit, setError,
+ formState: { errors, isSubmitting },
+ } = form;
 
  const mutation = useMutation({
  mutationFn: (d: FormValues) => overtimeApi.create({
@@ -114,6 +117,7 @@ export default function OvertimeCreatePage() {
  } else toast.error('Failed to submit OT request.');
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  const dateMin = options ? addDaysIso(todayIso(), -options.request_past_days) : undefined;
  const dateMax = options ? addDaysIso(todayIso(), options.request_future_days) : undefined;
@@ -121,6 +125,7 @@ export default function OvertimeCreatePage() {
  return (
  <div>
  <PageHeader title="New overtime request" backTo="/hr/attendance/overtime" backLabel="Overtime" />
+      <FormDraftBanner safety={safety} />
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-4">
  {optionsLoading ? (
  <Panel title="Request details"><SkeletonBlock className="h-24" /></Panel>

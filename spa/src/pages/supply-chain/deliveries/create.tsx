@@ -17,6 +17,8 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { onFormInvalid, applyServerValidationErrors } from '@/lib/formErrors';
 import { formatPeso } from '@/lib/formatNumber';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 // ─── Validation ──────────────────────────────────────────────────────────────
 
 const itemSchema = z.object({
@@ -58,14 +60,7 @@ export default function CreateDeliveryPage() {
  const vehicleList = vehiclesData?.data ?? [];
 
  // ── Form ──
- const {
- register,
- control,
- handleSubmit,
- watch,
- setError,
- formState: { errors, isSubmitting },
- } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  sales_order_id: '',
@@ -75,6 +70,14 @@ export default function CreateDeliveryPage() {
  items: [{ sales_order_item_id: '', quantity: undefined as unknown as number, inspection_id: '' }],
  },
  });
+ const {
+ register,
+ control,
+ handleSubmit,
+ watch,
+ setError,
+ formState: { errors, isSubmitting },
+ } = form;
 
  const { fields, append, remove } = useFieldArray({ control, name: 'items' });
 
@@ -113,6 +116,7 @@ export default function CreateDeliveryPage() {
  applyServerValidationErrors(err, setError, 'Failed to create delivery.');
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  // ── Pre-populate driver_id from SO if SO has a delivery address ──
  // (not applicable here — driver comes from fleet, not SO)
@@ -124,6 +128,7 @@ export default function CreateDeliveryPage() {
  backTo="/supply-chain/deliveries"
  backLabel="Deliveries"
  />
+      <FormDraftBanner safety={safety} />
 
  <form
  onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())}

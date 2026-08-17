@@ -21,6 +21,8 @@ import { focusRing } from '@/lib/focus';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/cn';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 const schema = z.object({
  title: z.string().min(1, 'Title is required').max(200),
  department_id: z.string().min(1, 'Department is required'),
@@ -43,14 +45,7 @@ export default function PostingCreatePage() {
  const [reqTags, setReqTags] = useState<string[]>([]);
  const [reqInput, setReqInput] = useState('');
 
- const {
- register,
- handleSubmit,
- setError,
- setValue,
- watch,
- formState: { errors },
- } = useForm<FormData>({
+  const form = useForm<FormData>({
  resolver: zodResolver(schema),
  defaultValues: {
  employment_type: '',
@@ -59,6 +54,14 @@ export default function PostingCreatePage() {
  requirements: '',
  },
  });
+ const {
+ register,
+ handleSubmit,
+ setError,
+ setValue,
+ watch,
+ formState: { errors },
+ } = form;
 
  const departmentId = watch('department_id');
 
@@ -124,6 +127,7 @@ export default function PostingCreatePage() {
  }
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  return (
  <div>
@@ -133,6 +137,7 @@ export default function PostingCreatePage() {
  backTo="/hr/recruitment/postings"
  backLabel="Postings"
  />
+      <FormDraftBanner safety={safety} />
 
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormData>())} className="max-w-5xl mx-auto px-5 py-4 space-y-4">
  <Panel title="Job Details">

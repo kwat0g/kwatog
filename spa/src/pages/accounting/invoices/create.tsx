@@ -24,6 +24,8 @@ import { onFormInvalid } from '@/lib/formErrors';
 import { numberInputProps } from '@/lib/numberInput';
 import type { ApiValidationError } from '@/types';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 const itemSchema = z.object({
  revenue_account_id: z.string().min(1, 'Required'),
  description: z.string().min(1, 'Required').max(200),
@@ -64,7 +66,7 @@ export default function CreateInvoicePage() {
  const vatConfigured = policies?.vat_status === 'VAT Registered' && policies.vat_rate !== null;
  const vatRateLabel = vatConfigured ? `${(Number(policies.vat_rate) * 100).toLocaleString()}%` : '—';
 
- const { register, control, handleSubmit, watch, setError, setValue, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  customer_id: presetCustomer, date: new Date().toISOString().slice(0, 10),
@@ -72,6 +74,7 @@ export default function CreateInvoicePage() {
  items: [{ revenue_account_id: '', description: '', quantity: undefined as unknown as number, unit: '', unit_price: undefined as unknown as number }],
  },
  });
+ const { register, control, handleSubmit, watch, setError, setValue, formState: { errors, isSubmitting } } = form;
  useEffect(() => {
  if (policies) setValue('is_vatable', vatConfigured);
  }, [policies, setValue, vatConfigured]);
@@ -110,11 +113,13 @@ export default function CreateInvoicePage() {
  } else toast.error(e.response?.data?.message ?? 'Failed to save invoice.');
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  return (
  <div>
  <PageHeader title="New invoice" backTo="/accounting/invoices" backLabel="Invoices"
  />
+      <FormDraftBanner safety={safety} />
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-5xl mx-auto px-5 py-4 space-y-4">
  <Panel title="Header">
  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">

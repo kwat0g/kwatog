@@ -25,6 +25,8 @@ import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
 import type { CreateInspectionData, InspectionStage, AqlPlan } from '@/types/quality';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 const schema = z.object({
  stage: z.string().min(1, 'Stage is required'),
  product_id: z.string().min(1, 'Product is required'),
@@ -43,13 +45,14 @@ export default function CreateInspectionPage() {
  });
  const stages = inspectionOptions.data?.stages ?? [];
 
- const {
- register, handleSubmit, watch, formState: { errors },
- } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  // Batch size is transactional input, not a catalog default.
  defaultValues: { stage: '', product_id: '', notes: '' },
  });
+ const {
+ register, handleSubmit, watch, formState: { errors },
+ } = form;
 
  const stage = watch('stage');
  const batchQty = watch('batch_quantity');
@@ -85,10 +88,12 @@ export default function CreateInspectionPage() {
  toast.error(e.response?.data?.message ?? 'Failed to open inspection');
  },
  });
+ const safety = useFormSafety({ form, saved: submit.isSuccess });
 
  return (
  <div>
  <PageHeader title="Open inspection" subtitle="Sample plan is computed when stage is outgoing" />
+      <FormDraftBanner safety={safety} />
  <form
  onSubmit={handleSubmit((v) =>
  submit.mutate({

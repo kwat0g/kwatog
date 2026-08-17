@@ -18,6 +18,8 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { onFormInvalid } from '@/lib/formErrors';
 import type { ApiValidationError } from '@/types';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 const schema = z.object({
  name: z.string().min(1, 'Name is required').max(200),
  description: z.string().max(5000).optional().or(z.literal('')),
@@ -52,7 +54,7 @@ export default function EditAssetPage() {
  queryFn: () => assetsApi.options(),
  });
 
- const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  values: data
  ? {
@@ -68,6 +70,7 @@ export default function EditAssetPage() {
  }
  : undefined,
  });
+ const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = form;
 
  const mutation = useMutation({
  mutationFn: (formData: FormValues) =>
@@ -95,6 +98,7 @@ export default function EditAssetPage() {
  }
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  if (isLoading) return <SkeletonDetail />;
  if (isError || !data) {
@@ -115,6 +119,7 @@ export default function EditAssetPage() {
  backTo={`/assets/${id}`}
  backLabel={data.asset_code}
  />
+      <FormDraftBanner safety={safety} />
  <form
  onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())}
  className="max-w-3xl mx-auto px-5 py-4"

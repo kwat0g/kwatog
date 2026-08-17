@@ -18,6 +18,8 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import type { CreateComplaintData, ComplaintSeverity } from '@/types/crm';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 const schema = z.object({
  customer_id: z.string().min(1, 'Customer is required'),
  product_id: z.string().optional().or(z.literal('')),
@@ -46,9 +48,7 @@ export default function CreateComplaintPage() {
  queryFn: () => complaintsApi.options(),
  });
 
- const {
- register, handleSubmit, setError, formState: { errors },
- } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  customer_id: '',
@@ -60,6 +60,9 @@ export default function CreateComplaintPage() {
  affected_quantity: 0,
  },
  });
+ const {
+ register, handleSubmit, setError, formState: { errors },
+ } = form;
 
  const submit = useMutation({
  mutationFn: (data: CreateComplaintData) => complaintsApi.create(data),
@@ -76,11 +79,13 @@ export default function CreateComplaintPage() {
  }
  },
  });
+ const safety = useFormSafety({ form, saved: submit.isSuccess });
 
  return (
  <div>
  <PageHeader title="File complaint" subtitle="An NCR will be auto-created on submit." backTo="/crm/complaints" backLabel="Complaints"
  />
+      <FormDraftBanner safety={safety} />
  <form
  onSubmit={handleSubmit((v) =>
  submit.mutate({

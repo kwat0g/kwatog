@@ -15,6 +15,8 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { onFormInvalid } from '@/lib/formErrors';
 import type { ApiValidationError } from '@/types';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 const schema = z.object({
  name: z.string().min(1, 'Name required').max(100),
  description: z.string().max(500).optional().or(z.literal('')),
@@ -33,7 +35,7 @@ export default function EditAccountPage() {
  enabled: !!id,
  });
 
- const { register, handleSubmit, setError, formState: { errors } } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  values: account ? {
  name: account.name,
@@ -41,6 +43,7 @@ export default function EditAccountPage() {
  is_active: account.is_active,
  } : undefined,
  });
+ const { register, handleSubmit, setError, formState: { errors } } = form;
 
  const mutation = useMutation({
  mutationFn: (data: FormValues) => accountsApi.update(id, {
@@ -63,6 +66,7 @@ export default function EditAccountPage() {
  }
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  if (isLoading || !account) return <SkeletonDetail />;
 
@@ -70,6 +74,7 @@ export default function EditAccountPage() {
  <div>
  <PageHeader title={`Edit ${account.code}`} backTo="/accounting/coa" backLabel="Chart of Accounts"
  />
+      <FormDraftBanner safety={safety} />
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())}
  className="max-w-2xl mx-auto px-5 py-4 space-y-4">
 

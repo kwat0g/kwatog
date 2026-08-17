@@ -21,6 +21,8 @@ import type { ApiValidationError } from '@/types';
 import type { CreateTrainingData } from '@/types/hr';
 import { onFormInvalid } from '@/lib/formErrors';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 const schema = z.object({
  name: z.string().min(1, 'Name is required').max(200),
  description: z.string().max(1000).optional().or(z.literal('')),
@@ -62,10 +64,11 @@ export default function TrainingFormPage() {
  enabled: isEdit,
  });
 
- const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: { is_certification: false },
  });
+ const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = form;
 
  useEffect(() => {
  if (training) {
@@ -96,6 +99,7 @@ export default function TrainingFormPage() {
  } else toast.error('Failed to save training.');
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  if (isEdit && loadingTraining) return <SkeletonForm />;
  if (isEdit && !loadingTraining && !training) return <EmptyState icon="alert-circle" title="Training not found" />;
@@ -103,6 +107,7 @@ export default function TrainingFormPage() {
  return (
  <div>
  <PageHeader title={isEdit ? 'Edit training' : 'Add training'} backTo="/hr/trainings" backLabel="Trainings" />
+      <FormDraftBanner safety={safety} />
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid())} className="max-w-2xl mx-auto px-5 py-4">
  <Panel title="Training details">
  <div className="space-y-3">

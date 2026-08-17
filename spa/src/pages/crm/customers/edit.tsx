@@ -11,6 +11,8 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { onFormInvalid } from '@/lib/formErrors';
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import type { ApiValidationError } from '@/types';
 import { CustomerForm, customerSchema, type CustomerFormValues } from './form';
 
@@ -88,6 +90,7 @@ export default function CrmCustomerEditPage() {
  }
  },
  });
+ const safety = useFormSafety({ form: methods, saved: mutation.isSuccess });
 
  const backTo = data ? `/crm/customers/${data.id}` : '/crm/customers';
 
@@ -98,6 +101,7 @@ export default function CrmCustomerEditPage() {
  backTo={backTo}
  backLabel={data?.name ?? 'Customers'}
  />
+      <FormDraftBanner safety={safety} />
  {isLoading && <SkeletonDetail />}
  {isError && (
  <EmptyState

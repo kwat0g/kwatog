@@ -18,6 +18,8 @@ import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { onFormInvalid, applyServerValidationErrors } from '@/lib/formErrors';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 const itemSchema = z.object({
  // A supplier return moves raw materials (items); a customer return moves
  // finished goods (products). The backend requires one or the other per line.
@@ -65,14 +67,7 @@ export default function CreateReturnRequestPage() {
  const navigate = useNavigate();
  const qc = useQueryClient();
 
- const {
- register,
- control,
- handleSubmit,
- watch,
- setError,
- formState: { errors, isSubmitting },
- } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  type: '',
@@ -86,6 +81,14 @@ export default function CreateReturnRequestPage() {
  items: [],
  },
  });
+ const {
+ register,
+ control,
+ handleSubmit,
+ watch,
+ setError,
+ formState: { errors, isSubmitting },
+ } = form;
 
  const { fields, append, remove } = useFieldArray({ control, name: 'items' });
  const returnType = watch('type');
@@ -147,6 +150,7 @@ export default function CreateReturnRequestPage() {
  applyServerValidationErrors<FormValues>(err, setError, 'Failed to create return request.');
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  return (
  <div>
@@ -155,6 +159,7 @@ export default function CreateReturnRequestPage() {
  subtitle="Create a customer or supplier return"
  backTo="/return-management"
  />
+      <FormDraftBanner safety={safety} />
 
  <form
  onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())}

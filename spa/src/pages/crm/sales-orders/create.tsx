@@ -33,6 +33,8 @@ import type { CreateSalesOrderData } from '@/types/crm';
 import { formatPeso } from '@/lib/formatNumber';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 const itemSchema = z.object({
  product_id: z.string().min(1, 'Product is required'),
  quantity: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Use a positive decimal with up to 2 places').refine((v) => Number(v) > 0, 'Must be greater than 0'),
@@ -66,10 +68,7 @@ export default function CreateSalesOrderPage() {
 
  const today = new Date().toISOString().slice(0, 10);
 
- const {
- register, control, handleSubmit, setError, setValue, watch,
- formState: { errors, isSubmitting },
- } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  customer_id: '',
@@ -80,6 +79,10 @@ export default function CreateSalesOrderPage() {
  items: [{ product_id: '', quantity: '', delivery_date: '' }],
  },
  });
+ const {
+ register, control, handleSubmit, setError, setValue, watch,
+ formState: { errors, isSubmitting },
+ } = form;
  const { fields, append, remove } = useFieldArray({ control, name: 'items' });
  const selectedCustomerId = watch('customer_id');
 
@@ -134,6 +137,7 @@ export default function CreateSalesOrderPage() {
  }
  },
  });
+ const safety = useFormSafety({ form, saved: create.isSuccess });
 
  // Live preview of subtotal (best-effort: pulls unit_price from product list — server
  // re-resolves from the actual price agreement on save, so this is approximate).
@@ -154,6 +158,7 @@ export default function CreateSalesOrderPage() {
  <div>
  <PageHeader title="New sales order" backTo="/crm/sales-orders" backLabel="Sales orders"
  />
+      <FormDraftBanner safety={safety} />
  <form
  onSubmit={handleSubmit((v) => create.mutate(v), onFormInvalid<FormValues>())}
  className="max-w-4xl mx-auto px-5 py-4"

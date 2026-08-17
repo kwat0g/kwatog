@@ -18,6 +18,8 @@ import { onFormInvalid } from '@/lib/formErrors';
 import type { ApiValidationError } from '@/types';
 import type { CreateTransferData } from '@/types/assets';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 const schema = z.object({
  asset_id: z.string().min(1, 'Asset is required'),
  from_department_id: z.string().min(1, 'From department is required'),
@@ -33,10 +35,11 @@ type FormValues = z.infer<typeof schema>;
 export default function CreateAssetTransferPage() {
  const navigate = useNavigate();
  const qc = useQueryClient();
- const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: { transfer_date: new Date().toISOString().split('T')[0] },
  });
+ const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = form;
 
  const { data: deptData, isLoading: deptLoading } = useQuery({
  queryKey: ['hr', 'departments', 'list'],
@@ -67,6 +70,7 @@ export default function CreateAssetTransferPage() {
  }
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  const onSubmit = (data: FormValues) => {
  mutation.mutate({
@@ -81,6 +85,7 @@ export default function CreateAssetTransferPage() {
  return (
  <div>
  <PageHeader title="New asset transfer" backTo="/assets/transfers" backLabel="Transfers" />
+      <FormDraftBanner safety={safety} />
  <form onSubmit={handleSubmit(onSubmit, onFormInvalid<FormValues>())} className="max-w-3xl mx-auto px-5 py-4">
  <fieldset className="mb-6">
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Transfer details</legend>

@@ -16,6 +16,8 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { onFormInvalid } from '@/lib/formErrors';
 import type { ApiValidationError } from '@/types';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 const schema = z.object({
   maintainable_type: z.string().min(1, 'Target type required'),
   maintainable_id: z.string().min(1, 'Target ID required'),
@@ -30,10 +32,11 @@ export default function CreateMaintenanceSchedulePage() {
  const navigate = useNavigate();
  const qc = useQueryClient();
  const { data: options } = useQuery({ queryKey: ['maintenance', 'schedule-options'], queryFn: () => schedulesApi.options() });
- const { register, handleSubmit, setError, watch, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: { maintainable_type: '', maintainable_id: '', interval_type: '', is_active: true },
  });
+ const { register, handleSubmit, setError, watch, formState: { errors, isSubmitting } } = form;
 
  const maintainableType = watch('maintainable_type');
  const machines = useQuery({ queryKey: ['mrp', 'machines'], queryFn: () => machinesApi.list({ per_page: 200 }), enabled: maintainableType === 'machine' });
@@ -60,10 +63,12 @@ export default function CreateMaintenanceSchedulePage() {
  }
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  return (
  <div>
  <PageHeader title="New maintenance schedule" backTo="/maintenance/schedules" backLabel="Schedules" />
+      <FormDraftBanner safety={safety} />
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-4">
  <fieldset className="mb-6">
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Target</legend>

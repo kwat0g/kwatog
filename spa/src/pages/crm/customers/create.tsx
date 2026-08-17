@@ -10,6 +10,8 @@ import { businessPoliciesApi } from '@/api/businessPolicies';
 import { Button } from '@/components/ui/Button';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { onFormInvalid } from '@/lib/formErrors';
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import type { ApiValidationError } from '@/types';
 import { CustomerForm, customerSchema, type CustomerFormValues } from './form';
 
@@ -69,6 +71,7 @@ export default function CrmCustomerCreatePage() {
  }
  },
  });
+ const safety = useFormSafety({ form: methods, saved: mutation.isSuccess });
 
  return (
  <div>
@@ -77,6 +80,7 @@ export default function CrmCustomerCreatePage() {
  backTo="/crm/customers"
  backLabel="Customers"
  />
+      <FormDraftBanner safety={safety} />
  <FormProvider {...methods}>
  <form onSubmit={handleSubmit((v) => mutation.mutate(v), onFormInvalid<FormValues>())}>
  <CustomerForm />
