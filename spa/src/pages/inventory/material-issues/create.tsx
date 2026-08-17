@@ -4,7 +4,6 @@ import { useFieldArray, useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { LuPlus, LuTrash2 } from '@/lib/icons';
 import { materialIssuesApi } from '@/api/inventory/material-issues';
@@ -18,8 +17,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { numberInputProps } from '@/lib/numberInput';
-import { onFormInvalid } from '@/lib/formErrors';
-import type { ApiValidationError } from '@/types';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
@@ -116,15 +114,8 @@ export default function CreateMaterialIssuePage() {
  toast.success(`Material issue ${slip.slip_number} created.`);
  nav(`/inventory/material-issues/${slip.id}`);
  },
- onError: (e: AxiosError<ApiValidationError>) => {
- if (e.response?.status === 422 && e.response.data?.errors) {
- Object.entries(e.response.data.errors).forEach(([f, msgs]) =>
- setError(f as keyof FormValues, { type: 'server', message: msgs[0] }),
- );
- toast.error('The server flagged some fields. Please review.');
- } else {
- toast.error(e.response?.data?.message ?? 'Failed to create material issue.');
- }
+ onError: (e) => {
+   applyServerValidationErrors(e, setError, 'Failed to save. Please try again.');
  },
  });
  const safety = useFormSafety({ form, saved: mutation.isSuccess });

@@ -5,7 +5,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
-import { AxiosError } from 'axios';
 import { loansApi } from '@/api/loans';
 import { employeesApi } from '@/api/hr/employees';
 import { Button } from '@/components/ui/Button';
@@ -15,8 +14,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatPeso } from '@/lib/formatNumber';
-import type { ApiValidationError } from '@/types';
-import { onFormInvalid } from '@/lib/formErrors';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import type { AmortizationItem, LoanType } from '@/types/loans';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { cn } from '@/lib/cn';
@@ -100,17 +98,8 @@ export default function CreateLoanPage() {
  toast.success(`Loan request ${loan.loan_no} submitted.`);
  navigate(`/hr/loans/${loan.id}`);
  },
- onError: (e: AxiosError<ApiValidationError>) => {
- if (e.response?.status === 422) {
- const data = e.response.data;
- if (data.errors) {
- Object.entries(data.errors).forEach(([f, msgs]) =>
- setError(f as keyof FormValues, { type: 'server', message: msgs[0] }),
- );
- } else if (data.message) {
- toast.error(data.message);
- }
- } else toast.error('Failed to submit loan request.');
+ onError: (e) => {
+   applyServerValidationErrors(e, setError, 'Failed to submit loan request.');
  },
  });
  const safety = useFormSafety({ form, saved: mutation.isSuccess });

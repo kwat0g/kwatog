@@ -5,7 +5,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
-import type { AxiosError } from 'axios';
 import { assetsApi } from '@/api/assets';
 import { departmentsApi } from '@/api/hr/departments';
 import { Button } from '@/components/ui/Button';
@@ -15,8 +14,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { onFormInvalid } from '@/lib/formErrors';
-import type { ApiValidationError } from '@/types';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
@@ -88,14 +86,8 @@ export default function EditAssetPage() {
  toast.success(`Asset ${asset.asset_code} updated.`);
  navigate(`/assets/${asset.id}`);
  },
- onError: (err: AxiosError<ApiValidationError>) => {
- if (err.response?.status === 422 && err.response.data.errors) {
- Object.entries(err.response.data.errors).forEach(([k, v]) =>
- setError(k as keyof FormValues, { type: 'server', message: v[0] }));
- toast.error(err.response?.data?.message || 'Validation failed.');
- } else {
- toast.error('Failed to update asset.');
- }
+ onError: (err) => {
+   applyServerValidationErrors(err, setError, 'Failed to update asset.');
  },
  });
  const safety = useFormSafety({ form, saved: mutation.isSuccess });

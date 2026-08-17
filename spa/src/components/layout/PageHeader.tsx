@@ -3,7 +3,7 @@ import { LuArrowLeft } from '@/lib/icons';
 import { isValidElement, useEffect, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { RefreshingIndicator } from './RefreshingIndicator';
-import { MODULE_LABELS } from './Breadcrumbs';
+import { MODULE_LABELS } from '@/lib/moduleLabels';
 import { useBreadcrumbStore } from '@/stores/breadcrumbStore';
 
 interface PageHeaderProps {

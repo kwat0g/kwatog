@@ -4,7 +4,6 @@ import { useFieldArray, useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { LuPlus, LuTrash2 } from '@/lib/icons';
 import { accountsApi } from '@/api/accounting/accounts';
@@ -16,9 +15,8 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatPeso } from '@/lib/formatNumber';
-import { onFormInvalid } from '@/lib/formErrors';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { numberInputProps } from '@/lib/numberInput';
-import type { ApiValidationError } from '@/types';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
@@ -91,14 +89,8 @@ export default function CreateJournalEntryPage() {
  toast.success(`Draft ${je.entry_number} created.`);
  navigate(`/accounting/journal-entries/${je.id}`);
  },
- onError: (e: AxiosError<ApiValidationError>) => {
- if (e.response?.status === 422 && e.response.data?.errors) {
- Object.entries(e.response.data.errors).forEach(([f, msgs]) =>
- setError(f as keyof FormValues, { type: 'server', message: msgs[0] }),
- );
- } else {
- toast.error(e.response?.data?.message ?? 'Failed to create entry.');
- }
+ onError: (e) => {
+   applyServerValidationErrors(e, setError, 'Failed to save. Please try again.');
  },
  });
  const safety = useFormSafety({ form, saved: mutation.isSuccess });

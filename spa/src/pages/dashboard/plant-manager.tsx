@@ -40,22 +40,28 @@ import type { ApiSuccess } from '@/types';
 
 interface PlantManagerData {
   kpis: Array<{ label: string; value: string | null; unit: string }>;
+  /**
+   * Panels are OPTIONAL: the server gates each one on the viewer's grant and
+   * omits what they may not read (PanelGate). The page grant opens the page,
+   * not every domain it draws from — a plant manager with no accounting grant
+   * gets no financial snapshot. Render what arrives.
+   */
   panels: {
-    chain_stages: Array<{
+    chain_stages?: Array<{
       key: string;
       label: string;
       color: string;
       count: number;
       percent: number;
     }>;
-    alerts: Array<{
+    alerts?: Array<{
       kind: string;
       severity: string;
       label: string;
       ref: string | null;
       ref_id: string | null;
     }>;
-    machine_util: Array<{
+    machine_util?: Array<{
       id: string;
       code: string;
       name: string;
@@ -63,8 +69,8 @@ interface PlantManagerData {
       status_label?: string;
       has_active_wo: boolean;
     }>;
-    defect_pareto: Array<{ code: string; name: string; count: number }>;
-    financial_snapshot: {
+    defect_pareto?: Array<{ code: string; name: string; count: number }>;
+    financial_snapshot?: {
       cash_balance: string;
       ar_outstanding: string;
       ap_outstanding: string;

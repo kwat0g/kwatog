@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import { LuChevronRight } from '@/lib/icons';
 import { useBreadcrumbStore } from '@/stores/breadcrumbStore';
+import { MODULE_LABELS } from '@/lib/moduleLabels';
 
 /**
  * Path-derived breadcrumbs — the app's ONE trail.
@@ -9,7 +10,7 @@ import { useBreadcrumbStore } from '@/stores/breadcrumbStore';
  * the canonical location. `PageHeader` used to accept a competing
  * `breadcrumbs` array, which meant the ~20 pages that passed it rendered two
  * trails at once on desktop — and the two disagreed, because a page would
- * write `{ label: 'CRM' }` where MODULE_LABELS below says "Sales & CRM".
+ * write `{ label: 'CRM' }` where MODULE_LABELS says "Sales & CRM".
  * PageHeader now contributes a label for the final segment instead of a second
  * trail (see `stores/breadcrumbStore`).
  *
@@ -22,35 +23,6 @@ import { useBreadcrumbStore } from '@/stores/breadcrumbStore';
  * "supply-chain" → "Supply Chain") so the breadcrumb mirrors the new
  * sidebar IA without changing any URLs.
  */
-
-/**
- * Restructured module names — ADV2 sidebar IA. Keyed by the **first**
- * URL segment only; later segments fall through to TITLE_OVERRIDES /
- * titleize().
- */
-export const MODULE_LABELS: Record<string, string> = {
- dashboard: 'Dashboard',
- 'action-center': 'Action Center',
- exceptions: 'Exception Workbench',
- alerts: 'Alerts',
- calendar: 'Calendar',
- approvals: 'Approvals',
- notifications: 'Notifications',
- crm: 'Sales & CRM',
- mrp: 'Production Planning',
- production: 'Production',
- 'supply-chain': 'Supply Chain',
- purchasing: 'Procurement',
- inventory: 'Warehouse',
- quality: 'Quality Control',
- accounting: 'Finance & Accounting',
- hr: 'Human Resources',
- payroll: 'Payroll & Benefits',
- maintenance: 'Maintenance',
- assets: 'Maintenance',
- admin: 'Administration',
- 'self-service': 'Self-service',
-};
 
 // Several module roots are redirects or have no standalone index route. Point
 // the global breadcrumb at the supported entry surface so every ancestor is a

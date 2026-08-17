@@ -6,7 +6,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { LuPlus, LuTrash2 } from '@/lib/icons';
 import toast from 'react-hot-toast';
-import { AxiosError } from 'axios';
 import { prTemplatesApi } from '@/api/purchasing/purchase-requests';
 import { itemsApi } from '@/api/inventory/items';
 import { departmentsApi } from '@/api/hr/departments';
@@ -16,8 +15,7 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { onFormInvalid } from '@/lib/formErrors';
-import type { ApiValidationError } from '@/types';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
@@ -142,15 +140,8 @@ export default function PrTemplateFormPage() {
       toast.success(isEdit ? 'Template updated.' : 'Template created.');
       navigate('/purchasing/pr-templates');
     },
-    onError: (err: AxiosError<ApiValidationError>) => {
-      if (err.response?.status === 422 && err.response.data.errors) {
-        Object.entries(err.response.data.errors).forEach(([k, v]) =>
-          setError(k as keyof FormValues, { type: 'server', message: v[0] }),
-        );
-        toast.error(err.response?.data?.message || 'Validation failed.');
-      } else {
-        toast.error(err.response?.data?.message ?? 'Failed to save template.');
-      }
+    onError: (err) => {
+      applyServerValidationErrors(err, setError, 'Failed to save. Please try again.');
     },
   });
   const safety = useFormSafety({ form, saved: save.isSuccess });

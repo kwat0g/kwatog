@@ -5,7 +5,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
-import { AxiosError } from 'axios';
 import { overtimeApi } from '@/api/attendance/overtime';
 import { employeesApi } from '@/api/hr/employees';
 import { useAuthStore } from '@/stores/authStore';
@@ -16,8 +15,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
-import type { ApiValidationError } from '@/types';
-import { onFormInvalid } from '@/lib/formErrors';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
@@ -108,13 +106,8 @@ export default function OvertimeCreatePage() {
  toast.success('Overtime request submitted.');
  navigate('/hr/attendance/overtime');
  },
- onError: (e: AxiosError<ApiValidationError>) => {
- if (e.response?.status === 422 && e.response.data.errors) {
- Object.entries(e.response.data.errors).forEach(([f, msgs]) =>
- setError(f as keyof FormValues, { type: 'server', message: msgs[0] }),
- );
- toast.error(e.response?.data?.message || 'Validation failed.');
- } else toast.error('Failed to submit OT request.');
+ onError: (e) => {
+   applyServerValidationErrors(e, setError, 'Failed to submit OT request.');
  },
  });
  const safety = useFormSafety({ form, saved: mutation.isSuccess });

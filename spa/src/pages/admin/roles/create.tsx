@@ -5,7 +5,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
-import { AxiosError } from 'axios';
 import { rolesApi } from '@/api/admin/roles';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -13,10 +12,10 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Switch } from '@/components/ui/Switch';
 import { PageHeader } from '@/components/layout/PageHeader';
-import type { ApiValidationError } from '@/types';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { applyServerValidationErrors } from '@/lib/formErrors';
 /**
  * Series R — Task R1.
  *
@@ -115,15 +114,8 @@ export default function CreateRolePage() {
  toast.success(`Role “${role.name}” created. Configure its permissions next.`);
  navigate(`/admin/roles/${role.id}/permissions`);
  },
- onError: (error: AxiosError<ApiValidationError>) => {
- if (error.response?.status === 422 && error.response.data.errors) {
- for (const [field, messages] of Object.entries(error.response.data.errors)) {
- setError(field as keyof FormValues, { type: 'server', message: messages[0] });
- }
- toast.error('Please fix the errors below.');
- return;
- }
- // Other errors handled by axios interceptor.
+ onError: (error) => {
+   applyServerValidationErrors(error, setError, 'Failed to save. Please try again.');
  },
  });
  const safety = useFormSafety({ form, saved: submit.isSuccess });

@@ -28,18 +28,24 @@ import { formatPeso } from '@/lib/formatNumber';
 
 interface HrDashboardData {
   kpis: Array<{ label: string; value: string; unit: string }>;
+  /**
+   * Panels are OPTIONAL: the server gates each one on the viewer's grant and
+   * omits what they may not read (PanelGate). The page grant opens the page,
+   * not every domain it draws from — a plant manager with no accounting grant
+   * gets no financial snapshot. Render what arrives.
+   */
   panels: {
-    by_department: Array<{ label: string; count: number }>;
-    recent_hires: Array<{ id: string; employee_no: string; name: string; date_hired: string }>;
-    pending_leaves: Array<{
+    by_department?: Array<{ label: string; count: number }>;
+    recent_hires?: Array<{ id: string; employee_no: string; name: string; date_hired: string }>;
+    pending_leaves?: Array<{
       id: string;
       leave_request_no: string | null;
       status: string;
       status_label?: string;
       days: string;
     }>;
-    attendance_summary: { present: number; late: number; absent: number; on_leave: number };
-    probation_alerts: Array<{
+    attendance_summary?: { present: number; late: number; absent: number; on_leave: number };
+    probation_alerts?: Array<{
       id: string;
       employee_no: string;
       name: string;
@@ -49,7 +55,7 @@ interface HrDashboardData {
     }>;
     probation_horizon_days?: number;
     leave_calendar_horizon_days?: number;
-    leave_calendar_week: Array<{
+    leave_calendar_week?: Array<{
       id: string;
       employee_no: string;
       name: string;
@@ -57,18 +63,18 @@ interface HrDashboardData {
       end_date: string;
       days: string;
     }>;
-    hr_calendar_events: {
+    hr_calendar_events?: {
       holidays: Array<{ name: string; date: string; type: string; type_label?: string }>;
       birthdays: Array<{ id: string; name: string; date: string }>;
       birthdays_count: number;
     };
-    pending_my_action: {
+    pending_my_action?: {
       leave_requests: number;
       profile_updates: number;
       clearances: number;
       total: number;
     };
-    headcount_forecast: ForecastPanelData;
+    headcount_forecast?: ForecastPanelData;
     // REC-05 — present only for HR users with payroll.view.
     payroll_summary?: {
       latest_period: {

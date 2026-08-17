@@ -16,9 +16,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SkeletonForm } from '@/components/ui/Skeleton';
-import { onFormInvalid } from '@/lib/formErrors';
-import type { AxiosError } from 'axios';
-import type { ApiValidationError } from '@/types';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import type { CreateNcrTemplateData } from '@/types/quality';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
@@ -102,15 +100,8 @@ export default function NcrTemplateFormPage() {
       queryClient.invalidateQueries({ queryKey: ['quality', 'ncr-templates'] });
       navigate('/quality/ncr-templates');
     },
-    onError: (err: AxiosError<ApiValidationError>) => {
-      if (err.response?.status === 422 && err.response.data.errors) {
-        Object.entries(err.response.data.errors).forEach(([k, v]) =>
-          setError(k as keyof FormValues, { type: 'server', message: v[0] }),
-        );
-        toast.error(err.response?.data?.message || 'Validation failed.');
-      } else {
-        toast.error(err.response?.data?.message ?? 'Failed to save template');
-      }
+    onError: (err) => {
+      applyServerValidationErrors(err, setError, 'Failed to save. Please try again.');
     },
   });
   const safety = useFormSafety({ form, saved: createMut.isSuccess });

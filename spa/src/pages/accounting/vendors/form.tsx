@@ -4,7 +4,6 @@ import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { vendorsApi } from '@/api/accounting/vendors';
 import { businessPoliciesApi } from '@/api/businessPolicies';
@@ -14,9 +13,8 @@ import { Switch } from '@/components/ui/Switch';
 import { Textarea } from '@/components/ui/Textarea';
 import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { onFormInvalid } from '@/lib/formErrors';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { numberInputProps } from '@/lib/numberInput';
-import type { ApiValidationError } from '@/types';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
@@ -72,12 +70,8 @@ export default function VendorFormPage({ mode }: { mode: 'create' | 'edit' }) {
  toast.success(mode === 'create' ? 'Vendor created.' : 'Vendor updated.');
  navigate(`/accounting/vendors/${v.id}`);
  },
- onError: (e: AxiosError<ApiValidationError>) => {
- if (e.response?.status === 422 && e.response.data?.errors) {
- Object.entries(e.response.data.errors).forEach(([f, msgs]) => setError(f as keyof FormValues, { type: 'server', message: (msgs as string[])[0] }));
- } else {
- toast.error(e.response?.data?.message ?? 'Failed to save vendor.');
- }
+ onError: (e) => {
+   applyServerValidationErrors(e, setError, 'Failed to save. Please try again.');
  },
  });
  const safety = useFormSafety({ form, saved: mutation.isSuccess });

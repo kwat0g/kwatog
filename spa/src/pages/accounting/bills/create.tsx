@@ -4,7 +4,6 @@ import { useFieldArray, useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { LuPlus, LuTrash2 } from '@/lib/icons';
 import { vendorsApi } from '@/api/accounting/vendors';
@@ -13,7 +12,6 @@ import { billsApi } from '@/api/accounting/bills';
 import { purchaseOrdersApi } from '@/api/purchasing/purchase-orders';
 import { businessPoliciesApi } from '@/api/businessPolicies';
 import { uomsApi } from '@/api/inventory/uoms';
-import type { ThreeWayMatchResult } from '@/types/purchasing';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -22,9 +20,8 @@ import { Switch } from '@/components/ui/Switch';
 import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatPeso } from '@/lib/formatNumber';
-import { onFormInvalid } from '@/lib/formErrors';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { numberInputProps } from '@/lib/numberInput';
-import type { ApiValidationError } from '@/types';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
@@ -202,26 +199,8 @@ export default function CreateBillPage() {
  toast.success(`Bill ${b.bill_number} recorded.`);
  navigate(`/accounting/bills/${b.id}`);
  },
- onError: (e: AxiosError<ApiValidationError & { code?: string; three_way_match?: ThreeWayMatchResult }>) => {
- const data = e.response?.data;
- // REC-02 — the 3-way match block is a 422 with a non-standard body:
- // { message, code: 'three_way_match_blocked', three_way_match: {...} }.
- // Surface it distinctly and list the blocking lines instead of trying to
- // map it onto form fields.
- if (e.response?.status === 422 && data?.code === 'three_way_match_blocked') {
- const blocked = (data.three_way_match?.lines ?? []).filter((l) => l.severity === 'block');
- const detail = blocked.length
- ? blocked.map((l) => l.item_code ?? l.description).join(', ')
- : '';
- toast.error(
- `3-way match blocked by variance — review variances or enable override${detail ? ` (${detail})` : ''}.`,
- { duration: 6000 },
- );
- return;
- }
- if (e.response?.status === 422 && data?.errors) {
- Object.entries(data.errors).forEach(([f, msgs]) => setError(f as keyof FormValues, { type: 'server', message: (msgs as string[])[0] }));
- } else toast.error(data?.message ?? 'Failed to create bill.');
+ onError: (e) => {
+   applyServerValidationErrors(e, setError, 'Failed to save. Please try again.');
  },
  });
  const safety = useFormSafety({ form, saved: mutation.isSuccess });

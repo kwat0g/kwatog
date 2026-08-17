@@ -4,7 +4,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
-import type { AxiosError } from 'axios';
 import { schedulesApi } from '@/api/maintenance/schedules';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -12,8 +11,7 @@ import { Select } from '@/components/ui/Select';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { onFormInvalid } from '@/lib/formErrors';
-import type { ApiValidationError } from '@/types';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
@@ -58,14 +56,8 @@ export default function EditMaintenanceSchedulePage() {
  toast.success('Schedule updated.');
  navigate(`/maintenance/schedules/${schedule.id}`);
  },
- onError: (err: AxiosError<ApiValidationError>) => {
- if (err.response?.status === 422 && err.response.data.errors) {
- Object.entries(err.response.data.errors).forEach(([k, v]) =>
- setError(k as keyof FormValues, { type: 'server', message: v[0] }));
- toast.error(err.response?.data?.message || 'Validation failed.');
- } else {
- toast.error('Failed to update schedule.');
- }
+ onError: (err) => {
+   applyServerValidationErrors(err, setError, 'Failed to update schedule.');
  },
  });
  const safety = useFormSafety({ form, saved: mutation.isSuccess });

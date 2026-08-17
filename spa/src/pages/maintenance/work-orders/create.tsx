@@ -5,7 +5,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
-import type { AxiosError } from 'axios';
 import { workOrdersApi } from '@/api/maintenance/workOrders';
 import { machinesApi } from '@/api/mrp/machines';
 import { moldsApi } from '@/api/mrp/molds';
@@ -13,8 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { onFormInvalid } from '@/lib/formErrors';
-import type { ApiValidationError } from '@/types';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
@@ -55,13 +53,8 @@ export default function CreateMaintenanceWorkOrderPage() {
  toast.success(`Work order ${wo.mwo_number} created.`);
  navigate(`/maintenance/work-orders/${wo.id}`);
  },
- onError: (error: AxiosError<ApiValidationError>) => {
- if (error.response?.status === 422 && error.response.data.errors) {
- Object.entries(error.response.data.errors).forEach(([field, messages]) => {
- setError(field as keyof FormValues, { type: 'server', message: messages[0] });
- });
- toast.error(error.response?.data?.message || 'Validation failed.');
- }
+ onError: (error) => {
+   applyServerValidationErrors(error, setError, 'Failed to save. Please try again.');
  },
  });
  const safety = useFormSafety({ form, saved: mutation.isSuccess });

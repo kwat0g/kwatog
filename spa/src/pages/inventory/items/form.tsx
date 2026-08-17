@@ -3,7 +3,6 @@ import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { itemsApi, itemCategoriesApi } from '@/api/inventory/items';
 import { uomsApi } from '@/api/inventory/uoms';
@@ -14,9 +13,8 @@ import { Switch } from '@/components/ui/Switch';
 import { Textarea } from '@/components/ui/Textarea';
 import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { onFormInvalid } from '@/lib/formErrors';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { numberInputProps } from '@/lib/numberInput';
-import type { ApiValidationError } from '@/types';
 import type { CreateItemData, ItemType, ReorderMethod } from '@/types/inventory';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
@@ -104,13 +102,8 @@ export default function ItemFormPage({ mode }: { mode: 'create' | 'edit' }) {
  toast.success(mode === 'create' ? 'Item created.' : 'Item updated.');
  navigate(`/inventory/items/${it.id}`);
  },
- onError: (e: AxiosError<ApiValidationError>) => {
- if (e.response?.status === 422 && e.response.data?.errors) {
- Object.entries(e.response.data.errors).forEach(([f, msgs]) =>
- setError(f as keyof FormValues, { type: 'server', message: (msgs as string[])[0] }));
- } else {
- toast.error(e.response?.data?.message ?? 'Failed to save item.');
- }
+ onError: (e) => {
+   applyServerValidationErrors(e, setError, 'Failed to save. Please try again.');
  },
  });
  const safety = useFormSafety({ form, saved: mutation.isSuccess });

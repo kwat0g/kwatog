@@ -5,7 +5,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
-import type { AxiosError } from 'axios';
 import { assetTransfersApi } from '@/api/assets';
 import { departmentsApi } from '@/api/hr/departments';
 import { assetsApi } from '@/api/assets';
@@ -14,8 +13,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { onFormInvalid } from '@/lib/formErrors';
-import type { ApiValidationError } from '@/types';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import type { CreateTransferData } from '@/types/assets';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
@@ -60,14 +58,8 @@ export default function CreateAssetTransferPage() {
  toast.success(`Transfer ${transfer.transfer_number} created.`);
  navigate('/assets/transfers');
  },
- onError: (err: AxiosError<ApiValidationError>) => {
- if (err.response?.status === 422 && err.response.data.errors) {
- Object.entries(err.response.data.errors).forEach(([k, v]) =>
- setError(k as keyof FormValues, { type: 'server', message: v[0] }));
- toast.error(err.response?.data?.message || 'Validation failed.');
- } else {
- toast.error('Failed to create transfer.');
- }
+ onError: (err) => {
+   applyServerValidationErrors(err, setError, 'Failed to create transfer.');
  },
  });
  const safety = useFormSafety({ form, saved: mutation.isSuccess });

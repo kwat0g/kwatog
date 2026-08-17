@@ -90,17 +90,23 @@ interface WoStatusItem {
 
 interface PpcDashboardData {
  kpis: PpcKpi[];
+ /**
+  * Panels are OPTIONAL: the server gates each one on the viewer's grant and
+  * omits what they may not read (PanelGate). The page grant opens the page,
+  * not every domain it draws from — a plant manager with no accounting grant
+  * gets no financial snapshot. Render what arrives.
+  */
  panels: {
- chain_stages: ChainStage[];
- alerts: AlertItem[];
- machine_util: MachineRow[];
+ chain_stages?: ChainStage[];
+ alerts?: AlertItem[];
+ machine_util?: MachineRow[];
  // D3 — New panels
- mrp_last_run: string;
- unplanned_wos: number;
- production_gantt: ProductionGanttRow[];
- mrp_shortages: MrpShortage[];
- machine_availability: GanttRow[];
- wo_status_breakdown: WoStatusItem[];
+ mrp_last_run?: string;
+ unplanned_wos?: number;
+ production_gantt?: ProductionGanttRow[];
+ mrp_shortages?: MrpShortage[];
+ machine_availability?: GanttRow[];
+ wo_status_breakdown?: WoStatusItem[];
  gantt_horizon_days?: number;
  };
 }

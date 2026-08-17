@@ -3,17 +3,15 @@ import { FormProvider, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
-import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { crmCustomersApi } from '@/api/crm/customers';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { onFormInvalid } from '@/lib/formErrors';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
-import type { ApiValidationError } from '@/types';
 import { CustomerForm, customerSchema, type CustomerFormValues } from './form';
 
 type FormValues = CustomerFormValues;
@@ -79,15 +77,8 @@ export default function CrmCustomerEditPage() {
  toast.success('Customer updated.');
  navigate(`/crm/customers/${customer.id}`);
  },
- onError: (e: AxiosError<ApiValidationError>) => {
- if (e.response?.status === 422 && e.response.data?.errors) {
- Object.entries(e.response.data.errors).forEach(([field, msgs]) =>
- setError(field as keyof FormValues, { type: 'server', message: (msgs as string[])[0] }),
- );
- toast.error(e.response?.data?.message ?? 'Validation failed.');
- } else {
- toast.error(e.response?.data?.message ?? 'Failed to save customer.');
- }
+ onError: (e) => {
+   applyServerValidationErrors(e, setError, 'Failed to save. Please try again.');
  },
  });
  const safety = useFormSafety({ form: methods, saved: mutation.isSuccess });
