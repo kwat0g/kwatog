@@ -103,6 +103,7 @@ export default function PriceAgreementsListPage() {
  data={data.data}
  meta={data.meta}
  onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+ onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
  />
  </div>
  )}

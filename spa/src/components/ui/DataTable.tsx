@@ -57,6 +57,8 @@ export interface DataTableProps<T> {
   data: T[];
   meta?: PaginationMeta;
   onPageChange?: (page: number) => void;
+  /** Supply to render a rows-per-page control in the pagination footer. */
+  onPageSizeChange?: (perPage: number) => void;
   onSort?: (sort: string, direction: 'asc' | 'desc') => void;
   currentSort?: string;
   currentDirection?: 'asc' | 'desc';
@@ -122,6 +124,7 @@ export function DataTable<T>({
   data,
   meta,
   onPageChange,
+  onPageSizeChange,
   onSort,
   currentSort,
   currentDirection,
@@ -573,7 +576,14 @@ export function DataTable<T>({
         </table>
       </div>
 
-      {meta && onPageChange && <DataTablePagination meta={meta} onPageChange={onPageChange} />}
+      {meta && onPageChange && (
+        <DataTablePagination
+          meta={meta}
+          onPageChange={onPageChange}
+          onPageSizeChange={onPageSizeChange}
+          perPage={meta.per_page}
+        />
+      )}
 
       <RowContextMenu
         open={ctxMenu !== null}

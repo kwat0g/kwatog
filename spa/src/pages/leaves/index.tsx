@@ -205,7 +205,8 @@ export default function LeavesPage() {
  {data && all.length > 0 && view === 'list' && (
  <div className="px-5 py-4"><DataTable
  tableKey="leave-requests"
- onRowClick={(r) => navigate(`/hr/leaves/${r.id}`)} columns={columns} data={all} meta={data.meta} onPageChange={(page) => setFilters((f) => ({ ...f, page }))} /></div>
+ onRowClick={(r) => navigate(`/hr/leaves/${r.id}`)} columns={columns} data={all} meta={data.meta} onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+ onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))} /></div>
  )}
 
  {data && all.length > 0 && view === 'kanban' && (

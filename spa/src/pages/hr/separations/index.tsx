@@ -101,7 +101,8 @@ export default function SeparationsListPage() {
   <DataTable
   tableKey="separations"
   onRowClick={(r) => navigate(`/hr/separations/${r.id}`)} columns={columns} data={data.data} meta={data.meta}
- onPageChange={(page) => setFilters((f) => ({ ...f, page }))} />
+ onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+ onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))} />
  </div>
  )}
  </div>

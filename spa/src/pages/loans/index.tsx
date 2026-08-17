@@ -94,7 +94,8 @@ export default function LoansPage() {
  )}
  {data && data.data.length > 0 && (
  <div className="px-5 py-4"><DataTable
- onRowClick={(r) => navigate(`/hr/loans/${r.id}`)} columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters((f) => ({ ...f, page }))} /></div>
+ onRowClick={(r) => navigate(`/hr/loans/${r.id}`)} columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+ onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))} /></div>
  )}
  </div>
  );

@@ -323,6 +323,7 @@ export default function EmployeesListPage() {
                 data={data.data}
                 meta={data.meta}
                 onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+ onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
                 onSort={(sort, direction) =>
                   setFilters((f) => ({ ...f, sort, direction, page: 1 }))
                 }

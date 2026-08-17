@@ -157,7 +157,8 @@ export default function PrTemplatesListPage() {
  <div className="px-5 py-4">
  <DataTable columns={columns} data={data.data} meta={data.meta} 
  onRowClick={(r) => navigate(`/purchasing/pr-templates/${r.id}/edit`)}
- onPageChange={(page) => setFilters(f => ({ ...f, page }))} />
+ onPageChange={(page) => setFilters(f => ({ ...f, page }))}
+ onPageSizeChange={(per_page) => setFilters(f => ({ ...f, per_page, page: 1 }))} />
  </div>
  )}
 
