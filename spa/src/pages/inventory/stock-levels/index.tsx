@@ -9,10 +9,12 @@ import { Button } from '@/components/ui/Button';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { LuArrowLeftRight } from '@/lib/icons';
+import { LuArrowLeftRight, LuDownload} from '@/lib/icons';
 import { StockMovementsTab } from '@/pages/inventory/movements';
 import type { StockLevel } from '@/types/inventory';
 
+import { ColumnSelectorModal } from '@/components/exports/ColumnSelectorModal';
+import { usePermission } from '@/hooks/usePermission';
 export default function StockLevelsPage() {
  const navigate = useNavigate();
  const [search] = useSearchParams();
@@ -32,6 +34,8 @@ export default function StockLevelsPage() {
   else params.delete('view');
   navigate(`?${params.toString()}`, { replace: true });
  };
+ const { can } = usePermission();
+ const [exportOpen, setExportOpen] = useState(false);
  const [filters, setFilters] = useState<Record<string, unknown>>({ page: 1, per_page: 50, item_id: itemFilter || undefined });
 
  const { data, isLoading, isError, refetch } = useQuery({
@@ -71,10 +75,20 @@ export default function StockLevelsPage() {
  title={view === 'levels' ? 'Stock levels' : 'Stock movements'}
  subtitle={view === 'levels' ? (data ? `${data.meta.total} entries` : undefined) : undefined}
  actions={
+ <>
+ {/* inventory.valuation is an export module the backend already serves; no
+ page offered it. */}
+ {view === 'levels' && can('inventory.view') && (
+ <Button variant="secondary" size="sm" icon={<LuDownload size={14} />}
+ onClick={() => setExportOpen(true)}>
+ Export
+ </Button>
+ )}
  <Button variant="secondary" size="sm" icon={<LuArrowLeftRight size={14} />}
  onClick={toggleView}>
  {view === 'levels' ? 'Movements' : 'Stock Levels'}
  </Button>
+ </>
  }
  />
  {view === 'movements' ? (
@@ -97,6 +111,12 @@ export default function StockLevelsPage() {
  )}
  </>
  )}
+   <ColumnSelectorModal
+     isOpen={exportOpen}
+     onClose={() => setExportOpen(false)}
+     module="inventory.valuation"
+     filters={filters as Record<string, unknown>}
+   />
  </div>
  );
 }

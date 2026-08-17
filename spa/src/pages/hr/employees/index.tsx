@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { LuPlus, LuKeyRound, LuCoins } from '@/lib/icons';
+import { LuPlus, LuKeyRound, LuCoins, LuDownload} from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { employeesApi, type EmployeeListParams } from '@/api/hr/employees';
 import { departmentsApi } from '@/api/hr/departments';
@@ -23,6 +23,7 @@ import { SalaryAdjustmentsTab } from '@/pages/hr/salary-adjustments';
 import type { Employee, BulkProvisionResponse } from '@/types/hr';
 
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
+import { ColumnSelectorModal } from '@/components/exports/ColumnSelectorModal';
 const DEFAULT_FILTERS: EmployeeListParams = {
   page: 1,
   per_page: 25,
@@ -76,6 +77,7 @@ export default function EmployeesListPage() {
   const { can } = usePermission();
   const queryClient = useQueryClient();
   const [bulkResult, setBulkResult] = useState<BulkProvisionResponse | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
   const canViewDepartments = can('hr.departments.view');
   const canViewEmployees = can('hr.employees.view');
   const canViewAdjustments = can('hr.salary_adjustments.view');
@@ -253,6 +255,21 @@ export default function EmployeesListPage() {
                 {view === 'employees' ? 'Salary Adjustments' : 'Employee List'}
               </Button>
             )}
+            {/* The column-selectable export has existed end to end — endpoint,
+                API client, ColumnSelectorModal — with no page offering it, while
+                admin/scheduled-exports let users *schedule* an export of a module
+                they could not export by hand. Current filters are passed through,
+                so what you see is what you get. */}
+            {view === 'employees' && can('hr.employees.export') && (
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<LuDownload size={14} />}
+                onClick={() => setExportOpen(true)}
+              >
+                Export
+              </Button>
+            )}
             {view === 'employees' && can('hr.employees.create') && (
               <Button
                 variant="primary"
@@ -398,6 +415,12 @@ export default function EmployeesListPage() {
           </div>
         )}
       </Modal>
+      <ColumnSelectorModal
+        isOpen={exportOpen}
+        onClose={() => setExportOpen(false)}
+        module="hr.employees"
+        filters={filters as Record<string, unknown>}
+      />
     </div>
   );
 }

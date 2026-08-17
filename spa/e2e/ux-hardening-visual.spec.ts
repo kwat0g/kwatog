@@ -216,3 +216,27 @@ test.describe('pagination', () => {
     await expect(page.getByLabel(/rows/i).first()).toBeVisible();
   });
 });
+
+test.describe('column-selectable export', () => {
+  test('the employees list offers a column-selectable export', async ({ page }) => {
+    await page.route('**/api/v1/hr/employees*', async (r) => {
+      if (r.request().method() !== 'GET') return r.continue();
+      await r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+        data: [], meta: { current_page: 1, last_page: 1, per_page: 25, total: 0, from: 0, to: 0 } }) });
+    });
+    await page.route('**/api/v1/exports/hr.employees/columns*', async (r) => {
+      await r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+        data: { module: 'hr.employees', selected: ['employee_no'], columns: [
+          { key: 'employee_no', label: 'Employee no', default: true, format: 'text' },
+          { key: 'full_name', label: 'Full name', default: true, format: 'text' },
+        ] } }) });
+    });
+    await loginAs(page, 'admin', '/hr/employees');
+    const btn = page.getByRole('button', { name: 'Export' });
+    await expect(btn).toBeVisible();
+    await btn.click();
+    // The modal must actually reach the columns endpoint and render choices.
+    await expect(page.getByText('Employee no')).toBeVisible();
+    await expect(page.getByText('Full name')).toBeVisible();
+  });
+});
