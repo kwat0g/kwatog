@@ -3,11 +3,16 @@
     failOnEmptyTestSuite: PHPUnit exits 0 when a filter matches no tests,
     printing only "INFO  No tests found." An acceptance gate of the form
     `php artisan test [filter=SomeClass]` therefore passes having run no test at
-    all, so a typo or a renamed class silently turns the gate into a no-op. 32
-    of the 42 gates in docs/AUDIT-ACCEPTANCE-MANIFEST-2026-08-13.json are that
+    all, so a typo or a renamed class silently turns the gate into a no-op. 34
+    of the 46 gates in docs/AUDIT-ACCEPTANCE-MANIFEST-2026-08-13.json are that
     shape. This attribute changes behaviour only in the zero-test case, and
     every PHPUnit invocation in .github/workflows/, Makefile and scripts/ is
     unfiltered, so it cannot fail a suite that actually has tests.
+
+    This attribute is what surfaced F-046: it turned five gates that had been
+    quietly passing on zero or unrelated tests into loud failures. The manifest
+    validator now also resolves every filter statically, so the same drift is
+    caught before a gate is ever run.
 
     Note for editors: XML forbids a double hyphen inside a comment, which is why
     the filter option is spelled without its leading dashes above. Break that
@@ -32,7 +37,25 @@
         </include>
     </source>
     <php>
-        <env name="APP_ENV" value="testing"/>
+        <!--
+            force="true" is load-bearing, not decoration. A plain <env> does not
+            overwrite a variable already present in the process environment, and
+            docker-compose.yml:11 injects APP_ENV=${APP_ENV:-local} into the api
+            container. So the local suite ran with app.env = 'local' for as long
+            as this file has existed, while CI ran 'testing' (its job-scoped env:
+            block sets APP_ENV as a process variable, which wins either way).
+            The two environments therefore disagreed about the one value that
+            selects which .env file Laravel loads. See finding F-042.
+
+            Consequence worth knowing before editing: Laravel loads .env.{APP_ENV}
+            when it exists, so forcing 'testing' switches the suite from api/.env
+            to api/.env.testing. Because this <env> block is applied before
+            Laravel's immutable Dotenv, every key declared below still wins over
+            that file — which is why the switch is safe, and why this block, not
+            .env.testing, is the durable place to pin test configuration.
+            .env.testing is untracked and cannot be enforced by the repository.
+        -->
+        <env name="APP_ENV" value="testing" force="true"/>
         <env name="APP_KEY" value="base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <!--
@@ -58,7 +81,21 @@
              same default migration 0287 seeds. -->
         <env name="TAX_PH_VAT_RATE" value="0.12"/>
         <env name="PDF_FOOTER_DISCLAIMER" value="System-generated document."/>
-        <env name="BROADCAST_CONNECTION" value="null"/>
+        <!--
+            'log', not 'null'. Laravel's env() converts the literal string "null"
+            to PHP null, which leaves broadcasting.default unset instead of
+            selecting the 'null' connection — measured: config('broadcasting.default')
+            was NULL. .github/workflows/api-tests.yml already carries this exact
+            correction with the same reasoning, and states that its env block and
+            this one must be kept in step; they had drifted apart on this key.
+            'log' is a real connection (config/broadcasting.php) needing no
+            credentials.
+
+            Note this key can only be verified locally. CI's job-scoped env block
+            sets BROADCAST_CONNECTION as a process variable, which overrides this
+            file, so a CI run says nothing about the value written here.
+        -->
+        <env name="BROADCAST_CONNECTION" value="log"/>
         <env name="CACHE_STORE" value="array"/>
         <env name="DB_CONNECTION" value="pgsql"/>
         <env name="DB_HOST" value="db"/>
