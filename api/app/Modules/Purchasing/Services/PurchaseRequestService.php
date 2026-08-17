@@ -224,10 +224,11 @@ class PurchaseRequestService
 
             // ADV6 — Urgency escalation: urgent PRs may skip the Dept Head step,
             // which submitUrgent() does by rewriting that step's record after
-            // submission. This is separate from ApprovalService's own amount
-            // gating, which reads the per-step `threshold` key in the `steps`
-            // JSON (not the unread `workflow_definitions.amount_threshold`
-            // column) and is capped by purchasing.urgent_skip_limit.
+            // submission, and only under the purchasing.urgent_skip_limit cap.
+            // That cap is unrelated to ApprovalService's own amount gating,
+            // which reads the per-step `threshold` key in the `steps` JSON (not
+            // the unread `workflow_definitions.amount_threshold` column) and
+            // reads no setting at all.
             if ($pr->is_urgent) {
                 $this->submitUrgent($pr, $total);
             } else {
