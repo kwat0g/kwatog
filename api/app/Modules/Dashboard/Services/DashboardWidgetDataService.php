@@ -282,8 +282,9 @@ class DashboardWidgetDataService
      * The latest computed value for a scorecard KPI.
      *
      * Reads `kpi_snapshots` rather than recomputing: the monthly compute is a
-     * scheduled process (`dashboard:compute-kpis` → KpiSnapshotService::computeAll)
-     * and a dashboard tile must not run an OEE aggregation on page load.
+     * scheduled process (`kpi:compute-monthly`, 2nd of the month at 03:00 —
+     * routes/console.php) and a dashboard tile must not run an OEE aggregation
+     * on page load. A KPI therefore reads one month behind by design.
      *
      * Visibility is NOT checked here — `dashboard_widgets.permission` already
      * gated this widget before the layout included it. Duplicating the check

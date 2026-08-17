@@ -655,6 +655,7 @@ assets:run-monthly-depreciation          (1st @ 03:00)
 ncr:escalate                             (every 15m)
 training:check-expiries                  (06:30)
 copq:snap-monthly                        (1st @ 02:30)
+kpi:compute-monthly                      (2nd @ 03:00 — the ONLY thing that fills kpi_snapshots, so every `kpi.*` widget reads one month behind)
 complaints:check-8d-slas                 (every 15m)
 docs:check-reviews                       (06:45)
 ```
