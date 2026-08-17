@@ -12,14 +12,18 @@ import { SkeletonBlock } from '@/components/ui/Skeleton';
 import type { ConditionMetric, ConditionReadingResult, ConditionSource, MachineHealthSnapshot } from '@/types/maintenance';
 import type { Machine } from '@/types/mrp';
 
+import { QueryErrorState } from '@/components/ui/QueryErrorState';
 export default function MobileConditionReading() {
  const queryClient = useQueryClient();
 
  // ── Machine list ───────────────────────────────────────
- const { data: machinesData, isLoading: machinesLoading } = useQuery({
+ // An empty machine picker used to be indistinguishable from a failed fetch,
+ // which on a tech's tablet reads as "no machines are set up".
+ const machinesQuery = useQuery({
  queryKey: ['mrp', 'machines', 'condition-reading'],
  queryFn: () => machinesApi.list({ per_page: 200 }),
  });
+ const { data: machinesData, isLoading: machinesLoading } = machinesQuery;
 
  const machines = (machinesData?.data ?? []) as Machine[];
 
@@ -100,6 +104,12 @@ export default function MobileConditionReading() {
  {/* Machine selector */}
  {machinesLoading ? (
  <SkeletonBlock className="h-11 rounded-md" />
+ ) : machinesQuery.isError ? (
+ <QueryErrorState
+ subject="the machine list"
+ size="compact"
+ onRetry={() => void machinesQuery.refetch()}
+ />
  ) : (
  <Select
  id="machine_select"

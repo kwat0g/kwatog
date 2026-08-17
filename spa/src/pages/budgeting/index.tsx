@@ -8,7 +8,6 @@ import { Panel } from '@/components/ui/Panel';
 import { StatCard } from '@/components/ui/StatCard';
 import { Chip } from '@/components/ui/Chip';
 import { SkeletonTable } from '@/components/ui/Skeleton';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/cn';
 import { formatCompactCurrency, formatPeso } from '@/lib/formatNumber';
@@ -17,20 +16,18 @@ import type { BudgetOverview } from '@/types/budgeting';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 
+import { QueryErrorState } from '@/components/ui/QueryErrorState';
 export default function BudgetOverviewPage() {
   const { can } = usePermission();
   const canManage = can('budgeting.manage');
   const navigate = useNavigate();
   const [selectedStatus, setSelectedStatus] = useState<string>('');
 
-  const {
-    data: overview,
-    isLoading,
-    error,
-  } = useQuery<BudgetOverview>({
+  const overviewQuery = useQuery<BudgetOverview>({
     queryKey: ['budget-overview'],
     queryFn: () => budgetingApi.overview(),
   });
+  const { data: overview, isLoading, error } = overviewQuery;
 
   const { data: budgetList } = useQuery({
     queryKey: ['budgets', selectedStatus],
@@ -53,7 +50,7 @@ export default function BudgetOverviewPage() {
     return (
       <div className="p-5 space-y-6">
         <PageHeader title="Budget Overview" />
-        <EmptyState icon="alert-circle" title="Failed to load budget overview" />
+        <QueryErrorState subject="the budget overview" onRetry={() => void overviewQuery.refetch()} />
       </div>
     );
 

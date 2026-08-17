@@ -22,6 +22,7 @@ import type { ApiValidationError } from '@/types';
 import { AxiosError } from 'axios';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { QueryErrorState } from '@/components/ui/QueryErrorState';
 const createSchema = z.object({
  name: z.string().min(1, 'Required').max(200),
  category: z.string().max(100).optional().or(z.literal('')),
@@ -35,7 +36,7 @@ export default function SkillsListPage() {
  const [showCreate, setShowCreate] = useState(false);
  const [filters, setFilters] = useUrlFilters<ListParams>({ page: 1, per_page: 25 });
 
- const { data, isLoading, isError } = useQuery({
+ const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['hr', 'skills', filters],
  queryFn: () => skillsApi.list(filters),
  placeholderData: (prev) => prev,
@@ -103,7 +104,7 @@ export default function SkillsListPage() {
  searchPlaceholder="Search skills..."
  />
  {isLoading && !data && <SkeletonTable columns={4} rows={8} />}
- {isError && <EmptyState icon="alert-circle" title="Failed to load skills" />}
+ {isError && <QueryErrorState subject="the skills list" onRetry={() => void refetch()} />}
  {data && data.data.length === 0 && <EmptyState icon="file-text" title="No skills yet" />}
  {data && data.data.length > 0 && (
  <DataTable columns={columns} data={data.data} meta={data.meta}

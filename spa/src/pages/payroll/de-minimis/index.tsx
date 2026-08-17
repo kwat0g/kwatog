@@ -21,6 +21,7 @@ import toast from 'react-hot-toast';
 import type { ListParams } from '@/types';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { QueryErrorState } from '@/components/ui/QueryErrorState';
 interface DeMinimisRow {
   id: string;
   employee: { id: string; full_name: string } | null;
@@ -61,7 +62,7 @@ export function DeMinimisManager() {
   const [scope, setScope] = useState<ArchiveScope>('active');
   const [filters, setFilters] = useUrlFilters<ListParams & { period_year?: string; period_month?: string; benefit_type?: string }>({ per_page: 25 });
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['de-minimis', filters, { trashed: archiveToTrashed(scope) }],
     // NB: the backend registers de-minimis under /de-minimis (no payroll/ prefix).
     queryFn: () => client.get('/de-minimis', { params: { ...filters, trashed: archiveToTrashed(scope) } }).then((r) => r.data),
@@ -133,7 +134,7 @@ export function DeMinimisManager() {
         </div>
       </div>
       {isLoading && <SkeletonTable columns={4} rows={8} />}
-      {isError && <EmptyState icon="alert-circle" title="Failed to load de minimis benefits" />}
+      {isError && <QueryErrorState subject="the de minimis benefits" onRetry={() => void refetch()} />}
       {!isLoading && !isError && items.length === 0 && <EmptyState icon="file-text" title="No de minimis benefits recorded" />}
       {items.length > 0 && (
         <DataTable columns={columns} data={items} meta={meta}

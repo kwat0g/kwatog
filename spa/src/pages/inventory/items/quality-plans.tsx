@@ -20,6 +20,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { cn } from '@/lib/cn';
 import type { QualityPlanParameter } from '@/types/inventory';
 
+import { QueryErrorState } from '@/components/ui/QueryErrorState';
 type DraftParameter = QualityPlanParameter & {
  nominal_value: number | null;
  tolerance_min: number | null;
@@ -81,6 +82,8 @@ export default function ItemQualityPlansPage() {
  setParameters((current) => current.map((parameter, i) => i === index ? { ...parameter, ...patch } : parameter));
 
  if (item.isLoading || plans.isLoading) return <SkeletonTable columns={4} rows={6} />;
+ // A 500 on the item fetch used to render "Item not found".
+ if (item.isError) return <QueryErrorState subject="this item" onRetry={() => void item.refetch()} />;
  if (!item.data) return <EmptyState icon="alert-circle" title="Item not found" />;
 
  return (

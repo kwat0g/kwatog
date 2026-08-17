@@ -21,6 +21,7 @@ import { AxiosError } from 'axios';
 import type { ListParams, ApiValidationError } from '@/types';
 import type { LeaveType } from '@/types/leave';
 
+import { QueryErrorState } from '@/components/ui/QueryErrorState';
 const schema = z.object({
  name: z.string().min(1, 'Required').max(100),
  code: z.string().min(1, 'Required').max(10).regex(/^[A-Z0-9_]+$/, 'Uppercase letters, digits, or underscores'),
@@ -59,7 +60,7 @@ export function LeaveTypesManager() {
  const [filters] = useState<ListParams>({ page: 1, per_page: 50 });
  const [scope, setScope] = useState<ArchiveScope>('active');
 
- const { data, isLoading, isError } = useQuery({
+ const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['leave-types', filters, { trashed: archiveToTrashed(scope) }],
  queryFn: () => leaveTypesApi.list({ trashed: archiveToTrashed(scope) }),
  placeholderData: (prev) => prev,
@@ -145,7 +146,7 @@ export function LeaveTypesManager() {
  </div>
  </div>
  {isLoading && <SkeletonTable columns={5} rows={6} />}
- {isError && <EmptyState icon="alert-circle" title="Failed to load leave types" />}
+ {isError && <QueryErrorState subject="the leave types" onRetry={() => void refetch()} />}
  {!isLoading && !isError && items.length === 0 && <EmptyState icon="calendar" title="No leave types" />}
  {items.length > 0 && (
  <DataTable columns={columns} data={items} meta={data!.meta}

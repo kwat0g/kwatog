@@ -18,6 +18,7 @@ import toast from 'react-hot-toast';
 import type { ListParams } from '@/types';
 import type { Training } from '@/types/hr';
 
+import { QueryErrorState } from '@/components/ui/QueryErrorState';
 export default function TrainingListPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
@@ -29,7 +30,7 @@ const [deleteTarget, setDeleteTarget] = useState<Training | null>(null);
 
  const params = useMemo(() => ({ ...filters, trashed: archiveToTrashed(scope) }), [filters, scope]);
 
- const { data, isLoading, isError } = useQuery({
+ const { data, isLoading, isError, refetch } = useQuery({
   queryKey: ['hr', 'trainings', params],
   queryFn: () => trainingsApi.list(params),
   placeholderData: (prev) => prev,
@@ -111,7 +112,7 @@ const [deleteTarget, setDeleteTarget] = useState<Training | null>(null);
   }
   />
  {isLoading && !data && <SkeletonTable columns={6} rows={8} />}
- {isError && <EmptyState icon="alert-circle" title="Failed to load trainings" />}
+ {isError && <QueryErrorState subject="the training list" onRetry={() => void refetch()} />}
  {data && data.data.length === 0 && <EmptyState icon="file-text" title="No trainings yet" />}
  {data && data.data.length > 0 && (
  <DataTable columns={columns} data={data.data} meta={data.meta}
