@@ -2,7 +2,7 @@
 import { useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { LuArrowRight, LuDownload, LuFileText, LuTrash2, LuUpload, LuArchiveRestore } from '@/lib/icons';
+import { LuArrowRight, LuDownload, LuFileText, LuTrash2, LuUpload, LuArchiveRestore, LuCheck} from '@/lib/icons';
 import toast from 'react-hot-toast';
 import type { AxiosError } from 'axios';
 import { downloadAuthenticatedFile } from '@/api/download';
@@ -194,7 +194,7 @@ export default function ShipmentDetailPage() {
                           : 'border-default text-muted bg-canvas',
                     ].join(' ')}
                   >
-                    {isDone ? '✓' : i + 1}
+                    {isDone ? <LuCheck size={12} aria-hidden="true" /> : i + 1}
                   </div>
                   <span
                     className={[

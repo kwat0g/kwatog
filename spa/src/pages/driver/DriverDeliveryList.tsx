@@ -30,7 +30,7 @@ export default function DriverDeliveryList() {
  title="Could not load deliveries"
  description="Check your connection and try again."
  action={
- <Button variant="secondary" size="lg" className="min-h-[44px]" onClick={() => refetch()}>
+ <Button variant="secondary" size="lg" className="min-h-hit" onClick={() => refetch()}>
  Try again
  </Button>
  }

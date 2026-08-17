@@ -1,6 +1,7 @@
 import { type CSSProperties, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 
+import { WidgetErrorBoundary } from '@/components/ui/WidgetErrorBoundary';
 const WIDTH_CLASSES: Record<number, string> = {
   1: 'lg:col-span-1',
   2: 'lg:col-span-2',
@@ -37,7 +38,11 @@ export function DashboardGridItem({
 
   return (
     <div className={cn('col-span-1 min-w-0', WIDTH_CLASSES[safeWidth], className)} style={style}>
-      {children}
+      {/* One cell is one widget, so this is the seam where isolation belongs:
+          a widget that throws should cost the user that widget, not the whole
+          dashboard. WidgetErrorBoundary existed for exactly this and was wired
+          into one widget on one of eleven dashboards. */}
+      <WidgetErrorBoundary>{children}</WidgetErrorBoundary>
     </div>
   );
 }

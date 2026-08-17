@@ -24,7 +24,7 @@ export default function ActiveOrders() {
     <Button
       variant="ghost"
       size="lg"
-      className="min-h-[44px] text-secondary"
+      className="min-h-hit text-secondary"
       icon={<LuRefreshCw className={cn('w-4 h-4', isFetching && 'animate-spin')} />}
       disabled={isFetching}
       onClick={() => refetch()}
@@ -53,7 +53,7 @@ export default function ActiveOrders() {
             <Button
               variant="secondary"
               size="lg"
-              className="min-h-[44px]"
+              className="min-h-hit"
               onClick={() => refetch()}
             >
               Try again
@@ -71,7 +71,7 @@ export default function ActiveOrders() {
             <Button
               variant="secondary"
               size="lg"
-              className="min-h-[44px]"
+              className="min-h-hit"
               icon={<LuRefreshCw className="w-4 h-4" />}
               onClick={() => refetch()}
             >

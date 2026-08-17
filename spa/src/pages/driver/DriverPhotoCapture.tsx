@@ -84,7 +84,7 @@ export default function DriverPhotoCapture() {
  <div className="space-y-4">
  <Link
  to={`/driver/${id}`}
- className={cn('inline-block text-sm text-muted underline min-h-[44px] py-2 rounded', focusRing)}
+ className={cn('inline-block text-sm text-muted underline min-h-hit py-2 rounded', focusRing)}
  >
  ← Back to delivery
  </Link>

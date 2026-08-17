@@ -150,7 +150,7 @@ export default function MobileWorkOrderDetail() {
             type="button"
             variant="secondary"
             size="lg"
-            className="min-h-[44px]"
+            className="min-h-hit"
             onClick={() => refetch()}
           >
             Try again
@@ -171,7 +171,7 @@ export default function MobileWorkOrderDetail() {
       <Link
         to="/maintenance/mobile"
         className={cn(
-          'inline-flex items-center gap-1.5 text-sm text-secondary min-h-[44px] rounded',
+          'inline-flex items-center gap-1.5 text-sm text-secondary min-h-hit rounded',
           focusRing,
         )}
       >
@@ -427,7 +427,7 @@ export default function MobileWorkOrderDetail() {
                       type="button"
                       onClick={() => setSelectedItem(item)}
                       className={cn(
-                        'w-full text-left p-3 rounded-md hover:bg-surface active:bg-elevated min-h-[44px] cursor-pointer',
+                        'w-full text-left p-3 rounded-md hover:bg-surface active:bg-elevated min-h-hit cursor-pointer',
                         focusRingInset,
                       )}
                     >

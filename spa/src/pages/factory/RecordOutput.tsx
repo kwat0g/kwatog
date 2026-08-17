@@ -86,7 +86,7 @@ export default function RecordOutput() {
       <Link
         to="/factory"
         className={cn(
-          'inline-flex items-center gap-1.5 text-sm text-secondary min-h-[44px] rounded',
+          'inline-flex items-center gap-1.5 text-sm text-secondary min-h-hit rounded',
           focusRing,
         )}
       >

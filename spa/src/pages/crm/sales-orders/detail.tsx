@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { LuBan, LuCheck, LuPencil, LuFileText } from '@/lib/icons';
+import { LuBan, LuCheck, LuPencil, LuFileText, LuArrowRight} from '@/lib/icons';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { salesOrdersApi } from '@/api/crm/salesOrders';
@@ -371,11 +371,11 @@ export default function SalesOrderDetailPage() {
  </p>
  <p className="text-muted">Confirming this order will automatically:</p>
  <ul className="list-none space-y-1 text-muted">
- <li>✓ Run MRP and check material availability</li>
- <li>✓ Create Work Orders for all {data.item_count} lines</li>
- <li>✓ Schedule production on available machines</li>
- <li>✓ Reserve required materials in inventory</li>
- <li>✓ Notify Production, Warehouse, and PPC teams</li>
+ <li className="flex items-start gap-1.5"><LuArrowRight size={12} className="mt-0.5 shrink-0 text-muted" aria-hidden="true" />Run MRP and check material availability</li>
+ <li className="flex items-start gap-1.5"><LuArrowRight size={12} className="mt-0.5 shrink-0 text-muted" aria-hidden="true" />Create Work Orders for all {data.item_count} lines</li>
+ <li className="flex items-start gap-1.5"><LuArrowRight size={12} className="mt-0.5 shrink-0 text-muted" aria-hidden="true" />Schedule production on available machines</li>
+ <li className="flex items-start gap-1.5"><LuArrowRight size={12} className="mt-0.5 shrink-0 text-muted" aria-hidden="true" />Reserve required materials in inventory</li>
+ <li className="flex items-start gap-1.5"><LuArrowRight size={12} className="mt-0.5 shrink-0 text-muted" aria-hidden="true" />Notify Production, Warehouse, and PPC teams</li>
  </ul>
  </div>
  }

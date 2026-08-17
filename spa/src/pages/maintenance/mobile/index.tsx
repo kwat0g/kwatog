@@ -56,7 +56,7 @@ export default function MobileMaintenanceList() {
  <Button
  variant="ghost"
  size="lg"
- className="min-h-[44px] text-secondary"
+ className="min-h-hit text-secondary"
  icon={<LuRefreshCw className={cn('w-4 h-4', isFetching && 'animate-spin')} />}
  disabled={isFetching}
  onClick={() => refetch()}
@@ -73,7 +73,7 @@ export default function MobileMaintenanceList() {
  title="Could not load work orders"
  description="Check your connection and try again."
  action={
- <Button variant="secondary" size="lg" className="min-h-[44px]" onClick={() => refetch()}>
+ <Button variant="secondary" size="lg" className="min-h-hit" onClick={() => refetch()}>
  Try again
  </Button>
  }
@@ -93,7 +93,7 @@ export default function MobileMaintenanceList() {
  <Button
  variant="secondary"
  size="lg"
- className="min-h-[44px]"
+ className="min-h-hit"
  icon={<LuRefreshCw className="w-4 h-4" />}
  onClick={() => refetch()}
  >

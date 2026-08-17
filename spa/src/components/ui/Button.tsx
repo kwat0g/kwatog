@@ -24,7 +24,7 @@ const sizeClasses: Record<Size, string> = {
   // than `min-h-hit`, which resolves to --hit-min: 28px outside a floor route —
   // a Button is placed by the page author, not by the palette, so the target
   // must not shrink when the same component renders on a desk screen.
-  touch: 'min-h-[44px] px-4 text-base',
+  touch: 'min-h-hit px-4 text-base',
 };
 
 const iconOnlySizeClasses: Record<Size, string> = {
@@ -33,7 +33,7 @@ const iconOnlySizeClasses: Record<Size, string> = {
   md: 'h-8 w-8 text-sm rounded-md',
   lg: 'h-9 w-9 text-base rounded-md',
   // Square 44×44 — same touch-target floor, both axes.
-  touch: 'min-h-[44px] min-w-[44px] text-base rounded-md',
+  touch: 'min-h-hit min-w-hit text-base rounded-md',
 };
 
 const variantClasses: Record<Variant, string> = {

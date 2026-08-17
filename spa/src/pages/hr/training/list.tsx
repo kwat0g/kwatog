@@ -8,7 +8,6 @@ import { archiveToTrashed, type ArchiveScope } from '@/lib/archiveScope';
 import { DataTable } from '@/components/ui/DataTable';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
-import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { FilterBar } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
@@ -19,6 +18,7 @@ import type { ListParams } from '@/types';
 import type { Training } from '@/types/hr';
 
 import { QueryErrorState } from '@/components/ui/QueryErrorState';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 export default function TrainingListPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
@@ -120,28 +120,32 @@ const [deleteTarget, setDeleteTarget] = useState<Training | null>(null);
  onRowClick={(row) => navigate(`/hr/trainings/${row.id}/edit`)}
  />
  )}
- {deleteTarget && (
-  <Modal isOpen onClose={() => setDeleteTarget(null)} title="Archive training" size="sm">
-  <div className="py-3">
-  <p className="text-sm">Are you sure you want to archive <span className="font-medium">{deleteTarget.name}</span>? It will be hidden and can be restored later.</p>
-  </div>
-  <ModalFooter>
-  <Button variant="secondary" onClick={() => setDeleteTarget(null)} disabled={deleteMutation.isPending}>Cancel</Button>
-  <Button variant="danger" onClick={() => deleteMutation.mutate(deleteTarget.id)} loading={deleteMutation.isPending}>Archive</Button>
-  </ModalFooter>
-  </Modal>
+ {/* These were two hand-built Modals reproducing what ConfirmDialog already
+ does — and losing its focus trap, Esc handling and busy state in the
+ process. */}
+ <ConfirmDialog
+ isOpen={deleteTarget !== null}
+ onClose={() => setDeleteTarget(null)}
+ title="Archive training?"
+ description={deleteTarget && (
+ <><span className="font-medium">{deleteTarget.name}</span> will be hidden from active lists and can be restored later.</>
  )}
- {restoreTarget && (
-  <Modal isOpen onClose={() => setRestoreTarget(null)} title="Restore training" size="sm">
-  <div className="py-3">
-  <p className="text-sm">Restore <span className="font-medium">{restoreTarget.name}</span>? It will reappear in active lists.</p>
-  </div>
-  <ModalFooter>
-  <Button variant="secondary" onClick={() => setRestoreTarget(null)} disabled={restoreMutation.isPending}>Cancel</Button>
-  <Button variant="primary" onClick={() => restoreMutation.mutate(restoreTarget.id)} loading={restoreMutation.isPending}>Restore</Button>
-  </ModalFooter>
-  </Modal>
+ confirmLabel="Archive"
+ variant="danger"
+ pending={deleteMutation.isPending}
+ onConfirm={() => { if (deleteTarget) deleteMutation.mutate(deleteTarget.id); }}
+ />
+ <ConfirmDialog
+ isOpen={restoreTarget !== null}
+ onClose={() => setRestoreTarget(null)}
+ title="Restore training?"
+ description={restoreTarget && (
+ <><span className="font-medium">{restoreTarget.name}</span> will reappear in active lists.</>
  )}
+ confirmLabel="Restore"
+ pending={restoreMutation.isPending}
+ onConfirm={() => { if (restoreTarget) restoreMutation.mutate(restoreTarget.id); }}
+ />
  </div>
  );
 }

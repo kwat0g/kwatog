@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { LuSearch } from '@/lib/icons';
+import { LuSearch, LuBan} from '@/lib/icons';
 import { warehouseMapApi } from '@/api/inventory/warehouseWms';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -285,7 +285,11 @@ export default function WarehouseMapPage() {
                                 className="text-xs text-danger-fg mt-0.5 truncate"
                                 title={loc.blocked_reason ?? ''}
                               >
-                                ⛔ {loc.stock_status_label ?? loc.stock_status}
+                                {/* Was the ⛔ emoji. Emoji render per-platform,
+                                    ignore the semantic colour tokens, and are
+                                    read aloud as "no entry sign". */}
+                                <LuBan size={11} className="inline-block shrink-0 mr-1 align-[-1px]" aria-hidden="true" />
+                                {loc.stock_status_label ?? loc.stock_status}
                               </div>
                             )}
                           </button>

@@ -16,7 +16,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { returnManagementApi } from '@/api/returnManagement';
 import { creditNotesApi } from '@/api/accounting/credit-notes';
-import { LuTriangleAlert, LuFileText, LuPackageCheck, LuRefreshCw } from '@/lib/icons';
+import { LuTriangleAlert, LuFileText, LuPackageCheck, LuRefreshCw, LuCheck} from '@/lib/icons';
 import { warehouseApi } from '@/api/inventory/warehouse';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
@@ -468,7 +468,7 @@ export default function ReturnRequestDetailPage() {
      {item.moved_quantity && Number(item.moved_quantity) > 0
      ? rma.type === 'supplier_return'
       ? <Chip variant="danger">{formatInt(item.moved_quantity)} out</Chip>
-      : <Chip variant="success">✓ {formatInt(item.moved_quantity)}</Chip>
+      : <Chip variant="success"><LuCheck size={11} className="inline mr-0.5 align-[-1px]" aria-hidden="true" />{formatInt(item.moved_quantity)}</Chip>
      : '—'}
     </Td>
     </tr>

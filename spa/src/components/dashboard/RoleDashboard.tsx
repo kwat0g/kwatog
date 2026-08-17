@@ -13,6 +13,7 @@ import { alertLink, chainStageLink, kpiLink } from '@/lib/dashboardLinks';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { formatPeso } from '@/lib/formatNumber';
 
+import { LuCheck, LuMinus } from '@/lib/icons';
 interface ChainStage { key: string; label: string; count: number; percent: number; color?: string }
 interface AlertItem { kind: string; label: string; count: number; severity?: string }
 interface MachineRow { id: string; code: string; name: string; status: string; status_label?: string; has_active_wo: boolean }
@@ -163,7 +164,7 @@ function RolePanels({ envelope }: { envelope: DashboardEnvelope }) {
  <Td mono>{m.code}</Td>
  <Td className="text-muted">{m.name}</Td>
  <Td><Chip variant={chipVariantForStatus(m.status)}>{m.status_label ?? m.status}</Chip></Td>
- <Td align="right" mono>{m.has_active_wo ? '✓' : '—'}</Td>
+ <Td align="right" mono>{m.has_active_wo ? <LuCheck size={12} className="inline text-success-fg" aria-hidden="true" /> : <LuMinus size={12} className="inline text-subtle" aria-hidden="true" />}</Td>
  </tr>
  ))}
  </tbody>
