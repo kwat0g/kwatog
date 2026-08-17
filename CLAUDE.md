@@ -664,4 +664,11 @@ docs:check-reviews                       (06:45)
 Recent additions use 4-digit numbered (`0186_*`, `0187_*`, …). Highest as of 2026-08-17 = **0472**. New migrations use highest+1. Mixed timestamp-style migrations (`2026_06_09_*`, `2026_08_16_*`) coexist for older HR/Payroll changes and recent BOM-costing work — don't introduce more.
 
 ### Test runner + suite size
-Full suite as of 2026-08-04: **1242 tests / 0 fail / ~9 min runtime**. Use `--filter='Foo|Bar'` for tight loops. Re-run full suite only at end of feature.
+Full suite as of 2026-08-17: **1900 tests / 0 fail / ~28 min runtime**. Use `--filter='Foo|Bar'` for tight loops. Re-run full suite only at end of feature.
+
+**Two agents cannot share `ogami_test`.** `RefreshDatabase` runs `migrate:fresh`, so a second suite tears the schema down under the first: you get `relation "roles" does not exist`, `column roles.deleted_at does not exist`, `SQLSTATE[40P01] deadlock detected` — hundreds of failures with ZERO assertion failures among them, which is the tell. Run on your own database instead of guessing:
+```
+docker compose exec -T db psql -U ogami -d postgres -c "CREATE DATABASE ogami_test_verify OWNER ogami;"
+docker compose exec -T -e DB_DATABASE=ogami_test_verify api php artisan test
+```
+`phpunit.xml` hardcodes `DB_DATABASE=ogami_test` but PHPUnit `<env>` does not force, so an existing env var wins.
