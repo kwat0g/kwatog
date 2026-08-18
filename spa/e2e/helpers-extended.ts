@@ -152,6 +152,10 @@ export const ROLES: Record<string, MockUser> = {
       'notifications.view', 'notifications.preferences.manage',
       'quality.documents.view',
       'calendar.view', 'approvals.board.view', 'hr.directory.view', 'dashboard.layout.reset',
+      // RolePermissionSeeder grants this to EVERY role alongside the four above
+      // (see the cross-cutting merge in its role loop) — the Action Center is
+      // each user's own work queue, so it is not a privilege to hold.
+      'dashboard.action_center.view',
     ],
     employee: { id: 'emp_wh', employee_no: 'OGM-2024-0006' },
   },

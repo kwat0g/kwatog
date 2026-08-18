@@ -95,17 +95,23 @@ test.describe('Operational rollout workflows', () => {
       summary: { total: 1, critical: 0, high: 1, overdue: 1, owned_by_me: assigned ? 1 : 0, unassigned: assigned ? 0 : 1, by_category: { quality: 1 } },
       generated_at: '2026-07-28T00:00:00Z',
     } });
-    await page.route('**/api/v1/dashboards/exceptions', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(response()) }));
+    // The standalone /exceptions page was folded into the Action Center on
+    // 2026-08-08 — same queue with approvals filtered out — and its route was
+    // deleted, so this test had been loading the SPA's not-found page and never
+    // reaching an assertion. The bulk triage it covers now lives behind
+    // ?scope=exceptions, fed by the Action Center endpoint.
+    await page.route('**/api/v1/dashboards/action-center', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(response()) }));
     await page.route('**/api/v1/dashboards/action-center/tasks', async (route) => {
       expect((await route.request().postDataJSON()).action).toBe('claim');
       assigned = true;
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) });
     });
 
-    await loginAs(page, 'warehouse', '/exceptions');
+    await loginAs(page, 'warehouse', '/action-center?scope=exceptions');
     await page.getByLabel('Select Resolve NCR NCR-001').check();
     await page.getByRole('button', { name: 'Claim' }).click();
-    await expect(page.getByText('Assigned to Warehouse Staff')).toBeVisible();
+    // The folded page words the owner line "Assigned: <name>".
+    await expect(page.getByText('Assigned: Warehouse Staff')).toBeVisible();
   });
 
   test('administrator sees rollout health telemetry', async ({ page }) => {
