@@ -37,14 +37,21 @@ use Tests\TestCase;
  * already set. So api/phpunit.xml's <env> values do take effect and do outrank
  * api/.env; pre-setting DB_DATABASE and COMPANY_LEGAL_NAME the way PHPUnit does
  * and then booting the framework yields the pre-set value, not the .env one.
- * The single exception is APP_ENV: docker-compose.yml:11 injects APP_ENV=local
- * into the container's real process environment, which outranks
- * api/phpunit.xml:35's non-forced declaration, so app()->environment() returns
- * 'local' for the whole suite (F-042). That does not redirect which .env loads
- * for the keys this test cares about — api/.env supplies only the keys
- * phpunit.xml never declares, COMPANY_EMAIL_BRAND_NAME among them, and it pins
- * several of those to a string byte-identical to its hardcoded fallback, which
- * makes tier 2 and tier 3 indistinguishable for them. Hence the sentinel.
+ * APP_ENV used to be the sole exception, because docker-compose.yml:11 injects
+ * APP_ENV=local into the container's real process environment and a non-forced
+ * <env> cannot outrank it. F-042 closed that with force="true" on that one
+ * entry, so app()->environment() is 'testing' for the whole suite now.
+ *
+ * WHY THE SENTINEL SURVIVES F-042's SECOND HALF. The probe variable here is
+ * EMAIL_BRAND_NAME, the name value() derived from the setting key, and nothing
+ * in this project ever defines it — that is the point of probing it.
+ * COMPANY_EMAIL_BRAND_NAME is a different variable, and F-042's follow-up has
+ * since declared it in api/phpunit.xml, pinned to 'Ogami Philippines' which is
+ * byte-identical to this class's FALLBACK. So it is no longer one of "the keys
+ * phpunit.xml never declares" and no longer reaches the suite from an untracked
+ * api/.env. Tier 2 and tier 3 stay indistinguishable for it either way, which
+ * is precisely why a sentinel on a third, undeclared name is still the only way
+ * to prove the env tier is gone.
  */
 class EmailBrandingResolutionTest extends TestCase
 {
