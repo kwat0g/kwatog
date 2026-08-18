@@ -40,7 +40,7 @@ id, user_id (FK users nullable), action (string 20: created/updated/deleted), mo
 id, document_type (string 30), prefix (string 10), year (int), month (int), last_number (int default 0), UNIQUE (document_type, year, month)
 
 ### workflow_definitions
-id, workflow_type (string 50 unique), name (string 100), steps (json), amount_threshold (decimal 15,2 nullable), created_at, updated_at
+id, workflow_type (string 50 unique), name (string 100), steps (json), created_at, updated_at
 
 ### approval_records
 id, approvable_type (string 100), approvable_id (bigint), step_order (int), role_slug (string 50), approver_id (FK users nullable), action (string 20: pending/approved/rejected), remarks (text nullable), acted_at (timestamp nullable), created_at
