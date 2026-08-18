@@ -438,7 +438,8 @@ export default function ReturnRequestDetailPage() {
  <Th>Product</Th>
  <Th align="right">Qty</Th>
  <Th align="right">Returned</Th>
- <Th align="right">Unit Price</Th>   <Th>Condition</Th>
+ <Th align="right">Unit Price</Th>
+ <Th>Condition</Th>
    <Th>Reason</Th>
    <Th>Disposition</Th>
    <Th>{rma.type === 'supplier_return' ? 'Return' : 'Restock'}</Th>
