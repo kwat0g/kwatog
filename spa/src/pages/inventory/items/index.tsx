@@ -36,14 +36,18 @@ const DEFAULT_FILTERS: ItemListParams = {
 // ─── Bulk archive / restore plumbing ──────────────────────────────
 //
 // There is no server-side bulk endpoint for items, so a batch is a fan-out of
-// single-row calls. Two limits keep that from turning into a worse experience
-// than clicking twenty times:
+// single-row calls. Two separate limits, doing two different things — an earlier
+// version of this comment conflated them:
 //
-// • CONCURRENCY — the `api` rate limiter is 60 requests/minute per user. Firing
-//   fifty DELETEs at once earns a 429 partway through and leaves the batch
-//   half-applied for a reason that has nothing to do with the items.
-// • LIMIT — above this the fan-out is the wrong tool and the honest answer is to
-//   say so, rather than to accept the click and fail most of it.
+// • LIMIT bounds the request COUNT. Fifty is comfortably inside the
+//   authenticated `api` limiter (300/min — the 60/min figure is the guest
+//   bucket, `api/config/rate_limits.php`) while leaving room for the refetch and
+//   whatever else the session is doing, and it bounds how long the batch runs.
+// • CONCURRENCY bounds how many are IN FLIGHT, which is not the same thing and
+//   does not lower the rate: fifty requests are fifty requests whether sent
+//   four-wide or all at once. What it buys is fewer simultaneous write
+//   transactions against the same tables, and it stays under the browser's own
+//   per-origin connection cap instead of queueing behind it.
 const BULK_LIMIT = 50;
 const BULK_CONCURRENCY = 4;
 

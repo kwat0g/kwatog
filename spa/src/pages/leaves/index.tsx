@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { LuPlus, LuListChecks, LuRotateCcw, LuCheck, LuTriangleAlert } from '@/lib/icons';
+import { LuPlus, LuListChecks, LuRotateCcw, LuCheck } from '@/lib/icons';
 import toast from 'react-hot-toast';
-import { leaveRequestsApi, type LeaveListParams } from '@/api/leave';
+import { leaveRequestsApi, type BulkApproveLeaveResult, type LeaveListParams } from '@/api/leave';
 import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { DataTable, NumCell, StackedCell, type Column, type BulkAction } from '@/components/ui/DataTable';
@@ -96,21 +96,46 @@ export default function LeavesPage() {
  return { dept, hr, untouched: rows.length - dept.length - hr.length };
  };
 
+ /**
+  * Submit one stage and normalise its outcome.
+  *
+  * The try/catch is the whole point. Two sequential awaits used to share one
+  * `onError`, so a transport failure on the HR call discarded the dept call's
+  * result — and the dept call's rows were already committed, each in its own
+  * `DB::transaction`. Five approved rows were reported as "No requests were
+  * approved", the `onSettled` refetch failed too, and the list still showed them
+  * as pending. That is the defect this whole task set out to remove.
+  *
+  * A stage whose call did not complete reports `unconfirmed`, not `failed`.
+  * Those two are genuinely different: the server said no to a failure, whereas
+  * a lost response means the rows may well have gone through. Calling that
+  * "failed" would be the same overclaim in the other direction.
+  */
+ const runStage = async (
+ rows: LeaveRequest[],
+ submit: (ids: string[]) => Promise<BulkApproveLeaveResult>,
+ ) => {
+ if (rows.length === 0) return { approved: 0, failed: [] as Array<{ reason: string }>, unconfirmed: 0 };
+ try {
+ const result = await submit(rows.map((r) => r.id));
+ return { approved: result.approved.length, failed: result.failed, unconfirmed: 0 };
+ } catch {
+ return { approved: 0, failed: [] as Array<{ reason: string }>, unconfirmed: rows.length };
+ }
+ };
+
  const bulkApprove = useMutation({
  mutationFn: async (rows: LeaveRequest[]) => {
  const { dept, hr, untouched } = splitByStage(rows);
  // Sequential rather than parallel: both endpoints write the same rows'
  // approval records, and two batches in flight would race for them.
- const deptResult = dept.length
- ? await leaveRequestsApi.bulkApproveDept(dept.map((r) => r.id))
- : { approved: [], failed: [] };
- const hrResult = hr.length
- ? await leaveRequestsApi.bulkApproveHR(hr.map((r) => r.id))
- : { approved: [], failed: [] };
+ const deptResult = await runStage(dept, leaveRequestsApi.bulkApproveDept);
+ const hrResult = await runStage(hr, leaveRequestsApi.bulkApproveHR);
  return {
  selected: rows.length,
- approved: deptResult.approved.length + hrResult.approved.length,
+ approved: deptResult.approved + hrResult.approved,
  failed: [...deptResult.failed, ...hrResult.failed],
+ unconfirmed: deptResult.unconfirmed + hrResult.unconfirmed,
  untouched,
  };
  },
@@ -118,6 +143,15 @@ export default function LeavesPage() {
  // have committed its first half, so the list is stale either way.
  onSettled: () => qc.invalidateQueries({ queryKey: ['leaves'] }),
  onSuccess: (r) => {
+ // Unconfirmed first: it is the only outcome the user cannot resolve by
+ // reading the list, because the list may itself be stale.
+ if (r.unconfirmed > 0) {
+ toast.error(
+ `Approved ${r.approved} of ${r.selected}. ${r.unconfirmed} could not be confirmed — the request did not complete. Reload before retrying, since some may have gone through.`,
+ { duration: 8000 },
+ );
+ return;
+ }
  const reason = r.failed[0]?.reason;
  if (r.failed.length > 0) {
  // Never a success toast for a partial outcome — the count that matters
@@ -131,13 +165,16 @@ export default function LeavesPage() {
  if (r.untouched > 0) {
  toast(
  `Approved ${r.approved} of ${r.selected}. ${r.untouched} left unchanged — not awaiting your approval.`,
- { icon: <LuTriangleAlert size={16} aria-hidden="true" />, duration: 6000 },
+ { duration: 6000 },
  );
  return;
  }
  toast.success(`${r.approved} leave request${r.approved === 1 ? '' : 's'} approved.`);
  },
- onError: (e) => reportMutationError(e, 'Bulk approval failed. No requests were approved.'),
+ // Reachable only if something throws outside the two submissions, which is
+ // why the copy no longer asserts that nothing was approved — after
+ // `runStage` this handler can no longer know that.
+ onError: (e) => reportMutationError(e, 'Bulk approval could not be completed.'),
  });
 
  const bulkActions: BulkAction<LeaveRequest>[] = [

@@ -210,6 +210,91 @@ test.describe('leave requests — bulk approve', () => {
     expect(hrCalled).toBe(true);
     expect(deptCalled).toBe(false);
   });
+
+  test('the denominator is the selection, not the rows that were submitted', async ({ page }) => {
+    // One approvable row and one already approved. Only the first is sent, so a
+    // report that counts what was *submitted* says "1 of 1" and looks perfect.
+    // Counting the selection is what makes the second row's fate visible.
+    //
+    // This exists because the reviewer rewrote the denominator to `r.approved`
+    // and to `r.approved + r.failed.length`, and every other leave test still
+    // passed — the untouched branch had no coverage at all.
+    mockList(page, '**/api/v1/leaves/requests*', [
+      leaveRow(),
+      leaveRow({ id: 'lr2', leave_request_no: 'LR-202604-0046', status: 'approved', status_label: 'Approved' }),
+    ]);
+    let sentIds: string[] = [];
+    await page.route('**/api/v1/leaves/requests/bulk-approve-dept', async (route) => {
+      sentIds = route.request().postDataJSON()?.ids ?? [];
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ data: { approved: [leaveRow({ status: 'approved' })], failed: [] } }),
+      });
+    });
+
+    await loginAs(page, 'hr', '/hr/leaves');
+    await expect(page.getByText('LR-202604-0046')).toBeVisible();
+    await selectAllRows(page);
+    await page.getByRole('button', { name: 'Approve selected' }).click();
+
+    const notice = toasts(page).first();
+    await expect(notice).toHaveText(
+      'Approved 1 of 2. 1 left unchanged — not awaiting your approval.',
+    );
+    await expect(successToast(page)).toHaveCount(0);
+    expect(sentIds).toEqual(['lr1']);
+  });
+
+  test('a committed first half survives the second call failing', async ({ page }) => {
+    // The Critical from review round 1. Both stages are pending and `hr` may
+    // approve both, so the dept call goes first and commits — each approveDept
+    // is its own DB::transaction server-side. Then the HR call dies at the
+    // transport level.
+    //
+    // The two awaits used to share one `onError`, so the dept half's outcome was
+    // discarded and the toast read "Bulk approval failed. No requests were
+    // approved." The refetch fails too, so the list still showed those rows as
+    // pending and the approver concluded nothing had happened.
+    mockList(page, '**/api/v1/leaves/requests*', [
+      leaveRow(),
+      leaveRow({ id: 'lr2', leave_request_no: 'LR-202604-0046' }),
+      leaveRow({ id: 'lr3', leave_request_no: 'LR-202604-0047', status: 'pending_hr', status_label: 'Pending HR' }),
+    ]);
+    await page.route('**/api/v1/leaves/requests/bulk-approve-dept', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: {
+            approved: [leaveRow({ status: 'approved' }), leaveRow({ id: 'lr2', status: 'approved' })],
+            failed: [],
+          },
+        }),
+      });
+    });
+    // A 500 on a POST is the case the interceptor deliberately stays quiet for
+    // (`interceptorOwnsToast`), so the page is the only thing that can speak.
+    await page.route('**/api/v1/leaves/requests/bulk-approve-hr', async (route) => {
+      await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ message: 'Server error' }) });
+    });
+
+    await loginAs(page, 'hr', '/hr/leaves');
+    await expect(page.getByText('LR-202604-0047')).toBeVisible();
+    await selectAllRows(page);
+    await page.getByRole('button', { name: 'Approve selected' }).click();
+
+    const failure = errorToast(page);
+    // The two dept rows are reported as approved even though the batch as a
+    // whole did not finish.
+    await expect(failure).toContainText('Approved 2 of 3');
+    // And the HR row is "could not be confirmed", not "failed": a lost response
+    // is not the server saying no, and it may well have committed. Asserting it
+    // failed would be the same overclaim pointing the other way.
+    await expect(failure).toContainText('1 could not be confirmed');
+    await expect(failure).not.toContainText('No requests were approved');
+    await expect(successToast(page)).toHaveCount(0);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -246,9 +331,14 @@ test.describe('overtime requests — bulk approve', () => {
     await expect(failure).toContainText('Approved 1 of 2');
     await expect(failure).toContainText('Overtime exceeds the 4-hour maximum.');
     await expect(successToast(page)).toHaveCount(0);
-    // And the raw integer primary key the API sends alongside the reason stays
-    // out of the UI — hash ids are the only ids a user ever sees.
-    await expect(toasts(page).first()).not.toContainText('id');
+    // The raw integer primary key the API sends alongside each reason must not
+    // reach the UI — hash ids are the only ids a user ever sees. Asserting the
+    // exact text is the only way to show that: `not.toContainText('id')` passed
+    // whatever the toast said, and the digit from `{ id: 2 }` would survive a
+    // substring check against "2" too.
+    await expect(failure).toHaveText(
+      'Approved 1 of 2. 1 failed: Overtime exceeds the 4-hour maximum.',
+    );
   });
 
   test('rows that were never pending are reported as left unchanged', async ({ page }) => {

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { LuCheck, LuPlus, LuTriangleAlert } from '@/lib/icons';
+import { LuCheck, LuPlus } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { overtimeApi, type OvertimeListParams } from '@/api/attendance/overtime';
 import { Button } from '@/components/ui/Button';
@@ -109,7 +109,7 @@ export default function OvertimeListPage() {
  // ids it cannot decode.
  toast(
  `Approved ${res.approved_count} of ${res.selected}. ${res.selected - res.approved_count} left unchanged — not pending approval.`,
- { icon: <LuTriangleAlert size={16} aria-hidden="true" />, duration: 6000 },
+ { duration: 6000 },
  );
  return;
  }
