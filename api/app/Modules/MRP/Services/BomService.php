@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\MRP\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Modules\MRP\Exceptions\BomStructureException;
 use App\Modules\MRP\Exceptions\MissingBomException;
 use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
@@ -371,7 +372,7 @@ class BomService
     {
         $maxDepth = $this->maxExplodeDepth();
         if ($depth > $maxDepth) {
-            throw new RuntimeException(
+            throw new BomStructureException(
                 'BOM explosion exceeded the maximum nesting depth of '
                 . $maxDepth . ' — check for a circular bill of materials.'
             );
@@ -387,7 +388,7 @@ class BomService
 
             if ($subBom !== null) {
                 if (in_array($subBom->product_id, $productPath, true)) {
-                    throw new RuntimeException(
+                    throw new BomStructureException(
                         'Circular bill of materials detected while exploding product '
                         . $subBom->product_id . ' (item ' . ($row->item?->code ?? '?') . ').'
                     );
@@ -424,7 +425,7 @@ class BomService
     {
         $maxDepth = $this->maxExplodeDepth();
         if ($depth > $maxDepth) {
-            throw new RuntimeException(
+            throw new BomStructureException(
                 'BOM explosion exceeded the maximum nesting depth of '
                 . $maxDepth . ' — check for a circular bill of materials.'
             );
@@ -439,7 +440,7 @@ class BomService
             }
 
             if (in_array($subBom->product_id, $productPath, true)) {
-                throw new RuntimeException(
+                throw new BomStructureException(
                     'Circular bill of materials detected while exploding product '
                     . $subBom->product_id . ' (item ' . ($row->item?->code ?? '?') . ').'
                 );
@@ -478,7 +479,7 @@ class BomService
     ): void {
         $maxDepth = $this->maxExplodeDepth();
         if ($depth > $maxDepth) {
-            throw new RuntimeException(
+            throw new BomStructureException(
                 'BOM explosion exceeded the maximum nesting depth of '
                 . $maxDepth . ' — check for a circular bill of materials.'
             );
@@ -503,7 +504,7 @@ class BomService
             }
 
             if (in_array($subBom->product_id, $productPath, true)) {
-                throw new RuntimeException(
+                throw new BomStructureException(
                     'Circular bill of materials detected while exploding product '
                     . $subBom->product_id . ' (item ' . ($row->item?->code ?? '?') . ').'
                 );

@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\ItemUomConversion;
 use App\Modules\Inventory\Models\Uom;
-use RuntimeException;
 
 /**
  * OGAMI-004 — Multi-UOM conversion.
@@ -49,8 +49,9 @@ class UomConversionService
     /**
      * Resolve the conversion factor (base units per one from-unit) for an item.
      *
-     * @throws RuntimeException when the uom codes are unknown or no conversion
-     *                          row exists for the (item, from→base) pair.
+     * @throws BusinessRuleException when the uom codes are unknown or no
+     *                               conversion row exists for the
+     *                               (item, from→base) pair.
      */
     public function factor(Item $item, string $fromUomCode, string $toUomCode): string
     {
@@ -64,7 +65,11 @@ class UomConversionService
             ->first();
 
         if (! $conv) {
-            throw new RuntimeException(
+            // Master data, not deployment config: the missing row is authored at
+            // POST /items/{item}/uom-conversions, and the message already names
+            // the item and both units. It arrives here from a GRN or issue-slip
+            // line the operator typed, so it is squarely a 422.
+            throw new BusinessRuleException(
                 "No UOM conversion configured for item {$item->code}: {$fromUomCode} → {$toUomCode}."
             );
         }
@@ -76,7 +81,10 @@ class UomConversionService
     {
         $uom = Uom::query()->whereRaw('UPPER(code) = ?', [strtoupper(trim($code))])->first();
         if (! $uom) {
-            throw new RuntimeException("Unknown unit of measure: {$code}.");
+            // $code reaches here from request payloads — `received_uom_code` on a
+            // GRN line, `issued_uom_code` on an issue slip, `unit` on a BOM line
+            // — so an unknown code is user input to correct, not a fault.
+            throw new BusinessRuleException("Unknown unit of measure: {$code}.");
         }
         return $uom;
     }

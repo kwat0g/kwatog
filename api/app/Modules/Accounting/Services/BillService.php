@@ -689,10 +689,17 @@ class BillService
         if ((int) $grn->purchase_order_id !== (int) $bill->purchase_order_id) throw new BusinessRuleException('The accepted GRN does not belong to the bill purchase order.');
     }
 
+    /**
+     * BusinessRuleException rather than ValidationException even though these
+     * read like field errors: createDraft()/createDraftForGrn() are also the
+     * supplier-portal and GRN→bill handoff paths, where a queued listener
+     * treats BusinessRuleException as "expected, surface to an operator" and
+     * anything else as an infrastructure fault worth retrying.
+     */
     private function normalizeItems(array $rawItems): array
     {
         if (count($rawItems) === 0) {
-            throw new RuntimeException('A bill must have at least one line item.');
+            throw new BusinessRuleException('A bill must have at least one line item.');
         }
 
         $rows = [];
@@ -700,7 +707,7 @@ class BillService
         foreach ($rawItems as $raw) {
             $accountId = HashIdFilter::decode($raw['expense_account_id'] ?? null, Account::class);
             if (! $accountId) {
-                throw new RuntimeException('Invalid expense account selected on bill item.');
+                throw new BusinessRuleException('Invalid expense account selected on bill item.');
             }
 
             $itemId = HashIdFilter::decode($raw['item_id'] ?? null, Item::class);
@@ -710,7 +717,7 @@ class BillService
             $total = Money::round2(bcmul($qty, $price, 4));
 
             if (Money::lte($qty, '0') || Money::lt($price, '0')) {
-                throw new RuntimeException('Quantity must be > 0, unit price must be ≥ 0.');
+                throw new BusinessRuleException('Quantity must be > 0, unit price must be ≥ 0.');
             }
 
             $rows[] = [
@@ -795,6 +802,10 @@ class BillService
     {
         $id = Account::query()->where('code', $code)->value('id');
         if (! $id) {
+            // Stays an unmapped RuntimeException on purpose. $code is a
+            // settings/seed value, so the remedy named in the message is a
+            // deployment step — there is no user input to correct, and a 422
+            // would file a broken chart of accounts under "your fault".
             throw new RuntimeException("Required account {$code} not found in COA. Run ChartOfAccountsSeeder.");
         }
 

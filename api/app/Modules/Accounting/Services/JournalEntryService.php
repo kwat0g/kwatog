@@ -21,7 +21,6 @@ use App\Modules\Auth\Models\User;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 class JournalEntryService
 {
@@ -375,6 +374,13 @@ class JournalEntryService
     /**
      * Build canonical line rows + running totals from a request payload.
      *
+     * BusinessRuleException, not ValidationException keyed to `lines`: this
+     * builder serves both the JE form and every internal GL poster
+     * (BillService::postBillToGl, invoice/GRN/payroll posting), which construct
+     * lines themselves and never submit a `lines` field. A zero-value bill line
+     * reaches the debit/credit rule from that direction, so keying the error to
+     * a form field the caller never sent would point the user at nothing.
+     *
      * @return array{0: array<int, array>, 1: string, 2: string}
      */
     private function buildLines(array $rawLines): array
@@ -388,7 +394,7 @@ class JournalEntryService
                 $accountId = HashIdFilter::decode((string) $accountId, Account::class);
             }
             if (! $accountId) {
-                throw new RuntimeException('Invalid account selected in journal entry line.');
+                throw new BusinessRuleException('Invalid account selected in journal entry line.');
             }
 
             $debit  = Money::round2((string) ($raw['debit']  ?? '0'));
@@ -397,7 +403,7 @@ class JournalEntryService
             $hasDebit  = Money::gt($debit,  '0');
             $hasCredit = Money::gt($credit, '0');
             if ($hasDebit === $hasCredit) {
-                throw new RuntimeException('Each line must have exactly one of debit or credit greater than zero.');
+                throw new BusinessRuleException('Each line must have exactly one of debit or credit greater than zero.');
             }
 
             $rows[] = [

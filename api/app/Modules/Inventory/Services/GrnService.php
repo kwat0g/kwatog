@@ -689,7 +689,7 @@ class GrnService
             ->pluck('status');
         if ($statuses->isEmpty() && ! $grn->qc_inspection_id) {
             if ($this->hasQcEligibleLines($grn)) {
-                throw new RuntimeException(
+                throw new BusinessRuleException(
                     "GRN {$grn->grn_number} has no incoming inspection records; "
                     .'incoming QC must be completed before acceptance.'
                 );
@@ -706,7 +706,7 @@ class GrnService
         // completed decision; it must not block acceptance forever.
         $blocking = $statuses->first(fn ($status) => ! in_array($status, ['passed', 'cancelled'], true));
         if ($blocking !== null) {
-            throw new RuntimeException(
+            throw new BusinessRuleException(
                 "GRN {$grn->grn_number} cannot be accepted until every incoming inspection passes (current: {$blocking})."
             );
         }

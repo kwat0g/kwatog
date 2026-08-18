@@ -31,7 +31,6 @@ use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\PurchaseRequestItem;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 class PurchaseOrderService
 {
@@ -650,6 +649,12 @@ class PurchaseOrderService
     }
 
     /**
+     * BusinessRuleException rather than ValidationException keyed to `items`:
+     * convertFromPr() reaches this builder from ConsolidatePurchaseOrders, a
+     * queued listener that treats BusinessRuleException as "expected, record a
+     * manual-action outcome" and Throwable as "unexpected, rethrow". Keying
+     * these to a form field would move a malformed PR line onto the retry path.
+     *
      * @param array<int, array> $rows
      * @return array{0: array<int, array>, 1: string}
      */
@@ -660,18 +665,18 @@ class PurchaseOrderService
         foreach ($rows as $r) {
             $itemId = HashIdFilter::decode($r['item_id'] ?? null, Item::class) ?? (int) ($r['item_id'] ?? 0);
             if (! $itemId) {
-                throw new RuntimeException('Each PO line must reference an item.');
+                throw new BusinessRuleException('Each PO line must reference an item.');
             }
             if (! array_key_exists('quantity', $r) || trim((string) $r['quantity']) === '') {
-                throw new RuntimeException('Each PO line must include a quantity.');
+                throw new BusinessRuleException('Each PO line must include a quantity.');
             }
             if (! array_key_exists('unit_price', $r) || trim((string) $r['unit_price']) === '') {
-                throw new RuntimeException('Each PO line must include an authoritative unit price.');
+                throw new BusinessRuleException('Each PO line must include an authoritative unit price.');
             }
             $qty   = (string) $r['quantity'];
             $price = (string) $r['unit_price'];
             if (Money::lte($qty, '0') || Money::lt($price, '0')) {
-                throw new RuntimeException('Quantity must be > 0, unit price must be ≥ 0.');
+                throw new BusinessRuleException('Quantity must be > 0, unit price must be ≥ 0.');
             }
             $total = Money::mul($qty, $price);
             $lines[] = [

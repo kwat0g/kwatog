@@ -292,6 +292,10 @@ class QuarantineService
     {
         $refZone = $reference->relationLoaded('zone') ? $reference->zone : $reference->zone()->first();
         if (! $refZone) {
+            // Left unmapped on purpose. A warehouse location with no zone
+            // violates an invariant the warehouse setup is supposed to hold; the
+            // message names an internal row id and offers no remedy, so calling
+            // it a validation error would only misattribute the fault.
             throw new RuntimeException("Source location {$reference->id} has no zone/warehouse.");
         }
         $warehouseId = $refZone->warehouse_id;
@@ -306,7 +310,10 @@ class QuarantineService
             ->first();
 
         if (! $location) {
-            throw new RuntimeException(
+            // The message already tells the operator exactly what to do, and
+            // creating a quarantine/scrap location is warehouse setup they own.
+            // Withholding that behind a 500 was the whole defect.
+            throw new BusinessRuleException(
                 "No active {$type->label()} location exists in warehouse {$warehouseId}. ".
                 'Create one before raising an MRB hold/release.'
             );

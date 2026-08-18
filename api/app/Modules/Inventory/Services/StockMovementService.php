@@ -21,7 +21,6 @@ use App\Modules\Accounting\Services\SourceReferenceRegistry;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\OutboxService;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 /**
  * Linchpin of the inventory ledger.
@@ -331,7 +330,10 @@ class StockMovementService
                 ->first();
 
             if ($session) {
-                throw new RuntimeException(
+                // Record state the operator can clear — finish or cancel the
+                // count, or move the stock elsewhere — and the message names the
+                // count session to go to. Never a server fault.
+                throw new BusinessRuleException(
                     "Warehouse location {$location->id} is frozen by stock count {$session->session_number}."
                 );
             }

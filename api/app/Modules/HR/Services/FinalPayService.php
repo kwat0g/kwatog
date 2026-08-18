@@ -22,7 +22,6 @@ use App\Modules\Payroll\Models\PayrollPeriod;
 use Carbon\CarbonInterface;
 use Closure;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 use Throwable;
 
 /**
@@ -152,7 +151,10 @@ class FinalPayService
                 throw new BusinessRuleException('Clearance not found.');
             }
             if (! $lockedClearance->final_pay_computed || ! $lockedClearance->final_pay_amount) {
-                throw new RuntimeException('Compute final pay before posting JE.');
+                // A sequencing rule, and the fix is one button away. It sat one
+                // line below a BusinessRuleException for the same kind of
+                // failure, so the two rendered differently for no reason.
+                throw new BusinessRuleException('Compute final pay before posting JE.');
             }
 
             $existing = null;
