@@ -25,6 +25,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 class LeaveRequestService
 {
@@ -57,6 +58,50 @@ class LeaveRequestService
             'exception'       => $e::class,
             'message'         => $e->getMessage(),
         ]);
+    }
+
+    /**
+     * Decide what a failed row tells the user, and log the cases it withholds.
+     *
+     * Three arms, because "is this sentence safe to show" turns out not to map
+     * onto a single exception type:
+     *
+     * 1. `BusinessRuleException` — authored copy, always safe.
+     * 2. A 4xx `HttpException`. `ApprovalService` states two of its refusals with
+     *    `abort(403, …)` rather than a typed exception: the segregation-of-duties
+     *    guard ("You cannot act on a record you submitted.") and the wrong-role
+     *    guard. Both are routine and deterministic in a batch — a department head
+     *    whose queue includes their own request hits the first, and an approver
+     *    who holds the permission but not the step's `role_slug` hits the second
+     *    on every row. Narrowing to `BusinessRuleException` alone replaced those
+     *    sentences with generic copy and logged an error per row for a refusal
+     *    the system had decided on purpose. `chain-leave.spec.ts` asserts the SoD
+     *    sentence reaches the user on the single-row path; the bulk path must not
+     *    disagree with it.
+     * 3. Anything else — including a 5xx `HttpException`, which is not authored
+     *    user copy — gets the stand-in, and a log line with the real detail.
+     *
+     * The `abort()` calls are the fragile part of this: they are typed as generic
+     * HTTP failures, so this arm has to infer intent from a status code. Retyping
+     * them is the durable fix and belongs with whoever owns `ApprovalService`.
+     */
+    private function bulkFailureReason(string $stage, int $id, \Throwable $e): string
+    {
+        if ($e instanceof BusinessRuleException) {
+            return $e->getMessage();
+        }
+
+        if ($e instanceof HttpExceptionInterface) {
+            $status  = $e->getStatusCode();
+            $message = trim($e->getMessage());
+            if ($status >= 400 && $status < 500 && $message !== '') {
+                return $message;
+            }
+        }
+
+        $this->logBulkApproveFailure($stage, $id, $e);
+
+        return self::UNEXPECTED_FAILURE_REASON;
     }
 
     public function list(array $filters, ?User $user = null): LengthAwarePaginator
@@ -291,13 +336,8 @@ class LeaveRequestService
                     continue;
                 }
                 $approved[] = $this->approveDept($req, $approver, $remarks);
-            } catch (BusinessRuleException $e) {
-                // A business rule is authored copy — safe, and the only thing
-                // that tells the approver what to do about that row.
-                $failed[] = ['id' => $id, 'reason' => $e->getMessage()];
             } catch (\Throwable $e) {
-                $failed[] = ['id' => $id, 'reason' => self::UNEXPECTED_FAILURE_REASON];
-                $this->logBulkApproveFailure('dept', $id, $e);
+                $failed[] = ['id' => $id, 'reason' => $this->bulkFailureReason('dept', $id, $e)];
             }
         }
         return ['approved' => $approved, 'failed' => $failed];
@@ -325,11 +365,8 @@ class LeaveRequestService
                     continue;
                 }
                 $approved[] = $this->approveHR($req, $approver, $remarks);
-            } catch (BusinessRuleException $e) {
-                $failed[] = ['id' => $id, 'reason' => $e->getMessage()];
             } catch (\Throwable $e) {
-                $failed[] = ['id' => $id, 'reason' => self::UNEXPECTED_FAILURE_REASON];
-                $this->logBulkApproveFailure('hr', $id, $e);
+                $failed[] = ['id' => $id, 'reason' => $this->bulkFailureReason('hr', $id, $e)];
             }
         }
         return ['approved' => $approved, 'failed' => $failed];
