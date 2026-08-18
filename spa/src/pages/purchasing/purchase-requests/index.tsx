@@ -19,6 +19,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
+import { reportMutationError } from '@/lib/formErrors';
 import type { ListParams } from '@/types';
 import type { PurchaseRequest, PurchaseRequestPriority, PurchaseRequestStatus } from '@/types/purchasing';
 
@@ -72,14 +73,30 @@ export default function PurchaseRequestsListPage() {
  const statusLabels = new Map((requestOptions?.statuses ?? []).map((option) => [option.value, option.label]));
 
  const bulkApproveMut = useMutation({
- mutationFn: (ids: string[]) => purchaseRequestsApi.bulkApprove(ids),
- onSuccess: (results) => {
- qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-requests'] });
- const approved = results.filter((r: { status: string }) => r.status === 'approved').length;
- const skipped = results.filter((r: { status: string }) => r.status === 'skipped').length;
- toast.success(`${approved} approved, ${skipped} skipped`);
+ mutationFn: async (rows: PurchaseRequest[]) => ({
+ results: await purchaseRequestsApi.bulkApprove(rows.map((r) => r.id)),
+ selected: rows.length,
+ }),
+ // A batch that rejects partway may still have committed rows, so refetch
+ // regardless of outcome rather than only on success.
+ onSettled: () => qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-requests'] }),
+ onSuccess: ({ results, selected }) => {
+ const approved = results.filter((r) => r.status === 'approved').length;
+ const skipped = results.filter((r) => r.status !== 'approved');
+ // This used to be `toast.success('N approved, M skipped')`: a green banner
+ // for a partial failure, with the server's per-row reason — which is the
+ // only thing that tells the user what to do next — discarded.
+ if (skipped.length > 0) {
+ const reason = skipped.find((r) => r.message)?.message;
+ toast.error(
+ `Approved ${approved} of ${selected}. ${skipped.length} skipped${reason ? `: ${reason}` : '.'}`,
+ { duration: 6000 },
+ );
+ return;
+ }
+ toast.success(`${approved} purchase request${approved === 1 ? '' : 's'} approved.`);
  },
- onError: (e) => toast.error(errMsg(e, 'Failed to bulk approve.')) });
+ onError: (e) => reportMutationError(e, 'Bulk approval failed. No requests were approved.') });
 
  const convertDetail = useQuery({
  queryKey: ['purchasing', 'purchase-requests', convertTarget?.id, 'conversion'],
@@ -118,8 +135,7 @@ export default function PurchaseRequestsListPage() {
  label: 'Approve selected',
  variant: 'primary',
  onClick: (rows) => {
- const ids = rows.map((r) => r.id);
- bulkApproveMut.mutate(ids);
+ bulkApproveMut.mutate(rows);
  } },
  ];
 
