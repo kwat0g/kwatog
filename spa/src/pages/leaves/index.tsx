@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { LuPlus, LuListChecks, LuRotateCcw } from '@/lib/icons';
+import { LuPlus, LuListChecks, LuRotateCcw, LuCheck, LuTriangleAlert } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { leaveRequestsApi, type LeaveListParams } from '@/api/leave';
 import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
-import { DataTable, NumCell, StackedCell, type Column } from '@/components/ui/DataTable';
+import { DataTable, NumCell, StackedCell, type Column, type BulkAction } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { Modal, ModalFooter } from '@/components/ui/Modal';
@@ -19,6 +19,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { formatDate } from '@/lib/formatDate';
+import { reportMutationError } from '@/lib/formErrors';
 import { LeaveTypesManager } from './types';
 import { YearEndLeaveModal } from './year-end';
 import type { LeaveRequest } from '@/types/leave';
@@ -77,6 +78,84 @@ export default function LeavesPage() {
  onError: () => toast.error('Reject failed.'),
  });
 
+ // ─── Bulk approve ───────────────────────────────────────────────
+ //
+ // Leave has two approval stages with two permissions, so one selection can
+ // contain rows the caller may act on at the dept stage, rows only an HR
+ // officer may act on, and rows in neither state. Splitting by stage here is
+ // what keeps the request honest: a row the caller cannot approve is never
+ // submitted, so the batch cannot half-fail on 403s the UI could have
+ // predicted. Anything not submitted is reported as untouched, not as done.
+ const canApproveDept = can('leave.approve_dept');
+ const canApproveHR = can('leave.approve_hr');
+ const canApproveAny = canApproveDept || canApproveHR;
+
+ const splitByStage = (rows: LeaveRequest[]) => {
+ const dept = canApproveDept ? rows.filter((r) => r.status === 'pending_dept') : [];
+ const hr = canApproveHR ? rows.filter((r) => r.status === 'pending_hr') : [];
+ return { dept, hr, untouched: rows.length - dept.length - hr.length };
+ };
+
+ const bulkApprove = useMutation({
+ mutationFn: async (rows: LeaveRequest[]) => {
+ const { dept, hr, untouched } = splitByStage(rows);
+ // Sequential rather than parallel: both endpoints write the same rows'
+ // approval records, and two batches in flight would race for them.
+ const deptResult = dept.length
+ ? await leaveRequestsApi.bulkApproveDept(dept.map((r) => r.id))
+ : { approved: [], failed: [] };
+ const hrResult = hr.length
+ ? await leaveRequestsApi.bulkApproveHR(hr.map((r) => r.id))
+ : { approved: [], failed: [] };
+ return {
+ selected: rows.length,
+ approved: deptResult.approved.length + hrResult.approved.length,
+ failed: [...deptResult.failed, ...hrResult.failed],
+ untouched,
+ };
+ },
+ // `onSettled` rather than `onSuccess`: a batch that threw partway may still
+ // have committed its first half, so the list is stale either way.
+ onSettled: () => qc.invalidateQueries({ queryKey: ['leaves'] }),
+ onSuccess: (r) => {
+ const reason = r.failed[0]?.reason;
+ if (r.failed.length > 0) {
+ // Never a success toast for a partial outcome — the count that matters
+ // is how many of the selected rows actually moved.
+ toast.error(
+ `Approved ${r.approved} of ${r.selected}. ${r.failed.length} failed${reason ? `: ${reason}` : '.'}`,
+ { duration: 6000 },
+ );
+ return;
+ }
+ if (r.untouched > 0) {
+ toast(
+ `Approved ${r.approved} of ${r.selected}. ${r.untouched} left unchanged — not awaiting your approval.`,
+ { icon: <LuTriangleAlert size={16} aria-hidden="true" />, duration: 6000 },
+ );
+ return;
+ }
+ toast.success(`${r.approved} leave request${r.approved === 1 ? '' : 's'} approved.`);
+ },
+ onError: (e) => reportMutationError(e, 'Bulk approval failed. No requests were approved.'),
+ });
+
+ const bulkActions: BulkAction<LeaveRequest>[] = [
+ {
+ label: 'Approve selected',
+ variant: 'primary',
+ icon: <LuCheck size={13} />,
+ onClick: (rows) => {
+ const { dept, hr } = splitByStage(rows);
+ if (dept.length + hr.length === 0) {
+ toast.error('None of the selected requests are awaiting your approval.');
+ return;
+ }
+ bulkApprove.mutate(rows);
+ },
+ },
+ ];
+
  const all = data?.data ?? [];
  const counts = {
  pending_dept: all.filter((l) => l.status === 'pending_dept').length,
@@ -117,13 +196,13 @@ export default function LeavesPage() {
  <div className="flex items-center justify-end gap-1">
  {r.status === 'pending_dept' && can('leave.approve_dept') && (
  <>
- <Button variant="primary" size="xs" disabled={approveDept.isPending} onClick={() => { setConfirmApproveDept(r.id); }}>Approve</Button>
+ <Button variant="primary" size="xs" disabled={approveDept.isPending || bulkApprove.isPending} onClick={() => { setConfirmApproveDept(r.id); }}>Approve</Button>
  <Button variant="danger" size="xs" onClick={() => { setActionTarget({ req: r, mode: 'reject' }); }}>Reject</Button>
  </>
  )}
  {r.status === 'pending_hr' && can('leave.approve_hr') && (
  <>
- <Button variant="primary" size="xs" disabled={approveHR.isPending} onClick={() => { setConfirmApproveHR(r.id); }}>Approve</Button>
+ <Button variant="primary" size="xs" disabled={approveHR.isPending || bulkApprove.isPending} onClick={() => { setConfirmApproveHR(r.id); }}>Approve</Button>
  <Button variant="danger" size="xs" onClick={() => { setActionTarget({ req: r, mode: 'reject' }); }}>Reject</Button>
  </>
  )}
@@ -206,7 +285,9 @@ export default function LeavesPage() {
  <div className="px-5 py-4"><DataTable
  tableKey="leave-requests"
  onRowClick={(r) => navigate(`/hr/leaves/${r.id}`)} columns={columns} data={all} meta={data.meta} onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
- onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))} /></div>
+ onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
+ selectable={canApproveAny}
+ bulkActions={canApproveAny ? bulkActions : undefined} /></div>
  )}
 
  {data && all.length > 0 && view === 'kanban' && (
