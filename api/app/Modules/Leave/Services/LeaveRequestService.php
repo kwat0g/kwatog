@@ -24,14 +24,40 @@ use App\Modules\Leave\Models\LeaveType;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class LeaveRequestService
 {
+    /**
+     * Stand-in for the message of an exception that is not a business rule.
+     *
+     * The bulk-approve endpoints put `reason` in front of the user — the SPA
+     * renders it into a toast verbatim. `\Throwable::getMessage()` there meant a
+     * QueryException would put `SQLSTATE[23505]: Unique violation … insert into
+     * "approval_records" …` on screen, table and column names included. Only
+     * `BusinessRuleException` carries copy written to be read; everything else
+     * gets this and a log line with the detail.
+     */
+    private const UNEXPECTED_FAILURE_REASON = 'An unexpected error stopped this request. It has been logged for support.';
+
     public function __construct(
         private readonly DocumentSequenceService $sequences,
         private readonly LeaveBalanceService $balances,
         private readonly ApprovalService $approvals,
     ) {}
+
+    /**
+     * Record the detail the user-facing `reason` deliberately withholds.
+     */
+    private function logBulkApproveFailure(string $stage, int $id, \Throwable $e): void
+    {
+        Log::error('Bulk leave approval failed unexpectedly.', [
+            'stage'           => $stage,
+            'leave_request_id' => $id,
+            'exception'       => $e::class,
+            'message'         => $e->getMessage(),
+        ]);
+    }
 
     public function list(array $filters, ?User $user = null): LengthAwarePaginator
     {
@@ -247,6 +273,8 @@ class LeaveRequestService
      * T1.7 — Bulk approve LeaveRequests at the department-head stage.
      * Per-row try/catch so one bad row doesn't abort the batch.
      *
+     * `failed[].reason` reaches the user verbatim — see UNEXPECTED_FAILURE_REASON.
+     *
      * @param array<int, int> $ids raw integer IDs (post HashID decode)
      * @return array{approved: array<int, LeaveRequest>, failed: array<int, array{id:int, reason:string}>}
      */
@@ -263,8 +291,13 @@ class LeaveRequestService
                     continue;
                 }
                 $approved[] = $this->approveDept($req, $approver, $remarks);
-            } catch (\Throwable $e) {
+            } catch (BusinessRuleException $e) {
+                // A business rule is authored copy — safe, and the only thing
+                // that tells the approver what to do about that row.
                 $failed[] = ['id' => $id, 'reason' => $e->getMessage()];
+            } catch (\Throwable $e) {
+                $failed[] = ['id' => $id, 'reason' => self::UNEXPECTED_FAILURE_REASON];
+                $this->logBulkApproveFailure('dept', $id, $e);
             }
         }
         return ['approved' => $approved, 'failed' => $failed];
@@ -273,6 +306,8 @@ class LeaveRequestService
     /**
      * T1.7 — Bulk approve LeaveRequests at the HR-officer stage.
      * Per-row try/catch so one bad row doesn't abort the batch.
+     *
+     * `failed[].reason` reaches the user verbatim — see UNEXPECTED_FAILURE_REASON.
      *
      * @param array<int, int> $ids
      * @return array{approved: array<int, LeaveRequest>, failed: array<int, array{id:int, reason:string}>}
@@ -290,8 +325,11 @@ class LeaveRequestService
                     continue;
                 }
                 $approved[] = $this->approveHR($req, $approver, $remarks);
-            } catch (\Throwable $e) {
+            } catch (BusinessRuleException $e) {
                 $failed[] = ['id' => $id, 'reason' => $e->getMessage()];
+            } catch (\Throwable $e) {
+                $failed[] = ['id' => $id, 'reason' => self::UNEXPECTED_FAILURE_REASON];
+                $this->logBulkApproveFailure('hr', $id, $e);
             }
         }
         return ['approved' => $approved, 'failed' => $failed];
