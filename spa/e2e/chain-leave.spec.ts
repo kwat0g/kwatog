@@ -20,10 +20,22 @@ const LEAVE_ID = 'lrTest01';
 interface LeaveRequest {
   id: string; leave_type: { id: string; code: string; name: string };
   employee: { id: string; full_name: string };
-  start_date: string; end_date: string; status: string;
+  start_date: string; end_date: string; status: string; status_label: string;
   reason: string; days_requested: number;
   half_day_period: string | null;
 }
+
+// `status_label` is what LeaveRequestResource sends and what every list chip
+// renders — LeaveRequestStatus::label(), e.g. 'Pending department head'. Omitting
+// it left the chip falling back to the raw enum 'pending_dept', which no user
+// ever sees, so an assertion written against the real wording found nothing.
+const STATUS_LABELS: Record<string, string> = {
+  pending_dept: 'Pending department head',
+  pending_hr: 'Pending HR approval',
+  approved: 'Approved',
+  rejected: 'Rejected',
+  cancelled: 'Cancelled',
+};
 
 function makeLeave(status: string): LeaveRequest {
   return {
@@ -31,7 +43,8 @@ function makeLeave(status: string): LeaveRequest {
     leave_type: { id: 'lt1', code: 'VL', name: 'Vacation Leave' },
     employee: { id: 'emp_ee', full_name: 'Manuel Cruz' },
     start_date: '2026-07-01', end_date: '2026-07-01',
-    status, days_requested: 1, half_day_period: null,
+    status, status_label: STATUS_LABELS[status] ?? status,
+    days_requested: 1, half_day_period: null,
     reason: 'E2E chain test',
   };
 }
@@ -89,10 +102,12 @@ test.describe('Leave chain — cross-role workflow', () => {
     await createPage.fillForm('Vacation Leave', '2026-07-01', '2026-07-01', 'E2E chain test');
     await createPage.submit();
 
-    // Should redirect to detail or list with the new request
-    await expect(page.getByText(/pending dept/i)).toBeVisible({ timeout: 5000 });
+    // Filing happens in a modal on this page — there is no redirect. The filed
+    // request comes back through the invalidated list, where the Status cell
+    // shows the label LeaveRequestStatus::label() produces for pending_dept.
+    await expect(page.getByRole('cell', { name: 'Pending department head' })).toBeVisible({ timeout: 5000 });
     // Toast confirms submission
-    await expect(page.getByText(/submitted|created|filed/i)).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText(/Leave request submitted for approval/i)).toBeVisible({ timeout: 5000 });
   });
 
   test('department head approves → pending_hr (cross-role)', async ({ page }) => {
@@ -163,8 +178,16 @@ test.describe('Leave chain — cross-role workflow', () => {
 
     if (await detail.approveDeptButton.isVisible()) {
       await detail.approveDept();
-      // The SoD guard returns 422 → the SPA shows the error
-      await expect(page.getByText(/failed to approve/i)).toBeVisible({ timeout: 5000 });
+      // The SoD guard returns 422 → the SPA shows the error.
+      //
+      // Assert the SERVER's sentence, not the page's 'Failed to approve.'
+      // fallback. `reportMutationError` prefers a message the API deliberately
+      // sent, because "You cannot act on a record you submitted" tells the
+      // approver what rule stopped them and what to do instead; "Failed to
+      // approve." tells them only that something went wrong, and would read the
+      // same for a dropped connection. So the fallback never reaches the screen
+      // here, and asserting it would only prove the specific message got lost.
+      await expect(page.getByText(/cannot act on a record you submitted/i)).toBeVisible({ timeout: 5000 });
     }
     // If the button is not visible (SPA hides it), that's also correct SoD behavior.
     // The test passes either way.
