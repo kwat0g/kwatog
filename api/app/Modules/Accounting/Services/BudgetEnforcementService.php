@@ -160,9 +160,17 @@ class BudgetEnforcementService
      *   - 'block' — throws BusinessRuleException when the spend hits
      *               'exhausted' or 'overdrawn' (100%+), which renders as a 422
      *               carrying the message. This used to be a bare
-     *               RuntimeException that relied on the calling controller
-     *               wrapping it; the ones that did not returned a 500 for a
-     *               ceiling the user could have raised or worked under.
+     *               RuntimeException, and every HTTP entry point today already
+     *               wraps it (PurchaseOrderController, PurchaseRequestController),
+     *               so the conversion is inert on the paths that exist — what it
+     *               buys is that the 422 no longer depends on each new caller
+     *               remembering to add `catch (\RuntimeException)`.
+     *
+     * One path is NOT inert: assess() is reached from PurchaseOrderService::create(),
+     * which ConsolidatePurchaseOrders calls via convertFromPr(). That listener
+     * splits on BusinessRuleException, so a blocked budget now records a
+     * manual-conversion outcome instead of poisoning the job — correct, since a
+     * retry cannot raise the ceiling.
      *
      * Graceful by design: when no budget exists for the department/fiscal-year,
      * checkAvailability() returns canProceed=true and nothing is blocked.

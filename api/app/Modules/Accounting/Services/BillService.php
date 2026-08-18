@@ -691,10 +691,17 @@ class BillService
 
     /**
      * BusinessRuleException rather than ValidationException even though these
-     * read like field errors: createDraft()/createDraftForGrn() are also the
-     * supplier-portal and GRN→bill handoff paths, where a queued listener
-     * treats BusinessRuleException as "expected, surface to an operator" and
-     * anything else as an infrastructure fault worth retrying.
+     * read like field errors: createDraft() and createDraftForGrn() are reached
+     * from the supplier portal and from AutoCreateBillOnGrnAccepted, a queued
+     * listener — neither submits a form with an `items` field, so keying the
+     * error to one would point at nothing.
+     *
+     * Deliberately understated on the queue side: unlike the delivery→invoice and
+     * PR→PO handoffs, AutoCreateBillOnGrnAccepted has NO catch, so these reach
+     * failed_jobs either way and this conversion changes nothing there. Its live
+     * effect is on the supplier-portal path, where it removes the dependence on
+     * SupplierPortalController happening to wrap the call in
+     * `catch (\RuntimeException)`.
      */
     private function normalizeItems(array $rawItems): array
     {

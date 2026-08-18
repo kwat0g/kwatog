@@ -651,9 +651,17 @@ class PurchaseOrderService
     /**
      * BusinessRuleException rather than ValidationException keyed to `items`:
      * convertFromPr() reaches this builder from ConsolidatePurchaseOrders, a
-     * queued listener that treats BusinessRuleException as "expected, record a
-     * manual-action outcome" and Throwable as "unexpected, rethrow". Keying
-     * these to a form field would move a malformed PR line onto the retry path.
+     * queued listener that splits on BusinessRuleException — "expected, record a
+     * manual-action outcome" — versus Throwable — "unexpected, rethrow".
+     *
+     * Note which way this moved. As bare RuntimeExceptions these four ESCAPED
+     * that split and were handled as unexpected: the listener rethrew, the job
+     * poisoned, and the PR stayed at `po_conversion_status = NotStarted` with no
+     * note explaining why. Naming them BusinessRuleException does not preserve
+     * the graceful arm, it puts them in it for the first time — a PR line
+     * missing an item or a price now records a manual-conversion outcome and
+     * notifies, which is right because no retry can supply the missing value.
+     * ValidationException would have escaped the split again.
      *
      * @param array<int, array> $rows
      * @return array{0: array<int, array>, 1: string}

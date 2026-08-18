@@ -450,11 +450,19 @@ class InvoiceService
      * BusinessRuleException rather than ValidationException even though these
      * read like field errors: create() is also the delivery→invoice handoff
      * path, and both DeliveryService::retryInvoiceHandoff() and
-     * CreateDraftInvoiceOnDeliveryInvoiceRequested treat
-     * `DeliveryInvoiceHandoffException|BusinessRuleException` as "expected,
-     * degrade to manual" and everything else as "infrastructure fault,
-     * rethrow so the queue retries". A ValidationException here would send a
-     * malformed delivery line down the retry path forever.
+     * CreateDraftInvoiceOnDeliveryInvoiceRequested split on
+     * `DeliveryInvoiceHandoffException|BusinessRuleException` — "expected,
+     * degrade to manual" — versus everything else — "infrastructure fault,
+     * rethrow so the queue retries".
+     *
+     * Note which way this moved. As bare RuntimeExceptions these three ESCAPED
+     * that split and were handled as infrastructure faults; naming them
+     * BusinessRuleException does not preserve the graceful arm, it puts them in
+     * it for the first time. A delivery line with no revenue account or a
+     * non-positive quantity now leaves the delivery at
+     * `invoice_handoff_status = manual_required` instead of poisoning the queue
+     * — which is the right outcome, because no retry can fix either condition.
+     * ValidationException would have undone that by escaping the split again.
      *
      * @return array{0: array<int, array{revenue_account_id:int, source_delivery_item_id:?int, description:string, quantity:string, unit:?string, unit_price:string, total:string}>, 1: string}
      */
