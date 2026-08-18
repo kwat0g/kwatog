@@ -373,7 +373,16 @@ class MrpEngineService
 
                 $plannedStart = $line->delivery_date->copy()->subDays(2)->toDateTimeString();
                 $plannedEnd   = $line->delivery_date->copy()->subDay()->toDateTimeString();
-                $priority     = $line->delivery_date->diffInDays(Carbon::now()) <= $urgentDeliveryDays
+                // Receiver-earlier, argument-later, and day-granular on both
+                // sides. Carbon 3 made diffIn* SIGNED, and this read
+                // `$line->delivery_date->diffInDays(now())` — the other way
+                // round — so a future delivery yielded a NEGATIVE count and
+                // `-25 <= 5` was always true: EVERY MRP work order came out
+                // urgent, and the horizon setting decided nothing. startOfDay on
+                // the left keeps this a whole-day comparison rather than one that
+                // shifts with the time of day the run happens to fire.
+                $daysUntilDelivery = Carbon::now()->startOfDay()->diffInDays($line->delivery_date);
+                $priority = $daysUntilDelivery <= $urgentDeliveryDays
                     ? $urgentPriority
                     : $normalPriority;
 

@@ -16,6 +16,7 @@ use App\Modules\MRP\Enums\MrpRunTrigger;
 use App\Modules\MRP\Models\Bom;
 use App\Modules\MRP\Models\BomItem;
 use App\Modules\MRP\Services\MrpEngineService;
+use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use Carbon\Carbon;
@@ -141,7 +142,43 @@ class MrpDemandIntegrityTest extends TestCase
             ->quantity);
     }
 
-    private function salesOrder(int $quantity, int $delivered = 0): SalesOrder
+    /**
+     * The urgent horizon is 5 days here (setUp), urgent priority 100, normal 50.
+     *
+     * Carbon 3 made diffIn* signed, and the engine asked
+     * `$line->delivery_date->diffInDays(now())` — receiver later, argument
+     * earlier — so a future delivery produced a NEGATIVE day count. `-25 <= 5`
+     * is true, so EVERY MRP-generated work order came out urgent and the
+     * distinction the setting exists to express did nothing.
+     */
+    public function test_a_delivery_beyond_the_urgent_horizon_gets_normal_priority(): void
+    {
+        $this->setOnHand('100.000');
+
+        $this->engine->runForSalesOrder($this->salesOrder(1, 0, 30));
+
+        $this->assertSame(
+            50,
+            WorkOrder::query()->latest('id')->firstOrFail()->priority,
+            'a delivery 30 days out is outside the 5-day urgent horizon'
+        );
+    }
+
+    public function test_a_delivery_inside_the_urgent_horizon_still_gets_urgent_priority(): void
+    {
+        // Guards against over-correcting the comparison into always-normal.
+        $this->setOnHand('100.000');
+
+        $this->engine->runForSalesOrder($this->salesOrder(1, 0, 2));
+
+        $this->assertSame(
+            100,
+            WorkOrder::query()->latest('id')->firstOrFail()->priority,
+            'a delivery 2 days out is inside the 5-day urgent horizon'
+        );
+    }
+
+    private function salesOrder(int $quantity, int $delivered = 0, int $deliveryInDays = 30): SalesOrder
     {
         $user = User::factory()->create();
         $so = SalesOrder::create([
@@ -162,7 +199,7 @@ class MrpDemandIntegrityTest extends TestCase
             'unit_price' => 20,
             'total' => $quantity * 20,
             'quantity_delivered' => $delivered,
-            'delivery_date' => Carbon::today()->addDays(30)->toDateString(),
+            'delivery_date' => Carbon::today()->addDays($deliveryInDays)->toDateString(),
         ]);
 
         return $so->fresh();
