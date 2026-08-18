@@ -5,12 +5,13 @@ import { LuArchiveRestore, LuListChecks, LuPencil, LuPlus, LuTrash2 } from '@/li
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { itemsApi, type ItemListParams } from '@/api/inventory/items';
+import { wasReportedGlobally } from '@/api/client';
 import { ArchiveFilter } from '@/components/ui/ArchiveFilter';
 import { archiveToTrashed, type ArchiveScope } from '@/lib/archiveScope';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
+import { DataTable, NumCell, type BulkAction, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
@@ -20,6 +21,8 @@ import { Modal } from '@/components/ui/Modal';
 import { ItemCategoriesManager } from '@/pages/inventory/categories';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { reportMutationError } from '@/lib/formErrors';
+import { showUndoToast } from '@/lib/undoToast';
 import type { Item } from '@/types/inventory';
 
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
@@ -29,6 +32,67 @@ const stockChip = (status: 'ok' | 'low' | 'critical') => ({
 const DEFAULT_FILTERS: ItemListParams = {
   page: 1, per_page: 25, is_active: 'true',
 };
+
+// ─── Bulk archive / restore plumbing ──────────────────────────────
+//
+// There is no server-side bulk endpoint for items, so a batch is a fan-out of
+// single-row calls. Two limits keep that from turning into a worse experience
+// than clicking twenty times:
+//
+// • CONCURRENCY — the `api` rate limiter is 60 requests/minute per user. Firing
+//   fifty DELETEs at once earns a 429 partway through and leaves the batch
+//   half-applied for a reason that has nothing to do with the items.
+// • LIMIT — above this the fan-out is the wrong tool and the honest answer is to
+//   say so, rather than to accept the click and fail most of it.
+const BULK_LIMIT = 50;
+const BULK_CONCURRENCY = 4;
+
+/**
+ * The user-facing reason a single row failed, or null when there isn't one.
+ *
+ * Null is a real answer, not a gap. `err.message` on an Axios rejection is
+ * "Request failed with status code 422" — see the `reportMutationError` docblock
+ * for why that must never reach a screen. And when the interceptor has already
+ * named the cause (429, offline, timeout, 403) the row still counts as failed,
+ * but quoting a second sentence for it would contradict the first.
+ */
+function rowFailureReason(err: unknown): string | null {
+  if (wasReportedGlobally(err)) return null;
+  if (err instanceof AxiosError) {
+    return (err.response?.data as { message?: string } | undefined)?.message ?? null;
+  }
+  return null;
+}
+
+interface BatchOutcome {
+  /** Ids that succeeded — the exact set an undo has to reverse. */
+  ok: string[];
+  failed: Array<{ reason: string | null }>;
+}
+
+/** Apply `task` to every id with bounded concurrency; never rejects. */
+async function runBatch(ids: string[], task: (id: string) => Promise<unknown>): Promise<BatchOutcome> {
+  const ok: string[] = [];
+  const failed: Array<{ reason: string | null }> = [];
+  for (let i = 0; i < ids.length; i += BULK_CONCURRENCY) {
+    const slice = ids.slice(i, i + BULK_CONCURRENCY);
+    const settled = await Promise.allSettled(slice.map(task));
+    settled.forEach((result, j) => {
+      if (result.status === 'fulfilled') ok.push(slice[j]);
+      else failed.push({ reason: rowFailureReason(result.reason) });
+    });
+  }
+  return { ok, failed };
+}
+
+/** "Archived 7 of 10. 3 failed: …" — never a bare count of the successes. */
+function partialMessage(verb: string, { ok, failed }: BatchOutcome): string {
+  const reason = failed.find((f) => f.reason)?.reason;
+  return `${verb} ${ok.length} of ${ok.length + failed.length}. ${failed.length} failed${
+    reason ? `: ${reason}` : ' — open a failed row to see why.'
+  }`;
+}
+
 
 export default function ItemsListPage() {
   const navigate = useNavigate();
@@ -42,6 +106,7 @@ export default function ItemsListPage() {
   const [filters, setFilters] = useUrlFilters<ItemListParams>(DEFAULT_FILTERS);
  const [confirmDelete, setConfirmDelete] = useState<Item | null>(null);
  const [confirmRestore, setConfirmRestore] = useState<Item | null>(null);
+ const [bulkConfirm, setBulkConfirm] = useState<{ mode: 'archive' | 'restore'; rows: Item[] } | null>(null);
  const [scope, setScope] = useState<ArchiveScope>('active');
 
  const { data, isLoading, isError, refetch } = useQuery({
@@ -76,6 +141,87 @@ export default function ItemsListPage() {
  onError: (e: AxiosError<{ message?: string }>) => {
  toast.error(e.response?.data?.message ?? 'Failed to restore item.');
  } });
+
+ // ─── Bulk archive / restore ─────────────────────────────────────
+ //
+ // Archiving is the one bulk write this page offers, and only because the way
+ // back is already here: `itemsApi.restore`, the per-row restore button, and the
+ // "Archived" scope that lists what was archived. The undo toast reverses the
+ // exact ids that succeeded — including after a partial batch, which is when a
+ // user most needs it and least expects to be handed one.
+ const bulkRestore = useMutation({
+ mutationFn: (ids: string[]) => runBatch(ids, (id) => itemsApi.restore(id)),
+ onSettled: () => qc.invalidateQueries({ queryKey: ['inventory', 'items'] }),
+ onSuccess: (outcome) => {
+ if (outcome.failed.length > 0) {
+ toast.error(partialMessage('Restored', outcome), { duration: 7000 });
+ return;
+ }
+ toast.success(`${outcome.ok.length} item${outcome.ok.length === 1 ? '' : 's'} restored.`);
+ },
+ onError: (e) => reportMutationError(e, 'Bulk restore failed.'),
+ });
+
+ const bulkArchive = useMutation({
+ mutationFn: (ids: string[]) => runBatch(ids, (id) => itemsApi.delete(id)),
+ onSettled: () => qc.invalidateQueries({ queryKey: ['inventory', 'items'] }),
+ onSuccess: (outcome) => {
+ const undo = () => bulkRestore.mutate(outcome.ok);
+ if (outcome.failed.length > 0) {
+ // Failure first, in the toast that carries the count. The undo follows
+ // separately so the half that did archive is still reversible.
+ toast.error(partialMessage('Archived', outcome), { duration: 7000 });
+ if (outcome.ok.length > 0) {
+ showUndoToast({ message: `${outcome.ok.length} archived.`, onUndo: undo, duration: 8000 });
+ }
+ return;
+ }
+ showUndoToast({
+ message: `${outcome.ok.length} item${outcome.ok.length === 1 ? '' : 's'} archived.`,
+ onUndo: undo,
+ });
+ },
+ onError: (e) => reportMutationError(e, 'Bulk archive failed.'),
+ });
+
+ const bulkPending = bulkArchive.isPending || bulkRestore.isPending;
+
+ /**
+  * Which bulk action the current view can honestly offer.
+  *
+  * `Item` carries no `deleted_at`, so under the "All" scope the page cannot tell
+  * an archived row from a live one — and a batch built on that guess would send
+  * half its calls to the wrong endpoint. Offer nothing there rather than
+  * something that looks right and isn't.
+  */
+ const bulkActions: BulkAction<Item>[] | undefined =
+ !canManage || scope === 'with'
+ ? undefined
+ : scope === 'only'
+ ? [{
+ label: 'Restore selected',
+ variant: 'secondary',
+ icon: <LuArchiveRestore size={13} />,
+ onClick: (rows) => {
+ if (rows.length > BULK_LIMIT) {
+ toast.error(`Restore up to ${BULK_LIMIT} items at a time.`);
+ return;
+ }
+ setBulkConfirm({ mode: 'restore', rows });
+ },
+ }]
+ : [{
+ label: 'Archive selected',
+ variant: 'danger',
+ icon: <LuTrash2 size={13} />,
+ onClick: (rows) => {
+ if (rows.length > BULK_LIMIT) {
+ toast.error(`Archive up to ${BULK_LIMIT} items at a time.`);
+ return;
+ }
+ setBulkConfirm({ mode: 'archive', rows });
+ },
+ }];
 
  const columns: Column<Item>[] = [
  { key: 'code', header: 'Code', cell: (r) => (
@@ -122,6 +268,7 @@ export default function ItemsListPage() {
  variant="ghost"
  size="sm"
  iconOnly
+ disabled={bulkPending}
  aria-label={`${scope === 'only' ? 'Restore' : 'Delete'} ${r.code}`}
  onClick={() => (scope === 'only' ? setConfirmRestore(r) : setConfirmDelete(r))}
  className={scope === 'only' ? 'text-muted hover:text-primary' : 'text-muted hover:text-danger-fg'}
@@ -220,6 +367,8 @@ export default function ItemsListPage() {
  meta={data.meta}
  onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
  onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
+ selectable={canManage && scope !== 'with'}
+ bulkActions={bulkActions}
  />
  </div>
  )}
@@ -262,6 +411,31 @@ export default function ItemsListPage() {
  confirmLabel="Restore"
  variant="primary"
  pending={restore.isPending}
+ />
+
+ <ConfirmDialog
+ isOpen={bulkConfirm !== null}
+ onClose={() => setBulkConfirm(null)}
+ onConfirm={() => {
+ if (!bulkConfirm) return;
+ const ids = bulkConfirm.rows.map((r) => r.id);
+ if (bulkConfirm.mode === 'archive') bulkArchive.mutate(ids);
+ else bulkRestore.mutate(ids);
+ setBulkConfirm(null);
+ }}
+ title={
+ bulkConfirm?.mode === 'restore'
+ ? `Restore ${bulkConfirm.rows.length} item${bulkConfirm.rows.length === 1 ? '' : 's'}?`
+ : `Archive ${bulkConfirm?.rows.length ?? 0} item${bulkConfirm?.rows.length === 1 ? '' : 's'}?`
+ }
+ description={
+ bulkConfirm?.mode === 'restore'
+ ? 'They will reappear in active lists and be available for use again.'
+ : 'They can be restored afterwards, and an Undo appears once the batch finishes. Items with existing stock or movement history will be reported as failed and left alone — deactivate those instead.'
+ }
+ confirmLabel={bulkConfirm?.mode === 'restore' ? 'Restore' : 'Archive'}
+ variant={bulkConfirm?.mode === 'restore' ? 'primary' : 'danger'}
+ pending={bulkPending}
  />
 
  {/* Item categories — 2026-08-08: standalone page folded into this modal (same
