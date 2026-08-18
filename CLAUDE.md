@@ -672,3 +672,37 @@ docker compose exec -T db psql -U ogami -d postgres -c "CREATE DATABASE ogami_te
 docker compose exec -T -e DB_DATABASE=ogami_test_verify api php artisan test
 ```
 `phpunit.xml` hardcodes `DB_DATABASE=ogami_test` but PHPUnit `<env>` does not force, so an existing env var wins.
+
+### Browser engine: Lightpanda where it fits, Chromium where it must
+
+`lightpanda` (installed at `~/.local/bin/lightpanda`) is a Zig headless engine that
+speaks CDP, so `chromium.connectOverCDP('http://127.0.0.1:9222')` works after
+`lightpanda serve --host 127.0.0.1 --port 9222`. It is ~9x faster and ~16x lighter
+than Chrome, and worth using for anything crawl-shaped.
+
+**It has no layout engine.** That is the deciding fact, measured against
+`1.0.0-nightly.5266`, not inferred from the docs:
+
+| probe | Lightpanda result |
+|---|---|
+| `connectOverCDP`, `goto`, DOM queries | work |
+| `getBoundingClientRect()` on `<body>` | `{w: 1920, h: 100000000}` — fabricated |
+| `getComputedStyle(el).display` | returns the initial value, not the cascade |
+| `page.title()` on example.com | `""` |
+| `page.setContent()` | closes the target |
+| `page.screenshot()` | fails |
+
+**Use Chromium (required) when the check measures rendering:**
+- the whole Playwright suite in `spa/e2e/` — 93 `page.route` mocks, 8
+  `setViewportSize`, plus `getComputedStyle`/`getBoundingClientRect`/
+  `toBeInViewport` in `ux-hardening-visual.spec.ts`. A UI/UX suite measures
+  layout, which is precisely what Lightpanda does not compute.
+- `scripts/defense-smoke-walk.js` — takes screenshots.
+
+**Lightpanda is a fit (DOM presence and text only, no geometry, no screenshots):**
+- `scripts/panel-gate-browser-check.js`
+- `scripts/dynamic-spa-route-audit.js`
+
+Do not "fix" a geometry assertion to make it pass under Lightpanda — a passing
+`getBoundingClientRect` there is a fabricated number, so the test would assert
+nothing. Reach for Chromium instead.

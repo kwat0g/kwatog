@@ -9,7 +9,7 @@
  *   A depthead who files their own leave must NOT see the approve button,
  *   or clicking it must surface an error.
  */
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { loginAs } from './helpers-extended';
 import { LeaveCreatePage, LeaveDetailPage, SelfServiceLeavePage } from './pages/LeavePages';
 

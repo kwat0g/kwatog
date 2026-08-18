@@ -9,7 +9,7 @@
  * All API calls are mocked. These test the frontend's PermissionGuard +
  * usePermission hook, NOT backend enforcement (that's the curl harness's job).
  */
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { loginAs } from './helpers-extended';
 import { BasePage } from './pages/BasePage';
 

@@ -7,7 +7,7 @@
  * Covers: /self-service/me, /self-service/leave, /self-service/payslips,
  * /self-service/dtr, /self-service/loans, /self-service/profile.
  */
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../fixtures';
 import { loginAs } from '../helpers-extended';
 import { BasePage } from '../pages/BasePage';
 import { SelfServiceLeavePage } from '../pages/LeavePages';

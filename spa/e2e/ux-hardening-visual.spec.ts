@@ -10,7 +10,7 @@
  * The hard assertion throughout is horizontal overflow: a document wider than
  * its viewport at 375px is the failure mode a hardcoded `grid-cols-4` produces.
  */
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 import { loginAs, mockList } from './helpers-extended';
 
 const PHONE = { width: 375, height: 812 };

@@ -6,7 +6,7 @@
  *
  * Status lifecycle: draft → processing → approved → finalized
  */
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { mockAuth, type MockUser } from './helpers';
 
 // ── Constants ─────────────────────────────────────────────────────────────

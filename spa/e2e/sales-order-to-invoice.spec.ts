@@ -9,7 +9,7 @@
  *
  * All API calls are intercepted via page.route() — no backend required.
  */
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { mockAuth, type MockUser } from './helpers';
 
 // ── User fixtures ────────────────────────────────────────────────────────────

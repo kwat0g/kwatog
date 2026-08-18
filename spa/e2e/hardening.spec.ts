@@ -5,7 +5,7 @@
  * HashID obfuscation in URLs, dark mode toggle, sidebar presence, and error state
  * handling in data pages.
  */
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { loginAs, mock500 } from './helpers-extended';
 import { BasePage } from './pages/BasePage';
 

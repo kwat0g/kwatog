@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { loginAs } from './helpers-extended';
 
 const ITEM_ID = 'itemPlan01';

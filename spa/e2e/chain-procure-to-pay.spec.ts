@@ -5,7 +5,7 @@
  *   Purchasing creates PR → submits → department_head approves
  *   → Purchasing converts to PO → PO goes through approval workflow.
  */
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { loginAs } from './helpers-extended';
 import { BasePage } from './pages/BasePage';
 import { PurchaseRequestListPage, PurchaseOrderListPage, PurchaseOrderDetailPage } from './pages/ModulePages';
