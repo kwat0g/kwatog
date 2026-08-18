@@ -117,6 +117,77 @@
         <env name="COMPANY_CERTIFICATION" value="IATF 16949:2016 Certified"/>
         <env name="COMPANY_LOGO_PATH" value=""/>
         <env name="COMPANY_EMAIL_BRAND_NAME" value="Ogami Philippines"/>
+        <!--
+            F-042, second pass. The eight keys above were the list F-042's own
+            Evidence section named, and that list was incomplete. Re-deriving it
+            mechanically instead of trusting it (every env(), $envString() and
+            $envFloat() key under database/seeders and database/migrations,
+            diffed against the names declared in this file) produced 22 keys, of
+            which five were still undeclared after that pass. All five are read
+            by SettingsSeeder and all five sit in its $deploymentKeys list,
+            where a BLANK env value skips the write and leaves the migration's
+            row alone but a NON-blank value overwrites it for the whole suite.
+            So the same gitignored file (.gitignore:12) that F-042 exists to
+            take out of the loop was still deciding these.
+
+            Measured, not argued. With an untracked api/.env.testing carrying
+            hostile values and these five undeclared, a probe seeding
+            SettingsSeeder reported the post-migration row, then the post-seed
+            row:
+
+              company.employee_email_domain   "ogami.ph"  became "hostile-domain.example"
+              company.latitude                14.2860     became 1.2345
+              company.longitude               120.9345    became 2.3456
+              quality.coc.manager_name        row absent  became "HOSTILE MANAGER"
+              quality.coc.manager_role        row absent  became "HOSTILE ROLE"
+
+            and GET /api/v1/landing/contact returned latitude 1.2345 instead of
+            14.286. With the same hostile file in place and these five declared,
+            the probe returned the values pinned below, identical to the run with
+            the file deleted.
+
+            Values, key by key, invented nowhere:
+
+            COMPANY_EMPLOYEE_EMAIL_DOMAIN is migration 0308's literal
+            'ogami.ph'. Consumer: UserProvisioningService:263, via
+            requiredString('company.employee_email_domain'). Note that key was
+            never throwing, because 0308 already supplied the row and the blank
+            env value skipped the write; what the hostile file did was replace
+            it, and tests/Feature/HR/UserProvisioningTest.php:94 asserts the
+            literal 'juan.cruz@ogami.ph'.
+
+            COMPANY_LATITUDE and COMPANY_LONGITUDE are migration 0442's
+            literals, which supersede migration 0427's placeholder pair
+            (14.3294, 120.9367 — a point in Dasmariñas city proper, several km
+            off the plant). Consumer: LandingContactController:23,24, which
+            range-checks and casts to float. One measured artefact worth
+            recording: SettingsSeeder reads these through $envFloat, so the
+            declared text round-trips through a PHP float and the stored jsonb
+            becomes 14.286 rather than the migration's 14.2860. The resolved
+            NUMBER is identical, every reader casts to float, and no code
+            compares these rows as text outside migration 0442's own guard,
+            which runs before any seeder.
+
+            QUALITY_COC_MANAGER_NAME and QUALITY_COC_MANAGER_ROLE are
+            deliberately EMPTY. No migration seeds either (measured: both rows
+            are absent after a full migrate), the application's own fallback is
+            '' at CoCService:138,139, api/.env.example leaves both blank, and
+            resources/views/pdf/coc.blade.php:147,148 already substitutes '—'
+            and 'Quality Management' when they are empty. A fabricated manager
+            name would put a fictitious human's signature on every certificate
+            of conformance the suite renders, which is worse than blank.
+
+            NET EFFECT: no resolved value moves. Three keys restate what a
+            migration already put in the row, two restate the '' the seeder
+            already wrote. What changes is that an untracked file can no longer
+            defeat the $deploymentKeys skip for any of them. None is forced,
+            for the reason given at the top of this block.
+        -->
+        <env name="COMPANY_EMPLOYEE_EMAIL_DOMAIN" value="ogami.ph"/>
+        <env name="COMPANY_LATITUDE" value="14.2860"/>
+        <env name="COMPANY_LONGITUDE" value="120.9345"/>
+        <env name="QUALITY_COC_MANAGER_NAME" value=""/>
+        <env name="QUALITY_COC_MANAGER_ROLE" value=""/>
         <!-- TAX_PH_VAT_RATE: SettingsSeeder seeds tax.ph.vat_rate from this env;
              an empty value now fails TaxPolicyService::requiredVatRate() (the
              strict rate validation added 2026-08-08), so every invoice/bill/

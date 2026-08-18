@@ -78,8 +78,42 @@ jobs:
     # client with a null REVERB_APP_KEY. Both killed `composer install`, which is
     # why PHPStan and PHPUnit had never once executed in CI. See finding F-043.
     #
-    # These values mirror api/phpunit.xml's <env> block, which is the same
-    # environment the suite declares for itself. Keep the two in step.
+    # SCOPE OF THIS BLOCK, and what "in step with api/phpunit.xml" means.
+    # Narrowed 2026-08-19: the previous two lines said this block mirrors
+    # api/phpunit.xml's <env> block and that the two must be kept in step,
+    # without saying which keys. They are 24 keys apart and always were, so
+    # read literally the instruction asks for a mirror that would be wrong.
+    #
+    # This block exists for the steps that boot the framework BEFORE PHPUnit
+    # runs, which PHPUnit's own <env> cannot reach: `composer install
+    # --optimize-autoloader` (its post-autoload-dump hook runs `artisan
+    # package:discover`) and larastan's kernel bootstrap. Neither runs a
+    # migration or a seeder. So the keys that belong here are exactly the
+    # framework-boot tier:
+    #   * APP_ENV, APP_KEY -- environment selection and the encrypter
+    #   * DB_*, REDIS_*    -- connection coordinates
+    #   * CACHE_STORE, SESSION_DRIVER, QUEUE_CONNECTION, MAIL_MAILER,
+    #     BROADCAST_CONNECTION -- drivers a boot may resolve
+    # Those are the keys to keep in step with api/phpunit.xml, and "in step"
+    # means the same DRIVER choice, not the same literal. DB_HOST (127.0.0.1
+    # here, `db` there) and DB_PASSWORD (ogami_ci_pw vs ogami_dev_pw) are
+    # deliberately DIFFERENT: a GitHub runner's service containers are not
+    # Compose's. That divergence is precisely why those phpunit.xml entries
+    # carry no force="true" -- CI must be able to outrank the file. See F-042.
+    # BROADCAST_CONNECTION is the cautionary case in this tier: it read 'null'
+    # in phpunit.xml and 'log' here and the two silently disagreed, which is
+    # what a real "keep in step" instruction is for.
+    #
+    # The remaining keys in api/phpunit.xml (24 as of 2026-08-19) are
+    # PHPUnit-only and must NOT be mirrored here: the SettingsSeeder inputs
+    # (COMPANY_*, ADMIN_*, QUALITY_COC_*, ACCOUNTING_FUNCTIONAL_CURRENCY_CODE,
+    # TAX_PH_VAT_RATE, PDF_FOOTER_DISCLAIMER) plus two test-only tunings
+    # (BCRYPT_ROUNDS, TELESCOPE_ENABLED). No step governed by this block runs a
+    # seeder, so copying them here would be cargo cult -- maintenance surface
+    # for values nothing in this tier reads. phpunit.xml is their single home,
+    # and since a <php><env> entry is applied before Laravel's immutable
+    # Dotenv it already outranks every env file on every machine, which is the
+    # remedy F-042 actually landed.
     env:
       APP_ENV: testing
       APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
