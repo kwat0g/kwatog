@@ -355,7 +355,15 @@ class AlertEngineService
                     return;
                 }
 
-                $daysOver = $today->diffInDays(Carbon::parse($row->due_date));
+                // Receiver-earlier, argument-later. Carbon 3 made diffIn* SIGNED,
+                // and this read $today->diffInDays($dueDate) — the other way
+                // round — so an overdue invoice yielded a NEGATIVE count. The
+                // query above already filters due_date < today - warningDays, so
+                // every row reaching here is overdue and `-75 >= 60` was always
+                // false: the critical band could never be reached, and the
+                // negative number was rendered into the message and stored in
+                // days_overdue. Cast because Carbon 3 returns a float.
+                $daysOver = (int) Carbon::parse($row->due_date)->diffInDays($today);
                 if ($daysOver >= $criticalDays) {
                     $this->raise(
                         AlertType::ArOverdue60,
