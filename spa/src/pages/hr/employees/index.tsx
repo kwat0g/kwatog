@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { LuPlus, LuKeyRound, LuCoins, LuDownload} from '@/lib/icons';
+import { LuPlus, LuKeyRound, LuCoins, LuDownload } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { employeesApi, type EmployeeListParams } from '@/api/hr/employees';
 import { departmentsApi } from '@/api/hr/departments';
@@ -125,6 +125,12 @@ export default function EmployeesListPage() {
     queryKey: ['hr', 'employee-options'],
     queryFn: employeesApi.options,
     staleTime: 5 * 60 * 1000,
+    // Same gate as the list below. This page is also the salary-adjustments
+    // queue, and a checker reaches it holding hr.salary_adjustments.view WITHOUT
+    // hr.employees.view — so firing these unconditionally 403'd on arrival and
+    // greeted them with "You do not have permission to perform this action."
+    // The filter dropdowns these feed already fall back to [].
+    enabled: canViewEmployees,
   });
   const statusLabel = new Map(
     (employeeOptions?.statuses ?? []).map((status) => [status.value, status.label]),
@@ -134,6 +140,7 @@ export default function EmployeesListPage() {
     queryKey: ['hr', 'employees', filters],
     queryFn: () => employeesApi.list(filters),
     placeholderData: (prev) => prev,
+    enabled: canViewEmployees,
   });
 
   // KPI tiles are server-side aggregates over the WHOLE filtered set. Counting
@@ -340,7 +347,7 @@ export default function EmployeesListPage() {
                 data={data.data}
                 meta={data.meta}
                 onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
- onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
+                onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
                 onSort={(sort, direction) =>
                   setFilters((f) => ({ ...f, sort, direction, page: 1 }))
                 }

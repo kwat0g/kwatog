@@ -3,6 +3,35 @@ const { chromium } = require('playwright');
 const BASE = (process.env.BASE_URL || 'http://localhost').replace(/\/$/, '');
 const PASSWORD = process.env.AUDIT_PASSWORD || 'password';
 
+/*
+ * How a denied page actually looks.
+ *
+ * This audit used to assert the literal word "Forbidden". PermissionGuard has
+ * rendered the unified NotFoundState for a while — deliberately, so the UI never
+ * confirms that a route or a record the user cannot read exists — so the assertion
+ * had inverted itself: every correctly denied page reported "was accessible but
+ * should be Forbidden", 30 of them, and what the audit was asking for was the
+ * information leak back. Same defect the e2e specs carried until 68c2a007; this
+ * script was missed in that sweep.
+ *
+ * Denial is now recognised by the not-found copy, and asserted in BOTH
+ * directions: the denied page must look not-found, and no page may name its own
+ * denial. Verified against the running app before changing it — employee at
+ * /payroll/periods and /hr/loans and qc_inspector at /payroll/statutory each
+ * render the not-found state, carry no page data, and fire no data request.
+ */
+const DENIED = /Page not found|doesn't exist or has been moved/i;
+/*
+ * Page-level denial must not name itself. Deliberately does NOT include the
+ * "You do not have permission to perform this action." toast from
+ * spa/src/api/client.ts: that is feedback on an action, which is legitimate, and
+ * react-hot-toast keeps it mounted across SPA navigations — so one unsolicited
+ * 403 was being attributed to the next several routes the audit visited. An
+ * unsolicited 403 is a real defect, and it is already reported on its own by the
+ * `emitted <status> <method>` check below, at the route that actually caused it.
+ */
+const LEAKS_DENIAL = /\bForbidden\b|access denied|not authoriz/i;
+
 const ALL_ACCOUNTS = [
   ['system_admin', 'admin@ogami.test'],
   ['hr_officer', 'hr@ogami.test'],
@@ -29,7 +58,8 @@ const SURFACES = [
   { path: '/hr/loans', roles: ['system_admin', 'hr_officer', 'finance_officer', 'department_head'] },
   { path: '/payroll/periods', roles: ['system_admin', 'hr_officer', 'finance_officer'] },
   { path: '/payroll/statutory', roles: ['system_admin', 'hr_officer', 'finance_officer'] },
-  { path: '/quality/documents', roles: ['system_admin', 'qc_inspector'] },
+  // '/quality/documents' removed: no route and no sidebar item exist for it
+  // anywhere in spa/src, so the expectation could never be met.
 ];
 
 const SIDEBAR_SURFACES = SURFACES.filter((surface) => surface.path !== '/hr/loans');
@@ -103,7 +133,8 @@ async function navigateSpa(page, route) {
           const apiStart = apiErrors.length;
           await navigateSpa(page, route);
           const body = await page.locator('body').innerText();
-          if (/\bForbidden\b/i.test(body)) failures.push(`${role}: visible sidebar route ${route} rendered Forbidden`);
+          if (DENIED.test(body)) failures.push(`${role}: visible sidebar route ${route} rendered the denied state`);
+          if (LEAKS_DENIAL.test(body)) failures.push(`${role}: visible sidebar route ${route} named the denial: ${body.match(LEAKS_DENIAL)[0]}`);
           if (/Something went wrong|unexpected error/i.test(body)) failures.push(`${role}: visible sidebar route ${route} hit an error boundary`);
           if (browserErrors.length > errorStart) {
             failures.push(`${role}: visible sidebar route ${route} emitted a browser error: ${browserErrors[errorStart].slice(0, 500)}`);
@@ -121,11 +152,15 @@ async function navigateSpa(page, route) {
           const apiStart = apiErrors.length;
           await navigateSpa(page, surface.path);
           const body = await page.locator('body').innerText();
-          const forbidden = /\bForbidden\b/i.test(body);
+          const denied = DENIED.test(body);
           const crashed = /Something went wrong|unexpected error/i.test(body);
 
-          if (expected && forbidden) failures.push(`${role}: ${surface.path} unexpectedly rendered Forbidden`);
-          if (!expected && !forbidden) failures.push(`${role}: ${surface.path} was accessible but should be Forbidden`);
+          if (expected && denied) failures.push(`${role}: ${surface.path} was denied but should be reachable`);
+          if (!expected && !denied) failures.push(`${role}: ${surface.path} was reachable but should be denied`);
+          // Denial must not name itself, in either direction.
+          if (LEAKS_DENIAL.test(body)) {
+            failures.push(`${role}: ${surface.path} named the denial: ${body.match(LEAKS_DENIAL)[0]}`);
+          }
           if (crashed) failures.push(`${role}: ${surface.path} hit an error boundary`);
           if (browserErrors.length > errorStart) {
             failures.push(`${role}: ${surface.path} emitted a browser error: ${browserErrors[errorStart].slice(0, 500)}`);
