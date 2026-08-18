@@ -34,12 +34,26 @@ interface PageHeaderProps {
 /**
  * Flatten a `title` node to plain text.
  *
- * `omitChips` drops <Chip> subtrees. Detail-page titles are overwhelmingly
- * "<record number> <status Chip>" — 30-odd pages do it — and a breadcrumb has
- * to name the record, not report its state: the leave detail trail read
- * "HR › Leaves › pending hr", which identifies nothing, changes under the user
- * mid-approval, and printed the status twice on one screen. The tab title keeps
- * the chip, where the extra word is the only progress signal a pinned tab has.
+ * `omitChips` drops `<Chip>` subtrees. 26 detail pages build their title as
+ * "<record number or name> <Chip>", and a breadcrumb has to name the record, not
+ * report its state: the leave detail trail read "HR › Leaves › pending hr", which
+ * identifies no request, changes under the user mid-approval, and printed the
+ * status twice on one screen. The tab title keeps the chip, where the extra word
+ * is the only progress signal a pinned tab has.
+ *
+ * It drops EVERY chip, not only status ones — on 2 of the 26 the chip carries
+ * identity (a customer `code`, an inspection-spec `v{version}`). Both of those
+ * titles also spell the record out beside the chip, so the crumb still names it;
+ * a page that put its only identifier in a chip would need `crumbLabel`.
+ *
+ * The test is `node.type === Chip`, by identity. It is exact and type-checked —
+ * a rename or move of Chip breaks the build, where a string marker would rot in
+ * silence — and it cannot false-positive on an unrelated component. The residual
+ * hole is narrow: a wrapper that takes its text as CHILDREN
+ * (`<StatusChip>{label}</StatusChip>`) would leak the status back into all 26
+ * crumbs, whereas the more natural `<StatusChip status={x} />` cannot, since its
+ * text is produced inside a render this function never invokes. The trail
+ * assertions in `e2e/chain-leave.spec.ts` are what catch that case.
  */
 function textFromNode(node: ReactNode, omitChips = false): string {
   if (typeof node === 'string' || typeof node === 'number') return String(node);

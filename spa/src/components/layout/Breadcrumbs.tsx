@@ -98,8 +98,9 @@ const titleize = (segment: string): string => {
 
 export function Breadcrumbs() {
  const { pathname } = useLocation();
- // PageHeader publishes the record's human name (the same string it puts in
- // document.title). Only trust it for the route that registered it.
+ // PageHeader publishes the record's human name: its title text with any Chip
+ // left out, so the trail names the record where document.title also reports its
+ // status. Only trust it for the route that registered it.
  const override = useBreadcrumbStore((s) => (s.path === pathname ? s.label : null));
  const segments = pathname.split('/').filter(Boolean);
 
