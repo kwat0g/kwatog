@@ -12,6 +12,7 @@ use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -145,5 +146,58 @@ class RawPunchImportTest extends TestCase
             'employee_id' => $emp->id,
             'date'        => '2026-04-10',
         ]);
+    }
+
+    public function test_punches_on_different_days_do_not_collapse_into_one_session(): void
+    {
+        $emp = $this->employee();
+
+        // Two ordinary days. Every real biometric export spans many days, so a
+        // session boundary that never fires collapses them into one record.
+        $file = $this->csv(
+            "employee_no,timestamp,direction\n".
+            "{$emp->employee_no},2026-05-04 08:00:00,in\n".
+            "{$emp->employee_no},2026-05-04 17:00:00,out\n".
+            "{$emp->employee_no},2026-05-05 08:00:00,in\n".
+            "{$emp->employee_no},2026-05-05 17:00:00,out\n"
+        );
+
+        $result = $this->svc->importRawPunches($file);
+
+        $this->assertSame(2, $result['imported'], 'each day is its own record: '.json_encode($result['errors']));
+        $this->assertDatabaseHas('attendances', ['employee_id' => $emp->id, 'date' => '2026-05-04']);
+        $this->assertDatabaseHas('attendances', ['employee_id' => $emp->id, 'date' => '2026-05-05']);
+    }
+
+    public function test_the_finalized_period_guard_reads_payroll_periods_once_per_import(): void
+    {
+        $emp = $this->employee();
+
+        // Six day records for one employee. The guard is a per-date question, so
+        // a per-row implementation asks the database the same thing six times.
+        // A real monthly import is ~200 employees x ~30 days, so the multiplier
+        // is ~6,000 identical queries rather than six.
+        $rows = '';
+        foreach (['2026-05-04', '2026-05-05', '2026-05-06', '2026-05-07', '2026-05-08', '2026-05-11'] as $day) {
+            $rows .= "{$emp->employee_no},{$day} 08:00:00,in\n";
+            $rows .= "{$emp->employee_no},{$day} 17:00:00,out\n";
+        }
+        $file = $this->csv("employee_no,timestamp,direction\n".$rows);
+
+        $periodQueries = 0;
+        DB::listen(function ($query) use (&$periodQueries): void {
+            if (str_contains($query->sql, 'payroll_periods')) {
+                $periodQueries++;
+            }
+        });
+
+        $result = $this->svc->importRawPunches($file);
+
+        $this->assertSame(6, $result['imported'], 'fixture must genuinely import six day records: '.json_encode($result['errors']));
+        $this->assertSame(
+            1,
+            $periodQueries,
+            'the finalized-period ranges must be read once per import, not once per day record'
+        );
     }
 }

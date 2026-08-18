@@ -102,7 +102,18 @@ class PunchSessionizer
             $firstIn = Carbon::parse($current['in']);
             // Same session if within 18h of the first IN (covers long shifts +
             // cross-midnight) AND not more than 1 calendar day apart.
-            $withinSession = $ts->diffInHours($firstIn) < 18 && $ts->copy()->startOfDay()->diffInDays($firstIn->copy()->startOfDay()) <= 1;
+            //
+            // abs() is load-bearing. Carbon 3 (nesbot/carbon 3.x, pulled in by
+            // Laravel 12) made diffIn* SIGNED, so `$ts->diffInHours($firstIn)`
+            // is NEGATIVE for every punch after the first — measured at -177.0
+            // for a punch seven days later. Both comparisons were therefore
+            // always true, no session boundary ever fired, and an employee's
+            // entire file collapsed into ONE record spanning it end to end.
+            // Rows arrive sorted ascending, so abs() only normalises the sign;
+            // it also keeps this correct if Carbon changes the default again.
+            $hoursApart = abs($ts->diffInHours($firstIn));
+            $daysApart = abs($ts->copy()->startOfDay()->diffInDays($firstIn->copy()->startOfDay()));
+            $withinSession = $hoursApart < 18 && $daysApart <= 1;
 
             if ($withinSession) {
                 $current['last'] = $r['ts'];
