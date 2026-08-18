@@ -275,6 +275,9 @@ class MovementGlPostingService
                 $this->settings->requiredString('accounting.accounts.material_consumption_code'),
                 true,  // DR inventory, CR consumption (reversal)
             ],
+            // Left unmapped: a StockMovementType with no GL mapping means a new
+            // enum case shipped without its posting rule. That is a developer
+            // omission to fix, and a 422 would hide it behind a form error.
             default => throw new \RuntimeException("No GL mapping for movement type {$type->value}"),
         };
     }

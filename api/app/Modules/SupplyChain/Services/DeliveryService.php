@@ -958,6 +958,10 @@ class DeliveryService
 
             $path = "deliveries/{$delivery->id}/proofs/coc-{$cocNumber}.pdf";
             if (! Storage::disk('local')->put($path, $built['contents'])) {
+                // Storage fault, not a business rule — deliberately NOT a
+                // DeliveryInvoiceHandoffException/BusinessRuleException, both of
+                // which this module's catch arms treat as "expected, degrade to
+                // manual". A failed write must stay retryable.
                 throw new RuntimeException('Unable to store the generated certificate of conformance.');
             }
 

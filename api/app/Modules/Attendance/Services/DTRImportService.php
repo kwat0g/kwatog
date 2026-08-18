@@ -50,6 +50,11 @@ class DTRImportService
         $rowNum = 1;
         $total = 0;
 
+        // The \RuntimeExceptions below are row-level control flow, not HTTP
+        // errors: each is caught by this loop's own `catch (Throwable)` and
+        // collected into $errors as {row, message}, which is the right UX for a
+        // CSV import — one bad line must not fail the file. Converting them to
+        // BusinessRuleException would change nothing and only obscure that.
         while (($row = fgetcsv($stream)) !== false) {
             $rowNum++;
             $total++;

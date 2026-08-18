@@ -166,6 +166,11 @@ class AccountingPeriodService
     private function assertValidMonth(int $month): void
     {
         if ($month < 1 || $month > 12) {
+            // Left as an unmapped RuntimeException: every HTTP caller validates
+            // `month` with min:1|max:12 in its FormRequest, so reaching here
+            // means an internal caller (cron, seeder, another service) passed a
+            // bad month. That is a caller bug to fix, not a message to show an
+            // operator, and a 422 would make it look like their input.
             throw new RuntimeException("Invalid month {$month}; expected 1-12.");
         }
     }

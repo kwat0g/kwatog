@@ -34,6 +34,9 @@ class GovernmentContributionTableImportService
 
         $stream = fopen($path, 'r');
         if ($stream === false) {
+            // The operator-facing case is the BusinessRuleException above; an
+            // fopen that fails after is_readable() passed is an I/O fault or a
+            // race, with no user remedy. Left unmapped.
             throw new RuntimeException("Could not open {$path}.");
         }
 

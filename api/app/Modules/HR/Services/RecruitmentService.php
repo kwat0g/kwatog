@@ -76,6 +76,8 @@ class RecruitmentService
     {
         $path = $resume->store('recruitment/resumes/'.now()->format('Y/m'), 'local');
         if ($path === false) {
+            // Storage fault, not a rejected application. Left unmapped so the
+            // applicant is not told to fix a file that was fine.
             throw new \RuntimeException('Unable to store the uploaded resume.');
         }
 
@@ -374,6 +376,8 @@ class RecruitmentService
                 return $code;
             }
         }
+        // Five collisions on a 31^6 space is a bug or a corrupt index, never the
+        // applicant's doing. Left unmapped.
         throw new \RuntimeException('Failed to generate unique tracking code after 5 attempts');
     }
 

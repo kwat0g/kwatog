@@ -355,6 +355,11 @@ class ForecastingService
             return [$qty, $this->confidenceFromSeries($values, $qty)];
         }
 
+        // Unreachable from a request: the controller validates
+        // `in:moving_avg,weighted_avg` and compute() re-checks with an
+        // InvalidArgumentException before we get here. Left unmapped so that if
+        // a third method is ever added without a branch, it surfaces as the
+        // programming error it is instead of a 422 blaming the user.
         throw new RuntimeException("Unsupported method: {$method}");
     }
 

@@ -321,6 +321,10 @@ class StockAdjustmentService
         }
         $enum = StockAdjustmentReason::tryFrom($reasonCode);
         if (! $enum) {
+            // Left unmapped: StoreStockAdjustmentRequest validates reason_code
+            // with Rule::in(StockAdjustmentReason::values()), and the internal
+            // callers (stock-count reconciliation) pass enum instances. An
+            // unknown code therefore means a caller bug, not operator input.
             throw new RuntimeException("Invalid stock adjustment reason code '{$reasonCode}'.");
         }
         return $enum;
