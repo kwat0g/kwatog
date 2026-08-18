@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { LuPlus } from '@/lib/icons';
+import { LuCheck, LuPlus, LuTriangleAlert } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { overtimeApi, type OvertimeListParams } from '@/api/attendance/overtime';
 import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { DataTable, NumCell, StackedCell, type Column } from '@/components/ui/DataTable';
+import { DataTable, NumCell, StackedCell, type BulkAction, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { Modal, ModalFooter } from '@/components/ui/Modal';
@@ -19,6 +19,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { formatDate } from '@/lib/formatDate';
+import { reportMutationError } from '@/lib/formErrors';
 import type { OvertimeRequest } from '@/types/attendance';
 
 const DEFAULT_FILTERS: OvertimeListParams = {
@@ -72,17 +73,65 @@ export default function OvertimeListPage() {
  onError: () => toast.error('Failed to reject.'),
  });
 
- // L-23 — bulk approve every visible pending request in one click.
+ // L-23 — bulk approve. Two entry points share this mutation: the header
+ // button (every visible pending request) and the table's bulk-action bar
+ // (exactly the rows the user ticked).
+ //
+ // `selected` is carried through the mutation because the server only reports
+ // what it approved. Without the number asked for, "Approved 7" cannot be told
+ // apart from "Approved 7 of 10" — and that gap is the whole bug this reporting
+ // replaced: the old toast announced a partial failure through `toast.success`
+ // and sent the user to "notifications" for reasons the response already had.
  const bulkApproveMutation = useMutation({
- mutationFn: (ids: string[]) => overtimeApi.bulkApprove(ids),
- onSuccess: (res) => {
- qc.invalidateQueries({ queryKey: ['attendance', 'overtime'] });
- const failed = res.failed.length;
- if (failed === 0) toast.success(`Approved ${res.approved_count} request${res.approved_count === 1 ? '' : 's'}.`);
- else toast.success(`Approved ${res.approved_count}; ${failed} failed (see notifications).`);
+ mutationFn: async (rows: OvertimeRequest[]) => {
+ // Only pending rows are submittable; anything else would come back as a
+ // failure the UI could have predicted. They are still counted, so the
+ // report is against what the user selected rather than what we sent.
+ const pending = rows.filter((r) => r.status === 'pending');
+ const res = await overtimeApi.bulkApprove(pending.map((r) => r.id));
+ return { ...res, selected: rows.length, untouched: rows.length - pending.length };
  },
- onError: () => toast.error('Bulk approve failed.'),
+ // A batch that rejects partway may still have committed rows, so refetch
+ // regardless of outcome rather than only on success.
+ onSettled: () => qc.invalidateQueries({ queryKey: ['attendance', 'overtime'] }),
+ onSuccess: (res) => {
+ const reason = res.failed[0]?.reason;
+ if (res.failed.length > 0) {
+ toast.error(
+ `Approved ${res.approved_count} of ${res.selected}. ${res.failed.length} failed${reason ? `: ${reason}` : '.'}`,
+ { duration: 6000 },
+ );
+ return;
+ }
+ if (res.approved_count < res.selected) {
+ // No failures and "everything approved" are not the same thing: rows
+ // that were not pending were never sent, and the server silently drops
+ // ids it cannot decode.
+ toast(
+ `Approved ${res.approved_count} of ${res.selected}. ${res.selected - res.approved_count} left unchanged — not pending approval.`,
+ { icon: <LuTriangleAlert size={16} aria-hidden="true" />, duration: 6000 },
+ );
+ return;
+ }
+ toast.success(`Approved ${res.approved_count} request${res.approved_count === 1 ? '' : 's'}.`);
+ },
+ onError: (e) => reportMutationError(e, 'Bulk approve failed. No requests were approved.'),
  });
+
+ const bulkActions: BulkAction<OvertimeRequest>[] = [
+ {
+ label: 'Approve selected',
+ variant: 'primary',
+ icon: <LuCheck size={13} />,
+ onClick: (rows) => {
+ if (!rows.some((r) => r.status === 'pending')) {
+ toast.error('None of the selected requests are pending approval.');
+ return;
+ }
+ bulkApproveMutation.mutate(rows);
+ },
+ },
+ ];
 
  const all = data?.data ?? [];
  const counts = {
@@ -115,7 +164,7 @@ export default function OvertimeListPage() {
  align: 'right' as const,
  cell: (r: OvertimeRequest) => r.status !== 'pending' ? null : (
  <div className="flex items-center justify-end gap-1">
- <Button variant="primary" size="xs" onClick={() => { setConfirmApprove(r.id); }} disabled={approveMutation.isPending}>Approve</Button>
+ <Button variant="primary" size="xs" onClick={() => { setConfirmApprove(r.id); }} disabled={approveMutation.isPending || bulkApproveMutation.isPending}>Approve</Button>
  <Button variant="danger" size="xs" onClick={() => { setReject(r); }}>Reject</Button>
  </div>
  ),
@@ -210,6 +259,8 @@ export default function OvertimeListPage() {
  meta={data.meta}
  onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
  onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
+ selectable={can('attendance.ot.approve')}
+ bulkActions={can('attendance.ot.approve') ? bulkActions : undefined}
  /></div>
  )}
 
@@ -235,8 +286,8 @@ export default function OvertimeListPage() {
  isOpen={showBulkApprove}
  onClose={() => setShowBulkApprove(false)}
  onConfirm={() => {
- const ids = grouped.pending.slice(0, 100).map((o) => o.id);
- if (ids.length > 0) bulkApproveMutation.mutate(ids);
+ const rows = grouped.pending.slice(0, 100);
+ if (rows.length > 0) bulkApproveMutation.mutate(rows);
  setShowBulkApprove(false);
  }}
  title={`Approve ${Math.min(counts.pending, 100)} pending overtime request${Math.min(counts.pending, 100) === 1 ? '' : 's'}?`}
