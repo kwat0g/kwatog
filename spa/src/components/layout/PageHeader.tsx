@@ -3,6 +3,7 @@ import { LuArrowLeft } from '@/lib/icons';
 import { isValidElement, useEffect, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { RefreshingIndicator } from './RefreshingIndicator';
+import { Chip } from '@/components/ui/Chip';
 import { MODULE_LABELS } from '@/lib/moduleLabels';
 import { useBreadcrumbStore } from '@/stores/breadcrumbStore';
 
@@ -17,8 +18,9 @@ interface PageHeaderProps {
   className?: string;
   /**
    * Overrides the breadcrumb label for this route's final segment. Defaults to
-   * the header's own title text, which is right for almost every page — pass
-   * this only when the title is too long to sit in the trail.
+   * the header's own title text with any status `<Chip>` left out, which is
+   * right for almost every page — pass this only when the title is too long to
+   * sit in the trail.
    */
   crumbLabel?: string;
   /**
@@ -29,14 +31,27 @@ interface PageHeaderProps {
   refreshingQueryKey?: readonly unknown[];
 }
 
-function textFromNode(node: ReactNode): string {
+/**
+ * Flatten a `title` node to plain text.
+ *
+ * `omitChips` drops <Chip> subtrees. Detail-page titles are overwhelmingly
+ * "<record number> <status Chip>" — 30-odd pages do it — and a breadcrumb has
+ * to name the record, not report its state: the leave detail trail read
+ * "HR › Leaves › pending hr", which identifies nothing, changes under the user
+ * mid-approval, and printed the status twice on one screen. The tab title keeps
+ * the chip, where the extra word is the only progress signal a pinned tab has.
+ */
+function textFromNode(node: ReactNode, omitChips = false): string {
   if (typeof node === 'string' || typeof node === 'number') return String(node);
-  if (Array.isArray(node)) return node.map(textFromNode).join(' ');
+  if (Array.isArray(node)) return node.map((child) => textFromNode(child, omitChips)).join(' ');
   if (isValidElement(node)) {
-    return textFromNode((node.props as { children?: ReactNode }).children);
+    if (omitChips && node.type === Chip) return '';
+    return textFromNode((node.props as { children?: ReactNode }).children, omitChips);
   }
   return '';
 }
+
+const flatten = (text: string): string => text.replace(/\s+/g, ' ').trim();
 
 export function PageHeader({
   title,
@@ -51,7 +66,7 @@ export function PageHeader({
 }: PageHeaderProps) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const documentTitle = textFromNode(title).replace(/\s+/g, ' ').trim();
+  const documentTitle = flatten(textFromNode(title));
   const setCrumb = useBreadcrumbStore((s) => s.set);
   const clearCrumb = useBreadcrumbStore((s) => s.clear);
 
@@ -59,7 +74,7 @@ export function PageHeader({
   // knows the record's human name, so lend it rather than making every page
   // hand-write a second breadcrumb array (which is what used to happen, and
   // produced two trails on screen that disagreed with each other).
-  const publishedCrumb = crumbLabel ?? documentTitle;
+  const publishedCrumb = crumbLabel ?? flatten(textFromNode(title, true));
   useEffect(() => {
     if (!publishedCrumb) return;
     setCrumb(pathname, publishedCrumb);
