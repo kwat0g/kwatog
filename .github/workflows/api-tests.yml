@@ -81,8 +81,10 @@ jobs:
     # SCOPE OF THIS BLOCK, and what "in step with api/phpunit.xml" means.
     # Narrowed 2026-08-19: the previous two lines said this block mirrors
     # api/phpunit.xml's <env> block and that the two must be kept in step,
-    # without saying which keys. They are 24 keys apart and always were, so
-    # read literally the instruction asks for a mirror that would be wrong.
+    # without saying which keys. The two blocks were never a mirror — the gap
+    # was 11 PHPUnit-only keys when that instruction was written, 19 by the
+    # time F-042's declarations began, and 24 now — so read literally the
+    # instruction asks for a mirror that would be wrong.
     #
     # This block exists for the steps that boot the framework BEFORE PHPUnit
     # runs, which PHPUnit's own <env> cannot reach: `composer install
@@ -91,13 +93,18 @@ jobs:
     # migration or a seeder. So the keys that belong here are exactly the
     # framework-boot tier:
     #   * APP_ENV, APP_KEY -- environment selection and the encrypter
-    #   * DB_*, REDIS_*    -- connection coordinates
+    #   * DB_*             -- connection coordinates
     #   * CACHE_STORE, SESSION_DRIVER, QUEUE_CONNECTION, MAIL_MAILER,
     #     BROADCAST_CONNECTION -- drivers a boot may resolve
-    # Those are the keys to keep in step with api/phpunit.xml, and "in step"
-    # means the same DRIVER choice, not the same literal. DB_HOST (127.0.0.1
-    # here, `db` there) and DB_PASSWORD (ogami_ci_pw vs ogami_dev_pw) are
-    # deliberately DIFFERENT: a GitHub runner's service containers are not
+    # REDIS_HOST/REDIS_PORT are CI-ONLY and are deliberately NOT in that list:
+    # api/phpunit.xml declares no REDIS_* at all, so there is nothing there to
+    # keep them in step with, and copying them over would be wrong -- Compose
+    # reaches redis by service name, not 127.0.0.1.
+    # The listed keys are the ones to keep in step with api/phpunit.xml, and
+    # "in step" means the same DRIVER choice, not the same literal. DB_HOST
+    # (127.0.0.1 here, `db` there) and DB_PASSWORD (ogami_ci_pw vs
+    # ogami_dev_pw) are deliberately DIFFERENT: a GitHub runner's service
+    # containers are not
     # Compose's. That divergence is precisely why those phpunit.xml entries
     # carry no force="true" -- CI must be able to outrank the file. See F-042.
     # BROADCAST_CONNECTION is the cautionary case in this tier: it read 'null'
