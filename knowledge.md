@@ -39,10 +39,10 @@ API tests directly: `docker compose exec api php artisan test`.
 ```
 React 18 SPA (Vite + TS) ──HTTP-only cookies──▶ Laravel 11 REST API (PHP 8.3)
                                                        │
-                  PostgreSQL 16 · Redis 7 · Meilisearch · Reverb (WS)
+                  PostgreSQL 16 · Redis 7 · Reverb (WS)
 ```
 
-Services in `docker-compose.yml`: `api`, `spa`, `nginx`, `db`, `redis`, `meilisearch`, `reverb`, and `queue`. Email is delivered through the Brevo SMTP relay configured in `api/.env`.
+Services in `docker-compose.yml`: `api`, `spa`, `nginx`, `db`, `redis`, `reverb`, and `queue`. Email is delivered through the Brevo SMTP relay configured in `api/.env`.
 
 ### Key directories
 

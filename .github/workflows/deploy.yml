@@ -150,7 +150,7 @@ jobs:
             cd "${{ secrets.DEPLOY_PATH }}/current"
             grep -Fqx -- "SERVER_NAME=$EXPECTED_SERVER_NAME" .env
             docker compose -f docker-compose.prod.yml build --pull
-            docker compose -f docker-compose.prod.yml up -d db redis meilisearch
+            docker compose -f docker-compose.prod.yml up -d db redis
             set -a
             . ./.env
             set +a
@@ -193,7 +193,7 @@ jobs:
       - name: Smoke test SPA and service state
         run: |
           ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
-            "set -e; cd ${{ secrets.DEPLOY_PATH }}/current; CODE=\$(curl -ksS -o /dev/null -w '%{http_code}' https://localhost/); echo \"SPA HTTP \$CODE\"; [ \"\$CODE\" = 200 ]; for service in api nginx db redis meilisearch reverb queue scheduler; do cid=\$(docker compose -f docker-compose.prod.yml ps -q \"\$service\"); [ -n \"\$cid\" ]; state=\$(docker inspect -f '{{.State.Status}}' \"\$cid\"); [ \"\$state\" = running ]; done"
+            "set -e; cd ${{ secrets.DEPLOY_PATH }}/current; CODE=\$(curl -ksS -o /dev/null -w '%{http_code}' https://localhost/); echo \"SPA HTTP \$CODE\"; [ \"\$CODE\" = 200 ]; for service in api nginx db redis reverb queue scheduler; do cid=\$(docker compose -f docker-compose.prod.yml ps -q \"\$service\"); [ -n \"\$cid\" ]; state=\$(docker inspect -f '{{.State.Status}}' \"\$cid\"); [ \"\$state\" = running ]; done"
 
       - name: Roll back failed release
         if: failure()
@@ -221,7 +221,7 @@ jobs:
             ln -sfn "$PREVIOUS" "$ROOT/current.new"
             mv -Tf "$ROOT/current.new" "$ROOT/current"
             cd "$ROOT/current"
-            docker compose -f docker-compose.prod.yml up -d db redis meilisearch
+            docker compose -f docker-compose.prod.yml up -d db redis
             docker compose -f docker-compose.prod.yml up -d api nginx reverb queue scheduler
             rm -f "$MARKER"
             echo "Rolled back to $PREVIOUS; investigate the failed release before retrying."

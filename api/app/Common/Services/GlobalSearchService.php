@@ -13,8 +13,14 @@ use Illuminate\Support\Facades\Schema;
  * Cross-module search.
  *
  * Returns grouped results scoped to what the caller is permitted to view.
- * Backed by Postgres ilike (Meilisearch-ready: swap the per-source query body
- * for a Scout::search() when Scout indexes are populated).
+ * Backed by Postgres `ilike`. This used to say "Meilisearch-ready — swap the
+ * per-source query body for a Scout::search() when Scout indexes are
+ * populated", which described an intention rather than the system: no model
+ * ever took the `Searchable` trait, `config/scout.php` was never published, and
+ * nothing indexed anything. The engine, its two Composer packages and its
+ * container were removed on 2026-08-20. Postgres `ilike` is the search, not a
+ * placeholder for it; adding a real engine later means adding it, not swapping
+ * a line.
  *
  * Each result has: id (hash), label, sublabel, status, amount?, url, group, type.
  */
