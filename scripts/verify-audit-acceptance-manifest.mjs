@@ -21,14 +21,29 @@ if (declared === null) {
   errors.push(`finding_sources mismatch: declared ${declared.join(', ') || '(none)'}; found ${registers.join(', ')}`);
 }
 const ids = new Set();
+// A finding with no fix has nothing to gate. F-030 was the only such row when
+// this check was written, so its exemption was pinned to its id; F-055 (money
+// documents accept no idempotency key) is the second, and pinning a second id
+// would make the next one a third edit. The exemption is now keyed on the
+// lifecycle status instead, which is the fact that actually licenses it.
+//
+// This is deliberately not a loophole. Skipping a gate now requires declaring
+// the finding `open` in the lifecycle file — a public statement that the defect
+// is unfixed, which is louder than a missing gate ever was. A `verified` row
+// still cannot omit its command.
+const openFindings = new Set(lifecycle.filter((row) => row.status === 'open').map((row) => row.id));
 for (const gate of manifest.gates ?? []) {
   if (!/^F-\d{3}$/.test(gate.id ?? '')) errors.push(`invalid gate id ${gate.id}`);
   if (ids.has(gate.id)) errors.push(`duplicate gate ${gate.id}`);
   ids.add(gate.id);
   if (!['focused_test', 'static_audit', 'operational', 'external_evidence', 'policy_decision', 'constraint_verification', 'ci_contract'].includes(gate.type)) errors.push(`${gate.id}: invalid gate type`);
   if (gate.id === 'F-030' && gate.type !== 'external_evidence') errors.push('F-030 must remain external_evidence');
-  if (gate.id === 'F-030' && gate.command !== null) errors.push('F-030 cannot claim a local command pass');
-  if (gate.id !== 'F-030' && (typeof gate.command !== 'string' || gate.command.trim() === '')) errors.push(`${gate.id}: missing machine gate command`);
+  if (gate.command === null) {
+    if (gate.type !== 'external_evidence') errors.push(`${gate.id}: a gate with no command must be external_evidence`);
+    if (!openFindings.has(gate.id)) errors.push(`${gate.id}: only a finding the lifecycle records as open may omit its machine gate command`);
+  } else if (typeof gate.command !== 'string' || gate.command.trim() === '') {
+    errors.push(`${gate.id}: missing machine gate command`);
+  }
 }
 for (const row of lifecycle) if (!ids.has(row.id)) errors.push(`${row.id}: missing acceptance gate`);
 for (const id of ids) if (!lifecycle.some((row) => row.id === id)) errors.push(`${id}: gate has no lifecycle finding`);
@@ -74,6 +89,6 @@ for (const gate of manifest.gates ?? []) {
 }
 // Kept explicit by decision: growing the registry stays a deliberate,
 // reviewable edit rather than one absorbed silently.
-if (manifest.gates?.length !== 47) errors.push(`expected 47 gates, got ${manifest.gates?.length ?? 0}`);
+if (manifest.gates?.length !== 55) errors.push(`expected 55 gates, got ${manifest.gates?.length ?? 0}`);
 if (errors.length) { console.error(errors.join('\n')); process.exit(1); }
-console.log('Audit acceptance manifest clean: 47 findings mapped; F-030 remains external-evidence-only.');
+console.log('Audit acceptance manifest clean: 55 findings mapped; F-030 and F-055 remain external-evidence-only.');

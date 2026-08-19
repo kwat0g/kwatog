@@ -225,7 +225,7 @@ dedicated database (`DB_DATABASE=ogami_test_verify`), which removed all of it:
 - **Ideal Process:** A retried financial POST returns the original 201 and its original body, and creates nothing.
 - **New Feature/Module Required:** No — a common service plus a table.
 - **Cross-Module Impact:** The shared service, once it exists, should absorb the three existing hand-rolled guards (WO output, auto payroll period, loan payroll payment) rather than sit beside them.
-- **Evidence:** `api/app/Modules/Accounting/Controllers/InvoiceController.php:42-50`, `BillController.php:43-57`, `JournalEntryController.php:44-56` — no key read in any. Contrast `api/app/Modules/Production/Controllers/WorkOrderController.php:237`. No regression proof: **this finding is open and unfixed.**
+- **Evidence:** `api/app/Modules/Accounting/Controllers/InvoiceController.php:42-50`, `BillController.php:43-57`, `JournalEntryController.php:44-56` — no key read in any. Contrast `api/app/Modules/Production/Controllers/WorkOrderController.php:237`. No regression proof: **this finding is open and unfixed.** Its acceptance gate is therefore `external_evidence` with a null command, the same shape F-030 carries. That shape used to be pinned to F-030's id in `scripts/verify-audit-acceptance-manifest.mjs`; it is now keyed on the lifecycle status, so omitting a gate command requires declaring the finding `open` — a `verified` row still cannot omit one.
 - **Priority:** P2.
 - **Impact:** Duplicate financial documents and duplicate GL postings from a retry the client cannot know succeeded.
 - **Complexity:** M.
