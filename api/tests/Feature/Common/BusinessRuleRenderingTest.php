@@ -5,13 +5,22 @@ declare(strict_types=1);
 namespace Tests\Feature\Common;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Modules\Accounting\Exceptions\ClosedPeriodException;
+use App\Modules\Accounting\Exceptions\LedgerImbalanceException;
+use App\Modules\Accounting\Exceptions\UnbalancedJournalEntryException;
+use App\Modules\Accounting\Services\AccountingPeriodService;
+use App\Modules\Assets\Enums\AssetCategory;
+use App\Modules\Assets\Enums\AssetStatus;
+use App\Modules\Assets\Models\Asset;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Enums\ClearanceStatus;
 use App\Modules\HR\Models\Clearance;
 use App\Modules\HR\Models\Employee;
 use App\Modules\MRP\Exceptions\BomStructureException;
+use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
+use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
 use RuntimeException;
@@ -133,5 +142,118 @@ class BusinessRuleRenderingTest extends TestCase
             ->patchJson("/api/v1/hr/clearances/{$clearance->hash_id}/finalize")
             ->assertStatus(422)
             ->assertJson(['message' => 'Compute final pay before posting JE.']);
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 3. The three accounting classes that stay outside the family
+    // ─────────────────────────────────────────────────────────────
+
+    /**
+     * ClosedPeriodException does NOT extend BusinessRuleException — two
+     * controllers depend on that in writing (GoodsReceiptNoteController's
+     * docblock, WorkOrderController::recordOutput), because reparenting it would
+     * move it inside the family ~20 GL-handoff arms degrade to manual, and the
+     * operator would stop being told which period to reopen.
+     *
+     * It still must not be a 500 where no controller names it, so it states its
+     * own 422. Laravel calls an exception's render() only when nothing caught it,
+     * so all 21 existing arms are untouched — ControllerSqlLeakTest pins one of
+     * them.
+     */
+    public function test_a_closed_period_renders_as_422_even_where_no_controller_names_it(): void
+    {
+        Route::middleware('api')->get('/api/v1/_test/closed-period', function (): never {
+            throw new ClosedPeriodException(2026, 7, '2026-07-15');
+        });
+
+        $response = $this->actingAs($this->makeAdmin())->getJson('/api/v1/_test/closed-period');
+
+        $response->assertStatus(422);
+        $this->assertStringContainsString('2026-07 is closed', (string) $response->json('message'));
+        $this->assertStringContainsString('Reopen the period first', (string) $response->json('message'));
+    }
+
+    /**
+     * The endpoint that made the arm above worth having.
+     *
+     * AssetService::dispose back-dates its disposal JE to `disposed_date`, so it
+     * reaches AccountingPeriodService::assertPostingAllowed — and AssetController
+     * has no try/catch at all. An accountant disposing an asset into last month's
+     * closed period got a 500 and "Server Error" for a condition whose own
+     * message names the period to reopen.
+     */
+    public function test_disposing_an_asset_into_a_closed_period_is_422_not_500(): void
+    {
+        $this->seed([ChartOfAccountsSeeder::class, SettingsSeeder::class]);
+        // Production runs with APP_DEBUG=false, which is the configuration where
+        // the operator saw "Server Error" and nothing else.
+        config(['app.debug' => false]);
+
+        $admin = $this->makeAdmin();
+        app(AccountingPeriodService::class)->close(2026, 7, $admin);
+
+        $asset = Asset::query()->create([
+            'asset_code'               => 'AST-CP-'.substr(uniqid(), -6),
+            'name'                     => 'Closed-period CNC Machine',
+            'category'                 => AssetCategory::Equipment->value,
+            'acquisition_date'         => '2026-01-15',
+            'acquisition_cost'         => 100000,
+            'useful_life_years'        => 5,
+            'salvage_value'            => 0,
+            'accumulated_depreciation' => 20000,
+            'status'                   => AssetStatus::Active->value,
+        ]);
+
+        $response = $this->actingAs($admin)->postJson("/api/v1/assets/{$asset->hash_id}/dispose", [
+            'disposal_amount' => '40000.00',
+            'disposed_date'   => '2026-07-15',
+        ]);
+
+        $response->assertStatus(422);
+        $this->assertStringContainsString('2026-07 is closed', (string) $response->json('message'));
+        $this->assertSame(
+            AssetStatus::Active,
+            $asset->fresh()->status,
+            'The refused disposal must leave the asset untouched.',
+        );
+    }
+
+    /**
+     * UnbalancedJournalEntryException stays a 500 where nothing names it, and
+     * that is the decision rather than an oversight.
+     *
+     * From the JE form it is user input and JournalEntryController answers 422
+     * with `errors.lines`. From an internal poster — MovementGl, PayrollGl,
+     * GrnGl, AssetService, FinalPayService — the lines were built by our own code
+     * from our own account mapping, so an imbalance is a bug. Telling an operator
+     * to correct a form they never filled in would hide it.
+     */
+    public function test_an_unbalanced_journal_entry_is_still_a_500_where_nothing_names_it(): void
+    {
+        Route::middleware('api')->get('/api/v1/_test/unbalanced-je', function (): never {
+            throw new UnbalancedJournalEntryException('100.00', '90.00');
+        });
+
+        $this->actingAs($this->makeAdmin())
+            ->getJson('/api/v1/_test/unbalanced-je')
+            ->assertStatus(500);
+    }
+
+    /**
+     * LedgerImbalanceException likewise. Every JE that reaches the ledger passed
+     * the balance check, so a non-zero trial balance means posted rows were
+     * mutated or the aggregation is wrong. Nothing the reader of a trial balance
+     * can do will fix it, and a 422 would dress a bug as a validation error —
+     * exactly what bootstrap/app.php refuses to map RuntimeException to prevent.
+     */
+    public function test_a_ledger_imbalance_is_still_a_500(): void
+    {
+        Route::middleware('api')->get('/api/v1/_test/ledger-imbalance', function (): never {
+            throw new LedgerImbalanceException('1000.00', '999.00');
+        });
+
+        $this->actingAs($this->makeAdmin())
+            ->getJson('/api/v1/_test/ledger-imbalance')
+            ->assertStatus(500);
     }
 }
