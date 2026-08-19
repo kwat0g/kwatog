@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Controllers;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\HashIdFilter;
+use App\Modules\Accounting\Exceptions\ClosedPeriodException;
 use App\Modules\Inventory\Enums\StockAdjustmentStatus;
+use App\Modules\Inventory\Exceptions\InsufficientStockException;
+use App\Modules\Inventory\Exceptions\InvalidMovementException;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockAdjustment;
 use App\Modules\Inventory\Models\WarehouseLocation;
@@ -16,7 +20,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Validation\Rule;
-use RuntimeException;
 
 class StockAdjustmentController
 {
@@ -90,7 +93,7 @@ class StockAdjustmentController
                 by: $request->user(),
                 reasonCode: $data['reason_code'] ?? null,
             );
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException|ClosedPeriodException|InsufficientStockException|InvalidMovementException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return (new StockAdjustmentResource(
@@ -102,7 +105,7 @@ class StockAdjustmentController
     {
         try {
             $adjustment = $this->service->approve($stockAdjustment, request()->user());
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException|ClosedPeriodException|InsufficientStockException|InvalidMovementException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return (new StockAdjustmentResource(

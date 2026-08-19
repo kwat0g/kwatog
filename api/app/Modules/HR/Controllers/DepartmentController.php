@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Controllers;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Requests\StoreDepartmentRequest;
 use App\Modules\HR\Requests\UpdateDepartmentRequest;
@@ -47,7 +48,7 @@ class DepartmentController
     {
         try {
             $this->service->delete($department);
-        } catch (\RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return response()->json(null, 204);

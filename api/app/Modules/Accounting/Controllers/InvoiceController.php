@@ -14,6 +14,8 @@ use App\Modules\Accounting\Services\InvoiceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use App\Common\Exceptions\BusinessRuleException;
+use App\Modules\Accounting\Exceptions\ClosedPeriodException;
 
 class InvoiceController
 {
@@ -43,7 +45,7 @@ class InvoiceController
     {
         try {
             $inv = $this->service->create($request->validated(), $request->user());
-        } catch (\RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return (new InvoiceResource($inv))->response()->setStatusCode(201);
@@ -53,7 +55,7 @@ class InvoiceController
     {
         try {
             $inv = $this->service->update($invoice, $request->validated(), $request->user());
-        } catch (\RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return new InvoiceResource($inv);
@@ -63,7 +65,7 @@ class InvoiceController
     {
         try {
             $inv = $this->service->finalize($invoice, $request->user());
-        } catch (\RuntimeException $e) {
+        } catch (BusinessRuleException|ClosedPeriodException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return new InvoiceResource($inv);
@@ -73,7 +75,7 @@ class InvoiceController
     {
         try {
             $inv = $this->service->cancel($invoice, $request->user());
-        } catch (\RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return new InvoiceResource($inv);
@@ -83,7 +85,7 @@ class InvoiceController
     {
         try {
             $coll = $this->service->recordCollection($invoice, $request->validated(), $request->user());
-        } catch (\RuntimeException $e) {
+        } catch (BusinessRuleException|ClosedPeriodException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return (new CollectionResource($coll))->response()->setStatusCode(201);

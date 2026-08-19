@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Maintenance\Controllers;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\HashIdFilter;
 use App\Common\Services\SettingsService;
 use App\Modules\Maintenance\Models\MachineConditionReading;
@@ -13,6 +14,7 @@ use App\Modules\MRP\Models\Machine;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 
@@ -110,10 +112,30 @@ class MachineConditionReadingController
                 ->orderByDesc('recorded_at')
                 ->first();
 
+            // `reason` is rendered to the technician, so it cannot be an
+            // arbitrary exception string: this arm caught \Throwable and passed
+            // getMessage() straight through, which meant a failure creating the
+            // corrective MWO reported `SQLSTATE[23503]: Foreign key violation
+            // ... (Connection: pgsql, SQL: insert into "maintenance_work_orders"
+            // ...)` as the reason no work order was raised. Only
+            // BusinessRuleException is copy written to be read; anything else
+            // gets a fixed sentence and a log line for support.
+            if ($e instanceof BusinessRuleException) {
+                $reason = $e->getMessage();
+            } else {
+                Log::error('MachineConditionReadingController — reading saved but evaluation failed.', [
+                    'machine_id' => (int) $data['machine_id'],
+                    'metric'     => $data['metric'],
+                    'exception'  => $e::class,
+                    'message'    => $e->getMessage(),
+                ]);
+                $reason = 'The reading was saved, but the breach evaluation could not complete. Maintenance has been notified.';
+            }
+
             return response()->json([
                 'data'      => $reading ? new MachineConditionReadingResource($reading) : null,
                 'triggered' => false,
-                'reason'    => $e->getMessage(),
+                'reason'    => $reason,
                 'work_order' => null,
             ], 201);
         }

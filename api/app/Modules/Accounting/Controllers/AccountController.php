@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Controllers;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Requests\StoreAccountRequest;
 use App\Modules\Accounting\Requests\UpdateAccountRequest;
@@ -40,7 +41,7 @@ class AccountController
     {
         try {
             $account = $this->service->create($request->validated());
-        } catch (\RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return (new AccountResource($account))->response()->setStatusCode(201);
@@ -50,7 +51,7 @@ class AccountController
     {
         try {
             $account = $this->service->update($account, $request->validated());
-        } catch (\RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return new AccountResource($account);
@@ -60,7 +61,7 @@ class AccountController
     {
         try {
             $account = $this->service->deactivate($account);
-        } catch (\RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return new AccountResource($account);

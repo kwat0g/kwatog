@@ -18,6 +18,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Validator;
+use App\Common\Exceptions\BusinessRuleException;
+use App\Modules\Leave\Exceptions\InsufficientLeaveBalanceException;
 
 class LeaveRequestController
 {
@@ -54,7 +56,7 @@ class LeaveRequestController
 
         try {
             $req = $this->service->submit($d['employee_id'], $d);
-        } catch (\RuntimeException|\InvalidArgumentException $e) {
+        } catch (BusinessRuleException|InsufficientLeaveBalanceException|\InvalidArgumentException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
@@ -87,7 +89,7 @@ class LeaveRequestController
     {
         try {
             $req = $this->service->approveDept($leaveRequest, $request->user(), $request->input('remarks'));
-        } catch (\RuntimeException $e) {
+        } catch (BusinessRuleException|InsufficientLeaveBalanceException $e) {
             abort(422, $e->getMessage());
         }
 
@@ -98,7 +100,7 @@ class LeaveRequestController
     {
         try {
             $req = $this->service->approveHR($leaveRequest, $request->user(), $request->input('remarks'));
-        } catch (\RuntimeException $e) {
+        } catch (BusinessRuleException|InsufficientLeaveBalanceException $e) {
             abort(422, $e->getMessage());
         }
 

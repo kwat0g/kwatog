@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\MRP\Controllers;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\CRM\Models\Product;
 use App\Modules\MRP\Models\Bom;
 use App\Modules\MRP\Requests\StoreBomRequest;
@@ -12,7 +13,6 @@ use App\Modules\MRP\Services\BomService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use RuntimeException;
 
 class BomController
 {
@@ -60,7 +60,7 @@ class BomController
     {
         try {
             $this->service->delete($bom);
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return response()->json(null, 204);

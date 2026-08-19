@@ -14,12 +14,15 @@ use App\Modules\Quality\Requests\CreateNcrRequest;
 use App\Modules\Quality\Resources\NcrActionResource;
 use App\Modules\Quality\Resources\NcrResource;
 use App\Modules\Quality\Services\NcrService;
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\SettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Throwable;
 
 class NcrController
@@ -157,13 +160,19 @@ class NcrController
                 $results[] = ['ncr_id' => $hashId, 'status' => 'success', 'message' => 'Closed.'];
                 $success++;
             } catch (Throwable $e) {
-                // Already closed or no disposition → skip rather than fail.
-                $msg = $e->getMessage();
-                if (str_contains($msg, 'already closed') || str_contains($msg, 'without a disposition')) {
-                    $results[] = ['ncr_id' => $hashId, 'status' => 'skipped', 'message' => $msg];
+                $reason = $this->bulkCloseFailureReason((int) $decoded[0], $e);
+
+                // Already closed or no disposition → skip rather than fail. Both
+                // sentences come from NcrService as a BusinessRuleException, and
+                // only that class reaches here with its own wording, so the match
+                // can no longer be satisfied by an incidental substring in an
+                // exception nobody authored.
+                if ($e instanceof BusinessRuleException
+                    && (str_contains($reason, 'already closed') || str_contains($reason, 'without a disposition'))) {
+                    $results[] = ['ncr_id' => $hashId, 'status' => 'skipped', 'message' => $reason];
                     $skipped++;
                 } else {
-                    $results[] = ['ncr_id' => $hashId, 'status' => 'failed', 'message' => $msg];
+                    $results[] = ['ncr_id' => $hashId, 'status' => 'failed', 'message' => $reason];
                     $failed++;
                 }
             }
@@ -182,5 +191,47 @@ class NcrController
                 'results' => $results,
             ],
         ], $status);
+    }
+
+    /**
+     * The per-row `message` this endpoint returns is rendered verbatim by the
+     * SPA, so it must never carry an exception nobody wrote for a reader.
+     * `catch (Throwable)` here previously put `$e->getMessage()` straight into
+     * it, which meant a unique-constraint violation or a deadlock inside the
+     * close transaction showed the quality engineer
+     * `SQLSTATE[23505]: ... (Connection: pgsql, SQL: insert into "ncr_actions" ...)`.
+     * Same defect, same shape, and the same fix as LeaveRequestService's bulk
+     * approve (2b82cba8 / f54822f7).
+     *
+     * Three arms, in order of how much the text was written to be read:
+     *  1. BusinessRuleException — authored copy, and the only thing that tells
+     *     the user what to do about the row ("Cannot close NCR without a
+     *     disposition.").
+     *  2. a 4xx HttpException with a message — `abort(403, '...')` states a
+     *     refusal on purpose; it is authored copy in everything but its type.
+     *  3. anything else — fixed copy, plus a log line carrying the class and
+     *     message so support can still find it.
+     */
+    private function bulkCloseFailureReason(int $ncrId, Throwable $e): string
+    {
+        if ($e instanceof BusinessRuleException) {
+            return $e->getMessage();
+        }
+
+        if ($e instanceof HttpExceptionInterface) {
+            $status  = $e->getStatusCode();
+            $message = trim($e->getMessage());
+            if ($status >= 400 && $status < 500 && $message !== '') {
+                return $message;
+            }
+        }
+
+        Log::error('NcrController::bulkClose — unexpected failure closing an NCR.', [
+            'ncr_id'    => $ncrId,
+            'exception' => $e::class,
+            'message'   => $e->getMessage(),
+        ]);
+
+        return 'An unexpected error stopped this NCR from closing.';
     }
 }

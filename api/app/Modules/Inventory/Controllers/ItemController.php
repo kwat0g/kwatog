@@ -17,6 +17,7 @@ use App\Modules\Inventory\Services\ItemService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use App\Common\Exceptions\BusinessRuleException;
 
 class ItemController
 {
@@ -72,7 +73,7 @@ class ItemController
     {
         try {
             $this->service->delete($item);
-        } catch (\RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return response()->json(null, 204);

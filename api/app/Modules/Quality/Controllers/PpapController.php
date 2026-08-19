@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Controllers;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Quality\Enums\PpapElementStatus;
 use App\Modules\Quality\Models\PpapElement;
 use App\Modules\Quality\Models\PpapSubmission;
@@ -15,7 +16,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Validation\Rule;
-use RuntimeException;
 
 class PpapController
 {
@@ -46,7 +46,7 @@ class PpapController
         ]);
         try {
             return new PpapSubmissionResource($this->service->update($ppap, $data));
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
     }
@@ -55,7 +55,7 @@ class PpapController
     {
         try {
             return new PpapSubmissionResource($this->service->submit($ppap));
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
     }
@@ -64,7 +64,7 @@ class PpapController
     {
         try {
             return new PpapSubmissionResource($this->service->review($ppap, $request->user()));
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
     }
@@ -73,7 +73,7 @@ class PpapController
     {
         try {
             return new PpapSubmissionResource($this->service->approve($ppap, $request->user()));
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
     }
@@ -83,7 +83,7 @@ class PpapController
         $data = $request->validate(['reason' => ['required', 'string', 'max:500']]);
         try {
             return new PpapSubmissionResource($this->service->reject($ppap, $data['reason'], $request->user()));
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
     }

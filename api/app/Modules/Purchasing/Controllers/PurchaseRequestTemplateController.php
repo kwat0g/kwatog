@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Purchasing\Controllers;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\HashIdFilter;
 use App\Modules\HR\Models\Department;
 use App\Modules\Purchasing\Models\PurchaseRequestTemplate;
@@ -14,7 +15,6 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
-use RuntimeException;
 
 class PurchaseRequestTemplateController
 {
@@ -88,7 +88,7 @@ class PurchaseRequestTemplateController
     {
         try {
             $this->service->delete($template);
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
 

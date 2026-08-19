@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Production\Controllers;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Production\Models\WoOperation;
 use App\Modules\Production\Models\WorkOrder;
@@ -13,10 +14,24 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Carbon;
-use RuntimeException;
 
 class WoOperationController
 {
+    /**
+     * Every lifecycle action below answers a violated rule with 409, not 422,
+     * and that is kept deliberately: "this operation is already running" is a
+     * state conflict, not a malformed request. The arms exist only to set that
+     * status, so they stay — narrowing the caught type to BusinessRuleException
+     * is the whole change.
+     *
+     * The type mattered because these arms caught \RuntimeException, and
+     * QueryException extends it: a deadlock between two shop-floor terminals
+     * hitting the same operation answered 409 with
+     * `SQLSTATE[40P01]: ... (Connection: pgsql, SQL: update "wo_operations" ...)`,
+     * printed on a tablet next to the press. WoOperationService raises nothing
+     * but BusinessRuleException (its 8 findOrFail calls now surface as 404s,
+     * which is what they are), so no rule loses its message here.
+     */
     public function __construct(private readonly WoOperationService $service) {}
 
     /**
@@ -60,7 +75,7 @@ class WoOperationController
 
         try {
             $this->service->startSetup($operation, $operator);
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 409);
         }
 
@@ -74,7 +89,7 @@ class WoOperationController
     {
         try {
             $this->service->endSetup($operation);
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 409);
         }
 
@@ -93,7 +108,7 @@ class WoOperationController
 
         try {
             $this->service->startOperation($operation, $operator);
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 409);
         }
 
@@ -107,7 +122,7 @@ class WoOperationController
     {
         try {
             $this->service->pauseOperation($operation);
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 409);
         }
 
@@ -126,7 +141,7 @@ class WoOperationController
 
         try {
             $this->service->resumeOperation($operation, $operator);
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 409);
         }
 
@@ -151,7 +166,7 @@ class WoOperationController
                 (float) $request->input('scrap', 0),
                 $request->input('scrap_reason'),
             );
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 409);
         }
 
@@ -165,7 +180,7 @@ class WoOperationController
     {
         try {
             $this->service->completeOperation($operation);
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 409);
         }
 

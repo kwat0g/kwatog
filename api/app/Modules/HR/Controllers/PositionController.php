@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Controllers;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\HR\Models\Position;
 use App\Modules\HR\Requests\StorePositionRequest;
 use App\Modules\HR\Requests\UpdatePositionRequest;
@@ -42,7 +43,7 @@ class PositionController
     {
         try {
             $this->service->delete($position);
-        } catch (\RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return response()->json(null, 204);

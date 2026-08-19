@@ -14,7 +14,10 @@ use App\Modules\Inventory\Enums\MrbStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use RuntimeException;
+use App\Common\Exceptions\BusinessRuleException;
+use App\Modules\Accounting\Exceptions\ClosedPeriodException;
+use App\Modules\Inventory\Exceptions\InsufficientStockException;
+use App\Modules\Inventory\Exceptions\InvalidMovementException;
 
 /**
  * REC-08 — Material Review Board (hold / release nonconforming stock).
@@ -48,7 +51,7 @@ class MrbController
     {
         try {
             $mrb = $this->service->hold($request->validated(), $request->user());
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException|ClosedPeriodException|InsufficientStockException|InvalidMovementException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
@@ -68,7 +71,7 @@ class MrbController
                 isset($data['target_location_id']) ? (int) $data['target_location_id'] : null,
                 $data['notes'] ?? null,
             );
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException|ClosedPeriodException|InsufficientStockException|InvalidMovementException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
 

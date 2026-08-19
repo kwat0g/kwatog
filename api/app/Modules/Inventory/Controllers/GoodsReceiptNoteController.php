@@ -18,10 +18,33 @@ use App\Modules\Purchasing\Models\PurchaseOrder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use RuntimeException;
+use App\Common\Exceptions\BusinessRuleException;
+use App\Modules\Accounting\Exceptions\ClosedPeriodException;
+use App\Modules\Inventory\Exceptions\InsufficientStockException;
+use App\Modules\Inventory\Exceptions\InvalidMovementException;
 
 class GoodsReceiptNoteController
 {
+    /**
+     * accept() and receiveWithQc() name four classes; the other arms name one.
+     *
+     * The difference is that accepting stock runs
+     * StockMovementService::move(), which raises InsufficientStockException /
+     * InvalidMovementException ("needed 100, available 20") and then posts the
+     * GL inline via MovementGlPostingService → JournalEntryService::postSystem →
+     * assertPostingAllowed, which raises ClosedPeriodException. None of those
+     * three extends BusinessRuleException, and every one of them tells the
+     * receiving clerk what to do, so narrowing to BusinessRuleException alone
+     * would have turned three actionable 422s into "Server Error".
+     *
+     * Two failures on this path DO become 500s now, on purpose. GrnGlPostingService's
+     * "GRNI clearing account {code} missing from chart of accounts" and "GRN
+     * inventory and GRNI deltas are out of balance" are the bare
+     * RuntimeExceptions 4f40a94d annotated as misconfiguration and internal
+     * invariant: the code comes from `accounting.accounts.grni_code`, the remedy
+     * is a COA or seed fix, and no receiving clerk can make it. A 422 there told
+     * them to correct a GRN form that was already correct.
+     */
     public function __construct(
         private readonly GrnService $service,
         private readonly SettingsService $settings,
@@ -50,7 +73,7 @@ class GoodsReceiptNoteController
     {
         try {
             return new GoodsReceiptNoteResource($this->service->retryIncomingQcHandoff($grn));
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
     }
@@ -64,7 +87,7 @@ class GoodsReceiptNoteController
             $grn = $this->service->create($po, $data['items'],
                 ['received_date' => $data['received_date'] ?? null, 'remarks' => $data['remarks'] ?? null],
                 $request->user());
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return (new GoodsReceiptNoteResource($grn))->response()->setStatusCode(201);
@@ -79,7 +102,7 @@ class GoodsReceiptNoteController
     {
         try {
             $result = $this->service->finalizeDraft($grn, $request->validated()['items'], $request->user());
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
         return new GoodsReceiptNoteResource($this->service->show($result));
@@ -106,7 +129,7 @@ class GoodsReceiptNoteController
             $result = $map
                 ? $this->service->partialAccept($grn, $map, $request->user())
                 : $this->service->accept($grn, $request->user());
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException|ClosedPeriodException|InsufficientStockException|InvalidMovementException $e) {
             abort(422, $e->getMessage());
         }
         return new GoodsReceiptNoteResource($this->service->show($result));
@@ -116,7 +139,7 @@ class GoodsReceiptNoteController
     {
         try {
             $result = $this->service->reject($grn, $request->validated()['reason'], $request->user());
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
         return new GoodsReceiptNoteResource($this->service->show($result));
@@ -175,7 +198,7 @@ class GoodsReceiptNoteController
                 $request->input('qc', []),
                 $request->user(),
             );
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException|ClosedPeriodException|InsufficientStockException|InvalidMovementException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
