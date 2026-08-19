@@ -11,7 +11,12 @@ use App\Common\Models\SchedulerTaskRun;
 use App\Common\Models\SchedulerTickRun;
 use App\Common\Services\AlertEngineService;
 use App\Common\Services\SchedulerExecutionLedger;
+use Illuminate\Console\Events\ScheduledTaskFailed;
+use Illuminate\Console\Events\ScheduledTaskStarting;
+use Illuminate\Console\Scheduling\CacheEventMutex;
+use Illuminate\Console\Scheduling\CallbackEvent;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use RuntimeException;
 use Tests\TestCase;
 
 /**
@@ -19,15 +24,22 @@ use Tests\TestCase;
  * consumed it, so a scheduler that stalled took all 42 entries in
  * `api/routes/console.php` down with it and said nothing.
  *
- * What these two tests can and cannot prove. They prove the engine consumes
- * the ledger's verdict in both directions: an unhealthy ledger raises the
- * alert, a healthy one does not. They cannot prove the alert fires when the
- * scheduler is completely dead, because it cannot: `runAllChecks()` is itself
- * driven by `alerts:run` every 15 minutes, so nothing raises anything while
- * the scheduler is down. That case is covered outside the application, by the
- * `scheduler:health` Docker healthcheck on `docker-compose.prod.yml`'s
- * `scheduler` service, whose command is exercised by
+ * What these tests can and cannot prove. They prove the engine consumes the
+ * ledger's verdict in both directions — an unhealthy ledger raises the alert, a
+ * healthy one does not — and that it does not throw while doing so. They cannot
+ * prove the alert fires when the scheduler is completely dead, because it
+ * cannot: `runAllChecks()` is itself driven by `alerts:run` every 15 minutes, so
+ * nothing raises anything while the scheduler is down. That case is covered
+ * outside the application, by the `scheduler:health` Docker healthcheck on
+ * `docker-compose.prod.yml`'s `scheduler` service, whose command is exercised by
  * `Tests\Feature\Infrastructure\SchedulerHealthTest`.
+ *
+ * Every case asserts `$stats['failed'] === []`. `runAllChecks()` wraps each
+ * check in `safe()`, which logs a throw and continues, so a `checkScheduler()`
+ * that threw would raise no alert and look identical to one that correctly
+ * found nothing wrong. Asserting the absence of an alert alone cannot tell
+ * those apart — which is the silent-disable mode the `alerts.scheduler`
+ * validation bound in `UpdateSettingRequest` exists to prevent.
  */
 class SchedulerStaleAlertTest extends TestCase
 {
@@ -51,10 +63,11 @@ class SchedulerStaleAlertTest extends TestCase
         // arm of health() rather than the two-tick gap arm.
         $this->finishedTickMinutesAgo(90);
 
-        app(AlertEngineService::class)->runAllChecks();
+        $stats = app(AlertEngineService::class)->runAllChecks();
 
         $alerts = Alert::query()->where('type', AlertType::SchedulerStale->value)->get();
 
+        $this->assertSame([], $stats['failed'], 'no check may throw while raising the scheduler alert');
         $this->assertCount(1, $alerts, 'a stale scheduler ledger must raise exactly one alert');
         $alert = $alerts->first();
         $this->assertSame(AlertType::SchedulerStale, $alert->type);
@@ -71,12 +84,51 @@ class SchedulerStaleAlertTest extends TestCase
     {
         $this->finishedTickMinutesAgo(0);
 
-        app(AlertEngineService::class)->runAllChecks();
+        $stats = app(AlertEngineService::class)->runAllChecks();
 
+        $this->assertSame(
+            [],
+            $stats['failed'],
+            'a silent throw must not be able to masquerade as "nothing was wrong"',
+        );
         $this->assertSame(
             0,
             Alert::query()->where('type', AlertType::SchedulerStale->value)->count(),
             'a healthy ledger must not raise a scheduler alert',
+        );
+    }
+
+    public function test_a_failed_task_on_a_punctual_scheduler_raises_without_claiming_the_scheduler_stopped(): void
+    {
+        // health() reports unhealthy when the LATEST run of any task failed,
+        // regardless of tick timeliness — so this scenario is a scheduler
+        // ticking perfectly with one failed task behind it. The alert must
+        // still be raised, but its title must not assert a fault that is not
+        // occurring: the original 'Scheduler is not running on schedule' was
+        // false here, and `$latestByTask` holds a failed latest run until that
+        // task next succeeds, so the false title would have stood for as long
+        // as the failure did.
+        $this->finishedTickMinutesAgo(0);
+        $task = new CallbackEvent(new CacheEventMutex(app('cache')), static function (): void {});
+        event(new ScheduledTaskStarting($task));
+        event(new ScheduledTaskFailed($task, new RuntimeException('provider unavailable')));
+
+        $stats = app(AlertEngineService::class)->runAllChecks();
+
+        $alert = Alert::query()->where('type', AlertType::SchedulerStale->value)->first();
+
+        $this->assertSame([], $stats['failed']);
+        $this->assertNotNull($alert, 'a failed scheduled task must still surface in the application');
+        $this->assertSame(
+            'succeeded',
+            $alert->metadata['latest_tick_status'],
+            'this case is only meaningful while the heartbeat itself is healthy',
+        );
+        $this->assertSame(1, $alert->metadata['failed_task_count']);
+        $this->assertStringNotContainsStringIgnoringCase(
+            'not running',
+            $alert->title,
+            'the title must not claim the scheduler stopped when only a task failed',
         );
     }
 

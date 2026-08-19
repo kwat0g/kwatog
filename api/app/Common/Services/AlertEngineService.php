@@ -484,6 +484,21 @@ class AlertEngineService
      * original message even if later issues differ. That is deliberate — one
      * standing alert per outage — but it means the message is the symptom at
      * first detection, not a running log.
+     *
+     * The title is deliberately generic, and that is a correction rather than
+     * laziness. `health()` reports unhealthy when the latest run of ANY of the
+     * 42 tasks failed, even while ticks are perfectly on time — so an earlier
+     * title of "Scheduler is not running on schedule" told the operator
+     * something false every time a single `db:backup` failed on a healthy
+     * scheduler. The cost was not cosmetic: `$latestByTask` keeps a failed
+     * latest run until that task next succeeds, and `scheduler:prune-ledger`
+     * retains it for 90 days, so a monthly task that failed once holds a
+     * standing Critical alert re-raised every 24 hours — under a title
+     * describing a different fault. Naming the specific arm would mean
+     * re-deriving which one fired, and this check deliberately does not
+     * re-derive `health()`'s logic; the discrimination therefore lives where
+     * it is already exact — the ledger's own `issues` strings in the message,
+     * and the per-arm counts in `metadata`.
      */
     private function checkScheduler(): void
     {
@@ -500,9 +515,10 @@ class AlertEngineService
         $this->raise(
             AlertType::SchedulerStale,
             AlertSeverity::Critical,
-            'Scheduler is not running on schedule',
+            'Scheduler health is degraded',
             sprintf(
-                'The scheduler heartbeat is unhealthy against a %d-minute threshold: %s',
+                'The scheduler execution ledger reports %d issue(s) against a %d-minute staleness threshold: %s',
+                count($issues),
                 $staleMinutes,
                 implode(' ', $issues),
             ),
