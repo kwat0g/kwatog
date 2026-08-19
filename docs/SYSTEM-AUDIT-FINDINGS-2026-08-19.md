@@ -17,9 +17,10 @@ unaffected; this register begins at F-046.
 
 **Provenance, stated plainly.** Unlike the 08-13 and 08-16 registers, this one
 was not produced by a standalone audit pass. It records defects found while
-implementing dashboard role-tiering, and every entry here was fixed in the same
+implementing dashboard role-tiering, and F-046–F-052 were each fixed in the same
 sitting. It is written because the defects were real authorization findings and
-existed nowhere but commit messages.
+existed nowhere but commit messages. **F-053 is the exception: it was added
+2026-08-20, is outside the dashboard scope above, and is open.**
 
 **Retracted observation — F-041 reported as an unclosed finding.** During
 discovery this session, F-041 (the MRP plan badge fixture) was twice reported as
@@ -183,6 +184,26 @@ dedicated database (`DB_DATABASE=ogami_test_verify`), which removed all of it:
 - **Impact:** One verification gate red, on a defect with no user-visible symptom beyond invalid DOM.
 - **Complexity:** S.
 - **Status note:** Registered and fixed 2026-08-19 (`047c8e50`).
+
+### F-053 — Invoice, Bill and Journal Entry creation accepts no idempotency key, so a retried POST posts the amount twice
+
+- **Module / feature:** Accounting — `POST /api/v1/invoices`, `/bills`, `/journal-entries`.
+- **Related modules:** Purchasing (bills carry the three-way match), GL (every one of the three writes journal lines).
+- **Category:** Financial correctness / request replay.
+- **Affected roles:** `finance_officer`, `system_admin` — anyone who can create a money document.
+- **Current Behavior:** All three `store()` actions call `$this->service->create($request->validated(), $request->user())` and return 201. No request-scoped key is read, stored, or compared. The system does have this protection elsewhere: `WorkOrderController` reads `X-Idempotency-Key` (`api/app/Modules/Production/Controllers/WorkOrderController.php:237`), and migrations `0466_add_work_order_output_idempotency`, `2026_08_11_140000_add_auto_payroll_idempotency_key` and `2026_08_13_212000_add_loan_payroll_payment_idempotency` back the same guard for production output, auto-created payroll periods and loan payroll deductions. Money documents are the omission, not the rule.
+- **Problem:** A double-submitted form, a proxy retry, or a client that resends on timeout creates two invoices, two bills or two journal entries for one transaction. Because each posts GL lines, the ledger is wrong, not merely duplicated — and the AR/AP balance that every dashboard reads is wrong with it. Nothing downstream detects it: there is no unique constraint on `(customer_id, reference)` or equivalent to fall back on.
+- **Real-world scenario:** Finance submits an invoice on a slow connection, the request times out client-side after the server has committed, the user clicks Save again. The customer is billed twice and the duplicate is found at month-end reconciliation, if at all.
+- **Root Cause:** The idempotency convention was introduced per-endpoint as each replay bug was found, rather than as a shared concern. There is no `IdempotencyService` and no middleware, so a new money endpoint gets the guard only if its author remembers to hand-roll one.
+- **Recommended Improvement:** One `App\Common\Services\IdempotencyService` keyed on `(user_id, route, Idempotency-Key)` storing the first response, applied to the three money-document creates — then to any future endpoint that mints a financial record. Prefer a middleware over three call sites, so the next endpoint inherits it. The `create()` path in all three services already runs inside `DB::transaction()`, so the key insert belongs in the same transaction as the document.
+- **Ideal Process:** A retried financial POST returns the original 201 and its original body, and creates nothing.
+- **New Feature/Module Required:** No — a common service plus a table.
+- **Cross-Module Impact:** The shared service, once it exists, should absorb the three existing hand-rolled guards (WO output, auto payroll period, loan payroll payment) rather than sit beside them.
+- **Evidence:** `api/app/Modules/Accounting/Controllers/InvoiceController.php:42-50`, `BillController.php:43-57`, `JournalEntryController.php:44-56` — no key read in any. Contrast `api/app/Modules/Production/Controllers/WorkOrderController.php:237`. No regression proof: **this finding is open and unfixed.**
+- **Priority:** P2.
+- **Impact:** Duplicate financial documents and duplicate GL postings from a retry the client cannot know succeeded.
+- **Complexity:** M.
+- **Status note:** Registered 2026-08-20, **open**. Provenance: an implementation existed on branch `feat/OGAMI-104-idempotency` (`27a2dcad`, 2026-06-19) — an `IdempotencyService` plus `MoneyDocumentIdempotencyTest`, +396/-85 across 8 files — which was never merged. That branch was deleted during pre-redeploy cleanup on 2026-08-20 rather than rebased: all three services it modified were substantially rewritten in the two months since, so the diff no longer applied and re-implementing was judged cheaper than resolving it. The finding is recorded here so deleting the branch does not delete the knowledge. Recover the original with `git show 27a2dcad` while the reflog retains it.
 
 ---
 
