@@ -142,7 +142,7 @@ class DTRComputationService
             // Defensive: end before start on a non-night shift means overnight day shift (rare); roll forward.
             $shiftEnd = $shiftEnd->addDay();
         }
-        $scheduledMin = max(0, (int) $shiftStart->diffInMinutes($shiftEnd) - (int) $shift['break_minutes']);
+        $scheduledMin = max(0, (int) $shiftStart->diffInMinutes($shiftEnd, true) - (int) $shift['break_minutes']);
 
         // ── No time_in: didn't work today.
         if (empty($input['time_in'])) {
@@ -158,7 +158,7 @@ class DTRComputationService
         if (empty($input['time_out'])) {
             $graceEnd = $shiftStart->addMinutes($graceMin);
             $tardyMin = $timeIn->gt($graceEnd)
-                ? (int) min($this->settings->requiredInt('attendance.tardiness.maximum_minutes', 1), $graceEnd->diffInMinutes($timeIn))
+                ? (int) min($this->settings->requiredInt('attendance.tardiness.maximum_minutes', 1), $graceEnd->diffInMinutes($timeIn, true))
                 : 0;
             return [
                 'regular_hours'      => 0.00,
@@ -184,16 +184,16 @@ class DTRComputationService
             }
         }
 
-        $totalMin  = (int) $timeIn->diffInMinutes($timeOut);
+        $totalMin  = (int) $timeIn->diffInMinutes($timeOut, true);
         $workedMin = max(0, $totalMin - (int) $shift['break_minutes']);
 
         // Tardiness — late arrival vs scheduled start, minus grace period.
         $graceEnd = $shiftStart->addMinutes($graceMin);
-        $tardyMin = $timeIn->gt($graceEnd) ? (int) min($this->settings->requiredInt('attendance.tardiness.maximum_minutes', 1), $graceEnd->diffInMinutes($timeIn)) : 0;
+        $tardyMin = $timeIn->gt($graceEnd) ? (int) min($this->settings->requiredInt('attendance.tardiness.maximum_minutes', 1), $graceEnd->diffInMinutes($timeIn, true)) : 0;
 
         // Undertime — left before scheduled end (only when worked < scheduled). Extended OT period
         // does not contribute to undertime (we measure relative to shift_end).
-        $undertimeMin = $timeOut->lt($shiftEnd) ? (int) max(0, $timeOut->diffInMinutes($shiftEnd)) : 0;
+        $undertimeMin = $timeOut->lt($shiftEnd) ? (int) max(0, $timeOut->diffInMinutes($shiftEnd, true)) : 0;
 
         // Regular vs overtime split.
         // We compute the overlap of [timeIn, timeOut] with [shiftStart, shiftEnd] minus break,
@@ -347,7 +347,7 @@ class DTRComputationService
         $end   = $aEnd->lt($bEnd) ? $aEnd : $bEnd;
         if ($end->lte($start)) return 0;
         // Carbon 3 returns float from diffInMinutes; truncate to whole minutes.
-        return (int) $start->diffInMinutes($end);
+        return (int) $start->diffInMinutes($end, true);
     }
 
     /**

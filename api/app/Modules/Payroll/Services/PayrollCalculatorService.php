@@ -575,8 +575,8 @@ class PayrollCalculatorService
             return '0.0000';
         }
 
-        $totalDays   = max(1, $periodStart->diffInDays($periodEnd) + 1);
-        $coveredDays = $from->diffInDays($to) + 1;
+        $totalDays   = max(1, $periodStart->diffInDays($periodEnd, true) + 1);
+        $coveredDays = $from->diffInDays($to, true) + 1;
 
         if ($coveredDays >= $totalDays) {
             return '1.0000';

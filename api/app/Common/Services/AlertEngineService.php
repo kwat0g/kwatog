@@ -367,7 +367,7 @@ class AlertEngineService
                 // false: the critical band could never be reached, and the
                 // negative number was rendered into the message and stored in
                 // days_overdue. Cast because Carbon 3 returns a float.
-                $daysOver = (int) Carbon::parse($row->due_date)->diffInDays($today);
+                $daysOver = (int) Carbon::parse($row->due_date)->diffInDays($today, true);
                 if ($daysOver >= $criticalDays) {
                     $this->raise(
                         AlertType::ArOverdue60,

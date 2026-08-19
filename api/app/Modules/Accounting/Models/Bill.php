@@ -124,7 +124,7 @@ class Bill extends Model
         $asOf = $asOf ?? now();
         if ($this->status === BillStatus::Paid || $this->status === BillStatus::Cancelled || $this->status === BillStatus::Draft) return 'paid';
         if (! $this->due_date || $this->due_date->gte($asOf)) return 'current';
-        $days = $this->due_date->diffInDays($asOf);
+        $days = $this->due_date->diffInDays($asOf, true);
         return match (true) {
             $days <= 30  => 'd1_30',
             $days <= 60  => 'd31_60',

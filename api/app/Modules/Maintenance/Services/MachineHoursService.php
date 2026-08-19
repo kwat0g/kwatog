@@ -42,7 +42,7 @@ class MachineHoursService
             ->sum(function (WorkOrder $workOrder): float {
                 $start = Carbon::parse($workOrder->actual_start);
                 $end = $workOrder->actual_end ? Carbon::parse($workOrder->actual_end) : now();
-                return $end->greaterThan($start) ? $start->diffInMinutes($end) : 0.0;
+                return $end->greaterThan($start) ? $start->diffInMinutes($end, true) : 0.0;
             });
 
         $downtime = (float) DB::table('machine_downtimes')

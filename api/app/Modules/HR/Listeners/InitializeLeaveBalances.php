@@ -40,8 +40,8 @@ class InitializeLeaveBalances implements ShouldQueue
 
         $startOfYear = Carbon::create($year, 1, 1);
         $endOfYear   = Carbon::create($year, 12, 31);
-        $totalDays   = $startOfYear->diffInDays($endOfYear) + 1; // 365 or 366
-        $remaining   = max(1, $hire->diffInDays($endOfYear) + 1);
+        $totalDays   = $startOfYear->diffInDays($endOfYear, true) + 1; // 365 or 366
+        $remaining   = max(1, $hire->diffInDays($endOfYear, true) + 1);
         $proRation   = $remaining / $totalDays;
 
         $created = 0;

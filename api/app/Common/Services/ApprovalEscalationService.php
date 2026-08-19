@@ -124,7 +124,7 @@ class ApprovalEscalationService
                 if ($hours <= 0) continue;
                 // Carbon 2: parsing the past instant and diffing to now() returns
                 // a positive hour count when escalated_at is in the past.
-                $elapsed = \Carbon\Carbon::parse($rec->escalated_at)->diffInHours(now());
+                $elapsed = \Carbon\Carbon::parse($rec->escalated_at)->diffInHours(now(), true);
                 if ($elapsed < $hours) {
                     continue;
                 }

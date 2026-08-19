@@ -105,7 +105,7 @@ class Invoice extends Model
             return $this->status->value;
         }
         if (! $this->due_date || $this->due_date->gte($asOf)) return 'current';
-        $days = $this->due_date->diffInDays($asOf);
+        $days = $this->due_date->diffInDays($asOf, true);
         return match (true) {
             $days <= 30  => 'd1_30',
             $days <= 60  => 'd31_60',

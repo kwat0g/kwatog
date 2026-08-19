@@ -351,8 +351,15 @@ class SupplierPerformanceService
         $diffs = [];
         foreach ($rows as $r) {
             if (! $r->po_date || ! $r->expected_delivery_date) continue;
-            $expected = Carbon::parse((string) $r->po_date)->diffInDays(Carbon::parse((string) $r->expected_delivery_date));
-            $actual   = Carbon::parse((string) $r->po_date)->diffInDays(Carbon::parse((string) $r->received_date));
+            // Both diffs are SIGNED offsets from the same anchor (po_date), and
+            // it is their DIFFERENCE that is the variance — so the signs must
+            // survive. Neither date is guaranteed to follow the PO date:
+            // UpdatePurchaseOrderRequest accepts any `expected_delivery_date`
+            // and StoreGrnRequest accepts any `received_date`. Taking magnitudes
+            // would fold a backdated expectation the wrong way and understate
+            // lateness by twice the backdating.
+            $expected = Carbon::parse((string) $r->po_date)->diffInDays(Carbon::parse((string) $r->expected_delivery_date), false);
+            $actual   = Carbon::parse((string) $r->po_date)->diffInDays(Carbon::parse((string) $r->received_date), false);
             $diffs[] = $actual - $expected;
         }
 
