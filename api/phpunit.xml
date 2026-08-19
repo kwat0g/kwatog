@@ -74,13 +74,160 @@
         <env name="COMPANY_TIN" value="000-000-000-000"/>
         <env name="COMPANY_VAT_STATUS" value="VAT Registered"/>
         <env name="COMPANY_PUBLIC_URL" value="https://ogami.test"/>
+        <!--
+            F-042: the four keys below are read by SettingsSeeder (and migration
+            0123 for logo_path/certification) but were not declared here, so
+            their values came from whichever untracked env file happened to sit
+            on the machine. Measured: an api/.env.testing carrying
+            COMPANY_CERTIFICATION=HOSTILE-CERT put that string into
+            company.certification for the entire suite, and removing the file
+            put '' there instead. Neither state is expressed by the repository,
+            which is the whole of F-042.
+
+            The values are not invented. Each is the fallback the application
+            itself already uses for the matching setting in
+            EmailBrandingService::data() — the same source six of the seven
+            COMPANY_* values above match byte for byte (COMPANY_PUBLIC_URL is
+            the exception; its fallback there is config('app.frontend_url')) —
+            so the seeded settings now equal what the code would have
+            substituted anyway. COMPANY_SALES_INBOX_EMAIL additionally matches
+            the literal migration 0358 inserts, so the seeder writes the value
+            that was already in the row rather than skipping it as blank
+            deployment data.
+
+            COMPANY_LOGO_PATH is deliberately empty: that is migration 0123's
+            default and api/.env.example's value, and no Blade renders
+            company.logo_path (the mail letterhead resolves its own asset via
+            EmailBrandingService::logoPath()). A fabricated path would pin the
+            key to a file that does not exist and mislead the next reader.
+
+            NET EFFECT, derived key by key rather than assumed: of the eight
+            keys this change declares, exactly ONE moves a resolved value.
+            company.certification goes from '' to a non-empty string, so PDF
+            letterheads now render the certification line they render in
+            production (resources/views/pdf/_components/letterhead.blade.php
+            gates it on !empty). The other seven resolve byte-identically to
+            what the code already substituted, because a migration or an in-code
+            fallback was already supplying them. So this fixed no latent failure
+            and the suite asserts none of these values. What changed is which
+            artefact decides them: the repository, not a gitignored file that
+            may or may not exist on a given machine.
+        -->
+        <env name="COMPANY_SALES_INBOX_EMAIL" value="sales@ogami.com.ph"/>
+        <env name="COMPANY_CERTIFICATION" value="IATF 16949:2016 Certified"/>
+        <env name="COMPANY_LOGO_PATH" value=""/>
+        <env name="COMPANY_EMAIL_BRAND_NAME" value="Ogami Philippines"/>
+        <!--
+            F-042, second pass. The eight keys above were the list F-042's own
+            Evidence section named, and that list was incomplete. Re-deriving it
+            mechanically instead of trusting it (every env(), $envString() and
+            $envFloat() key under database/seeders and database/migrations,
+            diffed against the names declared in this file) produced 22 keys, of
+            which five were still undeclared after that pass. All five are read
+            by SettingsSeeder and all five sit in its $deploymentKeys list,
+            where a BLANK env value skips the write and leaves the migration's
+            row alone but a NON-blank value overwrites it for the whole suite.
+            So the same gitignored file (.gitignore:12) that F-042 exists to
+            take out of the loop was still deciding these.
+
+            Measured, not argued. With an untracked api/.env.testing carrying
+            hostile values and these five undeclared, a probe seeding
+            SettingsSeeder reported the post-migration row, then the post-seed
+            row:
+
+              company.employee_email_domain   "ogami.ph"  became "hostile-domain.example"
+              company.latitude                14.2860     became 1.2345
+              company.longitude               120.9345    became 2.3456
+              quality.coc.manager_name        row absent  became "HOSTILE MANAGER"
+              quality.coc.manager_role        row absent  became "HOSTILE ROLE"
+
+            and GET /api/v1/landing/contact returned latitude 1.2345 instead of
+            14.286. With the same hostile file in place and these five declared,
+            the probe returned the values pinned below, identical to the run with
+            the file deleted.
+
+            Values, key by key, invented nowhere:
+
+            COMPANY_EMPLOYEE_EMAIL_DOMAIN is migration 0308's literal
+            'ogami.ph'. Consumer: UserProvisioningService:263, via
+            requiredString('company.employee_email_domain'). Note that key was
+            never throwing, because 0308 already supplied the row and the blank
+            env value skipped the write; what the hostile file did was replace
+            it, and tests/Feature/HR/UserProvisioningTest.php:94 asserts the
+            literal 'juan.cruz@ogami.ph'.
+
+            COMPANY_LATITUDE and COMPANY_LONGITUDE are migration 0442's
+            literals, which supersede migration 0427's placeholder pair
+            (14.3294, 120.9367 — a point in Dasmariñas city proper, several km
+            off the plant). Consumer: LandingContactController:23,24, which
+            range-checks and casts to float. One measured artefact worth
+            recording: SettingsSeeder reads these through $envFloat, so the
+            declared text round-trips through a PHP float and the stored jsonb
+            becomes 14.286 rather than the migration's 14.2860. The resolved
+            NUMBER is identical, every reader casts to float, and no code
+            compares these rows as text outside migration 0442's own guard,
+            which runs before any seeder.
+
+            QUALITY_COC_MANAGER_NAME and QUALITY_COC_MANAGER_ROLE are
+            deliberately EMPTY. No migration seeds either (measured: both rows
+            are absent after a full migrate), the application's own fallback is
+            '' at CoCService:138,139, api/.env.example leaves both blank, and
+            resources/views/pdf/coc.blade.php:147,148 already substitutes '—'
+            and 'Quality Management' when they are empty. A fabricated manager
+            name would put a fictitious human's signature on every certificate
+            of conformance the suite renders, which is worse than blank.
+
+            NET EFFECT: no resolved value moves. Three keys restate what a
+            migration already put in the row, two restate the '' the seeder
+            already wrote. What changes is that an untracked file can no longer
+            defeat the $deploymentKeys skip for any of them. None is forced,
+            for the reason given at the top of this block.
+        -->
+        <env name="COMPANY_EMPLOYEE_EMAIL_DOMAIN" value="ogami.ph"/>
+        <env name="COMPANY_LATITUDE" value="14.2860"/>
+        <env name="COMPANY_LONGITUDE" value="120.9345"/>
+        <env name="QUALITY_COC_MANAGER_NAME" value=""/>
+        <env name="QUALITY_COC_MANAGER_ROLE" value=""/>
         <!-- TAX_PH_VAT_RATE: SettingsSeeder seeds tax.ph.vat_rate from this env;
              an empty value now fails TaxPolicyService::requiredVatRate() (the
              strict rate validation added 2026-08-08), so every invoice/bill/
              credit-note test would throw. 0.12 is the legal PH VAT rate and the
              same default migration 0287 seeds. -->
         <env name="TAX_PH_VAT_RATE" value="0.12"/>
+        <!-- ACCOUNTING_FUNCTIONAL_CURRENCY_CODE: migration 0309 inserts the
+             literal 'PHP'. SettingsSeeder is the only env reader of this key
+             and lists it in $deploymentKeys, where a blank env value SKIPS the
+             write instead of blanking the row, so the resolved setting was
+             already 'PHP' and no requiredString() reader of it was ever
+             throwing. Declaring it here changes no resolved value; what it
+             closes is the write path. A NON-blank env value defeats that skip,
+             so an untracked env file saying USD would have replaced the
+             migration's PHP for all 28 test files that seed SettingsSeeder.
+             'PHP' matches migration 0309 byte for byte and is the only
+             admissible value, Philippine Peso being the system's sole currency
+             (CLAUDE.md). -->
+        <env name="ACCOUNTING_FUNCTIONAL_CURRENCY_CODE" value="PHP"/>
         <env name="PDF_FOOTER_DISCLAIMER" value="System-generated document."/>
+        <!--
+            AdminUserSeeder reads these three: it skips the admin bootstrap when
+            any one is blank, and throws when ADMIN_EMAIL is not a valid address
+            or ADMIN_PASSWORD is shorter than 12 characters. AdminUserSeeder is
+            reachable only through DatabaseSeeder and no test seeds
+            DatabaseSeeder, so these THREE keys are not exercised by the suite
+            at all. Read that as a statement about ADMIN_* only: the COMPANY_*
+            and ACCOUNTING_* keys above ARE exercised, by the 28 test files that
+            seed SettingsSeeder. Declaring these three buys one thing, that an
+            untracked env file can no longer decide which of the seeder's three
+            outcomes (skip, create, throw) a future DatabaseSeeder run takes.
+
+            The password is a fixture, not a credential. It exists only to clear
+            the seeder's 12-character check, and it is deliberately spelled so
+            that it cannot be mistaken for a real secret if it is ever grepped
+            out of this file.
+        -->
+        <env name="ADMIN_NAME" value="Test Administrator"/>
+        <env name="ADMIN_EMAIL" value="admin@ogami.test"/>
+        <env name="ADMIN_PASSWORD" value="not-a-real-password-A1!"/>
         <!--
             'log', not 'null'. Laravel's env() converts the literal string "null"
             to PHP null, which leaves broadcasting.default unset instead of

@@ -653,7 +653,30 @@ docs:check-reviews                       (06:45)
 ```
 
 ### Migration numbering
-Recent additions use 4-digit numbered (`0186_*`, `0187_*`, …). Highest as of 2026-08-04 = **0441**. New migrations use highest+1. Mixed timestamp-style migrations (`2026_06_09_*`) coexist for older HR/Payroll changes — don't introduce more.
+Recent additions use 4-digit numbered (`0186_*`, `0187_*`, …). Highest as of 2026-08-19 = **0473**. New migrations use highest+1. Mixed timestamp-style migrations (`2026_06_09_*`) coexist for older HR/Payroll changes — don't introduce more.
+
+**Four prefixes are used twice, and must NOT be renamed:**
+
+| prefix | the two files |
+|---|---|
+| `0198` | `add_label_description_to_settings`, `create_accounting_periods_table` |
+| `0427` | `seed_company_coordinates`, `seed_payroll_compute_stale_threshold` |
+| `0442` | `seed_maintenance_dashboard_window_setting`, `update_company_plant_location_settings` |
+| `0450` | `add_render_kind_to_dashboard_widgets`, `rename_edge_system_user_settings` |
+
+All four pairs are pre-existing on `origin/main`, so they are not new breakage, and
+**ordering is unaffected** — the migrator sorts by full filename, so a duplicated
+numeric prefix still orders deterministically by the rest of the name.
+
+Renaming them would be **destructive**. Laravel records the filename (without
+`.php`) in the `migrations` table and matches on it, so a renamed migration that
+has already run looks new and is re-run — re-applying schema operations against a
+deployed database. Leave them alone.
+
+The cost is human, not mechanical: two files claiming one sequence number make
+"highest + 1" ambiguous and invite a fifth collision. Derive the next number by
+confirming the prefix is unused (`ls api/database/migrations | grep '^0474_'`)
+rather than trusting a max.
 
 ### Test runner + suite size
 Full suite as of 2026-08-04: **1242 tests / 0 fail / ~9 min runtime**. Use `--filter='Foo|Bar'` for tight loops. Re-run full suite only at end of feature.

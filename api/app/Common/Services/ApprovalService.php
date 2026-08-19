@@ -19,12 +19,11 @@ class ApprovalService
      * Submit a record into a workflow. Creates one pending approval_record per step.
      *
      * A step carrying a `threshold` is skipped (action = 'skipped') when the
-     * supplied amount is strictly below it. Note the gate is the per-step
-     * `threshold` key inside the `steps` JSON column — NOT the
-     * `workflow_definitions.amount_threshold` column, which this service never
-     * reads. Both are seeded to 50000.00 on purchase_request and purchase_order
-     * (WorkflowSeeder:60,65 and :71,75), so the column looks authoritative and
-     * is not; setting it alone gates nothing.
+     * supplied amount is strictly below it. The gate is the per-step `threshold`
+     * key inside the `steps` JSON column, and that is now the only place a
+     * threshold lives: a `workflow_definitions.amount_threshold` column used to
+     * sit alongside it, seeded to the same 50000.00 on purchase_request and
+     * purchase_order and read by nothing, until migration 0473 dropped it.
      *
      * $amount is a decimal string, never a float — it is compared against a
      * step threshold to decide whether that step is skipped, and a float
