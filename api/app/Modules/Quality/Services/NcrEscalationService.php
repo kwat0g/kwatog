@@ -47,7 +47,7 @@ class NcrEscalationService
             if (! $clockStart instanceof Carbon) {
                 $clockStart = Carbon::parse((string) $clockStart);
             }
-            if ($clockStart->diffInHours(now()) < $hoursDue) {
+            if ($clockStart->diffInHours(now(), true) < $hoursDue) {
                 continue;
             }
 

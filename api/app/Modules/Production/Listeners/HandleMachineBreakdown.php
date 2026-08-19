@@ -172,7 +172,7 @@ class HandleMachineBreakdown implements ShouldQueue
                     $end = now();
                     $row->update([
                         'end_time'         => $end,
-                        'duration_minutes' => (int) max(0, $row->start_time->diffInMinutes($end)),
+                        'duration_minutes' => (int) max(0, $row->start_time->diffInMinutes($end, true)),
                     ]);
                     $closed++;
                 });

@@ -86,7 +86,7 @@ class CheckRecruitmentBottlenecks extends Command
             ->chunkById(100, function (Collection $applications) use (&$count, $recipients, $notifications, $thresholds, $dedupHours): void {
                 foreach ($applications as $application) {
                     $stage = $application->stage?->value ?? (string) $application->getRawOriginal('stage');
-                    $ageDays = $application->updated_at?->diffInDays(now()) ?? 0;
+                    $ageDays = $application->updated_at?->diffInDays(now(), true) ?? 0;
                     $reason = null;
 
                     if ($stage === ApplicationStage::Interview->value) {

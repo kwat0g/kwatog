@@ -26,6 +26,12 @@ namespace App\Common\Enums;
  *
  *  QUALITY
  *    qc_fail_rate_high   daily scrap rate > 5% on any product
+ *
+ *  SCHEDULER
+ *    scheduler_stale   the execution ledger's heartbeat is stale, stuck or gapped.
+ *                      Catches a STALLED scheduler, not a dead one — the check
+ *                      that raises it is itself scheduled. See
+ *                      AlertEngineService::checkScheduler().
  */
 enum AlertType: string
 {
@@ -53,6 +59,9 @@ enum AlertType: string
     case MrpRunFailed        = 'mrp_run_failed';
     case MrpDataError        = 'mrp_data_error';
 
+    /** Raised from SchedulerExecutionLedger::health() — see AlertEngineService::checkScheduler(). */
+    case SchedulerStale      = 'scheduler_stale';
+
     public static function values(): array
     {
         return array_map(fn (self $c) => $c->value, self::cases());
@@ -78,6 +87,7 @@ enum AlertType: string
             self::MrpScheduleConflict => 'MRP schedule conflict',
             self::MrpRunFailed => 'MRP run failed',
             self::MrpDataError => 'MRP data error',
+            self::SchedulerStale => 'Scheduler stale',
         };
     }
 
@@ -86,7 +96,7 @@ enum AlertType: string
         return match ($this) {
             self::StockCritical, self::MachineBreakdown,
             self::MoldShotCritical, self::ArOverdue60,
-            self::MrpRunFailed => AlertSeverity::Critical,
+            self::MrpRunFailed, self::SchedulerStale => AlertSeverity::Critical,
 
             self::ApDueSoon => AlertSeverity::Info,
 

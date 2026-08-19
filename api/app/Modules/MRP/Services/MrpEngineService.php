@@ -381,7 +381,14 @@ class MrpEngineService
                 // urgent, and the horizon setting decided nothing. startOfDay on
                 // the left keeps this a whole-day comparison rather than one that
                 // shifts with the time of day the run happens to fire.
-                $daysUntilDelivery = Carbon::now()->startOfDay()->diffInDays($line->delivery_date);
+                //
+                // Signed on purpose (`false`), and NOT an absolute magnitude: a
+                // delivery date already past yields a negative count, which is
+                // exactly what the `<= $urgentDeliveryDays` test wants — an
+                // overdue line is more urgent than one due today, not less. An
+                // absolute value would read a line 30 days overdue as 30 days of
+                // slack and downgrade it to normal priority.
+                $daysUntilDelivery = Carbon::now()->startOfDay()->diffInDays($line->delivery_date, false);
                 $priority = $daysUntilDelivery <= $urgentDeliveryDays
                     ? $urgentPriority
                     : $normalPriority;

@@ -791,7 +791,7 @@ class ChainBottleneckService
         $now = Carbon::now();
         foreach ($rows as $row) {
             $stuckSince = $this->parseTimestamp($row->updated_at ?? null);
-            $hoursStuck = $stuckSince ? $stuckSince->diffInHours($now) : null;
+            $hoursStuck = $stuckSince ? $stuckSince->diffInHours($now, true) : null;
 
             $out[] = [
                 'key' => $key,

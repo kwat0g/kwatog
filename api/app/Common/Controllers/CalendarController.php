@@ -45,7 +45,7 @@ class CalendarController
         $to   = Carbon::parse((string) $request->query('to'))->endOfDay();
 
         $maxRangeDays = $this->settings->requiredInt('calendar.max_range_days', 1, 3650);
-        if ($from->diffInDays($to) > $maxRangeDays) {
+        if ($from->diffInDays($to, true) > $maxRangeDays) {
             return response()->json([
                 'message' => 'Date range exceeds the maximum of '.$maxRangeDays.' days.',
                 'errors'  => ['to' => ['Range too large.']],

@@ -49,7 +49,7 @@ class DowntimeAnalyticsService
         // Argument-later, receiver-earlier. Carbon 3 made diffIn* SIGNED, so
         // $to->diffInMinutes($from) returned a NEGATIVE window: uptime collapsed
         // to max(0, negative) = 0 and MTBF was pinned at 0 for every machine.
-        $windowMinutes = (int) $from->diffInMinutes($to);
+        $windowMinutes = (int) $from->diffInMinutes($to, true);
         if ($breakdownCount > 0) {
             $uptimeMinutes = max(0, $windowMinutes - $totalMinutes);
             $mtbf = round($uptimeMinutes / $breakdownCount / 60, 2); // hours

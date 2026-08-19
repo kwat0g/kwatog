@@ -198,7 +198,7 @@ class ActionCenterService
         return Inspection::query()->with(['item:id,name', 'product:id,name', 'inspector:id,name'])
             ->whereIn('status', ['draft', 'in_progress'])->oldest()->limit($this->sourceLimit())->get()
             ->map(function (Inspection $inspection) use ($slaHours): array {
-                $age = $inspection->created_at?->diffInHours(now()) ?? 0;
+                $age = $inspection->created_at?->diffInHours(now(), true) ?? 0;
                 $stage = $this->enumValue($inspection->stage);
                 $subject = $inspection->item?->name ?? $inspection->product?->name ?? 'inspection lot';
 
@@ -232,7 +232,7 @@ class ActionCenterService
                     'low' => $this->settings->requiredInt('quality.ncr.sla_low_hours', 1),
                     default => $this->settings->requiredInt('quality.ncr.sla_medium_hours', 1),
                 };
-                $age = $ncr->created_at?->diffInHours(now()) ?? 0;
+                $age = $ncr->created_at?->diffInHours(now(), true) ?? 0;
 
                 return $this->item(
                     id: 'quality:ncr:'.$ncr->hash_id,
@@ -257,7 +257,7 @@ class ActionCenterService
         return MaintenanceWorkOrder::query()->with('assignee')->open()->oldest()->limit($this->sourceLimit())->get()
             ->map(function (MaintenanceWorkOrder $workOrder): array {
                 $priority = $this->enumValue($workOrder->priority);
-                $age = $workOrder->created_at?->diffInHours(now()) ?? 0;
+                $age = $workOrder->created_at?->diffInHours(now(), true) ?? 0;
 
                 return $this->item(
                     id: 'maintenance:work-order:'.$workOrder->hash_id,
@@ -293,7 +293,7 @@ class ActionCenterService
         return WorkOrder::query()->with('product:id,name')->whereIn('status', ['confirmed', 'in_progress'])
             ->whereNotNull('planned_end')->where('planned_end', '<', now())->oldest('planned_end')->limit($this->sourceLimit())->get()
             ->map(function (WorkOrder $workOrder) use ($criticalHours): array {
-                $hours = $workOrder->planned_end?->diffInHours(now()) ?? 0;
+                $hours = $workOrder->planned_end?->diffInHours(now(), true) ?? 0;
 
                 return $this->item(
                     id: 'production:work-order:'.$workOrder->hash_id,
@@ -350,7 +350,7 @@ class ActionCenterService
             'description' => $description, 'reference' => $reference, 'priority' => $priority,
             'priority_label' => $this->humanize($priority),
             'status_label' => $status, 'link' => $link, 'created_at' => $createdAt,
-            'due_at' => $dueAt, 'age_hours' => $created ? (int) $created->diffInHours(now()) : null,
+            'due_at' => $dueAt, 'age_hours' => $created ? (int) $created->diffInHours(now(), true) : null,
             'is_overdue' => $overdue, 'owner_label' => $owner,
         ];
     }

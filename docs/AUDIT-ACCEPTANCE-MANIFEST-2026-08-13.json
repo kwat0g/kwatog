@@ -50,6 +50,7 @@
     {"id":"F-043","type":"ci_contract","command":"python3 -c \"import yaml,sys; w=yaml.safe_load(open('.github/workflows/api-tests.yml')); sys.exit(0 if w['jobs']['phpunit'].get('env',{}).get('APP_ENV')=='testing' else 1)\""},
     {"id":"F-044","type":"focused_test","command":"cd api && php artisan test --filter='BudgetEnforcementBoundaryTest|BudgetConsumptionLevelTest'"},
     {"id":"F-045","type":"focused_test","command":"cd api && php artisan test --filter=ApprovalThresholdBoundaryTest"},
-    {"id":"F-046","type":"static_audit","command":"node scripts/verify-audit-acceptance-manifest.mjs"}
+    {"id":"F-046","type":"static_audit","command":"node scripts/verify-audit-acceptance-manifest.mjs"},
+    {"id":"F-047","type":"focused_test","command":"cd api && php artisan test --filter=SchedulerStaleAlertTest"}
   ]
 }

@@ -175,7 +175,13 @@ final class SchedulerExecutionLedger
             $previousTick = $recentTicks->get(1);
             $previousEnd = $previousTick->finished_at ?? $previousTick->started_at;
             $latestStart = $recentTicks->first()->started_at;
-            if ($previousEnd && $latestStart && $previousEnd->diffInSeconds($latestStart) > max(60, $staleMinutes * 60)) {
+            // Signed on purpose. This measures the GAP from the previous tick's
+            // end to the next tick's start, and the previous tick can still be
+            // running when the next one starts — `finished_at` then lands after
+            // `$latestStart` and the diff is negative, which correctly reads as
+            // "no gap". An absolute magnitude would report an overlap of N
+            // seconds as a gap of N seconds and raise a false stale alert.
+            if ($previousEnd && $latestStart && $previousEnd->diffInSeconds($latestStart, false) > max(60, $staleMinutes * 60)) {
                 $issues[] = sprintf(
                     'Scheduler tick gap detected: no tick started between %s and %s.',
                     $previousEnd->toDateTimeString(),

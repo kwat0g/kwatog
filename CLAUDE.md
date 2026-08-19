@@ -653,7 +653,7 @@ docs:check-reviews                       (06:45)
 ```
 
 ### Migration numbering
-Recent additions use 4-digit numbered (`0186_*`, `0187_*`, …). Highest as of 2026-08-19 = **0473**. New migrations use highest+1. Mixed timestamp-style migrations (`2026_06_09_*`) coexist for older HR/Payroll changes — don't introduce more.
+Recent additions use 4-digit numbered (`0186_*`, `0187_*`, …). Highest as of 2026-08-19 = **0474**. New migrations use highest+1. Note `0472` is absent from `main` — it lives on an unmerged frontend branch, so the sequence here reads 0470, 0471, 0473, 0474 and a gap does NOT mean the number is free. Mixed timestamp-style migrations (`2026_06_09_*`) coexist for older HR/Payroll changes — don't introduce more.
 
 **Four prefixes are used twice, and must NOT be renamed:**
 
