@@ -75,13 +75,15 @@ class LeaveRequestBulkApproveTest extends TestCase
      * `failed[].reason` is rendered into a toast verbatim by the SPA, so what
      * lands there is a user-facing contract, not a debugging detail.
      *
-     * The segregation-of-duties refusal is stated with `abort(403, …)` in
-     * `ApprovalService`, which raises a Symfony `HttpException` rather than a
-     * `BusinessRuleException`. Narrowing the catch to business rules alone —
-     * done to stop a QueryException putting SQL on screen — swallowed this
-     * sentence too and logged an error per row for a refusal the system makes on
-     * purpose. `chain-leave.spec.ts` asserts this same sentence reaches the user
-     * on the single-row path; the bulk path must not disagree with it.
+     * The segregation-of-duties refusal comes from `ApprovalService` as a
+     * `ForbiddenActionException`, not a `BusinessRuleException`. Narrowing the
+     * catch to business rules alone — done to stop a QueryException putting SQL
+     * on screen — swallowed this sentence and logged an error per row for a
+     * refusal the system makes on purpose. It was `abort(403, …)` at the time,
+     * so no catch could name it and the repair had to infer intent from a status
+     * code; `bulkFailureReason` now matches the type. `chain-leave.spec.ts`
+     * asserts this same sentence reaches the user on the single-row path; the
+     * bulk path must not disagree with it.
      */
     public function test_bulk_approve_surfaces_the_segregation_of_duties_refusal(): void
     {
