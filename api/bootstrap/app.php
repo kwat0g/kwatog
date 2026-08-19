@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Middleware\CheckFeature;
 use App\Common\Middleware\CheckPasswordExpiry;
 use App\Common\Middleware\CheckPermission;
@@ -102,6 +103,40 @@ return Application::configure(basePath: dirname(__DIR__))
                 'code'    => $e->errorCode(),
             ], static fn ($v) => $v !== null), 422);
         });
+
+        // An authorization refusal is a 403, and its message is authored copy.
+        //
+        // The two guards in ApprovalService (segregation of duties, wrong role
+        // for the step) and the equivalents in ActionCenterTaskService used to
+        // say this with `abort(403, '…')`. That raises a Symfony HttpException,
+        // which is invisible to `grep 'throw new'` and matches no named catch, so
+        // narrowing a bulk-approve arm to BusinessRuleException swallowed both
+        // and replaced a deliberate refusal with generic copy (f54822f7). Typing
+        // them means a catch can name them — and this arm means an uncaught one
+        // still reaches the client as the 403 it was written as.
+        //
+        // Same envelope shape as the 422 above so a page that reads `errors`
+        // finds the sentence in the same place; `code` is likewise omitted when
+        // null, because the SPA's 403 branch switches on it.
+        $exceptions->render(function (ForbiddenActionException $e, Request $request) {
+            if (! ($request->is('api/*') || $request->expectsJson())) {
+                return null;
+            }
+
+            return response()->json(array_filter([
+                'message' => $e->getMessage(),
+                'errors'  => [$e->errorKey() => [$e->getMessage()]],
+                'code'    => $e->errorCode(),
+            ], static fn ($v) => $v !== null), 403);
+        });
+
+        // A refusal the system decided on purpose is not a fault to report.
+        // `abort(403, …)` was silent here — Laravel's internalDontReport list
+        // contains HttpException — and retyping must not start writing an error
+        // log line every time a department head opens their own request.
+        $exceptions->dontReport([
+            ForbiddenActionException::class,
+        ]);
     })
     ->booted(function () {
         RateLimiter::for('auth', fn (Request $r) => Limit::perMinute(5)

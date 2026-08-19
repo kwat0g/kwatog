@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Leave\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Services\ApprovalService;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\OutboxService;
@@ -25,7 +26,6 @@ use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 class LeaveRequestService
 {
@@ -63,40 +63,31 @@ class LeaveRequestService
     /**
      * Decide what a failed row tells the user, and log the cases it withholds.
      *
-     * Three arms, because "is this sentence safe to show" turns out not to map
-     * onto a single exception type:
+     * Two arms, one per class of authored copy — no inference:
      *
-     * 1. `BusinessRuleException` — authored copy, always safe.
-     * 2. A 4xx `HttpException`. `ApprovalService` states two of its refusals with
-     *    `abort(403, …)` rather than a typed exception: the segregation-of-duties
-     *    guard ("You cannot act on a record you submitted.") and the wrong-role
-     *    guard. Both are routine and deterministic in a batch — a department head
-     *    whose queue includes their own request hits the first, and an approver
-     *    who holds the permission but not the step's `role_slug` hits the second
-     *    on every row. Narrowing to `BusinessRuleException` alone replaced those
-     *    sentences with generic copy and logged an error per row for a refusal
-     *    the system had decided on purpose. `chain-leave.spec.ts` asserts the SoD
-     *    sentence reaches the user on the single-row path; the bulk path must not
-     *    disagree with it.
-     * 3. Anything else — including a 5xx `HttpException`, which is not authored
-     *    user copy — gets the stand-in, and a log line with the real detail.
+     * 1. `BusinessRuleException` — a rule the record state violated ("Only
+     *    requests pending HR approval can be approved here.").
+     * 2. `ForbiddenActionException` — a refusal aimed at the actor. Both of
+     *    ApprovalService's guards raise it, and both are routine and
+     *    deterministic in a batch: a department head whose queue includes their
+     *    own request hits the segregation-of-duties guard, and an approver who
+     *    holds the permission but not the step's `role_slug` hits the wrong-role
+     *    guard on every row. `chain-leave.spec.ts` asserts the SoD sentence
+     *    reaches the user on the single-row path; the bulk path must agree.
+     * 3. Anything else gets the stand-in, and a log line with the real detail.
      *
-     * The `abort()` calls are the fragile part of this: they are typed as generic
-     * HTTP failures, so this arm has to infer intent from a status code. Retyping
-     * them is the durable fix and belongs with whoever owns `ApprovalService`.
+     * This arm used to test `HttpExceptionInterface` and a 4xx status, because
+     * the two guards were `abort(403, …)` and nothing typed them — the arm had to
+     * infer "was this sentence written to be read" from a status code. Typing
+     * them (ForbiddenActionException) removed the guess: the inference is gone,
+     * and any *other* 4xx HttpException reaching here is now deliberately
+     * withheld, because an `abort()` raised by framework plumbing (a 404 from a
+     * route binding, a 419, a 429) is not copy for this toast.
      */
     private function bulkFailureReason(string $stage, int $id, \Throwable $e): string
     {
-        if ($e instanceof BusinessRuleException) {
+        if ($e instanceof BusinessRuleException || $e instanceof ForbiddenActionException) {
             return $e->getMessage();
-        }
-
-        if ($e instanceof HttpExceptionInterface) {
-            $status  = $e->getStatusCode();
-            $message = trim($e->getMessage());
-            if ($status >= 400 && $status < 500 && $message !== '') {
-                return $message;
-            }
         }
 
         $this->logBulkApproveFailure($stage, $id, $e);
