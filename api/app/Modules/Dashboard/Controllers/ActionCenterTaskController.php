@@ -7,12 +7,28 @@ namespace App\Modules\Dashboard\Controllers;
 use App\Modules\Dashboard\Services\ActionCenterTaskService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use RuntimeException;
 
 class ActionCenterTaskController
 {
     public function __construct(private readonly ActionCenterTaskService $service) {}
 
+    /**
+     * No try/catch around the service call.
+     *
+     * This method used to `catch (RuntimeException)` and answer 422 with
+     * `$e->getMessage()` — one of the 39 arms 9fde7dfb narrowed, missed because
+     * the Dashboard module was held by another session at the time. It carried
+     * three unrelated things at once: a malformed item key, an authorization
+     * refusal, and — since QueryException extends PDOException extends
+     * RuntimeException — every SQL fault raised inside apply()'s transaction,
+     * SQLSTATE and column names included.
+     *
+     * The service now names all three. The render hook in bootstrap/app.php
+     * answers a BusinessRuleException with 422 and a ForbiddenActionException
+     * with 403, both carrying the message and an `errors` bag the old arm
+     * dropped; a QueryException reaches nothing that claims to understand it and
+     * is a 500.
+     */
     public function update(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -23,14 +39,10 @@ class ActionCenterTaskController
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        try {
-            $tasks = $this->service->apply(
-                $data['item_ids'], $data['action'], $request->user(),
-                $data['snoozed_until'] ?? null, $data['notes'] ?? null,
-            );
-        } catch (RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
-        }
+        $tasks = $this->service->apply(
+            $data['item_ids'], $data['action'], $request->user(),
+            $data['snoozed_until'] ?? null, $data['notes'] ?? null,
+        );
 
         return response()->json(['data' => array_map(fn ($task) => [
             'item_id' => $task->item_key,

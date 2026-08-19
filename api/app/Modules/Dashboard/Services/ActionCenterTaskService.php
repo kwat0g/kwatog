@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace App\Modules\Dashboard\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Models\Alert;
 use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Models\ActionCenterTask;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 class ActionCenterTaskService
 {
@@ -70,6 +70,23 @@ class ActionCenterTaskService
         return $results;
     }
 
+    /**
+     * Gate one item key against the permissions its source requires.
+     *
+     * Both refusals used to be a bare RuntimeException, which the controller
+     * turned into a 422 with the message. One of them is not a 422:
+     *
+     *  - an unknown key prefix is a malformed request, and 'Unsupported
+     *    action-center task action.' above already answers its sibling case with
+     *    BusinessRuleException, so this matches it;
+     *  - "you do not have access" is an authorization refusal. It reached the
+     *    user as "fix your input" for a request whose input was fine.
+     *
+     * Typing both also takes the controller out of the SQL-leak business: a
+     * deadlock or unique violation inside apply()'s transaction is a
+     * QueryException, which extends RuntimeException, so the arm that carried
+     * these two also put SQLSTATE, table and column names into a 422 message.
+     */
     private function assertAllowed(string $key, User $user): void
     {
         $permissions = match (true) {
@@ -82,13 +99,13 @@ class ActionCenterTaskService
             default => [],
         };
         if ($permissions === []) {
-            throw new RuntimeException('Unknown action-center item.');
+            throw new BusinessRuleException('Unknown action-center item.');
         }
         foreach ($permissions as $permission) {
             if ($user->hasPermission($permission)) {
                 return;
             }
         }
-        throw new RuntimeException('You do not have access to this action-center item.');
+        throw new ForbiddenActionException('You do not have access to this action-center item.');
     }
 }
