@@ -41,7 +41,7 @@ Every product has **inspection specs** (dimensions + tolerances). Every inspecti
 ```
 React 18 SPA (Vite + TypeScript) ←HTTP-only cookies→ Laravel 11 REST API (PHP 8.3)
                                               │
-              PostgreSQL 16 · Redis 7 · Meilisearch · Laravel Reverb (WebSocket)
+              PostgreSQL 16 · Redis 7 · Laravel Reverb (WebSocket)
 ```
 
 Fully decoupled. API at `/api/v1/*`, SPA at `/*`, WebSocket at `/ws`. Docker Compose.

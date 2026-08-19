@@ -176,7 +176,7 @@ build-spa:
 		sh -c "npm ci --no-audit --no-fund && npm run build"
 
 prod-up:
-	$(PROD_COMPOSE) up -d db redis meilisearch
+	$(PROD_COMPOSE) up -d db redis
 	@set -eu; \
 		status=; \
 		for i in 1 2 3 4 5 6 7 8 9 10; do \
@@ -204,7 +204,7 @@ deploy: build-spa
 	@if [ -z "$$SERVER_NAME" ]; then echo "ERROR: export SERVER_NAME=erp.your.domain"; exit 1; fi
 	$(PROD_COMPOSE) build --pull
 	# Apply schema changes before starting code that can consume queued work.
-	$(PROD_COMPOSE) up -d db redis meilisearch
+	$(PROD_COMPOSE) up -d db redis
 	@set -eu; \
 		status=; \
 		for i in 1 2 3 4 5 6 7 8 9 10; do \

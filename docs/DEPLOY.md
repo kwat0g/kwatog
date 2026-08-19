@@ -120,7 +120,7 @@ Generate values:
 # APP_KEY (run inside a temporary container so PHP isn't required on the host)
 docker run --rm -v "$PWD:/app" -w /app/api composer:2 php artisan key:generate --show
 
-# DB_PASSWORD, HASHIDS_SALT, REVERB_APP_KEY, REVERB_APP_SECRET, MEILISEARCH_KEY
+# DB_PASSWORD, HASHIDS_SALT, REVERB_APP_KEY, REVERB_APP_SECRET
 openssl rand -base64 32   # run multiple times
 ```
 
@@ -140,7 +140,7 @@ on the host (or use the inline command):
 # bring up the consumers.
 docker compose -f docker-compose.prod.yml pull
 docker compose -f docker-compose.prod.yml build --no-cache
-docker compose -f docker-compose.prod.yml up -d db redis meilisearch
+docker compose -f docker-compose.prod.yml up -d db redis
 # Wait with a bounded loop; a failed healthcheck must stop the release.
 status=missing
 for i in $(seq 1 60); do

@@ -5,7 +5,7 @@
 #     (no Vite dev server, no HMR).
 #   • API uses Dockerfile.prod (multi-stage, --no-dev, opcache enabled).
 #   • Nginx terminates TLS via Let's Encrypt certs mounted from the host.
-#   • All database/redis/meilisearch ports stay internal-only.
+#   • All database and redis ports stay internal-only.
 #   • Email delivery uses an external SMTP provider configured via env.
 #
 # Deploy: see docs/DEPLOY.md.
@@ -120,18 +120,6 @@ services:
       retries: 10
     networks: [ogami-net]
 
-  meilisearch:
-    image: getmeili/meilisearch:v1.10
-    container_name: ogami-meili
-    restart: unless-stopped
-    environment:
-      MEILI_MASTER_KEY: ${MEILISEARCH_KEY}
-      MEILI_NO_ANALYTICS: "true"
-      MEILI_ENV: production
-    volumes:
-      - meilidata:/meili_data
-    networks: [ogami-net]
-
   reverb:
     build:
       context: .
@@ -209,5 +197,4 @@ networks:
 volumes:
   pgdata:
   redisdata:
-  meilidata:
   appstorage:

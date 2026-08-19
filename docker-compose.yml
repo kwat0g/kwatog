@@ -93,16 +93,6 @@ services:
       - redisdata:/data
     networks: [ogami-net]
 
-  meilisearch:
-    image: getmeili/meilisearch:v1.10
-    container_name: ogami-meili
-    environment:
-      MEILI_MASTER_KEY: ${MEILISEARCH_KEY:-ogami_meili_dev}
-      MEILI_NO_ANALYTICS: "true"
-    volumes:
-      - meilidata:/meili_data
-    networks: [ogami-net]
-
   reverb:
     build:
       context: .
@@ -147,5 +137,4 @@ networks:
 volumes:
   pgdata:
   redisdata:
-  meilidata:
   spa_node_modules:

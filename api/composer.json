@@ -9,10 +9,8 @@
         "laravel/framework": "^12.64",
         "laravel/reverb": "^1.0",
         "laravel/sanctum": "^4.0",
-        "laravel/scout": "^10.0",
         "laravel/tinker": "^2.9",
         "phpoffice/phpspreadsheet": "^5.9",
-        "meilisearch/meilisearch-php": "^1.10",
         "predis/predis": "^2.2",
         "vinkla/hashids": "^13.0"
     },

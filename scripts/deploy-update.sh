@@ -160,7 +160,7 @@ ok "nginx config rendered"
 log "Stopping consumers before migration"
 ${COMPOSE} stop nginx reverb queue scheduler
 log "Starting infrastructure and API only"
-${COMPOSE} up -d --force-recreate db redis meilisearch api
+${COMPOSE} up -d --force-recreate db redis api
 log "Waiting for database to report healthy"
 for i in $(seq 1 30); do
     st="$(docker inspect --format '{{.State.Health.Status}}' ogami-db 2>/dev/null || echo none)"
@@ -210,7 +210,7 @@ fi
 [ "${SPA_CODE}" = "200" ] || die "SPA index returned HTTP ${SPA_CODE}; deployment is not complete."
 ok "SPA index: HTTP ${SPA_CODE}"
 
-for service in api nginx db redis meilisearch reverb queue scheduler; do
+for service in api nginx db redis reverb queue scheduler; do
     cid="$(${COMPOSE} ps -q "${service}")"
     [ -n "${cid}" ] || die "Expected service ${service} has no container."
     state="$(docker inspect -f '{{.State.Status}}' "${cid}")"

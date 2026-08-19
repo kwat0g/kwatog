@@ -9,7 +9,7 @@ Production-grade ERP for **Philippine Ogami Corporation** — a Japanese-owned p
 
 ## Stack
 
-- **API:** Laravel 11 · PHP 8.3 · PostgreSQL 16 · Redis 7 · Meilisearch · Reverb (WebSocket)
+- **API:** Laravel 11 · PHP 8.3 · PostgreSQL 16 · Redis 7 · Reverb (WebSocket)
 - **SPA:** React 18 · TypeScript · Vite · Tailwind · TanStack Query/Table · Zustand · React Hook Form + Zod
 - **Auth:** Sanctum SPA mode with HTTP-only cookies (NEVER bearer tokens)
 - **IDs:** HashIDs in URLs and API responses (NEVER raw integer ids)
