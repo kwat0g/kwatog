@@ -14,6 +14,26 @@ export { mockAuth, type MockUser, USERS } from './helpers';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Full role permissions (matches RolePermissionSeeder + live verification)
+//
+// Seven slugs are NOT per-role: RolePermissionSeeder::run() merges them into
+// every role it seeds (api/database/seeders/RolePermissionSeeder.php, the
+// array_merge inside the roleCatalog() loop) —
+//
+//   notifications.view · calendar.view · approvals.board.view ·
+//   hr.directory.view · dashboard.action_center.view ·
+//   dashboard.exceptions.view · dashboard.layout.reset
+//
+// so every non-admin fixture below must carry all seven. They are personal
+// work-queue and cross-cutting reads, not privileges: the Action Center is your
+// own queue, `hr.directory.view` is the staff phone book, and the layout reset
+// only ever touches rows you own.
+//
+// Omitting one does not fail where you would look for it. PermissionGuard
+// renders the unified not-found page rather than naming the missing permission
+// (deliberately — the UI must not confirm a route exists), so `loginAs` waits
+// for #main-content, times out, and reports a mock-auth failure that never
+// mentions permissions. Two of the seven were missing from every fixture here
+// and cost a debugging session on this branch exactly that way.
 // ══════════════════════════════════════════════════════════════════════════════
 
 export const ROLES: Record<string, MockUser> = {
@@ -42,6 +62,7 @@ export const ROLES: Record<string, MockUser> = {
       'payroll.anomalies.review', 'payroll.gov_tables.manage',
       'dashboard.hr.view', 'search.global', 'notifications.view', 'notifications.preferences.manage',
       'calendar.view', 'approvals.board.view', 'alerts.view', 'dashboard.layout.reset',
+      'dashboard.action_center.view', 'dashboard.exceptions.view',
     ],
     employee: { id: 'emp_hr', employee_no: 'OGM-2024-0001' },
   },
@@ -72,6 +93,7 @@ export const ROLES: Record<string, MockUser> = {
       'dashboard.view_bottlenecks', 'purchasing.suppliers.performance.view',
       'forecasting.view', 'return_management.view', 'quality.copq.view',
       'calendar.view', 'approvals.board.view', 'hr.directory.view', 'dashboard.layout.reset',
+      'dashboard.action_center.view', 'dashboard.exceptions.view',
     ],
     employee: { id: 'emp_fin', employee_no: 'OGM-2024-0002' },
   },
@@ -94,6 +116,7 @@ export const ROLES: Record<string, MockUser> = {
       'alerts.view', 'alerts.dismiss', 'dashboard.view_bottlenecks',
       'forecasting.view', 'return_management.view',
       'calendar.view', 'approvals.board.view', 'hr.directory.view', 'dashboard.layout.reset',
+      'dashboard.action_center.view', 'dashboard.exceptions.view',
       'quality.documents.view',
     ],
     employee: { id: 'emp_prd', employee_no: 'OGM-2024-0003' },
@@ -114,6 +137,7 @@ export const ROLES: Record<string, MockUser> = {
       'alerts.view', 'alerts.dismiss', 'dashboard.view_bottlenecks',
       'return_management.view', 'return_management.manage',
       'calendar.view', 'approvals.board.view', 'hr.directory.view', 'dashboard.layout.reset',
+      'dashboard.action_center.view', 'dashboard.exceptions.view',
       'quality.documents.view',
     ],
     employee: { id: 'emp_ppc', employee_no: 'OGM-2024-0004' },
@@ -135,6 +159,7 @@ export const ROLES: Record<string, MockUser> = {
       'search.global', 'notifications.view', 'notifications.preferences.manage',
       'quality.documents.view',
       'calendar.view', 'approvals.board.view', 'hr.directory.view', 'dashboard.layout.reset',
+      'dashboard.action_center.view', 'dashboard.exceptions.view',
     ],
     employee: { id: 'emp_pur', employee_no: 'OGM-2024-0005' },
   },
@@ -152,10 +177,7 @@ export const ROLES: Record<string, MockUser> = {
       'notifications.view', 'notifications.preferences.manage',
       'quality.documents.view',
       'calendar.view', 'approvals.board.view', 'hr.directory.view', 'dashboard.layout.reset',
-      // RolePermissionSeeder grants this to EVERY role alongside the four above
-      // (see the cross-cutting merge in its role loop) — the Action Center is
-      // each user's own work queue, so it is not a privilege to hold.
-      'dashboard.action_center.view',
+      'dashboard.action_center.view', 'dashboard.exceptions.view',
     ],
     employee: { id: 'emp_wh', employee_no: 'OGM-2024-0006' },
   },
@@ -174,6 +196,7 @@ export const ROLES: Record<string, MockUser> = {
       'loans.view', 'loans.create', 'payroll.view',
       'notifications.view', 'notifications.preferences.manage',
       'calendar.view', 'approvals.board.view', 'hr.directory.view', 'dashboard.layout.reset',
+      'dashboard.action_center.view', 'dashboard.exceptions.view',
     ],
     employee: { id: 'emp_qc', employee_no: 'OGM-2024-0007' },
   },
@@ -188,6 +211,7 @@ export const ROLES: Record<string, MockUser> = {
       'search.global', 'notifications.view', 'notifications.preferences.manage',
       'quality.documents.view',
       'calendar.view', 'approvals.board.view', 'hr.directory.view', 'dashboard.layout.reset',
+      'dashboard.action_center.view', 'dashboard.exceptions.view',
     ],
     employee: { id: 'emp_mnt', employee_no: 'OGM-2024-0008' },
   },
@@ -204,6 +228,7 @@ export const ROLES: Record<string, MockUser> = {
       'search.global', 'notifications.view', 'notifications.preferences.manage',
       'quality.documents.view',
       'calendar.view', 'approvals.board.view', 'hr.directory.view', 'dashboard.layout.reset',
+      'dashboard.action_center.view', 'dashboard.exceptions.view',
     ],
     employee: { id: 'emp_dpt', employee_no: 'OGM-2024-0009' },
   },
@@ -218,6 +243,7 @@ export const ROLES: Record<string, MockUser> = {
       'quality.documents.view',
       'notifications.view', 'notifications.preferences.manage',
       'calendar.view', 'approvals.board.view', 'hr.directory.view', 'dashboard.layout.reset',
+      'dashboard.action_center.view', 'dashboard.exceptions.view',
     ],
     employee: { id: 'emp_ee', employee_no: 'OGM-2024-0010' },
   },
