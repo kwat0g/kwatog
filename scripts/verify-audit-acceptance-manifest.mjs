@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { resolve, join, relative } from 'node:path';
 
 const root = resolve(new URL('..', import.meta.url).pathname);
 const manifest = JSON.parse(readFileSync(resolve(root, 'docs/AUDIT-ACCEPTANCE-MANIFEST-2026-08-13.json'), 'utf8'));
@@ -32,8 +32,48 @@ for (const gate of manifest.gates ?? []) {
 }
 for (const row of lifecycle) if (!ids.has(row.id)) errors.push(`${row.id}: missing acceptance gate`);
 for (const id of ids) if (!lifecycle.some((row) => row.id === id)) errors.push(`${id}: gate has no lifecycle finding`);
+
+// A focused_test gate whose --filter names nothing certifies nothing. Six of the
+// 34 shipped filters were in that state: F-009, F-015 and F-037 matched no test
+// at all, F-006 lost half of an alternation, and F-038 ran 22 unrelated tests
+// (invoice VAT, a birthday calendar) while never touching the withholding
+// brackets it certifies. They read as green for as long as they did because
+// PHPUnit exits 0 on an empty selection unless failOnEmptyTestSuite is set —
+// api/phpunit.xml sets it now, which turns a dead filter into a loud failure at
+// run time. This turns it into a static one, so the drift is caught by the
+// governance workflow instead of by whoever next runs a gate by hand.
+//
+// --filter is a case-insensitive regex over "Namespace\Class::method", so an
+// alternative may legitimately name a directory-derived namespace segment, a
+// class, or a single method. All three are collected; anything narrower produces
+// false failures (`BIR` legitimately resolves through `BirAlphalistTest`).
+const testsRoot = resolve(root, 'api/tests');
+const collectTestNames = (dir, out = []) => {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) collectTestNames(path, out);
+    else if (entry.name.endsWith('.php')) {
+      out.push(relative(testsRoot, path).replace(/\.php$/, '').toLowerCase());
+      for (const [, name] of readFileSync(path, 'utf8').matchAll(/function\s+(\w+)/g)) out.push(name.toLowerCase());
+    }
+  }
+  return out;
+};
+const testNames = collectTestNames(testsRoot);
+for (const gate of manifest.gates ?? []) {
+  if (gate.type !== 'focused_test') continue;
+  // The SPA gate runs the whole vitest suite and carries no --filter.
+  const match = /--filter=('([^']*)'|"([^"]*)"|(\S+))/.exec(gate.command ?? '');
+  if (!match) continue;
+  for (const alternative of (match[2] ?? match[3] ?? match[4]).split('|')) {
+    const needle = alternative.toLowerCase();
+    if (!testNames.some((name) => name.includes(needle))) {
+      errors.push(`${gate.id}: --filter '${alternative}' matches no test class, namespace or method`);
+    }
+  }
+}
 // Kept explicit by decision: growing the registry stays a deliberate,
 // reviewable edit rather than one absorbed silently.
-if (manifest.gates?.length !== 45) errors.push(`expected 45 gates, got ${manifest.gates?.length ?? 0}`);
+if (manifest.gates?.length !== 47) errors.push(`expected 47 gates, got ${manifest.gates?.length ?? 0}`);
 if (errors.length) { console.error(errors.join('\n')); process.exit(1); }
-console.log('Audit acceptance manifest clean: 45 findings mapped; F-030 remains external-evidence-only.');
+console.log('Audit acceptance manifest clean: 47 findings mapped; F-030 remains external-evidence-only.');

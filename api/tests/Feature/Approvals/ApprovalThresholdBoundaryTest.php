@@ -8,6 +8,7 @@ use App\Common\Models\ApprovalRecord;
 use App\Common\Models\WorkflowDefinition;
 use App\Common\Services\ApprovalService;
 use App\Modules\Purchasing\Models\PurchaseRequest;
+use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -16,7 +17,7 @@ use Tests\TestCase;
  *
  * The skip path is live, not dead code: 2 of the 17 shipped workflow_definitions
  * rows carry a threshold on their final VP step — purchase_request and
- * purchase_order, seeded at WorkflowSeeder:65,75 — so this branch decides
+ * purchase_order, seeded at WorkflowSeeder:64,73 — so this branch decides
  * whether VP approval is skipped on the two highest-value approval chains.
  *
  * This must still seed its own workflow, because RefreshDatabase leaves
@@ -87,5 +88,31 @@ class ApprovalThresholdBoundaryTest extends TestCase
             ->where('approvable_id', $pr->getKey())
             ->where('step_order', 2)
             ->value('action'));
+    }
+
+    /**
+     * The tests above prove the comparison is exact by supplying their own
+     * threshold as a JSON string. This one holds the SHIPPED rows to the same
+     * standard: a threshold written as a PHP float is json_encoded to a JSON
+     * number, and json_decode hands numbers back as PHP int or float — a float
+     * for any value carrying centavos. That happens upstream of ApprovalService,
+     * so no care taken inside the service can recover the lost precision.
+     * 50000.00 survives today only by accident: it encodes to `50000` and comes
+     * back an exact int. Storing the string is what keeps the seeded gate on the
+     * two highest-value approval chains out of float arithmetic regardless of
+     * what value an operator later puts there.
+     */
+    public function test_the_seeded_step_threshold_is_stored_as_a_json_string(): void
+    {
+        $this->seed(WorkflowSeeder::class);
+
+        $steps = WorkflowDefinition::query()
+            ->where('workflow_type', 'purchase_request')
+            ->value('steps');
+
+        $vp = collect($steps)->firstWhere('role', 'system_admin');
+
+        $this->assertIsString($vp['threshold'], 'a JSON number carrying centavos decodes to a float upstream of ApprovalService');
+        $this->assertSame('50000.00', $vp['threshold']);
     }
 }

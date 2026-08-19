@@ -46,8 +46,11 @@ class DowntimeAnalyticsService
 
         // MTBF = total uptime / number of breakdowns
         $mtbf = null;
+        // Argument-later, receiver-earlier. Carbon 3 made diffIn* SIGNED, so
+        // $to->diffInMinutes($from) returned a NEGATIVE window: uptime collapsed
+        // to max(0, negative) = 0 and MTBF was pinned at 0 for every machine.
+        $windowMinutes = (int) $from->diffInMinutes($to, true);
         if ($breakdownCount > 0) {
-            $windowMinutes = $to->diffInMinutes($from);
             $uptimeMinutes = max(0, $windowMinutes - $totalMinutes);
             $mtbf = round($uptimeMinutes / $breakdownCount / 60, 2); // hours
         }
@@ -61,8 +64,9 @@ class DowntimeAnalyticsService
             $mttr = round($breakdownMinutes / $breakdownCount, 2);
         }
 
-        // Availability = uptime / total time
-        $windowMinutes = $to->diffInMinutes($from);
+        // Availability = uptime / total time. Same window as MTBF above, computed
+        // once: the negative value also made this guard false, so availability
+        // came back null rather than a percentage.
         $availabilityPct = $windowMinutes > 0
             ? round(max(0, $windowMinutes - $totalMinutes) / $windowMinutes * 100, 2)
             : null;

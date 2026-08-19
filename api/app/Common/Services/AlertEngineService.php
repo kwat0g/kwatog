@@ -40,7 +40,10 @@ use Illuminate\Support\Facades\Notification;
  */
 class AlertEngineService
 {
-    public function __construct(private readonly SettingsService $settings) {}
+    public function __construct(
+        private readonly SettingsService $settings,
+        private readonly SchedulerExecutionLedger $scheduler,
+    ) {}
 
     /**
      * Idempotent alert creation. Returns the existing record if a recent
@@ -121,6 +124,7 @@ class AlertEngineService
             'production' => fn () => $this->checkProduction(),
             'finance' => fn () => $this->checkFinance(),
             'quality' => fn () => $this->checkQuality(),
+            'scheduler' => fn () => $this->checkScheduler(),
         ] as $label => $check) {
             $failure = $this->safe($check, $label);
             if ($failure !== null) {
@@ -355,7 +359,15 @@ class AlertEngineService
                     return;
                 }
 
-                $daysOver = $today->diffInDays(Carbon::parse($row->due_date));
+                // Receiver-earlier, argument-later. Carbon 3 made diffIn* SIGNED,
+                // and this read $today->diffInDays($dueDate) — the other way
+                // round — so an overdue invoice yielded a NEGATIVE count. The
+                // query above already filters due_date < today - warningDays, so
+                // every row reaching here is overdue and `-75 >= 60` was always
+                // false: the critical band could never be reached, and the
+                // negative number was rendered into the message and stored in
+                // days_overdue. Cast because Carbon 3 returns a float.
+                $daysOver = (int) Carbon::parse($row->due_date)->diffInDays($today, true);
                 if ($daysOver >= $criticalDays) {
                     $this->raise(
                         AlertType::ArOverdue60,
@@ -438,6 +450,89 @@ class AlertEngineService
                 }
             }
         }
+    }
+
+    /* ─── Scheduler checks ────────────────────────────────────────── */
+
+    /**
+     * `api/routes/console.php` registers 42 scheduled entries — MRP planning,
+     * payroll period creation, NCR escalation, alert dispatch, backups. If the
+     * scheduler stalls they all stop at once, and until this check existed
+     * nothing said so: `SchedulerExecutionLedger::health()` computed the
+     * evidence and no caller consumed it.
+     *
+     * THIS IS NOT A DEAD-MAN SWITCH, and must not be described as one. The
+     * thing that raises this alert is itself scheduled — `runAllChecks()` is
+     * driven by `alerts:run` every 15 minutes — so a completely dead scheduler
+     * raises nothing at all, and is caught by this check only once it comes
+     * back and reads its own ledger. What it does catch, while the scheduler
+     * is still running, is a STALLED or PARTIALLY FAILING one: a tick still
+     * `running` past the threshold, a tick that last finished longer ago than
+     * the threshold, a gap between consecutive ticks, and individual tasks
+     * stuck or failing.
+     *
+     * Coverage for a fully dead scheduler has to come from outside the
+     * process, and already does: `docker-compose.prod.yml`'s `scheduler`
+     * service runs `scheduler:health --stale-minutes=15` as its Docker
+     * healthcheck every 60s, over the same ledger. That control surfaces an
+     * outage to whoever watches container health; this one records it inside
+     * the application, where an operator will actually see it. They are
+     * complements, not substitutes, and neither makes the other redundant.
+     *
+     * `raise()` de-duplicates on (type, null entity) inside
+     * `alerts.dedup_window_hours`, so the first alert in a window keeps its
+     * original message even if later issues differ. That is deliberate — one
+     * standing alert per outage — but it means the message is the symptom at
+     * first detection, not a running log.
+     *
+     * The title is deliberately generic, and that is a correction rather than
+     * laziness. `health()` reports unhealthy when the latest run of ANY of the
+     * 42 tasks failed, even while ticks are perfectly on time — so an earlier
+     * title of "Scheduler is not running on schedule" told the operator
+     * something false every time a single `db:backup` failed on a healthy
+     * scheduler. The cost was not cosmetic: `$latestByTask` keeps a failed
+     * latest run until that task next succeeds, and `scheduler:prune-ledger`
+     * retains it for 90 days, so a monthly task that failed once holds a
+     * standing Critical alert re-raised every 24 hours — under a title
+     * describing a different fault. Naming the specific arm would mean
+     * re-deriving which one fired, and this check deliberately does not
+     * re-derive `health()`'s logic; the discrimination therefore lives where
+     * it is already exact — the ledger's own `issues` strings in the message,
+     * and the per-arm counts in `metadata`.
+     */
+    private function checkScheduler(): void
+    {
+        $staleMinutes = $this->positiveIntSetting('alerts.scheduler.stale_minutes');
+        $health = $this->scheduler->health($staleMinutes);
+
+        if ($health['healthy']) {
+            return;
+        }
+
+        $issues = $health['issues'];
+        $latestTick = $health['latest_tick'];
+
+        $this->raise(
+            AlertType::SchedulerStale,
+            AlertSeverity::Critical,
+            'Scheduler health is degraded',
+            sprintf(
+                'The scheduler execution ledger reports %d issue(s) against a %d-minute staleness threshold: %s',
+                count($issues),
+                $staleMinutes,
+                implode(' ', $issues),
+            ),
+            null,
+            [
+                'stale_minutes' => $staleMinutes,
+                'issues' => $issues,
+                'latest_tick_status' => $latestTick?->status,
+                'latest_tick_started_at' => $latestTick?->started_at?->toDateTimeString(),
+                'latest_tick_finished_at' => $latestTick?->finished_at?->toDateTimeString(),
+                'failed_task_count' => count($health['failed_tasks']),
+                'stuck_task_count' => count($health['stuck_tasks']),
+            ],
+        );
     }
 
     /* ─── Email fanout ────────────────────────────────────────────── */

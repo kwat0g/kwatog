@@ -55,24 +55,22 @@ class WorkflowSeeder extends Seeder
                 ],
             ],
             [
-                'workflow_type'    => 'purchase_request',
-                'name'             => 'Purchase Request Approval',
-                'amount_threshold' => 50000.00,
+                'workflow_type' => 'purchase_request',
+                'name'          => 'Purchase Request Approval',
                 'steps' => [
                     ['order' => 1, 'role' => 'department_head',    'label' => 'Department Head'],
                     ['order' => 2, 'role' => 'production_manager', 'label' => 'Manager'],
                     ['order' => 3, 'role' => 'purchasing_officer', 'label' => 'Purchasing'],
-                    ['order' => 4, 'role' => 'system_admin',       'label' => 'VP', 'threshold' => 50000.00],
+                    ['order' => 4, 'role' => 'system_admin',       'label' => 'VP', 'threshold' => '50000.00'],
                 ],
             ],
             [
-                'workflow_type'    => 'purchase_order',
-                'name'             => 'Purchase Order Approval',
-                'amount_threshold' => 50000.00,
+                'workflow_type' => 'purchase_order',
+                'name'          => 'Purchase Order Approval',
                 'steps' => [
                     ['order' => 1, 'role' => 'purchasing_officer', 'label' => 'Purchasing'],
                     ['order' => 2, 'role' => 'finance_officer',    'label' => 'Finance'],
-                    ['order' => 3, 'role' => 'system_admin',       'label' => 'VP', 'threshold' => 50000.00],
+                    ['order' => 3, 'role' => 'system_admin',       'label' => 'VP', 'threshold' => '50000.00'],
                 ],
             ],
             [
@@ -174,9 +172,8 @@ class WorkflowSeeder extends Seeder
             WorkflowDefinition::updateOrCreate(
                 ['workflow_type' => $w['workflow_type']],
                 [
-                    'name'             => $w['name'],
-                    'steps'            => $w['steps'],
-                    'amount_threshold' => $w['amount_threshold'] ?? null,
+                    'name'  => $w['name'],
+                    'steps' => $w['steps'],
                 ],
             );
         }

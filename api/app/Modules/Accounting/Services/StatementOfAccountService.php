@@ -179,7 +179,7 @@ class StatementOfAccountService
                 continue;
             }
 
-            $daysOverdue = $dueDate->diffInDays($asOfDate);
+            $daysOverdue = $dueDate->diffInDays($asOfDate, true);
 
             if ($daysOverdue <= 30) {
                 $buckets['d30_days'] = Money::add($buckets['d30_days'], $balance);

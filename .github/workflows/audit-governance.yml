@@ -11,6 +11,12 @@ on:
       - 'scripts/verify-audit-finding-lifecycle.mjs'
       - 'docs/AUDIT-ACCEPTANCE-MANIFEST-2026-08-13.json'
       - 'scripts/verify-audit-acceptance-manifest.mjs'
+      # The manifest validator resolves every focused_test --filter against the
+      # test corpus, so a renamed or deleted test class can invalidate a gate
+      # without touching any file above. Without this path the guard would not
+      # run on precisely the change that breaks it. The job takes ~10s and needs
+      # no npm install, so triggering it on test changes is cheap.
+      - 'api/tests/**'
       - '.github/workflows/audit-governance.yml'
   push:
     branches: [main]

@@ -273,7 +273,7 @@ class KpiSnapshotService
             $totalPlanned += $planned;
             $totalGood += $good;
             $totalProduced += $produced;
-            $totalActual += max(1, (int) Carbon::parse($wo->actual_start)->diffInMinutes(Carbon::parse($wo->actual_end)));
+            $totalActual += max(1, (int) Carbon::parse($wo->actual_start)->diffInMinutes(Carbon::parse($wo->actual_end), true));
             if ($wo->machine_id !== null) $machineIds[(int) $wo->machine_id] = true;
         }
 

@@ -13,13 +13,39 @@ scripts (`audit:rbac`, `audit:role-permissions`, `audit:role-dashboards`,
 they left (`audit:panel-gates`). File and line references are to the current
 worktree.
 **Relationship to the 2026-08-16 register:** additive. F-001–F-045 are
-unaffected; this register begins at F-046.
+unaffected; this register begins at F-048.
+
+**Renumbered on merge, 2026-08-20.** This register was written as F-046–F-052
+while the 08-16 register still ended at F-045. It then developed concurrently
+with `chore/remaining-backlog` and `chore/backlog-t4-t5`, which appended their
+own F-046 (dead acceptance-test gates) and F-047 (the discarded scheduler health
+verdict) to the 08-16 register and merged first, as PRs #107 and #108. Two
+registers therefore claimed the same two numbers. The already-merged pair keeps
+them, because merged commits, `docs/AUDIT-ACCEPTANCE-MANIFEST-2026-08-13.json`
+and `api/phpunit.xml:12` all cite them; this register shifted up by two instead.
+
+**So the commit messages on this branch are two behind the headings above.**
+`d393d939`, `9188fce5`, `410552a9`, `047c8e50` and the rest say F-046–F-052 and
+mean F-048–F-054. Reading the old number in a commit message and looking it up
+in this file lands on the wrong finding. Mapping, for anyone doing that:
+
+| commit message says | this register calls it |
+|---|---|
+| F-046 | F-048 — dashboard panels gated once at the route |
+| F-047 | F-049 — HR payroll panel gated on a universal permission |
+| F-048 | F-050 — deliveries had no read permission of their own |
+| F-049 | F-051 — `ppc_head` could not read the production schedule |
+| F-050 | F-052 — the RBAC audit demanded the information leak back |
+| F-051 | F-053 — employees page fetched unconditionally |
+| F-052 | F-054 — whitespace text node in the RMA table row |
+
+No commit references F-055; it was registered after the renumber.
 
 **Provenance, stated plainly.** Unlike the 08-13 and 08-16 registers, this one
 was not produced by a standalone audit pass. It records defects found while
-implementing dashboard role-tiering, and F-046–F-052 were each fixed in the same
+implementing dashboard role-tiering, and F-048–F-054 were each fixed in the same
 sitting. It is written because the defects were real authorization findings and
-existed nowhere but commit messages. **F-053 is the exception: it was added
+existed nowhere but commit messages. **F-055 is the exception: it was added
 2026-08-20, is outside the dashboard scope above, and is open.**
 
 **Retracted observation — F-041 reported as an unclosed finding.** During
@@ -45,7 +71,7 @@ dedicated database (`DB_DATABASE=ogami_test_verify`), which removed all of it:
 
 ---
 
-### F-046 — The eight purpose-built dashboards were gated once at the route, so holding the page permission delivered every domain the page draws from — including the plant manager's cash, AR, AP and posted revenue
+### F-048 — The eight purpose-built dashboards were gated once at the route, so holding the page permission delivered every domain the page draws from — including the plant manager's cash, AR, AP and posted revenue
 
 - **Module / feature:** Dashboard — the eight bespoke role dashboards.
 - **Related modules:** Accounting (the leaked figures), Production, Quality, MRP, Inventory, Purchasing, SupplyChain, HR, Payroll, Budgeting (each contributes a panel to one of these pages).
@@ -65,7 +91,7 @@ dedicated database (`DB_DATABASE=ogami_test_verify`), which removed all of it:
 - **Complexity:** M.
 - **Status note:** Registered and fixed 2026-08-18 (`d393d939`).
 
-### F-047 — The HR dashboard's payroll panel was gated on `payroll.view`, which every seeded role holds, so company payroll totals were effectively ungated
+### F-049 — The HR dashboard's payroll panel was gated on `payroll.view`, which every seeded role holds, so company payroll totals were effectively ungated
 
 - **Module / feature:** Dashboard — HR dashboard payroll summary (REC-05).
 - **Related modules:** Payroll (the disclosed figures), HR.
@@ -85,7 +111,7 @@ dedicated database (`DB_DATABASE=ogami_test_verify`), which removed all of it:
 - **Complexity:** S.
 - **Status note:** Registered and fixed 2026-08-18 (`d393d939`).
 
-### F-048 — Deliveries had `create` and `confirm` permissions but no read of their own, so the warehouse's delivery panels were stripped at render while its default layout claimed them
+### F-050 — Deliveries had `create` and `confirm` permissions but no read of their own, so the warehouse's delivery panels were stripped at render while its default layout claimed them
 
 - **Module / feature:** SupplyChain — delivery reads; Dashboard — warehouse dashboard and widget registry.
 - **Related modules:** Inventory (the warehouse role), CRM (customer names on the outgoing queue).
@@ -105,14 +131,14 @@ dedicated database (`DB_DATABASE=ogami_test_verify`), which removed all of it:
 - **Complexity:** S.
 - **Status note:** Registered and fixed 2026-08-18 (`1e214504`). Access widened deliberately and with the operator's confirmation; the narrow slug was chosen over granting `supply_chain.view` so the floor does not receive shipments, fleet and customs documents.
 
-### F-049 — `ppc_head` could not read the production schedule it owns, because the permission gating the scheduler lives in another module's bucket
+### F-051 — `ppc_head` could not read the production schedule it owns, because the permission gating the scheduler lives in another module's bucket
 
 - **Module / feature:** MRP — scheduler endpoints; Production — the `production.schedule.view` permission.
 - **Related modules:** Dashboard (the PPC dashboard's Gantt widget).
 - **Category:** Authorization completeness.
 - **Affected roles:** `ppc_head`.
 - **Current Behavior:** `GET /api/v1/mrp/scheduler/snapshot` and `/options` are gated on `permission:production.schedule.view` (`api/app/Modules/MRP/routes.php:77-78`). That slug is declared in the **`production`** bucket of the permission catalogue (`api/database/seeders/RolePermissionSeeder.php:257`), while `ppc_head`'s grants are assembled from `$this->module('mrp')` plus an explicit list of `production.*` slugs that did not include it.
-- **Problem:** `ppc_head` is described in its own seeder entry as the role that "owns the schedule and BOMs", and CLAUDE.md names PPC as the owner of the production schedule. It could not read it. The `production.gantt_mini` widget is gated on the same slug, so the Gantt tile in `ppc_head`'s default dashboard layout was stripped at render — the same silent-strip mechanism as F-048, reached from the opposite direction.
+- **Problem:** `ppc_head` is described in its own seeder entry as the role that "owns the schedule and BOMs", and CLAUDE.md names PPC as the owner of the production schedule. It could not read it. The `production.gantt_mini` widget is gated on the same slug, so the Gantt tile in `ppc_head`'s default dashboard layout was stripped at render — the same silent-strip mechanism as F-050, reached from the opposite direction.
 - **Real-world scenario:** The PPC head opens the dashboard the system routes them to and the production schedule tile is absent. The scheduler page it links to refuses them. The role exists to author that schedule.
 - **Root Cause:** A permission whose bucket does not match the module it gates. `$this->module('mrp')` cannot pick up a slug filed under `production`, so a role assembled by module inherits an incomplete set, and nothing checks that a routed permission is reachable by the role that owns the route.
 - **Recommended Improvement:** Grant `production.schedule.view` to `ppc_head` explicitly (`RolePermissionSeeder.php:572`), with the bucket-boundary reason recorded inline so it is not removed as redundant. The general fix — reconciling permission buckets with the modules whose routes consume them — is not attempted here and is noted as residual.
@@ -125,14 +151,14 @@ dedicated database (`DB_DATABASE=ogami_test_verify`), which removed all of it:
 - **Complexity:** S.
 - **Status note:** Registered and fixed 2026-08-18 (`087fc1f0`). Residual, deliberately out of scope: the general bucket/module mismatch that allowed it.
 
-### F-050 — The RBAC browser audit asserted that denied pages display the word "Forbidden", so it reported thirty correctly-denied pages as accessible and demanded the information leak the UI had removed
+### F-052 — The RBAC browser audit asserted that denied pages display the word "Forbidden", so it reported thirty correctly-denied pages as accessible and demanded the information leak the UI had removed
 
 - **Module / feature:** Verification tooling — `scripts/role-permission-audit.js`.
 - **Related modules:** every module with a permission-guarded SPA route.
 - **Category:** Detection / verification integrity.
 - **Affected roles:** none at runtime. All contributors relying on the gate.
 - **Current Behavior:** The audit decided whether a surface was denied by testing the rendered page body against `/\bForbidden\b/i`, then failed the run when a route the role should not reach did **not** contain that word. `PermissionGuard` renders `NotFoundState` for a denied route (`spa/src/components/guards/PermissionGuard.tsx:15-20`), deliberately, so the UI never confirms that a route or record the user cannot read exists.
-- **Problem:** The assertion had inverted itself. Thirty correctly-denied surfaces across ten roles reported `was accessible but should be Forbidden`, and satisfying the audit would have required restoring the disclosure the guard exists to prevent. This is the same defect commit `68c2a007` fixed across the e2e specs on 2026-08-17; this script was missed in that sweep and is not run by CI, so nothing surfaced it. Worse than noise: the thirty false positives **masked a real defect** (F-051), which appeared only once the detection was corrected.
+- **Problem:** The assertion had inverted itself. Thirty correctly-denied surfaces across ten roles reported `was accessible but should be Forbidden`, and satisfying the audit would have required restoring the disclosure the guard exists to prevent. This is the same defect commit `68c2a007` fixed across the e2e specs on 2026-08-17; this script was missed in that sweep and is not run by CI, so nothing surfaced it. Worse than noise: the thirty false positives **masked a real defect** (F-053), which appeared only once the detection was corrected.
 - **Real-world scenario:** A contributor runs the RBAC audit before a permission change, sees thirty failures unrelated to their work, and stops running it. The audit is the only automated check that every sidebar link a role sees actually opens for that role.
 - **Root Cause:** A test coupled to denial *copy* rather than denial *behaviour*, and never re-run after the copy deliberately changed.
 - **Recommended Improvement:** Recognise denial by the not-found copy and assert it in **both** directions — the denied page must look not-found, and no page may name its own denial. Verified against the running application before changing the assertion, because the alternative reading was a genuine leak: `employee` at `/payroll/periods` and `/hr/loans`, and `qc_inspector` at `/payroll/statutory`, each render the not-found state, carry no page-specific data, and fire no data request. Denied, not accessible. Two further corrections were needed after the first corrected run: the leak matcher must **exclude** the `api/client.ts` 403 toast, which is legitimate action feedback and which react-hot-toast keeps mounted across SPA navigations — so one unsolicited 403 was being attributed to the next several routes visited, inventing eleven failures from one cause; and `/quality/documents` was expected for two roles while existing nowhere in `spa/src`, an expectation that could never be met.
@@ -145,7 +171,7 @@ dedicated database (`DB_DATABASE=ogami_test_verify`), which removed all of it:
 - **Complexity:** S.
 - **Status note:** Registered and fixed 2026-08-19 (`410552a9`).
 
-### F-051 — The employees page fetches the employee list unconditionally, so a salary-adjustment checker is refused on arrival at its own approval queue
+### F-053 — The employees page fetches the employee list unconditionally, so a salary-adjustment checker is refused on arrival at its own approval queue
 
 - **Module / feature:** HR — `/hr/employees`, which is also the salary-adjustments queue.
 - **Related modules:** Dashboard (the sidebar item), Payroll (the adjustment chain).
@@ -163,9 +189,9 @@ dedicated database (`DB_DATABASE=ogami_test_verify`), which removed all of it:
 - **Priority:** P3.
 - **Impact:** An approver was refused on arrival at the queue holding work assigned to it.
 - **Complexity:** S.
-- **Status note:** Registered and fixed 2026-08-19 (`410552a9`). Found only after F-050's detection defect was corrected.
+- **Status note:** Registered and fixed 2026-08-19 (`410552a9`). Found only after F-052's detection defect was corrected.
 
-### F-052 — A whitespace text node inside a table row made the RMA detail page emit an invalid-DOM warning, failing the dynamic-route audit
+### F-054 — A whitespace text node inside a table row made the RMA detail page emit an invalid-DOM warning, failing the dynamic-route audit
 
 - **Module / feature:** ReturnManagement — `/return-management/:id`.
 - **Related modules:** none.
@@ -185,7 +211,7 @@ dedicated database (`DB_DATABASE=ogami_test_verify`), which removed all of it:
 - **Complexity:** S.
 - **Status note:** Registered and fixed 2026-08-19 (`047c8e50`).
 
-### F-053 — Invoice, Bill and Journal Entry creation accepts no idempotency key, so a retried POST posts the amount twice
+### F-055 — Invoice, Bill and Journal Entry creation accepts no idempotency key, so a retried POST posts the amount twice
 
 - **Module / feature:** Accounting — `POST /api/v1/invoices`, `/bills`, `/journal-entries`.
 - **Related modules:** Purchasing (bills carry the three-way match), GL (every one of the three writes journal lines).

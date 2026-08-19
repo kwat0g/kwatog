@@ -226,8 +226,7 @@ class PurchaseRequestService
             // which submitUrgent() does by rewriting that step's record after
             // submission, and only under the purchasing.urgent_skip_limit cap.
             // That cap is unrelated to ApprovalService's own amount gating,
-            // which reads the per-step `threshold` key in the `steps` JSON (not
-            // the unread `workflow_definitions.amount_threshold` column) and
+            // which reads the per-step `threshold` key in the `steps` JSON and
             // reads no setting at all.
             if ($pr->is_urgent) {
                 $this->submitUrgent($pr, $total);

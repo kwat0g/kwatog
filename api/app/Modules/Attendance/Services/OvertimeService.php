@@ -34,7 +34,7 @@ class OvertimeService
         if ($out->lessThanOrEqualTo($end)) {
             return 0;
         }
-        return (int) $end->diffInMinutes($out);
+        return (int) $end->diffInMinutes($out, true);
     }
 
     /**

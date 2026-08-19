@@ -83,7 +83,7 @@ class SessionTimeout
             : $this->settings->requiredInt('security.session_timeout_default', 1);
         $lastActivity = $user->last_activity ? Carbon::parse($user->last_activity) : null;
 
-        if ($lastActivity && $lastActivity->diffInMinutes(now()) >= $minutes) {
+        if ($lastActivity && $lastActivity->diffInMinutes(now(), true) >= $minutes) {
             // `auth()` resolves Sanctum's RequestGuard on these routes, which
             // has no logout() method. The SPA identity lives on the web guard.
             Auth::guard('web')->logout();

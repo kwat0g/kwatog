@@ -78,10 +78,23 @@ class DTRImportService
                 $date = Carbon::parse($dateStr)->toDateString();
 
                 $tIn  = $timeIn !== '' ? Carbon::parse($date.' '.$timeIn)->toDateTimeString() : null;
-                $tOut = $timeOut !== '' ? Carbon::parse($timeOut, $date)->toDateTimeString() : null;
-                // If time_out is HH:mm only, treat as same date (DTR engine handles cross-midnight).
-                if ($timeOut !== '' && strlen($timeOut) <= 5) {
-                    $tOut = Carbon::parse($date.' '.$timeOut)->toDateTimeString();
+                // `HH:mm` carries no date, so anchor it to the row's own date the
+                // way time_in above is anchored; anything longer is already a full
+                // datetime. This used to read `Carbon::parse($timeOut, $date)`,
+                // where Carbon's second parameter is the TIMEZONE — so every
+                // non-empty time_out raised InvalidTimeZoneException, the per-row
+                // catch below turned it into a silent `skipped`, and this endpoint
+                // discarded every row that recorded when someone left. The
+                // `strlen($timeOut) <= 5` reparse that used to sit below was
+                // already correct and already unreachable, because the throwing
+                // call ran first. Cross-midnight is not resolved here: the DTR
+                // engine advances a night shift's time_out by a day, and refuses
+                // an inverted day shift outright.
+                $tOut = null;
+                if ($timeOut !== '') {
+                    $tOut = strlen($timeOut) <= 5
+                        ? Carbon::parse($date.' '.$timeOut)->toDateTimeString()
+                        : Carbon::parse($timeOut)->toDateTimeString();
                 }
 
                 DB::transaction(function () use ($employeeId, $date, $tIn, $tOut) {
@@ -190,6 +203,8 @@ class DTRImportService
         // BusinessRuleException it would abort the whole upload on the first
         // affected day instead of importing the other days and naming that one.
         $cache = []; // employee_no => employee_id
+        // Read ONCE per import, not once per day record. See the accessor below.
+        $finalizedRanges = $this->finalizedPeriodRanges();
         $imported = 0;
         $skipped  = 0;
         $flagged  = 0;
@@ -206,7 +221,7 @@ class DTRImportService
                 $employeeId = $cache[$empNo];
                 $date = $day['date'];
 
-                if ($this->isDateInFinalizedPeriod($date)) {
+                if ($this->isDateInFinalizedPeriod($date, $finalizedRanges)) {
                     throw new \RuntimeException("Date {$date} falls in a finalized payroll period — import blocked.");
                 }
 
@@ -250,12 +265,49 @@ class DTRImportService
      * True when the given date sits inside a FINALIZED (or disbursed) payroll
      * period. Used to block raw-punch edits to already-paid attendance.
      */
-    private function isDateInFinalizedPeriod(string $date): bool
+    /**
+     * The finalized/disbursed payroll ranges, read once per import.
+     *
+     * This was previously an EXISTS query issued from inside the day loop, so a
+     * realistic monthly import (~200 employees x ~30 days) asked the database
+     * the same question ~6,000 times. It also used whereDate(), which wraps the
+     * column in a function and so cannot use an index on period_start /
+     * period_end even when one exists.
+     *
+     * The set is small — finalized periods accumulate a couple of dozen rows a
+     * year — so it is cheaper to hold it in memory and answer in PHP.
+     *
+     * Snapshot semantics, deliberate: the ranges are read once at the start of
+     * an import rather than re-read per row, so one import makes ONE consistent
+     * decision about what is finalized. A period finalized by someone else
+     * midway through no longer changes the verdict partway down the file.
+     *
+     * @return array<int, array{start: string, end: string}>
+     */
+    private function finalizedPeriodRanges(): array
     {
         return PayrollPeriod::query()
             ->whereIn('status', [PayrollPeriodStatus::Finalized->value, PayrollPeriodStatus::Disbursed->value])
-            ->whereDate('period_start', '<=', $date)
-            ->whereDate('period_end', '>=', $date)
-            ->exists();
+            ->get(['period_start', 'period_end'])
+            ->map(fn (PayrollPeriod $period): array => [
+                'start' => Carbon::parse($period->period_start)->toDateString(),
+                'end' => Carbon::parse($period->period_end)->toDateString(),
+            ])
+            ->all();
+    }
+
+    /**
+     * @param  array<int, array{start: string, end: string}>  $ranges
+     */
+    private function isDateInFinalizedPeriod(string $date, array $ranges): bool
+    {
+        foreach ($ranges as $range) {
+            // Y-m-d strings compare lexicographically in date order.
+            if ($date >= $range['start'] && $date <= $range['end']) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

@@ -221,7 +221,7 @@ class OeeService
         $cap   = 92;
         $cursor = $from->copy()->startOfDay();
         $end    = $to->copy()->startOfDay();
-        $days   = $cursor->diffInDays($end) + 1;
+        $days   = $cursor->diffInDays($end, true) + 1;
         if ($days <= $cap) {
             $machinesForTrend = $onlyMachine
                 ? Machine::whereKey($onlyMachine->id)->get()

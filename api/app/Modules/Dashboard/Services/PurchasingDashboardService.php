@@ -94,7 +94,7 @@ class PurchasingDashboardService
                 'estimated_total' => $this->prEstimatedTotal((int) $r->id),
                 'urgency'         => $r->priority ?? PurchaseRequestPriority::Normal->value,
                 'urgency_label'   => PurchaseRequestPriority::tryFrom((string) ($r->priority ?? $this->settings->get('purchasing.purchase_request.default_priority', '')))?->label() ?? (string) ($r->priority ?? $this->settings->get('purchasing.purchase_request.default_priority', '')),
-                'days_waiting'    => $r->created_at ? (int) Carbon::parse((string) $r->created_at)->diffInDays(now()) : 0,
+                'days_waiting'    => $r->created_at ? (int) Carbon::parse((string) $r->created_at)->diffInDays(now(), true) : 0,
             ])
             ->all();
     }

@@ -440,7 +440,7 @@ class WorkOrderService
                 $end = Carbon::now();
                 $open->update([
                     'end_time'         => $end,
-                    'duration_minutes' => (int) max(0, $open->start_time->diffInMinutes($end)),
+                    'duration_minutes' => (int) max(0, $open->start_time->diffInMinutes($end, true)),
                 ]);
             }
             $machine = $lockedWo->machine_id
