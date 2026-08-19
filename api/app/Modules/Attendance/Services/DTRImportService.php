@@ -73,10 +73,23 @@ class DTRImportService
                 $date = Carbon::parse($dateStr)->toDateString();
 
                 $tIn  = $timeIn !== '' ? Carbon::parse($date.' '.$timeIn)->toDateTimeString() : null;
-                $tOut = $timeOut !== '' ? Carbon::parse($timeOut, $date)->toDateTimeString() : null;
-                // If time_out is HH:mm only, treat as same date (DTR engine handles cross-midnight).
-                if ($timeOut !== '' && strlen($timeOut) <= 5) {
-                    $tOut = Carbon::parse($date.' '.$timeOut)->toDateTimeString();
+                // `HH:mm` carries no date, so anchor it to the row's own date the
+                // way time_in above is anchored; anything longer is already a full
+                // datetime. This used to read `Carbon::parse($timeOut, $date)`,
+                // where Carbon's second parameter is the TIMEZONE — so every
+                // non-empty time_out raised InvalidTimeZoneException, the per-row
+                // catch below turned it into a silent `skipped`, and this endpoint
+                // discarded every row that recorded when someone left. The
+                // `strlen($timeOut) <= 5` reparse that used to sit below was
+                // already correct and already unreachable, because the throwing
+                // call ran first. Cross-midnight is not resolved here: the DTR
+                // engine advances a night shift's time_out by a day, and refuses
+                // an inverted day shift outright.
+                $tOut = null;
+                if ($timeOut !== '') {
+                    $tOut = strlen($timeOut) <= 5
+                        ? Carbon::parse($date.' '.$timeOut)->toDateTimeString()
+                        : Carbon::parse($timeOut)->toDateTimeString();
                 }
 
                 DB::transaction(function () use ($employeeId, $date, $tIn, $tOut) {
