@@ -103,6 +103,13 @@ class UpdateSettingRequest extends FormRequest
             'alerts.quality.scrap_rate_threshold' => ['value' => ['required', 'numeric', 'min:0', 'max:1']],
             'alerts.quality.lookback_hours' => ['value' => ['required', 'integer', 'min:1', 'max:8760']],
             'alerts.quality.minimum_output_count' => ['value' => ['required', 'integer', 'min:1']],
+            // Bounded like scheduler:health's own --stale-minutes option, and
+            // bounded at all because AlertEngineService::checkScheduler() reads
+            // this through positiveIntSetting(): a zero or non-numeric value
+            // makes the check throw, and safe() then swallows it into
+            // stats['failed'] — so without a rule an operator edit could
+            // silently switch the scheduler alert off.
+            'alerts.scheduler.stale_minutes' => ['value' => ['required', 'integer', 'min:1', 'max:1440']],
             'security.auth_history_window_hours' => ['value' => ['required', 'integer', 'min:1', 'max:8760']],
             'accounting.customer_credit.warning_ratio' => ['value' => ['required', 'numeric', 'gt:0', 'lte:1']],
             'leave.calendar.coverage_success_pct' => ['value' => ['required', 'numeric', 'min:0', 'max:100']],

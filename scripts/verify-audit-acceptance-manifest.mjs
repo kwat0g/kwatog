@@ -74,6 +74,6 @@ for (const gate of manifest.gates ?? []) {
 }
 // Kept explicit by decision: growing the registry stays a deliberate,
 // reviewable edit rather than one absorbed silently.
-if (manifest.gates?.length !== 46) errors.push(`expected 46 gates, got ${manifest.gates?.length ?? 0}`);
+if (manifest.gates?.length !== 47) errors.push(`expected 47 gates, got ${manifest.gates?.length ?? 0}`);
 if (errors.length) { console.error(errors.join('\n')); process.exit(1); }
-console.log('Audit acceptance manifest clean: 46 findings mapped; F-030 remains external-evidence-only.');
+console.log('Audit acceptance manifest clean: 47 findings mapped; F-030 remains external-evidence-only.');

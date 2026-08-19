@@ -40,7 +40,10 @@ use Illuminate\Support\Facades\Notification;
  */
 class AlertEngineService
 {
-    public function __construct(private readonly SettingsService $settings) {}
+    public function __construct(
+        private readonly SettingsService $settings,
+        private readonly SchedulerExecutionLedger $scheduler,
+    ) {}
 
     /**
      * Idempotent alert creation. Returns the existing record if a recent
@@ -121,6 +124,7 @@ class AlertEngineService
             'production' => fn () => $this->checkProduction(),
             'finance' => fn () => $this->checkFinance(),
             'quality' => fn () => $this->checkQuality(),
+            'scheduler' => fn () => $this->checkScheduler(),
         ] as $label => $check) {
             $failure = $this->safe($check, $label);
             if ($failure !== null) {
@@ -446,6 +450,73 @@ class AlertEngineService
                 }
             }
         }
+    }
+
+    /* ─── Scheduler checks ────────────────────────────────────────── */
+
+    /**
+     * `api/routes/console.php` registers 42 scheduled entries — MRP planning,
+     * payroll period creation, NCR escalation, alert dispatch, backups. If the
+     * scheduler stalls they all stop at once, and until this check existed
+     * nothing said so: `SchedulerExecutionLedger::health()` computed the
+     * evidence and no caller consumed it.
+     *
+     * THIS IS NOT A DEAD-MAN SWITCH, and must not be described as one. The
+     * thing that raises this alert is itself scheduled — `runAllChecks()` is
+     * driven by `alerts:run` every 15 minutes — so a completely dead scheduler
+     * raises nothing at all, and is caught by this check only once it comes
+     * back and reads its own ledger. What it does catch, while the scheduler
+     * is still running, is a STALLED or PARTIALLY FAILING one: a tick still
+     * `running` past the threshold, a tick that last finished longer ago than
+     * the threshold, a gap between consecutive ticks, and individual tasks
+     * stuck or failing.
+     *
+     * Coverage for a fully dead scheduler has to come from outside the
+     * process, and already does: `docker-compose.prod.yml`'s `scheduler`
+     * service runs `scheduler:health --stale-minutes=15` as its Docker
+     * healthcheck every 60s, over the same ledger. That control surfaces an
+     * outage to whoever watches container health; this one records it inside
+     * the application, where an operator will actually see it. They are
+     * complements, not substitutes, and neither makes the other redundant.
+     *
+     * `raise()` de-duplicates on (type, null entity) inside
+     * `alerts.dedup_window_hours`, so the first alert in a window keeps its
+     * original message even if later issues differ. That is deliberate — one
+     * standing alert per outage — but it means the message is the symptom at
+     * first detection, not a running log.
+     */
+    private function checkScheduler(): void
+    {
+        $staleMinutes = $this->positiveIntSetting('alerts.scheduler.stale_minutes');
+        $health = $this->scheduler->health($staleMinutes);
+
+        if ($health['healthy']) {
+            return;
+        }
+
+        $issues = $health['issues'];
+        $latestTick = $health['latest_tick'];
+
+        $this->raise(
+            AlertType::SchedulerStale,
+            AlertSeverity::Critical,
+            'Scheduler is not running on schedule',
+            sprintf(
+                'The scheduler heartbeat is unhealthy against a %d-minute threshold: %s',
+                $staleMinutes,
+                implode(' ', $issues),
+            ),
+            null,
+            [
+                'stale_minutes' => $staleMinutes,
+                'issues' => $issues,
+                'latest_tick_status' => $latestTick?->status,
+                'latest_tick_started_at' => $latestTick?->started_at?->toDateTimeString(),
+                'latest_tick_finished_at' => $latestTick?->finished_at?->toDateTimeString(),
+                'failed_task_count' => count($health['failed_tasks']),
+                'stuck_task_count' => count($health['stuck_tasks']),
+            ],
+        );
     }
 
     /* ─── Email fanout ────────────────────────────────────────────── */
