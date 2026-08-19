@@ -65,8 +65,16 @@ test.describe('Operational rollout workflows', () => {
   });
 
   test('warehouse scanner resolves an item into a receiving action', async ({ page }) => {
+    // Captured here, asserted in the test body. An `expect` that throws inside
+    // a route handler skips the `route.fulfill()` under it, so the request it
+    // was mocking never resolves: ONE payload mismatch then reports as TWO
+    // errors — the mismatch, plus a misleading "element(s) not found" for
+    // content that could not have rendered without the response. Measured on
+    // Playwright 1.60. Capturing keeps one cause to one failure, on the line
+    // that names it.
+    const resolvePayloads: Array<{ barcode?: string }> = [];
     await page.route('**/api/v1/inventory/scan/resolve', async (route) => {
-      expect((await route.request().postDataJSON()).barcode).toBe('RM-003');
+      resolvePayloads.push(route.request().postDataJSON());
       await route.fulfill({
         status: 200, contentType: 'application/json', body: JSON.stringify({ data: {
           type: 'item', entity: { id: ITEM_ID, code: 'RM-003', name: 'Plastic Resin Type C' },
@@ -80,6 +88,9 @@ test.describe('Operational rollout workflows', () => {
     await page.getByRole('button', { name: 'Resolve' }).click();
     await expect(page.getByText('Plastic Resin Type C')).toBeVisible();
     await expect(page.getByRole('button', { name: 'View item' })).toBeVisible();
+    // The rendered result proves the round trip finished, so the capture is settled.
+    expect(resolvePayloads).toHaveLength(1);
+    expect(resolvePayloads[0].barcode).toBe('RM-003');
   });
 
   test('exception workbench claims selected work in bulk', async ({ page }) => {
@@ -101,8 +112,13 @@ test.describe('Operational rollout workflows', () => {
     // reaching an assertion. The bulk triage it covers now lives behind
     // ?scope=exceptions, fed by the Action Center endpoint.
     await page.route('**/api/v1/dashboards/action-center', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(response()) }));
+    // Captured, asserted in the body — same reason as the scanner test, one
+    // degree worse: a throw here also skips `assigned = true`, so the mock keeps
+    // serving the unclaimed row and the second error is an owner line that was
+    // never going to appear.
+    const taskRequests: Array<{ action?: string; item_ids?: string[] }> = [];
     await page.route('**/api/v1/dashboards/action-center/tasks', async (route) => {
-      expect((await route.request().postDataJSON()).action).toBe('claim');
+      taskRequests.push(route.request().postDataJSON());
       assigned = true;
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) });
     });
@@ -112,6 +128,11 @@ test.describe('Operational rollout workflows', () => {
     await page.getByRole('button', { name: 'Claim' }).click();
     // The folded page words the owner line "Assigned: <name>".
     await expect(page.getByText('Assigned: Warehouse Staff')).toBeVisible();
+    // The re-rendered owner line only happens after the POST, so the capture is
+    // settled: one claim, carrying the row that was checked.
+    expect(taskRequests).toHaveLength(1);
+    expect(taskRequests[0].action).toBe('claim');
+    expect(taskRequests[0].item_ids).toEqual(['quality:ncr:ncr01']);
   });
 
   test('administrator sees rollout health telemetry', async ({ page }) => {
