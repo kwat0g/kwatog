@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Controllers;
 
+use App\Common\Exceptions\BusinessRuleException;
+use App\Modules\Accounting\Exceptions\ClosedPeriodException;
+use App\Modules\Inventory\Exceptions\InsufficientStockException;
+use App\Modules\Inventory\Exceptions\InvalidMovementException;
 use App\Modules\Inventory\Models\MaterialIssueSlip;
 use App\Modules\Inventory\Requests\StoreMaterialIssueRequest;
 use App\Modules\Inventory\Resources\MaterialIssueSlipResource;
@@ -11,7 +15,6 @@ use App\Modules\Inventory\Services\MaterialIssueService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use RuntimeException;
 
 class MaterialIssueSlipController
 {
@@ -31,7 +34,7 @@ class MaterialIssueSlipController
     {
         try {
             $slip = $this->service->create($request->validated(), $request->user());
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException|ClosedPeriodException|InsufficientStockException|InvalidMovementException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return (new MaterialIssueSlipResource($slip))->response()->setStatusCode(201);

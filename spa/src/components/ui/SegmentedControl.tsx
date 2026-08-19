@@ -41,7 +41,7 @@ const sizeClasses: Record<Size, string> = {
  md: 'h-8 px-3 text-sm',
  // 44px — the touch-target floor the PWAs use. Deliberately larger than the
  // desktop scale in DESIGN-SYSTEM.md, which assumes a mouse.
- touch: 'min-h-[44px] px-4 text-base',
+ touch: 'min-h-hit px-4 text-base',
 };
 
 export function SegmentedControl<T extends string>({

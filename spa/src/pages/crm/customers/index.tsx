@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useNavigate} from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { LuPlus } from '@/lib/icons';
@@ -14,10 +13,11 @@ import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 import type { Customer } from '@/types/accounting';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 export default function CrmCustomersListPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
- const [filters, setFilters] = useState<CustomerListParams>({ page: 1, per_page: 25 });
+ const [filters, setFilters] = useUrlFilters<CustomerListParams>({ page: 1, per_page: 25 });
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['crm', 'customers', filters],
@@ -134,6 +134,7 @@ export default function CrmCustomersListPage() {
  data={data.data}
  meta={data.meta}
  onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+ onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
  />
  </div>
  )}

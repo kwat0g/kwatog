@@ -5,7 +5,6 @@
  * and actions (view, duplicate). Follows the same 5-state pattern
  * (loading / error / empty / data / stale) as all other list pages.
  */
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { LuCopy, LuPlus } from '@/lib/icons';
@@ -21,10 +20,11 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import type { ProductRouting } from '@/types/production/routing';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 export default function RoutingsListPage() {
  const navigate = useNavigate();
  const qc = useQueryClient();
- const [filters, setFilters] = useState<RoutingListParams>({ page: 1, per_page: 25 });
+ const [filters, setFilters] = useUrlFilters<RoutingListParams>({ page: 1, per_page: 25 });
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['production', 'routings', filters],
@@ -142,6 +142,7 @@ export default function RoutingsListPage() {
  data={data.data}
  meta={data.meta}
  onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+ onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
  />
  </div>
  )}

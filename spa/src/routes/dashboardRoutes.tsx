@@ -31,8 +31,12 @@ const ChainTrackerPage = lazy(() => import('@/pages/chains'));
 const ChainRecoveryPage = lazy(() => import('@/pages/chains/recovery'));
 const NotificationsListPage = lazy(() => import('@/pages/notifications'));
 const ActionCenterPage = lazy(() => import('@/pages/action-center'));
-// /exceptions page file kept (scope-cut 2026-08-08) — reachable as the
-// 'Exceptions' scope toggle on /action-center (?scope=exceptions).
+// The exception queue lives on /action-center behind the 'Exceptions' scope
+// toggle (?scope=exceptions). pages/exceptions/index.tsx — the standalone page
+// this replaced — was deleted rather than left orphaned: unrouted since the
+// 2026-08-08 fold, it still carried the pre-fold owner wording ("Assigned to
+// X" where the surviving page says "Assigned: X"), and a debugging session on
+// this branch read the dead file and chased the wrong string.
 const OperationsHealthPage = lazy(() => import('@/pages/admin/operations-health'));
 
 const AdminUsersRolesHubPage = lazy(() => import('@/pages/admin/users-roles'));

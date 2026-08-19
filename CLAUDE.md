@@ -636,6 +636,13 @@ Explicit `Event::listen($EventClass, [$ListenerClass, 'handle'])` in `AppService
 - `App\Modules\Quality\Services\InspectionService::recordMeasurements()` — tolerance auto-eval + status transition + defect counting.
 - `App\Common\Services\NotificationService::send($recipients, string $type, array $data)` — single notification entry point. Recipients = `User|Collection|array`.
 
+### Dashboards are permission-derived — never add a role-name branch
+- **Landing page:** `DashboardDispatchService::resolve()` picks the bespoke dashboard from `DashboardCatalog` (keyed by permission). When several qualify, rarest permission wins — rarity is counted live from `role_permissions`. A new role needs no code change.
+- **Widget visibility:** a `dashboard_widgets` row declares four independent things — `permission` (who), `render_kind` (how it draws), `link_path` (where "Open →" goes), `module` (picker grouping). None names a role. `DashboardLayoutService` strips anything the caller's `hasPermission` refuses, on both the plain and rich paths.
+- **Adding a widget:** row in `DashboardWidgetSeeder` (+ `LINK_BY_KEY` entry) → scalar arm in `DashboardWidgetDataService` → rich provider in `Services/Analytics/*` if non-scalar → register the provider in BOTH `WidgetAnalyticsService::providers()` and `WidgetSeedIntegrityTest::handledKeys()`.
+- `WidgetSeedIntegrityTest` is the drift guard: rich↔provider bijection, every row has a `link_path`, KPI widgets match `kpi_definitions`, KPI gates match `KpiSnapshotService::MODULE_PERMISSIONS`, and no role default references a widget that role cannot see.
+- Role defaults (`DashboardRoleLayoutSeeder`) are a UX seed, NOT an access decision. A leaky default is stripped at render, so it fails silently — the test above is what catches it.
+
 ### Cron inventory (post-Track-3)
 ```
 mrp:run-daily                            (06:00)
@@ -648,12 +655,13 @@ assets:run-monthly-depreciation          (1st @ 03:00)
 ncr:escalate                             (every 15m)
 training:check-expiries                  (06:30)
 copq:snap-monthly                        (1st @ 02:30)
+kpi:compute-monthly                      (2nd @ 03:00 — the ONLY thing that fills kpi_snapshots, so every `kpi.*` widget reads one month behind)
 complaints:check-8d-slas                 (every 15m)
 docs:check-reviews                       (06:45)
 ```
 
 ### Migration numbering
-Recent additions use 4-digit numbered (`0186_*`, `0187_*`, …). Highest as of 2026-08-19 = **0474**. New migrations use highest+1. Note `0472` is absent from `main` — it lives on an unmerged frontend branch, so the sequence here reads 0470, 0471, 0473, 0474 and a gap does NOT mean the number is free. Mixed timestamp-style migrations (`2026_06_09_*`) coexist for older HR/Payroll changes — don't introduce more.
+Recent additions use 4-digit numbered (`0186_*`, `0187_*`, …). Highest as of 2026-08-20 = **0474**. New migrations use highest+1. The sequence is contiguous through 0474: `0472_add_link_path_to_dashboard_widgets` used to be missing from `main` because it lived on an unmerged frontend branch, and that branch has now merged. Mixed timestamp-style migrations (`2026_06_09_*`, `2026_08_16_*`) coexist for older HR/Payroll changes and recent BOM-costing work — don't introduce more.
 
 **Four prefixes are used twice, and must NOT be renamed:**
 
@@ -666,7 +674,10 @@ Recent additions use 4-digit numbered (`0186_*`, `0187_*`, …). Highest as of 2
 
 All four pairs are pre-existing on `origin/main`, so they are not new breakage, and
 **ordering is unaffected** — the migrator sorts by full filename, so a duplicated
-numeric prefix still orders deterministically by the rest of the name.
+numeric prefix still orders deterministically by the rest of the name. The
+timestamp-style files collide the same way and for the same reason —
+`2026_08_13_110000_*` names two files and `2026_08_13_120000_*` names four — and
+are equally safe to leave alone.
 
 Renaming them would be **destructive**. Laravel records the filename (without
 `.php`) in the `migrations` table and matches on it, so a renamed migration that
@@ -675,8 +686,49 @@ deployed database. Leave them alone.
 
 The cost is human, not mechanical: two files claiming one sequence number make
 "highest + 1" ambiguous and invite a fifth collision. Derive the next number by
-confirming the prefix is unused (`ls api/database/migrations | grep '^0474_'`)
+confirming the prefix is unused (`ls api/database/migrations | grep '^0475_'`)
 rather than trusting a max.
 
 ### Test runner + suite size
-Full suite as of 2026-08-04: **1242 tests / 0 fail / ~9 min runtime**. Use `--filter='Foo|Bar'` for tight loops. Re-run full suite only at end of feature.
+Full suite as of 2026-08-17: **1900 tests / 0 fail / ~28 min runtime**. Use `--filter='Foo|Bar'` for tight loops. Re-run full suite only at end of feature.
+
+**Two agents cannot share `ogami_test`.** `RefreshDatabase` runs `migrate:fresh`, so a second suite tears the schema down under the first: you get `relation "roles" does not exist`, `column roles.deleted_at does not exist`, `SQLSTATE[40P01] deadlock detected` — hundreds of failures with ZERO assertion failures among them, which is the tell. Run on your own database instead of guessing:
+```
+docker compose exec -T db psql -U ogami -d postgres -c "CREATE DATABASE ogami_test_verify OWNER ogami;"
+docker compose exec -T -e DB_DATABASE=ogami_test_verify api php artisan test
+```
+`phpunit.xml` hardcodes `DB_DATABASE=ogami_test` but PHPUnit `<env>` does not force, so an existing env var wins.
+
+### Browser engine: Lightpanda where it fits, Chromium where it must
+
+`lightpanda` (installed at `~/.local/bin/lightpanda`) is a Zig headless engine that
+speaks CDP, so `chromium.connectOverCDP('http://127.0.0.1:9222')` works after
+`lightpanda serve --host 127.0.0.1 --port 9222`. It is ~9x faster and ~16x lighter
+than Chrome, and worth using for anything crawl-shaped.
+
+**It has no layout engine.** That is the deciding fact, measured against
+`1.0.0-nightly.5266`, not inferred from the docs:
+
+| probe | Lightpanda result |
+|---|---|
+| `connectOverCDP`, `goto`, DOM queries | work |
+| `getBoundingClientRect()` on `<body>` | `{w: 1920, h: 100000000}` — fabricated |
+| `getComputedStyle(el).display` | returns the initial value, not the cascade |
+| `page.title()` on example.com | `""` |
+| `page.setContent()` | closes the target |
+| `page.screenshot()` | fails |
+
+**Use Chromium (required) when the check measures rendering:**
+- the whole Playwright suite in `spa/e2e/` — 93 `page.route` mocks, 8
+  `setViewportSize`, plus `getComputedStyle`/`getBoundingClientRect`/
+  `toBeInViewport` in `ux-hardening-visual.spec.ts`. A UI/UX suite measures
+  layout, which is precisely what Lightpanda does not compute.
+- `scripts/defense-smoke-walk.js` — takes screenshots.
+
+**Lightpanda is a fit (DOM presence and text only, no geometry, no screenshots):**
+- `scripts/panel-gate-browser-check.js`
+- `scripts/dynamic-spa-route-audit.js`
+
+Do not "fix" a geometry assertion to make it pass under Lightpanda — a passing
+`getBoundingClientRect` there is a fabricated number, so the test would assert
+nothing. Reach for Chromium instead.

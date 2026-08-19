@@ -7,6 +7,7 @@ namespace App\Modules\Dashboard\Services;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Services\Concerns\DashboardQueries;
+use App\Modules\Dashboard\Support\PanelGate;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestPriority;
 use Illuminate\Support\Carbon;
@@ -23,13 +24,16 @@ class PurchasingDashboardService
 {
     use DashboardQueries;
 
-    public function __construct(private readonly SettingsService $settings) {}
+    public function __construct(
+        private readonly SettingsService $settings,
+        private readonly PanelGate $gate,
+    ) {}
 
     private const CACHE_TTL = 30;
 
     public function purchasing(User $user): array
     {
-        return Cache::remember("dashboard:purchasing:{$user->id}", self::CACHE_TTL, function () {
+        return Cache::remember("dashboard:purchasing:{$user->id}", self::CACHE_TTL, function () use ($user) {
             $prsPending   = $this->safeCount('purchase_requests', fn ($q) => $q->where('status', 'pending'));
             $openPos      = $this->safeCount('purchase_orders', fn ($q) => $q->whereIn('status', [
                 PurchaseOrderStatus::Draft->value,
@@ -45,19 +49,25 @@ class PurchasingDashboardService
             });
 
             return [
-                'kpis' => [
-                    $this->kpi('PRs Pending Action',   (string) $prsPending,   'count'),
-                    $this->kpi('Open POs',              (string) $openPos,      'count'),
-                    $this->kpi('Overdue Deliveries',    (string) $overdue,      'count'),
-                    $this->kpi('Suppliers Due Review',  (string) $suppliersDue, 'count'),
-                ],
-                'panels' => [
-                    'delivery_horizon_days' => $this->settings->requiredInt('dashboard.widgets.delivery_horizon_days', 0),
-                    'pr_action_queue'      => $this->purchasingPrActionQueue(),
-                    'po_pipeline'          => $this->purchasingPoPipeline(),
-                    'supplier_performance' => $this->purchasingTopSuppliers(),
-                    'upcoming_deliveries'  => $this->purchasingUpcomingDeliveries(),
-                ],
+                'kpis' => $this->gate->kpis($user, [
+                    ['purchasing.view',                       fn () => $this->kpi('PRs Pending Action',   (string) $prsPending,   'count')],
+                    ['purchasing.view',                       fn () => $this->kpi('Open POs',              (string) $openPos,      'count')],
+                    // Overdue against po.expected_delivery_date — a purchasing
+                    // reading, not a supply-chain one.
+                    ['purchasing.view',                       fn () => $this->kpi('Overdue Deliveries',    (string) $overdue,      'count')],
+                    ['purchasing.suppliers.performance.view', fn () => $this->kpi('Suppliers Due Review',  (string) $suppliersDue, 'count')],
+                ]),
+                'panels' => $this->gate->panels($user, [
+                    // A configured horizon, not data.
+                    'delivery_horizon_days' => [null,                                     fn () => $this->settings->requiredInt('dashboard.widgets.delivery_horizon_days', 0)],
+                    'pr_action_queue'      => ['purchasing.view',                         fn () => $this->purchasingPrActionQueue()],
+                    'po_pipeline'          => ['purchasing.view',                         fn () => $this->purchasingPoPipeline()],
+                    // Scored suppliers by name — its own grant, which finance
+                    // also holds for the vendor-performance review.
+                    'supplier_performance' => ['purchasing.suppliers.performance.view',   fn () => $this->purchasingTopSuppliers()],
+                    // purchase_orders + vendor names, despite the name.
+                    'upcoming_deliveries'  => ['purchasing.view',                         fn () => $this->purchasingUpcomingDeliveries()],
+                ]),
             ];
         });
     }

@@ -689,10 +689,24 @@ class BillService
         if ((int) $grn->purchase_order_id !== (int) $bill->purchase_order_id) throw new BusinessRuleException('The accepted GRN does not belong to the bill purchase order.');
     }
 
+    /**
+     * BusinessRuleException rather than ValidationException even though these
+     * read like field errors: createDraft() and createDraftForGrn() are reached
+     * from the supplier portal and from AutoCreateBillOnGrnAccepted, a queued
+     * listener — neither submits a form with an `items` field, so keying the
+     * error to one would point at nothing.
+     *
+     * Deliberately understated on the queue side: unlike the delivery→invoice and
+     * PR→PO handoffs, AutoCreateBillOnGrnAccepted has NO catch, so these reach
+     * failed_jobs either way and this conversion changes nothing there. Its live
+     * effect is on the supplier-portal path, where it removes the dependence on
+     * SupplierPortalController happening to wrap the call in
+     * `catch (\RuntimeException)`.
+     */
     private function normalizeItems(array $rawItems): array
     {
         if (count($rawItems) === 0) {
-            throw new RuntimeException('A bill must have at least one line item.');
+            throw new BusinessRuleException('A bill must have at least one line item.');
         }
 
         $rows = [];
@@ -700,7 +714,7 @@ class BillService
         foreach ($rawItems as $raw) {
             $accountId = HashIdFilter::decode($raw['expense_account_id'] ?? null, Account::class);
             if (! $accountId) {
-                throw new RuntimeException('Invalid expense account selected on bill item.');
+                throw new BusinessRuleException('Invalid expense account selected on bill item.');
             }
 
             $itemId = HashIdFilter::decode($raw['item_id'] ?? null, Item::class);
@@ -710,7 +724,7 @@ class BillService
             $total = Money::round2(bcmul($qty, $price, 4));
 
             if (Money::lte($qty, '0') || Money::lt($price, '0')) {
-                throw new RuntimeException('Quantity must be > 0, unit price must be ≥ 0.');
+                throw new BusinessRuleException('Quantity must be > 0, unit price must be ≥ 0.');
             }
 
             $rows[] = [
@@ -795,6 +809,10 @@ class BillService
     {
         $id = Account::query()->where('code', $code)->value('id');
         if (! $id) {
+            // Stays an unmapped RuntimeException on purpose. $code is a
+            // settings/seed value, so the remedy named in the message is a
+            // deployment step — there is no user input to correct, and a 422
+            // would file a broken chart of accounts under "your fault".
             throw new RuntimeException("Required account {$code} not found in COA. Run ChartOfAccountsSeeder.");
         }
 

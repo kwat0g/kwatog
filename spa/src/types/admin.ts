@@ -62,6 +62,9 @@ export interface AdminUserListFilters {
  direction?: 'asc' | 'desc';
  page?: number;
  per_page?: number;
+ // Index signature so this can bind to the URL via useUrlFilters, which is
+ // how every other list page keeps its filters shareable and refresh-safe.
+ [key: string]: unknown;
 }
 
 export type AdminUserListResponse = PaginatedResponse<AdminUserListItem>;

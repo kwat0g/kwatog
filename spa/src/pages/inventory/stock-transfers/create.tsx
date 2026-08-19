@@ -18,6 +18,9 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { numberInputProps } from '@/lib/numberInput';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  item_id: z.string().min(1, 'Item is required.'),
  from_location_id: z.string().min(1, 'Source location is required.'),
@@ -44,9 +47,10 @@ export default function CreateStockTransferPage() {
  queryFn: () => warehouseApi.tree(),
  });
 
- const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<V>({
+  const form = useForm<V>({
  resolver: zodResolver(schema),
  });
+ const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = form;
 
  const m = useMutation({
  mutationFn: (d: V) => stockTransfersApi.create({
@@ -62,6 +66,7 @@ export default function CreateStockTransferPage() {
  applyServerValidationErrors(e, setError, 'Failed to record transfer.');
  },
  });
+ const safety = useFormSafety({ form, saved: m.isSuccess });
 
  const locations = (warehouses.data ?? []).flatMap((w) =>
  (w.zones ?? []).flatMap((z) => (z.locations ?? []).map((l) => ({
@@ -74,6 +79,7 @@ export default function CreateStockTransferPage() {
  return (
  <div>
  <PageHeader title="Stock transfer" backTo="/inventory/movements" backLabel="Movements" />
+      <FormDraftBanner safety={safety} />
  <form
  onSubmit={handleSubmit((d) => { setPendingValues(d); setConfirmOpen(true); }, onFormInvalid<V>())}
  className="max-w-3xl mx-auto px-5 py-4 space-y-4"
@@ -82,7 +88,7 @@ export default function CreateStockTransferPage() {
  <div className="grid grid-cols-2 gap-3">
  <Select label="Item" required {...register('item_id')} error={errors.item_id?.message}>
  <option value="">Select item…</option>
- {items.data?.data.map((it) => (
+ {items.data?.data?.map((it) => (
  <option key={it.id} value={it.id}>{it.code} — {it.name}</option>
  ))}
  </Select>
@@ -116,10 +122,10 @@ export default function CreateStockTransferPage() {
  />
  </div>
  </Panel>
- <div className="flex justify-end gap-2">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => nav('/inventory/movements')}>Cancel</Button>
  <Button type="submit" variant="primary" disabled={isSubmitting}>Transfer</Button>
- </div>
+ </FormActions>
  </form>
 
  <ConfirmDialog

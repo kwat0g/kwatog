@@ -18,6 +18,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Validator;
+use App\Common\Exceptions\BusinessRuleException;
+use App\Modules\Leave\Exceptions\InsufficientLeaveBalanceException;
 
 class LeaveRequestController
 {
@@ -43,8 +45,9 @@ class LeaveRequestController
     {
         $d = $request->validatedData();
         $user = $request->user();
-        $canFileForOthers = $user?->role?->slug === 'system_admin'
-            || $user?->hasPermission('leave.approve_hr');
+        // hasPermission short-circuits for system_admin, so the administrator
+        // reaches this through the same grant HR does.
+        $canFileForOthers = $user?->hasPermission('leave.approve_hr') ?? false;
         abort_unless(
             $canFileForOthers || (int) $user?->employee_id === (int) $d['employee_id'],
             403,
@@ -53,7 +56,7 @@ class LeaveRequestController
 
         try {
             $req = $this->service->submit($d['employee_id'], $d);
-        } catch (\RuntimeException|\InvalidArgumentException $e) {
+        } catch (BusinessRuleException|InsufficientLeaveBalanceException|\InvalidArgumentException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
@@ -63,10 +66,9 @@ class LeaveRequestController
     public function show(LeaveRequest $leaveRequest, Request $request): LeaveRequestResource
     {
         $user = $request->user();
-        $isAdmin = $user?->role?->slug === 'system_admin';
         $isHr = $user?->hasPermission('leave.approve_hr') ?? false;
 
-        if (! $isAdmin && ! $isHr) {
+        if (! $isHr) {
             $isDeptHead = $user?->hasPermission('leave.approve_dept') ?? false;
             $isOwn = (int) $leaveRequest->employee_id === (int) $user?->employee_id;
             $isDeptMember = false;
@@ -87,7 +89,7 @@ class LeaveRequestController
     {
         try {
             $req = $this->service->approveDept($leaveRequest, $request->user(), $request->input('remarks'));
-        } catch (\RuntimeException $e) {
+        } catch (BusinessRuleException|InsufficientLeaveBalanceException $e) {
             abort(422, $e->getMessage());
         }
 
@@ -98,7 +100,7 @@ class LeaveRequestController
     {
         try {
             $req = $this->service->approveHR($leaveRequest, $request->user(), $request->input('remarks'));
-        } catch (\RuntimeException $e) {
+        } catch (BusinessRuleException|InsufficientLeaveBalanceException $e) {
             abort(422, $e->getMessage());
         }
 

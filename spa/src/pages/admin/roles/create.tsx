@@ -5,7 +5,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
-import { AxiosError } from 'axios';
 import { rolesApi } from '@/api/admin/roles';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -13,8 +12,11 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Switch } from '@/components/ui/Switch';
 import { PageHeader } from '@/components/layout/PageHeader';
-import type { ApiValidationError } from '@/types';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { applyServerValidationErrors } from '@/lib/formErrors';
+import { FormActions } from '@/components/ui/FormActions';
 /**
  * Series R — Task R1.
  *
@@ -56,14 +58,7 @@ export default function CreateRolePage() {
  ? String((location.state as { cloneFrom?: unknown }).cloneFrom ?? '')
  : '';
 
- const {
- register,
- handleSubmit,
- watch,
- setValue,
- setError,
- formState: { errors, isSubmitting },
- } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  clone: !!cloneFromState,
@@ -73,6 +68,14 @@ export default function CreateRolePage() {
  source_role_id: cloneFromState,
  },
  });
+ const {
+ register,
+ handleSubmit,
+ watch,
+ setValue,
+ setError,
+ formState: { errors, isSubmitting },
+ } = form;
 
  const cloneMode = watch('clone');
  const nameValue = watch('name');
@@ -112,17 +115,11 @@ export default function CreateRolePage() {
  toast.success(`Role “${role.name}” created. Configure its permissions next.`);
  navigate(`/admin/roles/${role.id}/permissions`);
  },
- onError: (error: AxiosError<ApiValidationError>) => {
- if (error.response?.status === 422 && error.response.data.errors) {
- for (const [field, messages] of Object.entries(error.response.data.errors)) {
- setError(field as keyof FormValues, { type: 'server', message: messages[0] });
- }
- toast.error('Please fix the errors below.');
- return;
- }
- // Other errors handled by axios interceptor.
+ onError: (error) => {
+   applyServerValidationErrors(error, setError, 'Failed to create the role.');
  },
  });
+ const safety = useFormSafety({ form, saved: submit.isSuccess });
 
  return (
  <div>
@@ -131,12 +128,8 @@ export default function CreateRolePage() {
  subtitle="Define a custom role users can be assigned to. You configure its permissions on the next screen."
  backTo="/admin/roles"
  backLabel="Roles"
- breadcrumbs={[
- { label: 'Admin', href: '/admin/users' },
- { label: 'Roles', href: '/admin/roles' },
- { label: 'New Role' },
- ]}
  />
+      <FormDraftBanner safety={safety} />
 
  <form
  onSubmit={handleSubmit((v) => submit.mutate(v))}
@@ -207,7 +200,7 @@ export default function CreateRolePage() {
  </fieldset>
 
  {/* ─── Actions ───────────────────────────────────── */}
- <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+ <FormActions>
  <Button
  type="button"
  variant="secondary"
@@ -224,7 +217,7 @@ export default function CreateRolePage() {
  >
  {submit.isPending ? 'Creating…' : 'Create role'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

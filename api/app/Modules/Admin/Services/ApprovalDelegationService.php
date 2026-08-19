@@ -20,6 +20,12 @@ use Illuminate\Support\Facades\DB;
 class ApprovalDelegationService
 {
     /**
+     * The grant that lets an actor read and revoke delegations belonging to
+     * someone else. Named once so the three call sites cannot drift.
+     */
+    private const MANAGE_ANY = 'admin.delegations.manage_any';
+
+    /**
      * List delegations visible to $actor. Admins see all; everyone else sees
      * delegations they granted or that were granted to them.
      */
@@ -29,7 +35,10 @@ class ApprovalDelegationService
             ->with(['delegator:id,name,email,role_id', 'delegate:id,name,email,role_id'])
             ->orderByDesc('id');
 
-        if ($actor->role?->slug !== 'system_admin') {
+        // hasPermission short-circuits for system_admin, so the administrator
+        // still sees everything — but now so does any role granted the
+        // permission, without this service knowing a role name.
+        if (! $actor->hasPermission(self::MANAGE_ANY)) {
             $q->where(function ($w) use ($actor): void {
                 $w->where('delegator_user_id', $actor->id)
                     ->orWhere('delegate_user_id', $actor->id);
@@ -41,12 +50,13 @@ class ApprovalDelegationService
 
     public function create(array $data, User $actor): ApprovalDelegation
     {
-        $isAdmin = $actor->role?->slug === 'system_admin';
+        $canManageAny = $actor->hasPermission(self::MANAGE_ANY);
 
-        // Delegator defaults to the acting user. Only an admin may set it to
-        // someone else, so a normal user can only delegate THEIR OWN authority.
+        // Delegator defaults to the acting user. Only a holder of
+        // admin.delegations.manage_any may set it to someone else, so a normal
+        // user can only delegate THEIR OWN authority.
         $delegatorId = $actor->id;
-        if ($isAdmin && ! empty($data['delegator_user_id'])) {
+        if ($canManageAny && ! empty($data['delegator_user_id'])) {
             $delegatorId = HashIdFilter::decode($data['delegator_user_id'], User::class)
                 ?? (int) $data['delegator_user_id'];
         }
@@ -92,8 +102,7 @@ class ApprovalDelegationService
      */
     public function revoke(ApprovalDelegation $delegation, User $actor): ApprovalDelegation
     {
-        $isAdmin = $actor->role?->slug === 'system_admin';
-        if (! $isAdmin && $delegation->delegator_user_id !== $actor->id) {
+        if (! $actor->hasPermission(self::MANAGE_ANY) && $delegation->delegator_user_id !== $actor->id) {
             throw new BusinessRuleException('Only the delegator or an administrator may revoke this delegation.');
         }
 

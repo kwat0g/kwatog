@@ -1,5 +1,4 @@
 /** Sprint 7 — Task 68 — Customer complaints list. */
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
 import { LuPlus } from '@/lib/icons';
@@ -14,6 +13,8 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import type { CustomerComplaint, ComplaintSeverity, ComplaintStatus } from '@/types/crm';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 const STATUS_CHIP: Record<ComplaintStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
  open: 'warning', investigating: 'info', resolved: 'info', closed: 'success', cancelled: 'neutral' };
 const SEVERITY_CHIP: Record<ComplaintSeverity, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
@@ -22,7 +23,7 @@ const SEVERITY_CHIP: Record<ComplaintSeverity, 'success' | 'danger' | 'warning' 
 export default function ComplaintsListPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
- const [filters, setFilters] = useState<ComplaintListParams>({ page: 1, per_page: 25 });
+ const [filters, setFilters] = useUrlFilters<ComplaintListParams>({ page: 1, per_page: 25 });
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['crm', 'complaints', filters],
@@ -91,14 +92,14 @@ export default function ComplaintsListPage() {
  action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />
  )}
  {data && data.data.length === 0 && (
- <EmptyState icon="message-square" title="No complaints yet"
- description="Customer complaints filed by CRM officers will appear here. Each complaint auto-creates an NCR." />
+ <ListEmptyState />
  )}
  {data && data.data.length > 0 && (
  <div className="px-5 py-4">
  <DataTable
  onRowClick={(r) => navigate(`/crm/complaints/${r.id}`)} columns={columns} data={data.data} meta={data.meta}
- onPageChange={(page) => setFilters((f) => ({ ...f, page }))} />
+ onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+ onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))} />
  </div>
  )}
  </div>

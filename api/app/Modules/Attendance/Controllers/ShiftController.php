@@ -17,6 +17,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Carbon\Carbon;
+use App\Common\Exceptions\BusinessRuleException;
 
 class ShiftController
 {
@@ -50,7 +51,7 @@ class ShiftController
     {
         try {
             $this->shifts->delete($shift);
-        } catch (\RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return response()->json(null, 204);

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\CRM\Controllers;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Requests\StoreProductRequest;
 use App\Modules\CRM\Requests\UpdateProductRequest;
@@ -12,7 +13,6 @@ use App\Modules\CRM\Services\ProductService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use RuntimeException;
 
 class ProductController
 {
@@ -43,7 +43,7 @@ class ProductController
     {
         try {
             $this->service->delete($product);
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return response()->json(null, 204);

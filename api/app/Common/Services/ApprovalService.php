@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Common\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Models\ApprovalRecord;
 use App\Common\Models\WorkflowDefinition;
 use App\Common\Support\Money;
@@ -67,6 +68,17 @@ class ApprovalService
         });
     }
 
+    /**
+     * Both guards below raise ForbiddenActionException, not `abort(403, …)`.
+     *
+     * The refusals are identical in status and message, but the type is what
+     * lets a caller name them. Every bulk approver here wraps each row in a
+     * try/catch and puts the reason in front of the user; while these were
+     * generic HTTP failures, LeaveRequestService had to guess from a status code
+     * whether the sentence was authored copy, and narrowing that arm to
+     * BusinessRuleException once dropped the segregation-of-duties sentence
+     * entirely (f54822f7). See ForbiddenActionException for the full history.
+     */
     public function approve(Model $approvable, User $user, ?string $remarks = null): void
     {
         DB::transaction(function () use ($approvable, $user, $remarks) {
@@ -79,10 +91,10 @@ class ApprovalService
             }
             $submitterId = $this->resolveSubmitterUserId($approvable);
             if ($submitterId !== null && $submitterId === $user->id) {
-                abort(403, 'You cannot act on a record you submitted.');
+                throw new ForbiddenActionException('You cannot act on a record you submitted.');
             }
             if (! $this->userMayActFor($user, $next->role_slug)) {
-                abort(403, "Only users with role '{$next->role_slug}' can approve this step.");
+                throw new ForbiddenActionException("Only users with role '{$next->role_slug}' can approve this step.");
             }
 
             $next->update([
@@ -106,10 +118,10 @@ class ApprovalService
             }
             $submitterId = $this->resolveSubmitterUserId($approvable);
             if ($submitterId !== null && $submitterId === $user->id) {
-                abort(403, 'You cannot act on a record you submitted.');
+                throw new ForbiddenActionException('You cannot act on a record you submitted.');
             }
             if (! $this->userMayActFor($user, $next->role_slug)) {
-                abort(403, "Only users with role '{$next->role_slug}' can reject this step.");
+                throw new ForbiddenActionException("Only users with role '{$next->role_slug}' can reject this step.");
             }
 
             $next->update([

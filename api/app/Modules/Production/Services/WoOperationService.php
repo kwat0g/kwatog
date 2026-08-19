@@ -15,7 +15,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use RuntimeException;
+use App\Common\Exceptions\BusinessRuleException;
 
 /**
  * Sprint P10 — Task 11. WO Operation lifecycle service.
@@ -300,13 +300,13 @@ class WoOperationService
      * @param  WoOperationStatus[]    $allowed
      * @param  string                 $action   Human-readable action name for the error
      *
-     * @throws RuntimeException
+     * @throws BusinessRuleException
      */
     private function assertStatus(WoOperation $op, array $allowed, string $action): void
     {
         if (! in_array($op->status, $allowed, true)) {
             $allowedLabels = implode(', ', array_map(fn (WoOperationStatus $s) => $s->value, $allowed));
-            throw new RuntimeException(
+            throw new BusinessRuleException(
                 "Cannot {$action}: operation is '{$op->status->value}', must be one of [{$allowedLabels}]."
             );
         }
@@ -316,7 +316,7 @@ class WoOperationService
      * Assert that all preceding operations (lower sequence, same WO)
      * are Completed or Skipped.
      *
-     * @throws RuntimeException
+     * @throws BusinessRuleException
      */
     private function assertPreviousCompleted(WoOperation $op): void
     {
@@ -330,7 +330,7 @@ class WoOperationService
             ->exists();
 
         if ($blocking) {
-            throw new RuntimeException(
+            throw new BusinessRuleException(
                 'Cannot start operation: previous operations are not yet completed or skipped.'
             );
         }

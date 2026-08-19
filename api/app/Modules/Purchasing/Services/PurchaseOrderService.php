@@ -31,7 +31,6 @@ use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\PurchaseRequestItem;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 class PurchaseOrderService
 {
@@ -650,6 +649,20 @@ class PurchaseOrderService
     }
 
     /**
+     * BusinessRuleException rather than ValidationException keyed to `items`:
+     * convertFromPr() reaches this builder from ConsolidatePurchaseOrders, a
+     * queued listener that splits on BusinessRuleException — "expected, record a
+     * manual-action outcome" — versus Throwable — "unexpected, rethrow".
+     *
+     * Note which way this moved. As bare RuntimeExceptions these four ESCAPED
+     * that split and were handled as unexpected: the listener rethrew, the job
+     * poisoned, and the PR stayed at `po_conversion_status = NotStarted` with no
+     * note explaining why. Naming them BusinessRuleException does not preserve
+     * the graceful arm, it puts them in it for the first time — a PR line
+     * missing an item or a price now records a manual-conversion outcome and
+     * notifies, which is right because no retry can supply the missing value.
+     * ValidationException would have escaped the split again.
+     *
      * @param array<int, array> $rows
      * @return array{0: array<int, array>, 1: string}
      */
@@ -660,18 +673,18 @@ class PurchaseOrderService
         foreach ($rows as $r) {
             $itemId = HashIdFilter::decode($r['item_id'] ?? null, Item::class) ?? (int) ($r['item_id'] ?? 0);
             if (! $itemId) {
-                throw new RuntimeException('Each PO line must reference an item.');
+                throw new BusinessRuleException('Each PO line must reference an item.');
             }
             if (! array_key_exists('quantity', $r) || trim((string) $r['quantity']) === '') {
-                throw new RuntimeException('Each PO line must include a quantity.');
+                throw new BusinessRuleException('Each PO line must include a quantity.');
             }
             if (! array_key_exists('unit_price', $r) || trim((string) $r['unit_price']) === '') {
-                throw new RuntimeException('Each PO line must include an authoritative unit price.');
+                throw new BusinessRuleException('Each PO line must include an authoritative unit price.');
             }
             $qty   = (string) $r['quantity'];
             $price = (string) $r['unit_price'];
             if (Money::lte($qty, '0') || Money::lt($price, '0')) {
-                throw new RuntimeException('Quantity must be > 0, unit price must be ≥ 0.');
+                throw new BusinessRuleException('Quantity must be > 0, unit price must be ≥ 0.');
             }
             $total = Money::mul($qty, $price);
             $lines[] = [

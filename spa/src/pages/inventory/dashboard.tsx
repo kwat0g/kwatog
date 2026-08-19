@@ -32,7 +32,7 @@ export default function InventoryDashboardPage() {
  {isError && <EmptyState icon="alert-circle" title="Failed to load dashboard" action={<Button onClick={() => refetch()}>Retry</Button>} />}
  {data && (
  <>
- <div className="grid grid-cols-4 gap-3">
+ <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
  <StatCard label="Total stock value" value={formatPeso(data.total_stock_value)} />
  <StatCard label="Items below reorder" value={data.items_below_reorder.toString()} />
  <StatCard label="Critical low" value={data.items_critical.toString()}

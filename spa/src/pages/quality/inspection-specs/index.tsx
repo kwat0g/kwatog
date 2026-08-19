@@ -5,7 +5,6 @@
  * editor (always /quality/inspection-specs/{product_hash_id} — keyed on
  * product because there is exactly one active spec per product).
  */
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
 import { LuPlus } from '@/lib/icons';
@@ -20,10 +19,12 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import type { InspectionSpec } from '@/types/quality';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 export default function InspectionSpecsListPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
- const [filters, setFilters] = useState<InspectionSpecListParams>({ page: 1, per_page: 25 });
+ const [filters, setFilters] = useUrlFilters<InspectionSpecListParams>({ page: 1, per_page: 25 });
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['quality', 'inspection-specs', filters],
@@ -82,11 +83,7 @@ export default function InspectionSpecsListPage() {
  action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
  />}
  {data && data.data.length === 0 && (
- <EmptyState
- icon="clipboard-check"
- title="No inspection specs yet"
- description="Create a spec from any product detail page or click 'New spec' above."
- />
+ <ListEmptyState />
  )}
  {data && data.data.length > 0 && (
  <div className="px-5 py-4">
@@ -96,6 +93,7 @@ export default function InspectionSpecsListPage() {
  data={data.data}
  meta={data.meta}
  onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+ onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
  />
  </div>
  )}

@@ -33,6 +33,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import type { SpcCapabilityResult, RunCapabilityData } from '@/types/quality/spc';
 import type { InspectionSpecItem } from '@/types/quality';
 
+import { QueryErrorState } from '@/components/ui/QueryErrorState';
 // ─── Cpk rating ────────────────────────────────────
 function cpkRating(cpk: number, thresholds: { launch: number; ongoing: number; action: number }): { label: string; variant: ChipVariant } {
  if (cpk >= thresholds.launch) return { label: 'Excellent', variant: 'success' };
@@ -93,7 +94,9 @@ export default function CapabilityStudyPage() {
  const thresholds = spcOptions?.capability_thresholds;
 
  // Fetch products for the dropdown
- const { data: productsData } = useQuery({
+ // Every query on this page was destructured `{ data }` only, so a failed
+ // fetch left the product picker permanently empty with nothing to retry.
+ const productsQuery = useQuery({
  queryKey: ['crm', 'products', 'all'],
  queryFn: () => productsApi.list({ per_page: 200 }),
  });
@@ -146,17 +149,19 @@ export default function CapabilityStudyPage() {
  <PageHeader
  title="Capability Study"
  subtitle="Compute Cp/Cpk indices for a product dimension"
- breadcrumbs={[
- { label: 'Quality', href: '/quality' },
- { label: 'SPC', href: '/quality/spc' },
- { label: 'Capability Study' },
- ]}
  />
 
  <div className="px-5 py-4 space-y-4">
  {/* ─── Input panel ─── */}
  <Panel title="Parameters">
- <div className="grid grid-cols-3 gap-4 items-end">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
+ {productsQuery.isError && (
+ <QueryErrorState
+ subject="the product list"
+ size="compact"
+ onRetry={() => void productsQuery.refetch()}
+ />
+ )}
  <Select
  label="Product"
  value={selectedProductId}
@@ -167,7 +172,7 @@ export default function CapabilityStudyPage() {
  }}
  >
  <option value="">Select product</option>
- {productsData?.data.map((p) => (
+ {productsQuery.data?.data?.map((p) => (
  <option key={p.id} value={p.id}>
  {p.part_number} -- {p.name}
  </option>
@@ -214,7 +219,7 @@ export default function CapabilityStudyPage() {
  {result && thresholds && (
  <>
  {/* Stats row */}
- <div className="grid grid-cols-5 gap-4">
+ <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4">
  <StatCard
  label="Cp"
  value={

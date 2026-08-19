@@ -120,7 +120,6 @@ export default function SelfServiceProfilePage() {
  subtitle={subtitle}
  backTo="/self-service"
  backLabel="Self-service"
- breadcrumbs={[{ label: 'Self-service', href: '/self-service' }, { label: 'Profile' }]}
  actions={
  <>
  <Button

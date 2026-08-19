@@ -24,11 +24,18 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { formatDateTime } from '@/lib/formatDate';
 import type { ScheduledExport } from '@/types/exports';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { showUndoToast } from '@/lib/undoToast';
 export default function ScheduledExportsPage() {
-const [page, setPage] = useState(1);
+const [filters, setFilters] = useUrlFilters<{ page: number; scope: ArchiveScope }>({
+ page: 1,
+ scope: 'active',
+ });
+ const { page, scope } = filters;
+ const setPage = (next: number) => setFilters((f) => ({ ...f, page: next }));
+ const setScope = (next: ArchiveScope) => setFilters((f) => ({ ...f, scope: next, page: 1 }));
  const [deleteTarget, setDeleteTarget] = useState<ScheduledExport | null>(null);
  const [restoreTarget, setRestoreTarget] = useState<ScheduledExport | null>(null);
- const [scope, setScope] = useState<ArchiveScope>('active');
  const queryClient = useQueryClient();
 
  const { data, isLoading, isError, refetch } = useQuery({
@@ -39,9 +46,15 @@ const [page, setPage] = useState(1);
 
  const deleteMutation = useMutation({
   mutationFn: (id: string) => scheduledExportsApi.destroy(id),
-  onSuccess: () => {
+  onSuccess: (_data, archivedId: string) => {
   queryClient.invalidateQueries({ queryKey: ['scheduled-exports'] });
-  toast.success('Scheduled export archived.');
+  showUndoToast({
+    message: 'Scheduled export archived.',
+    // Archiving is reversible and one click; the restore endpoint is right
+    // here. An undo is the honest price for it — a modal asking whether the
+    // user meant it is a toll booth on something trivially taken back.
+    onUndo: () => restoreMutation.mutate(archivedId),
+  });
   setDeleteTarget(null);
   },
   onError: () => {

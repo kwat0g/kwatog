@@ -10,14 +10,18 @@ import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { TouchConfirmSheet, useTouchSubmitLabel } from '@/components/layout/TouchShell';
 import type { WorkOrder } from '@/types/production';
 
+import { QueryErrorState } from '@/components/ui/QueryErrorState';
 export default function QcQuickCheck() {
   const queryClient = useQueryClient();
 
   // Fetch active WOs for selection
-  const { data: ordersData, isLoading: ordersLoading } = useQuery({
+  // An empty picker used to mean either "no work orders running" or "the
+  // request failed", with nothing on screen telling them apart.
+  const ordersQuery = useQuery({
     queryKey: ['factory', 'active-orders'],
     queryFn: () => factoryApi.activeOrders(),
   });
+  const { data: ordersData, isLoading: ordersLoading } = ordersQuery;
 
   const orders = useMemo(() => (ordersData?.data ?? []) as WorkOrder[], [ordersData]);
 
@@ -143,6 +147,12 @@ export default function QcQuickCheck() {
       <div className="rounded-md border border-default bg-canvas p-4 space-y-4">
         {ordersLoading ? (
           <SkeletonBlock className="h-11 rounded-md" />
+        ) : ordersQuery.isError ? (
+          <QueryErrorState
+            subject="the active work orders"
+            size="compact"
+            onRetry={() => void ordersQuery.refetch()}
+          />
         ) : (
           <Select
             id="wo_select"

@@ -5,7 +5,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
-import type { AxiosError } from 'axios';
 import { schedulesApi } from '@/api/maintenance/schedules';
 import { machinesApi } from '@/api/mrp/machines';
 import { moldsApi } from '@/api/mrp/molds';
@@ -13,9 +12,11 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { onFormInvalid } from '@/lib/formErrors';
-import type { ApiValidationError } from '@/types';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
   maintainable_type: z.string().min(1, 'Target type required'),
   maintainable_id: z.string().min(1, 'Target ID required'),
@@ -30,10 +31,11 @@ export default function CreateMaintenanceSchedulePage() {
  const navigate = useNavigate();
  const qc = useQueryClient();
  const { data: options } = useQuery({ queryKey: ['maintenance', 'schedule-options'], queryFn: () => schedulesApi.options() });
- const { register, handleSubmit, setError, watch, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: { maintainable_type: '', maintainable_id: '', interval_type: '', is_active: true },
  });
+ const { register, handleSubmit, setError, watch, formState: { errors, isSubmitting } } = form;
 
  const maintainableType = watch('maintainable_type');
  const machines = useQuery({ queryKey: ['mrp', 'machines'], queryFn: () => machinesApi.list({ per_page: 200 }), enabled: maintainableType === 'machine' });
@@ -52,18 +54,16 @@ export default function CreateMaintenanceSchedulePage() {
  toast.success('Schedule created.');
  navigate('/maintenance/schedules');
  },
- onError: (err: AxiosError<ApiValidationError>) => {
- if (err.response?.status === 422 && err.response.data.errors) {
- Object.entries(err.response.data.errors).forEach(([k, v]) =>
- setError(k as keyof FormValues, { type: 'server', message: v[0] }));
- toast.error(err.response?.data?.message || 'Validation failed.');
- }
+ onError: (err) => {
+   applyServerValidationErrors(err, setError, 'Failed to create the maintenance schedule.');
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  return (
  <div>
  <PageHeader title="New maintenance schedule" backTo="/maintenance/schedules" backLabel="Schedules" />
+      <FormDraftBanner safety={safety} />
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-4">
  <fieldset className="mb-6">
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Target</legend>
@@ -91,12 +91,12 @@ export default function CreateMaintenanceSchedulePage() {
  </div>
  </fieldset>
 
- <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/maintenance/schedules')}>Cancel</Button>
  <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending} loading={mutation.isPending}>
  {mutation.isPending ? 'Creating…' : 'Create schedule'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

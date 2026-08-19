@@ -15,6 +15,9 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import type { ApiValidationError } from '@/types';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  original_payroll_id: z.string().min(1, 'Source payroll is required'),
  type: z.string().min(1, 'Adjustment type is required'),
@@ -34,13 +37,14 @@ export default function CreatePayrollAdjustmentPage() {
  queryFn: () => adjustmentsApi.options(),
  });
 
- const { register, handleSubmit, setError, formState: { errors } } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  original_payroll_id: location.state?.original_payroll_id ?? '',
  type: '',
  },
  });
+ const { register, handleSubmit, setError, formState: { errors } } = form;
 
  const mutation = useMutation({
  mutationFn: (data: FormValues) => adjustmentsApi.create(data as Parameters<typeof adjustmentsApi.create>[0]),
@@ -55,6 +59,7 @@ export default function CreatePayrollAdjustmentPage() {
  }
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  const onSubmit = (data: FormValues) => {
  setSubmitting(true);
@@ -66,7 +71,8 @@ export default function CreatePayrollAdjustmentPage() {
 
  return (
  <div>
- <PageHeader title="Raise Payroll Adjustment" backTo="/payroll/adjustments" backLabel="Adjustments" breadcrumbs={[{ label: 'Payroll', href: '/payroll/periods' }, { label: 'Adjustments', href: '/payroll/adjustments' }, { label: 'New Adjustment' }]} />
+ <PageHeader title="Raise Payroll Adjustment" backTo="/payroll/adjustments" backLabel="Adjustments" />
+      <FormDraftBanner safety={safety} />
  <form onSubmit={handleSubmit(onSubmit, onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-4">
  {empName && (
  <div className="mb-4 p-3 bg-surface border border-default rounded-md text-xs">
@@ -118,7 +124,7 @@ export default function CreatePayrollAdjustmentPage() {
  </p>
  </fieldset>
 
- <div className="flex justify-end gap-2 pt-4 border-t border-default">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/payroll/adjustments')}
  disabled={submitting || mutation.isPending}>
  Cancel
@@ -127,7 +133,7 @@ export default function CreatePayrollAdjustmentPage() {
  disabled={submitting || mutation.isPending} loading={mutation.isPending}>
  {mutation.isPending ? 'Submitting…' : 'Submit adjustment'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

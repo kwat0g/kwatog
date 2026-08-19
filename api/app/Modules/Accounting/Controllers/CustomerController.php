@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Controllers;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Requests\StoreCustomerRequest;
 use App\Modules\Accounting\Requests\UpdateCustomerRequest;
@@ -49,7 +50,7 @@ class CustomerController
     {
         try {
             $this->service->delete($customer);
-        } catch (\RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return response()->json(null, 204);

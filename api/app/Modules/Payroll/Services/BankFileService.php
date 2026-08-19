@@ -173,6 +173,9 @@ class BankFileService
                 $relative = $dir.DIRECTORY_SEPARATOR.$filename;
                 $writtenPath = $relative;
                 if ($disk->put($relative, $csv) !== true) {
+                    // Infrastructure: a full or unwritable disk. A 500 is the
+                    // honest answer — the payroll officer cannot fix storage,
+                    // and a 422 would invite them to retry a failing write.
                     throw new RuntimeException("Unable to write bank file to {$relative}.");
                 }
 

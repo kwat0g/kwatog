@@ -41,6 +41,8 @@ final class DepartmentScope
      * @param string          $deptColumn          the department FK on the queried table
      * @param string|null     $selfColumn          column matching the user's own row (nullable)
      * @param int|null        $selfId              the user's own row id for $selfColumn
+     * @param string|null     $deptRelation        relation holding the department FK when the queried
+     *                                             table has none of its own (e.g. leave_requests → employee)
      * @return Builder<TModel>
      */
     public static function apply(
@@ -51,6 +53,7 @@ final class DepartmentScope
         string $deptColumn = 'department_id',
         ?string $selfColumn = null,
         ?int $selfId = null,
+        ?string $deptRelation = null,
     ): Builder {
         // No user context (console/system paths): do not scope. Callers that
         // need hard denial should not pass a null user.
@@ -68,10 +71,19 @@ final class DepartmentScope
             || $user->hasPermission($departmentPermission);
         $deptId = $canSeeDepartment ? self::departmentIdFor($user) : null;
 
-        return $query->where(function (Builder $q) use ($deptId, $deptColumn, $selfColumn, $selfId) {
+        return $query->where(function (Builder $q) use ($deptId, $deptColumn, $selfColumn, $selfId, $deptRelation) {
             $matched = false;
             if ($deptId !== null) {
-                $q->orWhere($deptColumn, $deptId);
+                // Transaction tables often carry no department of their own —
+                // leave_requests, overtime_requests and loans all reach it
+                // through the employee. Without this the caller had to hand-roll
+                // the whole tier ladder just to add one whereHas, which is how
+                // LeaveRequestService ended up with its own copy.
+                if ($deptRelation !== null) {
+                    $q->orWhereHas($deptRelation, fn ($r) => $r->where($deptColumn, $deptId));
+                } else {
+                    $q->orWhere($deptColumn, $deptId);
+                }
                 $matched = true;
             }
             if ($selfColumn !== null && $selfId !== null) {

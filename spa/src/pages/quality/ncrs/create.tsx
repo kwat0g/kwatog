@@ -12,7 +12,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import toast from 'react-hot-toast';
-import { onFormInvalid } from '@/lib/formErrors';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { LuCopy } from '@/lib/icons';
 import type { AxiosError } from 'axios';
 import { ncrsApi } from '@/api/quality/ncrs';
@@ -30,6 +30,8 @@ import { focusRingInset } from '@/lib/focus';
 import type { CreateNcrData, NcrTemplate, NcrSeverity, NcrSource } from '@/types/quality';
 import { cn } from '@/lib/cn';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 const schema = z.object({
  source: z.string().min(1, 'Source is required'),
  severity: z.string().min(1, 'Severity is required'),
@@ -66,9 +68,7 @@ export default function CreateNcrPage() {
  queryFn: () => ncrTemplatesApi.active(),
  });
 
- const {
- register, handleSubmit, formState: { errors }, reset, watch, setValue,
- } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  source: '',
@@ -78,6 +78,9 @@ export default function CreateNcrPage() {
  affected_quantity: 0,
  },
  });
+ const {
+ register, handleSubmit, formState: { errors }, reset, watch, setValue, setError,
+ } = form;
 
  useEffect(() => {
  if (!watch('source') && ncrOptions.data?.sources?.length) setValue('source', ncrOptions.data.sources[0].value);
@@ -120,13 +123,17 @@ export default function CreateNcrPage() {
  navigate(`/quality/ncrs/${ncr.id}`);
  },
  onError: (e: AxiosError<{ message?: string }>) => {
- toast.error(e.response?.data?.message ?? 'Failed to open NCR');
+ // A rejected NCR used to surface only the top-level message, so a bad
+ // field left the form unmarked and the user guessing which one.
+ applyServerValidationErrors(e, setError, 'Failed to open NCR.');
  },
  });
+ const safety = useFormSafety({ form, saved: submit.isSuccess });
 
  return (
  <div>
  <PageHeader title="Open NCR" subtitle="Use this for customer complaints or supplier issues. Inspection failures auto-create NCRs." />
+      <FormDraftBanner safety={safety} />
  {/* Template picker button */}
  <div className="px-5 py-2 flex items-center gap-2">
  <span className="text-xs text-muted">Quick-fill from template:</span>
@@ -155,7 +162,7 @@ export default function CreateNcrPage() {
  >
  <div className="space-y-4 max-w-3xl">
  <Panel title="Classification">
- <div className="grid grid-cols-3 gap-3">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
  <Select label="Source" required {...register('source')} error={errors.source?.message}>
  {(ncrOptions.data?.sources ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
  </Select>
@@ -175,7 +182,7 @@ export default function CreateNcrPage() {
  <Panel title="Subject">
  <Select label="Product (optional)" {...register('product_id')} error={errors.product_id?.message}>
  <option value="">— None —</option>
- {products.data?.data.map((p) => (
+ {products.data?.data?.map((p) => (
  <option key={p.id} value={p.id}>
  {p.part_number} — {p.name}
  </option>

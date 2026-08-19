@@ -111,7 +111,7 @@ export default function ChartOfAccountsPage() {
  <div className="px-5 py-4">
  <div className="border border-default rounded-md overflow-hidden">
  {/* Header matches DataTable (bg-canvas + border-b) for consistency. */}
- <div className="grid grid-cols-12 h-row px-2.5 items-center bg-canvas text-2xs uppercase tracking-wider text-muted font-medium border-b border-default">
+ <div className="hidden md:grid md:grid-cols-12 h-row px-2.5 items-center bg-canvas text-2xs uppercase tracking-wider text-muted font-medium border-b border-default">
  <div className="col-span-1">Code</div>
  <div className="col-span-5">Account</div>
  <div className="col-span-2">Type</div>
@@ -156,7 +156,7 @@ function TreeRow({
 
  return (
  <>
- <div className={cn('group grid grid-cols-12 h-8 px-2.5 items-center border-b border-subtle hover:bg-subtle text-sm', !node.is_active && 'opacity-60')}>
+ <div className={cn('group grid grid-cols-1 md:grid-cols-12 min-h-8 py-1.5 md:py-0 md:h-8 px-2.5 items-center border-b border-subtle hover:bg-subtle text-sm', !node.is_active && 'opacity-60')}>
  <div className="col-span-1 font-mono tabular-nums text-muted">{node.code}</div>
  <div className="col-span-5 flex items-center gap-1.5" style={{ paddingLeft: `${depth * 14}px` }}>
  {hasChildren ? (

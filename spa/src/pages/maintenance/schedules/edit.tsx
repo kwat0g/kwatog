@@ -4,7 +4,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
-import type { AxiosError } from 'axios';
 import { schedulesApi } from '@/api/maintenance/schedules';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -12,9 +11,11 @@ import { Select } from '@/components/ui/Select';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { onFormInvalid } from '@/lib/formErrors';
-import type { ApiValidationError } from '@/types';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  description: z.string().min(1).max(200),
  interval_type: z.string().min(1, 'Interval type required'),
@@ -35,7 +36,7 @@ export default function EditMaintenanceSchedulePage() {
  enabled: !!id,
  });
 
- const { register, handleSubmit, setError, formState: { errors } } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  values: data ? {
  description: data.description,
@@ -44,6 +45,7 @@ export default function EditMaintenanceSchedulePage() {
  is_active: data.is_active ? 'true' : 'false',
  } : undefined,
  });
+ const { register, handleSubmit, setError, formState: { errors } } = form;
 
  const mutation = useMutation({
  mutationFn: (values: FormValues) => schedulesApi.update(id, {
@@ -55,16 +57,11 @@ export default function EditMaintenanceSchedulePage() {
  toast.success('Schedule updated.');
  navigate(`/maintenance/schedules/${schedule.id}`);
  },
- onError: (err: AxiosError<ApiValidationError>) => {
- if (err.response?.status === 422 && err.response.data.errors) {
- Object.entries(err.response.data.errors).forEach(([k, v]) =>
- setError(k as keyof FormValues, { type: 'server', message: v[0] }));
- toast.error(err.response?.data?.message || 'Validation failed.');
- } else {
- toast.error('Failed to update schedule.');
- }
+ onError: (err) => {
+   applyServerValidationErrors(err, setError, 'Failed to update schedule.');
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  if (isLoading) return <SkeletonDetail />;
  if (isError || !data) return (
@@ -78,13 +75,8 @@ export default function EditMaintenanceSchedulePage() {
  title="Edit schedule"
  backTo={`/maintenance/schedules/${id}`}
  backLabel="Schedule"
- breadcrumbs={[
- { label: 'Maintenance', href: '/maintenance' },
- { label: 'Schedules', href: '/maintenance/schedules' },
- { label: data.description, href: `/maintenance/schedules/${id}` },
- { label: 'Edit' },
- ]}
  />
+      <FormDraftBanner safety={safety} />
  <form onSubmit={handleSubmit((v) => mutation.mutate(v), onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-4">
  <div className="mb-6 p-3 bg-subtle rounded-md text-sm">
  <span className="text-muted text-xs uppercase tracking-wider font-medium mr-2">Target</span>
@@ -111,12 +103,12 @@ export default function EditMaintenanceSchedulePage() {
  </div>
  </fieldset>
 
- <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate(`/maintenance/schedules/${id}`)}>Cancel</Button>
  <Button type="submit" variant="primary" loading={mutation.isPending}>
  {mutation.isPending ? 'Saving…' : 'Save changes'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

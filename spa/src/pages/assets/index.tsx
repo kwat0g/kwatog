@@ -16,6 +16,7 @@ import type { Asset, AssetStatus } from '@/types/assets';
 import { formatPeso } from '@/lib/formatNumber';
 import { DepreciationRunner } from './DepreciationRunner';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 const STATUS_CHIP: Record<AssetStatus, 'success' | 'warning' | 'neutral'> = {
  active: 'success',
  under_maintenance: 'warning',
@@ -24,7 +25,7 @@ const STATUS_CHIP: Record<AssetStatus, 'success' | 'warning' | 'neutral'> = {
 export default function AssetsListPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
- const [filters, setFilters] = useState<AssetListParams>({ page: 1, per_page: 25 });
+ const [filters, setFilters] = useUrlFilters<AssetListParams>({ page: 1, per_page: 25 });
  // Depreciation folded here 2026-08-08 (was /admin/depreciation). Same gate.
  const [showDepreciation, setShowDepreciation] = useState(false);
 
@@ -116,6 +117,7 @@ export default function AssetsListPage() {
  data={data.data}
  meta={data.meta}
  onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+ onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
  />
  </div>
  )}

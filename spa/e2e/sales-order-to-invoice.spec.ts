@@ -9,7 +9,7 @@
  *
  * All API calls are intercepted via page.route() — no backend required.
  */
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { mockAuth, type MockUser } from './helpers';
 
 // ── User fixtures ────────────────────────────────────────────────────────────
@@ -116,7 +116,9 @@ test.describe('Order-to-Cash golden path', () => {
     await page.goto('/crm/sales-orders');
     await page.waitForLoadState('networkidle');
 
-    await expect(page.getByRole('link', { name: 'SO-202606-0001' })).toBeVisible();
+    // The SO number is a <span>, not a link: table rows became clickable as a
+    // whole, so per-cell links were removed.
+    await expect(page.getByText('SO-202606-0001')).toBeVisible();
     await expect(page.getByRole('row', { name: /SO-202606-0001/ })).toContainText('Draft');
   });
 

@@ -15,7 +15,7 @@
  * React state AND the URL (via `setSearchParams`), so the back button works
  * and links are shareable.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 // ListParams (and page-level extensions) carry an index signature, so the
@@ -70,14 +70,25 @@ export function useUrlFilters<T extends Filters>(defaults: T): [T, (next: T | ((
  });
  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
+ // `filters` is mirrored into a ref so the setter can resolve an updater
+ // function WITHOUT doing it inside setFiltersState. It used to call
+ // setSearchParams from inside that updater, which is a side effect in a
+ // function React is allowed to run more than once — StrictMode double-invokes
+ // it in dev, and a render bailout can re-run it in production, so one filter
+ // change pushed two history entries.
+ const latest = useRef(filters);
+ latest.current = filters;
+
  const setFilters = useCallback(
  (next: T | ((prev: T) => T)) => {
- setFiltersState((prev) => {
- const value = typeof next === 'function' ? (next as (p: T) => T)(prev) : next;
- const params = filtersToParams(value, defaults);
- setSearchParams(params, { replace: false });
- return value;
- });
+ const value = typeof next === 'function' ? (next as (p: T) => T)(latest.current) : next;
+ latest.current = value;
+ setFiltersState(value);
+ // `replace` matters: this fires on every keystroke-debounced search, every
+ // select, and every page step. Pushing meant a user who typed a query and
+ // paged twice needed five Backs to leave the list, so the button stopped
+ // being an exit. Deep links and the initial URL are unaffected.
+ setSearchParams(filtersToParams(value, defaults), { replace: true });
  },
  [defaults, setSearchParams],
  );

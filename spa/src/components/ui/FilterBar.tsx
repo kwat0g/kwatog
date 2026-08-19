@@ -30,6 +30,13 @@ interface FilterBarProps {
  dateRange?: { fromKey: string; toKey: string; label?: string };
  /** Trailing controls (export, view switch) pinned to the right of the bar. */
  actions?: ReactNode;
+ /**
+  * Hide the search box. Set false when the endpoint has no search — the bar
+  * always rendered one, so inventory/movements shipped a search field wired to
+  * `onSearch={() => undefined}`: it accepted typing and did nothing, which
+  * reads as broken rather than absent.
+  */
+ searchable?: boolean;
  className?: string;
 }
 
@@ -45,6 +52,7 @@ export function FilterBar({
  dateRange,
  actions,
  className,
+ searchable = true,
 }: FilterBarProps) {
  const external = (values.search as string) ?? '';
  const [searchValue, setSearchValue] = useState<string>(external);
@@ -104,6 +112,7 @@ export function FilterBar({
 
  return (
  <div className={cn('flex items-center gap-2 px-5 py-3 border-b border-default flex-wrap', className)}>
+ {searchable && (
  <form
  onSubmit={submit}
  role="search"
@@ -130,6 +139,7 @@ export function FilterBar({
  </button>
  )}
  </form>
+ )}
 
  {filters.map((f) => (
  <Select

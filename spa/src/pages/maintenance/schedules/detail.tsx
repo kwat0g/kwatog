@@ -54,11 +54,6 @@ await schedulesApi.destroy(id);
  title={data.description}
  backTo="/maintenance/schedules"
  backLabel="Schedules"
- breadcrumbs={[
- { label: 'Maintenance', href: '/maintenance' },
- { label: 'Schedules', href: '/maintenance/schedules' },
- { label: data.description },
- ]}
  actions={
  can('maintenance.schedules.manage') ? (
  <div className="flex gap-2">
@@ -73,7 +68,7 @@ await schedulesApi.destroy(id);
  }
  />
 
- <div className="px-5 pt-3 pb-4 grid grid-cols-4 gap-2">
+ <div className="px-5 pt-3 pb-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
  <StatCard label="Target" value={data.maintainable?.name ?? data.maintainable_type} />
  <StatCard label="Interval" value={`${data.interval_value} ${data.interval_type}`} />
  <StatCard label="Last performed" value={data.last_performed_at ? formatDate(data.last_performed_at) : '—'} />

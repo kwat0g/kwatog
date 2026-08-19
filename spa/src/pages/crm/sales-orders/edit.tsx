@@ -29,6 +29,9 @@ import { salesOrdersApi } from '@/api/crm/salesOrders';
 import type { UpdateSalesOrderData } from '@/types/crm';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const itemSchema = z.object({
  product_id: z.string().min(1, 'Product is required'),
  quantity: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Use a positive decimal with up to 2 places').refine((v) => Number(v) > 0, 'Must be greater than 0'),
@@ -65,10 +68,7 @@ export default function EditSalesOrderPage() {
  queryFn: () => productsApi.list({ per_page: 100, is_active: 'true' }),
  });
 
- const {
- register, control, handleSubmit, reset, setError,
- formState: { errors, isSubmitting },
- } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  customer_id: '',
@@ -79,6 +79,10 @@ export default function EditSalesOrderPage() {
  items: [{ product_id: '', quantity: '', delivery_date: '' }],
  },
  });
+ const {
+ register, control, handleSubmit, reset, setError,
+ formState: { errors, isSubmitting },
+ } = form;
  const { fields, append, remove } = useFieldArray({ control, name: 'items' });
 
  // Pre-fill once the SO loads.
@@ -132,6 +136,7 @@ export default function EditSalesOrderPage() {
  }
  },
  });
+ const safety = useFormSafety({ form, saved: update.isSuccess });
 
  const isDraft = useMemo(() => detail.data?.status === 'draft', [detail.data]);
 
@@ -139,11 +144,8 @@ export default function EditSalesOrderPage() {
  return (
  <div>
  <PageHeader title="Edit sales order" backTo="/crm/sales-orders" backLabel="Sales orders"
- breadcrumbs={[
- { label: 'CRM' },
- { label: 'Sales orders', href: '/crm/sales-orders' },
- { label: 'Edit' },
- ]} />
+ />
+      <FormDraftBanner safety={safety} />
  <SkeletonForm />
  </div>
  );
@@ -152,11 +154,7 @@ export default function EditSalesOrderPage() {
  return (
  <div>
  <PageHeader title="Edit sales order" backTo="/crm/sales-orders" backLabel="Sales orders"
- breadcrumbs={[
- { label: 'CRM' },
- { label: 'Sales orders', href: '/crm/sales-orders' },
- { label: 'Edit sales order' },
- ]} />
+ />
  <EmptyState
  icon="alert-circle"
  title="Failed to load sales order"
@@ -170,11 +168,7 @@ export default function EditSalesOrderPage() {
  return (
  <div>
  <PageHeader title={`Edit ${detail.data.so_number}`} backTo={`/crm/sales-orders/${id}`} backLabel="Back to sales order"
- breadcrumbs={[
- { label: 'CRM' },
- { label: 'Sales orders', href: '/crm/sales-orders' },
- { label: `Edit ${detail.data.so_number}` },
- ]} />
+ />
  <EmptyState
  icon="lock"
  title="This sales order can no longer be edited"
@@ -188,18 +182,14 @@ export default function EditSalesOrderPage() {
  return (
  <div>
  <PageHeader title={`Edit ${detail.data.so_number}`} backTo={`/crm/sales-orders/${id}`} backLabel="Back to sales order"
- breadcrumbs={[
- { label: 'CRM' },
- { label: 'Sales orders', href: '/crm/sales-orders' },
- { label: `Edit ${detail.data.so_number}` },
- ]} />
+ />
  <form onSubmit={handleSubmit((v) => update.mutate(v), onFormInvalid<FormValues>())} className="max-w-4xl mx-auto px-5 py-4">
  <fieldset className="mb-8">
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Order header</legend>
  <div className="grid grid-cols-2 gap-3">
  <Select label="Customer" required {...register('customer_id')} error={errors.customer_id?.message}>
  <option value="">Select customer…</option>
- {customers.data?.data.map((c) => (
+ {customers.data?.data?.map((c) => (
  <option key={c.id} value={c.id}>{c.name}</option>
  ))}
  </Select>
@@ -231,7 +221,7 @@ export default function EditSalesOrderPage() {
  <Td>
  <Select {...register(`items.${i}.product_id` as const)} error={errors.items?.[i]?.product_id?.message}>
  <option value="">Select product…</option>
- {products.data?.data.map((p) => (
+ {products.data?.data?.map((p) => (
  <option key={p.id} value={p.id}>{p.part_number} — {p.name}</option>
  ))}
  </Select>
@@ -291,7 +281,7 @@ export default function EditSalesOrderPage() {
  <Textarea rows={3} {...register('notes')} error={errors.notes?.message} placeholder="Optional internal notes." />
  </fieldset>
 
- <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate(`/crm/sales-orders/${id}`)}>
  Cancel
  </Button>
@@ -303,7 +293,7 @@ export default function EditSalesOrderPage() {
  >
  {update.isPending ? 'Saving…' : 'Save changes'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

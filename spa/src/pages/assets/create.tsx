@@ -6,7 +6,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
-import type { AxiosError } from 'axios';
 import { assetsApi } from '@/api/assets';
 import { departmentsApi } from '@/api/hr/departments';
 import { Button } from '@/components/ui/Button';
@@ -14,9 +13,11 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { onFormInvalid } from '@/lib/formErrors';
-import type { ApiValidationError } from '@/types';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  name: z.string().min(1, 'Name is required').max(200),
  description: z.string().max(5000).optional().or(z.literal('')),
@@ -33,10 +34,11 @@ type FormValues = z.infer<typeof schema>;
 export default function CreateAssetPage() {
  const navigate = useNavigate();
  const qc = useQueryClient();
- const { register, handleSubmit, setError, watch, setValue, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: { category: '', salvage_value: '' },
  });
+ const { register, handleSubmit, setError, watch, setValue, formState: { errors, isSubmitting } } = form;
 
  const { data: deptData, isLoading: deptLoading } = useQuery({
  queryKey: ['hr', 'departments', 'list'],
@@ -68,18 +70,16 @@ export default function CreateAssetPage() {
  toast.success(`Asset ${asset.asset_code} created.`);
  navigate(`/assets/${asset.id}`);
  },
- onError: (err: AxiosError<ApiValidationError>) => {
- if (err.response?.status === 422 && err.response.data.errors) {
- Object.entries(err.response.data.errors).forEach(([k, v]) =>
- setError(k as keyof FormValues, { type: 'server', message: v[0] }));
- toast.error(err.response?.data?.message || 'Validation failed.');
- }
+ onError: (err) => {
+   applyServerValidationErrors(err, setError, 'Failed to create the asset.');
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  return (
  <div>
  <PageHeader title="New asset" backTo="/assets" backLabel="Assets" />
+      <FormDraftBanner safety={safety} />
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-3xl mx-auto px-5 py-4">
  <fieldset className="mb-6">
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Identification</legend>
@@ -105,7 +105,7 @@ export default function CreateAssetPage() {
 
  <fieldset className="mb-6">
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Acquisition</legend>
- <div className="grid grid-cols-3 gap-3">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
  <Input label="Acquisition date" type="date" {...register('acquisition_date')} error={errors.acquisition_date?.message} required />
  <Input label="Acquisition cost" {...register('acquisition_cost')} error={errors.acquisition_cost?.message}
  className="font-mono" placeholder="0.00" required />
@@ -117,12 +117,12 @@ export default function CreateAssetPage() {
  </div>
  </fieldset>
 
- <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/assets')}>Cancel</Button>
  <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending} loading={mutation.isPending}>
  {mutation.isPending ? 'Creating…' : 'Create asset'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

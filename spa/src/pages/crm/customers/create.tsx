@@ -3,16 +3,17 @@ import { FormProvider, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { crmCustomersApi } from '@/api/crm/customers';
 import { businessPoliciesApi } from '@/api/businessPolicies';
 import { Button } from '@/components/ui/Button';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { onFormInvalid } from '@/lib/formErrors';
-import type { ApiValidationError } from '@/types';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { CustomerForm, customerSchema, type CustomerFormValues } from './form';
 
+import { FormActions } from '@/components/ui/FormActions';
 type FormValues = CustomerFormValues;
 
 export default function CrmCustomerCreatePage() {
@@ -58,17 +59,11 @@ export default function CrmCustomerCreatePage() {
  toast.success('Customer created.');
  navigate(`/crm/customers/${customer.id}`);
  },
- onError: (e: AxiosError<ApiValidationError>) => {
- if (e.response?.status === 422 && e.response.data?.errors) {
- Object.entries(e.response.data.errors).forEach(([field, msgs]) =>
- setError(field as keyof FormValues, { type: 'server', message: (msgs as string[])[0] }),
- );
- toast.error(e.response?.data?.message ?? 'Validation failed.');
- } else {
- toast.error(e.response?.data?.message ?? 'Failed to create customer.');
- }
+ onError: (e) => {
+   applyServerValidationErrors(e, setError, 'Failed to create the customer.');
  },
  });
+ const safety = useFormSafety({ form: methods, saved: mutation.isSuccess });
 
  return (
  <div>
@@ -76,16 +71,12 @@ export default function CrmCustomerCreatePage() {
  title="New customer"
  backTo="/crm/customers"
  backLabel="Customers"
- breadcrumbs={[
- { label: 'CRM' },
- { label: 'Customers', href: '/crm/customers' },
- { label: 'New customer' },
- ]}
  />
+      <FormDraftBanner safety={safety} />
  <FormProvider {...methods}>
  <form onSubmit={handleSubmit((v) => mutation.mutate(v), onFormInvalid<FormValues>())}>
  <CustomerForm />
- <div className="max-w-3xl mx-auto px-5 pb-6 flex justify-end gap-2">
+ <FormActions>
  <Button
  type="button"
  variant="secondary"
@@ -101,7 +92,7 @@ export default function CrmCustomerCreatePage() {
  >
  {mutation.isPending ? 'Creating…' : 'Create customer'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </FormProvider>
  </div>

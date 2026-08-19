@@ -4,7 +4,7 @@
  * Covers: loading, error, data (up/stable/down trends), empty.
  * API calls intercepted via shared helpers — no backend needed.
  */
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { USERS, mockAuth, mockDashboardApi, setupDashboard } from './helpers';
 
 // ── Helpers ──────────────────────────────────────────────────────────────

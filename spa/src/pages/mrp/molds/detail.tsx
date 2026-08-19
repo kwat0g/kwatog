@@ -1,14 +1,19 @@
+import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
 import { LuPencil } from '@/lib/icons';
 import { moldsApi } from '@/api/mrp/molds';
+import { workOrdersApi } from '@/api/maintenance/workOrders';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
+import { reportMutationError } from '@/lib/formErrors';
 import { formatInt } from '@/lib/formatNumber';
 import type { MoldStatus } from '@/types/mrp';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
@@ -25,8 +30,11 @@ const variant: Record<MoldStatus, 'success' | 'neutral' | 'info' | 'danger' | 'w
 export default function MoldDetailPage() {
  const { id } = useParams<{ id: string }>();
  const navigate = useNavigate();
+ const queryClient = useQueryClient();
  const { can } = usePermission();
  const canManage = can('production.molds.manage');
+ const canRaisePm = can('maintenance.wo.create');
+ const [pmConfirmOpen, setPmConfirmOpen] = useState(false);
  const detail = useQuery({
  queryKey: ['mrp', 'molds', 'detail', id],
  queryFn: () => moldsApi.show(id!),
@@ -38,12 +46,42 @@ export default function MoldDetailPage() {
  enabled: !!id,
  });
 
+ /**
+  * Raise a preventive maintenance work order against this mold.
+  *
+  * This button used to call `alert()` with "Preventive Maintenance order
+  * initiated for Mold X" and do nothing else — a fabricated success message
+  * on a real control. A tooling engineer who trusted it would leave a mold
+  * past its shot limit believing maintenance was queued.
+  */
+ const raisePm = useMutation({
+ mutationFn: () =>
+ workOrdersApi.create({
+ maintainable_type: 'mold',
+ maintainable_id: id!,
+ type: 'preventive',
+ priority: 'high',
+ description: `Preventive maintenance — mold at ${formatInt(detail.data?.current_shot_count ?? 0)} of ${formatInt(detail.data?.max_shots_before_maintenance ?? 0)} shots.`,
+ }),
+ onSuccess: (mwo) => {
+ setPmConfirmOpen(false);
+ void queryClient.invalidateQueries({ queryKey: ['maintenance', 'work-orders'] });
+ void queryClient.invalidateQueries({ queryKey: ['mrp', 'molds', 'detail', id] });
+ toast.success(`Preventive maintenance order ${mwo.mwo_number} raised.`);
+ navigate(`/maintenance/work-orders/${mwo.id}`);
+ },
+ onError: (err) => {
+ setPmConfirmOpen(false);
+ reportMutationError(err, 'Could not raise the maintenance order.');
+ },
+ });
+
  if (detail.isLoading) return <div><PageHeader title="Mold" backTo="/mrp/molds" backLabel="Molds"
- breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'Molds', href: '/mrp/molds' }, { label: 'Loading…' }]} /><SkeletonDetail /></div>;
+ /><SkeletonDetail /></div>;
  if (detail.isError || !detail.data) return (
  <div>
  <PageHeader title="Mold" backTo="/mrp/molds" backLabel="Molds"
- breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'Molds', href: '/mrp/molds' }, { label: 'Error' }]} />
+ />
  <EmptyState
  icon="alert-circle"
  title="Failed to load mold"
@@ -69,7 +107,6 @@ export default function MoldDetailPage() {
  }
  backTo="/mrp/molds"
  backLabel="Molds"
- breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'Molds', href: '/mrp/molds' }, { label: m.mold_code }]}
  actions={canManage ? (
  <Button variant="secondary" size="sm" icon={<LuPencil size={14} />}
  onClick={() => navigate(`/mrp/molds/${m.id}/edit`)}>
@@ -78,7 +115,7 @@ export default function MoldDetailPage() {
  ) : null}
  />
 
- <div className="px-5 py-4 grid grid-cols-3 gap-4">
+ <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
  <div className="col-span-2 space-y-4">
  <MoldShotMeter
  currentShots={m.current_shot_count}
@@ -86,11 +123,11 @@ export default function MoldDetailPage() {
  moldCode={m.mold_code}
  warningRatioPct={90}
  status={m.status_label}
- onTriggerPm={() => alert(`Preventive Maintenance order initiated for Mold ${m.mold_code}`)}
+ onTriggerPm={canRaisePm ? () => setPmConfirmOpen(true) : undefined}
  />
 
  <Panel title="Specifications">
- <dl className="grid grid-cols-3 gap-y-2 gap-x-3 text-sm">
+ <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-2 gap-x-3 text-sm">
  <dt className="text-muted">Code</dt>
  <dd className="col-span-2 font-mono">{m.mold_code}</dd>
  <dt className="text-muted">Product</dt>
@@ -177,6 +214,25 @@ export default function MoldDetailPage() {
  </Panel>
  </div>
  </div>
+
+ <ConfirmDialog
+ isOpen={pmConfirmOpen}
+ onClose={() => setPmConfirmOpen(false)}
+ onConfirm={() => raisePm.mutate()}
+ title="Raise preventive maintenance?"
+ description={
+ <>
+ A high-priority preventive maintenance order will be opened for mold{' '}
+ <span className="font-mono">{m.mold_code}</span> at{' '}
+ <span className="font-mono tabular-nums">{formatInt(m.current_shot_count)}</span> of{' '}
+ <span className="font-mono tabular-nums">{formatInt(m.max_shots_before_maintenance)}</span> shots.
+ You will be taken to the new order to assign a technician.
+ </>
+ }
+ confirmLabel="Raise order"
+ variant="warning"
+ pending={raisePm.isPending}
+ />
  </div>
  );
 }

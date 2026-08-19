@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { LuPlus, LuKeyRound, LuCoins } from '@/lib/icons';
+import { LuPlus, LuKeyRound, LuCoins, LuDownload } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { employeesApi, type EmployeeListParams } from '@/api/hr/employees';
 import { departmentsApi } from '@/api/hr/departments';
@@ -22,6 +22,8 @@ import { formatDate } from '@/lib/formatDate';
 import { SalaryAdjustmentsTab } from '@/pages/hr/salary-adjustments';
 import type { Employee, BulkProvisionResponse } from '@/types/hr';
 
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
+import { ColumnSelectorModal } from '@/components/exports/ColumnSelectorModal';
 const DEFAULT_FILTERS: EmployeeListParams = {
   page: 1,
   per_page: 25,
@@ -75,6 +77,7 @@ export default function EmployeesListPage() {
   const { can } = usePermission();
   const queryClient = useQueryClient();
   const [bulkResult, setBulkResult] = useState<BulkProvisionResponse | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
   const canViewDepartments = can('hr.departments.view');
   const canViewEmployees = can('hr.employees.view');
   const canViewAdjustments = can('hr.salary_adjustments.view');
@@ -122,6 +125,12 @@ export default function EmployeesListPage() {
     queryKey: ['hr', 'employee-options'],
     queryFn: employeesApi.options,
     staleTime: 5 * 60 * 1000,
+    // Same gate as the list below. This page is also the salary-adjustments
+    // queue, and a checker reaches it holding hr.salary_adjustments.view WITHOUT
+    // hr.employees.view — so firing these unconditionally 403'd on arrival and
+    // greeted them with "You do not have permission to perform this action."
+    // The filter dropdowns these feed already fall back to [].
+    enabled: canViewEmployees,
   });
   const statusLabel = new Map(
     (employeeOptions?.statuses ?? []).map((status) => [status.value, status.label]),
@@ -131,6 +140,7 @@ export default function EmployeesListPage() {
     queryKey: ['hr', 'employees', filters],
     queryFn: () => employeesApi.list(filters),
     placeholderData: (prev) => prev,
+    enabled: canViewEmployees,
   });
 
   // KPI tiles are server-side aggregates over the WHOLE filtered set. Counting
@@ -252,6 +262,21 @@ export default function EmployeesListPage() {
                 {view === 'employees' ? 'Salary Adjustments' : 'Employee List'}
               </Button>
             )}
+            {/* The column-selectable export has existed end to end — endpoint,
+                API client, ColumnSelectorModal — with no page offering it, while
+                admin/scheduled-exports let users *schedule* an export of a module
+                they could not export by hand. Current filters are passed through,
+                so what you see is what you get. */}
+            {view === 'employees' && can('hr.employees.export') && (
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<LuDownload size={14} />}
+                onClick={() => setExportOpen(true)}
+              >
+                Export
+              </Button>
+            )}
             {view === 'employees' && can('hr.employees.create') && (
               <Button
                 variant="primary"
@@ -310,22 +335,7 @@ export default function EmployeesListPage() {
           )}
 
           {data && data.data.length === 0 && (
-            <EmptyState
-              icon="users"
-              title="No employees found"
-              description={
-                filters.search
-                  ? `No matches for "${filters.search}".`
-                  : 'Add your first employee to get started.'
-              }
-              action={
-                can('hr.employees.create') ? (
-                  <Button variant="primary" onClick={() => navigate('/hr/employees/create')}>
-                    Add employee
-                  </Button>
-                ) : undefined
-              }
-            />
+            <ListEmptyState searchTerm={filters.search as string | undefined} />
           )}
 
           {data && data.data.length > 0 && (
@@ -337,6 +347,7 @@ export default function EmployeesListPage() {
                 data={data.data}
                 meta={data.meta}
                 onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+                onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
                 onSort={(sort, direction) =>
                   setFilters((f) => ({ ...f, sort, direction, page: 1 }))
                 }
@@ -411,6 +422,12 @@ export default function EmployeesListPage() {
           </div>
         )}
       </Modal>
+      <ColumnSelectorModal
+        isOpen={exportOpen}
+        onClose={() => setExportOpen(false)}
+        module="hr.employees"
+        filters={filters as Record<string, unknown>}
+      />
     </div>
   );
 }

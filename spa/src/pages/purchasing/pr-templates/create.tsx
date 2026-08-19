@@ -6,7 +6,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { LuPlus, LuTrash2 } from '@/lib/icons';
 import toast from 'react-hot-toast';
-import { AxiosError } from 'axios';
 import { prTemplatesApi } from '@/api/purchasing/purchase-requests';
 import { itemsApi } from '@/api/inventory/items';
 import { departmentsApi } from '@/api/hr/departments';
@@ -16,9 +15,11 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { onFormInvalid } from '@/lib/formErrors';
-import type { ApiValidationError } from '@/types';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const lineSchema = z.object({
   item_id: z.string().optional().or(z.literal('')),
   description: z.string().trim().min(2, 'Description is required.').max(200),
@@ -65,15 +66,7 @@ export default function PrTemplateFormPage() {
     queryFn: () => departmentsApi.list({ per_page: 500 }),
   });
 
-  const {
-    register,
-    handleSubmit,
-    setError,
-    control,
-    watch,
-    setValue,
-    formState: { errors, isSubmitting },
-  } = useForm<FormValues>({
+    const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       name: '',
@@ -97,6 +90,15 @@ export default function PrTemplateFormPage() {
           }
         : undefined,
   });
+  const {
+    register,
+    handleSubmit,
+    setError,
+    control,
+    watch,
+    setValue,
+    formState: { errors, isSubmitting },
+  } = form;
 
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
   const watched = watch('items');
@@ -139,17 +141,11 @@ export default function PrTemplateFormPage() {
       toast.success(isEdit ? 'Template updated.' : 'Template created.');
       navigate('/purchasing/pr-templates');
     },
-    onError: (err: AxiosError<ApiValidationError>) => {
-      if (err.response?.status === 422 && err.response.data.errors) {
-        Object.entries(err.response.data.errors).forEach(([k, v]) =>
-          setError(k as keyof FormValues, { type: 'server', message: v[0] }),
-        );
-        toast.error(err.response?.data?.message || 'Validation failed.');
-      } else {
-        toast.error(err.response?.data?.message ?? 'Failed to save template.');
-      }
+    onError: (err) => {
+      applyServerValidationErrors(err, setError, 'Failed to save the PR template.');
     },
   });
+  const safety = useFormSafety({ form, saved: save.isSuccess });
 
   const depts = deptsData?.data ?? [];
   const items = itemsData?.data ?? [];
@@ -160,12 +156,8 @@ export default function PrTemplateFormPage() {
         title={isEdit ? 'Edit Template' : 'New PR Template'}
         backTo="/purchasing/pr-templates"
         backLabel="PR Templates"
-        breadcrumbs={[
-          { label: 'Purchasing', href: '/purchasing' },
-          { label: 'PR Templates', href: '/purchasing/pr-templates' },
-          { label: isEdit ? 'Edit Template' : 'New PR Template' },
-        ]}
       />
+      <FormDraftBanner safety={safety} />
       <form
         onSubmit={handleSubmit((d) => save.mutate(d), onFormInvalid<FormValues>())}
         className="px-5 py-4 max-w-3xl space-y-4"
@@ -233,7 +225,7 @@ export default function PrTemplateFormPage() {
           )}
           <div className="divide-y divide-subtle">
             {fields.map((field, i) => (
-              <div key={field.id} className="p-3 grid grid-cols-12 gap-2 items-start">
+              <div key={field.id} className="p-3 grid grid-cols-1 md:grid-cols-12 gap-2 items-start">
                 <div className="col-span-3">
                   <Select
                     value={watched[i]?.item_id ?? ''}
@@ -301,7 +293,7 @@ export default function PrTemplateFormPage() {
           </div>
         </Panel>
 
-        <div className="flex items-center justify-end gap-2 pt-2">
+        <FormActions>
           <Button
             type="button"
             variant="secondary"
@@ -323,7 +315,7 @@ export default function PrTemplateFormPage() {
                 ? 'Update Template'
                 : 'Create Template'}
           </Button>
-        </div>
+        </FormActions>
       </form>
     </div>
   );

@@ -21,11 +21,6 @@ export default function EditPriceAgreementPage() {
  title="Edit price agreement"
  backTo="/crm/price-agreements"
  backLabel="Price agreements"
- breadcrumbs={[
- { label: 'CRM' },
- { label: 'Price agreements', href: '/crm/price-agreements' },
- { label: 'Edit' },
- ]}
  />
  {isLoading && <SkeletonForm />}
  {isError && (

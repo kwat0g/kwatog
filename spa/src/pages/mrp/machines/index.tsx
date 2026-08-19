@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -16,6 +15,8 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import type { Machine, MachineStatus } from '@/types/mrp';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 const variant: Record<MachineStatus, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
  running: 'success', idle: 'neutral', maintenance: 'info', breakdown: 'danger', offline: 'neutral' };
 
@@ -25,7 +26,7 @@ export default function MachinesListPage() {
  const { can } = usePermission();
  const canManage = can('production.machines.manage');
  const canTransition = can('production.machines.transition');
- const [filters, setFilters] = useState<MachineListParams>({ page: 1, per_page: 25 });
+ const [filters, setFilters] = useUrlFilters<MachineListParams>({ page: 1, per_page: 25 });
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['mrp', 'machines', filters],
@@ -110,13 +111,14 @@ export default function MachinesListPage() {
  {isError && <EmptyState icon="alert-circle" title="Failed to load machines"
  action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />}
  {data && data.data.length === 0 && (
- <EmptyState icon="cog" title="No machines configured" description="Add machine master records to begin production planning." />
+ <ListEmptyState />
  )}
  {data && data.data.length > 0 && (
  <div className="px-5 py-4">
  <DataTable onRowClick={(r) => navigate(`/mrp/machines/${r.id}`)}
  columns={columns} data={data.data} meta={data.meta}
- onPageChange={(page) => setFilters((f) => ({ ...f, page }))} />
+ onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+ onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))} />
  </div>
  )}
  </div>

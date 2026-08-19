@@ -54,7 +54,7 @@ export default function BudgetVsActualPage() {
 
  // Group rows
  const grouped: Record<string, { rows: BudgetVsActualRow[]; budgeted: number; actual: number }> = {};
- data?.rows.forEach((row) => {
+ data?.rows?.forEach((row) => {
  const key = groupBy === 'department' ? row.department : row.budget_type;
  if (!grouped[key]) grouped[key] = { rows: [], budgeted: 0, actual: 0 };
  grouped[key].rows.push(row);
@@ -72,7 +72,6 @@ export default function BudgetVsActualPage() {
  <PageHeader
  title="Budget vs Actual"
  subtitle="P&L comparison — budgeted amounts vs actuals"
- breadcrumbs={[{ label: 'Budgeting', href: '/budgeting' }, { label: 'Budget vs Actual' }]}
  actions={
  <div className="flex items-center gap-2">
  {can('budgeting.manage') && (

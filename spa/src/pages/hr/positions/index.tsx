@@ -29,6 +29,9 @@ import type { ApiValidationError, ListParams } from '@/types';
 import { onFormInvalid } from '@/lib/formErrors';
 import type { Position } from '@/types/hr';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
+import { showUndoToast } from '@/lib/undoToast';
 const schema = z.object({
  title: z.string().trim().min(1, 'Title is required').max(100)
  .regex(/^[\p{L}0-9\s.&,()/-]+$/u, 'Letters, digits, spaces, and . & - , ( ) /'),
@@ -43,12 +46,11 @@ export default function PositionsPage() {
  const { can } = usePermission();
  const qc = useQueryClient();
 
- const [filters, setFilters] = useState<PositionFilterParams>({
+ const [filters, setFilters] = useUrlFilters<PositionFilterParams>({
   page: 1, per_page: 25, sort: 'title', direction: 'asc',
  });
  const [modalOpen, setModalOpen] = useState(false);
  const [editing, setEditing] = useState<Position | null>(null);
- const [pendingDelete, setPendingDelete] = useState<Position | null>(null);
  const [pendingRestore, setPendingRestore] = useState<Position | null>(null);
  const [selectedId, setSelectedId] = useState<string | null>(null);
  const [scope, setScope] = useState<ArchiveScope>('active');
@@ -67,16 +69,21 @@ export default function PositionsPage() {
  });
 
  const selected = useMemo(
- () => data?.data.find((p) => p.id === selectedId) ?? null,
+ () => data?.data?.find((p) => p.id === selectedId) ?? null,
  [data, selectedId],
  );
 
  const deleteMutation = useMutation({
   mutationFn: (id: string) => positionsApi.delete(id),
-  onSuccess: () => {
+  onSuccess: (_data, archivedId: string) => {
   qc.invalidateQueries({ queryKey: ['hr', 'positions'] });
-  toast.success('Position archived.');
-  setPendingDelete(null);
+  showUndoToast({
+    message: 'Position archived.',
+    // Archiving is reversible and one click; the restore endpoint is right
+    // here. An undo is the honest price for it — a modal asking whether the
+    // user meant it is a toll booth on something trivially taken back.
+    onUndo: () => restoreMutation.mutate(archivedId),
+  });
   setSelectedId(null);
   },
   onError: (e: AxiosError<{ message?: string }>) => {
@@ -175,12 +182,7 @@ export default function PositionsPage() {
  )}
 
  {data && data.data.length === 0 && (
- <EmptyState
- icon="inbox"
- title="No positions found"
- description={filters.search ? `No matches for "${filters.search}".` : 'Get started by adding a position.'}
- action={can('hr.positions.manage') ? <Button variant="primary" onClick={() => { setEditing(null); setModalOpen(true); }}>Add position</Button> : undefined}
- />
+ <ListEmptyState searchTerm={filters.search as string | undefined} />
  )}
 
  {data && data.data.length > 0 && (
@@ -191,6 +193,7 @@ export default function PositionsPage() {
  data={data.data}
  meta={data.meta}
  onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+ onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
  onSort={(sort, direction) => setFilters((f) => ({ ...f, sort, direction, page: 1 }))}
  currentSort={filters.sort}
  currentDirection={filters.direction}
@@ -214,7 +217,7 @@ export default function PositionsPage() {
   Restore
   </Button>
   ) : (
-  <Button variant="danger" size="sm" onClick={() => setPendingDelete(selected)} icon={<LuTrash2 size={12} />}>
+  <Button variant="danger" size="sm" onClick={() => deleteMutation.mutate(selected.id)} icon={<LuTrash2 size={12} />}>
   Delete
   </Button>
   )}
@@ -239,18 +242,7 @@ export default function PositionsPage() {
  />
  )}
 
- {pendingDelete && (
-  <ConfirmDialog
-  isOpen
-  onClose={() => setPendingDelete(null)}
-  onConfirm={() => deleteMutation.mutate(pendingDelete.id)}
-  title="Archive position?"
-  description={<>Archive <span className="font-medium">{pendingDelete.title}</span>? It will be hidden and can be restored later.</>}
-  variant="danger"
-  confirmLabel="Archive"
-  pending={deleteMutation.isPending}
-  />
- )}
+ 
 
  {pendingRestore && (
   <ConfirmDialog

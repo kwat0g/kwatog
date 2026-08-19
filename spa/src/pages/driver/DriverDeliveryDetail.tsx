@@ -78,7 +78,7 @@ export default function DriverDeliveryDetail() {
             <Button
               variant="secondary"
               size="lg"
-              className="min-h-[44px]"
+              className="min-h-hit"
               disabled={isFetching}
               onClick={() => refetch()}
             >
@@ -106,7 +106,7 @@ export default function DriverDeliveryDetail() {
       <Link
         to="/driver"
         className={cn(
-          'inline-block text-sm text-muted underline min-h-[44px] py-2 rounded',
+          'inline-block text-sm text-muted underline min-h-hit py-2 rounded',
           focusRing,
         )}
       >

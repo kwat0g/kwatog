@@ -6,6 +6,7 @@ namespace App\Modules\Dashboard\Services;
 
 use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Services\Concerns\DashboardQueries;
+use App\Modules\Dashboard\Support\PanelGate;
 use App\Modules\Dashboard\Services\ForecastingDashboardService;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Common\Services\SettingsService;
@@ -30,30 +31,36 @@ class QualityDashboardService
     public function __construct(
         private readonly ForecastingDashboardService $forecastingService,
         private readonly SettingsService $settings,
+        private readonly PanelGate $gate,
     ) {}
 
     public function quality(User $user): array
     {
-        return Cache::remember("dashboard:quality:{$user->id}", self::CACHE_TTL, function () {
+        return Cache::remember("dashboard:quality:{$user->id}", self::CACHE_TTL, function () use ($user) {
             $pendingInspections = $this->safeCount('inspections', fn ($q) => $q->where('status', 'in_progress'));
             $passRate           = $this->qualityPassRateToday();
             $openNcrs           = $this->safeCount('non_conformance_reports', fn ($q) => $q->whereIn('status', ['open', 'in_progress']));
             $cocsMtd            = $this->safeCount('non_conformance_reports', fn ($q) => $q->where('status', 'closed'));
 
             return [
-                'kpis' => [
-                    $this->kpi('Pending Inspections', (string) $pendingInspections, 'count'),
-                    $this->kpi('Pass Rate Today',      $passRate,                   'pct'),
-                    $this->kpi('Open NCRs',            (string) $openNcrs,          'count'),
-                    $this->kpi('CoCs Gen. MTD',        (string) $cocsMtd,           'count'),
-                ],
-                'panels' => [
-                    'inspection_queue'  => $this->qualityInspectionQueue(),
-                    'defect_pareto'     => $this->defectPareto(),
-                    'ncr_status'        => $this->qualityNcrList(),
-                    'qc_chain_coverage' => $this->qualityChainCoverage(),
-                    'defect_rate_forecast' => $this->forecastingService->defectRateForecast(),
-                ],
+                'kpis' => $this->gate->kpis($user, [
+                    ['quality.inspections.view', fn () => $this->kpi('Pending Inspections', (string) $pendingInspections, 'count')],
+                    ['quality.view',             fn () => $this->kpi('Pass Rate Today',      $passRate,                   'pct')],
+                    ['quality.ncr.view',         fn () => $this->kpi('Open NCRs',            (string) $openNcrs,          'count')],
+                    ['quality.ncr.view',         fn () => $this->kpi('CoCs Gen. MTD',        (string) $cocsMtd,           'count')],
+                ]),
+                'panels' => $this->gate->panels($user, [
+                    'inspection_queue'  => ['quality.inspections.view', fn () => $this->qualityInspectionQueue()],
+                    'defect_pareto'     => ['quality.view',             fn () => $this->defectPareto()],
+                    'ncr_status'        => ['quality.ncr.view',         fn () => $this->qualityNcrList()],
+                    'qc_chain_coverage' => ['quality.view',             fn () => $this->qualityChainCoverage()],
+                    // Gated on quality, NOT forecasting.view: it is a projection
+                    // OF the defect data, and a projection of a dataset is no
+                    // less sensitive than the dataset (same rule the
+                    // forecast.defect_rate widget follows). qc_inspector holds
+                    // no forecasting grant and must still see its own forecast.
+                    'defect_rate_forecast' => ['quality.view',          fn () => $this->forecastingService->defectRateForecast()],
+                ]),
                 'display_policy' => [
                     'defect_danger_pct' => $this->settings->requiredFloat('quality.dashboard.defect_danger_pct', 0, 100),
                     'defect_warning_pct' => $this->settings->requiredFloat('quality.dashboard.defect_warning_pct', 0, 100),

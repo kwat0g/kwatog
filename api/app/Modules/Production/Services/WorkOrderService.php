@@ -37,7 +37,6 @@ use App\Modules\Production\Models\WorkOrderMaterial;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 /**
  * Sprint 6 — Task 51. Work-order lifecycle service.
@@ -757,7 +756,7 @@ class WorkOrderService
      *   - Otherwise (either side lacks schedule rows), any other active WO
      *     bound to the same machine is treated as a conflict.
      *
-     * @throws RuntimeException when the machine is already committed.
+     * @throws BusinessRuleException when the machine is already committed.
      */
     private function assertMachineAvailable(WorkOrder $wo): void
     {
@@ -851,7 +850,10 @@ class WorkOrderService
             // A failure to cover the pooled on-hand throws here and the
             // confirm() transaction rolls back the partial reservations.
             if (! $this->reserveMaterialsSplit((int) $material->item_id, $needed, $wo->id)) {
-                throw new RuntimeException(
+                // The operator's remedies are real ones — receive the shortfall,
+                // release another WO's reservation, or cut the target quantity —
+                // and confirm() has already rolled back, so nothing is half done.
+                throw new BusinessRuleException(
                     "Insufficient stock for item {$material->item_id} (work order {$wo->wo_number}): "
                     . "needed {$needed}."
                 );

@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import toast from 'react-hot-toast';
+import { useQuery } from '@tanstack/react-query';
 import { LuCheck, LuX, LuRotateCcw } from '@/lib/icons';
 import { leaveRequestsApi, leaveBalancesApi } from '@/api/leave';
 import { Button } from '@/components/ui/Button';
@@ -20,9 +19,9 @@ import { CanDo } from '@/components/guards/CanDo';
 import { useAuthStore } from '@/stores/authStore';
 import { formatDate } from '@/lib/formatDate';
 
+import { useOptimisticStatusAction } from '@/hooks/useOptimisticStatusAction';
 export default function LeaveDetailPage() {
  const { id = '' } = useParams<{ id: string }>();
- const qc = useQueryClient();
  const user = useAuthStore((s) => s.user);
  const [reject, setReject] = useState(false);
  const [reason, setReason] = useState('');
@@ -49,32 +48,35 @@ export default function LeaveDetailPage() {
  enabled: Boolean(req?.employee?.id),
  });
 
- function useApprovalMutation<TVar = void>(
- fn: (v: TVar) => Promise<unknown>,
- nextStatus: string,
- opts: { successMsg: string; errorMsg: string; afterSuccess?: () => void },
- ) {
- return useMutation<unknown, unknown, TVar, { prev?: unknown }>({
- mutationFn: fn,
- onMutate: async () => {
- await qc.cancelQueries({ queryKey: detailKey });
- const prev = qc.getQueryData(detailKey);
- qc.setQueryData(detailKey, (old: typeof req) => old ? { ...old, status: nextStatus } : old);
- return { prev };
- },
- onError: (_e, _v, ctx) => {
- if (ctx?.prev) qc.setQueryData(detailKey, ctx.prev);
- toast.error(opts.errorMsg);
- },
- onSuccess: () => { toast.success(opts.successMsg); opts.afterSuccess?.(); },
- onSettled: () => { qc.invalidateQueries({ queryKey: ['leaves'] }); },
- });
- }
 
- const approveDept = useApprovalMutation(() => leaveRequestsApi.approveDept(id), 'pending_hr', { successMsg: 'Approved.', errorMsg: 'Failed to approve.' });
- const approveHR = useApprovalMutation(() => leaveRequestsApi.approveHR(id), 'approved', { successMsg: 'Approved.', errorMsg: 'Failed to approve.' });
- const rejectMut = useApprovalMutation(() => leaveRequestsApi.reject(id, reason), 'rejected', { successMsg: 'Rejected.', errorMsg: 'Failed to reject.', afterSuccess: () => { setReject(false); setReason(''); } });
- const cancelMut = useApprovalMutation(() => leaveRequestsApi.cancel(id), 'cancelled', { successMsg: 'Cancelled.', errorMsg: 'Failed to cancel.' });
+ const approveDept = useOptimisticStatusAction({
+      detailKey,
+      invalidateKey: ['leaves'],
+      mutationFn: () => leaveRequestsApi.approveDept(id),
+      nextStatus: 'pending_hr',
+      successMsg: 'Approved.', errorMsg: 'Failed to approve.',
+    });
+ const approveHR = useOptimisticStatusAction({
+      detailKey,
+      invalidateKey: ['leaves'],
+      mutationFn: () => leaveRequestsApi.approveHR(id),
+      nextStatus: 'approved',
+      successMsg: 'Approved.', errorMsg: 'Failed to approve.',
+    });
+ const rejectMut = useOptimisticStatusAction({
+      detailKey,
+      invalidateKey: ['leaves'],
+      mutationFn: () => leaveRequestsApi.reject(id, reason),
+      nextStatus: 'rejected',
+      successMsg: 'Rejected.', errorMsg: 'Failed to reject.', afterSuccess: () => { setReject(false); setReason(''); },
+    });
+ const cancelMut = useOptimisticStatusAction({
+      detailKey,
+      invalidateKey: ['leaves'],
+      mutationFn: () => leaveRequestsApi.cancel(id),
+      nextStatus: 'cancelled',
+      successMsg: 'Cancelled.', errorMsg: 'Failed to cancel.',
+    });
 
  if (isLoading) return <SkeletonDetail />;
  if (isError || !req) {
@@ -98,11 +100,6 @@ export default function LeaveDetailPage() {
  subtitle={`${req.employee?.full_name} · ${req.leave_type?.code}`}
  backTo="/hr/leaves"
  backLabel="Leaves"
- breadcrumbs={[
- { label: 'HR', href: '/hr/employees' },
- { label: 'Leaves', href: '/hr/leaves' },
- { label: req.leave_request_no },
- ]}
  actions={
  <>
  {/* Series R/R3 — declarative permission gating via <CanDo>. */}

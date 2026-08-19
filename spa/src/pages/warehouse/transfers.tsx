@@ -116,7 +116,7 @@ export default function TransferOrdersPage() {
  />
  )}
  {transfers && transfers.length > 0 && (
- <div className="grid grid-cols-12 gap-4">
+ <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
  {/* List */}
  <div className="col-span-3 space-y-1">
  <div className="text-2xs uppercase tracking-wider text-muted font-medium px-1 mb-1">

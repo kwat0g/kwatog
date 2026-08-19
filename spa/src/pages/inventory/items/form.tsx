@@ -3,7 +3,6 @@ import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { itemsApi, itemCategoriesApi } from '@/api/inventory/items';
 import { uomsApi } from '@/api/inventory/uoms';
@@ -14,11 +13,13 @@ import { Switch } from '@/components/ui/Switch';
 import { Textarea } from '@/components/ui/Textarea';
 import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { onFormInvalid } from '@/lib/formErrors';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { numberInputProps } from '@/lib/numberInput';
-import type { ApiValidationError } from '@/types';
 import type { CreateItemData, ItemType, ReorderMethod } from '@/types/inventory';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  code: z.string().min(2).max(30).regex(/^[A-Z0-9-]+$/, 'Use uppercase letters, digits, hyphens.'),
  name: z.string().min(1).max(200),
@@ -79,11 +80,12 @@ export default function ItemFormPage({ mode }: { mode: 'create' | 'edit' }) {
  lead_time_days: undefined as unknown as number, is_critical: false, is_active: true,
  };
 
- const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: defaults,
  values: existing ? defaults : undefined,
  });
+ const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = form;
 
  const mutation = useMutation({
  mutationFn: (d: FormValues) => {
@@ -101,23 +103,19 @@ export default function ItemFormPage({ mode }: { mode: 'create' | 'edit' }) {
  toast.success(mode === 'create' ? 'Item created.' : 'Item updated.');
  navigate(`/inventory/items/${it.id}`);
  },
- onError: (e: AxiosError<ApiValidationError>) => {
- if (e.response?.status === 422 && e.response.data?.errors) {
- Object.entries(e.response.data.errors).forEach(([f, msgs]) =>
- setError(f as keyof FormValues, { type: 'server', message: (msgs as string[])[0] }));
- } else {
- toast.error(e.response?.data?.message ?? 'Failed to save item.');
- }
+ onError: (e) => {
+   applyServerValidationErrors(e, setError, 'Failed to save the item.');
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  return (
  <div>
  <PageHeader
  title={mode === 'create' ? 'New item' : `Edit ${existing?.code ?? 'item'}`}
  backTo="/inventory/items" backLabel="Items"
- breadcrumbs={[{ label: 'Inventory', href: '/inventory' }, { label: 'Items', href: '/inventory/items' }, { label: mode === 'create' ? 'New item' : `Edit ${existing?.code ?? 'item'}` }]}
  />
+      <FormDraftBanner safety={safety} />
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())}
  className="max-w-3xl mx-auto px-5 py-4 space-y-4">
  <Panel title="Identity">
@@ -172,14 +170,14 @@ export default function ItemFormPage({ mode }: { mode: 'create' | 'edit' }) {
  </div>
  </Panel>
 
- <div className="flex justify-end gap-2 pt-2">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/inventory/items')}>Cancel</Button>
  <Button type="submit" variant="primary"
  loading={mutation.isPending}
  disabled={isSubmitting || mutation.isPending}>
  {mode === 'create' ? 'Create item' : 'Save changes'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

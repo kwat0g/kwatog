@@ -75,11 +75,6 @@ export default function LoanDetailPage() {
  subtitle={`${loan.employee?.full_name} · ${loan.loan_type_label ?? loan.loan_type}`}
  backTo="/hr/loans"
  backLabel="Loans"
- breadcrumbs={[
- { label: 'HR', href: '/hr/employees' },
- { label: 'Loans', href: '/hr/loans' },
- { label: loan.loan_no },
- ]}
  actions={
  <>
  {isPending && can('loans.approve') && (
@@ -104,7 +99,7 @@ export default function LoanDetailPage() {
  <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 px-5 py-4">
  <div className="space-y-4">
  <Panel title="Loan summary">
- <div className="grid grid-cols-3 gap-3">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
  <Stat label="Principal" value={formatPeso(loan.principal)} />
  <Stat label="Total paid" value={formatPeso(loan.total_paid)} variant="success" />
  <Stat label="Balance" value={formatPeso(loan.balance)} variant="warning" />

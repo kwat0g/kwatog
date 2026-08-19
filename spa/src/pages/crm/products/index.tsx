@@ -19,12 +19,14 @@ import { usePermission } from '@/hooks/usePermission';
 import type { Product } from '@/types/crm';
 import { formatPeso } from '@/lib/formatNumber';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 export default function ProductsListPage() {
  const navigate = useNavigate();
  const qc = useQueryClient();
  const { can } = usePermission();
  const canManage = can('crm.products.manage');
- const [filters, setFilters] = useState<ProductListParams>({ page: 1, per_page: 25, is_active: 'true' });
+ const [filters, setFilters] = useUrlFilters<ProductListParams>({ page: 1, per_page: 25, is_active: 'true' });
  const [confirmDelete, setConfirmDelete] = useState<Product | null>(null);
  const [scope, setScope] = useState<ArchiveScope>('active');
 
@@ -145,14 +147,7 @@ export default function ProductsListPage() {
  />
  )}
  {data && data.data.length === 0 && (
- <EmptyState
- icon="package"
- title="No products found"
- description={canManage ? 'Add your first product to start receiving sales orders.' : 'Nothing here yet.'}
- action={canManage ? (
- <Button variant="primary" onClick={() => navigate('/crm/products/create')}>New product</Button>
- ) : undefined}
- />
+ <ListEmptyState />
  )}
  {data && data.data.length > 0 && (
  <div className="px-5 py-4">
@@ -162,6 +157,7 @@ export default function ProductsListPage() {
  data={data.data}
  meta={data.meta}
  onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+ onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
  />
  </div>
  )}

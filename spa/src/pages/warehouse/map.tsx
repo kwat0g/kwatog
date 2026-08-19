@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { LuSearch } from '@/lib/icons';
+import { LuSearch, LuBan} from '@/lib/icons';
 import { warehouseMapApi } from '@/api/inventory/warehouseWms';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -161,7 +161,7 @@ export default function WarehouseMapPage() {
             </div>
 
             {isLoading && !data && (
-              <div className="grid grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                 {Array.from({ length: 4 }).map((_, i) => (
                   <SkeletonBlock key={i} className="h-48" />
                 ))}
@@ -199,7 +199,7 @@ export default function WarehouseMapPage() {
                   />
                 )}
 
-                <div className="grid grid-cols-12 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
                   {/* Zone sidebar */}
                   <div className="col-span-3 space-y-1">
                     <div className="text-2xs uppercase tracking-wider text-muted font-medium px-1 mb-1">
@@ -285,7 +285,11 @@ export default function WarehouseMapPage() {
                                 className="text-xs text-danger-fg mt-0.5 truncate"
                                 title={loc.blocked_reason ?? ''}
                               >
-                                ⛔ {loc.stock_status_label ?? loc.stock_status}
+                                {/* Was the ⛔ emoji. Emoji render per-platform,
+                                    ignore the semantic colour tokens, and are
+                                    read aloud as "no entry sign". */}
+                                <LuBan size={11} className="inline-block shrink-0 mr-1 align-[-1px]" aria-hidden="true" />
+                                {loc.stock_status_label ?? loc.stock_status}
                               </div>
                             )}
                           </button>

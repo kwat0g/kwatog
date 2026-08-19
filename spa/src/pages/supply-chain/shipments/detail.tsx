@@ -2,7 +2,7 @@
 import { useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { LuArrowRight, LuDownload, LuFileText, LuTrash2, LuUpload, LuArchiveRestore } from '@/lib/icons';
+import { LuArrowRight, LuDownload, LuFileText, LuTrash2, LuUpload, LuArchiveRestore, LuCheck} from '@/lib/icons';
 import toast from 'react-hot-toast';
 import type { AxiosError } from 'axios';
 import { downloadAuthenticatedFile } from '@/api/download';
@@ -156,10 +156,6 @@ export default function ShipmentDetailPage() {
         subtitle={data.purchase_order ? `PO ${data.purchase_order.po_number}` : undefined}
         backTo="/supply-chain/shipments"
         backLabel="Shipments"
-        breadcrumbs={[
-          { label: 'Shipments', href: '/supply-chain/shipments' },
-          { label: data.shipment_number },
-        ]}
         actions={
           nextStatus && canManage ? (
             <Button
@@ -198,7 +194,7 @@ export default function ShipmentDetailPage() {
                           : 'border-default text-muted bg-canvas',
                     ].join(' ')}
                   >
-                    {isDone ? '✓' : i + 1}
+                    {isDone ? <LuCheck size={12} aria-hidden="true" /> : i + 1}
                   </div>
                   <span
                     className={[
@@ -227,11 +223,11 @@ export default function ShipmentDetailPage() {
         </ol>
       </div>
 
-      <div className="px-5 pt-4 grid grid-cols-3 gap-4">
+      <div className="px-5 pt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <div className="col-span-2 space-y-4">
           {/* Shipment info */}
           <Panel title="Shipment details">
-            <dl className="grid grid-cols-3 gap-x-4 gap-y-3 text-sm">
+            <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3 text-sm">
               <div>
                 <dt className="text-2xs uppercase tracking-wider text-muted">Carrier</dt>
                 <dd>{data.carrier ?? '—'}</dd>

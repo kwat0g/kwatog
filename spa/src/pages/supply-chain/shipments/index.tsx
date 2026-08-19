@@ -1,5 +1,4 @@
 /** Sprint 7 — Task 67 — Shipments list (inbound, imported POs). */
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { LuPlus } from '@/lib/icons';
@@ -15,6 +14,8 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import type { Shipment, ShipmentStatus } from '@/types/supplyChain';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 const STATUS_CHIP: Record<ShipmentStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
  ordered: 'neutral', shipped: 'info', in_transit: 'info',
  customs: 'warning', cleared: 'info', received: 'success', cancelled: 'neutral',
@@ -23,7 +24,7 @@ const STATUS_CHIP: Record<ShipmentStatus, 'success' | 'danger' | 'warning' | 'ne
 export default function ShipmentsListPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
- const [filters, setFilters] = useState<ShipmentListParams>({ page: 1, per_page: 25 });
+ const [filters, setFilters] = useUrlFilters<ShipmentListParams>({ page: 1, per_page: 25 });
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['supply-chain', 'shipments', filters],
  queryFn: () => shipmentsApi.list(filters),
@@ -89,12 +90,13 @@ export default function ShipmentsListPage() {
  {isError && <EmptyState icon="alert-circle" title="Failed to load shipments"
  action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />}
  {data && data.data.length === 0 && (
- <EmptyState icon="package" title="No shipments yet" description="Imported POs will appear here once an ImpEx Officer opens a shipment." />
+ <ListEmptyState />
  )}
  {data && data.data.length > 0 && (
  <div className="px-5 py-4">
  <DataTable columns={columns} data={data.data} meta={data.meta}
  onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+ onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
  onRowClick={(r) => navigate(`/supply-chain/shipments/${r.id}`)} />
  </div>
  )}

@@ -114,11 +114,6 @@ export default function CustomerDetailPage() {
         }
         backTo="/accounting/customers"
         backLabel="Customers"
-        breadcrumbs={[
-          { label: 'Accounting' },
-          { label: 'Customers', href: '/accounting/customers' },
-          { label: customer.name },
-        ]}
         actions={
           <div className="flex gap-1.5">
             {can('accounting.invoices.create') && (
@@ -145,7 +140,7 @@ export default function CustomerDetailPage() {
         }
       />
 
-      <div className="px-5 py-4 grid grid-cols-3 gap-4">
+      <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard label="Credit Limit" value={formatPeso(customer.credit_limit)} />
         <StatCard label="Credit Used" value={formatPeso(customer.credit_used)} />
         <StatCard
@@ -159,7 +154,7 @@ export default function CustomerDetailPage() {
         />
       </div>
 
-      <div className="px-5 grid grid-cols-3 gap-4">
+      <div className="px-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <Panel title="Contact" className="col-span-1">
           <dl className="text-xs space-y-2">
             <div>

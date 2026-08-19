@@ -15,6 +15,7 @@ import { Select } from '@/components/ui/Select';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { numberInputProps } from '@/lib/numberInput';
 import type { ApiValidationError, ApiSuccess } from '@/types';
+import { reportMutationError } from '@/lib/formErrors';
 import type { CreateGrnData } from '@/types/inventory';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { cn } from '@/lib/cn';
@@ -129,8 +130,7 @@ export default function CreateGrnPage() {
  if (err.response?.status === 422 && data && 'errors' in data && data.errors) {
  toast.error('The server flagged some fields. Please review.');
  } else {
- const msg = (data && 'message' in data ? data.message : undefined) ?? 'Failed to create GRN.';
- toast.error(msg);
+ reportMutationError(err, 'Failed to create GRN.');
  }
  },
  });
@@ -163,7 +163,7 @@ export default function CreateGrnPage() {
  <PageHeader title="New GRN" backTo="/inventory/grn" backLabel="GRNs" />
  <div className="max-w-5xl mx-auto px-5 py-4 space-y-4">
  <Panel title="Reference">
- <div className="grid grid-cols-3 gap-3">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
  <Select
  label="Purchase order"
  required

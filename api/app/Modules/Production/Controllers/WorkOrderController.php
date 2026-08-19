@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Production\Controllers;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Modules\Accounting\Exceptions\ClosedPeriodException;
 use App\Modules\Inventory\Exceptions\InvalidMovementException;
 use App\Modules\Production\Enums\MachineDowntimeCategory;
 use App\Modules\Production\Exceptions\ProductionReceiptHandoffException;
@@ -21,10 +22,26 @@ use App\Modules\Production\Services\WorkOrderService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use RuntimeException;
 
 class WorkOrderController
 {
+    /**
+     * confirm(), start() and cancel() no longer swallow
+     * IllegalLifecycleTransitionException, and that is the point of narrowing
+     * them rather than an accident of it.
+     *
+     * That class extends HttpResponseException, which extends RuntimeException,
+     * so the old `catch (RuntimeException)` caught it — and
+     * HttpResponseException::getMessage() is empty when it is built from a
+     * response, which these are. An illegal transition therefore answered
+     * `422 {"message":""}`: a silent failure, with the 409 and the sentence
+     * "Illegal work-order lifecycle transition: draft → in_progress." thrown
+     * away. Uncaught, it renders its own response, which is what it was written
+     * to do.
+     *
+     * recordOutput() keeps a wider union — see the note on its own arm for why it
+     * carries one class more than retryProductionReceipt() below.
+     */
     public function __construct(private readonly WorkOrderService $service) {}
 
     /**
@@ -111,7 +128,7 @@ class WorkOrderController
     {
         try {
             $this->service->delete($workOrder);
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return response()->json(null, 204);
@@ -148,7 +165,7 @@ class WorkOrderController
                 $request->input('machine_id'),
                 $request->input('mold_id'),
             );
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return new WorkOrderResource($wo);
@@ -173,7 +190,7 @@ class WorkOrderController
         }
         try {
             $wo = $this->service->start($workOrder);
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return new WorkOrderResource($wo);
@@ -217,7 +234,7 @@ class WorkOrderController
     {
         try {
             $wo = $this->service->cancel($workOrder, $request->input('reason'));
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return new WorkOrderResource($wo);
@@ -242,7 +259,17 @@ class WorkOrderController
                 $request->user()->id,
                 $idempotency,
             );
-        } catch (RuntimeException $e) {
+            // ClosedPeriodException is listed even though WorkOrderOutputService
+            // already degrades the receipt handoff to manual: its
+            // `catch (ProductionReceiptHandoffException|BusinessRuleException|
+            // InvalidMovementException)` does NOT cover it, so a closed period
+            // hit while posting the FG movement's GL entry escapes record() and
+            // lands here. It says which period to reopen, and the old
+            // \RuntimeException arm did surface it — dropping it would have been
+            // a regression, not a narrowing. InsufficientStockException is
+            // deliberately absent: a production receipt is a destination-only
+            // movement, so there is no issue side to be short.
+        } catch (BusinessRuleException|ClosedPeriodException|ProductionReceiptHandoffException|InvalidMovementException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return new \App\Modules\Production\Resources\WorkOrderOutputResource($output);

@@ -9,7 +9,7 @@
  * All API calls are mocked. These test the frontend's PermissionGuard +
  * usePermission hook, NOT backend enforcement (that's the curl harness's job).
  */
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { loginAs } from './helpers-extended';
 import { BasePage } from './pages/BasePage';
 
@@ -105,23 +105,23 @@ test.describe('Permission guards — admin surface (only system_admin may access
     test(`admin can view ${key}`, async ({ page }) => {
       const bp = new BasePage(page);
       await loginAs(page, 'admin', url);
-      await expect(bp.forbiddenText).not.toBeVisible();
+      await expect(bp.deniedPageText).not.toBeVisible();
     });
   }
 
   for (const key of adminPages) {
     const { url } = GATED_PAGES[key];
 
-    test(`non-admin (hr) sees forbidden on ${key}`, async ({ page }) => {
+    test(`non-admin (hr) cannot tell a denied page from a missing one: ${key}`, async ({ page }) => {
       const bp = new BasePage(page);
       await loginAs(page, 'hr', url);
-      await bp.expectForbidden();
+      await bp.expectDeniedAsNotFound();
     });
 
-    test(`non-admin (employee) sees forbidden on ${key}`, async ({ page }) => {
+    test(`non-admin (employee) cannot tell a denied page from a missing one: ${key}`, async ({ page }) => {
       const bp = new BasePage(page);
       await loginAs(page, 'employee', url);
-      await bp.expectForbidden();
+      await bp.expectDeniedAsNotFound();
     });
   }
 });
@@ -136,20 +136,20 @@ test.describe('Permission guards — HR boundaries', () => {
     const bp = new BasePage(page);
     for (const u of ['/hr/employees', '/hr/departments', '/hr/leaves', '/hr/attendance']) {
       await loginAs(page, 'hr', u);
-      await expect(bp.forbiddenText).not.toBeVisible();
+      await expect(bp.deniedPageText).not.toBeVisible();
     }
   });
 
   test('employee cannot view hr/employees (self-service only)', async ({ page }) => {
     const bp = new BasePage(page);
     await loginAs(page, 'employee', '/hr/employees');
-    await bp.expectForbidden();
+    await bp.expectDeniedAsNotFound();
   });
 
   test('qc cannot view hr/employees', async ({ page }) => {
     const bp = new BasePage(page);
     await loginAs(page, 'qc', '/hr/employees');
-    await bp.expectForbidden();
+    await bp.expectDeniedAsNotFound();
   });
 
   test('employee CAN view self-service pages (own leave, payslips, DTR)', async ({ page }) => {
@@ -160,7 +160,7 @@ test.describe('Permission guards — HR boundaries', () => {
     const bp = new BasePage(page);
     for (const u of ['/self-service/leave', '/self-service/leaves', '/self-service/payslips', '/self-service/dtr', '/self-service/loans']) {
       await loginAs(page, 'employee', u);
-      await expect(bp.forbiddenText).not.toBeVisible();
+      await expect(bp.deniedPageText).not.toBeVisible();
     }
   });
 });
@@ -169,13 +169,13 @@ test.describe('Permission guards — Payroll boundaries', () => {
   test('hr can view payroll periods (has payroll.periods.view)', async ({ page }) => {
     const bp = new BasePage(page);
     await loginAs(page, 'hr', '/payroll/periods');
-    await expect(bp.forbiddenText).not.toBeVisible();
+    await expect(bp.deniedPageText).not.toBeVisible();
   });
 
   test('warehouse cannot view payroll periods (no payroll.periods.view)', async ({ page }) => {
     const bp = new BasePage(page);
     await loginAs(page, 'warehouse', '/payroll/periods');
-    await bp.expectForbidden();
+    await bp.expectDeniedAsNotFound();
   });
 });
 
@@ -184,16 +184,16 @@ test.describe('Permission guards — Quality vs Production boundary', () => {
     const bp = new BasePage(page);
     // View allowed
     await loginAs(page, 'production', '/quality/inspections');
-    await expect(bp.forbiddenText).not.toBeVisible();
+    await expect(bp.deniedPageText).not.toBeVisible();
     // Create page is gated by quality.inspections.manage (which prod lacks)
     await loginAs(page, 'production', '/quality/inspections/new');
-    await bp.expectForbidden();
+    await bp.expectDeniedAsNotFound();
   });
 
   test('qc_inspector cannot view production work orders', async ({ page }) => {
     const bp = new BasePage(page);
     await loginAs(page, 'qc', '/production/work-orders');
-    await bp.expectForbidden();
+    await bp.expectDeniedAsNotFound();
   });
 
   test('qc can view quality pages (inspections, ncrs, dashboard)', async ({ page }) => {
@@ -201,7 +201,7 @@ test.describe('Permission guards — Quality vs Production boundary', () => {
     const bp = new BasePage(page);
     for (const u of ['/quality/inspections', '/quality/ncrs', '/quality/dashboard']) {
       await loginAs(page, 'qc', u);
-      await expect(bp.forbiddenText).not.toBeVisible();
+      await expect(bp.deniedPageText).not.toBeVisible();
     }
   });
 });
@@ -212,7 +212,7 @@ test.describe('Permission guards — Accounting boundaries', () => {
     const bp = new BasePage(page);
     for (const u of ['/accounting/journal-entries', '/accounting/coa', '/accounting/invoices', '/accounting/bills']) {
       await loginAs(page, 'finance', u);
-      await expect(bp.forbiddenText).not.toBeVisible();
+      await expect(bp.deniedPageText).not.toBeVisible();
     }
   });
 
@@ -220,14 +220,14 @@ test.describe('Permission guards — Accounting boundaries', () => {
     const bp = new BasePage(page);
     for (const u of ['/accounting/journal-entries', '/accounting/coa']) {
       await loginAs(page, 'hr', u);
-      await bp.expectForbidden();
+      await bp.expectDeniedAsNotFound();
     }
   });
 
   test('warehouse cannot view accounting pages', async ({ page }) => {
     const bp = new BasePage(page);
     await loginAs(page, 'warehouse', '/accounting/journal-entries');
-    await bp.expectForbidden();
+    await bp.expectDeniedAsNotFound();
   });
 });
 
@@ -236,14 +236,14 @@ test.describe('Permission guards — Purchasing boundaries', () => {
     const bp = new BasePage(page);
     for (const u of ['/purchasing/purchase-requests', '/purchasing/purchase-orders']) {
       await loginAs(page, 'purchasing', u);
-      await expect(bp.forbiddenText).not.toBeVisible();
+      await expect(bp.deniedPageText).not.toBeVisible();
     }
   });
 
   test('warehouse cannot view purchase orders (no purchasing.view)', async ({ page }) => {
     const bp = new BasePage(page);
     await loginAs(page, 'warehouse', '/purchasing/purchase-orders');
-    await bp.expectForbidden();
+    await bp.expectDeniedAsNotFound();
   });
 });
 
@@ -251,15 +251,15 @@ test.describe('Permission guards — Dashboard segregation', () => {
   test('hr sees hr dashboard, not finance dashboard', async ({ page }) => {
     const bp = new BasePage(page);
     await loginAs(page, 'hr', '/dashboard/hr');
-    await expect(bp.forbiddenText).not.toBeVisible();
+    await expect(bp.deniedPageText).not.toBeVisible();
     await loginAs(page, 'hr', '/dashboard/accounting');
-    await bp.expectForbidden();
+    await bp.expectDeniedAsNotFound();
   });
 
   test('employee sees default dashboard', async ({ page }) => {
     const bp = new BasePage(page);
     await loginAs(page, 'employee', '/dashboard/default');
-    await expect(bp.forbiddenText).not.toBeVisible();
+    await expect(bp.deniedPageText).not.toBeVisible();
   });
 });
 
@@ -269,19 +269,19 @@ test.describe('Permission guards — department_head boundaries', () => {
     const bp = new BasePage(page);
     for (const u of ['/hr/leaves', '/hr/attendance', '/self-service/profile']) {
       await loginAs(page, 'depthead', u);
-      await expect(bp.forbiddenText).not.toBeVisible();
+      await expect(bp.deniedPageText).not.toBeVisible();
     }
   });
 
   test('depthead cannot view admin pages', async ({ page }) => {
     const bp = new BasePage(page);
     await loginAs(page, 'depthead', '/admin/users');
-    await bp.expectForbidden();
+    await bp.expectDeniedAsNotFound();
   });
 
   test('depthead cannot view payroll periods (no payroll.periods.view)', async ({ page }) => {
     const bp = new BasePage(page);
     await loginAs(page, 'depthead', '/payroll/periods');
-    await bp.expectForbidden();
+    await bp.expectDeniedAsNotFound();
   });
 });

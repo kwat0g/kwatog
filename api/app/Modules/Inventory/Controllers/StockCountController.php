@@ -17,8 +17,11 @@ use App\Modules\Inventory\Services\StockCountService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use RuntimeException;
 use Illuminate\Validation\Rule;
+use App\Common\Exceptions\BusinessRuleException;
+use App\Modules\Accounting\Exceptions\ClosedPeriodException;
+use App\Modules\Inventory\Exceptions\InsufficientStockException;
+use App\Modules\Inventory\Exceptions\InvalidMovementException;
 
 class StockCountController
 {
@@ -80,7 +83,7 @@ class StockCountController
 
         try {
             $session = $this->service->createSession($data, $request->user());
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
@@ -90,13 +93,17 @@ class StockCountController
 
     public function start(string $id, Request $request): StockCountSessionResource
     {
-        // Resolved outside the try: abort(404) raises NotFoundHttpException, which
-        // extends RuntimeException, so an unknown id would be rewritten as a 422.
+        // Kept outside the try. This used to be load-bearing: abort(404) raises
+        // NotFoundHttpException, which extends RuntimeException, so the old
+        // `catch (RuntimeException)` rewrote an unknown id as a 422. The catch is
+        // now narrowed to the business rules, so the 404 would survive either
+        // way — but resolving before the try still says which failures belong to
+        // the id and which to the session's state.
         $sessionId = $this->sessionId($id);
 
         try {
             $session = $this->service->startSession($sessionId, $request->user());
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
         return new StockCountSessionResource($session);
@@ -114,7 +121,7 @@ class StockCountController
 
         try {
             $item = $this->service->recordCount($itemId, $data, $request->user());
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
         return new StockCountItemResource($item);
@@ -126,7 +133,7 @@ class StockCountController
 
         try {
             $item = $this->service->approveVariance($itemId, $request->user());
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
         return new StockCountItemResource($item);
@@ -138,7 +145,7 @@ class StockCountController
 
         try {
             $session = $this->service->completeSession($sessionId, $request->user());
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException|ClosedPeriodException|InsufficientStockException|InvalidMovementException $e) {
             abort(422, $e->getMessage());
         }
         return new StockCountSessionResource($session);
@@ -150,7 +157,7 @@ class StockCountController
 
         try {
             $this->service->cancelSession($sessionId);
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
         return response()->json(null, 204);

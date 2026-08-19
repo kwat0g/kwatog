@@ -121,7 +121,7 @@ export default function LeaveCalendarPage() {
  {/* Loading skeleton */}
  {isLoading && (
  <div className="px-5 py-4">
- <div className="grid grid-cols-7 gap-1">
+ <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-1">
  {Array.from({ length: 35 }).map((_, i) => (
  <SkeletonBlock key={i} className="h-20 rounded-md" />
  ))}
@@ -144,7 +144,7 @@ export default function LeaveCalendarPage() {
  {data && (
  <div className="px-5 py-4">
  {/* Day of week headers */}
- <div className="grid grid-cols-7 gap-1 mb-1">
+ <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-1 mb-1">
  {DAY_LABELS.map((d) => (
  <div key={d} className="text-center text-xs text-muted font-medium py-1">
  {d}
@@ -153,7 +153,7 @@ export default function LeaveCalendarPage() {
  </div>
 
  {/* Cells */}
- <div className="grid grid-cols-7 gap-1">
+ <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-1">
  {gridCells.map((cell, i) =>
  cell === null ? (
  <div key={`pad-${i}`} className="h-20" />

@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { inquiriesApi, type InquiryListParams } from '@/api/crm/inquiries';
@@ -12,6 +11,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { formatDate } from '@/lib/formatDate';
 import type { ContactInquiry, ContactInquiryStatus } from '@/types/crm';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 const variant: Record<ContactInquiryStatus, 'info' | 'warning' | 'success' | 'neutral'> = {
  new: 'info',
  in_progress: 'warning',
@@ -20,7 +20,7 @@ const variant: Record<ContactInquiryStatus, 'info' | 'warning' | 'success' | 'ne
 
 export default function InquiryListPage() {
  const navigate = useNavigate();
- const [filters, setFilters] = useState<InquiryListParams>({ page: 1, per_page: 25 });
+ const [filters, setFilters] = useUrlFilters<InquiryListParams>({ page: 1, per_page: 25 });
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['crm', 'inquiries', filters],
@@ -78,7 +78,8 @@ export default function InquiryListPage() {
  <div className="px-5 py-4">
  <DataTable onRowClick={(r) => navigate(`/crm/inquiries/${r.id}`)}
  columns={columns} data={data.data} meta={data.meta}
- onPageChange={(page) => setFilters((f) => ({ ...f, page }))} />
+ onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+ onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))} />
  </div>
  )}
  </div>

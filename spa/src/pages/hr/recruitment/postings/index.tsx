@@ -15,6 +15,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
 import type { JobPosting, JobPostingStatus } from '@/types/recruitment';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 const STATUS_CHIP: Record<JobPostingStatus, 'neutral' | 'success' | 'warning' | 'info'> = {
  draft: 'neutral',
  open: 'success',
@@ -36,7 +37,7 @@ export default function PostingsListPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
  const [statusFilter, setStatusFilter] = useState('');
- const [filters, setFilters] = useState<PostingFilters>({
+ const [filters, setFilters] = useUrlFilters<PostingFilters>({
  page: 1, per_page: 25, sort: 'created_at', direction: 'desc',
  });
 
@@ -107,11 +108,6 @@ export default function PostingsListPage() {
  <PageHeader
  title="Job Postings"
  subtitle={data ? `${data.meta?.total ?? 0} postings` : undefined}
- breadcrumbs={[
- { label: 'HR', href: '/hr/employees' },
- { label: 'Recruitment', href: '/hr/recruitment' },
- { label: 'Postings' },
- ]}
  actions={
  can('hr.recruitment.manage') ? (
  <Button variant="primary" size="sm" icon={<LuPlus size={14} />} onClick={() => navigate('/hr/recruitment/postings/create')}>
@@ -167,6 +163,7 @@ export default function PostingsListPage() {
  data={data.data}
  meta={data.meta}
  onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+ onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
  onSort={(sort, direction) => setFilters((f) => ({ ...f, sort, direction, page: 1 }))}
  currentSort={filters.sort}
  currentDirection={filters.direction}

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\CRM\Controllers;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\CRM\Models\PriceAgreement;
 use App\Modules\CRM\Requests\StorePriceAgreementRequest;
@@ -13,7 +14,6 @@ use App\Modules\CRM\Services\PriceAgreementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use RuntimeException;
 
 class PriceAgreementController
 {
@@ -33,7 +33,7 @@ class PriceAgreementController
     {
         try {
             $a = $this->service->create($request->validated());
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return (new PriceAgreementResource($a))->response()->setStatusCode(201);
@@ -43,7 +43,7 @@ class PriceAgreementController
     {
         try {
             $a = $this->service->update($priceAgreement, $request->validated());
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return new PriceAgreementResource($a);

@@ -25,6 +25,9 @@ import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
 import type { CreateInspectionData, InspectionStage, AqlPlan } from '@/types/quality';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  stage: z.string().min(1, 'Stage is required'),
  product_id: z.string().min(1, 'Product is required'),
@@ -43,13 +46,14 @@ export default function CreateInspectionPage() {
  });
  const stages = inspectionOptions.data?.stages ?? [];
 
- const {
- register, handleSubmit, watch, formState: { errors },
- } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  // Batch size is transactional input, not a catalog default.
  defaultValues: { stage: '', product_id: '', notes: '' },
  });
+ const {
+ register, handleSubmit, watch, formState: { errors },
+ } = form;
 
  const stage = watch('stage');
  const batchQty = watch('batch_quantity');
@@ -85,10 +89,12 @@ export default function CreateInspectionPage() {
  toast.error(e.response?.data?.message ?? 'Failed to open inspection');
  },
  });
+ const safety = useFormSafety({ form, saved: submit.isSuccess });
 
  return (
  <div>
  <PageHeader title="Open inspection" subtitle="Sample plan is computed when stage is outgoing" />
+      <FormDraftBanner safety={safety} />
  <form
  onSubmit={handleSubmit((v) =>
  submit.mutate({
@@ -98,7 +104,7 @@ export default function CreateInspectionPage() {
  notes: v.notes,
  })
  , onFormInvalid<FormValues>())}
- className="px-5 py-4 grid grid-cols-3 gap-4"
+ className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
  >
  <div className="col-span-2 space-y-4">
  <Panel title="Inspection details">
@@ -109,7 +115,7 @@ export default function CreateInspectionPage() {
  </Select>
  <Select label="Product" required {...register('product_id')} error={errors.product_id?.message}>
  <option value="">Select…</option>
- {products.data?.data.map((p) => (
+ {products.data?.data?.map((p) => (
  <option key={p.id} value={p.id}>
  {p.part_number} — {p.name}
  </option>
@@ -161,14 +167,14 @@ export default function CreateInspectionPage() {
  </Panel>
  </div>
 
- <div className="col-span-3 flex items-center justify-end gap-2 border-t border-default pt-4">
+ <FormActions>
  <Button variant="secondary" type="button" onClick={() => navigate(-1)}>
  Cancel
  </Button>
  <Button variant="primary" type="submit" loading={submit.isPending}>
  Open inspection
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

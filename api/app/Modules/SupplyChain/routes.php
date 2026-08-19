@@ -84,12 +84,19 @@ Route::middleware(['auth:sanctum', 'feature:supply_chain'])->prefix('supply-chai
         ->middleware('permission:supply_chain.fleet.manage');
 
     /* ─── Deliveries (Task 66) ─── */
+    /*
+     * Reads accept EITHER the broad module view or the narrow delivery read, so
+     * the warehouse can open the schedule its dashboard links to without being
+     * handed shipments, fleet and customs documents. `permission_any` rather
+     * than swapping the slug outright: a custom role holding only
+     * supply_chain.view must not silently lose the delivery list.
+     */
     Route::get('/deliveries/options',                       [DeliveryController::class, 'options'])
-        ->middleware('permission:supply_chain.view');
+        ->middleware('permission_any:supply_chain.view,supply_chain.deliveries.view');
     Route::get('/deliveries',                               [DeliveryController::class, 'index'])
-        ->middleware('permission:supply_chain.view');
+        ->middleware('permission_any:supply_chain.view,supply_chain.deliveries.view');
     Route::get('/deliveries/{delivery}',                    [DeliveryController::class, 'show'])
-        ->middleware('permission:supply_chain.view');
+        ->middleware('permission_any:supply_chain.view,supply_chain.deliveries.view');
     Route::post('/deliveries',                              [DeliveryController::class, 'store'])
         ->middleware('permission:supply_chain.deliveries.create');
     Route::patch('/deliveries/{delivery}/status',           [DeliveryController::class, 'updateStatus'])

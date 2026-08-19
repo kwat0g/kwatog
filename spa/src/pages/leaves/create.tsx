@@ -16,8 +16,11 @@ import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import type { ApiValidationError } from '@/types';
-import { onFormInvalid } from '@/lib/formErrors';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  employee_id: z.string().min(1, 'Employee is required'),
  leave_type_id: z.string().min(1, 'Leave type is required'),
@@ -54,15 +57,16 @@ export default function CreateLeavePage() {
  });
  const employees = employeesResp?.data ?? [];
 
- const {
- register, handleSubmit, watch, setError,
- formState: { errors, isSubmitting },
- } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  employee_id: user?.employee?.id ?? '',
  },
  });
+ const {
+ register, handleSubmit, watch, setError,
+ formState: { errors, isSubmitting },
+ } = form;
 
  const employeeId = watch('employee_id');
  const leaveTypeId = watch('leave_type_id');
@@ -109,22 +113,15 @@ export default function CreateLeavePage() {
  navigate(`/hr/leaves/${req.id}`);
  },
  onError: (e: AxiosError<ApiValidationError>) => {
- if (e.response?.status === 422) {
- const data = e.response.data;
- if (data.errors) {
- Object.entries(data.errors).forEach(([f, msgs]) =>
- setError(f as keyof FormValues, { type: 'server', message: msgs[0] }),
- );
- } else if (data.message) {
- toast.error(data.message);
- }
- } else toast.error('Failed to submit leave request.');
+ applyServerValidationErrors(e, setError, 'Failed to submit leave request.');
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  return (
  <div>
- <PageHeader title="Request leave" backTo="/hr/leaves" backLabel="Leaves" breadcrumbs={[{ label: 'HR', href: '/hr/employees' }, { label: 'Leaves', href: '/hr/leaves' }, { label: 'New Request' }]} />
+ <PageHeader title="Request leave" backTo="/hr/leaves" backLabel="Leaves" />
+      <FormDraftBanner safety={safety} />
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-4 space-y-4">
  <Panel title="Leave details">
  <div className="grid grid-cols-2 gap-3">
@@ -171,12 +168,12 @@ export default function CreateLeavePage() {
  </div>
  )}
  </Panel>
- <div className="flex justify-end gap-2 pt-2">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/hr/leaves')}>Cancel</Button>
  <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending} loading={mutation.isPending}>
  {mutation.isPending ? 'Submitting…' : 'Submit request'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

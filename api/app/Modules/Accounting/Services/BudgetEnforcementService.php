@@ -11,7 +11,6 @@ use App\Modules\Accounting\Models\Budget;
 use App\Modules\Accounting\Support\BudgetConsumptionLevel;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Log;
-use RuntimeException;
 
 class BudgetEnforcementService
 {
@@ -107,7 +106,12 @@ class BudgetEnforcementService
         ])->save();
 
         if ($this->enforcementMode() === 'block' && ! $canProceed) {
-            throw new RuntimeException($message);
+            // "Insufficient budget. Requested: ₱120,000.00, Available:
+            // ₱4,300.00." is the single most actionable sentence in this
+            // service — trim the request, transfer budget, or get the VP
+            // approval it names. As a bare RuntimeException it depended on the
+            // calling controller happening to wrap the call.
+            throw new BusinessRuleException($message);
         }
 
         if ($requiresAcknowledgment) {
@@ -144,7 +148,7 @@ class BudgetEnforcementService
     {
         if (in_array($document->budget_warning_level, ['exhausted', 'overdrawn'], true)
             && ! $document->budget_acknowledged_at) {
-            throw new RuntimeException($document->budget_warning_message ?? 'Finance acknowledgment is required.');
+            throw new BusinessRuleException($document->budget_warning_message ?? 'Finance acknowledgment is required.');
         }
     }
 
@@ -153,8 +157,20 @@ class BudgetEnforcementService
      * `budgeting.enforcement_mode` config:
      *   - 'off'   (default) — no-op. Existing behaviour fully preserved.
      *   - 'warn'  — logs a warning when at/over the ceiling but allows through.
-     *   - 'block' — throws RuntimeException when the spend hits 'exhausted' or
-     *               'overdrawn' (100%+). Controllers translate this to HTTP 422.
+     *   - 'block' — throws BusinessRuleException when the spend hits
+     *               'exhausted' or 'overdrawn' (100%+), which renders as a 422
+     *               carrying the message. This used to be a bare
+     *               RuntimeException, and every HTTP entry point today already
+     *               wraps it (PurchaseOrderController, PurchaseRequestController),
+     *               so the conversion is inert on the paths that exist — what it
+     *               buys is that the 422 no longer depends on each new caller
+     *               remembering to add `catch (\RuntimeException)`.
+     *
+     * One path is NOT inert: assess() is reached from PurchaseOrderService::create(),
+     * which ConsolidatePurchaseOrders calls via convertFromPr(). That listener
+     * splits on BusinessRuleException, so a blocked budget now records a
+     * manual-conversion outcome instead of poisoning the job — correct, since a
+     * retry cannot raise the ceiling.
      *
      * Graceful by design: when no budget exists for the department/fiscal-year,
      * checkAvailability() returns canProceed=true and nothing is blocked.
@@ -185,7 +201,7 @@ class BudgetEnforcementService
         }
 
         if ($mode === 'block') {
-            throw new RuntimeException($message);
+            throw new BusinessRuleException($message);
         }
     }
 

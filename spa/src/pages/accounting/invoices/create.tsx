@@ -4,7 +4,6 @@ import { useFieldArray, useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { LuPlus, LuTrash2 } from '@/lib/icons';
 import { customersApi } from '@/api/accounting/customers';
@@ -20,10 +19,12 @@ import { Switch } from '@/components/ui/Switch';
 import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatPeso } from '@/lib/formatNumber';
-import { onFormInvalid } from '@/lib/formErrors';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { numberInputProps } from '@/lib/numberInput';
-import type { ApiValidationError } from '@/types';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const itemSchema = z.object({
  revenue_account_id: z.string().min(1, 'Required'),
  description: z.string().min(1, 'Required').max(200),
@@ -64,7 +65,7 @@ export default function CreateInvoicePage() {
  const vatConfigured = policies?.vat_status === 'VAT Registered' && policies.vat_rate !== null;
  const vatRateLabel = vatConfigured ? `${(Number(policies.vat_rate) * 100).toLocaleString()}%` : '—';
 
- const { register, control, handleSubmit, watch, setError, setValue, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  customer_id: presetCustomer, date: new Date().toISOString().slice(0, 10),
@@ -72,6 +73,7 @@ export default function CreateInvoicePage() {
  items: [{ revenue_account_id: '', description: '', quantity: undefined as unknown as number, unit: '', unit_price: undefined as unknown as number }],
  },
  });
+ const { register, control, handleSubmit, watch, setError, setValue, formState: { errors, isSubmitting } } = form;
  useEffect(() => {
  if (policies) setValue('is_vatable', vatConfigured);
  }, [policies, setValue, vatConfigured]);
@@ -104,24 +106,20 @@ export default function CreateInvoicePage() {
  toast.success('Draft invoice saved.');
  navigate(`/accounting/invoices/${inv.id}`);
  },
- onError: (e: AxiosError<ApiValidationError>) => {
- if (e.response?.status === 422 && e.response.data?.errors) {
- Object.entries(e.response.data.errors).forEach(([f, msgs]) => setError(f as keyof FormValues, { type: 'server', message: (msgs as string[])[0] }));
- } else toast.error(e.response?.data?.message ?? 'Failed to save invoice.');
+ onError: (e) => {
+   applyServerValidationErrors(e, setError, 'Failed to create the invoice.');
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  return (
  <div>
  <PageHeader title="New invoice" backTo="/accounting/invoices" backLabel="Invoices"
- breadcrumbs={[
- { label: 'Accounting' },
- { label: 'Invoices', href: '/accounting/invoices' },
- { label: 'New invoice' },
- ]} />
+ />
+      <FormDraftBanner safety={safety} />
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-5xl mx-auto px-5 py-4 space-y-4">
  <Panel title="Header">
- <div className="grid grid-cols-3 gap-3">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
  <Select label="Customer" required {...register('customer_id')} error={errors.customer_id?.message}>
  <option value="">— Select customer —</option>
  {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -138,7 +136,7 @@ export default function CreateInvoicePage() {
 
  <Panel title="Line items">
  <div className="border border-default rounded-md overflow-hidden">
- <div className="grid grid-cols-12 gap-2 h-row px-2.5 bg-subtle text-2xs uppercase tracking-wider text-muted font-medium border-b border-default items-center">
+ <div className="hidden md:grid md:grid-cols-12 gap-2 h-row px-2.5 bg-subtle text-2xs uppercase tracking-wider text-muted font-medium border-b border-default items-center">
  <div className="col-span-3">Description</div>
  <div className="col-span-3">Revenue account</div>
  <div className="col-span-1 text-right">Qty</div>
@@ -151,7 +149,7 @@ export default function CreateInvoicePage() {
  const it = items[idx] ?? ({} as FormValues['items'][number]);
  const lineTotal = ((Number(it.quantity) || 0) * (Number(it.unit_price) || 0)).toFixed(2);
  return (
- <div key={field.id} className="grid grid-cols-12 gap-2 px-2.5 py-1.5 border-b border-subtle items-start">
+ <div key={field.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 px-2.5 py-1.5 border-b border-subtle items-start">
  <div className="col-span-3"><Input {...register(`items.${idx}.description` as const)} /></div>
  <div className="col-span-3">
  <Select {...register(`items.${idx}.revenue_account_id` as const)}>
@@ -190,10 +188,10 @@ export default function CreateInvoicePage() {
  </div>
  </Panel>
 
- <div className="flex justify-end gap-2 pt-2">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/accounting/invoices')}>Cancel</Button>
  <Button type="submit" variant="primary" loading={mutation.isPending} disabled={isSubmitting || mutation.isPending}>Save draft</Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

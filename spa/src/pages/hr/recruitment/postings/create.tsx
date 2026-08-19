@@ -21,6 +21,9 @@ import { focusRing } from '@/lib/focus';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/cn';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  title: z.string().min(1, 'Title is required').max(200),
  department_id: z.string().min(1, 'Department is required'),
@@ -43,14 +46,7 @@ export default function PostingCreatePage() {
  const [reqTags, setReqTags] = useState<string[]>([]);
  const [reqInput, setReqInput] = useState('');
 
- const {
- register,
- handleSubmit,
- setError,
- setValue,
- watch,
- formState: { errors },
- } = useForm<FormData>({
+  const form = useForm<FormData>({
  resolver: zodResolver(schema),
  defaultValues: {
  employment_type: '',
@@ -59,6 +55,14 @@ export default function PostingCreatePage() {
  requirements: '',
  },
  });
+ const {
+ register,
+ handleSubmit,
+ setError,
+ setValue,
+ watch,
+ formState: { errors },
+ } = form;
 
  const departmentId = watch('department_id');
 
@@ -124,6 +128,7 @@ export default function PostingCreatePage() {
  }
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  return (
  <div>
@@ -132,13 +137,8 @@ export default function PostingCreatePage() {
  subtitle="Post a new open position"
  backTo="/hr/recruitment/postings"
  backLabel="Postings"
- breadcrumbs={[
- { label: 'HR', href: '/hr/employees' },
- { label: 'Recruitment', href: '/hr/recruitment' },
- { label: 'Postings', href: '/hr/recruitment/postings' },
- { label: 'Create' },
- ]}
  />
+      <FormDraftBanner safety={safety} />
 
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormData>())} className="max-w-5xl mx-auto px-5 py-4 space-y-4">
  <Panel title="Job Details">
@@ -231,14 +231,14 @@ export default function PostingCreatePage() {
  </Panel>
  </div>
 
- <div className="flex justify-end gap-2 pt-2">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/hr/recruitment/postings')}>
  Cancel
  </Button>
  <Button type="submit" variant="primary" disabled={mutation.isPending} loading={mutation.isPending}>
  {mutation.isPending ? 'Creating…' : 'Create Posting'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

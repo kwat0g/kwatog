@@ -4,7 +4,6 @@ import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { vendorsApi } from '@/api/accounting/vendors';
 import { businessPoliciesApi } from '@/api/businessPolicies';
@@ -14,10 +13,12 @@ import { Switch } from '@/components/ui/Switch';
 import { Textarea } from '@/components/ui/Textarea';
 import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { onFormInvalid } from '@/lib/formErrors';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { numberInputProps } from '@/lib/numberInput';
-import type { ApiValidationError } from '@/types';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  name: z.string().min(1, 'Name is required').max(200),
  contact_person: z.string().max(100).optional().or(z.literal('')),
@@ -42,7 +43,7 @@ export default function VendorFormPage({ mode }: { mode: 'create' | 'edit' }) {
  });
  const { data: policies } = useQuery({ queryKey: ['business-policies'], queryFn: businessPoliciesApi.get });
 
- const { register, handleSubmit, setError, setValue, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: existing ? {
  name: existing.name, contact_person: existing.contact_person ?? '', email: existing.email ?? '',
@@ -55,6 +56,7 @@ export default function VendorFormPage({ mode }: { mode: 'create' | 'edit' }) {
  payment_terms_days: existing.payment_terms_days, is_active: existing.is_active,
  } : undefined,
  });
+ const { register, handleSubmit, setError, setValue, formState: { errors, isSubmitting } } = form;
 
  useEffect(() => {
  if (mode === 'create' && policies) {
@@ -69,23 +71,17 @@ export default function VendorFormPage({ mode }: { mode: 'create' | 'edit' }) {
  toast.success(mode === 'create' ? 'Vendor created.' : 'Vendor updated.');
  navigate(`/accounting/vendors/${v.id}`);
  },
- onError: (e: AxiosError<ApiValidationError>) => {
- if (e.response?.status === 422 && e.response.data?.errors) {
- Object.entries(e.response.data.errors).forEach(([f, msgs]) => setError(f as keyof FormValues, { type: 'server', message: (msgs as string[])[0] }));
- } else {
- toast.error(e.response?.data?.message ?? 'Failed to save vendor.');
- }
+ onError: (e) => {
+   applyServerValidationErrors(e, setError, 'Failed to save the vendor.');
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  return (
  <div>
  <PageHeader title={mode === 'create' ? 'New vendor' : `Edit ${existing?.name ?? 'vendor'}`} backTo="/accounting/vendors" backLabel="Vendors"
- breadcrumbs={[
- { label: 'Accounting' },
- { label: 'Vendors', href: '/accounting/vendors' },
- { label: mode === 'create' ? 'New vendor' : `Edit ${existing?.name ?? 'vendor'}` },
- ]} />
+ />
+      <FormDraftBanner safety={safety} />
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-3xl mx-auto px-5 py-4 space-y-4">
  <Panel title="Identity">
  <div className="grid grid-cols-2 gap-3">
@@ -103,12 +99,12 @@ export default function VendorFormPage({ mode }: { mode: 'create' | 'edit' }) {
  <Switch label="Active" {...register('is_active')} />
  </div>
  </Panel>
- <div className="flex justify-end gap-2 pt-2">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/accounting/vendors')}>Cancel</Button>
  <Button type="submit" variant="primary" loading={mutation.isPending} disabled={isSubmitting || mutation.isPending}>
  {mode === 'create' ? 'Create vendor' : 'Save changes'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

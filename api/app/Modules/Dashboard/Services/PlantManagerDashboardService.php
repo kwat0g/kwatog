@@ -8,6 +8,7 @@ use App\Modules\Auth\Models\User;
 use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Dashboard\Services\Concerns\DashboardQueries;
+use App\Modules\Dashboard\Support\PanelGate;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -18,6 +19,16 @@ use Illuminate\Support\Facades\Schema;
  * Owns: plantManager + plantFinancialSnapshot + range/revenue/production/OEE/OTD helpers.
  * Shared helpers (kpi, safeCount, safeSum, cashBalance, chainStageBreakdown, alerts,
  * machineUtilization, defectPareto) come from DashboardQueries trait.
+ *
+ * Every panel and KPI declares the permission that lets it render (PanelGate).
+ * `dashboard.plant_manager.view` opens the PAGE; it does not entitle the viewer
+ * to every domain the page draws from. This mattered most for the financial
+ * snapshot (Task D2): it reports cash, AR, AP and posted revenue, and the only
+ * seeded role holding this dashboard — production_manager — has no `accounting.*`
+ * grant whatsoever, so the page was handing it a finance read its own module
+ * refuses. Each gate below is the SAME permission the equivalent widget uses
+ * over the same data (DashboardWidgetSeeder), so a reading cannot be authorized
+ * on one surface and refused on the other.
  */
 class PlantManagerDashboardService
 {
@@ -25,28 +36,45 @@ class PlantManagerDashboardService
 
     private const CACHE_TTL = 30;
 
+    public function __construct(private readonly PanelGate $gate) {}
+
     public function plantManager(User $user, string $range = 'week'): array
     {
         $range = in_array($range, ['today', 'week', 'month', 'quarter'], true) ? $range : 'week';
 
-        return Cache::remember("dashboard:plant_manager:{$user->id}:{$range}", self::CACHE_TTL, function () use ($range) {
+        // Cache key already carries the user id, so a per-viewer panel set is
+        // cache-safe — two roles never share an entry.
+        return Cache::remember("dashboard:plant_manager:{$user->id}:{$range}", self::CACHE_TTL, function () use ($user, $range) {
             [$start, $end, $label] = $this->rangeBounds($range);
 
             return [
-                'kpis' => [
-                    $this->kpi("Revenue · {$label}",    $this->revenueInRange($start, $end),    $this->functionalCurrency()),
-                    $this->kpi("Production · {$label}", $this->productionInRange($start, $end), 'units'),
-                    $this->kpi('OEE · Today',           $this->oeeToday(),                       'pct'),
-                    $this->kpi('On-Time Delivery',      $this->otdRate(),                        'pct'),
-                ],
-                'panels' => [
-                    'chain_stages'       => $this->chainStageBreakdown(),
-                    'alerts'             => $this->alerts(),
-                    'machine_util'       => $this->machineUtilization(),
-                    'defect_pareto'      => $this->defectPareto(),
-                    'financial_snapshot' => $this->plantFinancialSnapshot(),
-                    'range'              => $range,
-                ],
+                'kpis' => $this->gate->kpis($user, [
+                    // Money, even as a single figure, is finance's to disclose.
+                    ['accounting.dashboard.view', fn () => $this->kpi("Revenue · {$label}",    $this->revenueInRange($start, $end),    $this->functionalCurrency())],
+                    // Non-financial plant rates: one aggregate each, no row, no
+                    // amount, no counterparty. They are the reason this page
+                    // exists, so they ride the page grant rather than a module
+                    // read their only holder does not have (production_manager
+                    // holds no supply_chain grant, which would have silently
+                    // stripped On-Time Delivery from the plant dashboard).
+                    [null,                        fn () => $this->kpi("Production · {$label}", $this->productionInRange($start, $end), 'units')],
+                    [null,                        fn () => $this->kpi('OEE · Today',           $this->oeeToday(),                       'pct')],
+                    [null,                        fn () => $this->kpi('On-Time Delivery',      $this->otdRate(),                        'pct')],
+                ]),
+                'panels' => $this->gate->panels($user, [
+                    // Row-level from here down: each is a list of documents,
+                    // machines or defects, so each follows its module's grant.
+                    'chain_stages'       => ['dashboard.view_bottlenecks', fn () => $this->chainStageBreakdown()],
+                    'alerts'             => ['alerts.view',                fn () => $this->alerts()],
+                    'machine_util'       => ['production.dashboard.view',  fn () => $this->machineUtilization()],
+                    'defect_pareto'      => ['quality.view',               fn () => $this->defectPareto()],
+                    // Cash, AR, AP and posted revenue. production_manager — the
+                    // only seeded holder of this dashboard — has no accounting
+                    // grant at all, so this panel was the leak.
+                    'financial_snapshot' => ['accounting.dashboard.view',  fn () => $this->plantFinancialSnapshot()],
+                    // Not data — the echo of the caller's own range selection.
+                    'range'              => [null,                         fn () => $range],
+                ]),
             ];
         });
     }

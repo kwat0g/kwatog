@@ -17,6 +17,9 @@ import { Input } from '@/components/ui/Input';
 import { machinesApi } from '@/api/mrp/machines';
 import type { Machine, CreateMachineData, UpdateMachineData } from '@/types/mrp';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
   machine_code: z
     .string()
@@ -52,13 +55,7 @@ export function MachineForm({ initial, mode }: Props) {
   const navigate = useNavigate();
   const qc = useQueryClient();
 
-  const {
-    register,
-    handleSubmit,
-    setError,
-    reset,
-    formState: { errors, isSubmitting },
-  } = useForm<FormValues>({
+    const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       machine_code: initial?.machine_code ?? '',
@@ -71,6 +68,13 @@ export function MachineForm({ initial, mode }: Props) {
         initial?.available_hours_per_day != null ? String(initial.available_hours_per_day) : '',
     },
   });
+  const {
+    register,
+    handleSubmit,
+    setError,
+    reset,
+    formState: { errors, isSubmitting },
+  } = form;
 
   // `reset` rather than field-by-field `setValue`: one render instead of six,
   // and it re-baselines the defaults so a hydrated record doesn't leave the
@@ -120,12 +124,14 @@ export function MachineForm({ initial, mode }: Props) {
       }
     },
   });
+  const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
   return (
     <form
       onSubmit={handleSubmit((v) => mutation.mutate(v), onFormInvalid<FormValues>())}
       className="max-w-3xl mx-auto px-5 py-4"
     >
+      <FormDraftBanner safety={safety} inset={false} />
       <fieldset className="mb-8">
         <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">
           Identification
@@ -184,7 +190,7 @@ export function MachineForm({ initial, mode }: Props) {
         </div>
       </fieldset>
 
-      <div className="flex items-center justify-end gap-2">
+      <FormActions>
         <Button type="button" variant="secondary" onClick={() => navigate(-1)}>
           Cancel
         </Button>
@@ -195,7 +201,7 @@ export function MachineForm({ initial, mode }: Props) {
               ? 'Create machine'
               : 'Save changes'}
         </Button>
-      </div>
+      </FormActions>
     </form>
   );
 }

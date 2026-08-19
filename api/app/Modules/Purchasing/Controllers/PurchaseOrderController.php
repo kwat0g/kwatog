@@ -17,7 +17,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Symfony\Component\HttpFoundation\Response;
-use RuntimeException;
+use App\Common\Exceptions\BusinessRuleException;
 
 class PurchaseOrderController
 {
@@ -52,7 +52,7 @@ class PurchaseOrderController
     {
         try {
             $po = $this->service->create($request->validated(), $request->user());
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return (new PurchaseOrderResource($po))->response()->setStatusCode(201);
@@ -61,14 +61,14 @@ class PurchaseOrderController
     public function update(UpdatePurchaseOrderRequest $request, PurchaseOrder $purchaseOrder): PurchaseOrderResource
     {
         try { $po = $this->service->update($purchaseOrder, $request->validated()); }
-        catch (RuntimeException $e) { abort(422, $e->getMessage()); }
+        catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
         return new PurchaseOrderResource($po);
     }
 
     public function destroy(PurchaseOrder $purchaseOrder): JsonResponse
     {
         try { $this->service->delete($purchaseOrder); }
-        catch (RuntimeException $e) { return response()->json(['message' => $e->getMessage()], 422); }
+        catch (BusinessRuleException $e) { return response()->json(['message' => $e->getMessage()], 422); }
         return response()->json(null, 204);
     }
 
@@ -81,21 +81,21 @@ class PurchaseOrderController
     public function submit(PurchaseOrder $purchaseOrder): PurchaseOrderResource
     {
         try { $po = $this->service->submit($purchaseOrder); }
-        catch (RuntimeException $e) { abort(422, $e->getMessage()); }
+        catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
         return new PurchaseOrderResource($this->service->show($po));
     }
 
     public function acknowledgeBudget(Request $request, PurchaseOrder $purchaseOrder): PurchaseOrderResource
     {
         try { $po = $this->service->acknowledgeBudget($purchaseOrder, $request->user()); }
-        catch (RuntimeException $e) { abort(422, $e->getMessage()); }
+        catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
         return new PurchaseOrderResource($this->service->show($po));
     }
 
     public function approve(Request $request, PurchaseOrder $purchaseOrder): PurchaseOrderResource
     {
         try { $po = $this->service->approve($purchaseOrder, $request->user(), $request->input('remarks')); }
-        catch (RuntimeException $e) { abort(422, $e->getMessage()); }
+        catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
         return new PurchaseOrderResource($this->service->show($po));
     }
 
@@ -104,28 +104,28 @@ class PurchaseOrderController
         $reason = $request->input('reason');
         if (! $reason) abort(422, 'Reason is required.');
         try { $po = $this->service->reject($purchaseOrder, $request->user(), $reason); }
-        catch (RuntimeException $e) { abort(422, $e->getMessage()); }
+        catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
         return new PurchaseOrderResource($this->service->show($po));
     }
 
     public function send(PurchaseOrder $purchaseOrder): PurchaseOrderResource
     {
         try { $po = $this->service->markAsSent($purchaseOrder); }
-        catch (RuntimeException $e) { abort(422, $e->getMessage()); }
+        catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
         return new PurchaseOrderResource($this->service->show($po));
     }
 
     public function cancel(CancelPurchaseOrderRequest $request, PurchaseOrder $purchaseOrder): PurchaseOrderResource
     {
         try { $po = $this->service->cancel($purchaseOrder, $request->validated()['reason']); }
-        catch (RuntimeException $e) { abort(422, $e->getMessage()); }
+        catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
         return new PurchaseOrderResource($this->service->show($po));
     }
 
     public function close(PurchaseOrder $purchaseOrder): PurchaseOrderResource
     {
         try { $po = $this->service->close($purchaseOrder); }
-        catch (RuntimeException $e) { abort(422, $e->getMessage()); }
+        catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
         return new PurchaseOrderResource($this->service->show($po));
     }
 

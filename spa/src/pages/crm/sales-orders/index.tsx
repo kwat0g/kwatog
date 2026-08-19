@@ -15,6 +15,7 @@ import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { formatPeso } from '@/lib/formatNumber';
 import type { SalesOrder, SalesOrderStatus } from '@/types/crm';
 
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 const statusVariant: Record<SalesOrderStatus, 'success' | 'info' | 'warning' | 'neutral' | 'danger'> = {
  draft: 'neutral',
  confirmed: 'info',
@@ -46,7 +47,7 @@ export default function SalesOrdersListPage() {
  staleTime: 5 * 60 * 1000 });
  const statusLabels = new Map((salesOrderOptions?.statuses ?? []).map((option) => [option.value, option.label]));
  const statusLabel = (value: string) => statusLabels.get(value) ?? value.replaceAll('_', ' ');
- const totalValue = data?.data.some((order) => order.total_amount != null)
+ const totalValue = data?.data?.some((order) => order.total_amount != null)
   ? formatPeso(data.data.reduce((sum, order) => sum + Number(order.total_amount ?? 0), 0))
   : '—';
 
@@ -129,12 +130,7 @@ export default function SalesOrdersListPage() {
   )}
 
 {data && data.data.length === 0 && (
- <EmptyState
- icon="file-text"
- title="No sales orders yet"
- description={canCreate ? 'Create the first sales order to start the order-to-cash chain.' : 'Nothing here yet.'}
- action={canCreate ? <Button variant="primary" onClick={() => navigate('/crm/sales-orders/create')}>New sales order</Button> : undefined}
- />
+ <ListEmptyState />
  )}
 
  {data && data.data.length > 0 && (
@@ -146,6 +142,7 @@ export default function SalesOrdersListPage() {
  data={data.data}
  meta={data.meta}
  onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+ onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
  />
  </div>
  )}

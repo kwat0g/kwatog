@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Controllers;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Inventory\Models\ItemCategory;
 use App\Modules\Inventory\Requests\StoreItemCategoryRequest;
 use App\Modules\Inventory\Requests\UpdateItemCategoryRequest;
@@ -42,7 +43,7 @@ class ItemCategoryController
     {
         try {
             $this->service->delete($itemCategory);
-        } catch (\RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return response()->json(null, 204);

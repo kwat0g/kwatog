@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\CRM\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\TrashedFilter;
 use App\Modules\Accounting\Models\Customer;
@@ -15,7 +16,7 @@ use Carbon\CarbonInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
+use Illuminate\Validation\ValidationException;
 
 /**
  * The single sanctioned price entry point in the codebase.
@@ -142,7 +143,7 @@ class PriceAgreementService
 
     /**
      * Service-level uniqueness rule: no two overlapping windows for the
-     * same (customer, product). Throws RuntimeException on overlap.
+     * same (customer, product).
      */
     private function assertNoOverlap(
         int $productId,
@@ -152,7 +153,15 @@ class PriceAgreementService
         ?int $exceptId = null,
     ): void {
         if ($from > $to) {
-            throw new RuntimeException('The effective from date must be on or before the effective to date.');
+            // Keyed to effective_to because that is where both FormRequests put
+            // the same rule (`after_or_equal:effective_from`), so the operator
+            // sees the error against the same field whichever layer catches it.
+            // Reachable despite those rules: a PATCH that sends only
+            // effective_from leaves effective_to absent, and `sometimes` skips
+            // the comparison entirely.
+            throw ValidationException::withMessages([
+                'effective_to' => ['The effective from date must be on or before the effective to date.'],
+            ]);
         }
         $q = PriceAgreement::query()
             ->where('product_id', $productId)
@@ -161,7 +170,9 @@ class PriceAgreementService
             ->whereDate('effective_to', '>=', $from);
         if ($exceptId !== null) $q->where('id', '!=', $exceptId);
         if ($q->exists()) {
-            throw new RuntimeException('A price agreement already exists for this customer/product in the selected date range.');
+            // Not a field error — the conflict is with another record, and no
+            // single input on this form is the wrong one.
+            throw new BusinessRuleException('A price agreement already exists for this customer/product in the selected date range.');
         }
     }
 }

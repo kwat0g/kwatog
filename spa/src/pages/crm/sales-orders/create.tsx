@@ -33,6 +33,9 @@ import type { CreateSalesOrderData } from '@/types/crm';
 import { formatPeso } from '@/lib/formatNumber';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const itemSchema = z.object({
  product_id: z.string().min(1, 'Product is required'),
  quantity: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Use a positive decimal with up to 2 places').refine((v) => Number(v) > 0, 'Must be greater than 0'),
@@ -66,10 +69,7 @@ export default function CreateSalesOrderPage() {
 
  const today = new Date().toISOString().slice(0, 10);
 
- const {
- register, control, handleSubmit, setError, setValue, watch,
- formState: { errors, isSubmitting },
- } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  customer_id: '',
@@ -80,11 +80,15 @@ export default function CreateSalesOrderPage() {
  items: [{ product_id: '', quantity: '', delivery_date: '' }],
  },
  });
+ const {
+ register, control, handleSubmit, setError, setValue, watch,
+ formState: { errors, isSubmitting },
+ } = form;
  const { fields, append, remove } = useFieldArray({ control, name: 'items' });
  const selectedCustomerId = watch('customer_id');
 
  useEffect(() => {
- const customer = customers.data?.data.find((row) => row.id === selectedCustomerId);
+ const customer = customers.data?.data?.find((row) => row.id === selectedCustomerId);
  if (customer) {
  setValue('payment_terms_days', String(customer.payment_terms_days));
  } else if (policies.data) {
@@ -134,6 +138,7 @@ export default function CreateSalesOrderPage() {
  }
  },
  });
+ const safety = useFormSafety({ form, saved: create.isSuccess });
 
  // Live preview of subtotal (best-effort: pulls unit_price from product list — server
  // re-resolves from the actual price agreement on save, so this is approximate).
@@ -143,7 +148,7 @@ export default function CreateSalesOrderPage() {
  for (const it of watchedItems) {
  const qty = Number(it.quantity || 0);
  if (qty > 0 && it.product_id) {
- const p = products.data?.data.find((pp) => pp.id === it.product_id);
+ const p = products.data?.data?.find((pp) => pp.id === it.product_id);
  if (p) total += qty * Number(p.standard_cost || 0);
  }
  }
@@ -153,11 +158,8 @@ export default function CreateSalesOrderPage() {
  return (
  <div>
  <PageHeader title="New sales order" backTo="/crm/sales-orders" backLabel="Sales orders"
- breadcrumbs={[
- { label: 'CRM' },
- { label: 'Sales orders', href: '/crm/sales-orders' },
- { label: 'New sales order' },
- ]} />
+ />
+      <FormDraftBanner safety={safety} />
  <form
  onSubmit={handleSubmit((v) => create.mutate(v), onFormInvalid<FormValues>())}
  className="max-w-4xl mx-auto px-5 py-4"
@@ -167,7 +169,7 @@ export default function CreateSalesOrderPage() {
  <div className="grid grid-cols-2 gap-3">
  <Select label="Customer" required {...register('customer_id')} error={errors.customer_id?.message}>
  <option value="">Select customer…</option>
- {customers.data?.data.map((c) => (
+ {customers.data?.data?.map((c) => (
  <option key={c.id} value={c.id}>{c.name}</option>
  ))}
  </Select>
@@ -210,7 +212,7 @@ export default function CreateSalesOrderPage() {
  error={errors.items?.[i]?.product_id?.message}
  >
  <option value="">Select product…</option>
- {products.data?.data.map((p) => (
+ {products.data?.data?.map((p) => (
  <option key={p.id} value={p.id}>{p.part_number} — {p.name}</option>
  ))}
  </Select>
@@ -284,7 +286,7 @@ export default function CreateSalesOrderPage() {
  />
  </fieldset>
 
- <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/crm/sales-orders')}>
  Cancel
  </Button>
@@ -306,7 +308,7 @@ export default function CreateSalesOrderPage() {
  >
  {create.isPending && submitMode === 'confirm' ? 'Confirming…' : 'Save & confirm'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

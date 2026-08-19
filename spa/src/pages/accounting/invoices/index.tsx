@@ -17,6 +17,7 @@ import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
 import type { Invoice } from '@/types/accounting';
 
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 const DEFAULT_FILTERS: InvoiceListParams = {
  page: 1, per_page: 25, status: 'unpaid',
 };
@@ -42,7 +43,7 @@ export default function InvoicesPage() {
  staleTime: 5 * 60 * 1000 });
  const statusLabels = new Map((invoiceOptions?.statuses ?? []).map((option) => [option.value, option.label]));
  const statusLabel = (value: string) => statusLabels.get(value) ?? value.replaceAll('_', ' ');
- const outstandingBalance = data?.data.some((invoice) => invoice.balance != null)
+ const outstandingBalance = data?.data?.some((invoice) => invoice.balance != null)
   ? formatPeso(data.data.reduce((sum, invoice) => sum + Number(invoice.balance ?? 0), 0))
   : '—';
 
@@ -115,9 +116,7 @@ export default function InvoicesPage() {
   )}
 
 {data && data.data.length === 0 && (
- <EmptyState icon="inbox" title="No invoices yet"
- description={can('accounting.invoices.create') ? 'Issue invoices to track receivables.' : 'Nothing here yet.'}
- action={can('accounting.invoices.create') ? <Button variant="primary" onClick={() => navigate('/accounting/invoices/create')}>New invoice</Button> : undefined} />
+ <ListEmptyState />
  )}
 
 
@@ -131,6 +130,7 @@ export default function InvoicesPage() {
  data={data.data}
  meta={data.meta}
  onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+ onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
  selectable
  bulkActions={[{
  label: 'Print PDFs',

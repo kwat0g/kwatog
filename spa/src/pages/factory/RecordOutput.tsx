@@ -9,6 +9,7 @@ import { Chip } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { StickyActionBar } from '@/components/ui/StickyActionBar';
+import { QueryErrorState } from '@/components/ui/QueryErrorState';
 import { TouchConfirmSheet, useTouchSubmitLabel } from '@/components/layout/TouchShell';
 import type { WorkOrderOutput } from '@/types/production';
 import { formatTime } from '@/lib/formatDate';
@@ -20,11 +21,15 @@ export default function RecordOutput() {
   const { woId } = useParams<{ woId: string }>();
   const queryClient = useQueryClient();
 
-  // Fetch WO details
-  const { data: ordersData } = useQuery({
+  // Fetch WO details. `isError` matters more here than anywhere else in the
+  // app: this screen used to render `{workOrder && …}`, so a failed fetch
+  // dropped the order summary silently and the operator recorded output
+  // against a work order the screen could no longer name.
+  const orders = useQuery({
     queryKey: ['factory', 'active-orders'],
     queryFn: () => factoryApi.activeOrders(),
   });
+  const ordersData = orders.data;
 
   const workOrder = useMemo(
     () => (ordersData?.data ?? []).find((wo) => wo.id === woId),
@@ -81,7 +86,7 @@ export default function RecordOutput() {
       <Link
         to="/factory"
         className={cn(
-          'inline-flex items-center gap-1.5 text-sm text-secondary min-h-[44px] rounded',
+          'inline-flex items-center gap-1.5 text-sm text-secondary min-h-hit rounded',
           focusRing,
         )}
       >
@@ -90,6 +95,13 @@ export default function RecordOutput() {
       </Link>
 
       {/* WO Summary */}
+      {orders.isError && (
+        <QueryErrorState
+          subject="this work order"
+          size="compact"
+          onRetry={() => void orders.refetch()}
+        />
+      )}
       {workOrder && (
         <div className="rounded-md border border-default bg-canvas p-4">
           <div className="flex items-center justify-between">

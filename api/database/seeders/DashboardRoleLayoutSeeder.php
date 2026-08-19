@@ -20,6 +20,12 @@ use Illuminate\Support\Facades\DB;
 class DashboardRoleLayoutSeeder extends Seeder
 {
     /**
+     * Each role that holds a scorecard grant leads with ONE KPI, not a wall of
+     * them: `kpi.*` widgets are pickable by anyone who qualifies, and a default
+     * layout's job is to name the single reading that role opens the day on.
+     * The five roles with no `dashboard.*.view` grant get none — the registry
+     * would strip them anyway (DashboardLayoutService::getEffectiveLayout).
+     *
      * @return array<string, array<int, string>>
      */
     private function roleWidgets(): array
@@ -28,39 +34,47 @@ class DashboardRoleLayoutSeeder extends Seeder
             'system_admin' => [
                 'chain.stage_breakdown', 'production.kpi', 'finance.cash_position',
                 'hr.headcount', 'qc.pareto', 'alerts',
+                'kpi.oee',
             ],
             'production_manager' => [
                 'production.kpi', 'chain.stage_breakdown', 'machine.utilization',
                 'oee.gauges', 'qc.pareto', 'alerts', 'production.active_wo',
-                'maintenance.open_wos',
+                'maintenance.open_wos', 'kpi.oee',
             ],
             'ppc_head' => [
                 'production.gantt_mini', 'mrp.shortages', 'machine.status',
                 'production.wo_breakdown', 'material.reservations',
-                'maintenance.due_schedules',
+                'maintenance.due_schedules', 'kpi.on_time_delivery',
             ],
             'finance_officer' => [
                 'finance.cash_position', 'finance.ar_aging', 'finance.ap_aging',
                 'finance.revenue_mtd', 'finance.unpaid_invoices', 'finance.upcoming_payables',
-                'forecast.revenue', 'budget.utilization',
+                'forecast.revenue', 'budget.utilization', 'kpi.ar_aging_60d',
             ],
             'hr_officer' => [
                 'hr.headcount', 'hr.on_leave_today', 'approvals.pending',
                 'hr.probation_alerts', 'payroll.upcoming', 'forecast.headcount',
+                'kpi.attendance_rate',
             ],
             'purchasing_officer' => [
                 'purchasing.open_prs', 'purchasing.open_pos', 'purchasing.supplier_perf',
                 'supply.overdue_deliveries', 'inventory.low_stock',
-                'rma.open_returns',
+                'rma.open_returns', 'kpi.supplier_quality',
             ],
             'qc_inspector' => [
                 'qc.pending_inspections', 'qc.pareto', 'qc.open_ncrs', 'qc.pass_rate',
-                'forecast.defect_rate', 'rma.open_returns',
+                'forecast.defect_rate', 'rma.open_returns', 'kpi.dppm',
             ],
+            // `supply.delivery_schedule` is back, now that
+            // `supply_chain.deliveries.view` exists and warehouse_staff holds
+            // it. It was briefly dropped: the widget needed `supply_chain.view`,
+            // a whole-module read (shipments, fleet, customs docs) that the
+            // floor has no business holding, so the tile was silently stripped
+            // at render and the default was lying about it.
             'warehouse_staff' => [
                 'inventory.pending_grns', 'inventory.low_stock',
                 'inventory.pending_issues', 'supply.delivery_schedule',
-                'rma.open_returns',
+                'rma.open_returns', 'kpi.inventory_turnover',
             ],
             // Approvals-first: this role carries the second-most approve-type
             // permissions but has no bespoke dashboard page, so the registry

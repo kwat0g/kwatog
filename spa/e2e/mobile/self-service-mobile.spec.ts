@@ -7,7 +7,7 @@
  * Covers: /self-service/me, /self-service/leave, /self-service/payslips,
  * /self-service/dtr, /self-service/loans, /self-service/profile.
  */
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../fixtures';
 import { loginAs } from '../helpers-extended';
 import { BasePage } from '../pages/BasePage';
 import { SelfServiceLeavePage } from '../pages/LeavePages';
@@ -34,7 +34,7 @@ test.describe('Self-service portal — mobile (390px)', () => {
     });
     await loginAs(page, 'employee', '/self-service');
     const bp = new BasePage(page);
-    await expect(bp.forbiddenText).not.toBeVisible();
+    await expect(bp.deniedPageText).not.toBeVisible();
     // Some self-service tile/content
     await expect(page.getByText(/leave|payslip|dtr|profile/i).first()).toBeVisible();
   });
@@ -43,7 +43,7 @@ test.describe('Self-service portal — mobile (390px)', () => {
     await mockSelfServiceProfile(page);
     await loginAs(page, 'employee', '/self-service/me');
     const bp = new BasePage(page);
-    await expect(bp.forbiddenText).not.toBeVisible();
+    await expect(bp.deniedPageText).not.toBeVisible();
     await expect(page.getByText('Manuel Cruz')).toBeVisible();
   });
 
@@ -97,7 +97,7 @@ test.describe('Self-service portal — mobile (390px)', () => {
 
     await loginAs(page, 'employee', '/self-service/payslips');
     const bp = new BasePage(page);
-    await expect(bp.forbiddenText).not.toBeVisible();
+    await expect(bp.deniedPageText).not.toBeVisible();
     // Manuel Cruz's payslip should show his net pay
     await expect(page.getByText('28,170.56').or(page.getByText('28170.56'))).toBeVisible();
   });
@@ -113,7 +113,7 @@ test.describe('Self-service portal — mobile (390px)', () => {
 
     await loginAs(page, 'employee', '/self-service/dtr');
     const bp = new BasePage(page);
-    await expect(bp.forbiddenText).not.toBeVisible();
+    await expect(bp.deniedPageText).not.toBeVisible();
     await expect(page.getByRole('heading', { name: 'Daily Time Record' })).toBeVisible();
   });
 
@@ -126,7 +126,7 @@ test.describe('Self-service portal — mobile (390px)', () => {
 
     await loginAs(page, 'employee', '/self-service/loans');
     const bp = new BasePage(page);
-    await expect(bp.forbiddenText).not.toBeVisible();
+    await expect(bp.deniedPageText).not.toBeVisible();
   });
 
   test('self-service /profile renders', async ({ page }) => {
@@ -134,7 +134,7 @@ test.describe('Self-service portal — mobile (390px)', () => {
 
     await loginAs(page, 'employee', '/self-service/profile');
     const bp = new BasePage(page);
-    await expect(bp.forbiddenText).not.toBeVisible();
+    await expect(bp.deniedPageText).not.toBeVisible();
     await expect(page.getByText('Manuel Cruz')).toBeVisible();
   });
 });

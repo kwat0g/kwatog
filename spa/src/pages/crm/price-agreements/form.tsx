@@ -13,6 +13,9 @@ import { productsApi } from '@/api/crm/products';
 import { crmCustomersApi } from '@/api/crm/customers';
 import type { PriceAgreement, CreatePriceAgreementData } from '@/types/crm';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  product_id: z.string().min(1, 'Select a product'),
  customer_id: z.string().min(1, 'Select a customer'),
@@ -45,10 +48,7 @@ export function PriceAgreementForm({ initial, mode }: Props) {
  queryFn: () => crmCustomersApi.list({ per_page: 200, is_active: true }),
  });
 
- const {
- register, handleSubmit, setError,
- formState: { errors, isSubmitting },
- } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  product_id: initial?.product?.id ?? '',
@@ -58,6 +58,10 @@ export function PriceAgreementForm({ initial, mode }: Props) {
  effective_to: initial?.effective_to ?? '',
  },
  });
+ const {
+ register, handleSubmit, setError,
+ formState: { errors, isSubmitting },
+ } = form;
 
  const mutation = useMutation({
  mutationFn: (values: FormValues) => {
@@ -75,12 +79,14 @@ export function PriceAgreementForm({ initial, mode }: Props) {
  applyServerValidationErrors(e, setError, 'Failed to save price agreement.');
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  return (
  <form
  onSubmit={handleSubmit((v) => mutation.mutate(v), onFormInvalid<FormValues>())}
  className="max-w-3xl mx-auto px-5 py-4"
  >
+      <FormDraftBanner safety={safety} inset={false} />
  <fieldset className="mb-8">
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Agreement details</legend>
  <div className="grid grid-cols-2 gap-3">
@@ -92,7 +98,7 @@ export function PriceAgreementForm({ initial, mode }: Props) {
  error={errors.product_id?.message}
  >
  <option value="">— select product —</option>
- {productsData?.data.map((p) => (
+ {productsData?.data?.map((p) => (
  <option key={p.id} value={p.id}>
  {p.part_number} — {p.name}
  </option>
@@ -107,7 +113,7 @@ export function PriceAgreementForm({ initial, mode }: Props) {
  error={errors.customer_id?.message}
  >
  <option value="">— select customer —</option>
- {customersData?.data.map((c) => (
+ {customersData?.data?.map((c) => (
  <option key={c.id} value={c.id}>
  {c.code ? `${c.code} — ` : ''}{c.name}
  </option>
@@ -141,7 +147,7 @@ export function PriceAgreementForm({ initial, mode }: Props) {
  </div>
  </fieldset>
 
- <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/crm/price-agreements')}>
  Cancel
  </Button>
@@ -155,7 +161,7 @@ export function PriceAgreementForm({ initial, mode }: Props) {
  ? mode === 'create' ? 'Creating…' : 'Saving…'
  : mode === 'create' ? 'Create agreement' : 'Save changes'}
  </Button>
- </div>
+ </FormActions>
  </form>
  );
 }

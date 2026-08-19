@@ -188,7 +188,6 @@ const removeProof = useMutation({
  subtitle={data.sales_order ? `SO ${data.sales_order.so_number}` : undefined}
  backTo="/supply-chain/deliveries"
  backLabel="Deliveries"
- breadcrumbs={[{ label: 'Deliveries', href: '/supply-chain/deliveries' }, { label: data.delivery_number }]}
  actions={
  <div className="flex items-center gap-2">
  {next && canEdit && (
@@ -250,10 +249,10 @@ const removeProof = useMutation({
  })} />
  </div>
 
- <div className="px-5 grid grid-cols-3 gap-4">
+ <div className="px-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
  <div className="col-span-2 space-y-4">
  <Panel title="Schedule">
- <dl className="grid grid-cols-3 gap-x-4 gap-y-3 text-sm">
+ <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3 text-sm">
  <div>
  <dt className="text-2xs uppercase tracking-wider text-muted">Scheduled</dt>
  <dd className="font-mono tabular-nums">{data.scheduled_date ?? '—'}</dd>
@@ -292,7 +291,7 @@ const removeProof = useMutation({
  meta={hasProof ? `${proofs.length} file${proofs.length === 1 ? '' : 's'}` : 'Required before confirmation'}
  >
  {(data.receiver_name || data.receiver_position || data.received_at) && (
- <dl className="grid grid-cols-3 gap-x-4 gap-y-2 text-sm mb-3 pb-3 border-b border-subtle">
+ <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-2 text-sm mb-3 pb-3 border-b border-subtle">
  <div>
  <dt className="text-2xs uppercase tracking-wider text-muted">Received by</dt>
  <dd>{data.receiver_name ?? '—'}</dd>
@@ -382,7 +381,7 @@ const removeProof = useMutation({
  {/* Upload form */}
  {canUploadProofNow && (
  <div className="border-t border-subtle pt-3">
- <div className="grid grid-cols-3 gap-2 mb-2">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mb-2">
  <Select
  value={selectedProofType ?? ''}
  onChange={(e) => setProofType(e.target.value as DeliveryProofType)}

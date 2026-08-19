@@ -115,7 +115,7 @@ export function MoldShotMeter({
       </div>
 
       {/* Metric Breakdown Cards */}
-      <div className="grid grid-cols-3 gap-2 text-xs pt-1">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-xs pt-1">
         <div className="bg-surface p-2 rounded-md border border-default/50">
           <span className="text-2xs text-muted block">Used Lifespan</span>
           <span className="font-mono font-medium text-primary">{pct.toFixed(1)}%</span>

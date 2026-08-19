@@ -99,16 +99,19 @@ export function SkeletonGrid({ count = 4, className }: { count?: number; classNa
 export function SkeletonDetail() {
  return (
  <div className="px-5 py-4 space-y-4">
- {/* Header skeleton */}
- <div className="flex items-center justify-between border-b border-default pb-4">
- <div className="space-y-1.5">
- <div className="flex items-center gap-2">
- <SkeletonBlock className="h-6 w-44 rounded-sm" />
+ {/* Header skeleton. The widths here are fixed, so at 375px the title block
+ and the button pair together exceeded the viewport and pushed the whole
+ document sideways — on every detail page, every time one loaded. Wrapping
+ mirrors what PageHeader itself does (`flex-col sm:flex-row`). */}
+ <div className="flex flex-wrap items-center justify-between gap-3 border-b border-default pb-4">
+ <div className="min-w-0 space-y-1.5">
+ <div className="flex flex-wrap items-center gap-2">
+ <SkeletonBlock className="h-6 w-44 max-w-full rounded-sm" />
  <SkeletonBlock className="h-5 w-20 rounded-full" />
  </div>
- <SkeletonBlock className="h-3 w-32 rounded-sm" />
+ <SkeletonBlock className="h-3 w-32 max-w-full rounded-sm" />
  </div>
- <div className="flex gap-2">
+ <div className="flex shrink-0 gap-2">
  <SkeletonBlock className="h-8 w-20 rounded-md" />
  <SkeletonBlock className="h-8 w-24 rounded-md" />
  </div>
@@ -263,7 +266,7 @@ export function SkeletonLandingPage() {
  <div className="flex justify-center items-center my-auto">
  <SkeletonBlock className="h-36 w-36 rounded-full" />
  </div>
- <div className="grid grid-cols-3 gap-4 border-t border-subtle pt-4">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 border-t border-subtle pt-4">
  <SkeletonBlock className="h-4 w-full rounded-sm" />
  <SkeletonBlock className="h-4 w-full rounded-sm" />
  <SkeletonBlock className="h-4 w-full rounded-sm" />

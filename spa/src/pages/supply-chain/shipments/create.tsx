@@ -14,6 +14,9 @@ import { Textarea } from '@/components/ui/Textarea';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { onFormInvalid, applyServerValidationErrors } from '@/lib/formErrors';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  purchase_order_id: z.string().min(1, 'Purchase order is required'),
  carrier: z.string().max(100).optional().or(z.literal('')),
@@ -46,7 +49,7 @@ export default function CreateShipmentPage() {
  toast.error('Failed to load purchase orders');
  }
 
- const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  purchase_order_id: '',
@@ -60,6 +63,7 @@ export default function CreateShipmentPage() {
  incoterm: '',
  },
  });
+ const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = form;
 
  const mutation = useMutation({
  mutationFn: (data: FormValues) =>
@@ -83,6 +87,7 @@ export default function CreateShipmentPage() {
  applyServerValidationErrors(err, setError, 'Failed to create shipment.');
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  return (
  <div>
@@ -91,6 +96,7 @@ export default function CreateShipmentPage() {
  backTo="/supply-chain/shipments"
  backLabel="Shipments"
  />
+      <FormDraftBanner safety={safety} />
  <form
  onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())}
  className="max-w-3xl mx-auto px-5 py-4"
@@ -182,7 +188,7 @@ export default function CreateShipmentPage() {
  />
  </fieldset>
 
- <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+ <FormActions>
  <Button
  type="button"
  variant="secondary"
@@ -198,7 +204,7 @@ export default function CreateShipmentPage() {
  >
  {mutation.isPending ? 'Creating…' : 'Create shipment'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

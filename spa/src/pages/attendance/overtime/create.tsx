@@ -5,7 +5,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
-import { AxiosError } from 'axios';
 import { overtimeApi } from '@/api/attendance/overtime';
 import { employeesApi } from '@/api/hr/employees';
 import { useAuthStore } from '@/stores/authStore';
@@ -16,9 +15,11 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
-import type { ApiValidationError } from '@/types';
-import { onFormInvalid } from '@/lib/formErrors';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 function todayIso(): string {
  const d = new Date();
  const off = d.getTimezoneOffset() * 60_000;
@@ -82,16 +83,17 @@ export default function OvertimeCreatePage() {
  });
  }, [options]);
 
- const {
- register, handleSubmit, setError,
- formState: { errors, isSubmitting },
- } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  employee_id: user?.employee?.id ?? '',
  date: todayIso(),
  },
  });
+ const {
+ register, handleSubmit, setError,
+ formState: { errors, isSubmitting },
+ } = form;
 
  const mutation = useMutation({
  mutationFn: (d: FormValues) => overtimeApi.create({
@@ -105,15 +107,11 @@ export default function OvertimeCreatePage() {
  toast.success('Overtime request submitted.');
  navigate('/hr/attendance/overtime');
  },
- onError: (e: AxiosError<ApiValidationError>) => {
- if (e.response?.status === 422 && e.response.data.errors) {
- Object.entries(e.response.data.errors).forEach(([f, msgs]) =>
- setError(f as keyof FormValues, { type: 'server', message: msgs[0] }),
- );
- toast.error(e.response?.data?.message || 'Validation failed.');
- } else toast.error('Failed to submit OT request.');
+ onError: (e) => {
+   applyServerValidationErrors(e, setError, 'Failed to submit OT request.');
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  const dateMin = options ? addDaysIso(todayIso(), -options.request_past_days) : undefined;
  const dateMax = options ? addDaysIso(todayIso(), options.request_future_days) : undefined;
@@ -121,6 +119,7 @@ export default function OvertimeCreatePage() {
  return (
  <div>
  <PageHeader title="New overtime request" backTo="/hr/attendance/overtime" backLabel="Overtime" />
+      <FormDraftBanner safety={safety} />
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-4">
  {optionsLoading ? (
  <Panel title="Request details"><SkeletonBlock className="h-24" /></Panel>
@@ -165,12 +164,12 @@ export default function OvertimeCreatePage() {
  </div>
  </Panel>
  )}
- <div className="flex justify-end gap-2 pt-4">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/hr/attendance/overtime')}>Cancel</Button>
  <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending || optionsLoading || optionsError || !options} loading={mutation.isPending}>
  {mutation.isPending ? 'Submitting…' : 'Submit request'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

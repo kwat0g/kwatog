@@ -19,6 +19,7 @@ import { LuArrowLeft, LuSend, LuCircleX, LuCircleCheck } from '@/lib/icons';
 import type { Budget } from '@/types/budgeting';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
+import { QueryErrorState } from '@/components/ui/QueryErrorState';
 const MONTHS = [
   'Jan',
   'Feb',
@@ -52,11 +53,12 @@ export default function BudgetDetailPage() {
   const [confirmApprove, setConfirmApprove] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
 
-  const { data: budget, isLoading } = useQuery<Budget>({
+  const budgetQuery = useQuery<Budget>({
     queryKey: ['budget', id],
     queryFn: () => budgetingApi.show(id!),
     enabled: !!id,
   });
+  const { data: budget, isLoading } = budgetQuery;
   const { data: budgetOptions } = useQuery({
     queryKey: ['budgets', 'options'],
     queryFn: () => budgetingApi.options(),
@@ -94,6 +96,11 @@ export default function BudgetDetailPage() {
   });
 
   if (isLoading) return <SkeletonDetail />;
+  // A failed fetch used to render "Budget not found", telling the user the
+  // record was gone when the request had simply errored.
+  if (budgetQuery.isError) {
+    return <QueryErrorState subject="this budget" onRetry={() => void budgetQuery.refetch()} />;
+  }
   if (!budget) return <EmptyState icon="alert-circle" title="Budget not found" />;
 
   const canSubmit = budget.status === 'draft' && canManage;
@@ -129,7 +136,6 @@ export default function BudgetDetailPage() {
             </span>
           </div>
         }
-        breadcrumbs={[{ label: 'Budgeting', href: '/budgeting' }, { label: budget.name }]}
         actions={
           <div className="flex items-center gap-2">
             <Link

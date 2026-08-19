@@ -23,6 +23,8 @@ import { Button } from '@/components/ui/Button';
 import { businessPoliciesApi } from '@/api/businessPolicies';
 import { setFunctionalCurrency } from '@/lib/runtimeCurrency';
 
+import { ErrorBoundary } from '@/components/guards/ErrorBoundary';
+
 // Inner component so the keyboard-shortcut hook lives inside the
 // PageActionsProvider (otherwise the dispatcher context is null).
 function AppLayoutInner() {
@@ -84,7 +86,16 @@ function AppLayoutInner() {
  <main id="main-content" tabIndex={-1} className="flex-1 min-w-0">
  {/* Route content stays immediate; RouteTransition is a semantic wrapper only. */}
  <RouteTransition>
+ {/*
+ * The app's only ErrorBoundary was in App.tsx, wrapping this layout —
+ * so a throw in any page unmounted the topbar, the sidebar and the
+ * breadcrumbs with it, leaving "Something went wrong" and a Reload
+ * button as the only way out of a working session. A page crash costs
+ * the user that page now, not their navigation.
+ */}
+ <ErrorBoundary>
  <Outlet />
+ </ErrorBoundary>
  </RouteTransition>
  </main>
  </div>

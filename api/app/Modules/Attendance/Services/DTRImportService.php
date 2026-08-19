@@ -50,6 +50,11 @@ class DTRImportService
         $rowNum = 1;
         $total = 0;
 
+        // The \RuntimeExceptions below are row-level control flow, not HTTP
+        // errors: each is caught by this loop's own `catch (Throwable)` and
+        // collected into $errors as {row, message}, which is the right UX for a
+        // CSV import — one bad line must not fail the file. Converting them to
+        // BusinessRuleException would change nothing and only obscure that.
         while (($row = fgetcsv($stream)) !== false) {
             $rowNum++;
             $total++;
@@ -155,6 +160,10 @@ class DTRImportService
         $idx = array_flip($header);
 
         // ── Collect + validate raw punch rows ──
+        // Same rule as import() above: the \RuntimeException in this loop is
+        // row-level control flow, caught by the loop's own catch (Throwable) and
+        // collected into $errors as {row, message}. Not an HTTP error, and not a
+        // candidate for BusinessRuleException.
         $punches = [];
         $errors = [];
         $rowNum = 1;
@@ -187,6 +196,12 @@ class DTRImportService
         $deduped = $result['deduped'];
 
         // ── Persist each day record ──
+        // The two \RuntimeExceptions in this loop are row-level control flow as
+        // well — caught below and reported per day in $errors. Do NOT convert
+        // them. The finalized-payroll-period one in particular IS a business
+        // rule, and that is exactly why it must stay a per-row entry: as a
+        // BusinessRuleException it would abort the whole upload on the first
+        // affected day instead of importing the other days and naming that one.
         $cache = []; // employee_no => employee_id
         // Read ONCE per import, not once per day record. See the accessor below.
         $finalizedRanges = $this->finalizedPeriodRanges();

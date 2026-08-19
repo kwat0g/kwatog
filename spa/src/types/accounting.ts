@@ -381,17 +381,22 @@ export interface AgingBuckets {
  d91_plus: string;
  total: string;
 }
+/**
+ * Every field is optional: FinanceDashboardService gates each panel on the
+ * caller's grant and omits what they may not read (PanelGate), so an
+ * accounting-dashboard viewer without the AR grant receives no ar_* fields.
+ */
 export interface FinanceDashboardSummary {
- cash_balance: string;
- ar_outstanding: string;
- ap_outstanding: string;
- revenue_mtd: string;
- ar_aging_summary: AgingBuckets;
- ap_aging_summary: AgingBuckets;
- recent_journal_entries: Array<{
+ cash_balance?: string;
+ ar_outstanding?: string;
+ ap_outstanding?: string;
+ revenue_mtd?: string;
+ ar_aging_summary?: AgingBuckets;
+ ap_aging_summary?: AgingBuckets;
+ recent_journal_entries?: Array<{
  id: string; entry_number: string; date: string; description: string; total_debit: string; reference: string | null;
  }>;
- top_overdue_customers: Array<{
+ top_overdue_customers?: Array<{
  customer_id: string; customer_name: string;
  current: string; d1_30: string; d31_60: string; d61_90: string; d91_plus: string; total: string;
  }>;

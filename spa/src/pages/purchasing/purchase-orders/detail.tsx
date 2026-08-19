@@ -49,7 +49,7 @@ export default function PurchaseOrderDetailPage() {
  queryFn: purchaseOrdersApi.options,
  staleTime: 300_000,
  });
- const statusLabel = purchaseOrderOptions?.statuses.find((option) => option.value === data?.status)?.label;
+ const statusLabel = purchaseOrderOptions?.statuses?.find((option) => option.value === data?.status)?.label;
 
  // Series C — Task C4. Real-time chain progress.
  useChainProgress('purchase_order', id, ['purchasing', 'purchase-orders', id]);
@@ -106,7 +106,6 @@ export default function PurchaseOrderDetailPage() {
  <PageHeader
  title={<span className="font-mono">{data.po_number}</span>}
  backTo="/purchasing/purchase-orders" backLabel="Purchase orders"
- breadcrumbs={[{ label: 'Purchasing', href: '/purchasing' }, { label: 'Purchase orders', href: '/purchasing/purchase-orders' }, { label: data.po_number }]}
  actions={
  <div className="flex items-center gap-2 flex-wrap">
  <Chip variant={variant[data.status]}>{statusLabel ?? data.status}</Chip>
@@ -169,16 +168,16 @@ export default function PurchaseOrderDetailPage() {
   })} />
  </Panel>
  </div>
- <div className="px-5 grid grid-cols-3 gap-4 pb-6">
+ <div className="px-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-6">
  <div className="col-span-2 space-y-4">
- <div className="grid grid-cols-4 gap-3">
+ <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
  <StatCard label="Subtotal" value={formatPeso(data.subtotal)} />
  <StatCard label="VAT" value={formatPeso(data.vat_amount)} />
  <StatCard label="Total" value={formatPeso(data.total_amount)} />
  <StatCard label="Received" value={`${data.quantity_received_pct.toFixed(0)}%`} />
  </div>
  <Panel title="Header">
- <dl className="grid grid-cols-3 gap-y-3 gap-x-6 text-sm">
+ <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-3 gap-x-6 text-sm">
  <div><dt className="text-2xs uppercase tracking-wider text-muted">Vendor</dt><dd>{data.vendor?.name ?? '—'}</dd></div>
  <div><dt className="text-2xs uppercase tracking-wider text-muted">Date</dt><dd className="font-mono">{formatDate(data.date)}</dd></div>
  <div><dt className="text-2xs uppercase tracking-wider text-muted">Expected</dt><dd className="font-mono">{data.expected_delivery_date ? formatDate(data.expected_delivery_date) : '—'}</dd></div>

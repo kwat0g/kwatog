@@ -20,6 +20,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Validator;
+use App\Common\Exceptions\BusinessRuleException;
 
 class LoanController
 {
@@ -60,7 +61,7 @@ class LoanController
                 LoanType::from($d['loan_type']),
                 $d,
             );
-        } catch (\RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
@@ -94,7 +95,7 @@ class LoanController
     {
         try {
             $loan = $this->service->approve($loan, $request->user(), $request->input('remarks'));
-        } catch (\RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
 
@@ -105,7 +106,7 @@ class LoanController
     {
         try {
             $loan = $this->service->reject($loan, $request->user(), $request->input('reason'));
-        } catch (\RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
 
@@ -116,7 +117,7 @@ class LoanController
     {
         try {
             $loan = $this->service->cancel($loan);
-        } catch (\RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
 

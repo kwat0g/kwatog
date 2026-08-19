@@ -21,6 +21,7 @@ import { SkeletonBlock, SkeletonDetail } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 
+import { WidgetErrorBoundary } from '@/components/ui/WidgetErrorBoundary';
 /* ───────────────────────── Grid primitives ───────────────────────── */
 
 /**
@@ -191,7 +192,13 @@ export function DashboardShell<T>({
   return (
     <div>
       {header}
-      <DashboardBody>{children(query.data)}</DashboardBody>
+      <DashboardBody>
+        {/* Without this, one bad number in one panel escalated to the app-level
+            boundary and took the topbar and sidebar with it. Keeping the
+            failure inside the body leaves the user somewhere they can navigate
+            away from. */}
+        <WidgetErrorBoundary>{children(query.data)}</WidgetErrorBoundary>
+      </DashboardBody>
     </div>
   );
 }

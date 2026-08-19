@@ -16,11 +16,12 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SkeletonForm } from '@/components/ui/Skeleton';
-import { onFormInvalid } from '@/lib/formErrors';
-import type { AxiosError } from 'axios';
-import type { ApiValidationError } from '@/types';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import type { CreateNcrTemplateData } from '@/types/quality';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
   name: z.string().trim().min(1, 'Template name is required.').max(200),
   source: z.string().min(1, 'Source is required.'),
@@ -54,12 +55,7 @@ export default function NcrTemplateFormPage() {
     queryFn: () => itemsApi.list({ per_page: 200, item_type: 'product' }),
   });
 
-  const {
-    register,
-    handleSubmit,
-    setError,
-    formState: { errors, isSubmitting },
-  } = useForm<FormValues>({
+    const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       name: '',
@@ -81,6 +77,12 @@ export default function NcrTemplateFormPage() {
           }
         : undefined,
   });
+  const {
+    register,
+    handleSubmit,
+    setError,
+    formState: { errors, isSubmitting },
+  } = form;
 
   const createMut = useMutation({
     mutationFn: (data: FormValues) => {
@@ -99,17 +101,11 @@ export default function NcrTemplateFormPage() {
       queryClient.invalidateQueries({ queryKey: ['quality', 'ncr-templates'] });
       navigate('/quality/ncr-templates');
     },
-    onError: (err: AxiosError<ApiValidationError>) => {
-      if (err.response?.status === 422 && err.response.data.errors) {
-        Object.entries(err.response.data.errors).forEach(([k, v]) =>
-          setError(k as keyof FormValues, { type: 'server', message: v[0] }),
-        );
-        toast.error(err.response?.data?.message || 'Validation failed.');
-      } else {
-        toast.error(err.response?.data?.message ?? 'Failed to save template');
-      }
+    onError: (err) => {
+      applyServerValidationErrors(err, setError, 'Failed to save the NCR template.');
     },
   });
+  const safety = useFormSafety({ form, saved: createMut.isSuccess });
 
   if (isEdit && loadingExisting) {
     return <SkeletonForm />;
@@ -121,19 +117,15 @@ export default function NcrTemplateFormPage() {
         title={isEdit ? 'Edit NCR template' : 'New NCR template'}
         backTo="/quality/ncr-templates"
         backLabel="NCR templates"
-        breadcrumbs={[
-          { label: 'Quality', href: '/quality' },
-          { label: 'NCR templates', href: '/quality/ncr-templates' },
-          { label: isEdit ? 'Edit NCR template' : 'New NCR template' },
-        ]}
       />
+      <FormDraftBanner safety={safety} />
       <form
         onSubmit={handleSubmit((d) => createMut.mutate(d), onFormInvalid<FormValues>())}
         className="px-5 py-4"
       >
         <div className="space-y-4 max-w-3xl">
           <Panel title="Template details">
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               <Input
                 label="Template name"
                 required
@@ -176,7 +168,7 @@ export default function NcrTemplateFormPage() {
                 error={errors.product_id?.message}
               >
                 <option value="">— None —</option>
-                {products.data?.data.map((p) => (
+                {products.data?.data?.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.code} — {p.name}
                   </option>
@@ -206,7 +198,7 @@ export default function NcrTemplateFormPage() {
             </div>
           </Panel>
 
-          <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+          <FormActions>
             <Button
               variant="secondary"
               type="button"
@@ -223,7 +215,7 @@ export default function NcrTemplateFormPage() {
             >
               {isEdit ? 'Update template' : 'Create template'}
             </Button>
-          </div>
+          </FormActions>
         </div>
       </form>
     </div>

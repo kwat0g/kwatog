@@ -5,7 +5,7 @@
  * HashID obfuscation in URLs, dark mode toggle, sidebar presence, and error state
  * handling in data pages.
  */
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { loginAs, mock500 } from './helpers-extended';
 import { BasePage } from './pages/BasePage';
 
@@ -23,16 +23,15 @@ test.describe('Error pages', () => {
     await bp.expectNotFound();
   });
 
-  test('403 forbidden page renders when PermissionGuard blocks', async ({ page }) => {
-    // employee has no admin permissions → /admin/users is blocked by PermissionGuard
+  test('a denied page is indistinguishable from a missing one', async ({ page }) => {
+    // This asserted `sidebar.or(forbidden)`. The sidebar is present on every
+    // authenticated page, so the test passed whatever PermissionGuard rendered,
+    // and it described a "Forbidden" screen the product deliberately does not
+    // have: revealing that /admin/users exists but is closed to you is the
+    // information leak the unified 404 exists to prevent.
     await loginAs(page, 'employee', '/admin/users');
-    // The PermissionGuard renders an EmptyState with lock icon + "Forbidden" title.
-    // The exact text may be "Forbidden" (title) or "You do not have permission" (description).
-    // Try both in sequence.
-    const forbidden = page.getByText(/forbidden|you do not have permission/i);
-    const sidebar = page.locator('aside, nav, [role="navigation"], [role="complementary"]').first();
-    await expect(sidebar.or(forbidden).first()).toBeVisible({ timeout: 8000 });
-    // The page should NOT be the login page
+    const bp = new BasePage(page);
+    await bp.expectDeniedAsNotFound();
     await expect(page).not.toHaveURL(/\/login/);
   });
 

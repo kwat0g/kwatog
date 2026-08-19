@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
 import { LuPlus } from '@/lib/icons';
@@ -15,10 +14,11 @@ import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
 import type { EmployeeLoan } from '@/types/loans';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 export default function LoansPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
- const [filters, setFilters] = useState<LoanListParams>({ page: 1, per_page: 25, sort: 'created_at', direction: 'desc' });
+ const [filters, setFilters] = useUrlFilters<LoanListParams>({ page: 1, per_page: 25, sort: 'created_at', direction: 'desc' });
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['loans', filters],
@@ -94,7 +94,8 @@ export default function LoansPage() {
  )}
  {data && data.data.length > 0 && (
  <div className="px-5 py-4"><DataTable
- onRowClick={(r) => navigate(`/hr/loans/${r.id}`)} columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters((f) => ({ ...f, page }))} /></div>
+ onRowClick={(r) => navigate(`/hr/loans/${r.id}`)} columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+ onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))} /></div>
  )}
  </div>
  );

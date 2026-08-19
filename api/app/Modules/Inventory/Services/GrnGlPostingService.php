@@ -119,6 +119,9 @@ class GrnGlPostingService
             Log::error('GrnGlPostingService: configured GRNI account not found in COA', [
                 'grn_id' => $grn->id,
             ]);
+            // Log::error above already classifies this as a fault: the code came
+            // from `accounting.accounts.grni_code`, so the remedy is a COA/seed
+            // fix no receiving clerk can make. Stays a 500.
             throw new RuntimeException("GRNI clearing account {$grniCode} missing from chart of accounts.");
         }
 
@@ -173,6 +176,9 @@ class GrnGlPostingService
         }
 
         if (Money::isZero($deltaTotal) || $deltaByAccount === []) {
+            // An internal accounting invariant, not a rule the user broke: the
+            // debit and credit deltas this service just computed disagree with
+            // each other. There is nothing to correct on the GRN form.
             throw new RuntimeException('GRN inventory and GRNI deltas are out of balance.');
         }
 

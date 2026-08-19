@@ -4,7 +4,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
-import type { AxiosError } from 'axios';
 import { accountsApi } from '@/api/accounting/accounts';
 import { accountingOptionsApi } from '@/api/accounting/options';
 import { Button } from '@/components/ui/Button';
@@ -12,10 +11,12 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { onFormInvalid } from '@/lib/formErrors';
-import type { ApiValidationError } from '@/types';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import type { AccountType } from '@/types/accounting';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  code: z.string().min(1, 'Code required').max(20),
  name: z.string().min(1, 'Name required').max(100),
@@ -41,17 +42,18 @@ export default function CreateAccountPage() {
  staleTime: 300_000,
  });
 
- const { register, handleSubmit, setValue, setError, formState: { errors } } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: { type: '', normal_balance: '' },
  });
+ const { register, handleSubmit, setValue, setError, formState: { errors } } = form;
 
  const mutation = useMutation({
  mutationFn: (data: FormValues) => accountsApi.create({
  code: data.code,
  name: data.name,
  type: data.type as AccountType,
- normal_balance: (data.normal_balance || options?.account_types.find((t) => t.value === data.type)?.default_normal_balance) as 'debit' | 'credit' | undefined,
+ normal_balance: (data.normal_balance || options?.account_types?.find((t) => t.value === data.type)?.default_normal_balance) as 'debit' | 'credit' | undefined,
  parent_id: data.parent_id || null,
  description: data.description || undefined,
  }),
@@ -60,21 +62,17 @@ export default function CreateAccountPage() {
  toast.success(`Account ${account.code} created.`);
  navigate('/accounting/coa');
  },
- onError: (err: AxiosError<ApiValidationError>) => {
- if (err.response?.status === 422 && err.response.data.errors) {
- Object.entries(err.response.data.errors).forEach(([k, v]) =>
- setError(k as keyof FormValues, { type: 'server', message: v[0] }));
- toast.error(err.response?.data?.message || 'Validation failed.');
- } else {
- toast.error('Failed to create account.');
- }
+ onError: (err) => {
+   applyServerValidationErrors(err, setError, 'Failed to create account.');
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  return (
  <div>
  <PageHeader title="New account" backTo="/accounting/coa" backLabel="Chart of Accounts"
- breadcrumbs={[{ label: 'Finance', href: '/accounting/coa' }, { label: 'COA', href: '/accounting/coa' }, { label: 'New' }]} />
+ />
+      <FormDraftBanner safety={safety} />
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())}
  className="max-w-2xl mx-auto px-5 py-4 space-y-4">
 
@@ -82,7 +80,7 @@ export default function CreateAccountPage() {
  <Input label="Account code" {...register('code')} error={errors.code?.message} required
  placeholder="Account code" className="font-mono" />
  <Select label="Type" {...register('type', {
- onChange: (e) => setValue('normal_balance', options?.account_types.find((t) => t.value === e.target.value)?.default_normal_balance || ''),
+ onChange: (e) => setValue('normal_balance', options?.account_types?.find((t) => t.value === e.target.value)?.default_normal_balance || ''),
  })} error={errors.type?.message} required>
  <option value="">Select type</option>
  {(options?.account_types ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
@@ -110,10 +108,10 @@ export default function CreateAccountPage() {
  <Textarea label="Description (optional)" {...register('description')} rows={2}
  error={errors.description?.message} />
 
- <div className="flex justify-end gap-2 pt-2 border-t border-default">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/accounting/coa')}>Cancel</Button>
  <Button type="submit" variant="primary" loading={mutation.isPending}>Create account</Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

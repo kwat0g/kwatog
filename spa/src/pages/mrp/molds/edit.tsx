@@ -14,16 +14,12 @@ export default function EditMoldPage() {
  });
 
  if (isLoading) return <div><PageHeader title="Edit mold" backTo="/mrp/molds" backLabel="Molds"
- breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'Molds', href: '/mrp/molds' }, { label: 'Loading…' }]} /><SkeletonDetail /></div>;
+ /><SkeletonDetail /></div>;
 
  return (
  <div>
  <PageHeader title={`Edit ${data?.mold_code ?? 'mold'}`} backTo={`/mrp/molds/${id}`} backLabel="Mold"
- breadcrumbs={[
- { label: 'MRP' },
- { label: 'Molds', href: '/mrp/molds' },
- { label: data?.mold_code ?? 'Edit' },
- ]} />
+ />
  {isError || !data ? (
  <div className="px-5 py-4 text-sm text-muted">Could not load mold.</div>
  ) : (

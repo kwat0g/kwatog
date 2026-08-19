@@ -11,9 +11,21 @@ class AdminDashboardServiceTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * A system_admin, not a bare user: AdminDashboardService gates each panel on
+     * admin.users.manage / admin.audit_logs.view / admin.settings.manage
+     * (PanelGate), so a permission-less user now receives an empty panel set.
+     * These tests assert the SHAPE of each panel, so they need a viewer entitled
+     * to all of them.
+     */
+    private function adminUser(): User
+    {
+        return User::factory()->withRole('system_admin')->create();
+    }
+
     public function test_admin_dashboard_returns_expected_shape(): void
     {
-        $user = User::factory()->create();
+        $user = $this->adminUser();
         $svc  = app(AdminDashboardService::class);
 
         $result = $svc->admin($user);
@@ -31,7 +43,7 @@ class AdminDashboardServiceTest extends TestCase
 
     public function test_account_security_has_expected_keys(): void
     {
-        $user = User::factory()->create();
+        $user = $this->adminUser();
         $svc  = app(AdminDashboardService::class);
 
         $result = $svc->admin($user);
@@ -48,7 +60,7 @@ class AdminDashboardServiceTest extends TestCase
 
     public function test_auth_events_has_24h_trend_with_24_entries(): void
     {
-        $user   = User::factory()->create();
+        $user   = $this->adminUser();
         $svc    = app(AdminDashboardService::class);
         $result = $svc->admin($user);
 

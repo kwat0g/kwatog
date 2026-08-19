@@ -5,13 +5,14 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
-import type { AxiosError } from 'axios';
 import { Button, Input, Modal, ModalFooter, Panel, Select, Switch } from '@/components/ui';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { adminUsersApi } from '@/api/admin/users';
 import { client } from '@/api/client';
-import type { ApiValidationError } from '@/types';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { applyServerValidationErrors } from '@/lib/formErrors';
 interface RoleOption { id: string; name: string }
 interface RolesResponse { data: RoleOption[] }
 
@@ -36,15 +37,16 @@ export default function AdminCreateUserPage() {
  staleTime: 60_000,
  });
 
+  const form = useForm<FormValues>({
+ resolver: zodResolver(schema),
+ defaultValues: { name: '', email: '', role_id: '', send_welcome: true },
+ });
  const {
  register,
  handleSubmit,
  setError,
  formState: { errors, isSubmitting },
- } = useForm<FormValues>({
- resolver: zodResolver(schema),
- defaultValues: { name: '', email: '', role_id: '', send_welcome: true },
- });
+ } = form;
 
  const mutation = useMutation({
  mutationFn: (v: FormValues) => adminUsersApi.create(v),
@@ -57,24 +59,16 @@ export default function AdminCreateUserPage() {
  navigate(`/admin/users/${r.data.id}`);
  }
  },
- onError: (err: AxiosError<ApiValidationError>) => {
- if (err.response?.status === 422 && err.response.data?.errors) {
- Object.entries(err.response.data.errors).forEach(([field, messages]) => {
- setError(field as keyof FormValues, {
- type: 'server',
- message: (messages as string[])[0],
- });
- });
- toast.error('Please fix the errors below.');
- } else {
- toast.error('Failed to create user.');
- }
+ onError: (err) => {
+   applyServerValidationErrors(err, setError, 'Failed to create user.');
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  return (
  <div>
- <PageHeader title="Create LuUser" backTo="/admin/users" backLabel="Users" breadcrumbs={[{ label: 'Admin' }, { label: 'Users', href: '/admin/users' }, { label: 'New LuUser' }]} />
+ <PageHeader title="Create LuUser" backTo="/admin/users" backLabel="Users" />
+      <FormDraftBanner safety={safety} />
 
  <form
  onSubmit={handleSubmit((v) => mutation.mutate(v))}

@@ -90,11 +90,6 @@ export default function JournalEntryDetailPage() {
  }
  backTo="/accounting/journal-entries"
  backLabel="Journal Entries"
- breadcrumbs={[
- { label: 'Accounting' },
- { label: 'Journal Entries', href: '/accounting/journal-entries' },
- { label: je.entry_number },
- ]}
  actions={
  <div className="flex gap-1.5">
  <Button variant="secondary" size="sm" icon={<LuPrinter size={14} />} onClick={() => void downloadAuthenticatedFile(journalEntriesApi.pdfUrl(je.id), { openInNewTab: true, errorMessage: 'Failed to generate journal entry PDF.' })}>Print</Button>
@@ -122,10 +117,10 @@ export default function JournalEntryDetailPage() {
  }
  />
 
- <div className="px-5 py-4 grid grid-cols-3 gap-4">
+ <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
  <div className="col-span-2 space-y-4">
  <Panel title="Header">
- <dl className="grid grid-cols-3 gap-3 text-sm">
+ <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
  <div><dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">Date</dt><dd className="font-mono">{formatDate(je.date)}</dd></div>
  <div><dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">Posted at</dt><dd className="font-mono">{je.posted_at ? formatDate(je.posted_at) : '—'}</dd></div>
  <div><dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">Reference</dt><dd>{je.reference_label ?? '—'}</dd></div>

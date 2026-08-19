@@ -77,7 +77,7 @@ export default function SupplierInvoiceDetailPage() {
 
  {!isLoading && !isError && invoice && (
  <>
- <div className="grid grid-cols-3 gap-3">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
  <Panel title="Total Amount" bodyClassName="p-4 text-center">
  <p className="text-lg font-medium font-mono tabular-nums">{formatPeso(invoice.total_amount)}</p>
  </Panel>

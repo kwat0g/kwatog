@@ -56,11 +56,6 @@ export default function VendorDetailPage() {
  }
  backTo="/accounting/vendors"
  backLabel="Vendors"
- breadcrumbs={[
- { label: 'Accounting' },
- { label: 'Vendors', href: '/accounting/vendors' },
- { label: vendor.name },
- ]}
  actions={
  <div className="flex gap-1.5">
  {can('accounting.bills.create') && (
@@ -77,13 +72,13 @@ export default function VendorDetailPage() {
  }
  />
 
- <div className="px-5 py-4 grid grid-cols-3 gap-4">
+ <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
  <StatCard label="Open Balance" value={formatPeso(vendor.open_balance)} />
  <StatCard label="Payment Terms" value={vendor.payment_terms_days == null ? '—' : `${vendor.payment_terms_days} days`} />
  <StatCard label="Bills" value={vendor.bills_count ?? billsData?.meta.total ?? '—'} />
  </div>
 
- <div className="px-5 grid grid-cols-3 gap-4">
+ <div className="px-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
  <Panel title="Contact" className="col-span-1">
  <dl className="text-xs space-y-2">
  <div><dt className="text-muted">Contact person</dt><dd>{vendor.contact_person ?? '—'}</dd></div>

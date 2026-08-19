@@ -80,11 +80,6 @@ export default function MrbDetailPage() {
  title={<span className="font-mono">{data.mrb_number}</span>}
  backTo="/inventory/mrb"
  backLabel="MRB / Quarantine"
- breadcrumbs={[
- { label: 'Warehouse', href: '/inventory/items' },
- { label: 'MRB / Quarantine', href: '/inventory/mrb' },
- { label: data.mrb_number },
- ]}
  actions={
  <div className="flex items-center gap-2">
  <Chip variant={mrbStatusVariant(data.status)}>{data.status_label}</Chip>
@@ -97,7 +92,7 @@ export default function MrbDetailPage() {
  }
  />
 
- <div className="px-5 pt-3 pb-4 grid grid-cols-4 gap-2">
+ <div className="px-5 pt-3 pb-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
  <StatCard
  label="Quantity"
  value={
@@ -113,7 +108,7 @@ export default function MrbDetailPage() {
 
  <div className="px-5 pb-4 space-y-4">
  <Panel title="Movement">
- <dl className="grid grid-cols-3 gap-4 text-sm">
+ <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
  <Field label="Source location" value={data.source_location?.full_code} mono />
  <Field label="Quarantine location" value={data.quarantine_location?.full_code} mono />
  <Field label="Release location" value={data.release_location?.full_code} mono />

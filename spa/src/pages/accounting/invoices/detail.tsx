@@ -121,11 +121,6 @@ export default function InvoiceDetailPage() {
  }
  backTo="/accounting/invoices"
  backLabel="Invoices"
- breadcrumbs={[
- { label: 'Accounting' },
- { label: 'Invoices', href: '/accounting/invoices' },
- { label: invoice.invoice_number ?? 'Draft' },
- ]}
  actions={
  <div className="flex gap-1.5">
  <Button variant="secondary" size="sm" icon={<LuPrinter size={14} />} onClick={() => void downloadAuthenticatedFile(invoicesApi.pdfUrl(invoice.id), { openInNewTab: true, errorMessage: 'Failed to generate invoice PDF.' })}>Print</Button>
@@ -157,17 +152,17 @@ export default function InvoiceDetailPage() {
  </Panel>
  </div>
 
- <div className="px-5 py-4 grid grid-cols-4 gap-4">
+ <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
  <StatCard label="Total" value={formatPeso(invoice.total_amount)} />
  <StatCard label="Collected" value={formatPeso(invoice.amount_paid)} />
  <StatCard label="Balance" value={formatPeso(invoice.balance)} delta={invoice.is_overdue ? { value: 'OVERDUE', direction: 'down' } : undefined} />
  <StatCard label="Aging" value={invoice.aging_bucket.replace('d', '').replace('_', '–')} />
  </div>
 
- <div className="px-5 grid grid-cols-3 gap-4">
+ <div className="px-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
  <div className="col-span-2 space-y-4">
  <Panel title="Details">
- <dl className="grid grid-cols-3 gap-3 text-sm">
+ <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
  <div><dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">Customer</dt><dd>{invoice.customer?.name}</dd></div>
  <div><dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">Date</dt><dd className="font-mono">{formatDate(invoice.date)}</dd></div>
  <div><dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">Due date</dt><dd className="font-mono">{formatDate(invoice.due_date)}</dd></div>

@@ -343,11 +343,6 @@ export default function RolePermissionsPage() {
         }
         backTo="/admin/roles"
         backLabel="Roles"
-        breadcrumbs={[
-          { label: 'Admin', href: '/admin/users' },
-          { label: 'Roles', href: '/admin/roles' },
-          { label: role.data ? `${role.data.name} permissions` : 'Permissions' },
-        ]}
         actions={
           <>
             {diff.total > 0 && (

@@ -25,6 +25,7 @@ use App\Modules\Auth\Models\User;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
 class InvoiceService
@@ -446,24 +447,41 @@ class InvoiceService
     }
 
     /**
+     * BusinessRuleException rather than ValidationException even though these
+     * read like field errors: create() is also the delivery→invoice handoff
+     * path, and both DeliveryService::retryInvoiceHandoff() and
+     * CreateDraftInvoiceOnDeliveryInvoiceRequested split on
+     * `DeliveryInvoiceHandoffException|BusinessRuleException` — "expected,
+     * degrade to manual" — versus everything else — "infrastructure fault,
+     * rethrow so the queue retries".
+     *
+     * Note which way this moved. As bare RuntimeExceptions these three ESCAPED
+     * that split and were handled as infrastructure faults; naming them
+     * BusinessRuleException does not preserve the graceful arm, it puts them in
+     * it for the first time. A delivery line with no revenue account or a
+     * non-positive quantity now leaves the delivery at
+     * `invoice_handoff_status = manual_required` instead of poisoning the queue
+     * — which is the right outcome, because no retry can fix either condition.
+     * ValidationException would have undone that by escaping the split again.
+     *
      * @return array{0: array<int, array{revenue_account_id:int, source_delivery_item_id:?int, description:string, quantity:string, unit:?string, unit_price:string, total:string}>, 1: string}
      */
     private function normalizeItems(array $rawItems): array
     {
         if (count($rawItems) === 0) {
-            throw new RuntimeException('An invoice must have at least one line item.');
+            throw new BusinessRuleException('An invoice must have at least one line item.');
         }
         $rows = []; $subtotal = Money::zero();
         foreach ($rawItems as $raw) {
             $accountId = HashIdFilter::decode($raw['revenue_account_id'] ?? null, Account::class);
             if (! $accountId) {
-                throw new RuntimeException('Invalid revenue account selected on invoice item.');
+                throw new BusinessRuleException('Invalid revenue account selected on invoice item.');
             }
             $qty   = Money::round2((string) $raw['quantity']);
             $price = Money::round2((string) $raw['unit_price']);
             $total = Money::round2(bcmul($qty, $price, 4));
             if (Money::lte($qty, '0') || Money::lt($price, '0')) {
-                throw new RuntimeException('Quantity must be > 0, unit price must be ≥ 0.');
+                throw new BusinessRuleException('Quantity must be > 0, unit price must be ≥ 0.');
             }
             $rows[] = [
                 'revenue_account_id' => $accountId,
@@ -515,6 +533,11 @@ class InvoiceService
     {
         $id = Account::query()->where('code', $code)->value('id');
         if (! $id) {
+            // Deliberately NOT a BusinessRuleException: $code comes from the
+            // accounting settings / COA seed, never from the request. A user
+            // told "AR account 1200 not found" can do nothing about it, and
+            // dressing a broken chart of accounts as a 422 would hide a real
+            // deployment fault behind a form error.
             throw new RuntimeException("Required account {$code} not found in COA.");
         }
         return (int) $id;
@@ -543,7 +566,14 @@ class InvoiceService
         return VatClassification::Vatable;
     }
 
-    /** Clamp the Senior/PWD discount to [0, subtotal]. */
+    /**
+     * Clamp the Senior/PWD discount to [0, subtotal].
+     *
+     * ValidationException here (not BusinessRuleException): the discount is one
+     * input on one form, and the only caller that can trip these bounds is the
+     * HTTP invoice form — the delivery→invoice handoff never sends
+     * `senior_pwd_discount`, so this cannot reach a chain listener's catch arm.
+     */
     private function normalizeDiscount(string|float|int|null $raw, string $subtotal): string
     {
         if ($raw === null || $raw === '') {
@@ -551,10 +581,14 @@ class InvoiceService
         }
         $discount = Money::round2((string) $raw);
         if (Money::lt($discount, '0')) {
-            throw new RuntimeException('Senior/PWD discount must be ≥ 0.');
+            throw ValidationException::withMessages([
+                'senior_pwd_discount' => ['Senior/PWD discount must be ≥ 0.'],
+            ]);
         }
         if (Money::gt($discount, $subtotal)) {
-            throw new RuntimeException('Senior/PWD discount cannot exceed the subtotal.');
+            throw ValidationException::withMessages([
+                'senior_pwd_discount' => ['Senior/PWD discount cannot exceed the subtotal.'],
+            ]);
         }
         return $discount;
     }

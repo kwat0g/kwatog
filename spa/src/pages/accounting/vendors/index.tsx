@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
 import { LuPlus } from '@/lib/icons';
@@ -14,10 +13,12 @@ import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 import type { Vendor } from '@/types/accounting';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 export default function VendorsPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
- const [filters, setFilters] = useState<VendorListParams>({ page: 1, per_page: 25 });
+ const [filters, setFilters] = useUrlFilters<VendorListParams>({ page: 1, per_page: 25 });
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['accounting', 'vendors', filters],
@@ -64,8 +65,7 @@ export default function VendorsPage() {
  {isLoading && !data && <SkeletonTable columns={6} rows={6} />}
  {isError && <EmptyState icon="alert-circle" title="Failed to load vendors" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />}
  {data && data.data.length === 0 && (
- <EmptyState icon="inbox" title="No vendors yet" description={can('accounting.vendors.manage') ? 'Add your first vendor to record bills.' : 'Nothing here yet.'}
- action={can('accounting.vendors.manage') ? <Button variant="primary" onClick={() => navigate('/accounting/vendors/create')}>New vendor</Button> : undefined} />
+ <ListEmptyState />
  )}
  {data && data.data.length > 0 && (
  <div className="px-5 py-4">
@@ -75,6 +75,7 @@ export default function VendorsPage() {
  data={data.data}
  meta={data.meta}
  onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+ onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
  />
  </div>
  )}

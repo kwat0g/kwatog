@@ -4,7 +4,6 @@ import { useFieldArray, useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { LuPlus, LuTrash2 } from '@/lib/icons';
 import { vendorsApi } from '@/api/accounting/vendors';
@@ -13,7 +12,6 @@ import { billsApi } from '@/api/accounting/bills';
 import { purchaseOrdersApi } from '@/api/purchasing/purchase-orders';
 import { businessPoliciesApi } from '@/api/businessPolicies';
 import { uomsApi } from '@/api/inventory/uoms';
-import type { ThreeWayMatchResult } from '@/types/purchasing';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -22,10 +20,12 @@ import { Switch } from '@/components/ui/Switch';
 import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatPeso } from '@/lib/formatNumber';
-import { onFormInvalid } from '@/lib/formErrors';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { numberInputProps } from '@/lib/numberInput';
-import type { ApiValidationError } from '@/types';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const itemSchema = z.object({
  expense_account_id: z.string().min(1, 'Required'),
  // REC-02 — hidden PO item FK; empty for manually added free-text lines.
@@ -92,7 +92,7 @@ export default function CreateBillPage() {
  [posResp],
  );
 
- const { register, control, handleSubmit, watch, setError, setValue, getValues, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  bill_number: '', vendor_id: presetVendor, provenance_type: 'stock', purchase_order_id: '', goods_receipt_note_id: '',
@@ -102,6 +102,7 @@ export default function CreateBillPage() {
  items: [{ expense_account_id: '', item_id: '', description: '', quantity: undefined as unknown as number, unit: '', unit_price: undefined as unknown as number }],
  },
  });
+ const { register, control, handleSubmit, watch, setError, setValue, getValues, formState: { errors, isSubmitting } } = form;
  useEffect(() => {
  if (policies) setValue('is_vatable', vatConfigured);
  }, [policies, setValue, vatConfigured]);
@@ -199,35 +200,19 @@ export default function CreateBillPage() {
  toast.success(`Bill ${b.bill_number} recorded.`);
  navigate(`/accounting/bills/${b.id}`);
  },
- onError: (e: AxiosError<ApiValidationError & { code?: string; three_way_match?: ThreeWayMatchResult }>) => {
- const data = e.response?.data;
- // REC-02 — the 3-way match block is a 422 with a non-standard body:
- // { message, code: 'three_way_match_blocked', three_way_match: {...} }.
- // Surface it distinctly and list the blocking lines instead of trying to
- // map it onto form fields.
- if (e.response?.status === 422 && data?.code === 'three_way_match_blocked') {
- const blocked = (data.three_way_match?.lines ?? []).filter((l) => l.severity === 'block');
- const detail = blocked.length
- ? blocked.map((l) => l.item_code ?? l.description).join(', ')
- : '';
- toast.error(
- `3-way match blocked by variance — review variances or enable override${detail ? ` (${detail})` : ''}.`,
- { duration: 6000 },
- );
- return;
- }
- if (e.response?.status === 422 && data?.errors) {
- Object.entries(data.errors).forEach(([f, msgs]) => setError(f as keyof FormValues, { type: 'server', message: (msgs as string[])[0] }));
- } else toast.error(data?.message ?? 'Failed to create bill.');
+ onError: (e) => {
+   applyServerValidationErrors(e, setError, 'Failed to create the bill.');
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  return (
  <div>
- <PageHeader title="New bill" backTo="/accounting/bills" backLabel="Bills" breadcrumbs={[{ label: 'Accounting', href: '/accounting' }, { label: 'Bills', href: '/accounting/bills' }, { label: 'New Bill' }]} />
+ <PageHeader title="New bill" backTo="/accounting/bills" backLabel="Bills" />
+      <FormDraftBanner safety={safety} />
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-5xl mx-auto px-5 py-4 space-y-4">
  <Panel title="Header">
- <div className="grid grid-cols-3 gap-3">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
  <Select label="Bill provenance" required {...register('provenance_type')} error={errors.provenance_type?.message}>
  <option value="stock">Stock/item — PO + accepted GRN</option>
  <option value="service">Service/non-stock — approved exception</option>
@@ -272,7 +257,7 @@ export default function CreateBillPage() {
 
  <Panel title="Line items">
  <div className="border border-default rounded-md overflow-hidden">
- <div className="grid grid-cols-12 gap-2 h-row px-2.5 bg-subtle text-2xs uppercase tracking-wider text-muted font-medium border-b border-default items-center">
+ <div className="hidden md:grid md:grid-cols-12 gap-2 h-row px-2.5 bg-subtle text-2xs uppercase tracking-wider text-muted font-medium border-b border-default items-center">
  <div className="col-span-3">Description</div>
  <div className="col-span-3">Expense account</div>
  <div className="col-span-1 text-right">Qty</div>
@@ -285,7 +270,7 @@ export default function CreateBillPage() {
  const it = items[idx] ?? ({} as FormValues['items'][number]);
  const lineTotal = ((Number(it.quantity) || 0) * (Number(it.unit_price) || 0)).toFixed(2);
  return (
- <div key={field.id} className="grid grid-cols-12 gap-2 px-2.5 py-1.5 border-b border-subtle items-start">
+ <div key={field.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 px-2.5 py-1.5 border-b border-subtle items-start">
  {/* REC-02 — hidden PO item FK carried through to the payload. */}
  <input type="hidden" {...register(`items.${idx}.item_id` as const)} />
  <div className="col-span-3"><Input {...register(`items.${idx}.description` as const)} /></div>
@@ -326,12 +311,12 @@ export default function CreateBillPage() {
  </div>
  </Panel>
 
- <div className="flex justify-end gap-2 pt-2">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/accounting/bills')}>Cancel</Button>
  <Button type="submit" variant="primary" loading={mutation.isPending} disabled={isSubmitting || mutation.isPending}>
  Create bill
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

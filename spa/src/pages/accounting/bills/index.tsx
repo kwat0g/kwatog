@@ -17,6 +17,7 @@ import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
 import type { Bill } from '@/types/accounting';
 
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 const DEFAULT_FILTERS: BillListParams = {
  page: 1, per_page: 25, status: 'unpaid',
 };
@@ -38,7 +39,7 @@ export default function BillsPage() {
  staleTime: 5 * 60 * 1000 });
  const statusLabels = new Map((billOptions?.statuses ?? []).map((option) => [option.value, option.label]));
  const statusLabel = (value: string) => statusLabels.get(value) ?? value.replaceAll('_', ' ');
- const outstandingBalance = data?.data.some((bill) => bill.balance != null)
+ const outstandingBalance = data?.data?.some((bill) => bill.balance != null)
   ? formatPeso(data.data.reduce((sum, bill) => sum + Number(bill.balance ?? 0), 0))
   : '—';
 
@@ -107,9 +108,7 @@ export default function BillsPage() {
  )}
 
 {data && data.data.length === 0 && (
- <EmptyState icon="inbox" title="No bills yet"
- description={can('accounting.bills.create') ? 'Record vendor bills to track payables.' : 'Nothing here yet.'}
- action={can('accounting.bills.create') ? <Button variant="primary" onClick={() => navigate('/accounting/bills/create')}>New bill</Button> : undefined} />
+ <ListEmptyState />
  )}
 
  {data && data.data.length > 0 && (
@@ -121,6 +120,7 @@ export default function BillsPage() {
  data={data.data}
  meta={data.meta}
  onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+ onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
  selectable
  bulkActions={[{
  label: 'Print PDFs',

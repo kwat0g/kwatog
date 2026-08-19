@@ -26,6 +26,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use App\Common\Exceptions\BusinessRuleException;
 
 /**
  * U3 — Employee self-service endpoints. The current user must be linked to
@@ -153,7 +154,7 @@ class SelfServiceController
                     'purpose' => $validated['reason'] ?? null,
                 ],
             );
-        } catch (\RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
 
@@ -286,7 +287,7 @@ class SelfServiceController
 
         try {
             $this->overtime->cancel($ot, $request->user(), 'Cancelled by employee.');
-        } catch (\RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
 
@@ -315,7 +316,7 @@ class SelfServiceController
         abort_if(! $ot, 404);
         try {
             $this->overtime->restore($ot, $request->user());
-        } catch (\RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
 

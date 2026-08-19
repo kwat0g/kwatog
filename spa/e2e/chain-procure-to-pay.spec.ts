@@ -5,7 +5,7 @@
  *   Purchasing creates PR → submits → department_head approves
  *   → Purchasing converts to PO → PO goes through approval workflow.
  */
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { loginAs } from './helpers-extended';
 import { BasePage } from './pages/BasePage';
 import { PurchaseRequestListPage, PurchaseOrderListPage, PurchaseOrderDetailPage } from './pages/ModulePages';
@@ -62,13 +62,17 @@ test.describe('Procure-to-Pay chain — PR lifecycle', () => {
     await expect(listPage.heading).toBeVisible();
     // The table should show our PR
     await expect(page.getByText('PR-202607-0001')).toBeVisible();
-    await expect(page.getByText('pending', { exact: true })).toBeVisible();
+    // The Status chip renders `status_label` — PurchaseRequestStatus::label()
+    // returns 'Pending', capitalised. An exact match on lowercase 'pending'
+    // could only ever have passed against the raw enum value, which the list
+    // shows nobody, so it looked strict and asserted nothing.
+    await expect(page.getByRole('cell', { name: 'Pending', exact: true })).toBeVisible();
   });
 
   test('warehouse cannot view purchase requests (forbidden)', async ({ page }) => {
     await loginAs(page, 'warehouse', '/purchasing/purchase-requests');
     const base = new BasePage(page);
-    await base.expectForbidden();
+    await base.expectDeniedAsNotFound();
   });
 });
 

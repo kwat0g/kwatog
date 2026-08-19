@@ -37,6 +37,13 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'admin.import.manage',            'name' => 'Run CSV Imports'],
                 ['slug' => 'admin.print.bulk',               'name' => 'Bulk Print Documents'],
                 ['slug' => 'admin.users.manage_permissions', 'name' => 'Manage Per-User Permission Overrides'],
+                // Approval delegation is self-service — any authenticated user
+                // manages the delegations where they are the delegator
+                // (Admin/routes.php). Acting on ANOTHER user's delegation is the
+                // exception, and it used to be authorised by a literal
+                // `role?->slug === 'system_admin'` compare with no permission
+                // beside it to fall through to. This is that authority, named.
+                ['slug' => 'admin.delegations.manage_any',    'name' => 'Manage Any User\'s Approval Delegations'],
             ],
 
             // HR
@@ -226,6 +233,11 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'supply_chain.view',                 'name' => 'View Supply Chain'],
                 ['slug' => 'supply_chain.shipments.manage',     'name' => 'Manage Shipments'],
                 ['slug' => 'supply_chain.fleet.manage',         'name' => 'Manage Vehicles'],
+                // The read counterpart to .create/.confirm, which existed
+                // without one. `supply_chain.view` was the only delivery read,
+                // and it also carries shipments, fleet and import documents —
+                // far more than the warehouse needs to stage an outbound load.
+                ['slug' => 'supply_chain.deliveries.view',      'name' => 'View Deliveries'],
                 ['slug' => 'supply_chain.deliveries.create',    'name' => 'Create Deliveries'],
                 ['slug' => 'supply_chain.deliveries.confirm',   'name' => 'Confirm Customer Delivery'],
                 ['slug' => 'supply_chain.driver.access',        'name' => 'Access Driver PWA'],
@@ -550,6 +562,14 @@ class RolePermissionSeeder extends Seeder
                     [
                         'production.view', 'production.work_orders.view',
                         'production.wo.create', 'production.wo.confirm',
+                        // The scheduler endpoints PPC owns (/mrp/scheduler/*)
+                        // are gated on this slug, but it lives in the
+                        // `production` permission bucket — so $this->module('mrp')
+                        // above never picked it up and the role that "owns the
+                        // schedule" could not read it. Its own Gantt widget
+                        // (production.gantt_mini) was stripped from its default
+                        // dashboard for the same reason.
+                        'production.schedule.view',
                         // Routings (process plans) are PPC's to author.
                         'production.routings.view', 'production.routings.manage',
                         'dashboard.ppc.view', 'maintenance.view', 'assets.view',
@@ -569,6 +589,7 @@ class RolePermissionSeeder extends Seeder
                     $this->selfService(),
                     [
                         'inventory.view', 'inventory.grn.create', 'supply_chain.view', 'supply_chain.shipments.manage',
+                        'supply_chain.deliveries.view',
                         'accounting.vendors.view', 'accounting.bills.view',
                         'forecasting.view',
                         'return_management.view', 'return_management.manage',
@@ -599,6 +620,10 @@ class RolePermissionSeeder extends Seeder
                         'forecasting.view',
                         'return_management.view',
                         'dashboard.warehouse.view',
+                        // Outbound staging: which deliveries leave today, and
+                        // for whom. Deliberately NOT supply_chain.view, which
+                        // would also open shipments, fleet and customs docs.
+                        'supply_chain.deliveries.view',
                     ],
                 ),
             ],
@@ -637,7 +662,7 @@ class RolePermissionSeeder extends Seeder
                 'description' => 'Tracks imported shipments and customs documents.',
                 'permissions' => array_merge(
                     $this->selfService(),
-                    ['supply_chain.view', 'supply_chain.shipments.manage', 'purchasing.view'],
+                    ['supply_chain.view', 'supply_chain.shipments.manage', 'supply_chain.deliveries.view', 'purchasing.view'],
                 ),
             ],
             'department_head' => [

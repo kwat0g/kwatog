@@ -27,6 +27,9 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use App\Common\Exceptions\BusinessRuleException;
+use App\Modules\Accounting\Exceptions\ClosedPeriodException;
+use App\Modules\Purchasing\Exceptions\ThreeWayMatchException;
 
 class SupplierPortalController extends Controller
 {
@@ -171,6 +174,23 @@ class SupplierPortalController extends Controller
     {
         $user = $this->user($request);
 
+        // The arm stays because it adds `code: bill_creation_failed`, which the
+        // portal branches on — it is not a bare re-emission of getMessage().
+        //
+        // Three classes: the rules the supplier can act on, plus BillService's
+        // ThreeWayMatchException and the period guard, both reachable through
+        // submitInvoice → BillService::create.
+        //
+        // Two things it no longer catches, both on purpose. `abort_if(...,
+        // 403)` — a supplier submitting against another vendor's PO — used to
+        // arrive here as `422 {"message":"", "code":"bill_creation_failed"}`,
+        // because a Symfony HttpException extends RuntimeException and
+        // abort_if() with no message leaves getMessage() empty; it is now the
+        // 403 it was written as. And "Unable to store the supplier invoice."
+        // is the storage fault 4f40a94d annotated as a 500: the upload
+        // succeeded and validation passed, so there is nothing on the
+        // supplier's side to fix, and calling it a bill-creation failure
+        // invited them to resubmit a file that was fine.
         try {
             $result = $this->service->submitInvoice(
                 $user->vendor_id,
@@ -179,7 +199,7 @@ class SupplierPortalController extends Controller
                 $request->validated(),
                 $request->hasFile('file') ? $request->file('file') : null,
             );
-        } catch (\RuntimeException $e) {
+        } catch (BusinessRuleException|ClosedPeriodException|ThreeWayMatchException $e) {
             return response()->json([
                 'message' => $e->getMessage(),
                 'code'    => 'bill_creation_failed',

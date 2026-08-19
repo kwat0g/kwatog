@@ -17,6 +17,8 @@ use App\Modules\Accounting\Services\InvoiceService;
 use App\Modules\Dashboard\Services\ForecastingDashboardService;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
+use App\Modules\Auth\Models\User;
+use App\Modules\Dashboard\Support\PanelGate;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -29,14 +31,34 @@ class FinanceDashboardService
         private readonly InvoiceService $invoiceService,
         private readonly ForecastingDashboardService $forecastingService,
         private readonly SettingsService $settings,
+        private readonly PanelGate $gate,
     ) {}
 
-    public function summary(): array
+    /**
+     * Every gate this payload consults. Listed once so the cache signature and
+     * the panel map cannot fall out of step — a gate missing from here would
+     * make two different payloads share one cache entry.
+     */
+    private const GATES = [
+        'accounting.invoices.view',
+        'accounting.bills.view',
+        'accounting.journal.view',
+        'payroll.periods.view',
+        'budgeting.view',
+    ];
+
+    public function summary(User $user): array
     {
         // Task D5 — bumped cache key (`v2`) so existing cached payloads from
         // before this revision aren't served with the new schema missing.
+        //
+        // The key now also carries the caller's answers to GATES. The old shared
+        // key was correct only while every panel was ungated; with gating it
+        // would have handed a viewer another viewer's panel set.
+        $signature = $this->gate->signature($user, self::GATES);
+
         return Cache::tags(['financial_statements', 'finance_dashboard'])
-            ->remember('finance_dashboard:summary:v2', now()->addSeconds(30), function () {
+            ->remember("finance_dashboard:summary:v2:{$signature}", now()->addSeconds(30), function () use ($user) {
                 $cashCodes = array_values(array_filter([
                     $this->settings->get('accounting.accounts.cash_code'),
                     $this->settings->get('accounting.accounts.payroll_cash_code'),
@@ -93,24 +115,31 @@ class FinanceDashboardService
                     ->values()
                     ->all();
 
-                return [
-                    'cash_balance'           => Money::round2($cashBalance),
-                    'ar_outstanding'         => Money::round2($arOutstanding),
-                    'ap_outstanding'         => Money::round2($apOutstanding),
-                    'revenue_mtd'            => Money::round2($revenueMtd),
-                    'ar_aging_summary'       => $arAging['buckets'],
-                    'ap_aging_summary'       => $apAging['buckets'],
-                    'recent_journal_entries' => $recentJournalEntries,
-                    'top_overdue_customers'  => $topOverdue,
-                    // Task D5 — additional Finance Officer panels.
-                'payroll_pipeline'       => $this->payrollPipeline(),
-                'payroll_pipeline_history_days' => $this->settings->requiredInt('dashboard.finance.payroll_pipeline_history_days', 1),
-                'unposted_jes'           => $this->unpostedJes(),
-                    'ap_due_this_week'       => $this->apDueThisWeek(),
-                    'ap_due_horizon_days'   => $this->settings->requiredInt('dashboard.widgets.ap_due_horizon_days', 0),
-                'budget_vs_actual_top'   => $this->budgetVsActualTop(),
-                'revenue_forecast'       => $this->forecastingService->revenueForecast(),
-                ];
+                return $this->gate->panels($user, [
+                    // Cash and revenue ride the page grant
+                    // (`accounting.dashboard.view`): reaching this endpoint at
+                    // all already required it.
+                    'cash_balance'           => [null,                        fn () => Money::round2($cashBalance)],
+                    'revenue_mtd'            => [null,                        fn () => Money::round2($revenueMtd)],
+                    'ar_outstanding'         => ['accounting.invoices.view',  fn () => Money::round2($arOutstanding)],
+                    'ar_aging_summary'       => ['accounting.invoices.view',  fn () => $arAging['buckets']],
+                    // Named customers and what they owe.
+                    'top_overdue_customers'  => ['accounting.invoices.view',  fn () => $topOverdue],
+                    'ap_outstanding'         => ['accounting.bills.view',     fn () => Money::round2($apOutstanding)],
+                    'ap_aging_summary'       => ['accounting.bills.view',     fn () => $apAging['buckets']],
+                    'ap_due_this_week'       => ['accounting.bills.view',     fn () => $this->apDueThisWeek()],
+                    'recent_journal_entries' => ['accounting.journal.view',   fn () => $recentJournalEntries],
+                    'unposted_jes'           => ['accounting.journal.view',   fn () => $this->unpostedJes()],
+                    // Payroll run counts are payroll's, not accounting's — the
+                    // one panel here whose data comes from another module.
+                    'payroll_pipeline'       => ['payroll.periods.view',      fn () => $this->payrollPipeline()],
+                    'budget_vs_actual_top'   => ['budgeting.view',            fn () => $this->budgetVsActualTop()],
+                    // A projection of revenue, gated like revenue.
+                    'revenue_forecast'       => [null,                        fn () => $this->forecastingService->revenueForecast()],
+                    // Configured windows, not data.
+                    'payroll_pipeline_history_days' => [null,                 fn () => $this->settings->requiredInt('dashboard.finance.payroll_pipeline_history_days', 1)],
+                    'ap_due_horizon_days'    => [null,                        fn () => $this->settings->requiredInt('dashboard.widgets.ap_due_horizon_days', 0)],
+                ]);
             });
     }
 

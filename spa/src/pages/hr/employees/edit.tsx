@@ -66,7 +66,7 @@ export default function EditEmployeePage() {
  if (isLoading) {
  return (
  <div>
- <PageHeader title="Edit employee" backTo="/hr/employees" backLabel="Employees" breadcrumbs={[{ label: 'HR', href: '/hr/employees' }, { label: 'Employees', href: '/hr/employees' }, { label: 'Edit' }]} />
+ <PageHeader title="Edit employee" backTo="/hr/employees" backLabel="Employees" />
  <SkeletonForm />
  </div>
  );
@@ -92,12 +92,6 @@ export default function EditEmployeePage() {
  subtitle={<span className="font-mono">{employee.employee_no}</span>}
  backTo={`/hr/employees/${employee.id}`}
  backLabel="Profile"
- breadcrumbs={[
- { label: 'HR', href: '/hr/employees' },
- { label: 'Employees', href: '/hr/employees' },
- { label: employee.full_name, href: `/hr/employees/${employee.id}` },
- { label: 'Edit' },
- ]}
  />
  <EmployeeForm
  employee={employee}

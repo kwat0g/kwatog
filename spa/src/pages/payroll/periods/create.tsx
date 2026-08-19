@@ -15,6 +15,9 @@ import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { formatPeso } from '@/lib/formatNumber';
 import type { ApiValidationError } from '@/types';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  period_start: z.string().min(1, 'Start date is required'),
  period_end: z.string().min(1, 'End date is required'),
@@ -52,10 +55,11 @@ export default function CreatePayrollPeriodPage() {
  staleTime: 300_000,
  });
 
- const { register, handleSubmit, setError, watch, formState: { errors } } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: { scope_label: '' },
  });
+ const { register, handleSubmit, setError, watch, formState: { errors } } = form;
 
  const periodStart = watch('period_start');
  const periodEnd = watch('period_end');
@@ -134,6 +138,7 @@ export default function CreatePayrollPeriodPage() {
  }
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  const onSubmit = (data: FormValues) => {
  setSubmitting(true);
@@ -147,7 +152,8 @@ export default function CreatePayrollPeriodPage() {
 
  return (
  <div>
- <PageHeader title="New Payroll Period" backTo="/payroll/periods" backLabel="Payroll" breadcrumbs={[{ label: 'Payroll', href: '/payroll/periods' }, { label: 'Periods', href: '/payroll/periods' }, { label: 'New Period' }]} />
+ <PageHeader title="New Payroll Period" backTo="/payroll/periods" backLabel="Payroll" />
+      <FormDraftBanner safety={safety} />
  <form onSubmit={handleSubmit(onSubmit, onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-4">
  <fieldset className="mb-8">
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Schedule</legend>
@@ -266,7 +272,7 @@ export default function CreatePayrollPeriodPage() {
 
  {preview ? (
  <>
- <div className="grid grid-cols-3 gap-4">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
  <div>
  <p className="text-xs text-muted">Employees paid</p>
  <p className="font-mono tabular-nums text-lg">
@@ -315,14 +321,14 @@ export default function CreatePayrollPeriodPage() {
  </div>
  )}
 
- <div className="flex justify-end gap-2 pt-4 border-t border-default">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/payroll/periods')} disabled={busy}>
  Cancel
  </Button>
  <Button type="submit" variant="primary" disabled={busy || blocked} loading={mutation.isPending}>
  {mutation.isPending ? 'Creating…' : 'Create period'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

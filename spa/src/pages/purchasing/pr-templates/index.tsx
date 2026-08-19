@@ -21,6 +21,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
 import type { PurchaseRequestTemplate } from '@/types/purchasing';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 const errMsg = (e: unknown, fallback: string) =>
  (e instanceof AxiosError ? e.response?.data?.message : undefined) ?? fallback;
 
@@ -28,7 +29,7 @@ export default function PrTemplatesListPage() {
  const navigate = useNavigate();
  const qc = useQueryClient();
  const { can } = usePermission();
- const [filters, setFilters] = useState<Record<string, unknown>>({ page: 1, per_page: 25 });
+ const [filters, setFilters] = useUrlFilters<Record<string, unknown>>({ page: 1, per_page: 25 });
  const [deleteId, setDeleteId] = useState<string | null>(null);
  const [restoreId, setRestoreId] = useState<string | null>(null);
  const [scope, setScope] = useState<ArchiveScope>('active');
@@ -156,7 +157,8 @@ export default function PrTemplatesListPage() {
  <div className="px-5 py-4">
  <DataTable columns={columns} data={data.data} meta={data.meta} 
  onRowClick={(r) => navigate(`/purchasing/pr-templates/${r.id}/edit`)}
- onPageChange={(page) => setFilters(f => ({ ...f, page }))} />
+ onPageChange={(page) => setFilters(f => ({ ...f, page }))}
+ onPageSizeChange={(per_page) => setFilters(f => ({ ...f, per_page, page: 1 }))} />
  </div>
  )}
 

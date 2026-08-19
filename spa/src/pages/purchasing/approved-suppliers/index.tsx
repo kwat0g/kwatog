@@ -165,6 +165,7 @@ export default function ApprovedSuppliersPage() {
  data={data.data}
  meta={data.meta}
  onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+ onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
  />
  </div>
  )}
@@ -263,13 +264,13 @@ function ApprovedSupplierForm({ onClose, onSaved }: { onClose: () => void; onSav
  <div className="space-y-3">
  <Select label="Item" required {...register('item_id')} error={errors.item_id?.message}>
  <option value="">Select item…</option>
- {items.data?.data.map((it) => (
+ {items.data?.data?.map((it) => (
  <option key={it.id} value={it.id}>{it.code} — {it.name}</option>
  ))}
  </Select>
  <Select label="Vendor" required {...register('vendor_id')} error={errors.vendor_id?.message}>
  <option value="">Select vendor…</option>
- {vendors.data?.data.map((v) => (
+ {vendors.data?.data?.map((v) => (
  <option key={v.id} value={v.id}>{v.name}</option>
  ))}
  </Select>

@@ -13,6 +13,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { formatDate } from '@/lib/formatDate';
 import type { JobApplication, ApplicationStage } from '@/types/recruitment';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 const STAGE_CHIP: Record<ApplicationStage, 'neutral' | 'info' | 'warning' | 'success' | 'danger'> = {
  new: 'neutral',
  screening: 'info',
@@ -35,7 +36,7 @@ export default function ApplicationsListPage() {
  const navigate = useNavigate();
  const [searchParams] = useSearchParams();
  const [stageFilter, setStageFilter] = useState(searchParams.get('stage') ?? '');
- const [filters, setFilters] = useState<AppFilters>({
+ const [filters, setFilters] = useUrlFilters<AppFilters>({
  page: 1, per_page: 25, sort: 'applied_at', direction: 'desc',
  });
 
@@ -91,11 +92,6 @@ export default function ApplicationsListPage() {
  <PageHeader
  title="Applications"
  subtitle={data ? `${data.meta?.total ?? 0} applications` : undefined}
- breadcrumbs={[
- { label: 'HR', href: '/hr/employees' },
- { label: 'Recruitment', href: '/hr/recruitment' },
- { label: 'Applications' },
- ]}
  />
 
  <Tabs
@@ -141,6 +137,7 @@ export default function ApplicationsListPage() {
  data={data.data}
  meta={data.meta}
  onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+ onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
  onSort={(sort, direction) => setFilters((f) => ({ ...f, sort, direction, page: 1 }))}
  currentSort={filters.sort}
  currentDirection={filters.direction}

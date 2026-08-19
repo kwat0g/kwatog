@@ -18,6 +18,9 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import type { CreateComplaintData, ComplaintSeverity } from '@/types/crm';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  customer_id: z.string().min(1, 'Customer is required'),
  product_id: z.string().optional().or(z.literal('')),
@@ -46,9 +49,7 @@ export default function CreateComplaintPage() {
  queryFn: () => complaintsApi.options(),
  });
 
- const {
- register, handleSubmit, setError, formState: { errors },
- } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  customer_id: '',
@@ -60,6 +61,9 @@ export default function CreateComplaintPage() {
  affected_quantity: 0,
  },
  });
+ const {
+ register, handleSubmit, setError, formState: { errors },
+ } = form;
 
  const submit = useMutation({
  mutationFn: (data: CreateComplaintData) => complaintsApi.create(data),
@@ -76,15 +80,13 @@ export default function CreateComplaintPage() {
  }
  },
  });
+ const safety = useFormSafety({ form, saved: submit.isSuccess });
 
  return (
  <div>
  <PageHeader title="File complaint" subtitle="An NCR will be auto-created on submit." backTo="/crm/complaints" backLabel="Complaints"
- breadcrumbs={[
- { label: 'CRM' },
- { label: 'Complaints', href: '/crm/complaints' },
- { label: 'File complaint' },
- ]} />
+ />
+      <FormDraftBanner safety={safety} />
  <form
  onSubmit={handleSubmit((v) =>
  submit.mutate({
@@ -104,13 +106,13 @@ export default function CreateComplaintPage() {
  <div className="grid grid-cols-2 gap-3">
  <Select label="Customer" required {...register('customer_id')} error={errors.customer_id?.message}>
  <option value="">Select…</option>
- {customers.data?.data.map((c) => (
+ {customers.data?.data?.map((c) => (
  <option key={c.id} value={c.id}>{c.name}</option>
  ))}
  </Select>
  <Select label="Product (optional)" {...register('product_id')} error={errors.product_id?.message}>
  <option value="">— None —</option>
- {products.data?.data.map((p) => (
+ {products.data?.data?.map((p) => (
  <option key={p.id} value={p.id}>{p.part_number} — {p.name}</option>
  ))}
  </Select>
@@ -118,7 +120,7 @@ export default function CreateComplaintPage() {
  </Panel>
 
  <Panel title="Classification">
- <div className="grid grid-cols-3 gap-3">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
  <Input label="Received date" type="date" required
  {...register('received_date')} error={errors.received_date?.message} />
  <Select label="Severity" required {...register('severity')} error={errors.severity?.message}>
@@ -135,12 +137,12 @@ export default function CreateComplaintPage() {
  {...register('description')} error={errors.description?.message} />
  </Panel>
 
- <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+ <FormActions>
  <Button variant="secondary" type="button" onClick={() => navigate(-1)}>Cancel</Button>
  <Button variant="primary" type="submit" loading={submit.isPending}>
  {submit.isPending ? 'Opening...' : 'Open complaint'}
  </Button>
- </div>
+ </FormActions>
  </div>
  </form>
  </div>

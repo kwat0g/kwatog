@@ -44,7 +44,7 @@ export function OeeGaugeChart({ oee, availability, performance, quality, display
  </div>
 
  {/* A × P × Q breakdown */}
- <div className="grid grid-cols-3 gap-4 text-center text-sm w-full">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-center text-sm w-full">
  <div>
  <div className="font-mono tabular-nums text-base font-medium" style={{ color: colorFor(availability, displayPolicy) }}>
  {availability == null ? '—' : `${(availability * 100).toFixed(1)}%`}

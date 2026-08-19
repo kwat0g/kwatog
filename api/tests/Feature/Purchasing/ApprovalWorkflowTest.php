@@ -250,7 +250,7 @@ class ApprovalWorkflowTest extends TestCase
         // Attempting to approve with a production_manager before step 1 (department_head)
         // has been approved should fail because the next pending step is step 1
         // which requires 'department_head' role
-        $this->expectException(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+        $this->expectException(\App\Common\Exceptions\ForbiddenActionException::class);
         $approvals->approve($submitted, $step2Approver, 'Trying to skip step 1');
     }
 }

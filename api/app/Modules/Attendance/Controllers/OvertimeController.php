@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Attendance\Controllers;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\HashIdFilter;
 use App\Modules\Attendance\Models\OvertimeRequest;
 use App\Modules\Attendance\Requests\ApproveOvertimeRequestRequest;
@@ -65,7 +66,7 @@ class OvertimeController
         // 422 like the Leave/Loan controllers, instead of leaking an unhandled 500.
         try {
             $ot = $this->service->approve($overtime, $request->user(), $request->input('remarks'));
-        } catch (\RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
 
@@ -76,7 +77,7 @@ class OvertimeController
     {
         try {
             $ot = $this->service->reject($overtime, $request->user(), $request->input('reason'));
-        } catch (\RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
 
@@ -113,7 +114,7 @@ class OvertimeController
 
         try {
             $ot = $this->service->cancel($overtime, $user, $reason);
-        } catch (\RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
 

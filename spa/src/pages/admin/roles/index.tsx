@@ -20,6 +20,7 @@ import { archiveToTrashed, type ArchiveScope } from '@/lib/archiveScope';
 import { usePermission } from '@/hooks/usePermission';
 import type { RoleListParams } from '@/api/admin/roles';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 /**
  * Series R — Task R1.
  *
@@ -42,7 +43,7 @@ export default function RolesIndexPage() {
  if (row.last_modified_at) return '(unknown user)';
  return null;
  };
- const [filters, setFilters] = useState<RoleListParams>({
+ const [filters, setFilters] = useUrlFilters<RoleListParams>({
  page: 1,
  per_page: 25,
  sort: 'name',
@@ -316,6 +317,7 @@ const remove = useMutation({
  data={data.data}
  meta={data.meta}
  onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+ onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
  onSort={(sort, direction) => setFilters((f) => ({ ...f, sort, direction, page: 1 }))}
  currentSort={filters.sort}
  currentDirection={filters.direction}

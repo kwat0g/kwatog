@@ -19,6 +19,8 @@ import { usePermission } from '@/hooks/usePermission';
 import { adminUsersApi } from '@/api/admin/users';
 import { client } from '@/api/client';
 import { formatDateTime } from '@/lib/formatDate';
+import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 import type {
  AdminUserListItem,
  AdminUserListFilters,
@@ -36,7 +38,7 @@ export default function AdminUsersIndexPage() {
  const navigate = useNavigate();
  const queryClient = useQueryClient();
  const { can } = usePermission();
- const [filters, setFilters] = useState<AdminUserListFilters>({
+ const [filters, setFilters] = useUrlFilters<AdminUserListFilters>({
  page: 1,
  per_page: 25,
  sort: 'last_activity',
@@ -200,15 +202,7 @@ export default function AdminUsersIndexPage() {
  )}
 
  {data && data.data.length === 0 && (
- <EmptyState
- icon="inbox"
- title="No users found"
- description={
- filters.search
- ? `No users match "${filters.search}". Try a different search.`
- : 'No users match the current filters.'
- }
- />
+ <ListEmptyState searchTerm={filters.search as string | undefined} />
  )}
 
  {data && data.data.length > 0 && (
@@ -218,6 +212,7 @@ export default function AdminUsersIndexPage() {
  data={data.data}
  meta={data.meta}
  onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+ onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
  onSort={(sort, direction) => setFilters((f) => ({ ...f, sort, direction, page: 1 }))}
  currentSort={filters.sort}
  currentDirection={filters.direction}

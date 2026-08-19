@@ -22,8 +22,8 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Validator;
 use Symfony\Component\HttpFoundation\Response;
-use RuntimeException;
 use App\Common\Services\SettingsService;
+use App\Common\Exceptions\BusinessRuleException;
 
 class PurchaseRequestController
 {
@@ -79,7 +79,7 @@ class PurchaseRequestController
     {
         try {
             $pr = $this->service->update($purchaseRequest, $request->validated());
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
         return new PurchaseRequestResource($pr);
@@ -88,7 +88,7 @@ class PurchaseRequestController
     public function destroy(PurchaseRequest $purchaseRequest): JsonResponse
     {
         try { $this->service->delete($purchaseRequest); }
-        catch (RuntimeException $e) { return response()->json(['message' => $e->getMessage()], 422); }
+        catch (BusinessRuleException $e) { return response()->json(['message' => $e->getMessage()], 422); }
         return response()->json(null, 204);
     }
 
@@ -101,35 +101,35 @@ class PurchaseRequestController
     public function submit(PurchaseRequest $purchaseRequest): PurchaseRequestResource
     {
         try { $pr = $this->service->submit($purchaseRequest); }
-        catch (RuntimeException $e) { abort(422, $e->getMessage()); }
+        catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
         return new PurchaseRequestResource($this->service->show($pr));
     }
 
     public function acknowledgeBudget(Request $request, PurchaseRequest $purchaseRequest): PurchaseRequestResource
     {
         try { $pr = $this->service->acknowledgeBudget($purchaseRequest, $request->user()); }
-        catch (RuntimeException $e) { abort(422, $e->getMessage()); }
+        catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
         return new PurchaseRequestResource($this->service->show($pr));
     }
 
     public function approve(Request $request, PurchaseRequest $purchaseRequest): PurchaseRequestResource
     {
         try { $pr = $this->service->approve($purchaseRequest, $request->user(), $request->input('remarks')); }
-        catch (RuntimeException $e) { abort(422, $e->getMessage()); }
+        catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
         return new PurchaseRequestResource($this->service->show($pr));
     }
 
     public function reject(RejectPurchaseRequestRequest $request, PurchaseRequest $purchaseRequest): PurchaseRequestResource
     {
         try { $pr = $this->service->reject($purchaseRequest, $request->user(), $request->validated()['reason']); }
-        catch (RuntimeException $e) { abort(422, $e->getMessage()); }
+        catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
         return new PurchaseRequestResource($this->service->show($pr));
     }
 
     public function cancel(PurchaseRequest $purchaseRequest): PurchaseRequestResource
     {
         try { $pr = $this->service->cancel($purchaseRequest); }
-        catch (RuntimeException $e) { abort(422, $e->getMessage()); }
+        catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
         return new PurchaseRequestResource($this->service->show($pr));
     }
 
@@ -186,7 +186,7 @@ class PurchaseRequestController
     {
         try {
             $pos = $this->poService->convertFromPr($purchaseRequest, $request->validated()['vendor_map'], $request->user());
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return response()->json([

@@ -15,6 +15,8 @@ use App\Modules\Purchasing\Exceptions\ThreeWayMatchException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use App\Common\Exceptions\BusinessRuleException;
+use App\Modules\Accounting\Exceptions\ClosedPeriodException;
 
 class BillController
 {
@@ -50,7 +52,7 @@ class BillController
                 'code'              => 'three_way_match_blocked',
                 'three_way_match'   => $e->details,
             ], 422);
-        } catch (\RuntimeException $e) {
+        } catch (BusinessRuleException|ClosedPeriodException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return (new BillResource($bill))->response()->setStatusCode(201);
@@ -63,6 +65,12 @@ class BillController
             'allow_override' => ['nullable', 'boolean'],
             'override_reason' => ['nullable', 'string', 'max:1000'],
         ]);
+        // This residual arm was `catch (\Throwable)`, i.e. the same leak as the
+        // \RuntimeException arms but total: every SQL fault, every abort(), and
+        // BillService's "Required account {code} not found in COA" all came back
+        // as a 422 telling the AP clerk to fix the bill. It is not in the 39-file
+        // \RuntimeException set the task named, but it is one method away from
+        // store() and strictly worse, so it is narrowed with them.
         try {
             $bill = $this->service->postDraft(
                 $bill,
@@ -76,7 +84,7 @@ class BillController
                 'code' => 'three_way_match_blocked',
                 'three_way_match' => $e->details,
             ], 422);
-        } catch (\Throwable $e) {
+        } catch (BusinessRuleException|ClosedPeriodException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
@@ -87,7 +95,7 @@ class BillController
     {
         try {
             $bill = $this->service->cancel($bill, $request->user());
-        } catch (\RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return new BillResource($bill);
@@ -97,7 +105,7 @@ class BillController
     {
         try {
             $payment = $this->service->recordPayment($bill, $request->validated(), $request->user());
-        } catch (\RuntimeException $e) {
+        } catch (BusinessRuleException|ClosedPeriodException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return (new BillPaymentResource($payment))->response()->setStatusCode(201);

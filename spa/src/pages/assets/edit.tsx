@@ -5,7 +5,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
-import type { AxiosError } from 'axios';
 import { assetsApi } from '@/api/assets';
 import { departmentsApi } from '@/api/hr/departments';
 import { Button } from '@/components/ui/Button';
@@ -15,9 +14,11 @@ import { Textarea } from '@/components/ui/Textarea';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { onFormInvalid } from '@/lib/formErrors';
-import type { ApiValidationError } from '@/types';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  name: z.string().min(1, 'Name is required').max(200),
  description: z.string().max(5000).optional().or(z.literal('')),
@@ -52,7 +53,7 @@ export default function EditAssetPage() {
  queryFn: () => assetsApi.options(),
  });
 
- const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  values: data
  ? {
@@ -68,6 +69,7 @@ export default function EditAssetPage() {
  }
  : undefined,
  });
+ const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = form;
 
  const mutation = useMutation({
  mutationFn: (formData: FormValues) =>
@@ -85,16 +87,11 @@ export default function EditAssetPage() {
  toast.success(`Asset ${asset.asset_code} updated.`);
  navigate(`/assets/${asset.id}`);
  },
- onError: (err: AxiosError<ApiValidationError>) => {
- if (err.response?.status === 422 && err.response.data.errors) {
- Object.entries(err.response.data.errors).forEach(([k, v]) =>
- setError(k as keyof FormValues, { type: 'server', message: v[0] }));
- toast.error(err.response?.data?.message || 'Validation failed.');
- } else {
- toast.error('Failed to update asset.');
- }
+ onError: (err) => {
+   applyServerValidationErrors(err, setError, 'Failed to update asset.');
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  if (isLoading) return <SkeletonDetail />;
  if (isError || !data) {
@@ -115,6 +112,7 @@ export default function EditAssetPage() {
  backTo={`/assets/${id}`}
  backLabel={data.asset_code}
  />
+      <FormDraftBanner safety={safety} />
  <form
  onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())}
  className="max-w-3xl mx-auto px-5 py-4"
@@ -153,7 +151,7 @@ export default function EditAssetPage() {
 
  <fieldset className="mb-6">
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Acquisition</legend>
- <div className="grid grid-cols-3 gap-3">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
  <Input
  label="Acquisition date"
  type="date"
@@ -188,7 +186,7 @@ export default function EditAssetPage() {
  </div>
  </fieldset>
 
- <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate(`/assets/${id}`)}>
  Cancel
  </Button>
@@ -200,7 +198,7 @@ export default function EditAssetPage() {
  >
  {mutation.isPending ? 'Saving…' : 'Save changes'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

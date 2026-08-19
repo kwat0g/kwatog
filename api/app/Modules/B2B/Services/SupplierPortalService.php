@@ -216,6 +216,8 @@ class SupplierPortalService
         $folder = "portal/shipping-docs/{$purchaseOrder->id}";
         $path = $file->store($folder, 'local');
         if ($path === false) {
+            // Storage fault. The supplier already passed validation and the
+            // upload itself succeeded; there is nothing on their side to fix.
             throw new \RuntimeException('Unable to store the shipping document.');
         }
 
@@ -383,6 +385,7 @@ class SupplierPortalService
                     $folder = "portal/supplier-invoices/{$bill->id}";
                     $storedPath = $file->store($folder, 'local');
                     if ($storedPath === false) {
+                        // Storage fault, as above.
                         throw new \RuntimeException('Unable to store the supplier invoice.');
                     }
 

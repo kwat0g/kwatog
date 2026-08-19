@@ -181,10 +181,9 @@ export default function GrnDetailPage() {
   <PageHeader
   title={<span className="font-mono">{data.grn_number}</span>}
   backTo="/inventory/grn" backLabel="GRNs"
-  breadcrumbs={[{ label: 'Inventory', href: '/inventory' }, { label: 'GRNs', href: '/inventory/grn' }, { label: data.grn_number }]}
   actions={
    <div className="flex items-center gap-2">
-   <Chip variant={variant}>{grnOptions?.statuses.find((option) => option.value === data.status)?.label ?? data.status}</Chip>
+   <Chip variant={variant}>{grnOptions?.statuses?.find((option) => option.value === data.status)?.label ?? data.status}</Chip>
    {incomingQcNeedsAttention && can('quality.inspections.manage') && (
     <Button variant="secondary" size="sm" icon={<LuRefreshCw size={14} />} onClick={() => retryIncomingQc.mutate()} loading={retryIncomingQc.isPending}>
      Retry incoming QC
@@ -272,7 +271,7 @@ export default function GrnDetailPage() {
    })} />
   </Panel>
   <Panel title="Header">
-   <dl className="grid grid-cols-4 gap-y-3 gap-x-6 text-sm">
+   <dl className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-y-3 gap-x-6 text-sm">
    <div><dt className="text-2xs uppercase tracking-wider text-muted">PO</dt><dd className="font-mono">{data.purchase_order?.po_number ?? '—'}</dd></div>
    <div><dt className="text-2xs uppercase tracking-wider text-muted">Vendor</dt><dd>{data.vendor?.name ?? '—'}</dd></div>
    <div><dt className="text-2xs uppercase tracking-wider text-muted">Received</dt><dd className="font-mono">{formatDate(data.received_date)}</dd></div>

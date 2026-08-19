@@ -23,6 +23,7 @@ import { usePermission } from '@/hooks/usePermission';
 import type { AxiosError } from 'axios';
 import type { NcrTemplate } from '@/types/quality';
 
+import { showUndoToast } from '@/lib/undoToast';
 const SEVERITY_CHIP: Record<string, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
  minor: 'neutral',
  major: 'warning',
@@ -54,8 +55,14 @@ const [deleteId, setDeleteId] = useState<string | null>(null);
 
 const deleteMut = useMutation({
   mutationFn: (id: string) => ncrTemplatesApi.destroy(id),
-  onSuccess: () => {
-  toast.success('Template archived');
+  onSuccess: (_data, archivedId: string) => {
+  showUndoToast({
+    message: 'Template archived',
+    // Archiving is reversible and one click; the restore endpoint is right
+    // here. An undo is the honest price for it — a modal asking whether the
+    // user meant it is a toll booth on something trivially taken back.
+    onUndo: () => restoreMut.mutate(archivedId),
+  });
   queryClient.invalidateQueries({ queryKey: ['quality', 'ncr-templates'] });
   },
   onError: (e: AxiosError<{ message?: string }>) => {

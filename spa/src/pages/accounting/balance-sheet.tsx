@@ -42,7 +42,7 @@ export default function BalanceSheetPage() {
  {isLoading && !data && <SkeletonTable columns={2} rows={10} />}
  {isError && <EmptyState icon="alert-circle" title="Failed to generate balance sheet" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />}
  {data && (
- <div className="px-5 py-4 grid grid-cols-3 gap-4">
+ <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
  <Section title="Assets" rows={data.assets.accounts} total={data.assets.total} />
  <Section title="Liabilities" rows={data.liabilities.accounts} total={data.liabilities.total} />
  <Section title="Equity" rows={data.equity.accounts} total={data.equity.total} />

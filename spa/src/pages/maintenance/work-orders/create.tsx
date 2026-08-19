@@ -5,7 +5,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
-import type { AxiosError } from 'axios';
 import { workOrdersApi } from '@/api/maintenance/workOrders';
 import { machinesApi } from '@/api/mrp/machines';
 import { moldsApi } from '@/api/mrp/molds';
@@ -13,9 +12,11 @@ import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { onFormInvalid } from '@/lib/formErrors';
-import type { ApiValidationError } from '@/types';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
   maintainable_type: z.string().min(1, 'Target type is required'),
   maintainable_id: z.string().min(1, 'Target ID required'),
@@ -30,10 +31,11 @@ export default function CreateMaintenanceWorkOrderPage() {
  const qc = useQueryClient();
  const { data: options } = useQuery({ queryKey: ['maintenance', 'work-order-options'], queryFn: () => workOrdersApi.options() });
 
- const { register, handleSubmit, setError, watch, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: { maintainable_type: '', maintainable_id: '', type: '', priority: '' },
  });
+ const { register, handleSubmit, setError, watch, formState: { errors, isSubmitting } } = form;
 
  const maintainableType = watch('maintainable_type');
  const machines = useQuery({ queryKey: ['mrp', 'machines'], queryFn: () => machinesApi.list({ per_page: 200 }), enabled: maintainableType === 'machine' });
@@ -52,19 +54,16 @@ export default function CreateMaintenanceWorkOrderPage() {
  toast.success(`Work order ${wo.mwo_number} created.`);
  navigate(`/maintenance/work-orders/${wo.id}`);
  },
- onError: (error: AxiosError<ApiValidationError>) => {
- if (error.response?.status === 422 && error.response.data.errors) {
- Object.entries(error.response.data.errors).forEach(([field, messages]) => {
- setError(field as keyof FormValues, { type: 'server', message: messages[0] });
- });
- toast.error(error.response?.data?.message || 'Validation failed.');
- }
+ onError: (error) => {
+   applyServerValidationErrors(error, setError, 'Failed to create the maintenance work order.');
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  return (
  <div>
- <PageHeader title="New maintenance work order" backTo="/maintenance/work-orders" backLabel="Work orders" breadcrumbs={[{ label: 'Maintenance', href: '/maintenance' }, { label: 'Work Orders', href: '/maintenance/work-orders' }, { label: 'New' }]} />
+ <PageHeader title="New maintenance work order" backTo="/maintenance/work-orders" backLabel="Work orders" />
+      <FormDraftBanner safety={safety} />
 
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-4">
  <fieldset className="mb-6">
@@ -96,12 +95,12 @@ export default function CreateMaintenanceWorkOrderPage() {
  <Textarea label="Description" {...register('description')} rows={5} error={errors.description?.message} required />
  </fieldset>
 
- <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/maintenance/work-orders')}>Cancel</Button>
  <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending} loading={mutation.isPending}>
  {mutation.isPending ? 'Creating…' : 'Create work order'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

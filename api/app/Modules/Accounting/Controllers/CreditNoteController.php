@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Controllers;
 
+use App\Common\Exceptions\BusinessRuleException;
+use App\Modules\Accounting\Exceptions\ClosedPeriodException;
 use App\Modules\Accounting\Models\CreditNote;
 use App\Modules\Accounting\Requests\ApplyCreditNoteRequest;
 use App\Modules\Accounting\Requests\StoreCreditNoteRequest;
@@ -31,7 +33,7 @@ class CreditNoteController
     {
         try {
             $cn = $this->service->create($request->validated(), $request->user());
-        } catch (\RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return new CreditNoteResource($cn);
@@ -41,7 +43,7 @@ class CreditNoteController
     {
         try {
             $cn = $this->service->finalize($creditNote, $request->user());
-        } catch (\RuntimeException $e) {
+        } catch (BusinessRuleException|ClosedPeriodException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return new CreditNoteResource($cn);
@@ -51,7 +53,7 @@ class CreditNoteController
     {
         try {
             $this->service->apply($creditNote, $request->validated(), $request->user());
-        } catch (\RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return new CreditNoteResource($this->service->show($creditNote->fresh()));

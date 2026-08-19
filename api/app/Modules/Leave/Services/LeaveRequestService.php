@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Leave\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Services\ApprovalService;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\OutboxService;
@@ -17,20 +18,82 @@ use App\Modules\Leave\Events\LeaveRequestApproved;
 use App\Modules\Leave\Events\LeaveRequestPendingHR;
 use App\Modules\Leave\Events\LeaveRequestRejected;
 use App\Modules\Leave\Events\LeaveRequestSubmitted;
+use App\Common\Support\DepartmentScope;
 use App\Common\Support\TrashedFilter;
 use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Leave\Models\LeaveType;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class LeaveRequestService
 {
+    /**
+     * Stand-in for the message of an exception that is not a business rule.
+     *
+     * The bulk-approve endpoints put `reason` in front of the user — the SPA
+     * renders it into a toast verbatim. `\Throwable::getMessage()` there meant a
+     * QueryException would put `SQLSTATE[23505]: Unique violation … insert into
+     * "approval_records" …` on screen, table and column names included. Only
+     * `BusinessRuleException` carries copy written to be read; everything else
+     * gets this and a log line with the detail.
+     */
+    private const UNEXPECTED_FAILURE_REASON = 'An unexpected error stopped this request. It has been logged for support.';
+
     public function __construct(
         private readonly DocumentSequenceService $sequences,
         private readonly LeaveBalanceService $balances,
         private readonly ApprovalService $approvals,
     ) {}
+
+    /**
+     * Record the detail the user-facing `reason` deliberately withholds.
+     */
+    private function logBulkApproveFailure(string $stage, int $id, \Throwable $e): void
+    {
+        Log::error('Bulk leave approval failed unexpectedly.', [
+            'stage'           => $stage,
+            'leave_request_id' => $id,
+            'exception'       => $e::class,
+            'message'         => $e->getMessage(),
+        ]);
+    }
+
+    /**
+     * Decide what a failed row tells the user, and log the cases it withholds.
+     *
+     * Two arms, one per class of authored copy — no inference:
+     *
+     * 1. `BusinessRuleException` — a rule the record state violated ("Only
+     *    requests pending HR approval can be approved here.").
+     * 2. `ForbiddenActionException` — a refusal aimed at the actor. Both of
+     *    ApprovalService's guards raise it, and both are routine and
+     *    deterministic in a batch: a department head whose queue includes their
+     *    own request hits the segregation-of-duties guard, and an approver who
+     *    holds the permission but not the step's `role_slug` hits the wrong-role
+     *    guard on every row. `chain-leave.spec.ts` asserts the SoD sentence
+     *    reaches the user on the single-row path; the bulk path must agree.
+     * 3. Anything else gets the stand-in, and a log line with the real detail.
+     *
+     * This arm used to test `HttpExceptionInterface` and a 4xx status, because
+     * the two guards were `abort(403, …)` and nothing typed them — the arm had to
+     * infer "was this sentence written to be read" from a status code. Typing
+     * them (ForbiddenActionException) removed the guess: the inference is gone,
+     * and any *other* 4xx HttpException reaching here is now deliberately
+     * withheld, because an `abort()` raised by framework plumbing (a 404 from a
+     * route binding, a 419, a 429) is not copy for this toast.
+     */
+    private function bulkFailureReason(string $stage, int $id, \Throwable $e): string
+    {
+        if ($e instanceof BusinessRuleException || $e instanceof ForbiddenActionException) {
+            return $e->getMessage();
+        }
+
+        $this->logBulkApproveFailure($stage, $id, $e);
+
+        return self::UNEXPECTED_FAILURE_REASON;
+    }
 
     public function list(array $filters, ?User $user = null): LengthAwarePaginator
     {
@@ -64,29 +127,28 @@ class LeaveRequestService
         if (!empty($filters['from'])) $q->where('start_date', '>=', $filters['from']);
         if (!empty($filters['to'])) $q->where('end_date', '<=', $filters['to']);
 
-        // Row-level filtering. Admin and HR Officer see everything.
-        // Department Head sees own + their department's requests.
-        // Everyone else sees only their own.
-        if ($user) {
-            $roleSlug = $user->role?->slug;
-            $isAdmin = $roleSlug === 'system_admin';
-            $isHr    = $user->hasPermission('leave.approve_hr');
-            if (! $isAdmin && ! $isHr) {
-                $isDeptHead = $user->hasPermission('leave.approve_dept');
-                $employeeId = $user->employee_id;
-                if ($isDeptHead) {
-                    $deptId = \App\Modules\HR\Models\Employee::query()->whereKey($employeeId)->value('department_id');
-                    $q->where(function ($qq) use ($employeeId, $deptId) {
-                        $qq->where('employee_id', $employeeId);
-                        if ($deptId) {
-                            $qq->orWhereHas('employee', fn ($e) => $e->where('department_id', $deptId));
-                        }
-                    });
-                } else {
-                    $q->where('employee_id', $employeeId);
-                }
-            }
-        }
+        /*
+         * Row-level filtering, delegated to the shared three-tier scope:
+         *   leave.approve_hr  → every request
+         *   leave.approve_dept→ own department (via the employee relation) + own
+         *   otherwise         → own only, and nothing at all when unlinked
+         *
+         * This was a hand-rolled copy of that ladder, and it opened with
+         * `role?->slug === 'system_admin'` — a term that could never change the
+         * outcome, since hasPermission('leave.approve_hr') is already true for
+         * that role. `leave_requests` carries no department of its own, which is
+         * why DepartmentScope now takes a relation to reach it.
+         */
+        DepartmentScope::apply(
+            $q,
+            $user,
+            viewAllPermission: 'leave.approve_hr',
+            departmentPermission: 'leave.approve_dept',
+            deptColumn: 'department_id',
+            selfColumn: 'employee_id',
+            selfId: $user?->employee_id ? (int) $user->employee_id : null,
+            deptRelation: 'employee',
+        );
 
         return $q->orderByDesc('created_at')->paginate(min((int) ($filters['per_page'] ?? 25), 100));
     }
@@ -247,6 +309,8 @@ class LeaveRequestService
      * T1.7 — Bulk approve LeaveRequests at the department-head stage.
      * Per-row try/catch so one bad row doesn't abort the batch.
      *
+     * `failed[].reason` reaches the user verbatim — see UNEXPECTED_FAILURE_REASON.
+     *
      * @param array<int, int> $ids raw integer IDs (post HashID decode)
      * @return array{approved: array<int, LeaveRequest>, failed: array<int, array{id:int, reason:string}>}
      */
@@ -264,7 +328,7 @@ class LeaveRequestService
                 }
                 $approved[] = $this->approveDept($req, $approver, $remarks);
             } catch (\Throwable $e) {
-                $failed[] = ['id' => $id, 'reason' => $e->getMessage()];
+                $failed[] = ['id' => $id, 'reason' => $this->bulkFailureReason('dept', $id, $e)];
             }
         }
         return ['approved' => $approved, 'failed' => $failed];
@@ -273,6 +337,8 @@ class LeaveRequestService
     /**
      * T1.7 — Bulk approve LeaveRequests at the HR-officer stage.
      * Per-row try/catch so one bad row doesn't abort the batch.
+     *
+     * `failed[].reason` reaches the user verbatim — see UNEXPECTED_FAILURE_REASON.
      *
      * @param array<int, int> $ids
      * @return array{approved: array<int, LeaveRequest>, failed: array<int, array{id:int, reason:string}>}
@@ -291,7 +357,7 @@ class LeaveRequestService
                 }
                 $approved[] = $this->approveHR($req, $approver, $remarks);
             } catch (\Throwable $e) {
-                $failed[] = ['id' => $id, 'reason' => $e->getMessage()];
+                $failed[] = ['id' => $id, 'reason' => $this->bulkFailureReason('hr', $id, $e)];
             }
         }
         return ['approved' => $approved, 'failed' => $failed];

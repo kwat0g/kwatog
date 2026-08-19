@@ -27,11 +27,7 @@ export default function ProductDetailPage() {
  return (
  <div>
  <PageHeader title="Product" backTo="/crm/products" backLabel="Products"
- breadcrumbs={[
- { label: 'CRM' },
- { label: 'Products', href: '/crm/products' },
- { label: 'Product' },
- ]} />
+ />
  <SkeletonDetail />
  </div>
  );
@@ -40,11 +36,7 @@ export default function ProductDetailPage() {
  return (
  <div>
  <PageHeader title="Product" backTo="/crm/products" backLabel="Products"
- breadcrumbs={[
- { label: 'CRM' },
- { label: 'Products', href: '/crm/products' },
- { label: 'Product' },
- ]} />
+ />
  <EmptyState
  icon="alert-circle"
  title="Failed to load product"
@@ -69,11 +61,6 @@ export default function ProductDetailPage() {
  subtitle={data.name}
  backTo="/crm/products"
  backLabel="Products"
- breadcrumbs={[
- { label: 'CRM' },
- { label: 'Products', href: '/crm/products' },
- { label: data.part_number },
- ]}
  actions={canManage && (
  <Button
  variant="secondary"
@@ -89,7 +76,7 @@ export default function ProductDetailPage() {
  <div className="px-5 py-4 grid gap-4 lg:grid-cols-3">
  <div className="lg:col-span-2 space-y-4">
  <Panel title="Overview">
- <dl className="grid grid-cols-3 gap-x-4 gap-y-3 text-sm">
+ <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3 text-sm">
  <dt className="text-muted">Part number</dt>
  <dd className="col-span-2 font-mono">{data.part_number}</dd>
  <dt className="text-muted">Name</dt>

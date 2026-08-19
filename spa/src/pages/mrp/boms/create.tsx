@@ -28,6 +28,9 @@ import { bomsApi } from '@/api/mrp/boms';
 import type { CreateBomData } from '@/api/mrp/boms';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const itemSchema = z.object({
  item_id: z.string().min(1, 'Item is required'),
  quantity_per_unit: z.string().regex(/^\d+(\.\d{1,4})?$/, 'Use a positive decimal with up to 4 places').refine((v) => Number(v) > 0, 'Must be greater than 0'),
@@ -58,10 +61,7 @@ export default function CreateBomPage() {
 
  const { data: uoms = [] } = useQuery({ queryKey: ['inventory', 'uoms'], queryFn: uomsApi.list, staleTime: 300_000 });
 
- const {
- register, control, handleSubmit, setError, watch,
- formState: { errors, isSubmitting },
- } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  product_id: '',
@@ -69,6 +69,10 @@ export default function CreateBomPage() {
  items: [{ item_id: '', quantity_per_unit: '', unit: '', waste_factor: '' }],
  },
  });
+ const {
+ register, control, handleSubmit, setError, watch,
+ formState: { errors, isSubmitting },
+ } = form;
  const { fields, append, remove } = useFieldArray({ control, name: 'items' });
 
  const watchedItems = watch('items');
@@ -104,10 +108,11 @@ export default function CreateBomPage() {
  }
  },
  });
+ const safety = useFormSafety({ form, saved: create.isSuccess });
 
  // Auto-fill UOM when an item is picked.
  const handleItemPicked = (rowIndex: number, itemId: string) => {
- const picked = items.data?.data.find((it: { id: string; unit_of_measure?: string }) => it.id === itemId);
+ const picked = items.data?.data?.find((it: { id: string; unit_of_measure?: string }) => it.id === itemId);
  if (picked && watchedItems[rowIndex] && !watchedItems[rowIndex].unit) {
  const ev = { target: { value: picked.unit_of_measure, name: `items.${rowIndex}.unit` } };
  register(`items.${rowIndex}.unit`).onChange(ev as never);
@@ -117,6 +122,7 @@ export default function CreateBomPage() {
  return (
  <div>
  <PageHeader title="New BOM" backTo="/mrp/boms" backLabel="BOMs" />
+      <FormDraftBanner safety={safety} />
  <form
  onSubmit={handleSubmit((v) => create.mutate(v), onFormInvalid<FormValues>())}
  className="max-w-4xl mx-auto px-5 py-4"
@@ -126,7 +132,7 @@ export default function CreateBomPage() {
  <div className="grid grid-cols-2 gap-3">
  <Select label="Finished good" required {...register('product_id')} error={errors.product_id?.message}>
  <option value="">Select product…</option>
- {products.data?.data.map((p: { id: string; part_number: string; name: string }) => (
+ {products.data?.data?.map((p: { id: string; part_number: string; name: string }) => (
  <option key={p.id} value={p.id}>{p.part_number} — {p.name}</option>
  ))}
  </Select>
@@ -168,7 +174,7 @@ export default function CreateBomPage() {
  error={errors.items?.[i]?.item_id?.message}
  >
  <option value="">Select item…</option>
- {items.data?.data.map((it: { id: string; code: string; name: string }) => (
+ {items.data?.data?.map((it: { id: string; code: string; name: string }) => (
  <option key={it.id} value={it.id}>{it.code} — {it.name}</option>
  ))}
  </Select>
@@ -233,7 +239,7 @@ export default function CreateBomPage() {
  {errors.items?.message && <p className="mt-2 text-xs text-danger-fg">{errors.items.message as string}</p>}
  </fieldset>
 
- <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/mrp/boms')}>
  Cancel
  </Button>
@@ -245,7 +251,7 @@ export default function CreateBomPage() {
  >
  {create.isPending ? 'Saving…' : 'Save BOM'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

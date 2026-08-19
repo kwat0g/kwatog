@@ -63,11 +63,6 @@ export default function PermissionSearchPage() {
  <PageHeader
  title="Permission Search"
  subtitle="Find which roles have a specific permission"
- breadcrumbs={[
- { label: 'Admin', href: '/admin/users' },
- { label: 'Roles', href: '/admin/roles' },
- { label: 'Permission Search' },
- ]}
  backTo="/admin/roles"
  backLabel="Roles"
  />

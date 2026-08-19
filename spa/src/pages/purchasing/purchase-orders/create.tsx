@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useFieldArray, useForm } from 'react-hook-form';
@@ -21,17 +21,16 @@ import { Select } from '@/components/ui/Select';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { Switch } from '@/components/ui/Switch';
 import { Textarea } from '@/components/ui/Textarea';
-import { DraftRestoreBanner } from '@/components/ui/DraftRestoreBanner';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
-import { useFormDraftAutosave } from '@/hooks/useFormDraftAutosave';
-import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
-import { useAuthStore } from '@/stores/authStore';
 import { formatPeso } from '@/lib/formatNumber';
 import { numberInputProps } from '@/lib/numberInput';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { cn } from '@/lib/cn';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormActions } from '@/components/ui/FormActions';
 const lineSchema = z.object({
   item_id: z.string().min(1, 'Item is required.'),
   description: z.string().trim().min(2, 'Description is required.').max(200),
@@ -63,7 +62,6 @@ type V = z.infer<typeof schema>;
 
 export default function CreatePurchaseOrderPage() {
   const nav = useNavigate();
-  const userId = useAuthStore((s) => s.user?.id);
   const [search] = useSearchParams();
   const prId = search.get('pr_id');
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -97,17 +95,7 @@ export default function CreatePurchaseOrderPage() {
   const vatRate = policies.data?.vat_rate == null ? null : Number(policies.data.vat_rate);
   const vatConfigured = vatStatus === 'VAT Registered' && vatRate !== null;
 
-  const {
-    register,
-    handleSubmit,
-    setError,
-    setValue,
-    control,
-    watch,
-    reset,
-    getValues,
-    formState: { errors, isSubmitting, isDirty },
-  } = useForm<V>({
+    const form = useForm<V>({
     resolver: zodResolver(schema),
     defaultValues: {
       vendor_id: '',
@@ -118,6 +106,16 @@ export default function CreatePurchaseOrderPage() {
       items: [{ item_id: '', description: '', quantity: '', unit: '', unit_price: '' }],
     },
   });
+  const {
+    register,
+    handleSubmit,
+    setError,
+    setValue,
+    control,
+    watch,
+    reset,
+    formState: { errors, isSubmitting },
+  } = form;
   useEffect(() => {
     if (policies.data) setValue('is_vatable', vatConfigured);
   }, [policies.data, setValue, vatConfigured]);
@@ -191,18 +189,17 @@ export default function CreatePurchaseOrderPage() {
       applyServerValidationErrors(e, setError, 'Failed to create PO.');
     },
   });
-
-  const applyDraft = useCallback((data: Record<string, unknown>) => {
-    reset(data as V);
-  }, [reset]);
-  const draft = useFormDraftAutosave({
+  // This page was the only one in the app with draft recovery and an
+  // unsaved-changes guard, hand-wired. It now uses the shared hook so there is
+  // one pattern rather than a reference implementation plus 50 pages without.
+  // The draft stays keyed to the source PR and disabled without one: a PO
+  // draft with no PR behind it cannot be restored into anything.
+  const safety = useFormSafety({
+    form,
+    saved: create.isSuccess,
     formKey: `purchasing.purchase-orders.create.${prId ?? 'new'}`,
-    getValues,
-    setValues: applyDraft,
-    userId,
-    enabled: Boolean(prId) && !create.isSuccess,
+    draft: Boolean(prId),
   });
-  useUnsavedChangesGuard(isDirty && !create.isSuccess);
 
   return (
     <div>
@@ -210,13 +207,9 @@ export default function CreatePurchaseOrderPage() {
         title="New purchase order"
         backTo="/purchasing/purchase-orders"
         backLabel="Purchase orders"
-        breadcrumbs={[
-          { label: 'Purchasing', href: '/purchasing' },
-          { label: 'Purchase orders', href: '/purchasing/purchase-orders' },
-          { label: 'New purchase order' },
-        ]}
         actions={requiresVp ? <Chip variant="warning">VP approval required</Chip> : null}
       />
+      <FormDraftBanner safety={safety} />
       {!prId && (
         <Panel title="Source purchase request">
           <p className="text-sm text-muted mb-3">
@@ -266,15 +259,9 @@ export default function CreatePurchaseOrderPage() {
         }, onFormInvalid<V>())}
         className="max-w-5xl mx-auto px-5 py-4 space-y-4"
       >
-        {draft.hasDraft && (
-          <DraftRestoreBanner
-            ageMs={draft.draftAge}
-            onRestore={draft.restore}
-            onDiscard={draft.discard}
-          />
-        )}
+        <FormDraftBanner safety={safety} inset={false} />
         <Panel title="Header">
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             <Select
               label="Vendor"
               required
@@ -282,7 +269,7 @@ export default function CreatePurchaseOrderPage() {
               error={errors.vendor_id?.message}
             >
               <option value="">Select vendor…</option>
-              {vendors.data?.data.map((v) => (
+              {vendors.data?.data?.map((v) => (
                 <option key={v.id} value={v.id}>
                   {v.name}
                 </option>
@@ -357,7 +344,7 @@ export default function CreatePurchaseOrderPage() {
                       onChange={(e) => onLineItemChange(i, e.target.value)}
                     >
                       <option value="">—</option>
-                      {items.data?.data.map((it) => (
+                      {items.data?.data?.map((it) => (
                         <option key={it.id} value={it.id}>
                           {it.code} — {it.name}
                         </option>
@@ -456,7 +443,7 @@ export default function CreatePurchaseOrderPage() {
             </tbody>
           </table>
         </Panel>
-        <div className="flex justify-end gap-2">
+        <FormActions>
           <Button
             type="button"
             variant="secondary"
@@ -473,7 +460,7 @@ export default function CreatePurchaseOrderPage() {
           >
             Create PO
           </Button>
-        </div>
+        </FormActions>
       </form>
       )}
 

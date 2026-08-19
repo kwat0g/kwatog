@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\MRP\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Modules\MRP\Exceptions\BomStructureException;
+use App\Modules\MRP\Exceptions\MissingBomException;
 use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
@@ -248,7 +250,7 @@ class BomService
     {
         $bom = $this->activeForProduct($productId);
         if (! $bom) {
-            throw new RuntimeException('No active BOM exists for the requested product.');
+            throw new MissingBomException($this->describeMissingBom($productId));
         }
 
         // [item_id => ['item_id' => int, 'item_code' => string, 'item_name' => string, 'qty' => float]]
@@ -281,7 +283,7 @@ class BomService
     {
         $bom = $this->activeForProduct($productId);
         if (! $bom) {
-            throw new RuntimeException('No active BOM exists for the requested product.');
+            throw new MissingBomException($this->describeMissingBom($productId));
         }
 
         return $bom->items->map(fn ($row) => [
@@ -309,7 +311,7 @@ class BomService
     {
         $bom = $this->activeForProduct($productId);
         if (! $bom) {
-            throw new RuntimeException('No active BOM exists for the requested product.');
+            throw new MissingBomException($this->describeMissingBom($productId));
         }
 
         return $this->productionTreeInto($bom, $finishedQuantity, [$productId], 0);
@@ -330,7 +332,7 @@ class BomService
     {
         $bom = $this->activeForProduct($productId);
         if (! $bom) {
-            throw new RuntimeException('No active BOM exists for the requested product.');
+            throw new MissingBomException($this->describeMissingBom($productId));
         }
 
         $accumulator = [];
@@ -370,7 +372,7 @@ class BomService
     {
         $maxDepth = $this->maxExplodeDepth();
         if ($depth > $maxDepth) {
-            throw new RuntimeException(
+            throw new BomStructureException(
                 'BOM explosion exceeded the maximum nesting depth of '
                 . $maxDepth . ' — check for a circular bill of materials.'
             );
@@ -386,7 +388,7 @@ class BomService
 
             if ($subBom !== null) {
                 if (in_array($subBom->product_id, $productPath, true)) {
-                    throw new RuntimeException(
+                    throw new BomStructureException(
                         'Circular bill of materials detected while exploding product '
                         . $subBom->product_id . ' (item ' . ($row->item?->code ?? '?') . ').'
                     );
@@ -423,7 +425,7 @@ class BomService
     {
         $maxDepth = $this->maxExplodeDepth();
         if ($depth > $maxDepth) {
-            throw new RuntimeException(
+            throw new BomStructureException(
                 'BOM explosion exceeded the maximum nesting depth of '
                 . $maxDepth . ' — check for a circular bill of materials.'
             );
@@ -438,7 +440,7 @@ class BomService
             }
 
             if (in_array($subBom->product_id, $productPath, true)) {
-                throw new RuntimeException(
+                throw new BomStructureException(
                     'Circular bill of materials detected while exploding product '
                     . $subBom->product_id . ' (item ' . ($row->item?->code ?? '?') . ').'
                 );
@@ -477,7 +479,7 @@ class BomService
     ): void {
         $maxDepth = $this->maxExplodeDepth();
         if ($depth > $maxDepth) {
-            throw new RuntimeException(
+            throw new BomStructureException(
                 'BOM explosion exceeded the maximum nesting depth of '
                 . $maxDepth . ' — check for a circular bill of materials.'
             );
@@ -502,7 +504,7 @@ class BomService
             }
 
             if (in_array($subBom->product_id, $productPath, true)) {
-                throw new RuntimeException(
+                throw new BomStructureException(
                     'Circular bill of materials detected while exploding product '
                     . $subBom->product_id . ' (item ' . ($row->item?->code ?? '?') . ').'
                 );
@@ -587,5 +589,21 @@ class BomService
             : null;
 
         return $this->subAssemblyCache[$itemCode] = $bom;
+    }
+
+    /**
+     * Message for a missing BOM that names the product.
+     *
+     * These four call sites all raised the same anonymous sentence, which on a
+     * sales order with several lines left the user with no idea which product to
+     * author a BOM for.
+     */
+    private function describeMissingBom(int $productId): string
+    {
+        $product = Product::query()->find($productId, ['part_number', 'name']);
+
+        return $product
+            ? sprintf('No active BOM exists for %s (%s). Author one before confirming.', $product->part_number, $product->name)
+            : 'No active BOM exists for the requested product.';
     }
 }

@@ -40,7 +40,7 @@ export default function PayrollEmployeeDetailPage() {
  if (isError || !data) {
  return (
  <div>
- <PageHeader title="Employee payroll" backTo={`/payroll/periods/${id}`} backLabel="Period" breadcrumbs={[{ label: 'Payroll', href: '/payroll/periods' }, { label: 'Periods', href: '/payroll/periods' }, { label: 'Employee Detail' }]} />
+ <PageHeader title="Employee payroll" backTo={`/payroll/periods/${id}`} backLabel="Period" />
  <EmptyState icon="alert-circle" title="Failed to load payroll"
  action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />
  </div>
@@ -66,11 +66,6 @@ export default function PayrollEmployeeDetailPage() {
  {emp.position && <> · {emp.position}</>}
  </> : null}
  backTo={`/payroll/periods/${id}`} backLabel="Period"
- breadcrumbs={[
- { label: 'Payroll', href: '/payroll/periods' },
- { label: 'Periods', href: '/payroll/periods' },
- { label: emp ? emp.full_name : 'Employee' },
- ]}
  actions={
  <>
  {data.error_message ? <Chip variant="danger">Failed</Chip> : <Chip variant="success">Computed</Chip>}
@@ -111,7 +106,7 @@ export default function PayrollEmployeeDetailPage() {
  </div>
  )}
 
- <div className="grid grid-cols-3 gap-3">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
  <StatCard label="Gross Pay" value={formatPeso(data.gross_pay)} />
  <StatCard label="Total Deductions" value={formatPeso(data.total_deductions)} />
  <StatCard label="Net Pay" value={formatPeso(data.net_pay)} />

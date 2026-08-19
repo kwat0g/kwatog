@@ -133,15 +133,26 @@ CHAIN 3 — HIRE TO RETIRE
 
 | Guard | Location | Blocks | Observed HTTP | Override |
 |---|---|---|---|---|
-| **A** | `ApprovalService::approve/reject` | Submitter approving own approvable | **422** (controller-surfaced) | none |
-| **B** | `JournalEntryService::post()` | Creator posting own JE | **422** | `accounting.journal.self_post_override` |
+| **A** | `ApprovalService::approve/reject` | Submitter approving own approvable | **403** | none |
+| **B** | `JournalEntryService::post()` | Creator posting own JE | **403** | `accounting.journal.self_post_override` |
 | **C** | `PurchaseOrderService::assertVendorSod()` | Approving PO to self-created vendor | 403 — **dormant** until `vendors.created_by` exists | `purchasing.po.sod_override` |
 | **D** | `PayrollAdjustmentService::approve()` | Approving own adjustment | 422 | none |
 | **E** | `OvertimeService::approve()` | Approving own OT | **NOT ENFORCED — see DEFECT-1** | none |
 
-> Part 1 of the original analysis predicted 403 for guards A/B; the live runs show
-> **422** because the controllers surface the abort as a validation-style error.
-> Documented here as the corrected ground truth.
+> Guards A and B were observed as **422** when this table was written, and the
+> note here recorded that as corrected ground truth: the controllers wrapped a
+> `\RuntimeException` arm around the service call and relabelled the abort as a
+> validation error. Both arms have since been narrowed to the classes they were
+> written for (`9fde7dfb`), so each guard now answers with the 403 it always
+> stated — and guard A no longer says it with `abort()` at all, but with
+> `App\Common\Exceptions\ForbiddenActionException`, rendered 403 by
+> `bootstrap/app.php`. Part 1's original prediction of 403 for A/B was right.
+>
+> One exception worth knowing when reading a run: `ReturnRequestService::approve`
+> deliberately re-wraps whatever `ApprovalService` refuses into a
+> `BusinessRuleException` with the same sentence, so the RMA approve endpoint
+> answers guard A with **422**. Every other consumer (Leave, Loans, Purchasing,
+> Salary Adjustment) lets it through as 403.
 
 ---
 

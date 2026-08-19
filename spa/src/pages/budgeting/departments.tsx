@@ -89,10 +89,6 @@ export default function DepartmentBudgetDetailPage() {
       <PageHeader
         title={`${departmentName} Budget`}
         subtitle={`FY ${new Date().getFullYear()} — Monthly Budget vs Actual Breakdown`}
-        breadcrumbs={[
-          { label: 'Budgeting', href: '/budgeting' },
-          { label: `${departmentName} Budget` },
-        ]}
         actions={
           <Link
             to="/budgeting"

@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
 import { LuPlus } from '@/lib/icons';
@@ -14,10 +13,12 @@ import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 import type { Customer } from '@/types/accounting';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { ListEmptyState } from '@/components/ui/ListEmptyState';
 export default function CustomersPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
- const [filters, setFilters] = useState<CustomerListParams>({ page: 1, per_page: 25 });
+ const [filters, setFilters] = useUrlFilters<CustomerListParams>({ page: 1, per_page: 25 });
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['accounting', 'customers', filters],
@@ -58,12 +59,12 @@ export default function CustomersPage() {
  {isLoading && !data && <SkeletonTable columns={6} rows={6} />}
  {isError && <EmptyState icon="alert-circle" title="Failed to load customers" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />}
  {data && data.data.length === 0 && (
- <EmptyState icon="inbox" title="No customers yet" description={can('accounting.customers.manage') ? 'Add your first customer to issue invoices.' : 'Nothing here yet.'}
- action={can('accounting.customers.manage') ? <Button variant="primary" onClick={() => navigate('/accounting/customers/create')}>New customer</Button> : undefined} />
+ <ListEmptyState />
  )}
  {data && data.data.length > 0 && (
  <div className="px-5 py-4"><DataTable
- onRowClick={(r) => navigate(`/accounting/customers/${r.id}`)} columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters((f) => ({ ...f, page }))} /></div>
+ onRowClick={(r) => navigate(`/accounting/customers/${r.id}`)} columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+ onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))} /></div>
  )}
  </div>
  );

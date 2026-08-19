@@ -31,6 +31,7 @@ import { ForecastAccuracyPanel } from '@/components/dashboard/ForecastAccuracyPa
 import { DonutBreakdown, BarComparison } from '@/components/charts';
 import { KpiStrip } from '@/components/dashboard/KpiStrip';
 
+import { LuCheck, LuMinus, LuCircle, LuX } from '@/lib/icons';
 /* ───────────────────────── Typed interface ───────────────────────── */
 
 interface PpcKpi {
@@ -89,17 +90,23 @@ interface WoStatusItem {
 
 interface PpcDashboardData {
  kpis: PpcKpi[];
+ /**
+  * Panels are OPTIONAL: the server gates each one on the viewer's grant and
+  * omits what they may not read (PanelGate). The page grant opens the page,
+  * not every domain it draws from — a plant manager with no accounting grant
+  * gets no financial snapshot. Render what arrives.
+  */
  panels: {
- chain_stages: ChainStage[];
- alerts: AlertItem[];
- machine_util: MachineRow[];
+ chain_stages?: ChainStage[];
+ alerts?: AlertItem[];
+ machine_util?: MachineRow[];
  // D3 — New panels
- mrp_last_run: string;
- unplanned_wos: number;
- production_gantt: ProductionGanttRow[];
- mrp_shortages: MrpShortage[];
- machine_availability: GanttRow[];
- wo_status_breakdown: WoStatusItem[];
+ mrp_last_run?: string;
+ unplanned_wos?: number;
+ production_gantt?: ProductionGanttRow[];
+ mrp_shortages?: MrpShortage[];
+ machine_availability?: GanttRow[];
+ wo_status_breakdown?: WoStatusItem[];
  gantt_horizon_days?: number;
  };
 }
@@ -223,7 +230,7 @@ function MachineUtilPanel({ machines }: { machines: MachineRow[] }) {
  <Chip variant={machineStatusVariant(m.status)}>{m.status_label ?? m.status}</Chip>
  </Td>
  <Td align="right" mono aria-label={m.has_active_wo ? 'Has active work order' : 'No active work order'}>
- {m.has_active_wo ? '✓' : '—'}
+ {m.has_active_wo ? <LuCheck size={12} className="inline text-success-fg" aria-hidden="true" /> : <LuMinus size={12} className="inline text-subtle" aria-hidden="true" />}
  </Td>
  </tr>
  ))}
@@ -408,7 +415,9 @@ function MachineAvailabilityGrid({ rows, horizonDays }: { rows: GanttRow[]; hori
  : 'bg-danger-bg/20';
  return (
  <Td align="center" className={` rounded-sm ${cls}`} key={`${m}-${date}`} aria-label={`${m} on ${date}: ${cell?.status ?? 'unknown'}`}>
- {cell?.status === 'available' ? '✓' : cell?.status === 'busy' ? '●' : '✗'}
+ {cell?.status === 'available' ? <LuCheck size={12} className="inline text-success-fg" aria-hidden="true" />
+ : cell?.status === 'busy' ? <LuCircle size={9} className="inline text-info-fg fill-current" aria-hidden="true" />
+ : <LuX size={12} className="inline text-danger-fg" aria-hidden="true" />}
  </Td>
  );
  })}

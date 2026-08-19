@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\HR;
 
+use App\Common\Exceptions\ForbiddenActionException;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
@@ -14,7 +15,6 @@ use App\Modules\HR\Services\SalaryAdjustmentService;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
 /**
@@ -128,7 +128,7 @@ class SalaryAdjustmentGateTest extends TestCase
             'effective_date'          => '2026-08-01',
         ], $hr);
 
-        $this->expectException(HttpException::class);
+        $this->expectException(ForbiddenActionException::class);
         $this->expectExceptionMessage('cannot act on a record you submitted');
         $svc->approve($adj, $hr);
     }

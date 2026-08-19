@@ -4,7 +4,6 @@ import { useFieldArray, useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { LuPlus, LuTrash2 } from '@/lib/icons';
 import { materialIssuesApi } from '@/api/inventory/material-issues';
@@ -18,9 +17,11 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { numberInputProps } from '@/lib/numberInput';
-import { onFormInvalid } from '@/lib/formErrors';
-import type { ApiValidationError } from '@/types';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const itemSchema = z.object({
  item_id: z.string().min(1, 'Item required'),
  location_id: z.string().min(1, 'Location required'),
@@ -53,7 +54,7 @@ export default function CreateMaterialIssuePage() {
  const qc = useQueryClient();
  const [search] = useSearchParams();
 
- const { register, control, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  work_order_id: search.get('work_order_id') ?? '',
@@ -63,6 +64,7 @@ export default function CreateMaterialIssuePage() {
  items: [{ ...blankLine }],
  },
  });
+ const { register, control, handleSubmit, setError, formState: { errors, isSubmitting } } = form;
  const { fields, append, remove } = useFieldArray({ control, name: 'items' });
 
  const { data: workOrders } = useQuery({
@@ -113,28 +115,23 @@ export default function CreateMaterialIssuePage() {
  toast.success(`Material issue ${slip.slip_number} created.`);
  nav(`/inventory/material-issues/${slip.id}`);
  },
- onError: (e: AxiosError<ApiValidationError>) => {
- if (e.response?.status === 422 && e.response.data?.errors) {
- Object.entries(e.response.data.errors).forEach(([f, msgs]) =>
- setError(f as keyof FormValues, { type: 'server', message: msgs[0] }),
- );
- toast.error('The server flagged some fields. Please review.');
- } else {
- toast.error(e.response?.data?.message ?? 'Failed to create material issue.');
- }
+ onError: (e) => {
+   applyServerValidationErrors(e, setError, 'Failed to record the material issue.');
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  return (
  <div>
  <PageHeader title="New material issue" backTo="/inventory/material-issues" backLabel="Material issues" />
+      <FormDraftBanner safety={safety} />
 
  <form
  onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())}
  className="max-w-5xl mx-auto px-5 py-4 space-y-4"
  >
  <Panel title="Reference">
- <div className="grid grid-cols-3 gap-3">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
  <Select
  label="Work order"
  {...register('work_order_id')}
@@ -176,7 +173,7 @@ export default function CreateMaterialIssuePage() {
 
  <Panel title="Line items">
  <div className="border border-default rounded-md overflow-hidden">
- <div className="grid grid-cols-12 h-row px-2.5 bg-subtle text-2xs uppercase tracking-wider text-muted font-medium border-b border-default items-center">
+ <div className="hidden md:grid md:grid-cols-12 h-row px-2.5 bg-subtle text-2xs uppercase tracking-wider text-muted font-medium border-b border-default items-center">
  <div className="col-span-4">Item</div>
  <div className="col-span-3">Location</div>
  <div className="col-span-2 text-right">Qty issued</div>
@@ -184,7 +181,7 @@ export default function CreateMaterialIssuePage() {
  <div className="col-span-1" />
  </div>
  {fields.map((field, idx) => (
- <div key={field.id} className="grid grid-cols-12 gap-2 px-2.5 py-1.5 border-b border-subtle items-start">
+ <div key={field.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 px-2.5 py-1.5 border-b border-subtle items-start">
  <div className="col-span-4">
  <Select required {...register(`items.${idx}.item_id` as const)} error={errors.items?.[idx]?.item_id?.message}>
  <option value="">— Select item —</option>
@@ -253,14 +250,14 @@ export default function CreateMaterialIssuePage() {
  </div>
  </Panel>
 
- <div className="flex justify-end gap-2 pt-2">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => nav('/inventory/material-issues')} disabled={mutation.isPending}>
  Cancel
  </Button>
  <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending} loading={mutation.isPending}>
  {mutation.isPending ? 'Saving…' : 'Create issue'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

@@ -16,6 +16,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import type { AssetTransfer, AssetTransferStatus } from '@/types/assets';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 const STATUS_CHIP: Record<AssetTransferStatus, 'warning' | 'info' | 'danger' | 'success'> = {
  pending: 'warning',
  approved: 'info',
@@ -27,7 +28,7 @@ export default function AssetTransfersListPage() {
  const navigate = useNavigate();
  const qc = useQueryClient();
  const { can } = usePermission();
- const [filters, setFilters] = useState<AssetTransferListParams>({ page: 1, per_page: 25 });
+ const [filters, setFilters] = useUrlFilters<AssetTransferListParams>({ page: 1, per_page: 25 });
  const [confirmApprove, setConfirmApprove] = useState<string | null>(null);
  const [confirmReject, setConfirmReject] = useState<string | null>(null);
 
@@ -140,7 +141,8 @@ export default function AssetTransfersListPage() {
  {data && data.data.length > 0 && (
  <div className="px-5 py-4">
  <DataTable columns={columns} data={data.data} meta={data.meta}
- onPageChange={(page) => setFilters((f) => ({ ...f, page }))} />
+ onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+ onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))} />
  </div>
  )}
 

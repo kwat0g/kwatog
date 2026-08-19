@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AxiosError } from 'axios';
 import { LuRefreshCw } from '@/lib/icons';
@@ -15,6 +14,8 @@ import type { ListParams } from '@/types';
 import type { StockMovement } from '@/types/inventory';
 import { usePermission } from '@/hooks/usePermission';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { PageHeader } from '@/components/layout/PageHeader';
 const chip = (t: string): 'success' | 'info' | 'warning' | 'danger' | 'neutral' => {
   if (['grn_receipt', 'production_receipt', 'adjustment_in'].includes(t)) return 'success';
   if (['material_issue', 'delivery'].includes(t)) return 'info';
@@ -49,7 +50,7 @@ export function StockMovementsTab({
 }) {
  const qc = useQueryClient();
  const { can } = usePermission();
- const [filters, setFilters] = useState<StockMovementListParams>({
+ const [filters, setFilters] = useUrlFilters<StockMovementListParams>({
  ...DEFAULT_FILTERS,
  item_id: initialItemId || undefined,
  movement_type: initialMovementType || undefined,
@@ -127,16 +128,28 @@ export function StockMovementsTab({
 
  return (
  <div>
- <FilterBar filters={filterConfig} values={filters}
- onSearch={() => undefined}
+ {/* The page had no PageHeader, so it had no heading, no document.title and
+ nothing to name its breadcrumb — the tab read "localhost". */}
+ <PageHeader
+ title="Stock movements"
+ subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'movement' : 'movements'}` : undefined}
+ backTo="/inventory"
+ backLabel="Inventory"
+ refreshingQueryKey={['inventory', 'movements']}
+ />
+ <FilterBar
+ filters={filterConfig}
+ values={filters}
+ searchable={false}
  onFilter={(k, v) => setFilters(f => ({ ...f, [k]: v, page: 1 }))}
- searchPlaceholder="" />
+ />
  {isLoading && !data && <SkeletonTable columns={10} rows={10} />}
  {isError && <EmptyState icon="alert-circle" title="Failed to load movements" action={<Button onClick={() => refetch()}>Retry</Button>} />}
  {data && data.data.length === 0 && <EmptyState icon="inbox" title="No movements yet" />}
  {data && data.data.length > 0 && (
  <div className="px-5 py-4">
-  <DataTable tableKey="stock-movements" columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters(f => ({ ...f, page }))} />
+  <DataTable tableKey="stock-movements" columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters(f => ({ ...f, page }))}
+ onPageSizeChange={(per_page) => setFilters(f => ({ ...f, per_page, page: 1 }))} />
  </div>
  )}
  </div>

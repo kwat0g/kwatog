@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit;
 
+use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Models\WorkflowDefinition;
 use App\Common\Services\ApprovalService;
 use App\Modules\Auth\Models\Role;
@@ -11,7 +12,6 @@ use App\Modules\Auth\Models\User;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
 class ApprovalServiceTest extends TestCase
@@ -65,11 +65,13 @@ class ApprovalServiceTest extends TestCase
 
     /**
      * A user whose role slug does NOT match the current step's role_slug is
-     * rejected with a 403 HttpException; the approval record stays 'pending'.
+     * refused with ForbiddenActionException; the approval record stays 'pending'.
      *
-     * Note: abort(403) throws HttpException whose getStatusCode() === 403 but
-     * whose getCode() === 0 (Symfony's HttpException uses status, not PHP code).
-     * We therefore catch manually and assert getStatusCode().
+     * This was `catch (HttpException)` + `assertSame(403, $e->getStatusCode())`
+     * while the guard was `abort(403, …)` — a service asserting an HTTP status
+     * because the status was the only thing that identified the refusal. The 403
+     * is now a property of the render arm and is pinned over HTTP in
+     * ApprovalRefusalRenderingTest; what this unit test owns is the type.
      */
     public function test_wrong_role_approve_throws_403(): void
     {
@@ -91,12 +93,15 @@ class ApprovalServiceTest extends TestCase
         $threw = false;
         try {
             $svc->approve($approvable, $wrongUser, 'should be blocked');
-        } catch (HttpException $e) {
+        } catch (ForbiddenActionException $e) {
             $threw = true;
-            $this->assertSame(403, $e->getStatusCode(), 'Expected HTTP 403 for wrong-role approve');
+            $this->assertStringContainsString(
+                "Only users with role 'department_head' can approve this step.",
+                $e->getMessage(),
+            );
         }
 
-        $this->assertTrue($threw, 'HttpException must be thrown when wrong-role user attempts to approve');
+        $this->assertTrue($threw, 'ForbiddenActionException must be thrown when wrong-role user attempts to approve');
     }
 
     /**
@@ -121,8 +126,8 @@ class ApprovalServiceTest extends TestCase
 
         try {
             $svc->approve($approvable, $wrongUser);
-        } catch (HttpException $e) {
-            // Expected — 403 is thrown inside DB::transaction which rolls back.
+        } catch (ForbiddenActionException $e) {
+            // Expected — the refusal is raised inside DB::transaction, which rolls back.
         }
 
         $record = $svc->nextStep($approvable);
@@ -260,12 +265,10 @@ class ApprovalServiceTest extends TestCase
         $threw403 = false;
         try {
             $svc->approve($approvable, $wrongUser);
-        } catch (HttpException $e) {
-            if ($e->getStatusCode() === 403) {
-                $threw403 = true;
-            }
+        } catch (ForbiddenActionException $e) {
+            $threw403 = true;
         }
-        $this->assertTrue($threw403, 'Wrong-role user must receive HTTP 403');
+        $this->assertTrue($threw403, 'Wrong-role user must be refused');
 
         // Correct user CAN act — no exception, record becomes 'approved'.
         $svc->approve($approvable, $correctUser);
@@ -367,7 +370,7 @@ class ApprovalServiceTest extends TestCase
         $svc = app(ApprovalService::class);
         $svc->submit($po, 't2_admin_bypass');
 
-        $this->expectException(HttpException::class);
+        $this->expectException(ForbiddenActionException::class);
         $svc->approve($po, $admin);
     }
 
@@ -414,8 +417,7 @@ class ApprovalServiceTest extends TestCase
         try {
             $svc->approve($po, $submitter);
             $this->fail('Submitter should not be able to approve own record');
-        } catch (HttpException $e) {
-            $this->assertSame(403, $e->getStatusCode());
+        } catch (ForbiddenActionException $e) {
             $this->assertStringContainsStringIgnoringCase('cannot act', $e->getMessage());
         }
     }
@@ -441,8 +443,7 @@ class ApprovalServiceTest extends TestCase
         try {
             $svc->reject($po, $submitter, 'no');
             $this->fail('Submitter should not be able to reject own record');
-        } catch (HttpException $e) {
-            $this->assertSame(403, $e->getStatusCode());
+        } catch (ForbiddenActionException $e) {
             $this->assertStringContainsStringIgnoringCase('cannot act', $e->getMessage());
         }
     }

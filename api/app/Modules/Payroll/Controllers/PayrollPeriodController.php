@@ -27,7 +27,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\Rule;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use RuntimeException;
 
 class PayrollPeriodController
 {
@@ -144,7 +143,7 @@ class PayrollPeriodController
     {
         try {
             $claimed = $this->service->claimForComputeAndStage($period, $request->user());
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
@@ -162,7 +161,7 @@ class PayrollPeriodController
     {
         try {
             $approved = $this->service->approve($period, $request->user());
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
@@ -175,7 +174,7 @@ class PayrollPeriodController
     {
         try {
             $period = $this->service->finalize($period, $request->user());
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
@@ -189,7 +188,7 @@ class PayrollPeriodController
     {
         try {
             $updated = $this->service->retryGlPosting($period);
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
@@ -253,7 +252,7 @@ class PayrollPeriodController
 
         try {
             $updated = $this->service->forceUnlock($period, $request->user(), $data['reason'] ?? null);
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
@@ -276,7 +275,7 @@ class PayrollPeriodController
     {
         try {
             $voided = $this->service->void($period, $request->user(), $request->validated()['reason']);
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
 

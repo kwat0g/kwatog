@@ -26,6 +26,9 @@ import type { CreateBomData } from '@/api/mrp/boms';
 import type { Path } from 'react-hook-form';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const itemSchema = z.object({
  item_id: z.string().min(1, 'Item is required'),
  quantity_per_unit: z.string().regex(/^\d+(\.\d{1,4})?$/, 'Use a positive decimal with up to 4 places').refine((v) => Number(v) > 0, 'Must be greater than 0'),
@@ -61,10 +64,7 @@ export default function EditBomPage() {
  });
  const { data: uoms = [] } = useQuery({ queryKey: ['inventory', 'uoms'], queryFn: uomsApi.list, staleTime: 300_000 });
 
- const {
- register, control, handleSubmit, setError, setValue, watch,
- formState: { errors, isSubmitting },
- } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  values: data
  ? {
@@ -81,6 +81,10 @@ export default function EditBomPage() {
  }
  : undefined,
  });
+ const {
+ register, control, handleSubmit, setError, setValue, watch,
+ formState: { errors, isSubmitting },
+ } = form;
 
  const { fields, append, remove } = useFieldArray({ control, name: 'items' });
  const watchedItems = watch('items');
@@ -116,10 +120,11 @@ export default function EditBomPage() {
  }
  },
  });
+ const safety = useFormSafety({ form, saved: update.isSuccess });
 
  // Auto-fill UOM when a new item row's item is picked.
  const handleItemPicked = (rowIndex: number, itemId: string) => {
- const picked = items.data?.data.find((it: { id: string; unit_of_measure?: string }) => it.id === itemId);
+ const picked = items.data?.data?.find((it: { id: string; unit_of_measure?: string }) => it.id === itemId);
  if (picked?.unit_of_measure && !watchedItems[rowIndex]?.unit) {
  setValue(`items.${rowIndex}.unit`, picked.unit_of_measure);
  }
@@ -128,7 +133,8 @@ export default function EditBomPage() {
  if (isLoading) return (
  <div>
  <PageHeader title="Edit BOM" backTo="/mrp/boms" backLabel="BOMs"
- breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'BOMs', href: '/mrp/boms' }, { label: 'Loading…' }]} />
+ />
+      <FormDraftBanner safety={safety} />
  <SkeletonDetail />
  </div>
  );
@@ -136,7 +142,7 @@ export default function EditBomPage() {
  if (isError || !data) return (
  <div>
  <PageHeader title="Edit BOM" backTo="/mrp/boms" backLabel="BOMs"
- breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'BOMs', href: '/mrp/boms' }, { label: 'Error' }]} />
+ />
  <EmptyState icon="alert-circle" title="Failed to load BOM"
  action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />
  </div>
@@ -153,12 +159,6 @@ export default function EditBomPage() {
  }
  backTo={`/mrp/boms/${id}`}
  backLabel="BOM"
- breadcrumbs={[
- { label: 'MRP', href: '/mrp' },
- { label: 'BOMs', href: '/mrp/boms' },
- { label: data.product?.part_number ?? 'BOM', href: `/mrp/boms/${id}` },
- { label: 'Edit' },
- ]}
  />
  <form
  onSubmit={handleSubmit((v) => update.mutate(v), onFormInvalid<FormValues>())}
@@ -216,7 +216,7 @@ export default function EditBomPage() {
  error={errors.items?.[i]?.item_id?.message}
  >
  <option value="">Select item…</option>
- {items.data?.data.map((it: { id: string; code: string; name: string }) => (
+ {items.data?.data?.map((it: { id: string; code: string; name: string }) => (
  <option key={it.id} value={it.id}>{it.code} — {it.name}</option>
  ))}
  </Select>
@@ -285,7 +285,7 @@ export default function EditBomPage() {
  )}
  </fieldset>
 
- <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate(`/mrp/boms/${id}`)}>
  Cancel
  </Button>
@@ -297,7 +297,7 @@ export default function EditBomPage() {
  >
  {update.isPending ? 'Saving…' : 'Save changes'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

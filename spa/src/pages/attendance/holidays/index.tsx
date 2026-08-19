@@ -29,6 +29,7 @@ import { onFormInvalid } from '@/lib/formErrors';
 import type { Holiday } from '@/types/attendance';
 import { cn } from '@/lib/cn';
 
+import { showUndoToast } from '@/lib/undoToast';
 const schema = z.object({
  name: z.string().min(1).max(100),
  date: z.string().min(1, 'Required'),
@@ -58,9 +59,15 @@ export default function HolidaysPage() {
 
  const deleteMutation = useMutation({
  mutationFn: (id: string) => holidaysApi.delete(id),
- onSuccess: () => {
+ onSuccess: (_data, archivedId: string) => {
  qc.invalidateQueries({ queryKey: ['attendance', 'holidays'] });
- toast.success('Holiday archived.');
+ showUndoToast({
+    message: 'Holiday archived.',
+    // Archiving is reversible and one click; the restore endpoint is right
+    // here. An undo is the honest price for it — a modal asking whether the
+    // user meant it is a toll booth on something trivially taken back.
+    onUndo: () => restoreMutation.mutate(archivedId),
+  });
  setPendingDelete(null);
  },
  onError: () => toast.error('Failed to archive holiday.'),
@@ -280,10 +287,10 @@ function MonthGrid({ year, month, holidays }: { year: number; month: number; hol
  return (
  <Panel title={format(ref, 'MMMM yyyy')} noPadding>
  <div className="p-2">
- <div className="grid grid-cols-7 text-2xs uppercase tracking-wider text-muted text-center mb-1">
+ <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 text-2xs uppercase tracking-wider text-muted text-center mb-1">
  {['S','M','T','W','T','F','S'].map((d, i) => <div key={i} className="h-5 leading-5">{d}</div>)}
  </div>
- <div className="grid grid-cols-7 gap-px">
+ <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-px">
  {cells.map((d, i) => {
  const key = d ? format(d, 'yyyy-MM-dd') : `empty-${i}`;
  const matches = d ? byDay.get(key) ?? [] : [];

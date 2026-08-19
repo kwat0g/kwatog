@@ -20,6 +20,9 @@ import { moldsApi } from '@/api/mrp/molds';
 import { productsApi } from '@/api/crm/products';
 import type { Mold, CreateMoldData, UpdateMoldData } from '@/types/mrp';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const intField = (max: number, msg: string) =>
   z
     .string()
@@ -61,13 +64,7 @@ export function MoldForm({ initial, mode }: Props) {
     queryFn: () => productsApi.list({ per_page: 200, is_active: 'true' }),
   });
 
-  const {
-    register,
-    handleSubmit,
-    setError,
-    reset,
-    formState: { errors, isSubmitting },
-  } = useForm<FormValues>({
+    const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       mold_code: initial?.mold_code ?? '',
@@ -83,6 +80,13 @@ export function MoldForm({ initial, mode }: Props) {
       location: initial?.location ?? '',
     },
   });
+  const {
+    register,
+    handleSubmit,
+    setError,
+    reset,
+    formState: { errors, isSubmitting },
+  } = form;
 
   useEffect(() => {
     if (initial) {
@@ -139,12 +143,14 @@ export function MoldForm({ initial, mode }: Props) {
       }
     },
   });
+  const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
   return (
     <form
       onSubmit={handleSubmit((v) => mutation.mutate(v), onFormInvalid<FormValues>())}
       className="max-w-3xl mx-auto px-5 py-4"
     >
+      <FormDraftBanner safety={safety} inset={false} />
       <fieldset className="mb-8">
         <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">
           Identification
@@ -175,7 +181,7 @@ export function MoldForm({ initial, mode }: Props) {
             disabled={products.isLoading}
           >
             <option value="">Select a product…</option>
-            {products.data?.data.map((p) => (
+            {products.data?.data?.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.part_number} — {p.name}
               </option>
@@ -255,7 +261,7 @@ export function MoldForm({ initial, mode }: Props) {
         </div>
       </fieldset>
 
-      <div className="flex items-center justify-end gap-2">
+      <FormActions>
         <Button type="button" variant="secondary" onClick={() => navigate(-1)}>
           Cancel
         </Button>
@@ -266,7 +272,7 @@ export function MoldForm({ initial, mode }: Props) {
               ? 'Create mold'
               : 'Save changes'}
         </Button>
-      </div>
+      </FormActions>
     </form>
   );
 }

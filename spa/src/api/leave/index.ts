@@ -53,6 +53,12 @@ export interface LeaveListParams extends ListParams {
  search?: string;
 }
 
+/** Per-row outcome of a bulk leave approval. See `bulkApproveDept` below. */
+export interface BulkApproveLeaveResult {
+ approved: LeaveRequest[];
+ failed: Array<{ reason: string }>;
+}
+
 export const leaveRequestsApi = {
  options: () => client.get<{ data: { statuses: Array<{ value: string; label: string }>; half_day_periods: Array<{ value: string; label: string }> } }>('/leaves/requests/options').then((r) => r.data.data),
  list: (params?: LeaveListParams) =>
@@ -65,6 +71,22 @@ export const leaveRequestsApi = {
  client.patch<ApiSuccess<LeaveRequest>>(`/leaves/requests/${id}/approve-dept`, { remarks }).then((r) => r.data.data),
  approveHR: (id: string, remarks?: string) =>
  client.patch<ApiSuccess<LeaveRequest>>(`/leaves/requests/${id}/approve-hr`, { remarks }).then((r) => r.data.data),
+ /**
+  * Bulk approve at the department stage. The endpoint has existed since T1.7
+  * with no caller; it approves per row inside its own try/catch, so a rejected
+  * row lands in `failed` with the business rule that stopped it instead of
+  * aborting the batch.
+  *
+  * `failed` entries also carry the raw integer primary key. It is deliberately
+  * absent from this type: nothing in the SPA may render it, and the narrower
+  * type is what stops a future caller from putting a bare `42` on screen.
+  */
+ bulkApproveDept: (ids: string[], remarks?: string) =>
+ client.post<ApiSuccess<BulkApproveLeaveResult>>('/leaves/requests/bulk-approve-dept', { ids, remarks })
+ .then((r) => r.data.data),
+ bulkApproveHR: (ids: string[], remarks?: string) =>
+ client.post<ApiSuccess<BulkApproveLeaveResult>>('/leaves/requests/bulk-approve-hr', { ids, remarks })
+ .then((r) => r.data.data),
  reject: (id: string, reason: string) =>
  client.patch<ApiSuccess<LeaveRequest>>(`/leaves/requests/${id}/reject`, { reason }).then((r) => r.data.data),
  cancel: (id: string) =>

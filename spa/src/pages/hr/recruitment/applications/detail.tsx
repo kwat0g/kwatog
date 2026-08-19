@@ -113,7 +113,7 @@ export default function ApplicationDetailPage() {
  const pipelineStages = (recruitmentOptions?.application_stages ?? []).filter((stage) => !stage.is_terminal);
  const stageLabel = new Map((recruitmentOptions?.application_stages ?? []).map((stage) => [stage.value, stage.label]));
  const currentIdx = pipelineStages.findIndex((stage) => stage.value === application.stage);
- const nextStage = recruitmentOptions?.application_stages.find((stage) => stage.value === application.stage)?.next;
+ const nextStage = recruitmentOptions?.application_stages?.find((stage) => stage.value === application.stage)?.next;
 
  return (
  <div>
@@ -127,12 +127,6 @@ export default function ApplicationDetailPage() {
  subtitle={<span className="font-mono">{application.application_number} · {application.job_posting?.title ?? '—'}</span>}
  backTo="/hr/recruitment/applications"
  backLabel="Applications"
- breadcrumbs={[
- { label: 'HR', href: '/hr/employees' },
- { label: 'Recruitment', href: '/hr/recruitment' },
- { label: 'Applications', href: '/hr/recruitment/applications' },
- { label: application.full_name },
- ]}
  actions={
  can('hr.recruitment.applications') && !isTerminal ? (
  <>

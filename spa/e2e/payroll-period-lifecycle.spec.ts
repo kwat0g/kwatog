@@ -4,9 +4,9 @@
  * Covers: list with status chips, create, process (compute), approve + finalize.
  * All API calls are intercepted via Playwright route mocking — no backend needed.
  *
- * Status lifecycle: draft → processing → approved → finalized
+ * Status lifecycle: draft → processing → computed → approved → finalized
  */
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { mockAuth, type MockUser } from './helpers';
 
 // ── Constants ─────────────────────────────────────────────────────────────
@@ -45,10 +45,11 @@ const PAYROLL_USER: MockUser = {
 // ── Mock data factories ───────────────────────────────────────────────────
 
 /** Builds a single PayrollPeriod object at the given status. */
-function makePeriod(status: 'draft' | 'processing' | 'approved' | 'finalized', overrides: Record<string, unknown> = {}) {
+function makePeriod(status: 'draft' | 'processing' | 'computed' | 'approved' | 'finalized', overrides: Record<string, unknown> = {}) {
   const statusLabels: Record<string, string> = {
     draft:      'Draft',
     processing: 'Processing',
+    computed:   'Computed',
     approved:   'Approved',
     finalized:  'Finalized',
   };
@@ -262,8 +263,11 @@ test.describe('Payroll Period Lifecycle', () => {
 
     await computeBtn.click();
 
-    // Success toast: "Computation queued."
-    await expect(page.getByText(/Computation queued/i)).toBeVisible({ timeout: 5000 });
+    // The run is handed to a queued job, so the only immediate feedback is the
+    // toast. It says "started", not "queued": the click takes the compute claim
+    // there and then, and a period that reads "queued" while another worker
+    // already owns it is the confusion the wording was changed to remove.
+    await expect(page.getByText('Computation started.')).toBeVisible({ timeout: 5000 });
 
     // The page auto-polls while processing — verify processing indicator appears.
     await expect(page.getByText(/Processing/i).first()).toBeVisible({ timeout: 5000 });
@@ -274,12 +278,16 @@ test.describe('Payroll Period Lifecycle', () => {
   test('approves and finalizes a payroll period', async ({ page }) => {
     await mockAuth(page, PAYROLL_USER);
 
-    // Start at draft (approve requires status=draft per the detail page logic).
-    const draftPeriod = makePeriod('draft');
+    // Start at Computed. Approve is gated on `status === 'computed' && hasRows`
+    // and not on draft, deliberately: approving an uncomputed period signed off
+    // an empty run and paid a ₱0 payroll. A draft period therefore has no
+    // Approve button, and driving this test from draft would only assert that
+    // the guard is missing.
+    const computedPeriod = makePeriod('computed');
     const approvedPeriod = makePeriod('approved');
     const finalizedPeriod = makePeriod('finalized');
 
-    let periodState = draftPeriod;
+    let periodState = computedPeriod;
 
     await page.route(`**/api/v1/payroll-periods/${PERIOD_ID}`, async (route) => {
       if (route.request().method() !== 'GET') { await route.continue(); return; }
@@ -343,7 +351,7 @@ test.describe('Payroll Period Lifecycle', () => {
     // ── Step A: Approve ────────────────────────────────────────────────────
 
     await expect(page.getByRole('heading', { name: 'May 2026 — 1st Half' })).toBeVisible();
-    await expect(page.getByText('Draft', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Computed', { exact: true }).first()).toBeVisible();
 
     const approveBtn = page.getByRole('button', { name: /Approve/i });
     await expect(approveBtn).toBeVisible();

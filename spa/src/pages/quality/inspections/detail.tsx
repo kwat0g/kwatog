@@ -80,8 +80,8 @@ export default function InspectionDetailPage() {
  queryFn: capabilityApi.options,
  staleTime: 300_000,
  });
- const statusLabel = inspectionOptions?.statuses.find((option) => option.value === data?.status)?.label;
- const stageLabel = inspectionOptions?.stages.find((option) => option.value === data?.stage)?.label;
+ const statusLabel = inspectionOptions?.statuses?.find((option) => option.value === data?.status)?.label;
+ const stageLabel = inspectionOptions?.stages?.find((option) => option.value === data?.stage)?.label;
  const measurementResultLabels = new Map((inspectionOptions?.measurement_results ?? []).map((option) => [option.value, option.label]));
  const cpkThresholds = spcOptions?.capability_thresholds;
 
@@ -205,7 +205,6 @@ export default function InspectionDetailPage() {
  ? `${data.item.code} — ${data.item.name} (${stageLabel ?? data.stage})`
  : stageLabel ?? data.stage
  }
- breadcrumbs={[{ label: 'Quality', href: '/quality' }, { label: 'Inspections', href: '/quality/inspections' }, { label: data.inspection_number }]}
  actions={
  <div className="flex items-center gap-2">
  {!isTerminal && can('quality.inspections.manage') && (
@@ -270,10 +269,10 @@ export default function InspectionDetailPage() {
  </div>
  )}
 
- <div className="px-5 grid grid-cols-3 gap-4">
+ <div className="px-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
  <div className="col-span-2 space-y-4">
  <Panel title="Sample plan">
- <dl className="grid grid-cols-4 gap-x-4 gap-y-3 text-sm">
+ <dl className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-x-4 gap-y-3 text-sm">
  <div>
  <dt className="text-2xs uppercase tracking-wider text-muted">Stage</dt>
  <dd className="font-mono">{data.stage_label ?? data.stage}</dd>

@@ -825,6 +825,10 @@ class ReturnRequestService
             }
             $revenueId = $item->product?->revenue_account_id ?? $defaultRevenueId;
             if (! $revenueId) {
+                // Configuration, same class as "Required account 1010 not found
+                // in COA": the fallback comes from
+                // `accounting.default_sales_revenue_account_code`. The clerk
+                // settling an RMA cannot set it, so left unmapped.
                 throw new \RuntimeException('Default revenue account not configured.');
             }
             $lines[] = [

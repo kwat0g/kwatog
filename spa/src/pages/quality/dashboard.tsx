@@ -59,7 +59,7 @@ export default function QualityDashboardPage() {
  <div>
  <PageHeader title="Quality dashboard" subtitle={pareto.data ? `Quality window: ${pareto.data.from} — ${pareto.data.to}` : 'Configured quality history window'} />
 
- <div className="px-5 grid grid-cols-3 gap-4 mb-4">
+ <div className="px-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
  <StatCard
  label="Pass rate"
  value={passRate.isLoading ? '—' : passRate.data?.pass_rate != null ? `${passRate.data.pass_rate.toFixed(1)}%` : '—'}
@@ -77,7 +77,7 @@ export default function QualityDashboardPage() {
  />
  </div>
 
- <div className="px-5 grid grid-cols-3 gap-4">
+ <div className="px-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
  <Panel title="Defect Pareto" meta="Top 10 parameters" className="col-span-2">
  {pareto.isLoading && <SkeletonBlock className="h-64" />}
  {pareto.isError && (

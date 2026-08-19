@@ -64,23 +64,27 @@ export default function AdminDashboard() {
  ))}
  </KpiGrid>
 
- {/* Row 2 — Active sessions + Account security */}
+ {/* Row 2 — Active sessions + Account security.
+     Each panel renders only if the server sent it: it gates them on
+     admin.users.manage / admin.audit_logs.view / admin.settings.manage
+     independently of dashboard.admin.view, so a role granted this page
+     without those reads simply gets fewer rows. */}
  <PanelRow>
- <ActiveSessionsPanel data={panels.active_sessions} />
- <AccountSecurityPanel data={panels.account_security} />
+ {panels.active_sessions && <ActiveSessionsPanel data={panels.active_sessions} />}
+ {panels.account_security && <AccountSecurityPanel data={panels.account_security} />}
  </PanelRow>
 
  {/* Row 3 — Auth events */}
- <AuthEventsPanel data={panels.auth_events} />
+ {panels.auth_events && <AuthEventsPanel data={panels.auth_events} />}
 
  {/* Row 4 — Queue health + Open alerts */}
  <PanelRow>
- <QueueHealthPanel data={panels.queue_health} />
- <OpenAlertsPanel data={panels.open_alerts} />
+ {panels.queue_health && <QueueHealthPanel data={panels.queue_health} />}
+ {panels.open_alerts && <OpenAlertsPanel data={panels.open_alerts} />}
  </PanelRow>
 
  {/* Row 5 — Audit trail */}
- <AuditTrailPanel events={panels.recent_audit} />
+ {panels.recent_audit && <AuditTrailPanel events={panels.recent_audit} />}
  </>
  )}
  </DashboardShell>
@@ -92,7 +96,7 @@ export default function AdminDashboard() {
 function ActiveSessionsPanel({
  data,
 }: {
- data: AdminDashboardData['panels']['active_sessions'];
+ data: NonNullable<AdminDashboardData['panels']['active_sessions']>;
 }) {
  return (
  <Panel
@@ -130,7 +134,7 @@ function ActiveSessionsPanel({
 function AccountSecurityPanel({
  data,
 }: {
- data: AdminDashboardData['panels']['account_security'];
+ data: NonNullable<AdminDashboardData['panels']['account_security']>;
 }) {
  const stats = [
  { label: 'Total accounts', value: data.total, color: '' },
@@ -197,7 +201,7 @@ const AUTH_STATUS_VARIANT: Record<string, 'success' | 'danger' | 'warning' | 'ne
 function AuthEventsPanel({
  data,
 }: {
- data: AdminDashboardData['panels']['auth_events'];
+ data: NonNullable<AdminDashboardData['panels']['auth_events']>;
 }) {
  const breakdown = data.breakdown_24h;
  const windowHours = data.window_hours;
@@ -277,7 +281,7 @@ function AuthEventsPanel({
 function QueueHealthPanel({
  data,
 }: {
- data: AdminDashboardData['panels']['queue_health'];
+ data: NonNullable<AdminDashboardData['panels']['queue_health']>;
 }) {
  return (
  <Panel
@@ -338,7 +342,7 @@ const ALERT_VARIANT: Record<string, 'danger' | 'warning' | 'info' | 'neutral'> =
 function OpenAlertsPanel({
  data,
 }: {
- data: AdminDashboardData['panels']['open_alerts'];
+ data: NonNullable<AdminDashboardData['panels']['open_alerts']>;
 }) {
  return (
  <Panel

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Admin\Controllers;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\ApprovalDelegation;
 use App\Modules\Admin\Requests\StoreApprovalDelegationRequest;
 use App\Modules\Admin\Resources\ApprovalDelegationResource;
@@ -11,7 +12,6 @@ use App\Modules\Admin\Services\ApprovalDelegationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use RuntimeException;
 
 /**
  * OGAMI-013 — Approval delegation CRUD.
@@ -35,7 +35,7 @@ class ApprovalDelegationController
     {
         try {
             $delegation = $this->service->create($request->validated(), $request->user());
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
@@ -46,9 +46,14 @@ class ApprovalDelegationController
 
     public function destroy(Request $request, ApprovalDelegation $delegation): JsonResponse
     {
+        // 403, not 422 — the arm exists to set that status ("you may only revoke
+        // your own delegation" is an authorization refusal), so it stays and only
+        // the caught type changes. Deleting it would have let the render hook
+        // answer 422, quietly downgrading an access decision to a validation
+        // complaint.
         try {
             $this->service->revoke($delegation, $request->user());
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 403);
         }
 

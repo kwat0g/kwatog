@@ -38,10 +38,86 @@ export const client = axios.create({
 interface OgamiRequestConfig extends InternalAxiosRequestConfig {
  /** Internal loop guard for the one-time CSRF recovery retry. */
  _csrfRetried?: boolean;
- /** Explicit opt-in for a global toast. Screens normally own their error UI. */
+ /**
+  * Force a global toast for a status the interceptor would otherwise leave to
+  * the page (5xx on a mutation). Rarely needed — see `interceptorOwnsToast`.
+  */
  showErrorToast?: boolean;
- /** Legacy per-request opt-out retained for existing callers. */
+ /** Silence the interceptor entirely for this request. */
  skipErrorToast?: boolean;
+}
+
+/**
+ * Marker set on an error the interceptor has already reported. Page-level
+ * handlers use `wasReportedGlobally()` so one failure never produces two
+ * toasts saying different things.
+ */
+const REPORTED = Symbol.for('ogami.errorReported');
+
+export function wasReportedGlobally(error: unknown): boolean {
+ return Boolean(error && typeof error === 'object' && (error as Record<symbol, unknown>)[REPORTED]);
+}
+
+function markReported(error: AxiosError): void {
+ (error as unknown as Record<symbol, unknown>)[REPORTED] = true;
+}
+
+/**
+ * Stable toast ids per failure class.
+ *
+ * A dashboard fires a dozen queries at once. When the API is down they all
+ * reject, and without an id react-hot-toast stacks a dozen identical banners
+ * that push each other off screen. Reusing the id replaces instead.
+ */
+const TOAST_ID = {
+ timeout: 'net-timeout',
+ offline: 'net-offline',
+ throttled: 'http-429',
+ locked: 'http-423',
+ server: 'http-5xx',
+} as const;
+
+/**
+ * Which failures the interceptor reports itself rather than leaving to the page.
+ *
+ * This used to be opt-in via `showErrorToast`, and nothing in the app ever
+ * opted in — so a rate-limited, locked-out, timed-out or offline user got
+ * silence from here and a misleading "Failed to create PO." from the page's
+ * own `onError`. The page cannot know the difference; the interceptor can.
+ *
+ * • Infrastructure failures (timeout / offline / 429 / 423) always report,
+ *   because the page's generic message is actively wrong about the cause.
+ * • 5xx reports only for reads. Mutations nearly always have an `onError`
+ *   with useful context ("Failed to post journal entry"); queries usually
+ *   have nothing at all.
+ * • 401 / 403 / 404 / 419 / 422 stay page- and guard-owned (see the switch).
+ */
+function interceptorOwnsToast(config: OgamiRequestConfig | undefined, status: number | undefined): boolean {
+ if (config?.skipErrorToast === true) return false;
+ if (config?.showErrorToast === true) return true;
+ if (status === undefined || status >= 500) {
+  const method = (config?.method ?? 'get').toLowerCase();
+  return method === 'get' || method === 'head';
+ }
+ return true;
+}
+
+/**
+ * Laravel's throttle middleware answers 429 with a `Retry-After` header in
+ * whole seconds. Quoting it turns "Too many requests" — which reads as a bug —
+ * into an instruction the user can act on.
+ */
+function throttleMessage(error: AxiosError<LaravelDebugError>): string {
+ const raw = error.response?.headers?.['retry-after'];
+ const seconds = Number(Array.isArray(raw) ? raw[0] : raw);
+ if (!Number.isFinite(seconds) || seconds <= 0) {
+  return 'Too many requests in a short time. Wait a moment and try again.';
+ }
+ if (seconds < 60) {
+  return `Too many requests. Try again in ${Math.ceil(seconds)} second${Math.ceil(seconds) === 1 ? '' : 's'}.`;
+ }
+ const minutes = Math.ceil(seconds / 60);
+ return `Too many requests. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`;
 }
 
 const createResponseErrorHandler = (retryClient: AxiosInstance) => async (error: AxiosError<LaravelDebugError>) => {
@@ -68,11 +144,10 @@ const createResponseErrorHandler = (retryClient: AxiosInstance) => async (error:
  const isBootstrap = requestUrl.endsWith('/auth/user');
  const isLoginAttempt = requestUrl.endsWith('/auth/login');
 
- // Pages and mutations own their error UI. A request may explicitly opt into
- // a global toast for a truly background operation; this avoids interceptor +
- // page handlers producing two notifications for one failure.
+ // Pages and mutations own their *validation* UI; the interceptor owns the
+ // failures a page cannot diagnose. See `interceptorOwnsToast`.
  const requestConfig = error.config as OgamiRequestConfig | undefined;
- const showToast = requestConfig?.showErrorToast === true && requestConfig.skipErrorToast !== true;
+ const showToast = interceptorOwnsToast(requestConfig, status);
 
  // Timeout — axios sets error.code = 'ECONNABORTED' when the request
  // exceeds the configured `timeout`. Check before the HTTP status switch
@@ -85,8 +160,12 @@ const createResponseErrorHandler = (retryClient: AxiosInstance) => async (error:
  status: 0,
  message: `Timeout after ${error.config?.timeout ?? 30_000}ms`,
  });
- if (showToast) {
- toast.error('Request timed out. Please try again.', { duration: 5000 });
+ if (requestConfig?.skipErrorToast !== true) {
+ markReported(error);
+ toast.error('The server took too long to respond. Nothing was saved — please try again.', {
+ id: TOAST_ID.timeout,
+ duration: 6000,
+ });
  }
  return Promise.reject(error);
  }
@@ -115,6 +194,7 @@ const createResponseErrorHandler = (retryClient: AxiosInstance) => async (error:
  } else if (data?.code === 'feature_disabled') {
  // ModuleGuard handles UI; suppress toast here.
  } else if (showToast) {
+ markReported(error);
  toast.error(data?.message ?? 'You do not have permission to perform this action.');
  }
  break;
@@ -145,11 +225,20 @@ const createResponseErrorHandler = (retryClient: AxiosInstance) => async (error:
  break;
 
  case 423:
- if (showToast) toast.error(data?.message ?? 'Account locked. Try again later.');
+ if (showToast) {
+ markReported(error);
+ toast.error(data?.message ?? 'This account is locked. Try again later or contact IT.', {
+ id: TOAST_ID.locked,
+ duration: 6000,
+ });
+ }
  break;
 
  case 429:
- if (showToast) toast.error('Too many requests. Please wait a moment.');
+ if (showToast) {
+ markReported(error);
+ toast.error(throttleMessage(error), { id: TOAST_ID.throttled, duration: 6000 });
+ }
  break;
 
  case 500:
@@ -157,16 +246,28 @@ const createResponseErrorHandler = (retryClient: AxiosInstance) => async (error:
  case 503:
  case 504:
  if (showToast) {
+ markReported(error);
  const serverMsg = import.meta.env.DEV ? data?.message : null;
- toast.error(serverMsg ?? 'Something went wrong. Please try again.', {
- duration: 5000,
+ toast.error(serverMsg ?? 'The server had a problem loading this. Try again in a moment.', {
+ id: TOAST_ID.server,
+ duration: 6000,
  });
  }
  break;
 
  default:
+ // No `error.response` means the request never reached the API — DNS,
+ // dropped Wi-Fi, or a proxy refusing the connection. Distinguish it from
+ // a server error so the user knows to check their own connection, and
+ // from OfflineBanner's queue message, which only covers mutations.
  if (!error.response && showToast) {
- toast.error('Network error. Please check your connection.');
+ markReported(error);
+ toast.error(
+ navigator.onLine === false
+ ? 'You are offline. This will work again once the connection returns.'
+ : 'Could not reach the server. Check your connection and try again.',
+ { id: TOAST_ID.offline, duration: 6000 },
+ );
  }
  }
 

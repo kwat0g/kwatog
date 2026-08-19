@@ -18,6 +18,9 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { numberInputProps } from '@/lib/numberInput';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  item_id: z.string().min(1, 'Item is required.'),
  location_id: z.string().min(1, 'Location is required.'),
@@ -46,10 +49,11 @@ export default function CreateStockAdjustmentPage() {
  queryFn: () => warehouseApi.tree(),
  });
 
- const { register, handleSubmit, setError, watch, formState: { errors, isSubmitting } } = useForm<V>({
+  const form = useForm<V>({
  resolver: zodResolver(schema),
  defaultValues: { direction: '', quantity: '', unit_cost: '' },
  });
+ const { register, handleSubmit, setError, watch, formState: { errors, isSubmitting } } = form;
  const direction = watch('direction');
 
  const m = useMutation({
@@ -70,6 +74,7 @@ export default function CreateStockAdjustmentPage() {
  applyServerValidationErrors(e, setError, 'Failed to record adjustment.');
  },
  });
+ const safety = useFormSafety({ form, saved: m.isSuccess });
 
  const locations = (warehouses.data ?? []).flatMap((w) =>
  (w.zones ?? []).flatMap((z) => (z.locations ?? []).map((l) => ({
@@ -82,6 +87,7 @@ export default function CreateStockAdjustmentPage() {
  return (
  <div>
  <PageHeader title="Stock adjustment" backTo="/inventory/stock-levels?view=movements" backLabel="Movements" />
+      <FormDraftBanner safety={safety} />
  <form
  onSubmit={handleSubmit((d) => { setPendingValues(d); setConfirmOpen(true); }, onFormInvalid<V>())}
  className="max-w-3xl mx-auto px-5 py-4 space-y-4"
@@ -90,7 +96,7 @@ export default function CreateStockAdjustmentPage() {
  <div className="grid grid-cols-2 gap-3">
  <Select label="Item" required {...register('item_id')} error={errors.item_id?.message}>
  <option value="">Select item…</option>
- {items.data?.data.map((it) => (
+ {items.data?.data?.map((it) => (
  <option key={it.id} value={it.id}>{it.code} — {it.name}</option>
  ))}
  </Select>
@@ -134,10 +140,10 @@ export default function CreateStockAdjustmentPage() {
  />
  </div>
  </Panel>
- <div className="flex justify-end gap-2">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => nav('/inventory/stock-levels?view=movements')}>Cancel</Button>
  <Button type="submit" variant="primary" disabled={isSubmitting}>Record adjustment</Button>
- </div>
+ </FormActions>
  </form>
 
  <ConfirmDialog

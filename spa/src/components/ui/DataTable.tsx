@@ -1,6 +1,7 @@
 import {
   Fragment,
   useCallback,
+  useEffect,
   useRef,
   useMemo,
   useState,
@@ -56,6 +57,8 @@ export interface DataTableProps<T> {
   data: T[];
   meta?: PaginationMeta;
   onPageChange?: (page: number) => void;
+  /** Supply to render a rows-per-page control in the pagination footer. */
+  onPageSizeChange?: (perPage: number) => void;
   onSort?: (sort: string, direction: 'asc' | 'desc') => void;
   currentSort?: string;
   currentDirection?: 'asc' | 'desc';
@@ -79,7 +82,11 @@ export interface DataTableProps<T> {
   tableKey?: string;
   /** Renders an inline expandable detail row when set. The chevron column appears at the start. */
   renderExpanded?: (row: T) => ReactNode;
-  /** Right-click context menu items. Receives the row that was clicked. */
+  /**
+   * Row context-menu items. Opens on right-click, and from the keyboard via the
+   * ContextMenu key or Shift+F10 on the focused row — without that second path
+   * this would put row actions behind a gesture a keyboard user cannot make.
+   */
   rowContextMenu?: (row: T) => RowContextMenuItem[];
   /** Sticky `<thead>` while vertically scrolling the table container. Default true. */
   stickyHeader?: boolean;
@@ -121,6 +128,7 @@ export function DataTable<T>({
   data,
   meta,
   onPageChange,
+  onPageSizeChange,
   onSort,
   currentSort,
   currentDirection,
@@ -217,6 +225,21 @@ export function DataTable<T>({
   const allOnPageSelected = data.length > 0 && data.every((r) => selected.has(idOf(r)));
   const selectedRows = data.filter((r) => selected.has(idOf(r)));
 
+  // Selection is scoped to what is on screen, because that is all a bulk action
+  // can actually receive: `selectedRows` filters `data`, so ids retained from a
+  // previous page were counted by nothing and acted on by nothing. Keeping them
+  // was worse than dropping them — a user who ticked 10 rows on page 1, paged
+  // to 2, ticked 10 more and hit Approve approved only the visible 10, with a
+  // badge that agreed. Reset when the visible set changes so the count on
+  // screen is always the count that will be submitted.
+  const visibleIds = data.map((r, i) => idOf(r, i)).join(' ');
+  const lastVisibleIds = useRef(visibleIds);
+  useEffect(() => {
+    if (lastVisibleIds.current === visibleIds) return;
+    lastVisibleIds.current = visibleIds;
+    setSelected((prev) => (prev.size === 0 ? prev : new Set()));
+  }, [visibleIds]);
+
   const toggleAll = () => {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -247,11 +270,29 @@ export function DataTable<T>({
   const sortIndicator = (col: Column<T>) => {
     if (!col.sortable) return null;
     const active = currentSort === col.key;
+    // An unsorted column used to render the same down-arrow at 30% opacity,
+    // which reads as "sorted descending" rather than "sortable". Show the
+    // neutral up/down pair until the column is actually the sort key.
+    if (!active) {
+      return (
+        <span className="inline-flex flex-col leading-none ml-1 opacity-40" aria-hidden="true">
+          <LuArrowUp size={8} />
+          <LuArrowDown size={8} />
+        </span>
+      );
+    }
     return (
-      <span className={cn('inline-block ml-1', !active && 'opacity-30')}>
-        {active && currentDirection === 'asc' ? <LuArrowUp size={10} /> : <LuArrowDown size={10} />}
+      <span className="inline-block ml-1" aria-hidden="true">
+        {currentDirection === 'asc' ? <LuArrowUp size={10} /> : <LuArrowDown size={10} />}
       </span>
     );
+  };
+
+  /** `aria-sort` is the only way a screen reader learns a column is ordered. */
+  const ariaSortFor = (col: Column<T>): 'ascending' | 'descending' | 'none' | undefined => {
+    if (!col.sortable || !onSort) return undefined;
+    if (currentSort !== col.key) return 'none';
+    return currentDirection === 'asc' ? 'ascending' : 'descending';
   };
 
   const handleHeaderClick = (col: Column<T>) => {
@@ -269,6 +310,20 @@ export function DataTable<T>({
   const totalCols = visibleColumns.length + (selectable ? 1 : 0) + (renderExpanded ? 1 : 0);
 
   const tbodyRef = useRef<HTMLTableSectionElement>(null);
+
+  // Rows are rendered from `data` in order, so a focused <tr>'s position among
+  // the focusable rows identifies its row. `tr[tabindex]` is the right selector
+  // precisely because an expanded detail row carries no tabindex and so does not
+  // shift the count. Needed by the keyboard context-menu path, which has an
+  // element but no click event to read the row off.
+  const rowForElement = useCallback(
+    (tr: HTMLElement): T | undefined => {
+      const rows = Array.from(tbodyRef.current?.querySelectorAll<HTMLElement>('tr[tabindex]') ?? []);
+      const index = rows.indexOf(tr);
+      return index === -1 ? undefined : data[index];
+    },
+    [data],
+  );
 
   const onRowKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTableSectionElement>) => {
@@ -300,8 +355,26 @@ export function DataTable<T>({
         e.preventDefault();
         target.click();
       }
+
+      // The context menu was right-click only, which is why `rowContextMenu`
+      // has no consumers: adopting it would have put row actions behind a
+      // gesture a keyboard user cannot make, breaking the design system's
+      // "all interactive elements keyboard reachable" rule on every list it
+      // was added to. ContextMenu key and Shift+F10 are the platform
+      // conventions for opening one from the keyboard.
+      if (rowContextMenu && (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10'))) {
+        const row = rowForElement(target);
+        if (row === undefined) return;
+        const items = rowContextMenu(row);
+        if (items.length === 0) return;
+        e.preventDefault();
+        // Anchor to the focused row rather than a stale cursor position, which
+        // for a keyboard user is wherever the mouse happens to be sitting.
+        const box = target.getBoundingClientRect();
+        setCtxMenu({ x: box.left + 8, y: box.bottom, items });
+      }
     },
-    [onRowClick, selectable, selected.size],
+    [onRowClick, selectable, selected.size, rowContextMenu, rowForElement],
   );
 
   return (
@@ -381,28 +454,42 @@ export function DataTable<T>({
               )}
               {orderedColumns.map((col) => {
                 const isPinned = col.pinned === 'left';
+                const isSortable = Boolean(col.sortable && onSort);
                 return (
                   <th
                     key={col.key}
                     scope="col"
+                    aria-sort={ariaSortFor(col)}
                     style={isPinned ? { left: pinnedOffsets[col.key] } : undefined}
                     className={cn(
                       'px-2.5 text-2xs uppercase tracking-wider text-muted font-medium select-none',
                       rowHeight.default,
                       alignClass[col.align ?? 'left'],
-                      col.sortable &&
-                        onSort &&
-                        'cursor-pointer hover:text-primary transition-colors duration-fast',
                       isPinned && pinnedTHClass,
                       isPinned && 'border-r border-default',
                       col.className,
                     )}
-                    onClick={() => handleHeaderClick(col)}
                   >
-                    <span className="inline-flex items-center gap-1">
-                      {col.header}
-                      {sortIndicator(col)}
-                    </span>
+                    {/* Sorting used to live on the <th>'s onClick, so it was
+                        mouse-only — DESIGN-SYSTEM.md requires every
+                        interactive element be keyboard reachable. A real
+                        <button> gets Enter/Space and the focus ring free. */}
+                    {isSortable ? (
+                      <button
+                        type="button"
+                        onClick={() => handleHeaderClick(col)}
+                        className={cn(
+                          'inline-flex items-center gap-1 cursor-pointer rounded-sm',
+                          'hover:text-primary transition-colors duration-fast',
+                          focusRingInset,
+                        )}
+                      >
+                        {col.header}
+                        {sortIndicator(col)}
+                      </button>
+                    ) : (
+                      <span className="inline-flex items-center gap-1">{col.header}</span>
+                    )}
                   </th>
                 );
               })}
@@ -525,7 +612,14 @@ export function DataTable<T>({
         </table>
       </div>
 
-      {meta && onPageChange && <DataTablePagination meta={meta} onPageChange={onPageChange} />}
+      {meta && onPageChange && (
+        <DataTablePagination
+          meta={meta}
+          onPageChange={onPageChange}
+          onPageSizeChange={onPageSizeChange}
+          perPage={meta.per_page}
+        />
+      )}
 
       <RowContextMenu
         open={ctxMenu !== null}

@@ -5,7 +5,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
-import type { AxiosError } from 'axios';
 import { assetTransfersApi } from '@/api/assets';
 import { departmentsApi } from '@/api/hr/departments';
 import { assetsApi } from '@/api/assets';
@@ -14,10 +13,12 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { onFormInvalid } from '@/lib/formErrors';
-import type { ApiValidationError } from '@/types';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import type { CreateTransferData } from '@/types/assets';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  asset_id: z.string().min(1, 'Asset is required'),
  from_department_id: z.string().min(1, 'From department is required'),
@@ -33,10 +34,11 @@ type FormValues = z.infer<typeof schema>;
 export default function CreateAssetTransferPage() {
  const navigate = useNavigate();
  const qc = useQueryClient();
- const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: { transfer_date: new Date().toISOString().split('T')[0] },
  });
+ const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = form;
 
  const { data: deptData, isLoading: deptLoading } = useQuery({
  queryKey: ['hr', 'departments', 'list'],
@@ -57,16 +59,11 @@ export default function CreateAssetTransferPage() {
  toast.success(`Transfer ${transfer.transfer_number} created.`);
  navigate('/assets/transfers');
  },
- onError: (err: AxiosError<ApiValidationError>) => {
- if (err.response?.status === 422 && err.response.data.errors) {
- Object.entries(err.response.data.errors).forEach(([k, v]) =>
- setError(k as keyof FormValues, { type: 'server', message: v[0] }));
- toast.error(err.response?.data?.message || 'Validation failed.');
- } else {
- toast.error('Failed to create transfer.');
- }
+ onError: (err) => {
+   applyServerValidationErrors(err, setError, 'Failed to create transfer.');
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  const onSubmit = (data: FormValues) => {
  mutation.mutate({
@@ -81,6 +78,7 @@ export default function CreateAssetTransferPage() {
  return (
  <div>
  <PageHeader title="New asset transfer" backTo="/assets/transfers" backLabel="Transfers" />
+      <FormDraftBanner safety={safety} />
  <form onSubmit={handleSubmit(onSubmit, onFormInvalid<FormValues>())} className="max-w-3xl mx-auto px-5 py-4">
  <fieldset className="mb-6">
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Transfer details</legend>
@@ -112,12 +110,12 @@ export default function CreateAssetTransferPage() {
  </div>
  </fieldset>
 
- <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/assets/transfers')}>Cancel</Button>
  <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending} loading={mutation.isPending}>
  {mutation.isPending ? 'Creating...' : 'Create transfer'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

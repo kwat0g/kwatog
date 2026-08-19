@@ -26,6 +26,9 @@ import { workOrdersApi } from '@/api/production/workOrders';
 import { businessPoliciesApi } from '@/api/businessPolicies';
 import type { CreateWorkOrderData } from '@/types/production';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  product_id: z.string().min(1, 'Product is required'),
  quantity_target: z.string().regex(/^\d+$/, 'Use a positive integer').refine((v) => Number(v) > 0, 'Must be greater than 0'),
@@ -61,10 +64,7 @@ export default function CreateWorkOrderPage() {
 
  const today = new Date().toISOString().slice(0, 16);
 
- const {
- register, handleSubmit, setError, setValue,
- formState: { errors, isSubmitting },
- } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  product_id: '',
@@ -76,6 +76,10 @@ export default function CreateWorkOrderPage() {
  priority: '',
  },
  });
+ const {
+ register, handleSubmit, setError, setValue,
+ formState: { errors, isSubmitting },
+ } = form;
  useEffect(() => {
  if (policies) setValue('priority', String(policies.mrp_work_order_normal_priority));
  }, [policies, setValue]);
@@ -109,11 +113,13 @@ export default function CreateWorkOrderPage() {
  }
  },
  });
+ const safety = useFormSafety({ form, saved: create.isSuccess });
 
  return (
  <div>
  <PageHeader title="New work order" backTo="/production/work-orders" backLabel="Work orders"
- breadcrumbs={[{ label: 'Production', href: '/production' }, { label: 'Work orders', href: '/production/work-orders' }, { label: 'New work order' }]} />
+ />
+      <FormDraftBanner safety={safety} />
  <form
  onSubmit={handleSubmit((v) => create.mutate(v), onFormInvalid<FormValues>())}
  className="max-w-2xl mx-auto px-5 py-4"
@@ -123,7 +129,7 @@ export default function CreateWorkOrderPage() {
  <div className="grid grid-cols-2 gap-3">
  <Select label="Product" required {...register('product_id')} error={errors.product_id?.message}>
  <option value="">Select product…</option>
- {products.data?.data.map((p) => (
+ {products.data?.data?.map((p) => (
  <option key={p.id} value={p.id}>{p.part_number} — {p.name}</option>
  ))}
  </Select>
@@ -164,20 +170,20 @@ export default function CreateWorkOrderPage() {
  <div className="grid grid-cols-2 gap-3">
  <Select label="Machine" {...register('machine_id')} error={errors.machine_id?.message}>
  <option value="">Pick later</option>
- {machines.data?.data.map((m) => (
+ {machines.data?.data?.map((m) => (
  <option key={m.id} value={m.id}>{m.machine_code} — {m.name}{m.tonnage ? ` · ${m.tonnage}T` : ''}</option>
  ))}
  </Select>
  <Select label="Mold" {...register('mold_id')} error={errors.mold_id?.message}>
  <option value="">Pick later</option>
- {molds.data?.data.map((m) => (
+ {molds.data?.data?.map((m) => (
  <option key={m.id} value={m.id}>{m.mold_code} — {m.name}</option>
  ))}
  </Select>
  </div>
  </fieldset>
 
- <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/production/work-orders')}>
  Cancel
  </Button>
@@ -189,7 +195,7 @@ export default function CreateWorkOrderPage() {
  >
  {create.isPending ? 'Creating…' : 'Create work order'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

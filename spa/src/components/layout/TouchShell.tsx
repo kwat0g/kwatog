@@ -11,6 +11,7 @@ import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { focusRingInset } from '@/lib/focus';
 import { cn } from '@/lib/cn';
 
+import { ErrorBoundary } from '@/components/guards/ErrorBoundary';
 /**
  * The shell every touch PWA runs on — factory floor, driver, maintenance tech.
  *
@@ -113,7 +114,12 @@ export function TouchShell({
       <main
         className={cn('flex-1 w-full mx-auto px-4 py-4', contentWidthClassName, hasTabs && 'pb-20')}
       >
-        <Outlet />
+        {/* A crash on the floor is the worst case for losing the shell: an
+            operator mid-shift would be left with no tab bar and no way back to
+            the order list. Keep the failure inside <main>. */}
+        <ErrorBoundary>
+          <Outlet />
+        </ErrorBoundary>
       </main>
 
       {hasTabs && (

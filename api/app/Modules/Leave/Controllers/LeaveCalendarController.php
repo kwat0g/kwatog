@@ -28,7 +28,9 @@ class LeaveCalendarController
             : null;
 
         $user = $request->user();
-        if ($user?->role?->slug !== 'system_admin' && ! $user?->hasPermission('leave.approve_hr')) {
+        // hasPermission short-circuits for system_admin, so the removed
+        // `role->slug !== 'system_admin'` term could never change the outcome.
+        if (! $user?->hasPermission('leave.approve_hr')) {
             $deptId = Employee::query()->whereKey($user?->employee_id)->value('department_id');
             abort_unless($deptId, 403, 'Your account is not assigned to a department.');
         }

@@ -19,6 +19,7 @@ import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
 import type { PayrollAdjustment } from '@/types/payroll';
 
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 const statusVariant = (s: string | null | undefined): ChipVariant => {
   switch (s) {
     case 'approved':
@@ -38,7 +39,7 @@ export default function PayrollAdjustmentsPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { can } = usePermission();
-  const [filters, setFilters] = useState<AdjustmentListParams>({
+  const [filters, setFilters] = useUrlFilters<AdjustmentListParams>({
     page: 1,
     per_page: 25,
     sort: 'created_at',
@@ -245,6 +246,7 @@ export default function PayrollAdjustmentsPage() {
             data={data.data}
             meta={data.meta}
             onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+ onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
           />
         </div>
       )}

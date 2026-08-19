@@ -4,7 +4,6 @@ import { useFieldArray, useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { LuPlus, LuTrash2 } from '@/lib/icons';
 import { accountsApi } from '@/api/accounting/accounts';
@@ -16,10 +15,12 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatPeso } from '@/lib/formatNumber';
-import { onFormInvalid } from '@/lib/formErrors';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { numberInputProps } from '@/lib/numberInput';
-import type { ApiValidationError } from '@/types';
 
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { FormActions } from '@/components/ui/FormActions';
 const lineSchema = z.object({
  account_id: z.string().min(1, 'Account is required'),
  debit: z.preprocess((value) => value === '' || value == null ? undefined : value, z.coerce.number({ invalid_type_error: 'Number' }).min(0, 'Min 0').optional()),
@@ -48,7 +49,7 @@ export default function CreateJournalEntryPage() {
  });
  const accounts = accountsResp?.data ?? [];
 
- const { register, control, handleSubmit, watch, setError, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  date: new Date().toISOString().slice(0, 10),
@@ -59,6 +60,7 @@ export default function CreateJournalEntryPage() {
  ],
  },
  });
+ const { register, control, handleSubmit, watch, setError, formState: { errors, isSubmitting } } = form;
  const { fields, append, remove } = useFieldArray({ control, name: 'lines' });
  const lines = watch('lines');
 
@@ -88,29 +90,21 @@ export default function CreateJournalEntryPage() {
  toast.success(`Draft ${je.entry_number} created.`);
  navigate(`/accounting/journal-entries/${je.id}`);
  },
- onError: (e: AxiosError<ApiValidationError>) => {
- if (e.response?.status === 422 && e.response.data?.errors) {
- Object.entries(e.response.data.errors).forEach(([f, msgs]) =>
- setError(f as keyof FormValues, { type: 'server', message: msgs[0] }),
- );
- } else {
- toast.error(e.response?.data?.message ?? 'Failed to create entry.');
- }
+ onError: (e) => {
+   applyServerValidationErrors(e, setError, 'Failed to post the journal entry.');
  },
  });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  return (
  <div>
  <PageHeader title="New journal entry" backTo="/accounting/journal-entries" backLabel="Journal Entries"
- breadcrumbs={[
- { label: 'Accounting' },
- { label: 'Journal Entries', href: '/accounting/journal-entries' },
- { label: 'New entry' },
- ]} />
+ />
+      <FormDraftBanner safety={safety} />
 
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-5xl mx-auto px-5 py-4 space-y-4">
  <Panel title="Header">
- <div className="grid grid-cols-3 gap-3">
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
  <Input label="Date" type="date" required {...register('date')} error={errors.date?.message} />
  <Textarea label="Description" required rows={2} className="col-span-2" {...register('description')} error={errors.description?.message} maxLength={500} />
  </div>
@@ -118,7 +112,7 @@ export default function CreateJournalEntryPage() {
 
  <Panel title="Lines">
  <div className="border border-default rounded-md overflow-hidden">
- <div className="grid grid-cols-12 h-row px-2.5 bg-subtle text-2xs uppercase tracking-wider text-muted font-medium border-b border-default items-center">
+ <div className="hidden md:grid md:grid-cols-12 h-row px-2.5 bg-subtle text-2xs uppercase tracking-wider text-muted font-medium border-b border-default items-center">
  <div className="col-span-4">Account</div>
  <div className="col-span-3">Description</div>
  <div className="col-span-2 text-right">Debit</div>
@@ -126,7 +120,7 @@ export default function CreateJournalEntryPage() {
  <div className="col-span-1" />
  </div>
  {fields.map((field, idx) => (
- <div key={field.id} className="grid grid-cols-12 gap-2 px-2.5 py-1.5 border-b border-subtle items-start">
+ <div key={field.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 px-2.5 py-1.5 border-b border-subtle items-start">
  <div className="col-span-4">
  <Select required {...register(`lines.${idx}.account_id` as const)} error={errors.lines?.[idx]?.account_id?.message}>
  <option value="">— Select account —</option>
@@ -182,14 +176,14 @@ export default function CreateJournalEntryPage() {
  </div>
  </Panel>
 
- <div className="flex justify-end gap-2 pt-2">
+ <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/accounting/journal-entries')}>Cancel</Button>
  <Button type="submit" variant="primary"
  disabled={!totals.balanced || isSubmitting || mutation.isPending}
  loading={mutation.isPending}>
  {mutation.isPending ? 'Saving…' : 'Save draft'}
  </Button>
- </div>
+ </FormActions>
  </form>
  </div>
  );

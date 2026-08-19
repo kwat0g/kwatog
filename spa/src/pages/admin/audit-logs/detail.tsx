@@ -104,14 +104,9 @@ export default function AuditLogDetailPage() {
  subtitle={`${data.model_type}${data.model_id ? ` · #${data.model_id}` : ''}`}
  backTo="/admin/audit-logs"
  backLabel="Audit logs"
- breadcrumbs={[
- { label: 'Admin', href: '/admin/users' },
- { label: 'Audit Logs', href: '/admin/audit-logs' },
- { label: `Entry #${data.id}` },
- ]}
  actions={<Chip variant={actionVariant}>{data.action}</Chip>}
  />
- <div className="px-5 pb-6 grid grid-cols-3 gap-4">
+ <div className="px-5 pb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
  <div className="col-span-2">
  <Panel
  title="Field-level diff"

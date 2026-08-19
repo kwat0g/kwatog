@@ -2,7 +2,8 @@
   "schema_version": 1,
   "finding_sources": [
     "docs/SYSTEM-AUDIT-FINDINGS-2026-08-13.md",
-    "docs/SYSTEM-AUDIT-FINDINGS-2026-08-16.md"
+    "docs/SYSTEM-AUDIT-FINDINGS-2026-08-16.md",
+    "docs/SYSTEM-AUDIT-FINDINGS-2026-08-19.md"
   ],
   "gates": [
     {"id":"F-001","type":"focused_test","command":"cd api && php artisan test --filter=ApprovalDelegation"},
@@ -51,6 +52,14 @@
     {"id":"F-044","type":"focused_test","command":"cd api && php artisan test --filter='BudgetEnforcementBoundaryTest|BudgetConsumptionLevelTest'"},
     {"id":"F-045","type":"focused_test","command":"cd api && php artisan test --filter=ApprovalThresholdBoundaryTest"},
     {"id":"F-046","type":"static_audit","command":"node scripts/verify-audit-acceptance-manifest.mjs"},
-    {"id":"F-047","type":"focused_test","command":"cd api && php artisan test --filter=SchedulerStaleAlertTest"}
+    {"id":"F-047","type":"focused_test","command":"cd api && php artisan test --filter=SchedulerStaleAlertTest"},
+    {"id": "F-048", "type": "focused_test", "command": "cd api && php artisan test --filter=DashboardPanelGateTest"},
+    {"id": "F-049", "type": "focused_test", "command": "cd api && php artisan test --filter=DashboardPanelGateTest"},
+    {"id": "F-050", "type": "focused_test", "command": "cd api && php artisan test --filter=DeliveryReadPermissionTest"},
+    {"id": "F-051", "type": "focused_test", "command": "cd api && php artisan test --filter=WidgetSeedIntegrityTest"},
+    {"id": "F-052", "type": "static_audit", "command": "cd spa && npm run audit:role-permissions"},
+    {"id": "F-053", "type": "static_audit", "command": "cd spa && npm run audit:role-permissions"},
+    {"id": "F-054", "type": "static_audit", "command": "cd spa && npm run audit:dynamic-routes"},
+    {"id": "F-055", "type": "external_evidence", "command": null}
   ]
 }

@@ -14,7 +14,7 @@ use App\Modules\CRM\Services\SalesOrderService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use RuntimeException;
+use App\Common\Exceptions\BusinessRuleException;
 
 class SalesOrderController
 {
@@ -54,7 +54,7 @@ class SalesOrderController
     {
         try {
             $so = $this->service->update($salesOrder, $request->validated());
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return new SalesOrderResource($so);
@@ -64,7 +64,7 @@ class SalesOrderController
     {
         try {
             $this->service->delete($salesOrder);
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return response()->json(null, 204);
@@ -81,11 +81,24 @@ class SalesOrderController
         if (! $this->user()->hasPermission('crm.sales_orders.confirm')) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
-        try {
-            $result = $this->service->confirmWithChainResult($salesOrder);
-        } catch (RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
-        }
+        // Deliberately uncaught. The render hook in bootstrap/app.php turns a
+        // BusinessRuleException into the same 422 this arm produced, plus the
+        // `errors` bag and `code` the subclasses carry — and re-emitting only
+        // getMessage() here threw both away. ChainErrorPanel decides whether to
+        // offer "Manage BOMs" from `errors.bom` / `code === 'missing_bom'`
+        // (MissingBomException, BomStructureException), so with the arm in place
+        // the button that fixes the failure could never appear. This is the one
+        // endpoint in this sweep whose client reads the structured fields; the
+        // rest keep their arm because `applyServerValidationErrors` replaces a
+        // message with a generic "The server flagged some fields" as soon as an
+        // `errors` bag is present.
+        //
+        // NoPriceAgreementException also passes through now: it is an
+        // HttpResponseException carrying its own 422 with errors.product_id, and
+        // HttpResponseException::getMessage() is empty, so this arm used to
+        // answer a missing price agreement with `422 {"message":""}`.
+        $result = $this->service->confirmWithChainResult($salesOrder);
+
         return response()->json([
             'data' => (new SalesOrderResource($result['so']))->resolve(),
             'chain_result' => $result['chain_result'],
@@ -96,7 +109,7 @@ class SalesOrderController
     {
         try {
             $so = $this->service->cancel($salesOrder, $request->input('reason'));
-        } catch (RuntimeException $e) {
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return new SalesOrderResource($so);

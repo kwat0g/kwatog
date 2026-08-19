@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Controllers;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Inventory\Enums\WarehouseZoneType;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Models\WarehouseLocation;
@@ -56,7 +57,7 @@ class WarehouseController
     public function destroyWarehouse(Warehouse $warehouse): JsonResponse
     {
         try { $this->service->deleteWarehouse($warehouse); }
-        catch (\RuntimeException $e) { return response()->json(['message' => $e->getMessage()], 422); }
+        catch (BusinessRuleException $e) { return response()->json(['message' => $e->getMessage()], 422); }
         return response()->json(null, 204);
     }
 
@@ -80,7 +81,7 @@ class WarehouseController
     public function destroyZone(WarehouseZone $zone): JsonResponse
     {
         try { $this->service->deleteZone($zone); }
-        catch (\RuntimeException $e) { return response()->json(['message' => $e->getMessage()], 422); }
+        catch (BusinessRuleException $e) { return response()->json(['message' => $e->getMessage()], 422); }
         return response()->json(null, 204);
     }
 
@@ -106,7 +107,7 @@ class WarehouseController
     public function destroyLocation(WarehouseLocation $location): JsonResponse
     {
         try { $this->service->deleteLocation($location); }
-        catch (\RuntimeException $e) { return response()->json(['message' => $e->getMessage()], 422); }
+        catch (BusinessRuleException $e) { return response()->json(['message' => $e->getMessage()], 422); }
         return response()->json(null, 204);
     }
 
