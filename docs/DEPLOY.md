@@ -157,6 +157,18 @@ docker compose -f docker-compose.prod.yml up -d api nginx reverb queue scheduler
 # Seed once on a new installation, after migration and before opening traffic.
 docker compose -f docker-compose.prod.yml exec api php artisan db:seed --force
 docker compose -f docker-compose.prod.yml exec api php artisan storage:link
+
+# Confirm the administrator exists. AdminUserSeeder SKIPS silently when any of
+# ADMIN_NAME / ADMIN_EMAIL / ADMIN_PASSWORD is blank, and db:seed still exits 0,
+# so a zero-user install looks like a clean one. Check rather than assume:
+docker compose -f docker-compose.prod.yml exec -T api \
+    php artisan tinker --execute='echo DB::table("users")->count(), PHP_EOL;'
+# Expect 1. If it prints 0, set the three keys in .env, then recreate the api
+# container so Compose re-injects env_file (`restart` does NOT re-read it) and
+# run the one seeder on its own:
+#   docker compose -f docker-compose.prod.yml up -d --force-recreate api
+#   docker compose -f docker-compose.prod.yml exec -T api \
+#       php artisan db:seed --class=AdminUserSeeder --force
 ```
 
 > **DO NOT** run `migrate:fresh` in production. Ever. Laravel only re-runs
@@ -206,21 +218,41 @@ docker compose -f /opt/ogami-erp/docker-compose.prod.yml exec nginx nginx -s rel
 
 ## 8. Smoke test
 
-```bash
-# CSRF cookie endpoint (should return 204 + Set-Cookie XSRF-TOKEN)
-curl -i -c /tmp/c.jar https://erp.ogami.example/sanctum/csrf-cookie
+**Send `Origin` and `Referer` on every call.** Sanctum's
+`EnsureFrontendRequestsAreStateful` decides whether to apply the `web`
+middleware group — and therefore whether a session exists — by matching the
+request's `Origin`/`Referer` host against `SANCTUM_STATEFUL_DOMAINS`. A bare
+`curl` sends neither, so Sanctum treats the call as token-based, `StartSession`
+never runs, and `/auth/login` fails with **HTTP 500 `Session store not set on
+request`** *after* verifying the password. That is the documented design working
+as intended, not a deployment fault, but it makes an Origin-less smoke test
+report a broken site. A browser always sends these headers; `curl` must be told
+to.
 
-# Login
-TOKEN=$(grep XSRF-TOKEN /tmp/c.jar | awk '{print $7}')
-curl -i -b /tmp/c.jar -c /tmp/c.jar \
+```bash
+ORIGIN=https://erp.ogami.example      # must match a SANCTUM_STATEFUL_DOMAINS entry
+H=(-H "Origin: $ORIGIN" -H "Referer: $ORIGIN/" -H "Accept: application/json" \
+   -H "X-Requested-With: XMLHttpRequest")
+
+# CSRF cookie endpoint (should return 204 + Set-Cookie XSRF-TOKEN)
+curl -i -c /tmp/c.jar "${H[@]}" $ORIGIN/sanctum/csrf-cookie
+
+# Login. The cookie is URL-encoded, so decode %3D back to = before sending it.
+TOKEN=$(grep XSRF-TOKEN /tmp/c.jar | awk '{print $7}' | sed 's/%3D/=/g')
+curl -i -b /tmp/c.jar -c /tmp/c.jar "${H[@]}" \
     -H "X-XSRF-TOKEN: $TOKEN" \
     -H "Content-Type: application/json" \
-    -d '{"email":"admin@ogami.test","password":"AdminPassword1!"}' \
-    https://erp.ogami.example/api/v1/auth/login
+    -d "{\"email\":\"$ADMIN_EMAIL\",\"password\":\"$ADMIN_PASSWORD\"}" \
+    $ORIGIN/api/v1/auth/login
 
 # Authenticated user fetch
-curl -i -b /tmp/c.jar https://erp.ogami.example/api/v1/auth/user
+curl -i -b /tmp/c.jar "${H[@]}" $ORIGIN/api/v1/auth/user
 ```
+
+Use the `ADMIN_EMAIL` and `ADMIN_PASSWORD` you set in section 5 — those are the
+only credentials that exist on a fresh install. A successful login returns the
+user with a **hashed** `id` (`"id":"pqYKqmK8N4"`, never `"id":1`) and the
+permission array for its role.
 
 In a browser, open the site and confirm in DevTools → Application → Cookies:
 
