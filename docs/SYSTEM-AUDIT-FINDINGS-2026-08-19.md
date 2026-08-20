@@ -231,6 +231,26 @@ dedicated database (`DB_DATABASE=ogami_test_verify`), which removed all of it:
 - **Complexity:** M.
 - **Status note:** Registered 2026-08-20, **open**. Provenance: an implementation existed on branch `feat/OGAMI-104-idempotency` (`27a2dcad`, 2026-06-19) — an `IdempotencyService` plus `MoneyDocumentIdempotencyTest`, +396/-85 across 8 files — which was never merged. That branch was deleted during pre-redeploy cleanup on 2026-08-20 rather than rebased: all three services it modified were substantially rewritten in the two months since, so the diff no longer applied and re-implementing was judged cheaper than resolving it. The finding is recorded here so deleting the branch does not delete the knowledge. Recover the original with `git show 27a2dcad` while the reflog retains it.
 
+### F-056 — The documented fresh-install path finishes with zero users, and its own smoke test asserts a login that was never created
+
+- **Module / feature:** Deployment — `docs/DEPLOY.md` §5–§8, `.env.production.example`, `AdminUserSeeder`.
+- **Related modules:** Auth (the seeder and the login route).
+- **Category:** Deployment correctness / silent skip.
+- **Affected roles:** whoever performs a first-time install — after which nobody can sign in at all.
+- **Current Behavior:** DEPLOY.md §5 says `cp .env.production.example .env`, and §6 runs `php artisan db:seed --force`. `DatabaseSeeder` includes `AdminUserSeeder`, which reads `ADMIN_EMAIL`, `ADMIN_NAME` and `ADMIN_PASSWORD` — and **none of the three appears in `.env.production.example`**. They exist only in `api/.env.example`, which the production runbook never mentions. With all three blank the seeder calls `$this->command?->warn(...)` and returns, and `db:seed` exits **0**.
+- **Problem:** The install reports success and produces a database with 13 roles, 235 permissions, 425 settings, 62 dashboard widgets — and **0 rows in `users`**. There is no interactive account-creation path and no `artisan` command for it, so the only ways in are editing `.env` and re-running the seeder, or hand-writing a bcrypt row. Worse, §8's smoke test then logs in as `admin@ogami.test` / `AdminPassword1!`, credentials that no seeder ever creates, so the runbook's own verification step cannot pass on the system the runbook just built. The failure is invisible at every stage that reports anything.
+- **Real-world scenario:** Exactly what happened during the 2026-08-20 redeploy. Migrations ran clean, the seed printed DONE for every seeder, all seven services came up healthy, TLS was valid, the SPA served HTTP 200 — and the site was unusable, discovered only by counting `users` directly.
+- **Root Cause:** Two env templates with different key sets, and a seeder that treats missing configuration as "skip" rather than "fail". A skip is right for a *local* checkout where a developer may not want a seeded admin, but `db:seed --force` in a production runbook is the one place the account is mandatory, and the seeder cannot tell the two apart.
+- **Recommended Improvement:** Declare the three keys in `.env.production.example` with the seeder's own constraint stated (≥12 characters, or it throws). Add an explicit post-seed `users` count to §6 with the recovery command, since a step that can silently do nothing needs an assertion rather than a note. Fix §8 to use those credentials instead of invented ones. Longer term the seeder should hard-fail when `APP_ENV=production`, which is left as a follow-up rather than done here — it changes seeder behaviour and wants its own test.
+- **Ideal Process:** A completed install has exactly one working administrator, and the runbook proves it rather than assuming it.
+- **New Feature/Module Required:** No.
+- **Cross-Module Impact:** None functional. §8's second defect is documented in the same section: a bare `curl` sends no `Origin`/`Referer`, so Sanctum's `EnsureFrontendRequestsAreStateful` never applies the `web` group, `StartSession` never runs, and `/auth/login` returns **500 `Session store not set on request`** *after* verifying the password. Design working as intended, but it makes an Origin-less smoke test misreport a healthy site as broken. Both were hit in the same session.
+- **Evidence:** `api/database/seeders/AdminUserSeeder.php:17-23` (the blank-check and silent return); `api/database/seeders/DatabaseSeeder.php:16`; `.env.production.example` before this change (no `ADMIN_` key); `docs/DEPLOY.md` §8 before this change (`admin@ogami.test`). Measured on the live host: `DB::table('users')->count()` returned **0** after a clean `db:seed --force` that exited 0. Regression proof: `grep -q '^ADMIN_EMAIL=' .env.production.example && grep -q '^ADMIN_NAME=' .env.production.example && grep -q '^ADMIN_PASSWORD=' .env.production.example` — the F-056 acceptance gate, which fails if the keys are ever dropped again. Post-fix on the live host: 1 user, and a browser-shaped login returns the hashed id `pqYKqmK8N4` with its permission array.
+- **Priority:** P1.
+- **Impact:** A by-the-book production install is inaccessible to everyone, and every signal the runbook checks says it is fine.
+- **Complexity:** S.
+- **Status note:** Registered and fixed 2026-08-20, found while performing the redeploy this register's F-055 note describes.
+
 ---
 
 ## Verification state at close (2026-08-19)
