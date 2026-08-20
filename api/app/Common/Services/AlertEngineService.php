@@ -557,7 +557,13 @@ class AlertEngineService
                 return;
             }
 
-            $emailUsers = $users->filter(static fn (User $user): bool => filter_var($user->email, FILTER_VALIDATE_EMAIL));
+            // `!== false` is load-bearing. filter_var returns the ADDRESS on
+            // success and false only on failure, so a closure typed `: bool`
+            // under strict_types threw a TypeError for every VALID recipient.
+            // The catch below then reported that TypeError as an email-provider
+            // rejection, and notified_email_at stayed null, so every alerts:run
+            // tick retried and produced another fallback notification.
+            $emailUsers = $users->filter(static fn (User $user): bool => filter_var($user->email, FILTER_VALIDATE_EMAIL) !== false);
             if ($emailUsers->isEmpty()) {
                 app(EmailDeliveryFailureNotifier::class)->notify(
                     $users,
