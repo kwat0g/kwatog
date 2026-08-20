@@ -40,7 +40,11 @@ class SendDailyProductionSummary extends Command
             return self::SUCCESS;
         }
 
-        $emailUsers = $users->filter(static fn (User $user): bool => filter_var($user->email, FILTER_VALIDATE_EMAIL));
+        // `!== false` is load-bearing, not defensive. filter_var returns the
+        // ADDRESS on success and false only on failure, so a closure typed
+        // `: bool` under strict_types threw a TypeError for every VALID
+        // recipient — the happy path was the broken one.
+        $emailUsers = $users->filter(static fn (User $user): bool => filter_var($user->email, FILTER_VALIDATE_EMAIL) !== false);
         if ($emailUsers->isEmpty()) {
             app(EmailDeliveryFailureNotifier::class)->notify(
                 $users,
