@@ -11,6 +11,16 @@ Thumbs.db
 .env.*.local
 .env.testing
 .env.testing.*
+# Hand-made copies taken before editing .env. `.env` alone does not match these,
+# so a `.env.bak-20260820` sitting in the repo shows as untracked and a later
+# `git add -A` commits every live secret. Hit for real during the 2026-08-20
+# redeploy. The allow-list below still wins, so the committed templates survive.
+.env.bak*
+.env.backup*
+.env.orig
+.env.save
+.env.*.bak
+*.env.swp
 !.env.example
 !.env.production.example
 !.env.dusk.example
