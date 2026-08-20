@@ -61,6 +61,7 @@
     {"id": "F-053", "type": "static_audit", "command": "cd spa && npm run audit:role-permissions"},
     {"id": "F-054", "type": "static_audit", "command": "cd spa && npm run audit:dynamic-routes"},
     {"id": "F-055", "type": "external_evidence", "command": null},
-    {"id": "F-056", "type": "static_audit", "command": "grep -q '^ADMIN_EMAIL=' .env.production.example && grep -q '^ADMIN_NAME=' .env.production.example && grep -q '^ADMIN_PASSWORD=' .env.production.example"}
+    {"id": "F-056", "type": "static_audit", "command": "grep -q '^ADMIN_EMAIL=' .env.production.example && grep -q '^ADMIN_NAME=' .env.production.example && grep -q '^ADMIN_PASSWORD=' .env.production.example"},
+    {"id": "F-057", "type": "static_audit", "command": "for k in $(grep -oE '^[A-Z_]+' api/.env.example | grep -E 'COMPANY|QUALITY|ADMIN|PDF_FOOTER' | sort -u); do grep -q \"^${k}=\" .env.production.example || { echo \"missing from .env.production.example: $k\"; exit 1; }; done"}
   ]
 }
