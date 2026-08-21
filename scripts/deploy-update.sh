@@ -130,9 +130,14 @@ ok "SMTP configured: ${MAIL_HOST}:${MAIL_PORT} from ${MAIL_FROM_ADDRESS}"
 
 if command -v openssl >/dev/null 2>&1 && command -v timeout >/dev/null 2>&1; then
     log "Checking SMTP TLS reachability"
-    if ! timeout 15 openssl s_client -quiet -starttls smtp \
+    # Mail Manager keeps the SMTP session open after the TLS handshake, so
+    # openssl can time out even after a valid certificate and SMTP greeting
+    # have been received. Validate the certificate line instead of requiring
+    # the remote server to close the session.
+    SMTP_TLS_OUTPUT="$(timeout 15 openssl s_client -starttls smtp \
         -connect "${MAIL_HOST}:${MAIL_PORT}" \
-        -servername "${MAIL_HOST}" </dev/null >/dev/null 2>&1; then
+        -servername "${MAIL_HOST}" </dev/null 2>&1 || true)"
+    if ! grep -Fq 'Verify return code: 0 (ok)' <<<"${SMTP_TLS_OUTPUT}"; then
         die "SMTP TLS connection failed for ${MAIL_HOST}:${MAIL_PORT}."
     fi
     ok "SMTP TLS endpoint reachable"
