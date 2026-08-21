@@ -263,17 +263,30 @@ ok "nginx reloaded"
 
 # ── 11. Smoke test ────────────────────────────────────────────────────────────
 log "Smoke test against https://${SERVER_NAME}"
-if ! HEALTH="$(curl -fsS --max-time 15 "https://${SERVER_NAME}/api/v1/health")"; then
-    die "Health probe failed; deployment is not complete."
-fi
+HEALTH=""
+for attempt in $(seq 1 10); do
+    if HEALTH="$(curl -fsS --max-time 15 "https://${SERVER_NAME}/api/v1/health" 2>/dev/null)"; then
+        case "${HEALTH}" in
+            *'"status":"ok"'*) break ;;
+        esac
+    fi
+    HEALTH=""
+    sleep 2
+done
 case "${HEALTH}" in
     *'"status":"ok"'*) ok "Health: ${HEALTH}" ;;
-    *) die "Health probe did not return ok: ${HEALTH}" ;;
+    *) die "Health probe did not return ok: ${HEALTH:-unreachable}" ;;
 esac
-if ! SPA_CODE="$(curl -fsS -o /dev/null -w '%{http_code}' --max-time 15 "https://${SERVER_NAME}/")"; then
-    die "SPA probe failed; deployment is not complete."
-fi
-[ "${SPA_CODE}" = "200" ] || die "SPA index returned HTTP ${SPA_CODE}; deployment is not complete."
+
+SPA_CODE=""
+for attempt in $(seq 1 10); do
+    if SPA_CODE="$(curl -fsS -o /dev/null -w '%{http_code}' --max-time 15 "https://${SERVER_NAME}/" 2>/dev/null)" && [ "${SPA_CODE}" = "200" ]; then
+        break
+    fi
+    SPA_CODE=""
+    sleep 2
+done
+[ "${SPA_CODE}" = "200" ] || die "SPA index returned HTTP ${SPA_CODE:-unreachable}; deployment is not complete."
 ok "SPA index: HTTP ${SPA_CODE}"
 
 for service in api nginx db redis reverb queue scheduler; do
