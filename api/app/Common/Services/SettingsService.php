@@ -164,9 +164,11 @@ class SettingsService
         // Clear only settings entries. Cache::flush() would also delete
         // sessions, queued jobs, rate-limit counters, and unrelated caches.
         try {
-            DB::table('settings')->pluck('key')->each(
-                static fn (string $key): bool => Cache::forget("settings:{$key}"),
-            );
+            DB::table('settings')->pluck('key')->each(static function (string $key): void {
+                // Do not return Cache::forget()'s boolean: Collection::each()
+                // treats false as a signal to stop iterating.
+                Cache::forget("settings:{$key}");
+            });
         } catch (\Throwable $e) {
             // Cache invalidation is best effort; reads fall back to the DB.
         }
