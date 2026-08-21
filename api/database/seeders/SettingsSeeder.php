@@ -472,6 +472,11 @@ class SettingsSeeder extends Seeder
             );
         }
 
+        // Landing settings are inserted by migrations rather than this
+        // deployment-settings list. Clear all settings keys after a full seed
+        // so a request that arrived during bootstrap cannot retain []/null.
+        $settings->flushCache();
+
         $this->command?->info('Settings + feature toggles seeded.');
     }
 }

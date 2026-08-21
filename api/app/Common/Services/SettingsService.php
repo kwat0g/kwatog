@@ -24,15 +24,27 @@ class SettingsService
             return $default;
         }
 
-        // Cache::remember can throw "Please provide a valid cache path" when
-        // the configured driver (file/redis) isn't usable in the current
-        // process — most often during artisan seeders that boot a partial
-        // application container, or when redis is briefly unavailable. Wrap
-        // it in a try/catch and fall back to a direct DB read so callers
-        // (PDF rendering, branding lookup, etc.) never crash on a transient
+        // Never cache a missing setting's fallback. Migrations insert settings
+        // directly, so caching []/null before a migration or seeder runs can
+        // leave a valid setting invisible until the Redis TTL expires.
+        // Cache::get can throw when the configured driver is unavailable;
+        // fall back to a direct DB read so callers never crash on a transient
         // cache outage.
         try {
-            return Cache::remember("settings:{$key}", self::CACHE_TTL, fn () => $this->fetch($key, $default));
+            $cacheMiss = new \stdClass();
+            $cached = Cache::get("settings:{$key}", $cacheMiss);
+            if ($cached !== $cacheMiss) {
+                return $cached;
+            }
+
+            $row = DB::table('settings')->where('key', $key)->first();
+            if (! $row) {
+                return $default;
+            }
+
+            $value = json_decode($row->value, true) ?? $default;
+            Cache::put("settings:{$key}", $value, self::CACHE_TTL);
+            return $value;
         } catch (\Throwable $e) {
             return $this->fetch($key, $default);
         }
@@ -145,7 +157,18 @@ class SettingsService
 
     public function flushCache(): void
     {
-        // Coarse flush — fine for Sprint 1. Refine per-key in Sprint 8.
-        Cache::flush();
+        if (! Schema::hasTable('settings')) {
+            return;
+        }
+
+        // Clear only settings entries. Cache::flush() would also delete
+        // sessions, queued jobs, rate-limit counters, and unrelated caches.
+        try {
+            DB::table('settings')->pluck('key')->each(
+                static fn (string $key): bool => Cache::forget("settings:{$key}"),
+            );
+        } catch (\Throwable $e) {
+            // Cache invalidation is best effort; reads fall back to the DB.
+        }
     }
 }

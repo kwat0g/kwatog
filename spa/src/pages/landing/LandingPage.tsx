@@ -28,7 +28,9 @@ import { QualitySection } from './sections/QualitySection';
 import { PhilippinesSection } from './sections/PhilippinesSection';
 import { ContactSection } from './sections/ContactSection';
 import { useLandingMotion } from './motion';
-import { landingApi } from '@/api/landing';
+import { SkeletonLandingPage } from '@/components/ui/Skeleton';
+import { QueryErrorState } from '@/components/ui/QueryErrorState';
+import { landingApi, type LandingContact, type LandingContent } from '@/api/landing';
 
 /**
  * Spread `inert` (+ aria-hidden) onto a wrapper when `active`, so background
@@ -41,10 +43,30 @@ function inertWhen(active: boolean): Record<string, unknown> {
 }
 
 export default function LandingPage() {
+  const contactQuery = useQuery({ queryKey: ['landing', 'contact'], queryFn: landingApi.contact, staleTime: 300_000 });
+  const contentQuery = useQuery({ queryKey: ['landing', 'content'], queryFn: landingApi.content, staleTime: 300_000 });
+
+  if (contactQuery.isPending || contentQuery.isPending) {
+    return <SkeletonLandingPage />;
+  }
+
+  if (contactQuery.isError || contentQuery.isError) {
+    return (
+      <QueryErrorState
+        subject="the landing page"
+        onRetry={() => {
+          void Promise.all([contactQuery.refetch(), contentQuery.refetch()]);
+        }}
+      />
+    );
+  }
+
+  return <LandingPageContent contact={contactQuery.data} content={contentQuery.data} />;
+}
+
+function LandingPageContent({ contact, content }: { contact: LandingContact; content: LandingContent }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const { data: contact } = useQuery({ queryKey: ['landing', 'contact'], queryFn: landingApi.contact, staleTime: 300_000 });
-  const { data: content } = useQuery({ queryKey: ['landing', 'content'], queryFn: landingApi.content, staleTime: 300_000 });
   useLandingMotion(rootRef);
 
   useEffect(() => {

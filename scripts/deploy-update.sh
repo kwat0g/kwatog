@@ -247,6 +247,9 @@ ${COMPOSE} exec -T api php artisan config:cache
 ${COMPOSE} exec -T api php artisan route:cache
 ${COMPOSE} exec -T api php artisan view:cache
 ${COMPOSE} exec -T api php artisan storage:link
+# Migrations write settings directly, so invalidate only settings cache keys
+# after schema/data changes. This deliberately does not flush Redis globally.
+${COMPOSE} exec -T api php artisan tinker --execute='app(\App\Common\Services\SettingsService::class)->flushCache();'
 ok "Caches rebuilt"
 
 # ── 9. Start consumers only after migration and cache rebuild ────────────────
