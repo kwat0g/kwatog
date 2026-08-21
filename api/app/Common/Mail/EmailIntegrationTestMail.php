@@ -21,7 +21,7 @@ class EmailIntegrationTestMail extends Mailable implements ShouldQueue
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: 'Ogami Philippines · Brevo email integration test');
+        return new Envelope(subject: 'Ogami Philippines · AWS Mail Manager email integration test');
     }
 
     public function content(): Content
@@ -36,8 +36,8 @@ class EmailIntegrationTestMail extends Mailable implements ShouldQueue
     {
         app(EmailDeliveryFailureNotifier::class)->notifyUserId(
             $this->fallbackUserId,
-            'Brevo email integration test',
-            'The live email test could not be delivered. Check the Brevo SMTP configuration and queue worker.',
+            'AWS Mail Manager email integration test',
+            'The live email test could not be delivered. Check the AWS Mail Manager SMTP configuration and queue worker.',
             ['reason' => $e->getMessage()],
         );
     }

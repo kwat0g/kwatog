@@ -1,5 +1,5 @@
 <x-mail::message>
-# Brevo email integration test
+# AWS Mail Manager email integration test
 
 Hello,
 
@@ -16,7 +16,7 @@ This is a live transactional-email test from **{{ $brand['name'] }}**.
 | VAT status | {{ $brand['vat_status'] }} |
 | Certification | {{ $brand['certification'] }} |
 
-The Brevo SMTP queue accepted this message from the Ogami Philippines application.
+The AWS Mail Manager SMTP queue accepted this message from the Ogami Philippines application.
 
 Thanks,<br>
 {{ $brand['name'] }}

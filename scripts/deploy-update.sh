@@ -63,6 +63,31 @@ ok()   { printf '\033[1;32m✓ %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33m! %s\033[0m\n' "$*"; }
 die()  { printf '\033[1;31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
 
+# Read one simple KEY=value entry without sourcing .env. Production secrets can
+# contain shell metacharacters (the SMTP password currently contains literal
+# '$' characters); sourcing the file would expand them or execute substitutions.
+env_value() {
+    local key="$1" value
+    value="$(awk -v wanted="${key}" '
+        $0 !~ /^[[:space:]]*#/ && index($0, "=") {
+            key = $0
+            sub(/=.*/, "", key)
+            if (key == wanted) {
+                sub(/^[^=]*=/, "", $0)
+                sub(/[[:space:]]*\r$/, "", $0)
+                print $0
+                exit
+            }
+        }
+    ' "${ENV_FILE}")"
+    if [[ "${value}" == '"'*'"' ]]; then
+        value="${value:1:${#value}-2}"
+    elif [[ "${value}" == "'"*"'" ]]; then
+        value="${value:1:${#value}-2}"
+    fi
+    printf '%s' "${value}"
+}
+
 START_TS=$(date +%s)
 trap 'die "Update FAILED at line $LINENO. Services left as-is; investigate with: ${COMPOSE} ps && ${COMPOSE} logs --tail=50 api"' ERR
 
@@ -73,10 +98,47 @@ log "Preflight checks"
 command -v docker >/dev/null || die "docker not installed."
 docker compose version >/dev/null 2>&1 || die "docker compose plugin missing."
 
-# SERVER_NAME drives the nginx render + smoke test. Pull it from .env.
-SERVER_NAME="$(grep -E '^SERVER_NAME=' "${ENV_FILE}" | head -1 | cut -d= -f2- | tr -d '"'"'"' ')"
+# Read only the values needed by this host-side preflight and backup. Do not
+# source the live .env: Docker Compose reads it safely, while a shell would
+# expand '$' in passwords and can execute command substitutions.
+SERVER_NAME="$(env_value SERVER_NAME)"
 [ -n "${SERVER_NAME}" ] || die "SERVER_NAME not set in ${ENV_FILE}."
 ok "Target domain: ${SERVER_NAME}"
+
+MAIL_MAILER="$(env_value MAIL_MAILER)"
+MAIL_HOST="$(env_value MAIL_HOST)"
+MAIL_PORT="$(env_value MAIL_PORT)"
+MAIL_SCHEME="$(env_value MAIL_SCHEME)"
+MAIL_USERNAME="$(env_value MAIL_USERNAME)"
+MAIL_PASSWORD="$(env_value MAIL_PASSWORD)"
+MAIL_FROM_ADDRESS="$(env_value MAIL_FROM_ADDRESS)"
+DB_USERNAME="$(env_value DB_USERNAME)"
+DB_DATABASE="$(env_value DB_DATABASE)"
+DB_PASSWORD="$(env_value DB_PASSWORD)"
+
+if [ "${MAIL_MAILER}" != "smtp" ]; then
+    die "MAIL_MAILER must be smtp in production (currently ${MAIL_MAILER:-unset}); log/array mailers do not deliver messages."
+fi
+for mail_key in MAIL_HOST MAIL_PORT MAIL_SCHEME MAIL_USERNAME MAIL_PASSWORD MAIL_FROM_ADDRESS; do
+    [ -n "${!mail_key:-}" ] || die "${mail_key} must be set for production SMTP delivery."
+done
+case "${MAIL_PORT}" in
+    465|587|2525|2587) ;;
+    *) die "MAIL_PORT=${MAIL_PORT} is not an approved submission port (use 465, 587, 2525, or 2587)." ;;
+esac
+ok "SMTP configured: ${MAIL_HOST}:${MAIL_PORT} from ${MAIL_FROM_ADDRESS}"
+
+if command -v openssl >/dev/null 2>&1 && command -v timeout >/dev/null 2>&1; then
+    log "Checking SMTP TLS reachability"
+    if ! timeout 15 openssl s_client -quiet -starttls smtp \
+        -connect "${MAIL_HOST}:${MAIL_PORT}" \
+        -servername "${MAIL_HOST}" </dev/null >/dev/null 2>&1; then
+        die "SMTP TLS connection failed for ${MAIL_HOST}:${MAIL_PORT}."
+    fi
+    ok "SMTP TLS endpoint reachable"
+else
+    warn "openssl/timeout unavailable; SMTP TLS reachability will be checked after the containers start."
+fi
 
 # ── 1. Sync code ──────────────────────────────────────────────────────────────
 # The nginx conf is rendered in place (SERVER_NAME substituted), so it shows as
@@ -104,7 +166,6 @@ if [ "${DO_BACKUP}" -eq 1 ]; then
     DB_CID="$(${COMPOSE} ps -q db 2>/dev/null)"
     if [ -n "${DB_CID}" ] && [ "$(docker inspect -f '{{.State.Running}}' "${DB_CID}" 2>/dev/null)" = "true" ]; then
         mkdir -p "${BACKUP_DIR}" 2>/dev/null || sudo mkdir -p "${BACKUP_DIR}"
-        set -a; . "./${ENV_FILE}"; set +a
         TS="$(date +%Y%m%d-%H%M%S)"
         OUT="${BACKUP_DIR}/predeploy-${TS}-${PREV_SHA}.sql.gz"
         TMP="$(mktemp "${BACKUP_DIR}/.predeploy-${TS}.XXXXXX")"

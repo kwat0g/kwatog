@@ -168,7 +168,7 @@ class RunArDunningCommandTest extends TestCase
         ]);
 
         (new InvoiceDunningMail($invoice, 7, 8, [$officer->id]))
-            ->failed(new \RuntimeException('Brevo delivery failed'));
+            ->failed(new \RuntimeException('Mail delivery failed'));
 
         $this->assertDatabaseHas('notifications', [
             'notifiable_id' => $officer->id,

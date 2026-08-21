@@ -182,7 +182,7 @@ class PublicRecruitmentTest extends TestCase
         Storage::fake('local');
         Mail::shouldReceive('to')
             ->once()
-            ->andThrow(new \RuntimeException('Brevo rejected the recipient'));
+            ->andThrow(new \RuntimeException('Mail provider rejected the recipient'));
 
         app(RecruitmentService::class)->submitApplication($this->posting, [
             'first_name' => 'NoEmail',

@@ -16,7 +16,7 @@ make fresh                         # migrate + seed (DESTRUCTIVE — never on pr
 ```
 
 - SPA + API at http://localhost (API proxied at `/api/v1/*`)
-- Email delivery uses the Brevo SMTP relay configured in `api/.env`.
+- Email delivery uses the AWS SES Mail Manager authenticated SMTP endpoint configured in `api/.env`.
 - Reverb WebSocket at `ws://localhost:8080` (direct, **not** proxied through Nginx)
 
 ## Common commands (`Makefile`)
@@ -42,7 +42,7 @@ React 18 SPA (Vite + TS) ──HTTP-only cookies──▶ Laravel 11 REST API (P
                   PostgreSQL 16 · Redis 7 · Reverb (WS)
 ```
 
-Services in `docker-compose.yml`: `api`, `spa`, `nginx`, `db`, `redis`, `reverb`, and `queue`. Email is delivered through the Brevo SMTP relay configured in `api/.env`.
+Services in `docker-compose.yml`: `api`, `spa`, `nginx`, `db`, `redis`, `reverb`, and `queue`. Email is delivered through the AWS SES Mail Manager authenticated SMTP endpoint configured in `api/.env`.
 
 ### Key directories
 

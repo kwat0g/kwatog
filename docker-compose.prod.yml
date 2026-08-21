@@ -22,7 +22,9 @@ services:
     container_name: ogami-migrate
     restart: "no"
     working_dir: /var/www
-    env_file: .env
+    env_file:
+      - path: .env
+        format: raw
     environment:
       APP_ENV: production
       APP_DEBUG: "false"
@@ -41,7 +43,9 @@ services:
     container_name: ogami-api
     restart: unless-stopped
     working_dir: /var/www
-    env_file: .env
+    env_file:
+      - path: .env
+        format: raw
     environment:
       APP_ENV: production
       APP_DEBUG: "false"
@@ -127,7 +131,9 @@ services:
     container_name: ogami-reverb
     restart: unless-stopped
     working_dir: /var/www
-    env_file: .env
+    env_file:
+      - path: .env
+        format: raw
     command: php artisan reverb:start --host=0.0.0.0 --port=8080
     depends_on:
       - api
@@ -142,7 +148,9 @@ services:
     container_name: ogami-queue
     restart: unless-stopped
     working_dir: /var/www
-    env_file: .env
+    env_file:
+      - path: .env
+        format: raw
     # 1800s matches the longest durable listener; retry_after is kept above it
     # so Redis does not redeliver a live long-running job.
     command: php artisan queue:work --tries=3 --timeout=1800 --sleep=3
@@ -166,7 +174,9 @@ services:
     container_name: ogami-scheduler
     restart: unless-stopped
     working_dir: /var/www
-    env_file: .env
+    env_file:
+      - path: .env
+        format: raw
     # Run one truthful scheduler tick every 60s. The wrapper observes
     # ScheduledTaskFailed because Laravel's native schedule:run catches task
     # exceptions and otherwise exits 0; a failed tick must restart this

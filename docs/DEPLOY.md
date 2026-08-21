@@ -104,15 +104,35 @@ sudo certbot renew --dry-run
 ```bash
 cd /opt/ogami-erp
 cp .env.production.example .env
-nano .env   # fill in DB_PASSWORD, APP_KEY, HASHIDS_SALT, and SES MAIL_*, etc.
+nano .env   # fill in DB_PASSWORD, APP_KEY, HASHIDS_SALT, and Mail Manager MAIL_*, etc.
 ```
 
-For Amazon SES SMTP, use the username and password from the downloaded SES
-SMTP credentials CSV as `MAIL_USERNAME` and `MAIL_PASSWORD`. Use a verified
-sender/domain for `MAIL_FROM_ADDRESS`. The relay settings are the SES SMTP
-endpoint for the selected region (for example,
-`MAIL_HOST=email-smtp.ap-southeast-2.amazonaws.com`), `MAIL_PORT=587`, and
-`MAIL_SCHEME=smtp`.
+For Amazon SES Mail Manager, use the authenticated ingress endpoint hostname
+ending in `.mail-manager-smtp.amazonaws.com`, together with that endpoint's
+username and SMTP password. Use an approved sender for `MAIL_FROM_ADDRESS`.
+The production settings are `MAIL_PORT=587` and `MAIL_SCHEME=smtp`.
+The production Compose file uses `env_file` with `format: raw`, so literal
+`$` characters in SMTP credentials are passed unchanged to Laravel. Keep the
+password in `.env` as the provider supplied it; do not shell-source `.env`.
+
+If the organization uses another SMTP relay, use that provider's SMTP login,
+SMTP key/password, hostname, and verified sender instead. Do not use an API key,
+the provider's account password, or `MAIL_MAILER=log`; the latter only writes a
+local log entry and makes queued jobs appear successful without delivering
+anything.
+
+Before opening traffic, verify all of the following:
+
+```bash
+grep -E '^(MAIL_MAILER|MAIL_HOST|MAIL_PORT|MAIL_SCHEME|MAIL_FROM_ADDRESS)=' .env
+test "$(grep '^MAIL_MAILER=' .env | cut -d= -f2-)" = smtp
+```
+
+The deployment script checks the required SMTP values and performs a TLS
+reachability check. SMTP reachability is not the same as deliverability: the
+Mail Manager traffic policy and rule set must permit the authenticated sender
+and route the message to the internet. Confirm the message in the Mail
+Manager archive and the recipient inbox when testing Gmail/Yahoo delivery.
 
 Generate values:
 
@@ -157,6 +177,15 @@ docker compose -f docker-compose.prod.yml up -d api nginx reverb queue scheduler
 # Seed once on a new installation, after migration and before opening traffic.
 docker compose -f docker-compose.prod.yml exec api php artisan db:seed --force
 docker compose -f docker-compose.prod.yml exec api php artisan storage:link
+
+# Queue one real integration message to the configured administrator. This
+# exercises the same SMTP + Redis queue path used by application mail. Inspect
+# the queue logs and the recipient inbox; a queued/DONE job alone is not proof
+# of delivery.
+docker compose -f docker-compose.prod.yml exec -T api php artisan tinker \
+    --execute='Mail::to(env("ADMIN_EMAIL"))->queue(new \App\Common\Mail\EmailIntegrationTestMail);'
+docker compose -f docker-compose.prod.yml exec -T api php artisan queue:restart
+docker compose -f docker-compose.prod.yml logs --since=2m queue
 
 # Confirm the administrator exists. AdminUserSeeder SKIPS silently when any of
 # ADMIN_NAME / ADMIN_EMAIL / ADMIN_PASSWORD is blank, and db:seed still exits 0,

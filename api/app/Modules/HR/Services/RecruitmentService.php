@@ -145,7 +145,7 @@ class RecruitmentService
 
         try {
             // This internal alert is independent from the candidate email.
-            // HR must still see every saved application when Brevo is down.
+            // HR must still see every saved application when the mail provider is down.
             $this->notifyHrNewApplication($application, $posting);
         } catch (\Throwable $e) {
             Log::warning('Application saved but HR inbox notification failed.', [

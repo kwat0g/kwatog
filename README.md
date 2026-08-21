@@ -26,7 +26,7 @@ docker compose exec api php artisan key:generate
 make fresh         # migrate + seed
 ```
 
-Open http://localhost — SPA served via Nginx; API proxied at `/api/v1/*`. Configure Amazon SES SMTP credentials in `api/.env` before testing email workflows; local email actions send real messages.
+Open http://localhost — SPA served via Nginx; configure AWS SES Mail Manager SMTP credentials in `api/.env` before testing email workflows; local email actions send real messages.
 
 ## Make targets
 
