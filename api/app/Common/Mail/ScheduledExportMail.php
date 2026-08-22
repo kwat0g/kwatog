@@ -22,12 +22,20 @@ class ScheduledExportMail extends Mailable implements ShouldQueue
         public readonly string $exportName,
         public readonly string $module,
         public readonly string $filename,
-        public readonly string $bytes,
+        string $bytes,
         public readonly ExportFormat $format,
         public readonly ?int $ownerId = null,
     ) {
+        // Queue payloads are JSON encoded by the Redis connector. XLSX/CSV
+        // output is arbitrary binary data, so carrying it directly in a
+        // queued mailable causes "Malformed UTF-8" failures before the job
+        // reaches the worker. Base64 keeps the payload transport-safe while
+        // preserving the original bytes for the attachment.
+        $this->encodedBytes = base64_encode($bytes);
         $this->afterCommit();
     }
+
+    private readonly string $encodedBytes;
 
     public function envelope(): Envelope
     {
@@ -53,7 +61,14 @@ class ScheduledExportMail extends Mailable implements ShouldQueue
     public function attachments(): array
     {
         return [
-            Attachment::fromData(fn (): string => $this->bytes, $this->filename)
+            Attachment::fromData(function (): string {
+                $bytes = base64_decode($this->encodedBytes, true);
+                if ($bytes === false) {
+                    throw new \RuntimeException('Scheduled export attachment payload is invalid.');
+                }
+
+                return $bytes;
+            }, $this->filename)
                 ->withMime($this->format->mimeType()),
         ];
     }
