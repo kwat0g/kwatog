@@ -104,7 +104,8 @@ class EmployeeMasterExport extends BaseModuleExport
             'status' => [
                 'label'   => 'Status',
                 'default' => true,
-                'resolver' => fn (Employee $e) => ucwords(str_replace('_', ' ', (string) $e->status)),
+                'resolver' => fn (Employee $e) => $e->status?->label()
+                    ?? ucwords(str_replace('_', ' ', (string) $e->getRawOriginal('status'))),
             ],
             'email' => [
                 'label'   => 'Email',

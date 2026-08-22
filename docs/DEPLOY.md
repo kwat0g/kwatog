@@ -354,6 +354,29 @@ errors, no warnings.
 
 ## 10. Subsequent deploys
 
+### Independent production health check
+
+The repository ships `scripts/ogami-healthcheck.sh`, which checks the public
+Cloudflare path, all production containers, the durable scheduler ledger, the
+freshness and integrity of the latest Postgres backup, and root-disk usage. It
+is designed to run outside the application so it can detect a dead API or
+container.
+
+Install the systemd timer once on the VPS:
+
+```bash
+sudo install -m 0644 ops/systemd/ogami-healthcheck.service /etc/systemd/system/ogami-healthcheck.service
+sudo install -m 0644 ops/systemd/ogami-healthcheck.timer /etc/systemd/system/ogami-healthcheck.timer
+sudo systemctl daemon-reload
+sudo systemctl enable --now ogami-healthcheck.timer
+sudo systemctl start ogami-healthcheck.service
+sudo journalctl -u ogami-healthcheck.service -n 20 --no-pager
+```
+
+The timer records failures in the system journal. Pair it with an external
+uptime/alerting service for phone or email notifications; a host that is down
+cannot notify from its own timer.
+
 Once the initial deploy is in, deploys are a `git pull + rebuild + migrate`:
 
 ```bash

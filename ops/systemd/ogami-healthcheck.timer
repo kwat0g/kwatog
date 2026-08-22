@@ -1,0 +1,12 @@
+[Unit]
+Description=Run the Ogami ERP production health check every five minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=5min
+RandomizedDelaySec=30s
+Persistent=true
+Unit=ogami-healthcheck.service
+
+[Install]
+WantedBy=timers.target

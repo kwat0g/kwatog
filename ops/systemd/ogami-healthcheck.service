@@ -1,0 +1,11 @@
+[Unit]
+Description=Ogami ERP production health check
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=kwat0g
+WorkingDirectory=/opt/ogami-erp
+ExecStart=/opt/ogami-erp/scripts/ogami-healthcheck.sh
+SyslogIdentifier=ogami-healthcheck
