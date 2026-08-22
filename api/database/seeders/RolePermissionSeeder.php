@@ -23,6 +23,8 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'admin.roles.manage',       'name' => 'Manage Roles & Permissions'],
                 ['slug' => 'admin.settings.manage',    'name' => 'Manage System Settings'],
                 ['slug' => 'admin.audit_logs.view',    'name' => 'View Audit Logs'],
+                ['slug' => 'admin.backups.view',        'name' => 'View Backup History'],
+                ['slug' => 'admin.backups.manage',      'name' => 'Create and Restore Backups'],
                 // REC-01 — view the Segregation-of-Duties matrix + violation report.
                 ['slug' => 'admin.sod.view',           'name' => 'View Segregation-of-Duties Matrix'],
                 ['slug' => 'admin.users.manage',       'name' => 'Manage Users'],

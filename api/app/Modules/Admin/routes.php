@@ -9,6 +9,7 @@ use App\Common\Controllers\ScheduledExportController;
 use App\Modules\Admin\Controllers\ActivityFeedController;
 use App\Modules\Admin\Controllers\ApprovalDelegationController;
 use App\Modules\Admin\Controllers\AuditLogController;
+use App\Modules\Admin\Controllers\BackupController;
 use App\Modules\Admin\Controllers\BulkPrintController;
 use App\Modules\Admin\Controllers\PermissionController;
 use App\Modules\Admin\Controllers\RoleController;
@@ -76,6 +77,19 @@ Route::prefix('admin')
                 Route::patch('{user}/reset-password', [UserAdminController::class, 'resetPassword']);
                 Route::get('{user}/login-history', [UserAdminController::class, 'loginHistory']);
             });
+    });
+
+// Infrastructure recovery is intentionally separate from ordinary settings.
+// View access is read-only; create/restore is a second, destructive permission.
+Route::prefix('admin/backups')
+    ->middleware(['auth:sanctum', 'session.timeout', 'password.expired'])
+    ->group(function (): void {
+        Route::get('/', [BackupController::class, 'index'])
+            ->middleware('permission:admin.backups.view');
+        Route::post('/', [BackupController::class, 'store'])
+            ->middleware(['permission:admin.backups.manage', 'throttle:sensitive']);
+        Route::post('/restore', [BackupController::class, 'restore'])
+            ->middleware(['permission:admin.backups.manage', 'throttle:sensitive']);
     });
 
 Route::prefix('admin')

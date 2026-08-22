@@ -229,11 +229,11 @@ Schedule::command('audit:prune --months=12')
     ->withoutOverlapping(120)
     ->onOneServer();
 
-// OGAMI-018 — Daily database backup at 03:17 (off-peak, off-:00 to avoid the
-// global cron stampede). Wraps scripts/db-backup.sh (pg_dump + gzip +
-// retention + optional S3). Backups underpin the restore drill documented in
-// docs/RESTORE-DRILL.md.
-Schedule::command('db:backup')
+// OGAMI-018 — Daily full backup at 03:17 (off-peak, off-:00 to avoid the
+// global cron stampede). Wraps scripts/db-backup.sh plus the private-file
+// archive (gzip/tar + retention + optional S3). Backups underpin the restore
+// drill documented in docs/RESTORE-DRILL.md.
+Schedule::command('db:full-backup')
     ->dailyAt('03:17')
     ->withoutOverlapping(120)
     ->onOneServer();

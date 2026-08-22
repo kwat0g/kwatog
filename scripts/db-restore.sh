@@ -42,13 +42,24 @@ fi
 : "${DB_PASSWORD:?DB_PASSWORD required}"
 : "${DB_DATABASE:?DB_DATABASE required}"
 
+# DB_DATABASE is deployment configuration, not a user input field. Still
+# validate it before interpolating it into the maintenance SQL so a malformed
+# server environment can never turn this destructive helper into arbitrary SQL.
+case "${DB_DATABASE}" in
+    ''|*[!a-zA-Z0-9_-]*)
+        echo "ERROR: DB_DATABASE contains unsupported characters" >&2
+        exit 2
+        ;;
+esac
+
 export PGPASSWORD="${DB_PASSWORD}"
 
 # Connect to the maintenance DB (`postgres`) to drop+create the target.
 PSQL_ADMIN=(psql --host="${DB_HOST}" --port="${DB_PORT}" --username="${DB_USERNAME}" --dbname=postgres -v ON_ERROR_STOP=1)
 
 echo "==> terminating active connections to ${DB_DATABASE}"
-"${PSQL_ADMIN[@]}" -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${DB_DATABASE}' AND pid <> pg_backend_pid();" >/dev/null
+"${PSQL_ADMIN[@]}" -v target_db="${DB_DATABASE}" \
+    -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = :'target_db' AND pid <> pg_backend_pid();" >/dev/null
 
 echo "==> dropping and recreating ${DB_DATABASE}"
 "${PSQL_ADMIN[@]}" -c "DROP DATABASE IF EXISTS \"${DB_DATABASE}\";"

@@ -11,17 +11,25 @@ quarterly.
 
 ## 1. How backups are produced
 
-Three paths, all using the same `scripts/db-backup.sh` (plain `pg_dump` →
-`gzip`, 14-file retention, optional S3 upload):
+Three paths exist. The Laravel scheduler and admin center use the full-backup
+workflow; the host and manual database paths use `scripts/db-backup.sh`
+(plain `pg_dump` → `gzip`, 14-file retention, optional S3 upload):
 
 | Path | Trigger | Output |
 |------|---------|--------|
-| Scheduler | `php artisan db:backup` daily **03:17** (`api/routes/console.php`) | `storage/app/backups/ogami-<ts>.sql.gz` in the api container |
+| Scheduler | `php artisan db:full-backup` daily **03:17** (`api/routes/console.php`) | `storage/app/backups/ogami-<ts>.sql.gz` + `ogami-files-<ts>.tar.gz` in the api container |
 | Host cron | `scripts/db-backup-cron.sh` (system crontab) | `./backups/` on the host |
 | Manual | `make backup` (dev) / `make prod-backup` (prod) | `./backups/` on the host |
 
 Off-site copies: set `BACKUP_S3_BUCKET` (e.g. `s3://ogami-backups`) so each
 dump is also `aws s3 cp`'d. Verify off-site retention separately.
+
+The admin **Backup & Restore** center adds a queued full-backup path using
+`db:full-backup`. It pairs the database dump with an archive of private
+application uploads (`ogami-files-<ts>.tar.gz`), validates both artifacts, and
+records their SHA-256 checksums in `backup_operations`. Restore requests always
+create a new rollback pair before entering maintenance mode. The API accepts
+only generated artifact filenames; it does not accept arbitrary paths or SQL.
 
 Filename format: `ogami-YYYYMMDD-HHMMSS.sql.gz`.
 

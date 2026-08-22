@@ -36,6 +36,7 @@ const EntityAuditTrailPage = lazy(() => import('@/pages/admin/audit-logs/entity'
 
 // Active sessions management
 const SessionsPage = lazy(() => import('@/pages/admin/sessions'));
+const AdminBackupsPage = lazy(() => import('@/pages/admin/backups'));
 
 export const adminRoutes = (
  <>
@@ -103,6 +104,14 @@ export const adminRoutes = (
  element={
  <PermissionGuard permission="admin.settings.manage">
  <SessionsPage />
+ </PermissionGuard>
+ }
+ />
+ <Route
+ path="/admin/backups"
+ element={
+ <PermissionGuard permission="admin.backups.view">
+ <AdminBackupsPage />
  </PermissionGuard>
  }
  />

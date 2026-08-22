@@ -43,6 +43,7 @@ import {
   LuX,
   LuShieldAlert,
   LuMonitor,
+  LuDatabase,
   LuListChecks,
   LuScanBarcode,
   LuGraduationCap,
@@ -680,6 +681,12 @@ export const SECTIONS: NavSection[] = [
         label: 'Sessions',
         icon: LuMonitor,
         permission: 'admin.settings.manage',
+      },
+      {
+        to: '/admin/backups',
+        label: 'Backup & Restore',
+        icon: LuDatabase,
+        permission: 'admin.backups.view',
       },
       {
         to: '/admin/gov-tables',

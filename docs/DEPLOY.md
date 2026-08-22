@@ -327,10 +327,11 @@ upload from the host (the stock Postgres image is not assumed to contain the
 AWS CLI). A configured off-site target fails the backup command if the host
 tool or upload is unavailable.
 
-The Laravel scheduler also runs `db:backup` daily at 03:17. Production API
-images include the backup script, `pg_dump`, and the optional AWS CLI, and the
+The Laravel scheduler runs `db:full-backup` daily at 03:17. Production API
+images include both backup scripts, `pg_dump`, and the optional AWS CLI, and the
 default scheduler output is retained in the shared application storage. The
-host-cron path above remains the operator-visible copy used for restore drills.
+host-cron path above remains the operator-visible database copy used for restore
+drills.
 
 ### Off-site (S3) replication
 
@@ -351,6 +352,45 @@ Daily backups live on the same droplet by default. To replicate off-site:
 
 When BACKUP_S3_BUCKET is unset (default), the script is local-only — no
 errors, no warnings.
+
+### Admin Backup & Restore center
+
+The admin UI at **Administration → Backup & Restore** uses the queued
+`db:full-backup` command. Each full backup contains:
+
+- a validated PostgreSQL dump;
+- a validated archive of `storage/app/private` (employee documents, resumes,
+  delivery proofs, and other private uploads); and
+- SHA-256 metadata recorded in the `backup_operations` ledger.
+
+Set these optional values in the production `.env` to keep the UI artifacts in
+the persistent application volume explicitly:
+
+```dotenv
+BACKUP_DIR=/var/www/storage/app/backups
+BACKUP_FILES_DIRECTORY=/var/www/storage/app/private
+BACKUP_FILES_KEEP=30
+```
+
+The restore button requires the `admin.backups.manage` permission and a typed
+`RESTORE <database-filename>` confirmation. It creates a fresh rollback backup,
+enters application maintenance mode, restores the selected database and
+private files, applies pending migrations, and then exits maintenance mode.
+Do not start a restore during an active business cutover; it is a destructive
+operation and should still be exercised against a disposable database during
+the quarterly drill.
+
+After the migration is deployed, run the normal permission seeder so the
+system administrator role receives the new backup permissions:
+
+```bash
+docker compose -f docker-compose.prod.yml exec -T api php artisan db:seed \
+  --class=RolePermissionSeeder --force
+```
+
+The UI reports whether S3 is configured, but a local backup is not a disaster
+recovery plan. Configure the off-site settings above before relying on the
+restore center after VPS loss.
 
 ## 10. Subsequent deploys
 
