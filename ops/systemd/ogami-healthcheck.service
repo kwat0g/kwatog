@@ -5,7 +5,10 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-User=kwat0g
+# Backups are intentionally mode 0600 and owned by root. The monitor needs to
+# validate their gzip integrity, so it runs as root while remaining read-only
+# with respect to application state.
+User=root
 WorkingDirectory=/opt/ogami-erp
 ExecStart=/opt/ogami-erp/scripts/ogami-healthcheck.sh
 SyslogIdentifier=ogami-healthcheck
