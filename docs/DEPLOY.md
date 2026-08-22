@@ -377,6 +377,15 @@ The timer records failures in the system journal. Pair it with an external
 uptime/alerting service for phone or email notifications; a host that is down
 cannot notify from its own timer.
 
+For the host-level daily database backup, install the repository's safe cron
+entry instead of sourcing `.env` directly from a shell:
+
+```bash
+sudo install -m 0755 ops/cron/ogami-pgdump /etc/cron.daily/ogami-pgdump
+sudo /etc/cron.daily/ogami-pgdump
+tail -n 20 /var/log/ogami-backup.log
+```
+
 Once the initial deploy is in, deploys are a `git pull + rebuild + migrate`:
 
 ```bash

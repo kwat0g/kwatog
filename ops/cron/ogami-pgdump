@@ -1,0 +1,42 @@
+#!/bin/sh
+# Root cron entry for the host-level Postgres backup.
+# Reads only the required simple KEY=value values without sourcing .env, so
+# passwords containing shell metacharacters are not expanded or executed.
+
+set -eu
+
+cd /opt/ogami-erp
+
+env_value() {
+    key="$1"
+    awk -v wanted="$key" '
+        $0 !~ /^[[:space:]]*#/ && index($0, "=") {
+            key = $0
+            sub(/=.*/, "", key)
+            if (key == wanted) {
+                sub(/^[^=]*=/, "", $0)
+                sub(/[[:space:]]*\r$/, "", $0)
+                print $0
+                exit
+            }
+        }
+    ' .env
+}
+
+DB_USERNAME="$(env_value DB_USERNAME)"
+DB_PASSWORD="$(env_value DB_PASSWORD)"
+DB_DATABASE="$(env_value DB_DATABASE)"
+BACKUP_S3_BUCKET="$(env_value BACKUP_S3_BUCKET)"
+BACKUP_S3_PREFIX="$(env_value BACKUP_S3_PREFIX)"
+AWS_ACCESS_KEY_ID="$(env_value AWS_ACCESS_KEY_ID)"
+AWS_SECRET_ACCESS_KEY="$(env_value AWS_SECRET_ACCESS_KEY)"
+AWS_DEFAULT_REGION="$(env_value AWS_DEFAULT_REGION)"
+
+export DB_USERNAME DB_PASSWORD DB_DATABASE BACKUP_S3_BUCKET BACKUP_S3_PREFIX
+export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_DEFAULT_REGION
+export DB_CONTAINER=ogami-db
+export CONTAINER_BACKUP_DIR=/var/backups/ogami
+export HOST_BACKUP_DIR=/var/backups/ogami
+export BACKUP_KEEP=30
+
+exec /opt/ogami-erp/scripts/db-backup-cron.sh >>/var/log/ogami-backup.log 2>&1
