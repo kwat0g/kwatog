@@ -125,3 +125,118 @@ The remaining findings are intentionally not marked fixed:
 - F-010 and F-011 still require product/operations decisions.
 
 The focused existing backend suite passed 52 tests/183 assertions; the new M033 route-coverage suite passed 9 tests/32 assertions. Scoped ESLint and PHP syntax checks pass. The full SPA typecheck reports only unrelated diagnostics in HR/accounting/assets code as recorded in fix-log.md; no M033 or portal diagnostics remain.
+
+## Re-audit addendum — 2026-08-26
+
+The 2026-08-25 verification above is accurate for the findings it names, but it
+is **incomplete about what that session changed**. Two coupled edits to
+`SalesOrderService` appear in neither its fix-log nor its report, and together
+they broke Chain 1. This addendum records them and four new findings.
+
+### F-012 — Broken (regression) — the state machine refused legitimate forward transitions
+
+The 2026-08-25 session narrowed `ALLOWED_TRANSITIONS`
+(`api/app/Modules/CRM/Services/SalesOrderService.php:44-84`) from forward-only to
+strictly linear, dropping `confirmed → partially_delivered / delivered /
+invoiced`, `in_production → invoiced`, and `partially_delivered → invoiced`. In
+the same commit it changed rejection handling from returning a typed `skipped`
+result to **throwing** `BusinessRuleException` (`:751`), and updated only this
+module's own tests to match.
+
+The original table was authored in the deliberate feature commit b8d57d0a ("C-2
+wire SalesOrder status transitions") and its comment stated the intent —
+"Backwards or terminal transitions are absent" — so forward skips were always in
+scope. Two of the dropped transitions are reachable in production:
+
+1. **`confirmed → delivered`.** `in_production` is set only by
+   `WorkOrderService::start()` (`:369`). An order filled from finished-goods
+   stock has no work order to start, and `DeliveryService::create()` (`:226`)
+   deliberately does not require the SO to be in production — it checks only
+   remaining quantity and the outgoing inspection. `DeliveryService::confirm()`
+   then calls `markDelivered()` inside its transaction (`:901`), so the throw
+   rolled back the entire delivery confirmation. **Order-to-cash could not
+   complete.**
+2. **`partially_delivered → invoiced`.** `InvoiceService::finalize()` calls
+   `markInvoiced()` *after* posting the journal entry, in the same transaction
+   (`:299`). Refusing the transition rolled back a posted JE, making it
+   impossible to bill a partial delivery. **No test covered this** — it was a
+   latent second blocker found by reading the call site, not from the failure
+   list.
+
+Resolved: forward skips restored, the louder throw kept (with the table correct,
+only genuine backwards/terminal transitions now throw, which is the stronger
+design). `cancelled` remains absent as a target on purpose — no `mark*` helper
+requests it and `cancel()` is the sole entry point, with its own downstream
+guards.
+
+### F-013 — Stale test assertion, not a code defect
+
+`SalesOrderChainBridgeTest::test_confirm_so_handles_missing_bom_gracefully`
+asserted `work_orders_created >= 1` for a BOM-less product. The behaviour change
+is intentional and owned elsewhere: B01 in
+`audit/domains/manufacturing/bom-mrp-planning/fix-log.md` records MRP now
+blocking the standard-WO path (`MrpEngineService.php:400`), corroborated
+independently by `WorkOrderService::assertMaterialPlan()`, which refuses to
+*start* a standard WO with no material plan. The WO the test demanded could never
+have been started. Assertion corrected; `MrpEngineService` untouched.
+
+### F-014 — Broken — the portal sales-order detail endpoint returned 500 on every call
+
+`CustomerPortalService::salesOrderDetail()` (`:136-149`) ran
+`WorkOrderStatus::tryFrom((string) $workOrder->status)`, but `WorkOrder` casts
+`status` to that enum (`WorkOrder.php:46`), so the string cast raised `Error:
+Object of class …WorkOrderStatus could not be converted to string`. Any portal
+customer opening an order with a linked work order got a 500. Resolved by
+accepting either shape. This is the portal sales-order surface, which
+`status.md` and F-006 both place in this module.
+
+### F-015 — Missing — no guard against silent narrowing of the transition table
+
+Nothing asserted that the table is forward-only rather than linear, which is
+precisely why F-012 passed this module's own suite while breaking three suites
+elsewhere; `partially_delivered → invoiced` had no coverage at all. Resolved with
+two data-driven tests in `SalesOrderStatusTransitionsTest` pinning both halves of
+the contract — the five reachable forward skips, and the backwards/terminal
+refusals.
+
+### F-008 — partially resolved
+
+The historical half is done:
+`2026_08_26_030000_backfill_sales_order_lifecycle_timestamps` recovers the six
+lifecycle timestamps from `audit_logs` (`SalesOrder` uses `HasAuditLog`, so the
+first write of each status is `MIN(created_at)` over rows whose
+`new_values->>'status'` names it). No `updated_at` guessing: orders predating the
+audit trail stay NULL, because a plausible-looking invented date in a field an
+operator reads as "when it happened" is worse than a blank.
+
+The canonical half is still open and is now quantified: `ChainDefinitions.php:37-51`
+maps `cancelled → 'closed'`, the **last of nine** `STEPS_SALES_ORDER`, and
+`ChainBroadcaster` broadcasts `resolveStrict()`'s output (`:80`), so a cancelled
+order goes out as step 9/9 with all eight earlier steps complete — it renders as
+a fully successful order, while `SalesOrderService::chain()` calls the same order
+`skipped`. The fix needs a new terminal state in shared `app/Common/` chain
+infrastructure plus every consumer, so it stays out of this module.
+
+### F-005 — still open, re-verified
+
+`MrpEngineService::runForSalesOrder()` (`:73`) still locks only the prior plan and
+never re-reads `$so->status`, so cancellation racing the queued job can still
+leave an active plan and work orders on a cancelled order. Both that method and
+its trigger (`MRP\Listeners\QueueMrpOnSalesOrderConfirmed`) are outside this
+module, and no sales-order-side guard exists — the SO cannot know a job is in
+flight.
+
+### Disposition after the re-audit
+
+All 9 assigned failures pass. Module-owned suites are green
+(`SalesOrderStatusTransitionsTest` 20, `SalesOrderChainBridgeTest` 8,
+`SalesOrderRouteCoverageTest` 9, `SalesOrderChainStageTest` 4,
+`SalesOrderLifecycleConcurrencyTest` 2, `CustomerProductPricingTest` 12), and the
+45 delivery/invoice tests that consume the transition table pass with 177
+assertions. Two `CustomerPortalServiceTest` failures remain and belong to other
+modules (portal delivery-proof streaming, 8D report route); they are itemised in
+`fix-log.md`.
+
+Status stays `🔁 Needs Re-audit`: F-005 and the canonical half of F-008 are out of
+module scope, and F-010/F-011 plus a new third question are blocked on a human
+business decision.

@@ -124,25 +124,42 @@ class SalesOrderChainBridgeTest extends TestCase
 
     public function test_confirm_so_handles_missing_bom_gracefully(): void
     {
-        // Create SO with a product that has NO BOM — MRP should still succeed
-        // (with a warning diagnostic) and create a WO.
+        // Create SO with a product that has NO BOM. Confirmation must still
+        // succeed and the plan must still be produced, with a warning
+        // diagnostic — but NO standard work order is created.
+        //
+        // This last part is deliberate policy, not a gap. A standard WO with
+        // no material plan can never be started:
+        // WorkOrderService::assertMaterialPlan() refuses it unless the WO is
+        // explicitly classed service/non_stock/prototype with an authorized
+        // reason. Creating one here would only ever produce a dead record, so
+        // MrpEngineService blocks the standard-WO path for a BOM-less line
+        // (see api/app/Modules/MRP/Services/MrpEngineService.php:400 and the
+        // B01 entry in audit/domains/manufacturing/bom-mrp-planning/fix-log.md).
         [$so, $product] = $this->makeSoWithoutBom();
 
         $result = $this->soService->confirmWithChainResult($so);
 
         $cr = $result['chain_result'];
-        $this->assertGreaterThanOrEqual(1, $cr['work_orders_created'],
-            'WO should still be created even when BOM is missing.');
+        $this->assertSame(0, $cr['work_orders_created'],
+            'A BOM-less line must not produce a standard work order it could never start.');
         $this->assertSame(0, $cr['shortages'],
             'No shortages expected when BOM is missing (no demand explosion).');
 
+        // Confirmation itself still succeeded — that is the "gracefully" part.
+        $this->assertSame(SalesOrderStatus::Confirmed->value, $so->fresh()->status->value,
+            'A missing BOM must not block the sales-order confirmation.');
+
         // Verify the plan has a diagnostic warning.
         $plan = MrpPlan::where('sales_order_id', $so->id)->first();
+        $this->assertNotNull($plan, 'The MRP plan must remain visible so the gap is actionable.');
         $diagnostics = $plan->diagnostics;
         $missingBomWarning = collect($diagnostics)->firstWhere('type', 'missing_bom');
         $this->assertNotNull($missingBomWarning,
             'Plan diagnostics should contain a missing_bom warning.');
         $this->assertSame('warning', $missingBomWarning['kind']);
+        $this->assertSame((int) $product->id, (int) $missingBomWarning['product_id'],
+            'The warning must name the product whose BOM is missing.');
     }
 
     // ─── HTTP-level tests ─────────────────────────────────────────────────

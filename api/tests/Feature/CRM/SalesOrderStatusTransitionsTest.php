@@ -113,6 +113,98 @@ class SalesOrderStatusTransitionsTest extends TestCase
         $this->assertSame(SalesOrderStatus::PartiallyDelivered->value, $so->fresh()->status->value);
     }
 
+    /**
+     * The transition table is FORWARD-ONLY, not strictly linear, and nothing
+     * used to assert that. When it was narrowed to a strict chain, confirming
+     * any delivery for an order that never entered production threw and rolled
+     * the delivery confirmation back — 8 suites went red at once.
+     *
+     * `in_production` is set only by WorkOrderService::start(). An order filled
+     * from finished-goods stock has no work order to start, and
+     * DeliveryService::create() does not require the SO to be in production,
+     * so `confirmed → delivered` is a reachable, supported path.
+     *
+     * @dataProvider forwardSkipProvider
+     */
+    public function test_forward_skips_are_permitted(
+        SalesOrderStatus $from,
+        string $method,
+        SalesOrderStatus $expected,
+    ): void {
+        $so = $this->makeSo($from);
+
+        $this->soService->{$method}($so->id);
+
+        $this->assertSame($expected->value, $so->fresh()->status->value,
+            "{$from->value} → {$expected->value} must be permitted; it is reachable in production.");
+    }
+
+    /**
+     * @return array<string, array{0: SalesOrderStatus, 1: string, 2: SalesOrderStatus}>
+     */
+    public static function forwardSkipProvider(): array
+    {
+        return [
+            // Fulfilled from stock — production was never entered.
+            'confirmed → delivered' => [
+                SalesOrderStatus::Confirmed, 'markDelivered', SalesOrderStatus::Delivered,
+            ],
+            'confirmed → partially_delivered' => [
+                SalesOrderStatus::Confirmed, 'markPartiallyDelivered', SalesOrderStatus::PartiallyDelivered,
+            ],
+            // Advance / proforma billing before any delivery exists.
+            'confirmed → invoiced' => [
+                SalesOrderStatus::Confirmed, 'markInvoiced', SalesOrderStatus::Invoiced,
+            ],
+            'in_production → invoiced' => [
+                SalesOrderStatus::InProduction, 'markInvoiced', SalesOrderStatus::Invoiced,
+            ],
+            // Billing a partial delivery. InvoiceService::finalize() calls
+            // markInvoiced() AFTER posting the journal entry, in the same
+            // transaction — refusing this rolled back a posted JE.
+            'partially_delivered → invoiced' => [
+                SalesOrderStatus::PartiallyDelivered, 'markInvoiced', SalesOrderStatus::Invoiced,
+            ],
+        ];
+    }
+
+    /**
+     * The other half of the same contract: forward-only must still mean no
+     * going back, and no leaving a terminal state.
+     *
+     * @dataProvider refusedTransitionProvider
+     */
+    public function test_backwards_and_terminal_transitions_are_refused(
+        SalesOrderStatus $from,
+        string $method,
+    ): void {
+        $so = $this->makeSo($from);
+
+        try {
+            $this->soService->{$method}($so->id);
+            $this->fail("{$from->value} must not accept {$method}().");
+        } catch (BusinessRuleException $e) {
+            $this->assertStringContainsString('not allowed', $e->getMessage());
+        }
+
+        $this->assertSame($from->value, $so->fresh()->status->value,
+            'A refused transition must leave the status untouched.');
+    }
+
+    /**
+     * @return array<string, array{0: SalesOrderStatus, 1: string}>
+     */
+    public static function refusedTransitionProvider(): array
+    {
+        return [
+            'invoiced is terminal'           => [SalesOrderStatus::Invoiced, 'markDelivered'],
+            'cancelled is terminal'          => [SalesOrderStatus::Cancelled, 'markDelivered'],
+            'draft must be confirmed first'  => [SalesOrderStatus::Draft, 'markDelivered'],
+            'delivered cannot go back'       => [SalesOrderStatus::Delivered, 'markPartiallyDelivered'],
+            'invoiced cannot go back'        => [SalesOrderStatus::Invoiced, 'markInProduction'],
+        ];
+    }
+
     public function test_backwards_transition_throws_and_records_reason(): void
     {
         $so = $this->makeSo(SalesOrderStatus::Delivered);

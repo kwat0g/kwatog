@@ -135,9 +135,17 @@ class CustomerPortalService
         ]);
 
         $salesOrder->workOrders->each(function ($workOrder): void {
+            // WorkOrder casts `status` to the WorkOrderStatus enum, so the
+            // attribute is already an enum instance. Casting it to string to
+            // feed tryFrom() raised "Object of class WorkOrderStatus could not
+            // be converted to string" and turned this whole portal endpoint
+            // into a 500. Accept either shape.
+            $status = $workOrder->status;
             $workOrder->setAttribute(
                 'status_label',
-                WorkOrderStatus::tryFrom((string) $workOrder->status)?->label() ?? (string) $workOrder->status,
+                $status instanceof WorkOrderStatus
+                    ? $status->label()
+                    : (WorkOrderStatus::tryFrom((string) $status)?->label() ?? (string) $status),
             );
         });
 

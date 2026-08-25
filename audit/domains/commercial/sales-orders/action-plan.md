@@ -75,3 +75,70 @@ The module was re-audited because the previous report predates substantial uncom
 - Item 4 is covered by SalesOrderRouteCoverageTest.php plus the existing lifecycle/chain/concurrency suites; the direct suite passed 9 tests/32 assertions.
 - Items 5–6 remain deferred because their correct fixes are in MRP/shared chain infrastructure outside this module.
 - Item 7 remains deferred pending the cancellation-reason and archive/restore UI decisions.
+
+## Session execution status — 2026-08-26 (resumed after crash)
+
+Reclaimed a 7h-stale lock. The 2026-08-25 fix-log was already written, and its
+claims verify against the committed source, so items 1–4 really were done. But
+that session also made two coupled changes it logged **nowhere** — narrowing
+`ALLOWED_TRANSITIONS` to a strict linear chain while simultaneously changing
+`transitionOrFail()` from returning a `skipped` result to throwing — and those
+broke order-to-cash in 8 tests across two other modules.
+
+### Item 0 (unplanned, highest severity) — restore the forward-only transition contract
+
+- Finding: F-012. **Fixed.** Order-to-cash could not complete: confirming a
+  delivery for an order that never entered production threw and rolled the whole
+  confirmation back, and finalizing an invoice for a partially delivered order
+  rolled back a posted journal entry. Restored the forward-skip entries, kept the
+  louder throw, and added F-015 regression coverage so the table cannot be
+  silently narrowed again.
+
+### Items 1–4 — already done before this session
+
+Verified in the committed source, not taken on trust. Nothing re-fixed.
+
+### Item 5 — queued-MRP cancellation race
+
+- Finding: F-005. **Deferred on a hard scope constraint, not a risk label.**
+  The fix belongs in `MrpEngineService::runForSalesOrder()` and
+  `MRP\Listeners\QueueMrpOnSalesOrderConfirmed`, both outside this module.
+  Re-verified the race is still open (the method locks the prior plan but never
+  re-reads `$so->status`). There is no sales-order-side guard: the SO cannot know
+  a job is in flight. Route to the MRP module.
+
+### Item 6 — cancelled-chain semantics and historical timestamps
+
+- Finding: F-008. **Split. Historical half done, canonical half deferred.**
+  - Done: `2026_08_26_030000_backfill_sales_order_lifecycle_timestamps` recovers
+    the six lifecycle timestamps from `audit_logs` for orders that transitioned
+    before the columns existed. Truthful — no `updated_at` guessing; orders with
+    no audit trail stay NULL.
+  - Deferred: `ChainDefinitions` maps `cancelled → closed`, the last of nine
+    steps, so a cancelled order is broadcast as 9/9 complete. Correcting it means
+    a new terminal state in shared `app/Common/` chain infrastructure plus every
+    consumer. Not fixable from inside this module without spreading the wrong
+    answer.
+
+### Item 7 — policy-dependent behaviour
+
+- Findings: F-010, F-011. **Escalated as questions, not deferred work.** Both
+  need a human business decision before the contract changes; guessing would
+  either 422 existing integrations (mandatory cancellation reason) or invent an
+  admin surface and permission set nobody asked for. Written up in `fix-log.md`
+  under "Questions for the product/operations owner", along with a third question
+  raised by the F-012 fix (whether `partially_delivered → invoiced` should leave
+  the order looking fully invoiced).
+
+### Also fixed, outside the plan
+
+- F-013 — a stale assertion in `SalesOrderChainBridgeTest` demanding a work order
+  that the intentional, separately-logged B01 no-BOM policy no longer creates.
+- F-014 — `CustomerPortalService::salesOrderDetail()` returned 500 on every call
+  (enum cast to string). Portal sales-order surface, i.e. this module's declared
+  scope.
+
+### Status
+
+`🔁 Needs Re-audit` — item 5 and the canonical half of item 6 are genuinely out
+of module scope, and item 7 is blocked on a human decision.

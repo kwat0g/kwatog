@@ -36,15 +36,40 @@ class SalesOrderService
     /**
      * C-2 — Allowed SalesOrder status transitions. Each key is a current
      * status; the array is the list of statuses we permit moving INTO.
-     * Terminal and backwards transitions are absent. Cancellation is an
-     * explicit operation because it has downstream reconciliation rules.
+     *
+     * The rule is FORWARD-ONLY, not strictly linear. Every stage may skip
+     * ahead, because the O2C chain has legitimate paths that never visit an
+     * intermediate stage and the mark* helpers are called from inside the
+     * owning module's write transaction:
+     *
+     *   confirmed → delivered / partially_delivered
+     *     `in_production` is only ever set by WorkOrderService::start(). An
+     *     order fulfilled from finished-goods stock has no work order to
+     *     start, and DeliveryService::create() deliberately does not require
+     *     the SO to be in production — it only checks remaining quantity and
+     *     the outgoing inspection. Refusing this made confirming such a
+     *     delivery throw and roll back the whole delivery confirmation.
+     *
+     *   confirmed / in_production / partially_delivered → invoiced
+     *     InvoiceService::finalize() calls markInvoiced() *after* posting the
+     *     journal entry, inside the same transaction. Refusing the transition
+     *     therefore rolls back a posted JE, which makes it impossible to bill
+     *     a partial delivery or raise an advance invoice.
+     *
+     * Backwards and terminal transitions remain absent, and an illegal
+     * transition is a hard error (see transitionOrFail) so the owning
+     * operation rolls back rather than succeeding while the SO goes stale.
+     *
+     * `cancelled` is not a target here on purpose: no mark* helper requests
+     * it. Cancellation goes through cancel(), which has its own downstream
+     * reconciliation guards (assertCancellableDownstreamState).
      *
      * @var array<string, list<string>>
      */
     private const ALLOWED_TRANSITIONS = [
-        'confirmed'           => ['in_production'],
-        'in_production'       => ['partially_delivered', 'delivered'],
-        'partially_delivered' => ['delivered'],
+        'confirmed'           => ['in_production', 'partially_delivered', 'delivered', 'invoiced'],
+        'in_production'       => ['partially_delivered', 'delivered', 'invoiced'],
+        'partially_delivered' => ['delivered', 'invoiced'],
         'delivered'           => ['invoiced'],
         'invoiced'            => [],
         'cancelled'           => [],
