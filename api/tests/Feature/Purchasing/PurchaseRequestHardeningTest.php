@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Tests\Feature\Purchasing;
 
 use App\Common\Models\ApprovalRecord;
+use App\Common\Models\WorkflowDefinition;
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Exceptions\ForbiddenActionException;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -48,11 +50,16 @@ class PurchaseRequestHardeningTest extends TestCase
             'department_id' => $otherDepartment->id,
         ]);
 
-        $this->actingAs($head)
+        // Assert on the collection's own ids, not a loose JSON fragment. A hash
+        // id encodes the integer key with no per-model salt, so PR #N and user
+        // #N hash identically — assertJsonMissing(['id' => …]) then matches the
+        // nested `requester` object and fails on row counts that are correct.
+        $listed = $this->actingAs($head)
             ->getJson('/api/v1/purchasing/purchase-requests')
             ->assertOk()
-            ->assertJsonFragment(['id' => $visible->hash_id])
-            ->assertJsonMissing(['id' => $hidden->hash_id]);
+            ->json('data.*.id');
+
+        $this->assertSame([$visible->hash_id], $listed);
 
         $this->actingAs($head)
             ->getJson("/api/v1/purchasing/purchase-requests/{$hidden->hash_id}")
@@ -194,6 +201,83 @@ class PurchaseRequestHardeningTest extends TestCase
             ->getJson("/api/v1/purchasing/purchase-requests/{$pr->hash_id}")
             ->assertOk()
             ->assertJsonPath('data.items.0.suggested_vendor.id', $vendor->hash_id);
+    }
+
+    /**
+     * Drift guard. A workflow step whose role cannot pass the route middleware
+     * is a stall, not a control: the approve route is
+     * `permission:purchasing.pr.approve` and show is `permission:purchasing.view`,
+     * so every role the seeded chain names must hold both. This is the defect
+     * L-37 already recorded for return_management.approve, and it recurred here
+     * on production_manager (step 2, "Manager").
+     */
+    public function test_every_seeded_approval_step_role_can_reach_the_approve_route(): void
+    {
+        $workflow = WorkflowDefinition::query()
+            ->where('workflow_type', 'purchase_request')
+            ->where('is_active', true)
+            ->firstOrFail();
+
+        $this->assertNotEmpty($workflow->steps);
+
+        foreach ($workflow->steps as $step) {
+            $slug = (string) $step['role'];
+            $user = $this->user($slug);
+
+            $this->assertTrue(
+                $user->hasPermission('purchasing.pr.approve'),
+                "Chain step {$step['order']} routes to '{$slug}', which cannot reach the approve route.",
+            );
+            $this->assertTrue(
+                $user->hasPermission('purchasing.view'),
+                "Chain step {$step['order']} routes to '{$slug}', which cannot open the request it must approve.",
+            );
+        }
+    }
+
+    public function test_plant_wide_step_role_can_approve_and_open_any_department_request(): void
+    {
+        $department = Department::factory()->create();
+        $requester = $this->user('employee', $department);
+        $head = $this->user('department_head', $department);
+        // Deliberately a different department: "Manager" is a company-level
+        // office, so its step must not be department-scoped.
+        $manager = $this->user('production_manager', Department::factory()->create());
+        $service = app(PurchaseRequestService::class);
+
+        $pr = $service->create($this->payload(), $requester);
+        $service->submit($pr);
+        $service->approve($pr->fresh(), $head, 'Step 1 approved');
+
+        $this->actingAs($manager)
+            ->getJson("/api/v1/purchasing/purchase-requests/{$pr->hash_id}")
+            ->assertOk();
+
+        $this->actingAs($manager)
+            ->patchJson("/api/v1/purchasing/purchase-requests/{$pr->hash_id}/approve", [
+                'remarks' => 'Step 2 approved',
+            ])
+            ->assertOk();
+
+        $this->assertSame('approved', ApprovalRecord::query()
+            ->where('approvable_type', $pr->getMorphClass())
+            ->where('approvable_id', $pr->id)
+            ->where('step_order', 2)
+            ->value('action'));
+    }
+
+    public function test_department_head_cannot_approve_another_departments_step_one(): void
+    {
+        $department = Department::factory()->create();
+        $requester = $this->user('employee', $department);
+        $foreignHead = $this->user('department_head', Department::factory()->create());
+        $service = app(PurchaseRequestService::class);
+
+        $pr = $service->create($this->payload(), $requester);
+        $service->submit($pr);
+
+        $this->expectException(ForbiddenActionException::class);
+        $service->approve($pr->fresh(), $foreignHead, 'Not my department');
     }
 
     /** @return array{priority:string,items:array<int,array<string,string>>} */

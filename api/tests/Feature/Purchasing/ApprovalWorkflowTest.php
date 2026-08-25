@@ -8,6 +8,8 @@ use App\Common\Models\ApprovalRecord;
 use App\Common\Services\ApprovalService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\HR\Models\Department;
+use App\Modules\HR\Models\Employee;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Services\PurchaseRequestService;
@@ -21,22 +23,34 @@ class ApprovalWorkflowTest extends TestCase
 {
     use RefreshDatabase;
 
+    private Department $department;
+
     protected function setUp(): void
     {
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
         $this->seed(WorkflowSeeder::class);
+        $this->department = Department::factory()->create();
     }
 
-    private function makeUser(string $roleSlug = 'system_admin'): User
+    /**
+     * Every actor is backed by an employee in one department, because step 1 of
+     * the purchase_request chain is department-scoped: a department head only
+     * approves its own department's requests. A departmentless fixture tested
+     * the fallback instead of the rule.
+     */
+    private function makeUser(string $roleSlug = 'system_admin', ?Department $department = null): User
     {
         $roleId = Role::where('slug', $roleSlug)->value('id');
 
         return User::create([
-            'name'     => 'Tester ' . uniqid(),
-            'email'    => 't_' . uniqid() . '@x.test',
-            'password' => bcrypt('Password1!'),
-            'role_id'  => $roleId,
+            'name'        => 'Tester ' . uniqid(),
+            'email'       => 't_' . uniqid() . '@x.test',
+            'password'    => bcrypt('Password1!'),
+            'role_id'     => $roleId,
+            'employee_id' => Employee::factory()->create([
+                'department_id' => ($department ?? $this->department)->id,
+            ])->id,
         ]);
     }
 

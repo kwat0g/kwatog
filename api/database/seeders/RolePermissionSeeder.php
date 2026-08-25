@@ -575,6 +575,14 @@ class RolePermissionSeeder extends Seeder
                         'inventory.view',
                         // Quality: view + read sub-resources for quality dashboard / NCR/inspection pages
                         'quality.view', 'quality.inspections.view', 'quality.ncr.view',
+                        // M036 — production_manager is step 2 ("Manager") of the
+                        // seeded purchase_request chain in WorkflowSeeder, but
+                        // held no purchasing slug at all, so the approve route
+                        // rejected the only role that step accepts and every
+                        // submitted PR stalled at step 2. Same defect as L-37
+                        // on return_management.approve. Read + approve only:
+                        // raising and converting a PR stays purchasing's.
+                        'purchasing.view', 'purchasing.pr.approve',
                         'dashboard.plant_manager.view',
                         'maintenance.view', 'assets.view',
                         'search.global', 'notifications.preferences.manage',
