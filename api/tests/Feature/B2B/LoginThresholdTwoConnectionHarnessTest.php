@@ -87,7 +87,7 @@ class LoginThresholdTwoConnectionHarnessTest extends TestCase
         usleep(250000);
         $this->assertSame('', (string) @file_get_contents($resultFile), 'Child must wait before reading the reset counter.');
 
-        DB::table($user->getTable())->whereKey($user->getKey())->update([
+        DB::table($user->getTable())->where($user->getKeyName(), $user->getKey())->update([
             'failed_login_attempts' => 0,
             'locked_until' => null,
             'last_login_at' => now(),

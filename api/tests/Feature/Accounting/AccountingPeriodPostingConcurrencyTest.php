@@ -75,7 +75,7 @@ class AccountingPeriodPostingConcurrencyTest extends TestCase
                 );
             },
             function () use ($period, $admin): void {
-                DB::table('accounting_periods')->whereKey($period->id)->update([
+                DB::table('accounting_periods')->where('id', $period->id)->update([
                     'status' => AccountingPeriodStatus::Closed->value,
                     'closed_at' => now(),
                     'closed_by' => $admin->id,
@@ -178,7 +178,7 @@ class AccountingPeriodPostingConcurrencyTest extends TestCase
                 file_put_contents($this->workerResultPath(), (string) $count);
             },
             function () use ($period): void {
-                DB::table('accounting_periods')->whereKey($period->id)->update([
+                DB::table('accounting_periods')->where('id', $period->id)->update([
                     'reopened_at' => now()->subHour(),
                     'updated_at' => now(),
                 ]);

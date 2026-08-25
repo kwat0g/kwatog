@@ -239,8 +239,8 @@ class AuthEventsAuditTest extends TestCase
     {
         $password = 'CorrectHorse-1!';
         $user = $this->makeUser($password);
-        DB::table('users')->whereKey($user->id)->update(['email' => 'Legacy.Mixed+'.uniqid().'@t.test']);
-        $legacyEmail = (string) DB::table('users')->whereKey($user->id)->value('email');
+        DB::table('users')->where('id', $user->id)->update(['email' => 'Legacy.Mixed+'.uniqid().'@t.test']);
+        $legacyEmail = (string) DB::table('users')->where('id', $user->id)->value('email');
         $this->clearAuthThrottle($legacyEmail);
 
         $this->postLogin(strtoupper($legacyEmail), $password)->assertOk();

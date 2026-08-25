@@ -42,7 +42,12 @@ class CalendarAggregatorTest extends TestCase
 
         $departments = Department::query()->orderBy('id')->take(2)->get();
         $this->alpha = $departments->firstOrFail();
-        $this->beta = $departments->lastOrFail();
+        // Not lastOrFail(): Eloquent Collection has no such method, so this threw
+        // BadMethodCallException in setUp() and failed all 7 tests here — and,
+        // running in-process, poisoned whatever suite came next. beta must be the
+        // SECOND department, so skip(1) fails loudly if only one was seeded rather
+        // than silently aliasing beta to alpha the way last() would.
+        $this->beta = $departments->skip(1)->firstOrFail();
         $this->leaveType = LeaveType::query()->firstOrFail();
     }
 
