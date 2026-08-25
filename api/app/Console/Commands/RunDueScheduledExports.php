@@ -10,6 +10,7 @@ use App\Common\Mail\ScheduledExportMail;
 use App\Common\Models\ScheduledExport;
 use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Common\Services\Export\ExportRunner;
+use App\Common\Services\Export\ScheduledExportArtifactService;
 use App\Common\Services\Export\SpreadsheetExportService;
 use App\Common\Services\SettingsService;
 use Illuminate\Console\Command;
@@ -39,6 +40,7 @@ class RunDueScheduledExports extends Command
     public function __construct(
         private readonly ExportRunner $runner,
         private readonly SpreadsheetExportService $spreadsheets,
+        private readonly ScheduledExportArtifactService $artifacts,
         private readonly SettingsService $settings,
         private readonly EmailDeliveryFailureNotifier $emailFailures,
     ) {
@@ -48,7 +50,13 @@ class RunDueScheduledExports extends Command
     public function handle(): int
     {
         $scanAt = now();
-        $due = ScheduledExport::query()->due($scanAt)->with('owner:id,name,email')->get();
+        // The owner is loaded whole, not as a `id,name,email` projection: the
+        // exporter re-checks the owner's module permission and row-level
+        // department scope, and both read `role_id` / `employee_id`. A partial
+        // select silently made every owner look permissionless, which made a
+        // permission-gated column impossible to schedule and quietly emptied
+        // scoped datasets.
+        $due = ScheduledExport::query()->due($scanAt)->with('owner')->get();
 
         $this->info("Found {$due->count()} due export(s).");
         if ($due->isEmpty()) {
@@ -134,7 +142,21 @@ class RunDueScheduledExports extends Command
             throw new \RuntimeException('Scheduled export has no valid recipients.');
         }
 
-        $exporter = $this->runner->build($row->module, (array) $row->columns, (array) ($row->filters ?? []));
+        if ($row->owner === null) {
+            throw new \RuntimeException('Scheduled export owner no longer exists.');
+        }
+
+        // Revalidate the persisted module, columns, filters, implementation,
+        // and owner capability immediately before background execution. A
+        // schedule may outlive a role/permission change, and its JSON payload
+        // must never become an authorization bypass merely because it was
+        // accepted at creation time.
+        $exporter = $this->runner->build(
+            $row->module,
+            (array) $row->columns,
+            (array) ($row->filters ?? []),
+            $row->owner,
+        );
         $filename = sprintf(
             '%s-%s.%s',
             str_replace('.', '_', $row->module),
@@ -142,17 +164,24 @@ class RunDueScheduledExports extends Command
             $format->extension(),
         );
         $bytes = $this->spreadsheets->render($exporter, $format);
+        $artifactPath = $this->artifacts->store($bytes, $filename);
 
         $name = $row->name;
         $module = $row->module;
-        Mail::to($recipients)->queue(new ScheduledExportMail(
-            $name,
-            $module,
-            $filename,
-            $bytes,
-            $format,
-            $row->owner?->id,
-        ));
+        try {
+            Mail::to($recipients)->queue(new ScheduledExportMail(
+                $name,
+                $module,
+                $filename,
+                $artifactPath,
+                $format,
+                $row->owner->id,
+                true,
+            ));
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Storage::disk(ScheduledExportArtifactService::DISK)->delete($artifactPath);
+            throw $e;
+        }
 
         $nextRunAt = $frequency->nextRunFrom(
             $runAt,

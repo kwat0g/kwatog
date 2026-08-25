@@ -7,18 +7,23 @@ namespace App\Modules\Admin\Controllers;
 use App\Common\Services\BulkPdfService;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Auth\Models\User;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Validation\Rule;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /** Sprint 8 — Task 76. */
 class BulkPrintController extends Controller
 {
     public function __construct(private readonly BulkPdfService $bulk) {}
 
-    public function print(Request $request)
+    public function print(Request $request): StreamedResponse
     {
+        $actor = $request->user();
+        abort_unless($actor instanceof User, 401);
+
         $data = $request->validate([
             'type'  => ['required', Rule::in([
                 'purchase_order', 'bill', 'invoice',
@@ -28,7 +33,7 @@ class BulkPrintController extends Controller
         ]);
 
         $payloads = $this->buildPayloads((string) $data['type'], (array) $data['ids']);
-        return $this->bulk->render((string) $data['type'], $payloads);
+        return $this->bulk->render((string) $data['type'], $payloads, $actor);
     }
 
     /**

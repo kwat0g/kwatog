@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Common\Services;
 
+use App\Common\Enums\DocumentType;
 use App\Common\Exceptions\BusinessRuleException;
-use Barryvdh\DomPDF\Facade\Pdf;
-use Illuminate\Http\Response;
+use App\Common\Services\Pdf\PdfRenderService;
+use App\Modules\Auth\Models\User;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Sprint 8 — Task 76. Renders a list of homogenous documents into one PDF.
@@ -24,6 +26,13 @@ use Illuminate\Http\Response;
  *   'cash_advance'         → resources/views/pdf/cash-advance.blade.php    (same)
  *   'purchase_request'     → resources/views/pdf/purchase-request.blade.php
  *   'clearance'            → resources/views/pdf/clearance.blade.php       (Task 71)
+ *
+ * Lifecycle: the bytes go through PdfRenderService (so the wrapped
+ * per-document Blades receive the same company letterhead, generator, and
+ * watermark context every other official PDF gets) and then through
+ * DocumentVaultService, so a bulk print leaves a `documents` audit row with a
+ * checksum and is re-downloadable through the central permission-checked
+ * route instead of being a one-shot untracked byte stream.
  */
 class BulkPdfService
 {
@@ -39,11 +48,24 @@ class BulkPdfService
         'invoice'          => 'pdf.invoice',
     ];
 
+    public function __construct(
+        private readonly PdfRenderService $renderer,
+        private readonly DocumentVaultService $vault,
+    ) {}
+
     /**
      * @param string                       $type        document type (see RENDERERS)
      * @param iterable<int, array<string,mixed>> $payloads   per-document data arrays
+     * @param User                         $requestedBy the acting user; a bulk
+     *        print is an operator action, so the vault row is filed against the
+     *        requester. A bulk artifact spans many records and therefore has no
+     *        single owning business entity, and `documents.entity_type` /
+     *        `entity_id` are NOT NULL. Access is gated by the `bulk_pdf`
+     *        document-type permission (`admin.print.bulk`) in
+     *        DocumentController::permissionFor(), never by entity ownership, so
+     *        filing against the requester grants no extra reach.
      */
-    public function render(string $type, iterable $payloads): Response
+    public function render(string $type, iterable $payloads, User $requestedBy): StreamedResponse
     {
         if (! isset(self::RENDERERS[$type])) {
             throw new BusinessRuleException("Unsupported bulk document type: {$type}");
@@ -54,15 +76,21 @@ class BulkPdfService
             throw new BusinessRuleException('No documents to render.');
         }
 
-        $pdf = Pdf::loadView('pdf._bulk', [
+        $bytes = $this->renderer->render('pdf._bulk', [
             'view'     => $view,
             'payloads' => $payloadsArr,
-        ])->setPaper('a4', 'portrait');
-
-        $filename = 'bulk-'.$type.'-'.now()->format('YmdHis').'.pdf';
-        return response($pdf->output(), 200, [
-            'Content-Type'        => 'application/pdf',
-            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+        ], [
+            'title'     => 'Bulk '.ucwords(str_replace('_', ' ', $type)),
+            'generator' => $requestedBy,
         ]);
+
+        $document = $this->vault->store(
+            $bytes,
+            DocumentType::BulkPdf,
+            $requestedBy,
+            $requestedBy,
+        );
+
+        return $this->vault->streamDownload($document);
     }
 }
