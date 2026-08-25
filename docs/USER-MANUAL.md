@@ -278,8 +278,14 @@ You only ever see your own data — the server scopes by `auth.user.employee_id`
 - **Bell** in the topbar shows unread count, dropdown lists last 25.
 - **Notification preferences** under *Self-service → Notification
   Preferences* — toggle in-app vs. email per notification type.
-- **Global search**: press `⌘K` (Mac) or `Ctrl+K`, type at least 2 chars,
-  arrow keys to navigate, Enter to open. Results are permission-scoped.
+- **Global search**: press `⌘K` (Mac) or `Ctrl+K`, or tap the magnifier in the
+  topbar on a phone or tablet. Type at least 2 characters, arrow keys to
+  navigate, Enter to open. What you type is matched **literally** as a
+  substring — `%` and `_` are ordinary characters, not wildcards. Results are
+  scoped to the rows you are allowed to see, not merely to the modules you can
+  open: a Department Head searching employees or purchase orders gets their own
+  department's, the same set their list pages show. Archived (deleted) records
+  are never returned.
 
 ## 18. Admin
 

@@ -92,6 +92,21 @@ export function Topbar({ user, onLogout, rightExtras }: TopbarProps) {
  <kbd className="font-mono text-2xs text-subtle">⌘K</kbd>
  </button>
 
+ {/* M009-F07 — the trigger above is `hidden sm:flex` and the only other way
+ in is a ⌘K/Ctrl+K key listener, which is not a gesture a phone or a floor
+ tablet has. Below 640px global search was therefore unreachable, despite
+ the user manual describing it as a general feature. Same handler,
+ icon-only so it fits the narrow bar. */}
+ <Button
+ variant="ghost"
+ size="sm"
+ iconOnly
+ icon={<LuSearch size={14} />}
+ aria-label="Search"
+ onClick={() => setPaletteOpen(true)}
+ className="sm:hidden text-muted hover:text-primary"
+ />
+
  <Tooltip content={resolvedTheme === 'dark' ? 'Light mode' : 'Dark mode'}>
  <Button
  variant="ghost"

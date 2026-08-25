@@ -20,14 +20,18 @@ import {
   LuTruck,
   LuTriangleAlert,
   LuArrowRight,
+  LuCircleAlert,
+  LuRefreshCw,
 
 } from '@/lib/icons';
 import { client } from '@/api/client';
+import { isAxiosError } from 'axios';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { formatPeso } from '@/lib/formatNumber';
 import { focusRingInset } from '@/lib/focus';
 import { useDebounce } from '@/hooks/useDebounce';
 import { LinkButton } from './LinkButton';
+import { Button } from './Button';
 import { SECTIONS, isNavItemVisible } from '@/components/layout/Sidebar';
 import { useAuthStore } from '@/stores/authStore';
 import { useRecentItemsStore } from '@/stores/recentItemsStore';
@@ -113,12 +117,53 @@ interface Props {
   onClose: () => void;
 }
 
+/**
+ * Turn a failed `/search` call into something recoverable — M009-F06.
+ *
+ * The palette used to read only `data` and `isFetching`, so a 403, 429 or 500
+ * rendered as "No results for …": the user was told their term matched nothing
+ * when in fact nothing was searched. Each of these has a different remedy, and
+ * only the last one is worth retrying immediately.
+ */
+function describeFailure(error: unknown): { title: string; hint: string; retryable: boolean } {
+  const status = isAxiosError(error) ? error.response?.status : undefined;
+
+  if (status === 403) {
+    return {
+      title: 'Search is not available to your account',
+      hint: 'Your role does not include global search, or the search feature is switched off for this system.',
+      retryable: false,
+    };
+  }
+  if (status === 429) {
+    return {
+      title: 'Too many searches',
+      hint: 'Search is limited to 30 requests a minute. Wait a moment before trying again.',
+      retryable: true,
+    };
+  }
+  if (status !== undefined && status >= 500) {
+    return {
+      title: 'Search failed on the server',
+      hint: 'Your term is fine — the request did not complete. Retry, or try again shortly.',
+      retryable: true,
+    };
+  }
+  return {
+    title: 'Could not reach search',
+    hint: 'Check your connection, then retry.',
+    retryable: true,
+  };
+}
+
 export function CommandPalette({ open, onClose }: Props) {
   const navigate = useNavigate();
   const [q, setQ] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  /** Whatever had focus when the palette opened, so it can be given back. */
+  const openerRef = useRef<HTMLElement | null>(null);
 
   const permissions = useAuthStore((s) => s.permissions);
   const features = useAuthStore((s) => s.features);
@@ -127,12 +172,19 @@ export function CommandPalette({ open, onClose }: Props) {
   const addRecent = useRecentItemsStore((s) => s.add);
   const clearRecents = useRecentItemsStore((s) => s.clear);
 
-  // Reset on close.
+  // Reset on close, and hand focus back to whatever opened us — M009-F07.
+  // `aria-modal` moves focus into the dialog; dropping it on the floor
+  // afterwards strands keyboard and screen-reader users at the top of the
+  // document, which is the usual reason a palette "loses" the page.
   useEffect(() => {
     if (!open) {
       setQ('');
       setActiveIndex(0);
+      const opener = openerRef.current;
+      openerRef.current = null;
+      if (opener && document.contains(opener)) opener.focus();
     } else {
+      openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       requestAnimationFrame(() => inputRef.current?.focus());
     }
   }, [open]);
@@ -153,7 +205,13 @@ export function CommandPalette({ open, onClose }: Props) {
   const debouncedTerm = useDebounce(trimmed, 200);
   const enabled = open && debouncedTerm.length >= 2;
 
-  const { data: groups = NO_GROUPS, isFetching } = useQuery({
+  const {
+    data: fetchedGroups = NO_GROUPS,
+    isFetching,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ['command-palette', 'search', debouncedTerm],
     queryFn: ({ signal }) =>
       client
@@ -163,7 +221,19 @@ export function CommandPalette({ open, onClose }: Props) {
     // Keep the previous term's rows on screen while the next ones load,
     // rather than blanking the list on every keystroke.
     placeholderData: (prev) => prev,
+    // The global default is `retry: 1`. On this endpoint that is actively
+    // harmful: `/search` is throttled at 30/min, so an automatic retry spends
+    // a second token against the limit that just rejected us and pushes the
+    // window further out. One attempt, then an explicit Retry the user drives.
+    retry: false,
   });
+
+  // `placeholderData` keeps the PREVIOUS term's rows in `data` across a
+  // failure, so on error the list would show stale records under a fresh
+  // query with no indication either was wrong. Drop them and render the
+  // failure instead — M009-F06.
+  const groups = isError ? NO_GROUPS : fetchedGroups;
+  const failure = isError ? describeFailure(error) : null;
 
   // Count the debounce window as loading. Otherwise the 200ms before the
   // request starts reads as "settled with no results", and the empty state
@@ -326,7 +396,7 @@ export function CommandPalette({ open, onClose }: Props) {
 
   if (!open) return null;
 
-  const showEmptyState = searching && !loading && sections.length === 0;
+  const showEmptyState = searching && !loading && !failure && sections.length === 0;
   const totalResults = flatRows.length;
 
   return (
@@ -367,6 +437,40 @@ export function CommandPalette({ open, onClose }: Props) {
               <span className="font-mono text-primary">WO-</span>,{' '}
               <span className="font-mono text-primary">INV-</span>,{' '}
               <span className="font-mono text-primary">NCR-</span>, any name).
+            </div>
+          )}
+
+          {failure && (
+            /*
+             * Deliberately NOT `<QueryErrorState>`: that component states, in so
+             * many words, that it "distinguishes nothing about the cause" — the
+             * right call for a page, wrong here. A 403 means this account will
+             * never get results and retrying is pointless; a 429 means wait; a
+             * 5xx means try again now. Collapsing them would leave the user
+             * hammering a button that cannot work. It is also a full-height
+             * EmptyState, which does not fit a 420px dropdown.
+             */
+            <div className="px-3 py-4 border-t border-subtle first:border-t-0">
+              <div className="flex items-start gap-2.5">
+                <LuCircleAlert size={14} className="text-danger shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-primary">{failure.title}</p>
+                  <p className="mt-0.5 text-xs text-muted">{failure.hint}</p>
+                  {failure.retryable && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon={<LuRefreshCw size={12} />}
+                      loading={isFetching}
+                      disabled={isFetching}
+                      onClick={() => void refetch()}
+                      className="mt-2"
+                    >
+                      Retry
+                    </Button>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
