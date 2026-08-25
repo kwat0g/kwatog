@@ -8,6 +8,7 @@ use App\Common\Models\ApprovalRecord;
 use App\Common\Services\ApprovalService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\HR\Models\Employee;
 use App\Modules\Leave\Events\LeaveRequestApproved;
 use App\Modules\Leave\Events\LeaveRequestPendingHR;
 use App\Modules\Leave\Events\LeaveRequestRejected;
@@ -48,6 +49,29 @@ class LeaveNotificationTest extends TestCase
     {
         $role = Role::where('slug', $slug)->firstOrFail();
         return User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
+    }
+
+    /**
+     * A department head who may actually decide $req.
+     *
+     * `approveDept()`/`reject()` now require the approver's own department to
+     * match the target employee's, and refuse with a ForbiddenActionException
+     * otherwise — the same fail-closed rule the visibility matrix already pins
+     * for reads ("an unlinked department head sees nothing"). A bare
+     * `userWithRole('department_head')` has no `employee_id`, therefore no
+     * department, so it is refused before any event can fire. Link it to an
+     * employee in the requester's department so these tests measure the event
+     * dispatch they are named for rather than the authorization guard.
+     */
+    private function deptHeadFor(LeaveRequest $req): User
+    {
+        $departmentId = Employee::query()->whereKey($req->employee_id)->value('department_id');
+
+        return User::factory()->create([
+            'role_id'     => Role::where('slug', 'department_head')->value('id'),
+            'employee_id' => Employee::factory()->create(['department_id' => $departmentId])->id,
+            'is_active'   => true,
+        ]);
     }
 
     /**
@@ -123,7 +147,7 @@ class LeaveNotificationTest extends TestCase
         Event::fake([LeaveRequestPendingHR::class]);
 
         $req      = $this->makePendingDeptRequest();
-        $deptHead = $this->userWithRole('department_head');
+        $deptHead = $this->deptHeadFor($req);
 
         app(LeaveRequestService::class)->approveDept($req, $deptHead);
 
@@ -163,7 +187,7 @@ class LeaveNotificationTest extends TestCase
         Event::fake([LeaveRequestRejected::class]);
 
         $req      = $this->makePendingDeptRequest();
-        $deptHead = $this->userWithRole('department_head');
+        $deptHead = $this->deptHeadFor($req);
 
         app(LeaveRequestService::class)->reject($req, $deptHead, 'Insufficient leave balance.');
 

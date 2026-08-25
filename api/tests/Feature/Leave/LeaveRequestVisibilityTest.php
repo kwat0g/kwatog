@@ -8,6 +8,7 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
+use App\Modules\Leave\Models\EmployeeLeaveBalance;
 use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Leave\Models\LeaveType;
 use App\Modules\Leave\Services\LeaveRequestService;
@@ -79,6 +80,31 @@ class LeaveRequestVisibilityTest extends TestCase
         $this->alphaHead = Employee::factory()->create(['department_id' => $this->alpha->id]);
         $this->alphaMember = Employee::factory()->create(['department_id' => $this->alpha->id]);
         $this->betaMember = Employee::factory()->create(['department_id' => $this->beta->id]);
+
+        /*
+         * Filing requires an initialized balance for (employee, type, year); the
+         * service refuses with a 422 when none exists. In production
+         * `EmployeeService::create()` seeds those rows inside the employee-insert
+         * transaction, so a real employee always has one — `Employee::factory()`
+         * bypasses that service, so the fixture stands in for it. Without this the
+         * filing-for-another-employee test reads a 422 as "HR was refused", which
+         * is the opposite of the rule it measures.
+         *
+         * This year and the next: the payload date is relative to `now()`, so a
+         * late-December run crosses the year boundary.
+         */
+        foreach ([$this->alphaHead, $this->alphaMember, $this->betaMember] as $employee) {
+            foreach ([(int) now()->year, (int) now()->year + 1] as $year) {
+                EmployeeLeaveBalance::create([
+                    'employee_id' => $employee->id,
+                    'leave_type_id' => $this->type->id,
+                    'year' => $year,
+                    'total_credits' => 10.0,
+                    'used' => 0,
+                    'remaining' => 10.0,
+                ]);
+            }
+        }
     }
 
     private function userFor(string $roleSlug, ?Employee $employee = null): User

@@ -20,11 +20,16 @@ const LEAVE_ID = 'lrTest01';
 const LEAVE_NO = 'LR-202607-0045';
 
 interface LeaveRequest {
-  id: string; leave_request_no: string;
+  id: string;
+  leave_request_no: string;
   leave_type: { id: string; code: string; name: string };
   employee: { id: string; full_name: string };
-  start_date: string; end_date: string; status: string; status_label: string;
-  reason: string; days_requested: number;
+  start_date: string;
+  end_date: string;
+  status: string;
+  status_label: string;
+  reason: string;
+  days_requested: number;
   half_day_period: string | null;
 }
 
@@ -46,9 +51,12 @@ function makeLeave(status: string): LeaveRequest {
     leave_request_no: LEAVE_NO,
     leave_type: { id: 'lt1', code: 'VL', name: 'Vacation Leave' },
     employee: { id: 'emp_ee', full_name: 'Manuel Cruz' },
-    start_date: '2026-07-01', end_date: '2026-07-01',
-    status, status_label: STATUS_LABELS[status] ?? status,
-    days_requested: 1, half_day_period: null,
+    start_date: '2026-07-01',
+    end_date: '2026-07-01',
+    status,
+    status_label: STATUS_LABELS[status] ?? status,
+    days_requested: 1,
+    half_day_period: null,
     reason: 'E2E chain test',
   };
 }
@@ -75,59 +83,107 @@ const OPTIONS_STATUS_LABELS: Record<string, string> = {
 
 async function mockLeaveOptions(page: Page): Promise<void> {
   await page.route('**/api/v1/leaves/requests/options', async (route) => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: {
-      statuses: Object.entries(OPTIONS_STATUS_LABELS).map(([value, label]) => ({ value, label })),
-      half_day_periods: [
-        { value: 'none', label: 'Full day' },
-        { value: 'am', label: 'Morning (AM half-day)' },
-        { value: 'pm', label: 'Afternoon (PM half-day)' },
-      ],
-    } })});
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: {
+          statuses: Object.entries(OPTIONS_STATUS_LABELS).map(([value, label]) => ({
+            value,
+            label,
+          })),
+          half_day_periods: [
+            { value: 'none', label: 'Full day' },
+            { value: 'am', label: 'Morning (AM half-day)' },
+            { value: 'pm', label: 'Afternoon (PM half-day)' },
+          ],
+        },
+      }),
+    });
   });
 }
 
 function listResponse(items: LeaveRequest[]) {
   return {
     data: items,
-    meta: { current_page: 1, last_page: 1, per_page: 25, total: items.length, from: items.length > 0 ? 1 : null, to: items.length > 0 ? items.length : null },
+    meta: {
+      current_page: 1,
+      last_page: 1,
+      per_page: 25,
+      total: items.length,
+      from: items.length > 0 ? 1 : null,
+      to: items.length > 0 ? items.length : null,
+    },
     links: { first: null, last: null, prev: null, next: null },
   };
 }
-function detailResponse(item: LeaveRequest) { return { data: item }; }
+function detailResponse(item: LeaveRequest) {
+  return { data: item };
+}
 
 // ── Tests ───────────────────────────────────────────────────────────────────
 
 test.describe('Leave chain — cross-role workflow', () => {
-
   test('employee files leave → status pending_dept', async ({ page }) => {
     await mockLeaveOptions(page);
-    // Mock leave types
-    await page.route('**/api/v1/leaves/types', async (route) => {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
-        data: [{ id: 'lt1', code: 'VL', name: 'Vacation Leave' }],
-      })});
+    // Mock leave types. The trailing `*` is load-bearing: the self-service page
+    // asks for active types only (`/leaves/types?is_active=true`), and a glob
+    // without it does not match a URL carrying a query string — the request
+    // would fall through to the empty-payload fixture and the Select would have
+    // no "Vacation Leave" option to pick.
+    await page.route('**/api/v1/leaves/types*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: [{ id: 'lt1', code: 'VL', name: 'Vacation Leave' }],
+        }),
+      });
     });
     // Mock balances
     await page.route('**/api/v1/leaves/balances/me', async (route) => {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
-        data: [{
-          id: 'bal1',
-          leave_type: { id: 'lt1', code: 'VL', name: 'Vacation Leave' },
-          year: 2026,
-          total_credits: '15.00',
-          used: '3.00',
-          remaining: '12.00',
-        }],
-      })});
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: [
+            {
+              id: 'bal1',
+              leave_type: { id: 'lt1', code: 'VL', name: 'Vacation Leave' },
+              year: 2026,
+              total_credits: '15.00',
+              used: '3.00',
+              remaining: '12.00',
+            },
+          ],
+        }),
+      });
     });
     // Mock POST create → 201 pending_dept
     await page.route('**/api/v1/leaves/requests', async (route) => {
-      if (route.request().method() !== 'POST') { await route.continue(); return; }
-      await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(detailResponse(makeLeave('pending_dept'))) });
+      if (route.request().method() !== 'POST') {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify(detailResponse(makeLeave('pending_dept'))),
+      });
     });
-    // Mock list (will be empty before, then has one)
-    await page.route('**/api/v1/leaves/requests?*', async (route) => {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(listResponse([makeLeave('pending_dept')])) });
+    // Mock the list this page actually reads. It is the self-scoped
+    // `/hr/self-service/leave-requests`, NOT the general `/leaves/requests` — the
+    // page moved onto the narrower endpoint, and this mock stayed behind. An
+    // unmocked read here is worse than it sounds: the fallback fixture answers
+    // `{}`, and this API function returns `r.data` (the whole envelope, not
+    // `r.data.data`), so `data` came back truthy with no `data.data` array and
+    // the page died in its ErrorBoundary rather than showing an empty list.
+    await page.route('**/api/v1/hr/self-service/leave-requests*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(listResponse([makeLeave('pending_dept')])),
+      });
     });
     await loginAs(page, 'employee', '/self-service/leave');
 
@@ -143,9 +199,13 @@ test.describe('Leave chain — cross-role workflow', () => {
     // Filing happens in a modal on this page — there is no redirect. The filed
     // request comes back through the invalidated list, where the Status cell
     // shows the label LeaveRequestStatus::label() produces for pending_dept.
-    await expect(page.getByRole('cell', { name: 'Pending department head' })).toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole('cell', { name: 'Pending department head' })).toBeVisible({
+      timeout: 5000,
+    });
     // Toast confirms submission
-    await expect(page.getByText(/Leave request submitted for approval/i)).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText(/Leave request submitted for approval/i)).toBeVisible({
+      timeout: 5000,
+    });
   });
 
   test('department head approves → pending_hr (cross-role)', async ({ page }) => {
@@ -153,16 +213,31 @@ test.describe('Leave chain — cross-role workflow', () => {
     await mockLeaveOptions(page);
     // HR leave list + detail mock
     await page.route('**/api/v1/leaves/requests?*', async (route) => {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(listResponse([makeLeave('pending_dept')])) });
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(listResponse([makeLeave('pending_dept')])),
+      });
     });
     await page.route(`**/api/v1/leaves/requests/${LEAVE_ID}`, async (route) => {
-      if (route.request().method() !== 'GET') { await route.continue(); return; }
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(detailResponse(makeLeave(status))) });
+      if (route.request().method() !== 'GET') {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(detailResponse(makeLeave(status))),
+      });
     });
     // PATCH approve-dept → pending_hr
     await page.route(`**/api/v1/leaves/requests/${LEAVE_ID}/approve-dept`, async (route) => {
       status = 'pending_hr';
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(detailResponse(makeLeave(status))) });
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(detailResponse(makeLeave(status))),
+      });
     });
 
     await loginAs(page, 'depthead', `/hr/leaves/${LEAVE_ID}`);
@@ -189,15 +264,30 @@ test.describe('Leave chain — cross-role workflow', () => {
     let status = 'pending_hr';
     await mockLeaveOptions(page);
     await page.route('**/api/v1/leaves/requests?*', async (route) => {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(listResponse([makeLeave('pending_hr')])) });
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(listResponse([makeLeave('pending_hr')])),
+      });
     });
     await page.route(`**/api/v1/leaves/requests/${LEAVE_ID}`, async (route) => {
-      if (route.request().method() !== 'GET') { await route.continue(); return; }
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(detailResponse(makeLeave(status))) });
+      if (route.request().method() !== 'GET') {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(detailResponse(makeLeave(status))),
+      });
     });
     await page.route(`**/api/v1/leaves/requests/${LEAVE_ID}/approve-hr`, async (route) => {
       status = 'approved';
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(detailResponse(makeLeave(status))) });
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(detailResponse(makeLeave(status))),
+      });
     });
 
     await loginAs(page, 'hr', `/hr/leaves/${LEAVE_ID}`);
@@ -207,17 +297,29 @@ test.describe('Leave chain — cross-role workflow', () => {
     await detail.approveHR();
     // Scoped to the heading because the ChainHeader also has an 'Approved' step;
     // the record number in the same name proves the heading is this request's.
-    await expect(page.getByRole('heading', { name: `${LEAVE_NO} Approved` })).toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole('heading', { name: `${LEAVE_NO} Approved` })).toBeVisible({
+      timeout: 5000,
+    });
   });
 
   test('SoD: depthead cannot approve their own leave (422 error)', async ({ page }) => {
     await mockLeaveOptions(page);
     // Mock: the leave was created BY the depthead
-    const selfLeave = { ...makeLeave('pending_dept'), employee: { id: 'emp_dpt', full_name: 'Roberto Santos' } };
+    const selfLeave = {
+      ...makeLeave('pending_dept'),
+      employee: { id: 'emp_dpt', full_name: 'Roberto Santos' },
+    };
 
     await page.route(`**/api/v1/leaves/requests/${LEAVE_ID}`, async (route) => {
-      if (route.request().method() !== 'GET') { await route.continue(); return; }
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(detailResponse(selfLeave)) });
+      if (route.request().method() !== 'GET') {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(detailResponse(selfLeave)),
+      });
     });
     // approve-dept returns 422 for self-approval
     await page.route(`**/api/v1/leaves/requests/${LEAVE_ID}/approve-dept`, async (route) => {
@@ -254,7 +356,9 @@ test.describe('Leave chain — cross-role workflow', () => {
     // approve." tells them only that something went wrong, and would read the
     // same for a dropped connection. So the fallback never reaches the screen
     // here, and asserting it would only prove the specific message got lost.
-    await expect(page.getByText(/cannot act on a record you submitted/i)).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText(/cannot act on a record you submitted/i)).toBeVisible({
+      timeout: 5000,
+    });
     // And the request is still awaiting the department head — a refused approval
     // must not leave the optimistic 'pending_hr' patch on screen.
     await expect(page.getByText('Pending dept', { exact: true })).toBeVisible();

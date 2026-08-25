@@ -200,12 +200,22 @@ export default function SelfServiceLeavePage() {
  (r: LeaveRequest) => r.status === 'pending_dept' || r.status === 'pending_hr',
  ).length;
 
+ /*
+  * Read the page through one narrowed array rather than off `data.data` at each
+  * use site. `data` is the whole paginated envelope, so a response that arrives
+  * without its `data` array made `data.data.length` throw a TypeError — which
+  * the ErrorBoundary turns into a full-page "Something went wrong", losing even
+  * the isError retry affordance below. `pendingCount` was already written
+  * defensively; the three render branches were not.
+  */
+ const rows = data?.data ?? [];
+
  return (
  <div>
  <PageHeader
  title="My Leave Requests"
- subtitle={data ? `${data.data.length} total · ${pendingCount} awaiting approval` : undefined}
- actions={!data || data.data.length > 0 ? (
+ subtitle={data ? `${rows.length} total · ${pendingCount} awaiting approval` : undefined}
+ actions={!data || rows.length > 0 ? (
  <Button
  variant="primary"
  size="sm"
@@ -228,7 +238,7 @@ export default function SelfServiceLeavePage() {
  />
  )}
 
- {data && data.data.length === 0 && (
+ {data && rows.length === 0 && (
  <EmptyState
  icon="file-text"
  title="No leave requests yet"
@@ -241,8 +251,8 @@ export default function SelfServiceLeavePage() {
  />
  )}
 
- {data && data.data.length > 0 && (
- <DataTable columns={columns} data={data.data} stickyHeader={false} />
+ {data && rows.length > 0 && (
+ <DataTable columns={columns} data={rows} stickyHeader={false} />
  )}
 
  <Modal

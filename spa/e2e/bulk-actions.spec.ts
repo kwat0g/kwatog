@@ -24,14 +24,21 @@ function leaveRow(over: Partial<Record<string, unknown>> = {}) {
   return {
     id: 'lr1',
     leave_request_no: 'LR-202604-0045',
-    employee: { id: 'e1', employee_no: 'OGM-2026-0142', full_name: 'Ana Reyes', department: 'Production' },
+    employee: {
+      id: 'e1',
+      employee_no: 'OGM-2026-0142',
+      full_name: 'Ana Reyes',
+      department: 'Production',
+    },
     leave_type: { id: 'lt1', code: 'VL', name: 'Vacation Leave' },
     start_date: '2026-04-20',
     end_date: '2026-04-21',
     days: '2.00',
     half_day_period: null,
     reason: 'Family matter',
-    document_path: null,
+    // `LeaveRequestResource` never exposes the stored path — it lives on the
+    // private disk and is not a client-owned URL — only whether one exists.
+    has_document: false,
     status: 'pending_dept',
     status_label: 'Pending dept',
     dept_approver: null,
@@ -102,7 +109,15 @@ test.describe('leave requests — bulk approve', () => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ data: { approved: [leaveRow({ status: 'approved' }), leaveRow({ id: 'lr2', status: 'approved' })], failed: [] } }),
+        body: JSON.stringify({
+          data: {
+            approved: [
+              leaveRow({ status: 'approved' }),
+              leaveRow({ id: 'lr2', status: 'approved' }),
+            ],
+            failed: [],
+          },
+        }),
       });
     });
 
@@ -168,8 +183,11 @@ test.describe('leave requests — bulk approve', () => {
     // No seeded role holds types.manage alone, hence the bespoke user.
     mockList(page, '**/api/v1/leaves/requests*', [leaveRow()]);
     await mockAuth(page, {
-      id: 'lt0001', name: 'Leave Type Admin', email: 'types@ogami.test',
-      roleSlug: 'hr_officer', roleName: 'HR Officer',
+      id: 'lt0001',
+      name: 'Leave Type Admin',
+      email: 'types@ogami.test',
+      roleSlug: 'hr_officer',
+      roleName: 'HR Officer',
       permissions: ['leave.view', 'leave.types.manage'],
       employee: { id: 'emp_lt', employee_no: 'OGM-2026-0900' },
     });
@@ -185,19 +203,27 @@ test.describe('leave requests — bulk approve', () => {
   test('an approver is never offered a batch that would 403', async ({ page }) => {
     // Only the HR stage is pending here, and `hr` holds both permissions, so
     // the dept endpoint must not be called at all.
-    mockList(page, '**/api/v1/leaves/requests*', [leaveRow({ status: 'pending_hr', status_label: 'Pending HR' })]);
+    mockList(page, '**/api/v1/leaves/requests*', [
+      leaveRow({ status: 'pending_hr', status_label: 'Pending HR' }),
+    ]);
     let deptCalled = false;
     let hrCalled = false;
     await page.route('**/api/v1/leaves/requests/bulk-approve-dept', async (route) => {
       deptCalled = true;
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { approved: [], failed: [] } }) });
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ data: { approved: [], failed: [] } }),
+      });
     });
     await page.route('**/api/v1/leaves/requests/bulk-approve-hr', async (route) => {
       hrCalled = true;
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ data: { approved: [leaveRow({ status: 'approved' })], failed: [] } }),
+        body: JSON.stringify({
+          data: { approved: [leaveRow({ status: 'approved' })], failed: [] },
+        }),
       });
     });
 
@@ -221,7 +247,12 @@ test.describe('leave requests — bulk approve', () => {
     // passed — the untouched branch had no coverage at all.
     mockList(page, '**/api/v1/leaves/requests*', [
       leaveRow(),
-      leaveRow({ id: 'lr2', leave_request_no: 'LR-202604-0046', status: 'approved', status_label: 'Approved' }),
+      leaveRow({
+        id: 'lr2',
+        leave_request_no: 'LR-202604-0046',
+        status: 'approved',
+        status_label: 'Approved',
+      }),
     ]);
     let sentIds: string[] = [];
     await page.route('**/api/v1/leaves/requests/bulk-approve-dept', async (route) => {
@@ -229,7 +260,9 @@ test.describe('leave requests — bulk approve', () => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ data: { approved: [leaveRow({ status: 'approved' })], failed: [] } }),
+        body: JSON.stringify({
+          data: { approved: [leaveRow({ status: 'approved' })], failed: [] },
+        }),
       });
     });
 
@@ -259,7 +292,12 @@ test.describe('leave requests — bulk approve', () => {
     mockList(page, '**/api/v1/leaves/requests*', [
       leaveRow(),
       leaveRow({ id: 'lr2', leave_request_no: 'LR-202604-0046' }),
-      leaveRow({ id: 'lr3', leave_request_no: 'LR-202604-0047', status: 'pending_hr', status_label: 'Pending HR' }),
+      leaveRow({
+        id: 'lr3',
+        leave_request_no: 'LR-202604-0047',
+        status: 'pending_hr',
+        status_label: 'Pending HR',
+      }),
     ]);
     await page.route('**/api/v1/leaves/requests/bulk-approve-dept', async (route) => {
       await route.fulfill({
@@ -267,7 +305,10 @@ test.describe('leave requests — bulk approve', () => {
         contentType: 'application/json',
         body: JSON.stringify({
           data: {
-            approved: [leaveRow({ status: 'approved' }), leaveRow({ id: 'lr2', status: 'approved' })],
+            approved: [
+              leaveRow({ status: 'approved' }),
+              leaveRow({ id: 'lr2', status: 'approved' }),
+            ],
             failed: [],
           },
         }),
@@ -276,7 +317,11 @@ test.describe('leave requests — bulk approve', () => {
     // A 500 on a POST is the case the interceptor deliberately stays quiet for
     // (`interceptorOwnsToast`), so the page is the only thing that can speak.
     await page.route('**/api/v1/leaves/requests/bulk-approve-hr', async (route) => {
-      await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ message: 'Server error' }) });
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Server error' }),
+      });
     });
 
     await loginAs(page, 'hr', '/hr/leaves');
@@ -352,7 +397,12 @@ test.describe('overtime requests — bulk approve', () => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ message: '1 approved, 0 failed.', approved_count: 1, failed: [], data: [] }),
+        body: JSON.stringify({
+          message: '1 approved, 0 failed.',
+          approved_count: 1,
+          failed: [],
+          data: [],
+        }),
       });
     });
 
@@ -420,7 +470,9 @@ function itemRow(over: Partial<Record<string, unknown>> = {}) {
 }
 
 test.describe('items — bulk archive', () => {
-  test('a fan-out that partly fails reports the count and still offers an undo', async ({ page }) => {
+  test('a fan-out that partly fails reports the count and still offers an undo', async ({
+    page,
+  }) => {
     mockList(page, '**/api/v1/inventory/items*', [
       itemRow(),
       itemRow({ id: 'it2', code: 'RES-PP-002' }),
@@ -465,7 +517,9 @@ test.describe('items — bulk archive', () => {
     await expect(page.getByRole('button', { name: 'Undo' })).toBeVisible();
   });
 
-  test('the All scope offers no batch, because it cannot tell archived from live', async ({ page }) => {
+  test('the All scope offers no batch, because it cannot tell archived from live', async ({
+    page,
+  }) => {
     mockList(page, '**/api/v1/inventory/items*', [itemRow()]);
     await loginAs(page, 'admin', '/inventory/items');
     await expect(page.getByText('RES-PP-001')).toBeVisible();
@@ -478,4 +532,3 @@ test.describe('items — bulk archive', () => {
     await expect(page.getByLabel('Select all rows')).toHaveCount(0);
   });
 });
-

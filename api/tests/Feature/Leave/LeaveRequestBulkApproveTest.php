@@ -10,6 +10,7 @@ use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Leave\Enums\LeaveRequestStatus;
+use App\Modules\Leave\Models\EmployeeLeaveBalance;
 use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Leave\Models\LeaveType;
 use App\Modules\Leave\Services\LeaveRequestService;
@@ -24,6 +25,30 @@ use Tests\TestCase;
 class LeaveRequestBulkApproveTest extends TestCase
 {
     use RefreshDatabase;
+
+    /**
+     * Stand in for `EmployeeService::create()`, which seeds one balance row per
+     * active leave type inside the employee-insert transaction.
+     *
+     * Submission refuses an employee/type/year with no initialized balance, so a
+     * factory-built employee cannot file at all. Without this the four tests below
+     * die on the balance guard before reaching the batch behaviour they measure.
+     * Both this year and the next are seeded because the request dates are
+     * relative to `now()` and a late-December run would cross the boundary.
+     */
+    private function balanceFor(Employee $employee, LeaveType $type, float $credits = 20.0): void
+    {
+        foreach ([(int) now()->year, (int) now()->year + 1] as $year) {
+            EmployeeLeaveBalance::create([
+                'employee_id'   => $employee->id,
+                'leave_type_id' => $type->id,
+                'year'          => $year,
+                'total_credits' => $credits,
+                'used'          => 0,
+                'remaining'     => $credits,
+            ]);
+        }
+    }
 
     public function test_bulk_approve_dept_partial_success(): void
     {
@@ -49,6 +74,7 @@ class LeaveRequestBulkApproveTest extends TestCase
         $emp  = Employee::factory()->create(['department_id' => $department->id]);
         $type = LeaveType::query()->first();
         $date = now()->addWeek()->toDateString();
+        $this->balanceFor($emp, $type);
 
         // r1: properly submitted -> PendingDept with approval records.
         $r1 = $svc->submit($emp->id, [
@@ -104,6 +130,7 @@ class LeaveRequestBulkApproveTest extends TestCase
         $emp  = Employee::factory()->create(['department_id' => $department->id]);
         $type = LeaveType::query()->first();
         $date = now()->addWeek()->toDateString();
+        $this->balanceFor($emp, $type);
 
         // The approver IS the requester: `LeaveRequest::approvalSubmitterId()`
         // resolves the submitter through `users.employee_id`, so linking the
@@ -155,6 +182,7 @@ class LeaveRequestBulkApproveTest extends TestCase
         $date = now()->addWeek()->toDateString();
 
         $svc = app(LeaveRequestService::class);
+        $this->balanceFor($emp, $type);
         $req = $svc->submit($emp->id, [
             'start_date'    => $date,
             'end_date'      => $date,
@@ -211,6 +239,7 @@ class LeaveRequestBulkApproveTest extends TestCase
         $emp  = Employee::factory()->create(['first_name' => 'Ana', 'last_name' => 'Dela Cruz']);
         $type = LeaveType::query()->first();
         $svc  = app(LeaveRequestService::class);
+        $this->balanceFor($emp, $type);
 
         $r1 = $svc->submit($emp->id, [
             'start_date'    => now()->addWeek()->toDateString(),

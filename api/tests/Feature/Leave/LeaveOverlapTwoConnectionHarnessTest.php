@@ -41,6 +41,20 @@ class LeaveOverlapTwoConnectionHarnessTest extends TestCase
             'name' => 'Harness Leave', 'code' => 'LH'.random_int(10, 99), 'default_balance' => 10,
             'is_paid' => true, 'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
         ]);
+        /*
+         * Submission refuses an (employee, type, year) with no initialized
+         * balance. This harness builds its rows with raw inserts rather than
+         * `EmployeeService::create()`, which is what seeds them in production, so
+         * it has to insert the balance itself. The requests below are dated 2026,
+         * so that is the year the balance must cover — without it the forked child
+         * reports `error:Leave balance is not initialized…` and the harness proves
+         * nothing about the employee lock.
+         */
+        DB::table('employee_leave_balances')->insert([
+            'employee_id' => $employee, 'leave_type_id' => $leaveType, 'year' => 2026,
+            'total_credits' => 10, 'used' => 0, 'remaining' => 10,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
         DB::table('workflow_definitions')->insert([
             'workflow_type' => 'leave_request', 'name' => 'Harness Leave Workflow',
             'steps' => json_encode([['order' => 1, 'role' => 'department_head'], ['order' => 2, 'role' => 'hr_officer']]),
