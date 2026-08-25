@@ -7,9 +7,10 @@ completeness. It ONLY inventories what modules exist and builds the tracking
 backbone that every future session (including parallel ones) will read from and
 write to.
 
-Before running this, make sure `/audit/scripts/claim-module.sh`,
+Before running this, make sure `audit/scripts/claim-module.sh`,
 `release-module.sh`, and `regenerate-registry.sh` exist and are executable
-(`chmod +x /audit/scripts/*.sh`). This prompt scaffolds folders those scripts
+(`chmod +x audit/scripts/*.sh`). Paths are repo-relative - there is no `/audit`
+at the filesystem root. This prompt scaffolds folders those scripts
 depend on.
 
 ## Instructions to Claude
@@ -71,8 +72,8 @@ Do NOT create a single shared registry table by hand - it will be generated.
 with a one-line placeholder comment.
 
 ### Phase 4: Generate the first registry view
-Run `/audit/scripts/regenerate-registry.sh`. This scans every `status.md` and
-builds `/audit/00-MODULE-REGISTRY.md` as a read-only generated view. Confirm
+Run `audit/scripts/regenerate-registry.sh`. This scans every `status.md` and
+builds `audit/00-MODULE-REGISTRY.md` as a read-only generated view. Confirm
 it ran and show the resulting table.
 
 ### Phase 5: Summary
