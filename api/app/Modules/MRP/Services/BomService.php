@@ -29,6 +29,7 @@ class BomService
     public function __construct(
         private readonly SettingsService $settings,
         private readonly BomCostingService $costing,
+        private readonly BomComponentIntegrityService $integrity,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -81,7 +82,7 @@ class BomService
             throw new BusinessRuleException('Cost batch size must be at least 1.');
         }
 
-        $bom = DB::transaction(function () use ($productId, $itemRows, $costBatchSize) {
+        return DB::transaction(function () use ($productId, $itemRows, $costBatchSize) {
             $this->validateDefinition($productId, $itemRows);
             $previous = Bom::where('product_id', $productId)->lockForUpdate()->orderByDesc('version')->first();
 
@@ -106,12 +107,11 @@ class BomService
                 ]);
             }
 
-            return $this->show($this->costing->recalculate($bom->fresh()));
+            $created = $this->show($this->costing->recalculate($bom->fresh()));
+            $this->requestAutomaticReplan($created, 'bom_changed');
+
+            return $created;
         });
-
-        $this->requestAutomaticReplan($bom, 'bom_changed');
-
-        return $bom;
     }
 
     /** "Edit" creates a new version. Old version stays archived. */
@@ -161,6 +161,16 @@ class BomService
         $bom->delete();
     }
 
+    public function assertComponentIntegrity(Bom $bom): void
+    {
+        $this->integrity->assertValid($bom);
+    }
+
+    public function ensureFreshForPlanning(Bom $bom): Bom
+    {
+        return $this->costing->ensureFresh($bom);
+    }
+
     private function requestAutomaticReplan(Bom $bom, string $reason): void
     {
         $salesOrderIds = app(MrpScopeResolver::class)->salesOrderIdsForProduct((int) $bom->product_id);
@@ -169,7 +179,7 @@ class BomService
         }
 
         app(OutboxService::class)->record(
-            new MrpReplanRequested($salesOrderIds, $reason),
+            new MrpReplanRequested($salesOrderIds, $reason, auth()->id()),
             'mrp:replan:bom:' . $bom->id,
         );
     }
@@ -252,6 +262,7 @@ class BomService
         if (! $bom) {
             throw new MissingBomException($this->describeMissingBom($productId));
         }
+        $this->integrity->assertValid($bom);
 
         // [item_id => ['item_id' => int, 'item_code' => string, 'item_name' => string, 'qty' => float]]
         $accumulator = [];
@@ -285,6 +296,7 @@ class BomService
         if (! $bom) {
             throw new MissingBomException($this->describeMissingBom($productId));
         }
+        $this->integrity->assertValid($bom);
 
         return $bom->items->map(fn ($row) => [
             'item_id'        => (int) $row->item_id,
@@ -313,6 +325,7 @@ class BomService
         if (! $bom) {
             throw new MissingBomException($this->describeMissingBom($productId));
         }
+        $this->integrity->assertValid($bom);
 
         return $this->productionTreeInto($bom, $finishedQuantity, [$productId], 0);
     }
@@ -335,6 +348,7 @@ class BomService
             throw new MissingBomException($this->describeMissingBom($productId));
         }
 
+        $this->integrity->assertValid($bom);
         $accumulator = [];
         $subassemblies = [];
         $this->productionPlanInto(
@@ -370,6 +384,7 @@ class BomService
      */
     private function explodeInto(Bom $bom, float $multiplier, array &$accumulator, array $productPath, int $depth): void
     {
+        $this->integrity->assertValid($bom);
         $maxDepth = $this->maxExplodeDepth();
         if ($depth > $maxDepth) {
             throw new BomStructureException(
@@ -423,6 +438,7 @@ class BomService
      */
     private function productionTreeInto(Bom $bom, float $multiplier, array $productPath, int $depth): array
     {
+        $this->integrity->assertValid($bom);
         $maxDepth = $this->maxExplodeDepth();
         if ($depth > $maxDepth) {
             throw new BomStructureException(
@@ -477,6 +493,7 @@ class BomService
         int $depth,
         Closure $quantityToManufacture,
     ): void {
+        $this->integrity->assertValid($bom);
         $maxDepth = $this->maxExplodeDepth();
         if ($depth > $maxDepth) {
             throw new BomStructureException(
