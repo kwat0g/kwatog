@@ -32,7 +32,7 @@ class ExportController
     {
         $this->guardModule($module, $request);
 
-        $available = ExportColumnRegistry::for($module);
+        $available = ExportColumnRegistry::forUser($module, $request->user());
         $shape = [];
         foreach ($available as $key => $def) {
             $shape[] = [
@@ -56,10 +56,9 @@ class ExportController
     {
         $this->guardModule($module, $request);
         $columns = $request->input('columns', []);
-        if (! is_array($columns)) {
-            $columns = [];
-        }
-        $this->selector->save($request->user(), $module, array_values(array_filter($columns, 'is_string')));
+        abort_unless(is_array($columns), 422, 'The columns field must be an array.');
+        $columns = ExportColumnRegistry::validateColumns($module, $columns, $request->user());
+        $this->selector->save($request->user(), $module, $columns);
 
         return response()->json([
             'data' => [
@@ -73,9 +72,9 @@ class ExportController
     {
         $this->guardModule($module, $request);
         $columns = $this->resolveColumnsFromRequest($request, $module);
-        $filters = (array) $request->query('filters', []);
+        $filters = ExportColumnRegistry::validateFilters($module, (array) $request->query('filters', []));
 
-        $rows = $this->runner->preview($module, $columns, $filters, 20);
+        $rows = $this->runner->preview($module, $columns, $filters, 20, $request->user());
 
         return response()->json([
             'data' => [
@@ -90,10 +89,10 @@ class ExportController
         $this->guardModule($module, $request);
 
         $columns = $this->resolveColumnsFromRequest($request, $module);
-        $filters = (array) $request->query('filters', []);
+        $filters = ExportColumnRegistry::validateFilters($module, (array) $request->query('filters', []));
         $format = ExportFormat::tryFrom((string) $request->query('format', 'xlsx')) ?? ExportFormat::Xlsx;
 
-        $exporter = $this->runner->build($module, $columns, $filters);
+        $exporter = $this->runner->build($module, $columns, $filters, $request->user());
         $filename = sprintf(
             '%s-%s.%s',
             str_replace('.', '_', $module),
@@ -109,13 +108,21 @@ class ExportController
     {
         $raw = $request->query('columns');
         if (is_string($raw) && $raw !== '') {
-            return array_values(array_filter(explode(',', $raw), fn ($s) => $s !== ''));
+            return ExportColumnRegistry::validateColumns(
+                $module,
+                explode(',', $raw),
+                $request->user(),
+            );
         }
         if (is_array($raw)) {
-            return array_values(array_filter($raw, 'is_string'));
+            return ExportColumnRegistry::validateColumns($module, $raw, $request->user());
         }
 
-        return $this->selector->resolve($request->user(), $module);
+        return ExportColumnRegistry::validateColumns(
+            $module,
+            $this->selector->resolve($request->user(), $module),
+            $request->user(),
+        );
     }
 
     private function guardModule(string $module, Request $request): void
@@ -127,22 +134,11 @@ class ExportController
         $perm = $this->permissionFor($module);
         $user = $request->user();
         abort_unless($user && $user->can($perm), 403);
+        abort_unless($this->runner->supports($module), 404, "Export module [{$module}] is not implemented.");
     }
 
     private function permissionFor(string $module): string
     {
-        return match ($module) {
-            'hr.employees' => 'hr.employees.export',
-            'payroll.register' => 'payroll.payslip.view_all',
-            'payroll.gov.sss_r3',
-            'payroll.gov.philhealth_rf1',
-            'payroll.gov.pagibig',
-            'payroll.gov.bir_1601c' => 'payroll.statutory.export',
-            'inventory.valuation',
-            'inventory.stock_card' => 'inventory.view',
-            'accounting.ar_aging',
-            'accounting.ap_aging' => 'accounting.statements.export',
-            default => 'admin.audit_logs.view',
-        };
+        return ExportColumnRegistry::permissionFor($module) ?? 'admin.audit_logs.view';
     }
 }

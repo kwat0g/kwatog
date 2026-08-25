@@ -31,6 +31,8 @@ enum DocumentType: string
     case Ncr                = 'ncr';
     case WorkOrderTraveler  = 'work_order_traveler';
     case BulkPdf            = 'bulk_pdf';
+    case PackingList        = 'packing_list';
+    case CommercialInvoice  = 'commercial_invoice';
 
     /** Confidential by default — affects watermark + Cache-Control. */
     public function isConfidential(): bool
@@ -70,6 +72,17 @@ enum DocumentType: string
             self::Ncr                => 'NCR',
             self::WorkOrderTraveler  => 'Work Order Traveler',
             self::BulkPdf            => 'Bulk PDF',
+            self::PackingList        => 'Packing List',
+            self::CommercialInvoice  => 'Commercial Invoice',
+        };
+    }
+
+    public function filePrefix(): string
+    {
+        return match ($this) {
+            self::PackingList => 'packing-list',
+            self::CommercialInvoice => 'commercial-invoice',
+            default => $this->value,
         };
     }
 }

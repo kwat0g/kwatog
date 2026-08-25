@@ -17,6 +17,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SpreadsheetExportService
 {
+    public const MAX_ROWS = 50_000;
+
     public function download(SpreadsheetExport $export, string $filename, ExportFormat $format = ExportFormat::Xlsx): StreamedResponse
     {
         return response()->streamDownload(
@@ -63,8 +65,16 @@ class SpreadsheetExportService
         ]);
         $sheet->freezePane('A2');
 
+        $records = $export->collection();
+        if ($records->count() > self::MAX_ROWS) {
+            throw new \RuntimeException(sprintf(
+                'Export contains more than %d rows; narrow the filters and try again.',
+                self::MAX_ROWS,
+            ));
+        }
+
         $rowNumber = 2;
-        foreach ($export->collection() as $row) {
+        foreach ($records as $row) {
             $this->writeRow($sheet, $rowNumber, $export->map($row), $format);
             if ($rowNumber % 2 === 0) {
                 $sheet->getStyle("A{$rowNumber}:{$lastColumn}{$rowNumber}")->getFill()->applyFromArray([

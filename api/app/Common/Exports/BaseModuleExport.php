@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Common\Exports;
 
 use App\Common\Services\Export\ExportColumnRegistry;
+use App\Modules\Auth\Models\User;
 use Illuminate\Support\Collection;
 
 /**
@@ -21,6 +22,7 @@ abstract class BaseModuleExport implements SpreadsheetExport
     public function __construct(
         protected array $columns,
         protected array $filters = [],
+        protected ?User $actor = null,
     ) {}
 
     /** Module key, e.g. "hr.employees". */
@@ -32,10 +34,11 @@ abstract class BaseModuleExport implements SpreadsheetExport
     /** @return array<int, string> */
     public function headings(): array
     {
+        $this->columns = ExportColumnRegistry::validateColumns($this->module(), $this->columns, $this->actor);
         $registry = ExportColumnRegistry::for($this->module());
         $headers = [];
         foreach ($this->columns as $key) {
-            $headers[] = $registry[$key]['label'] ?? $this->humanize($key);
+            $headers[] = $registry[$key]['label'];
         }
 
         return $headers;
@@ -47,16 +50,15 @@ abstract class BaseModuleExport implements SpreadsheetExport
      */
     public function map($row): array
     {
+        $this->columns = ExportColumnRegistry::validateColumns($this->module(), $this->columns, $this->actor);
         $registry = ExportColumnRegistry::for($this->module());
         $out = [];
         foreach ($this->columns as $key) {
             $def = $registry[$key] ?? null;
-            if ($def && isset($def['resolver']) && is_callable($def['resolver'])) {
-                $out[] = ($def['resolver'])($row);
-            } else {
-                // Default resolver: arrow-access (for arrays + models).
-                $out[] = is_array($row) ? ($row[$key] ?? null) : ($row->{$key} ?? null);
+            if (! $def || ! isset($def['resolver']) || ! is_callable($def['resolver'])) {
+                throw new \LogicException("Export column [{$key}] in module [{$this->module()}] has no resolver.");
             }
+            $out[] = ($def['resolver'])($row);
         }
 
         return $out;
@@ -67,8 +69,4 @@ abstract class BaseModuleExport implements SpreadsheetExport
         return substr($this->module().' '.now()->format('Y-m-d'), 0, 31);
     }
 
-    private function humanize(string $key): string
-    {
-        return ucwords(str_replace(['_', '.'], ' ', $key));
-    }
 }

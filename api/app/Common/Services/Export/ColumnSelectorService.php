@@ -27,14 +27,13 @@ class ColumnSelectorService
             ->first();
 
         if ($pref && is_array($pref->columns) && $pref->columns !== []) {
-            // Filter against registry to drop stale keys.
-            $available = array_keys(ExportColumnRegistry::for($module));
-            $filtered = array_values(array_intersect($pref->columns, $available));
-            if ($filtered !== []) {
-                return $filtered;
-            }
+            return ExportColumnRegistry::validateColumns($module, $pref->columns, $user);
         }
-        return ExportColumnRegistry::defaultsFor($module);
+        return ExportColumnRegistry::validateColumns(
+            $module,
+            ExportColumnRegistry::defaultsFor($module),
+            $user,
+        );
     }
 
     /**
@@ -42,8 +41,7 @@ class ColumnSelectorService
      */
     public function save(User $user, string $module, array $columns): ExportColumnPreference
     {
-        $available = array_keys(ExportColumnRegistry::for($module));
-        $clean = array_values(array_unique(array_intersect($columns, $available)));
+        $clean = ExportColumnRegistry::validateColumns($module, $columns, $user);
 
         return ExportColumnPreference::updateOrCreate(
             ['user_id' => $user->id, 'module' => $module],

@@ -9,6 +9,7 @@ use App\Common\Enums\ExportFrequency;
 use App\Common\Models\ScheduledExport;
 use App\Common\Resources\ScheduledExportResource;
 use App\Common\Services\Export\ExportColumnRegistry;
+use App\Common\Services\Export\ExportRunner;
 use App\Common\Services\SettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,7 +20,10 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
  */
 class ScheduledExportController
 {
-    public function __construct(private readonly SettingsService $settings) {}
+    public function __construct(
+        private readonly SettingsService $settings,
+        private readonly ExportRunner $runner,
+    ) {}
 
     public function index(Request $request): AnonymousResourceCollection
     {
@@ -90,7 +94,7 @@ class ScheduledExportController
     {
         $this->authorizeRow($scheduledExport, $request);
 
-        $data = $this->validatePayload($request, partial: true);
+        $data = $this->validatePayload($request, partial: true, existing: $scheduledExport);
         $scheduledExport->fill($data);
         $defaultTime = $this->settings->requiredString('exports.default_time_of_day');
 
@@ -125,17 +129,17 @@ class ScheduledExportController
     }
 
     /** @return array<string, mixed> */
-    private function validatePayload(Request $request, bool $partial = false): array
+    private function validatePayload(
+        Request $request,
+        bool $partial = false,
+        ?ScheduledExport $existing = null,
+    ): array
     {
         $required = $partial ? 'sometimes' : 'required';
 
-        return $request->validate([
+        $data = $request->validate([
             'name'         => [$required, 'string', 'max:100'],
-            'module'       => [$required, 'string', function ($attr, $value, $fail) {
-                if (! ExportColumnRegistry::has((string) $value)) {
-                    $fail("Module [{$value}] is not registered for export.");
-                }
-            }],
+            'module'       => [$required, 'string'],
             'columns'      => [$required, 'array', 'min:1'],
             'columns.*'    => ['string'],
             'filters'      => ['nullable', 'array'],
@@ -148,6 +152,48 @@ class ScheduledExportController
             'recipients.*' => ['email'],
             'is_active'    => ['sometimes', 'boolean'],
         ]);
+
+        $module = (string) ($data['module'] ?? $existing?->module ?? '');
+        if (! ExportColumnRegistry::has($module)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'module' => "Module [{$module}] is not registered for export.",
+            ]);
+        }
+        if (! $this->runner->supports($module)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'module' => "Module [{$module}] is not implemented for export.",
+            ]);
+        }
+
+        $user = $request->user();
+        $permission = ExportColumnRegistry::permissionFor($module);
+        if ($permission !== null && ! $user->can($permission)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'module' => "Your account cannot export module [{$module}].",
+            ]);
+        }
+
+        $columns = array_key_exists('columns', $data)
+            ? $data['columns']
+            : (array) ($existing?->columns ?? []);
+        $data['columns'] = ExportColumnRegistry::validateColumns($module, $columns, $user);
+
+        $filters = array_key_exists('filters', $data)
+            ? (array) ($data['filters'] ?? [])
+            : (array) ($existing?->filters ?? []);
+        $data['filters'] = ExportColumnRegistry::validateFilters($module, $filters);
+
+        // Export recipients are deliberately limited to validated email
+        // addresses here. An approved-domain policy is a deployment/business
+        // decision and must not be guessed from the sender address; the
+        // unresolved policy remains recorded in the module fix log.
+        if (array_key_exists('recipients', $data)) {
+            $data['recipients'] = array_values(array_unique($data['recipients']));
+        } elseif ($existing !== null) {
+            $data['recipients'] = array_values(array_unique((array) $existing->recipients));
+        }
+
+        return $data;
     }
 
     private function authorizeRow(ScheduledExport $row, Request $request): void
