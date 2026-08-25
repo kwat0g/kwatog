@@ -50,4 +50,12 @@ class ProductionRoutingController
             ->response()
             ->setStatusCode(201);
     }
+
+    /**
+     * Put a superseded version back into service (roll back a routing change).
+     */
+    public function activate(ProductRouting $routing): ProductRoutingResource
+    {
+        return new ProductRoutingResource($this->service->activate($routing));
+    }
 }

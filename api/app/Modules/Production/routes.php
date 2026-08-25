@@ -50,7 +50,7 @@ Route::middleware(['auth:sanctum', 'feature:production'])->prefix('production')-
     Route::get('/work-orders/{workOrder}/chain',     [WorkOrderController::class, 'chain']) ->middleware('permission:production.work_orders.view');
     Route::post('/work-orders',                      [WorkOrderController::class, 'store']) ->middleware('permission:production.wo.create');
     Route::delete('/work-orders/{workOrder}',        [WorkOrderController::class, 'destroy'])->middleware('permission:production.wo.create');
-    Route::patch('/work-orders/{workOrder}/restore', [WorkOrderController::class, 'restore'])->middleware('permission:production.wo.create');
+    Route::patch('/work-orders/{workOrder}/restore', [WorkOrderController::class, 'restore'])->middleware('permission:production.wo.create')->withTrashed();
     Route::post('/work-orders/{workOrder}/confirm',  [WorkOrderController::class, 'confirm'])->middleware('permission:production.wo.confirm');
     Route::post('/work-orders/{workOrder}/start',    [WorkOrderController::class, 'start'])  ->middleware('permission:production.work_orders.lifecycle');
     Route::post('/work-orders/{workOrder}/pause',    [WorkOrderController::class, 'pause'])  ->middleware('permission:production.work_orders.lifecycle');
@@ -79,6 +79,9 @@ Route::middleware(['auth:sanctum', 'feature:production'])->prefix('production')-
     Route::get('/routings/{routing}',             [ProductionRoutingController::class, 'show'])     ->middleware('permission:production.routings.view');
     Route::put('/routings/{routing}',             [ProductionRoutingController::class, 'update'])   ->middleware('permission:production.routings.manage');
     Route::post('/routings/{routing}/duplicate',  [ProductionRoutingController::class, 'duplicate'])->middleware('permission:production.routings.manage');
+    // Roll back to a superseded version. Routings are never deleted, so this
+    // is the only lifecycle write besides publishing a new version.
+    Route::post('/routings/{routing}/activate',   [ProductionRoutingController::class, 'activate'])  ->middleware('permission:production.routings.manage');
 
     /* ─── WO Operations (Task 11) ─── */
     Route::get('/work-orders/{workOrder}/operations',   [WoOperationController::class, 'index'])       ->middleware('permission:production.work_orders.view');

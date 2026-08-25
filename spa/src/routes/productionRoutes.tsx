@@ -48,8 +48,12 @@ export const productionRoutes = (
  element={<PermissionGuard permission="production.routings.view"><RoutingsListPage /></PermissionGuard>} />
  <Route path="/production/routings/create"
  element={<PermissionGuard permission="production.routings.manage"><RoutingEditorPage /></PermissionGuard>} />
+ {/* M052 F-02 — the detail page is view-gated to match GET /routings/{id}.
+ The editor itself renders read-only without `routings.manage`, and for
+ any superseded version, so a view-only role can inspect the process
+ plan it is running without being shown actions it would be denied. */}
  <Route path="/production/routings/:id"
- element={<PermissionGuard permission="production.routings.manage"><RoutingEditorPage /></PermissionGuard>} />
+ element={<PermissionGuard permission="production.routings.view"><RoutingEditorPage /></PermissionGuard>} />
  </Route>
  </>
 );

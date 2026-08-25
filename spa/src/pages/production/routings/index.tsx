@@ -15,16 +15,35 @@ import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { FilterBar } from '@/components/ui/FilterBar';
+import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { usePermission } from '@/hooks/usePermission';
 import type { ProductRouting } from '@/types/production/routing';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+
+/** Superseded versions are kept forever, so the list needs to filter them. */
+const statusFilters: FilterConfig[] = [
+ {
+ key: 'is_active',
+ label: 'Status',
+ type: 'select',
+ options: [
+ { value: '', label: 'All' },
+ { value: 'true', label: 'Active' },
+ { value: 'false', label: 'Superseded' },
+ ],
+ },
+];
+
 export default function RoutingsListPage() {
  const navigate = useNavigate();
  const qc = useQueryClient();
+ const { can } = usePermission();
+ const canManage = can('production.routings.manage');
  const [filters, setFilters] = useUrlFilters<RoutingListParams>({ page: 1, per_page: 25 });
+ const isFiltered = Boolean(filters.search) || (filters.is_active ?? '') !== '';
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['production', 'routings', filters],
@@ -60,7 +79,7 @@ export default function RoutingsListPage() {
  key: 'status', header: 'Status',
  cell: (r) => (
  <Chip variant={r.is_active ? 'success' : 'neutral'}>
- {r.is_active ? 'Active' : 'Inactive'}
+ {r.is_active ? 'Active' : 'Superseded'}
  </Chip>
  ) },
  {
@@ -69,9 +88,12 @@ export default function RoutingsListPage() {
  {
  key: 'ops', header: 'Operations', align: 'right',
  cell: (r) => <NumCell>{r.operations?.length ?? 0}</NumCell> },
- {
+ // Duplicate publishes a new version, so it is a manage action. A
+ // view-only role is not shown a button its request would be denied.
+ ...(canManage
+ ? [{
  key: 'actions', header: '',
- cell: (r) => (
+ cell: (r: ProductRouting) => (
  <div className="flex items-center justify-end gap-1">
  <Button
  size="sm"
@@ -85,7 +107,8 @@ export default function RoutingsListPage() {
  Duplicate
  </Button>
  </div>
- ) },
+ ) } as Column<ProductRouting>]
+ : []),
  ];
 
  return (
@@ -94,6 +117,7 @@ export default function RoutingsListPage() {
  title="Routings"
  subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'routing' : 'routings'}` : undefined}
  actions={
+ canManage ? (
  <Button
  size="sm"
  variant="primary"
@@ -102,10 +126,13 @@ export default function RoutingsListPage() {
  >
  New routing
  </Button>
+ ) : undefined
  }
  />
  <FilterBar
  values={filters}
+ filters={statusFilters}
+ onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
  onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
  searchPlaceholder="Search product part number or name…"
  />
@@ -118,11 +145,20 @@ export default function RoutingsListPage() {
  />
  )}
  {data && data.data.length === 0 && (
+ isFiltered ? (
+ <EmptyState
+ icon="search-x"
+ searchTerm={filters.search}
+ title="No routings match these filters"
+ description="Try a different product, or clear the filters to see every version."
+ />
+ ) : (
  <EmptyState
  icon="factory"
  title="No routings yet"
  description="Create a routing to define the sequence of operations for a product."
  action={
+ canManage ? (
  <Button
  variant="primary"
  size="sm"
@@ -131,8 +167,10 @@ export default function RoutingsListPage() {
  >
  New routing
  </Button>
+ ) : undefined
  }
  />
+ )
  )}
  {data && data.data.length > 0 && (
  <div className="px-5 py-4">

@@ -116,11 +116,11 @@ CHAIN 3 — HIRE TO RETIRE
 | system_admin | Everything; top/VP approver in every chain | (control — wildcard `*`) |
 | hr_officer | Employees, attendance, leave, separation, loans, payroll **create/compute**, sensitive HR | **No** payroll approve/finalize; no GL posting; no purchasing/prod/quality writes |
 | finance_officer | Payroll **approve/finalize**, accounting (COA/JE/AP/AR), budgeting, assets | **No** payroll maker-checker override; no `accounting.journal.self_post_override`; no HR CRUD; no prod/quality |
-| production_manager | WO/output/OEE/schedule; machine master, MRP+quality **view-only** | No inspection/NCR authoring; no purchasing/accounting/HR writes |
+| production_manager | WO/output/OEE/schedule; machine master, MRP+quality **view-only**, routings **view-only** | No inspection/NCR authoring; no `production.routings.manage` (ppc_head authors process plans); no purchasing/accounting/HR writes |
 | ppc_head | MRP/BOM/plans/molds/routings, forecasting, WO create/confirm | No output recording; no purchasing approve; no accounting or back-office HR/payroll |
 | purchasing_officer | PR/PO create+approve+send, GRN create, shipments | **No** `purchasing.po.sod_override`; no bill pay; no prod/quality/HR |
 | warehouse_staff | Items, warehouse map, GRN, issues, stock count, picking | No purchasing approve; no accounting; no HR/payroll; no quality authoring |
-| qc_inspector | Inspections, NCRs, specs, calibration, COPQ | No output recording; no purchasing/accounting/HR |
+| qc_inspector | Inspections, NCRs, specs, calibration, capability analytics | No output recording; no purchasing/accounting/HR |
 | maintenance_tech | Maintenance WO create/complete, assets view | Cannot **assign** MWOs; no schedules manage; no prod/quality/HR |
 | impex_officer | Shipments/customs, purchasing **view** | No PR/PO create/approve; no accounting; no HR |
 | department_head | Approve leave(dept), OT, loans, and PR for own dept; sign clearance; department-scoped employee view | Cannot see sensitive salary/onboarding data; cannot HR-approve leave; cannot write off loans; cannot approve PO; cannot create employees; cannot finalize payroll |

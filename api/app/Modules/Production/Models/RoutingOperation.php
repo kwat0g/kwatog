@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Production\Models;
 
+use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
@@ -11,9 +12,17 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * One step of a published routing.
+ *
+ * Rows are written once, when their version is published, and are never
+ * mutated or deleted: `wo_operations.routing_operation_id` points here for the
+ * lifetime of the work order it generated. `HasAuditLog` records the publish
+ * so the operation values a past work order was built from stay attributable.
+ */
 class RoutingOperation extends Model
 {
-    use HasFactory, HasHashId;
+    use HasFactory, HasHashId, HasAuditLog;
 
     protected $fillable = [
         'routing_id',
