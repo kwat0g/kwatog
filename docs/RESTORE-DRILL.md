@@ -1,6 +1,6 @@
 # OGAMI ERP — Backup & Restore Drill Runbook
 
-Owner: Platform / Ops. Last reviewed: 2026-06-16 (OGAMI-018).
+Owner: Platform / Ops. Last reviewed: 2026-08-25 (OGAMI-018).
 
 This runbook covers (1) how backups are produced, (2) how to restore from one,
 and (3) a repeatable drill checklist to prove the backups actually work. A
@@ -77,6 +77,59 @@ docker compose exec api php artisan migrate --force   # apply any newer migratio
 docker compose exec api php artisan config:cache
 ```
 
+### Admin restore safety contract
+
+The admin Backup & Restore workflow is the production recovery path. Production
+Compose explicitly sets `APP_MAINTENANCE_DRIVER=cache` and
+`APP_MAINTENANCE_STORE=redis` for the API, queue, scheduler, and migration
+containers, so the maintenance gate is visible across containers. Before the
+destructive step, the restore worker checks the selected manifest's size and
+SHA-256 locally or through S3 `head-object`, creates a rollback point, pauses
+the configured Redis queue, and then enters the shared gate.
+
+The operation ledger is the committed pair manifest. A restore can be queued
+only from a completed manifest; a filename is not trusted as an independent
+source of restore metadata. If database or private-file replacement fails
+after the destructive phase starts, the operation becomes
+`rollback_required`. Do not run `artisan up` manually in that state. From the
+API/queue image, run the operator recovery command and verify the resulting
+ledger state:
+
+```bash
+docker compose exec api php artisan backup:rollback <rollback-required-operation-uuid>
+docker compose exec api php artisan backup:reconcile-stale
+```
+
+The rollback command restores the recorded pre-restore artifacts, re-runs
+migrations, marks the operation `rolled_back`, resumes the queue, and releases
+the shared gate only after the rollback succeeds. A failed rollback keeps the
+gate held and the operation visible for another operator attempt.
+
+**What the catalog claims, and what it does not.** The Backup & Restore list is
+polled every 5s while an operation runs, so it verifies each artifact's *size*
+against its manifest and reports `matches manifest` — never
+`checksum verified`. Re-hashing every retained archive on each poll is
+gigabytes of I/O per request. The SHA-256 is enforced where the verdict has to
+be true of the bytes actually about to be replayed: restore preflight, and the
+off-site download. An artifact shown as matching can therefore still fail
+preflight, and that is the intended ordering.
+
+Legacy and cron-produced archives appear in the catalog as **Legacy archive**
+and are never restorable through the UI: they have no committed manifest, so
+`resolveRestoreManifest()` refuses them. Recover one with the shell path in
+section 2 instead. A backup that failed after publishing its database dump
+records the leftover filenames in the failed operation's
+`metadata.orphan_artifacts` — the dump is deliberately kept, because deleting a
+usable recovery point to tidy the ledger is the wrong trade.
+
+**Restoring re-imports old ledger rows.** A dump always contains the
+`backup_operations` row of the run that produced it, captured mid-run as
+`running` with the singleton `active_lock` held. The restore retires those
+imported rows after migrations (`metadata.retired_imported_operations`), which
+is what stops the first successful recovery from permanently blocking every
+later backup. An imported `rollback_required` row is deliberately left alone;
+resolve it with `backup:rollback` before queueing anything else.
+
 ---
 
 ## 3. Recovery objectives
@@ -110,6 +163,33 @@ Run against a **throwaway / staging** database, never production.
 - [ ] Tear down the scratch DB.
 - [ ] Log the drill: date, dump used, measured RTO, issues, sign-off.
 
+### Target-like admin recovery drill
+
+The disposable database test above proves dump compatibility, but it does not
+prove the multi-container admin contract. At least once per release, run the
+following against an isolated staging Compose deployment and retain the
+command output, operation UUID, and timestamps:
+
+- [ ] Build `docker-compose.prod.yml` and confirm the API image reports
+      PostgreSQL client major version 16 (`pg_dump --version`).
+- [ ] Trigger an admin full backup and confirm one completed operation exposes
+      a committed manifest with both database and private-file artifacts.
+- [ ] Remove or alter a copied artifact and confirm restore preflight rejects
+      the size/checksum mismatch before maintenance begins.
+- [ ] Start a restore from the committed operation ID; confirm an API request
+      receives the maintenance response and queued writers stop consuming work.
+- [ ] Confirm the restore operation reaches `completed` and the queue resumes.
+- [ ] In a disposable rehearsal, force a post-drop failure; confirm
+      `rollback_required`, the maintenance gate remains active, and
+      `backup:rollback <uuid>` returns the operation to `rolled_back`.
+- [ ] Run `backup:reconcile-stale` after a worker interruption and record the
+      resulting status and audit event.
+- [ ] Verify the settings endpoint rejects an unknown key, preserves the
+      stored JSON type, and writes an immutable `settings.updated` audit row
+      with old/new values and the operator reason.
+- [ ] Record authenticated API health, queue, scheduler, upload/restart,
+      migration, rollback, and measured RTO evidence in the drill log.
+
 ### Drill log
 
 | Date | Dump file | RTO | Pass/Fail | Notes / signer |
@@ -117,6 +197,7 @@ Run against a **throwaway / staging** database, never production.
 | _2026-06-16_ | _example — fill on first real drill_ | _–_ | _–_ | _–_ |
 | 2026-08-11 | `backups/ogami-20260810-211704.sql.gz` | ~10s | Partial pass | Disposable PostgreSQL restore completed with `ON_ERROR_STOP`; `users=14`, `event_outbox=0`. App-container login/health checks still require staging. |
 | 2026-08-11 | `backups/ogami-20260810-214257.sql.gz` | ~10s | Partial pass | Fresh backup restored into disposable PostgreSQL with `ON_ERROR_STOP`; `users=14`, `event_outbox=0`. App-container login/health checks and VPS freshness/off-site checks still require staging. |
+| 2026-08-25 | _target-like admin drill not run in this checkout_ | _–_ | Not run | Local PostgreSQL host `db` is unavailable; authenticated multi-container, queue, rollback, and upload evidence still require an isolated staging deployment. |
 
 ---
 

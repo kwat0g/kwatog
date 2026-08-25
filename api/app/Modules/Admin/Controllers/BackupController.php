@@ -11,9 +11,19 @@ use Illuminate\Http\Request;
 
 class BackupController
 {
-    public function index(BackupService $backups): JsonResponse
+    public function index(Request $request, BackupService $backups): JsonResponse
     {
-        return response()->json(['data' => $backups->index()]);
+        $validated = $request->validate([
+            'cursor' => ['nullable', 'string', 'max:255'],
+            'per_page' => ['nullable', 'integer', 'min:5', 'max:100'],
+        ]);
+
+        return response()->json([
+            'data' => $backups->index(
+                $validated['cursor'] ?? null,
+                (int) ($validated['per_page'] ?? 25),
+            ),
+        ]);
     }
 
     public function store(Request $request, BackupService $backups): JsonResponse
@@ -34,6 +44,7 @@ class BackupController
     {
         $operation = $backups->queueRestore(
             $request->user(),
+            $request->filled('backup_operation_id') ? (string) $request->string('backup_operation_id') : null,
             (string) $request->string('database_filename'),
             $request->filled('files_filename') ? (string) $request->string('files_filename') : null,
             (string) $request->string('confirmation'),

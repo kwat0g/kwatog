@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Admin\Requests;
 
+use App\Common\Services\SettingsService;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\DB;
 
 class UpdateSettingRequest extends FormRequest
 {
@@ -44,13 +46,13 @@ class UpdateSettingRequest extends FormRequest
         ];
 
         if (str_starts_with((string) $key, 'loans.') && str_ends_with((string) $key, '.annual_interest_rate')) {
-            return ['value' => ['required', 'numeric', 'min:0', 'max:1']];
+            return $this->withStoredTypeGuard(['value' => ['required', 'numeric', 'min:0', 'max:1']], (string) $key);
         }
         if (str_starts_with((string) $key, 'loans.') && str_ends_with((string) $key, '.max_salary_multiplier')) {
-            return ['value' => ['required', 'numeric', 'min:0.1', 'max:24']];
+            return $this->withStoredTypeGuard(['value' => ['required', 'numeric', 'min:0.1', 'max:24']], (string) $key);
         }
         if (str_starts_with((string) $key, 'purchasing.supplier_score.weight_')) {
-            return ['value' => ['required', 'numeric', 'min:0', 'max:1']];
+            return $this->withStoredTypeGuard(['value' => ['required', 'numeric', 'min:0', 'max:1']], (string) $key);
         }
         $policyRules = [
             'tax.ph.vat_rate' => ['value' => ['required', 'numeric', 'min:0', 'max:1']],
@@ -68,6 +70,7 @@ class UpdateSettingRequest extends FormRequest
             'inventory.abc.history_months' => ['value' => ['required', 'integer', 'min:1', 'max:120']],
             'calendar.max_range_days' => ['value' => ['required', 'integer', 'min:1', 'max:3650']],
             'hr.onboarding.stale_days' => ['value' => ['required', 'integer', 'min:1', 'max:365']],
+            'hr.onboarding.notification_roles' => ['value' => ['required', 'array', 'min:1']],
             'hr.probation.period_months' => ['value' => ['required', 'integer', 'min:1', 'max:60']],
             'production.dashboard.defect_history_days' => ['value' => ['required', 'integer', 'min:1', 'max:3650']],
             'loans.max_pay_periods' => ['value' => ['required', 'integer', 'min:1', 'max:120']],
@@ -395,7 +398,39 @@ class UpdateSettingRequest extends FormRequest
             'workflow.chain_definitions' => ['value' => ['required', 'array', 'min:1']],
         ];
 
-        return $securityRules[$key] ?? $maintenanceRules[$key] ?? $policyRules[$key] ?? $base;
+        return $this->withStoredTypeGuard(
+            $securityRules[$key] ?? $maintenanceRules[$key] ?? $policyRules[$key] ?? $base,
+            (string) $key,
+        );
+    }
+
+    /** @param array<string, array<int, mixed>> $rules @return array<string, array<int, mixed>> */
+    private function withStoredTypeGuard(array $rules, string $key): array
+    {
+        $rules['reason'] = ['nullable', 'string', 'max:2000'];
+        $rules['value'][] = function (string $attribute, mixed $value, \Closure $fail) use ($key): void {
+            $row = DB::table('settings')->where('key', $key)->first();
+            if (! $row) {
+                $fail('Unknown setting key.');
+                return;
+            }
+
+            try {
+                $stored = json_decode((string) $row->value, true, 512, JSON_THROW_ON_ERROR);
+            } catch (\JsonException) {
+                $fail('The stored setting is invalid and cannot be edited safely.');
+                return;
+            }
+
+            // One implementation, shared with SettingsService::updateFromAdmin.
+            // A second copy of this match drifted from the service's within a
+            // single change and re-introduced the int/float split.
+            if (! SettingsService::valueKeepsStoredJsonType($stored, $value)) {
+                $fail('The new value must keep the setting’s existing JSON type.');
+            }
+        };
+
+        return $rules;
     }
 
     public function messages(): array

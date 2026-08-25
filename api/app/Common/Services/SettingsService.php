@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace App\Common\Services;
 
+use App\Common\Models\AuditLog;
+use App\Modules\Auth\Models\User;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Application-wide key/value settings backed by the `settings` table.
@@ -139,6 +142,158 @@ class SettingsService
             // Cache layer may be unavailable; the next read will go straight
             // to the DB so this is non-fatal.
         }
+    }
+
+    /**
+     * Update an existing setting from an authenticated admin request.
+     *
+     * Seeder/bootstrap code may still use set(), which can create new keys.
+     * The admin path is deliberately narrower: it locks an existing row,
+     * preserves the stored JSON type, and emits an immutable audit record with
+     * sensitive setting values redacted.
+     */
+    public function updateFromAdmin(string $key, mixed $value, User $actor, ?string $reason = null): void
+    {
+        if (! Schema::hasTable('settings')) {
+            throw ValidationException::withMessages([
+                'key' => ['Settings are not available yet.'],
+            ]);
+        }
+
+        $setting = DB::table('settings')
+            ->where('key', $key)
+            ->lockForUpdate()
+            ->first();
+
+        if (! $setting) {
+            throw ValidationException::withMessages([
+                'key' => ['Unknown setting key.'],
+            ]);
+        }
+
+        try {
+            $oldValue = json_decode((string) $setting->value, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException $exception) {
+            throw new \RuntimeException("Setting {$key} contains invalid JSON.", 0, $exception);
+        }
+
+        if (! self::valueKeepsStoredJsonType($oldValue, $value)) {
+            throw ValidationException::withMessages([
+                'value' => ['The new value must keep the setting’s existing JSON type.'],
+            ]);
+        }
+
+        try {
+            $encoded = json_encode($value, JSON_THROW_ON_ERROR);
+        } catch (\JsonException $exception) {
+            throw ValidationException::withMessages([
+                'value' => ['The value could not be encoded as JSON.'],
+            ]);
+        }
+
+        $now = now();
+        DB::table('settings')->where('id', $setting->id)->update([
+            'value' => $encoded,
+            'updated_by' => $actor->id,
+            'updated_at' => $now,
+        ]);
+
+        $request = request();
+        AuditLog::create([
+            'user_id' => $actor->id,
+            'actor_type' => 'user',
+            'action' => 'settings.updated',
+            'model_type' => 'settings',
+            'model_id' => $setting->id,
+            'old_values' => [
+                'key' => $key,
+                'value' => self::redactSettingValue($key, $oldValue),
+            ],
+            'new_values' => [
+                'key' => $key,
+                'value' => self::redactSettingValue($key, $value),
+            ],
+            'ip_address' => $request?->ip(),
+            'user_agent' => $request?->userAgent(),
+            'source_command' => 'admin.settings.update',
+            'correlation_id' => $request?->attributes->get('request_id')
+                ?? $request?->header('X-Request-ID'),
+            'reason' => mb_substr(trim($reason ?? '') ?: 'Admin settings update', 0, 2000),
+            'created_at' => $now,
+        ]);
+
+        try {
+            Cache::forget("settings:{$key}");
+        } catch (\Throwable $exception) {
+            // A cache outage must not roll back a committed settings change.
+        }
+    }
+
+    /**
+     * Whether a candidate admin value keeps the stored setting's JSON type.
+     *
+     * JSON has a single number type and PHP collapses whole floats on encode:
+     * `json_encode(1.0)` emits `1`, which decodes back as an int. Splitting int
+     * from float here therefore froze every whole-number decimal setting to
+     * integers — `loans.company_loan.annual_interest_rate` stores `0` and
+     * `loans.*.max_salary_multiplier` stores `1`, so `0.05` and `1.5` were
+     * rejected as type changes and those rates became uneditable. Int-versus-
+     * decimal is policed by the per-key `integer` rules in
+     * UpdateSettingRequest, which is where a numeric contract belongs; this
+     * guard only stops a value changing JSON *class* (number ↔ string ↔ array).
+     */
+    public static function valueKeepsStoredJsonType(mixed $stored, mixed $value): bool
+    {
+        return match (true) {
+            is_bool($stored) => is_bool($value),
+            is_int($stored), is_float($stored) => is_int($value) || is_float($value),
+            is_string($stored) => is_string($value),
+            is_array($stored) => is_array($value),
+            $stored === null => $value === null,
+            default => false,
+        };
+    }
+
+    /**
+     * Segment names whose value is a credential or a personal identifier.
+     *
+     * Matched against the key's LAST dot-segment only. A substring match here
+     * redacted 69 of 420 seeded keys, because "accoun<b>tin</b>g",
+     * "forecas<b>tin</b>g", "budge<b>tin</b>g" and "ra<b>tin</b>g" all contain
+     * `tin`, and `bank`/`routing` matched GL account codes — so every
+     * accounting settings change was audited as `***`. Worse, `password`
+     * matched `security.password_min_length`, hiding exactly the security
+     * policy history this audit trail exists to preserve.
+     */
+    private const SENSITIVE_SEGMENTS = [
+        'password', 'passwd', 'passphrase', 'secret', 'token', 'credential', 'credentials',
+        'api_key', 'apikey', 'private_key', 'privatekey', 'access_key', 'secret_key',
+        'tin', 'ssn', 'sss_no', 'philhealth_no', 'pagibig_no', 'iban', 'swift', 'swift_code',
+        'bank_account', 'bank_account_no', 'account_no', 'routing_number', 'national_id', 'tax_id',
+    ];
+
+    /** Compound suffixes such as `smtp_password` or `webhook_secret`. */
+    private const SENSITIVE_SUFFIXES = [
+        '_password', '_passwd', '_passphrase', '_secret', '_token', '_credential',
+        '_credentials', '_api_key', '_apikey', '_private_key', '_access_key', '_secret_key',
+    ];
+
+    private static function redactSettingValue(string $key, mixed $value): mixed
+    {
+        $segments = explode('.', strtolower($key));
+        $last = (string) end($segments);
+
+        if (in_array($last, self::SENSITIVE_SEGMENTS, true)) {
+            return '***';
+        }
+
+        foreach (self::SENSITIVE_SUFFIXES as $suffix) {
+            if (str_ends_with($last, $suffix)) {
+                return '***';
+            }
+        }
+
+        return $value;
     }
 
     /**
