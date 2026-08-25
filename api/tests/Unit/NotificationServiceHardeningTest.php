@@ -284,6 +284,44 @@ class NotificationServiceHardeningTest extends TestCase
         $this->assertSame(2, DB::table('notifications')->where('type', 'test.optin')->count());
     }
 
+    public function test_email_opt_in_is_independent_of_in_app_opt_out(): void
+    {
+        $user = User::factory()->create(['email' => 'email-only@ogami.test']);
+        DB::table('notification_preferences')->insert([
+            [
+                'user_id' => $user->id,
+                'notification_type' => 'test.email_only',
+                'channel' => 'in_app',
+                'enabled' => false,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'user_id' => $user->id,
+                'notification_type' => 'test.email_only',
+                'channel' => 'email',
+                'enabled' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        Event::fake();
+        Mail::fake();
+
+        $this->service->send($user, 'test.email_only', [
+            'title' => 'Email only',
+            'message' => 'In-app is disabled independently.',
+        ]);
+
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $user->id,
+            'type' => 'test.email_only',
+        ]);
+        Mail::assertQueued(UserNotificationMail::class, 1);
+        Event::assertNotDispatched(UserNotificationCreated::class);
+    }
+
     public function test_in_app_fallback_never_queues_email_even_when_email_is_enabled(): void
     {
         $user = User::factory()->create(['email' => 'fallback@ogami.test']);

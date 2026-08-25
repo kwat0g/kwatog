@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Quality;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Quality\Enums\CalibrationStatus;
 use App\Modules\Quality\Models\CalibrationRecord;
 use App\Modules\Quality\Services\CalibrationService;
@@ -107,5 +108,19 @@ class CalibrationRegisterTest extends TestCase
         $this->assertSame(CalibrationStatus::Retired, $rec->status);
         $this->svc->recomputeStatuses();
         $this->assertSame(CalibrationStatus::Retired, $rec->fresh()->status);
+    }
+
+    public function test_record_calibration_rejects_a_future_date_in_the_service_layer(): void
+    {
+        $rec = $this->svc->create([
+            'equipment_code' => 'GAUGE-FUTURE',
+            'name' => 'Future date guard',
+            'frequency_days' => 365,
+        ]);
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('Calibration date cannot be in the future.');
+
+        $this->svc->recordCalibration($rec, CarbonImmutable::tomorrow()->toDateString());
     }
 }

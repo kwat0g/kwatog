@@ -13,7 +13,9 @@ use App\Modules\Accounting\Models\CreditNote;
 use App\Modules\Accounting\Models\CreditNoteApplication;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Models\Vendor;
+use App\Modules\Accounting\Enums\JournalEntryStatus;
 use App\Modules\Accounting\Services\CreditNoteService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -54,6 +56,20 @@ class CreditNoteTest extends TestCase
     private function revenueAccountId(): string
     {
         return (string) Account::query()->where('code', '4010')->value('id');
+    }
+
+    private function postedJournalEntry(User $by): JournalEntry
+    {
+        return JournalEntry::create([
+            'entry_number' => 'JE-CN-'.uniqid(),
+            'date' => now()->toDateString(),
+            'description' => 'Posted target document fixture',
+            'total_debit' => '1.00',
+            'total_credit' => '1.00',
+            'status' => JournalEntryStatus::Posted,
+            'posted_at' => now(),
+            'posted_by' => $by->id,
+        ]);
     }
 
     public function test_finalize_posts_a_balanced_vat_reversing_entry(): void
@@ -99,6 +115,7 @@ class CreditNoteTest extends TestCase
             'status' => 'finalized', 'subtotal' => '1000.00', 'vat_amount' => '120.00',
             'total_amount' => '1120.00', 'amount_paid' => '0.00', 'balance' => '1120.00',
             'date' => now()->toDateString(), 'due_date' => now()->addDays(30)->toDateString(),
+            'journal_entry_id' => $this->postedJournalEntry($by)->id,
             'created_by' => $by->id,
         ]);
 
@@ -137,6 +154,7 @@ class CreditNoteTest extends TestCase
             'status' => 'finalized', 'subtotal' => '1000.00', 'vat_amount' => '120.00',
             'total_amount' => '1120.00', 'amount_paid' => '0.00', 'balance' => '1120.00',
             'date' => now()->toDateString(), 'due_date' => now()->addDays(30)->toDateString(),
+            'journal_entry_id' => $this->postedJournalEntry($by)->id,
             'created_by' => $by->id,
         ]);
 
@@ -169,6 +187,7 @@ class CreditNoteTest extends TestCase
             'status' => 'unpaid', 'subtotal' => '2000.00', 'vat_amount' => '240.00',
             'total_amount' => '2240.00', 'amount_paid' => '0.00', 'balance' => '2240.00',
             'date' => now()->toDateString(), 'due_date' => now()->addDays(30)->toDateString(),
+            'journal_entry_id' => $this->postedJournalEntry($by)->id,
             'created_by' => $by->id,
         ]);
 
@@ -197,6 +216,7 @@ class CreditNoteTest extends TestCase
             'status' => 'finalized', 'subtotal' => '5000.00', 'vat_amount' => '600.00',
             'total_amount' => '5600.00', 'amount_paid' => '0.00', 'balance' => '5600.00',
             'date' => now()->toDateString(), 'due_date' => now()->addDays(30)->toDateString(),
+            'journal_entry_id' => $this->postedJournalEntry($by)->id,
             'created_by' => $by->id,
         ]);
 
@@ -209,6 +229,26 @@ class CreditNoteTest extends TestCase
         // CN balance is 112.00; applying 500 must be rejected.
         $this->expectException(\RuntimeException::class);
         $this->svc->apply($cn, ['amount' => '500.00', 'invoice_id' => $invoice->id], $by);
+    }
+
+    public function test_customer_credit_note_rejects_a_non_revenue_line_account(): void
+    {
+        $by = $this->admin();
+        $customer = Customer::create(['name' => 'Typed Account Co', 'payment_terms_days' => 30]);
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('must be of type revenue');
+
+        $this->svc->create([
+            'type' => 'customer',
+            'date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'lines' => [[
+                'account_id' => (string) Account::query()->where('code', '1010')->value('id'),
+                'description' => 'Invalid asset line',
+                'amount' => '100.00',
+            ]],
+        ], $by);
     }
 
     public function test_credit_note_routes_are_permission_gated(): void

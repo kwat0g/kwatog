@@ -6,12 +6,13 @@ import type {
  CreateAdminUserData,
  CreateAdminUserResponse,
  LoginEvent,
+ AdminUserOptions,
 } from '@/types/admin';
 import type { ApiSuccess } from '@/types';
 
 /** U2 — Admin user management. */
 export const adminUsersApi = {
- options: () => client.get<{ data: { statuses: Array<{ value: string; label: string }> } }>('/admin/users/options').then((r) => r.data.data),
+ options: () => client.get<{ data: AdminUserOptions }>('/admin/users/options').then((r) => r.data.data),
  list: (params?: AdminUserListFilters) =>
  client.get<AdminUserListResponse>('/admin/users', { params }).then((r) => r.data),
 
@@ -46,9 +47,17 @@ export const adminUsersApi = {
  return body.data ?? (r.data as unknown as AdminUserDetail);
  }),
 
+ updateProfile: (id: string, data: { name: string; email: string }) =>
+ client
+ .patch<ApiSuccess<AdminUserDetail>>(`/admin/users/${id}/profile`, data)
+ .then((r) => {
+ const body = r.data as { data?: AdminUserDetail } & AdminUserDetail;
+ return body.data ?? (r.data as unknown as AdminUserDetail);
+ }),
+
  resetPassword: (id: string) =>
  client
- .patch<{ message: string; sent_to: string | null }>(`/admin/users/${id}/reset-password`)
+ .patch<{ message: string; sent_to: string | null; temp_password: string }>(`/admin/users/${id}/reset-password`)
  .then((r) => r.data),
 
  loginHistory: (id: string) =>
@@ -58,7 +67,7 @@ export const adminUsersApi = {
 
  bulkChangeRole: (userIds: string[], roleId: string, reason: string, expectedRoleIds: Record<string, string>) =>
  client
- .patch<{ message: string; data: { updated: number; conflicts: Array<{ user_id: string; expected_role_id: string | null; actual_role_id: string | null }>; invalid_ids: string[] } }>(`/admin/users/bulk-role`, {
+ .patch<{ message: string; data: { updated: number; conflicts: Array<{ user_id: string; expected_role_id: string | null; actual_role_id: string | null }>; missing: string[]; invalid_ids: string[] } }>(`/admin/users/bulk-role`, {
  user_ids: userIds,
  role_id: roleId,
  reason,

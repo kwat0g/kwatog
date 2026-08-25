@@ -9,6 +9,8 @@ use App\Common\Services\SettingsService;
 use App\Modules\Payroll\Events\PayrollPeriodFinalized;
 use App\Modules\Payroll\Jobs\SendPayslipEmailJob;
 use App\Modules\Payroll\Models\Payroll;
+use App\Modules\Payroll\Models\PayrollPeriod;
+use App\Modules\Payroll\Services\PayrollPublicationPolicy;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -21,12 +23,19 @@ class EmailPayslipPdfOnPayrollFinalized implements ShouldQueue
 
     public function __construct(
         private readonly SettingsService $settings,
+        private readonly PayrollPublicationPolicy $publication,
     ) {}
 
     public function handle(PayrollPeriodFinalized $event): void
     {
         if (! $this->settings->requiredBool('payroll.payslip_email.enabled')) {
             app(ChainListenerRunService::class)->recordOutcome('skipped', 'feature_disabled');
+            return;
+        }
+
+        $period = PayrollPeriod::query()->find($event->period->id);
+        if (! $this->publication->isPeriodPublishable($period)) {
+            app(ChainListenerRunService::class)->recordOutcome('skipped', 'period_not_publishable');
             return;
         }
 
@@ -87,6 +96,10 @@ class EmailPayslipPdfOnPayrollFinalized implements ShouldQueue
                 ->find($payrollId);
 
             if (! $payroll || $payroll->payslip_emailed_at !== null || ! $payroll->employee?->email) {
+                return false;
+            }
+
+            if (! $this->publication->isPayrollPublishable($payroll)) {
                 return false;
             }
 

@@ -36,7 +36,7 @@ class ImportGovContributionTableTest extends TestCase
 
         $csv = $this->makeCsv(<<<CSV
 bracket_min,bracket_max,ee_amount,er_amount,effective_date
-0,4250,180.00,380.00,2026-01-01
+0,4249.99,180.00,380.00,2026-01-01
 4250,4750,202.50,427.50,2026-01-01
 CSV);
 
@@ -81,11 +81,11 @@ CSV);
         unlink($csv);
     }
 
-    public function test_bad_row_lands_in_errors_without_aborting_batch(): void
+    public function test_bad_row_aborts_the_entire_import_without_partial_schedule(): void
     {
         $csv = $this->makeCsv(<<<CSV
 bracket_min,bracket_max,ee_amount,er_amount,effective_date
-0,4250,180.00,380.00,2026-01-01
+0,4249.99,180.00,380.00,2026-01-01
 9999,100,202.50,427.50,2026-01-01
 4250,4750,202.50,427.50,2026-01-01
 CSV);
@@ -94,9 +94,12 @@ CSV);
             ->importFromPath(ContributionAgency::Sss, $csv);
 
         $this->assertSame(3, $r['total']);
-        $this->assertSame(2, $r['imported']);
-        $this->assertSame(1, $r['skipped']);
+        $this->assertSame(0, $r['imported']);
+        $this->assertSame(3, $r['skipped']);
         $this->assertCount(1, $r['errors']);
+        $this->assertSame(0, GovernmentContributionTable::where('agency', 'sss')
+            ->where('effective_date', '2026-01-01')
+            ->count());
         unlink($csv);
     }
 

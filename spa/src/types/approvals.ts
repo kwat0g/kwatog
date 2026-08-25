@@ -42,7 +42,13 @@ export interface ApprovalBoard {
  my_action: number;
  awaiting_others: number;
  approved: number;
- rejected: number;
+  rejected: number;
+ };
+ meta: {
+  pending_limit: number;
+  history_limit: number;
+  pending_truncated: boolean;
+  history_truncated: boolean;
  };
 }
 
@@ -52,4 +58,6 @@ export interface ApprovalBoardResponse {
 
 export interface ApprovalBoardParams {
  type?: ApprovalKind;
+ pending_limit?: number;
+ history_limit?: number;
 }

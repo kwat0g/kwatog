@@ -46,7 +46,7 @@ class JournalEntryController
     public function store(StoreJournalEntryRequest $request): JsonResponse
     {
         try {
-            $je = $this->service->create($request->validated(), $request->user());
+            $je = $this->service->createManual($request->validated(), $request->user());
         } catch (UnbalancedJournalEntryException $e) {
             return response()->json([
                 'message' => $e->getMessage(),
@@ -85,7 +85,11 @@ class JournalEntryController
 
     public function restore(JournalEntry $journalEntry): JsonResponse
     {
-        $journalEntry->restore();
+        try {
+            $this->service->restore($journalEntry);
+        } catch (BusinessRuleException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
         return response()->json(['message' => 'Journal entry restored.']);
     }
 
@@ -118,6 +122,7 @@ class JournalEntryController
                 $journalEntry,
                 $request->user(),
                 $request->filled('reverse_date') ? Carbon::parse($request->input('reverse_date')) : null,
+                $request->string('reason')->toString(),
             );
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);

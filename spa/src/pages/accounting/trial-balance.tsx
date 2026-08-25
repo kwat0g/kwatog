@@ -8,10 +8,12 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 import { Td, Th, tableCls, theadTrCls, totalsTrCls, trCls } from '@/components/ui/table-cells';
 
 export default function TrialBalancePage() {
+ const { can } = usePermission();
  const today = new Date();
  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10);
  const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().slice(0, 10);
@@ -28,14 +30,15 @@ export default function TrialBalancePage() {
  <div>
  <PageHeader
  title="Trial Balance"
+ subtitle={data ? `Currency: ${data.currency}` : undefined}
  backTo="/accounting/journal-entries"
  backLabel="Journal Entries"
- actions={
+ actions={can('accounting.statements.export') && (
  <div className="flex gap-1.5">
  <Button variant="secondary" size="sm" icon={<LuDownload size={14} />} onClick={() => void downloadAuthenticatedFile(statementsApi.csvUrl('trial-balance', { from, to }), { errorMessage: 'Failed to export trial balance.' })}>CSV</Button>
  <Button variant="secondary" size="sm" icon={<LuPrinter size={14} />} onClick={() => void downloadAuthenticatedFile(statementsApi.pdfUrl('trial-balance', { from, to }), { openInNewTab: true, errorMessage: 'Failed to generate trial balance PDF.' })}>PDF</Button>
  </div>
- }
+ )}
  />
 
  <div className="px-5 py-3 border-b border-default flex items-end gap-3">
@@ -49,7 +52,8 @@ export default function TrialBalancePage() {
  {data && data.accounts.length > 0 && (
  <div className="px-5 py-4">
  <div className="border border-default rounded-md overflow-hidden">
- <table className={tableCls}>
+ <div className="overflow-x-auto">
+ <table className={`${tableCls} min-w-[720px]`}>
  <thead>
  <tr className={theadTrCls}>
  <Th>Code</Th>
@@ -76,6 +80,7 @@ export default function TrialBalancePage() {
  </tr>
  </tbody>
  </table>
+ </div>
  </div>
  </div>
  )}

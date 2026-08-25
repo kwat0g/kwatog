@@ -20,7 +20,12 @@ class MrpPlanGenerated implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public function __construct(public MrpPlan $plan) {}
+    public function __construct(
+        public MrpPlan $plan,
+        public ?int $sourceRunId = null,
+        public ?int $initiatingActorId = null,
+        public ?string $reason = null,
+    ) {}
 
     /** @return array<int, PrivateChannel> */
     public function broadcastOn(): array

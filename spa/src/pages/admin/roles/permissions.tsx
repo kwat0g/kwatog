@@ -454,7 +454,7 @@ export default function RolePermissionsPage() {
                               className="flex items-center justify-between rounded bg-surface border border-subtle px-2.5 py-1 text-xs"
                             >
                               <span className="font-medium text-primary">{item?.name || slug}</span>
-                              <span className="font-mono text-[10px] text-muted">{slug}</span>
+                              <span className="font-mono text-2xs text-muted">{slug}</span>
                             </li>
                           );
                         })}
@@ -475,7 +475,7 @@ export default function RolePermissionsPage() {
                               className="flex items-center justify-between rounded bg-surface border border-subtle px-2.5 py-1 text-xs"
                             >
                               <span className="font-medium text-primary">{item?.name || slug}</span>
-                              <span className="font-mono text-[10px] text-muted">{slug}</span>
+                              <span className="font-mono text-2xs text-muted">{slug}</span>
                             </li>
                           );
                         })}
@@ -609,7 +609,7 @@ export default function RolePermissionsPage() {
                         type="button"
                         onClick={() => setStatusFilter(st.id)}
                         className={cn(
-                          'rounded-full px-3 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors cursor-pointer',
+                          'rounded-full px-3 py-1 font-mono text-xs uppercase tracking-wider transition-colors cursor-pointer',
                           statusFilter === st.id
                             ? 'bg-accent text-accent-fg font-medium'
                             : 'bg-subtle text-muted hover:text-primary hover:bg-elevated',
@@ -723,7 +723,7 @@ export default function RolePermissionsPage() {
                                 type="button"
                                 title="Grant all in this module"
                                 onClick={() => setModulePermissions(module, 'all')}
-                                className="rounded px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider border border-default-default bg-surface text-secondary hover:text-primary hover:bg-elevated transition-colors cursor-pointer"
+                                className="rounded px-2 py-0.5 font-mono text-2xs uppercase tracking-wider border border-default bg-surface text-secondary hover:text-primary hover:bg-elevated transition-colors cursor-pointer"
                               >
                                 All
                               </button>
@@ -731,7 +731,7 @@ export default function RolePermissionsPage() {
                                 type="button"
                                 title="Grant view-only permissions in this module"
                                 onClick={() => setModulePermissions(module, 'view_only')}
-                                className="rounded px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider border border-default-default bg-surface text-secondary hover:text-primary hover:bg-elevated transition-colors cursor-pointer"
+                                className="rounded px-2 py-0.5 font-mono text-2xs uppercase tracking-wider border border-default bg-surface text-secondary hover:text-primary hover:bg-elevated transition-colors cursor-pointer"
                               >
                                 View Only
                               </button>
@@ -739,7 +739,7 @@ export default function RolePermissionsPage() {
                                 type="button"
                                 title="Clear all in this module"
                                 onClick={() => setModulePermissions(module, 'none')}
-                                className="rounded px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider border border-default-default bg-surface text-secondary hover:text-primary hover:bg-elevated transition-colors cursor-pointer"
+                                className="rounded px-2 py-0.5 font-mono text-2xs uppercase tracking-wider border border-default bg-surface text-secondary hover:text-primary hover:bg-elevated transition-colors cursor-pointer"
                               >
                                 Clear
                               </button>
@@ -769,9 +769,8 @@ export default function RolePermissionsPage() {
                             return (
                               <div
                                 key={p.slug}
-                                onClick={() => toggleSlug(p.slug)}
                                 className={cn(
-                                  'flex items-center justify-between px-4 py-3.5 transition-colors duration-fast cursor-pointer select-none border-b border-subtle/70 relative rounded-sm',
+                                  'flex items-center justify-between px-4 py-3.5 transition-colors duration-fast border-b border-subtle/70 relative rounded-sm',
                                   idx % 2 === 1
                                     ? isGranted
                                       ? 'bg-[var(--bg-row-hover)]/40 hover:bg-[var(--bg-row-hover)]'
@@ -789,7 +788,7 @@ export default function RolePermissionsPage() {
                                   <div className="pt-0.5 shrink-0">
                                     <Chip
                                       variant={badge.variant}
-                                      className="text-[9px] font-mono font-medium px-1.5 py-0.2"
+                                      className="text-2xs font-mono font-medium px-1.5 py-0.2"
                                     >
                                       {badge.label}
                                     </Chip>
@@ -807,7 +806,7 @@ export default function RolePermissionsPage() {
                                       </span>
                                       <span className="font-mono text-xs text-muted">{p.slug}</span>
                                       {isModified && (
-                                        <span className="font-mono text-[9px] uppercase tracking-wider text-warning-fg font-medium">
+                                        <span className="font-mono text-2xs uppercase tracking-wider text-warning-fg font-medium">
                                           {isGranted ? '+ Added' : '− Removed'}
                                         </span>
                                       )}
@@ -823,11 +822,11 @@ export default function RolePermissionsPage() {
 
                                 <div className="shrink-0 flex items-center gap-2">
                                   {isGranted ? (
-                                    <span className="hidden sm:inline-flex items-center gap-1 font-mono text-[10px] uppercase text-success-fg font-medium mr-2">
+                                    <span className="hidden sm:inline-flex items-center gap-1 font-mono text-2xs uppercase text-success-fg font-medium mr-2">
                                       <LuCheck size={12} /> Granted
                                     </span>
                                   ) : (
-                                    <span className="hidden sm:inline-flex items-center gap-1 font-mono text-[10px] uppercase text-muted font-normal mr-2">
+                                    <span className="hidden sm:inline-flex items-center gap-1 font-mono text-2xs uppercase text-muted font-normal mr-2">
                                       Off
                                     </span>
                                   )}

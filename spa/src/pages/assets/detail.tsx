@@ -1,7 +1,9 @@
 /** Sprint 8 — Task 70. Asset detail with depreciation history + dispose modal. */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { isAxiosError } from 'axios';
+import QRCode from 'qrcode';
 import toast from 'react-hot-toast';
 import { assetsApi } from '@/api/assets';
 import { Button } from '@/components/ui/Button';
@@ -12,6 +14,7 @@ import { StatCard } from '@/components/ui/StatCard';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
+import { Textarea } from '@/components/ui/Textarea';
 import { LuPencil } from '@/lib/icons';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
@@ -25,13 +28,19 @@ export default function AssetDetailPage() {
   const { can } = usePermission();
   const [disposeOpen, setDisposeOpen] = useState(false);
   const [disposalAmount, setDisposalAmount] = useState<string>('');
+  const [disposalDate, setDisposalDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [disposalReason, setDisposalReason] = useState<string>('');
+  const [qrImage, setQrImage] = useState<string | null>(null);
+  const [qrError, setQrError] = useState(false);
   const disposalError = !/^\d+(\.\d{1,2})?$/.test(disposalAmount)
     ? disposalAmount === ''
       ? 'Disposal proceeds is required.'
       : 'Enter a valid amount, up to 2 decimals.'
     : Number(disposalAmount) < 0
       ? 'Amount cannot be negative.'
-      : undefined;
+    : undefined;
+  const disposalReasonError = disposalReason.trim() === '' ? 'A disposal reason is required.' : undefined;
+  const disposalDateError = disposalDate === '' ? 'Disposal date is required.' : undefined;
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['asset', id],
@@ -44,6 +53,28 @@ export default function AssetDetailPage() {
     enabled: !!id && !!data,
     staleTime: Infinity,
   });
+  useEffect(() => {
+    let active = true;
+    setQrImage(null);
+    setQrError(false);
+    if (!qrData?.url) return undefined;
+
+    QRCode.toDataURL(qrData.url, {
+      errorCorrectionLevel: 'M',
+      margin: 1,
+      width: 320,
+    })
+      .then((dataUrl) => {
+        if (active) setQrImage(dataUrl);
+      })
+      .catch(() => {
+        if (active) setQrError(true);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [qrData?.url]);
   const { data: assetOptions } = useQuery({
     queryKey: ['assets', 'options'],
     queryFn: assetsApi.options,
@@ -55,14 +86,19 @@ export default function AssetDetailPage() {
   )?.label;
 
   const dispose = useMutation({
-    mutationFn: () => assetsApi.dispose(id, { disposal_amount: disposalAmount }),
+    mutationFn: () => assetsApi.dispose(id, {
+      disposal_amount: disposalAmount,
+      disposed_date: disposalDate,
+      remarks: disposalReason.trim(),
+    }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['asset', id] });
       qc.invalidateQueries({ queryKey: ['assets'] });
       toast.success('Asset disposed and JE posted.');
       setDisposeOpen(false);
+      setDisposalReason('');
     },
-    onError: () => toast.error('Failed to dispose asset.'),
+    onError: (error) => toast.error(isAxiosError(error) ? error.response?.data?.message ?? 'Failed to dispose asset.' : 'Failed to dispose asset.'),
   });
 
   if (isLoading) return <SkeletonDetail />;
@@ -100,12 +136,12 @@ export default function AssetDetailPage() {
             >
               {statusLabel ?? data.status}
             </Chip>
-            {can('assets.create') && (
+            {can('assets.update') && (
               <Button variant="secondary" size="xs" onClick={() => navigate(`/assets/${id}/edit`)}>
                 <LuPencil className="h-3.5 w-3.5 mr-1" /> Edit
               </Button>
             )}
-            {data.status === 'active' && can('assets.dispose') && (
+            {data.status !== 'disposed' && can('assets.dispose') && (
               <Button variant="danger" size="xs" onClick={() => setDisposeOpen(true)}>
                 Dispose
               </Button>
@@ -174,6 +210,7 @@ export default function AssetDetailPage() {
                   <span className="font-mono">{formatPeso(data.disposal_amount)}</span>
                 </Row>
               )}
+              {data.disposal_reason && <Row label="Disposal reason">{data.disposal_reason}</Row>}
             </dl>
           </Panel>
 
@@ -181,27 +218,34 @@ export default function AssetDetailPage() {
           {qrData && (
             <Panel title="QR code">
               <div className="flex flex-col items-center gap-3 py-2">
-                {qrData.url ? (
+                {qrImage ? (
                   <img
-                    src={qrData.url}
+                    src={qrImage}
                     alt={`QR for ${qrData.asset_code}`}
                     className="w-40 h-40 rounded border border-default"
                   />
+                ) : qrData.url && !qrError ? (
+                  <div className="w-40 h-40 rounded border border-default bg-elevated flex items-center justify-center text-xs text-muted">
+                    Generating QR…
+                  </div>
                 ) : (
                   <div className="w-40 h-40 rounded border border-default bg-elevated flex items-center justify-center text-xs text-muted">
-                    No QR image
+                    QR unavailable
                   </div>
                 )}
                 <p className="text-xs font-mono text-muted">{qrData.asset_code}</p>
-                {qrData.url && (
+                {qrImage && (
                   <a
-                    href={qrData.url}
+                    href={qrImage}
                     download={`${qrData.asset_code}-qr.png`}
                     className="text-xs text-accent hover:underline"
-                    target="_blank"
-                    rel="noopener noreferrer"
                   >
                     Download QR
+                  </a>
+                )}
+                {qrError && qrData.url && (
+                  <a href={qrData.url} className="text-xs text-accent hover:underline" target="_blank" rel="noopener noreferrer">
+                    Open asset link
                   </a>
                 )}
               </div>
@@ -229,6 +273,24 @@ export default function AssetDetailPage() {
             prefix="₱"
             className="font-mono"
           />
+          <Input
+            label="Disposal date"
+            type="date"
+            min={data.acquisition_date.slice(0, 10)}
+            max={new Date().toISOString().slice(0, 10)}
+            value={disposalDate}
+            onChange={(event) => setDisposalDate(event.target.value)}
+            error={disposalDateError}
+          />
+          <Textarea
+            label="Reason"
+            value={disposalReason}
+            onChange={(event) => setDisposalReason(event.target.value)}
+            error={disposalReasonError}
+            rows={3}
+            placeholder="Why is this asset being disposed?"
+            required
+          />
         </div>
         <ModalFooter>
           <Button variant="secondary" onClick={() => setDisposeOpen(false)}>
@@ -238,7 +300,7 @@ export default function AssetDetailPage() {
             variant="danger"
             onClick={() => dispose.mutate()}
             loading={dispose.isPending}
-            disabled={!!disposalError}
+            disabled={!!disposalError || !!disposalDateError || !!disposalReasonError}
           >
             {dispose.isPending ? 'Disposing…' : 'Confirm dispose'}
           </Button>

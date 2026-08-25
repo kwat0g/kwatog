@@ -117,18 +117,11 @@ class MaterialIssueService
                     referenceId: $slip->id,
                     remarks: "MIS {$slip->slip_number}",
                     createdBy: $by->id,
+                    lotNumber: isset($row['lot_number']) ? (string) $row['lot_number'] : null,
                 ));
 
                 $unitCost = (string) $mvmt->unit_cost;
                 $lineTotal = bcmul($qty, $unitCost, 4);
-
-                // OGAMI-012 — optional lot stamp so an issued lot is traceable
-                // back to the GRN lot it came from. Null-safe; existing callers
-                // omit `lot_number` and the movement stays unstamped.
-                $this->movements->stampLot(
-                    $mvmt,
-                    isset($row['lot_number']) ? (string) $row['lot_number'] : null,
-                );
 
                 $reservationId = $row['material_reservation_id'] ?? null;
                 if ($reservationId) {
@@ -147,6 +140,8 @@ class MaterialIssueService
                     'quantity_issued'         => $qty,
                     'unit_cost'               => $unitCost,
                     'total_cost'              => bcadd($lineTotal, '0', 2),
+                    'issued_uom_code'         => $row['issued_uom_code'] ?? null,
+                    'lot_number'              => $row['lot_number'] ?? null,
                     'material_reservation_id' => $row['material_reservation_id'] ?? null,
                     'remarks'                 => $row['remarks'] ?? null,
                 ]);
@@ -171,13 +166,24 @@ class MaterialIssueService
      */
     public function cancel(MaterialIssueSlip $slip, ?User $by = null): void
     {
-        if ($slip->status === MaterialIssueStatus::Cancelled) {
-            throw new BusinessRuleException('Slip is already cancelled.');
-        }
-
         DB::transaction(function () use ($slip, $by) {
-            if ($slip->status === MaterialIssueStatus::Issued) {
-                foreach ($slip->items as $item) {
+            // The caller may hold a stale model. Serialize cancellation on the
+            // slip itself, then read its lines under the same transaction so
+            // two stale requests can never both post reversal movements.
+            $lockedSlip = MaterialIssueSlip::query()
+                ->lockForUpdate()
+                ->findOrFail($slip->getKey());
+            if ($lockedSlip->status === MaterialIssueStatus::Cancelled) {
+                throw new BusinessRuleException('Slip is already cancelled.');
+            }
+
+            $items = MaterialIssueSlipItem::query()
+                ->where('material_issue_slip_id', $lockedSlip->id)
+                ->lockForUpdate()
+                ->get();
+
+            if ($lockedSlip->status === MaterialIssueStatus::Issued) {
+                foreach ($items as $item) {
                     $this->movements->move(new StockMovementInput(
                         type: StockMovementType::AdjustmentIn,
                         itemId: $item->item_id,
@@ -185,13 +191,14 @@ class MaterialIssueService
                         quantity: (string) $item->quantity_issued,
                         unitCost: (string) $item->unit_cost,
                         referenceType: 'material_issue_slip',
-                        referenceId: $slip->id,
-                        remarks: "MIS {$slip->slip_number} cancel reversal",
+                        referenceId: $lockedSlip->id,
+                        remarks: "MIS {$lockedSlip->slip_number} cancel reversal",
                         createdBy: $by?->id,
+                        lotNumber: $item->lot_number,
                     ));
                 }
             } else {
-                foreach ($slip->items as $item) {
+                foreach ($items as $item) {
                     if ($item->material_reservation_id) {
                         $res = MaterialReservation::query()
                             ->lockForUpdate()
@@ -208,7 +215,12 @@ class MaterialIssueService
                 }
             }
 
-            $slip->update(['status' => MaterialIssueStatus::Cancelled]);
+            $lockedSlip->update(['status' => MaterialIssueStatus::Cancelled]);
         });
+
+        // Keep callers that passed a previously-loaded model in sync with the
+        // row serialized immediately after cancellation (notably the API
+        // controller).
+        $slip->refresh();
     }
 }

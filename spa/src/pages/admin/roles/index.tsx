@@ -242,6 +242,7 @@ const remove = useMutation({
  <PageHeader
  title="Roles & permissions"
  subtitle={data ? `${data.meta.total} roles` : undefined}
+ refreshingQueryKey={['admin', 'roles', scope, filters]}
  actions={
  can('admin.roles.manage') && (
  <>

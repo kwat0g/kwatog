@@ -12,15 +12,15 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
  * Sprint 7 — Task 59. Inspection specification root row.
  *
- * One per product (UNIQUE constraint at the DB level). Updates do not
- * supersede the spec — they bump `version` and overwrite. Sprint 7 keeps
- * spec authoring single-active; full history is queued for Sprint 8 if
- * the audit programme needs versioned spec lineage.
+ * One root per product (UNIQUE constraint at the DB level). Each save creates
+ * an immutable revision and appends new item rows; the root carries the
+ * current version and active/archive state.
  */
 class InspectionSpec extends Model
 {
@@ -48,5 +48,31 @@ class InspectionSpec extends Model
     public function items(): HasMany
     {
         return $this->hasMany(InspectionSpecItem::class)->orderBy('sort_order');
+    }
+
+    public function revisions(): HasMany
+    {
+        return $this->hasMany(InspectionSpecRevision::class)->orderBy('version');
+    }
+
+    public function currentRevision(): HasOne
+    {
+        return $this->hasOne(InspectionSpecRevision::class)->ofMany('version', 'max');
+    }
+
+    /**
+     * Compatibility bridge for legacy model writers that create an item or
+     * inspection directly instead of going through the revisioning service.
+     * New HTTP writes always create the revision explicitly in the service.
+     */
+    public function ensureCurrentRevision(): InspectionSpecRevision
+    {
+        return $this->revisions()->firstOrCreate(
+            ['version' => (int) $this->version],
+            [
+                'created_by' => (int) $this->created_by,
+                'notes' => $this->notes,
+            ],
+        );
     }
 }

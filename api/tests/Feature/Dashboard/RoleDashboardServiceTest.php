@@ -12,6 +12,7 @@ use App\Modules\Dashboard\Services\PurchasingDashboardService;
 use App\Modules\Dashboard\Services\RoleDashboardService;
 use App\Modules\Dashboard\Services\WarehouseDashboardService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -363,6 +364,13 @@ class RoleDashboardServiceTest extends TestCase
             ['invoice_number' => 'INV-2', 'customer_id' => 1, 'status' => 'finalized',
                 'date' => $secondDate->toDateString(), 'due_date' => $secondDate->copy()->addDays(30)->toDateString(),
                 'total_amount' => 5000, 'balance' => 0, 'created_at' => now(), 'updated_at' => now()],
+            // Non-revenue lifecycle rows must not inflate the headline.
+            ['invoice_number' => 'INV-DRAFT', 'customer_id' => 1, 'status' => 'draft',
+                'date' => now()->toDateString(), 'due_date' => now()->addDays(30)->toDateString(),
+                'total_amount' => 9000, 'balance' => 9000, 'created_at' => now(), 'updated_at' => now()],
+            ['invoice_number' => 'INV-CANCELLED', 'customer_id' => 1, 'status' => 'cancelled',
+                'date' => now()->toDateString(), 'due_date' => now()->addDays(30)->toDateString(),
+                'total_amount' => 11000, 'balance' => 0, 'created_at' => now(), 'updated_at' => now()],
         ]);
 
         // Revenue is money, so it renders only for a viewer holding the
@@ -425,15 +433,21 @@ class RoleDashboardServiceTest extends TestCase
         $this->assertSame(2, $rows[0]['items_count']);
     }
 
-    public function test_probation_alerts_finds_employee_whose_6mo_ends_within_30_days(): void
+    public function test_probation_alerts_uses_the_configured_period_for_membership_and_display(): void
     {
+        DB::table('settings')->where('key', 'hr.probation.period_months')->update([
+            'value' => json_encode(3),
+            'updated_at' => now(),
+        ]);
+        Cache::forget('settings:hr.probation.period_months');
+
         $deptId = DB::table('departments')->insertGetId(['name' => 'Prod', 'code' => 'PRD', 'created_at' => now(), 'updated_at' => now()]);
         $posId = DB::table('positions')->insertGetId(['title' => 'Op', 'department_id' => $deptId, 'created_at' => now(), 'updated_at' => now()]);
         DB::table('employees')->insert([
             'employee_no' => 'OGM-P-1', 'first_name' => 'Ana', 'last_name' => 'Reyes',
             'birth_date' => '1995-05-10', 'gender' => 'female', 'civil_status' => 'single',
             'department_id' => $deptId, 'position_id' => $posId, 'employment_type' => 'probationary',
-            'pay_type' => 'monthly', 'date_hired' => now()->subMonths(6)->addDays(15)->toDateString(),
+            'pay_type' => 'monthly', 'date_hired' => now()->subMonths(3)->addDays(15)->toDateString(),
             'status' => 'active', 'created_at' => now(), 'updated_at' => now(),
         ]);
 
@@ -446,6 +460,10 @@ class RoleDashboardServiceTest extends TestCase
 
         $this->assertCount(1, $rows);
         $this->assertSame('OGM-P-1', $rows[0]['employee_no']);
+        $this->assertSame(
+            now()->subMonths(3)->addDays(15)->addMonths(3)->toDateString(),
+            $rows[0]['probation_end'],
+        );
     }
 
     public function test_calendar_events_lists_birthdays_in_current_month_sorted_by_day(): void

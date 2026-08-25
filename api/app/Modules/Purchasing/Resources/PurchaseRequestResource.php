@@ -6,11 +6,19 @@ namespace App\Modules\Purchasing\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use App\Modules\Purchasing\Enums\PurchaseRequestPriority;
+use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
 
 class PurchaseRequestResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $isUrgent = (bool) $this->is_urgent
+            || in_array((string) $this->priority?->value, [
+                PurchaseRequestPriority::Urgent->value,
+                PurchaseRequestPriority::Critical->value,
+            ], true);
+
         return [
             'id'                      => $this->hash_id,
             'pr_number'               => $this->pr_number,
@@ -26,7 +34,7 @@ class PurchaseRequestResource extends JsonResource
             'po_conversion_at'       => optional($this->po_conversion_at)->toIso8601String(),
             'is_auto_generated'       => (bool) $this->is_auto_generated,
             'auto_generated_reason'   => $this->auto_generated_reason,
-            'is_urgent'               => (bool) $this->is_urgent,
+            'is_urgent'               => $isUrgent,
             'urgency_reason'          => $this->urgency_reason,
             'current_approval_step'   => (int) $this->current_approval_step,
             'has_overdue_approval'    => $this->relationLoaded('approvalRecords')
@@ -101,6 +109,12 @@ class PurchaseRequestResource extends JsonResource
             'created_at'              => optional($this->created_at)->toIso8601String(),
             'updated_at'              => optional($this->updated_at)->toIso8601String(),
             'deleted_at'              => optional($this->deleted_at)?->toIso8601String(),
+            // Action decisions are needed on row-detail/action responses. Do
+            // not run delegation/pending-step checks once per row on the
+            // paginated list response.
+            'actions'                 => $request->route('purchaseRequest') !== null && $request->user()
+                ? app(PurchaseRequestAccessPolicy::class)->actionsFor($request->user(), $this->resource)
+                : null,
         ];
     }
 }

@@ -26,7 +26,12 @@ class CreateBackupJob implements ShouldQueue
     /** @return array<int, object> */
     public function middleware(): array
     {
-        return [new WithoutOverlapping('ogami-backup-recovery')];
+        return [
+            (new WithoutOverlapping('ogami-backup-recovery'))
+                ->shared()
+                ->releaseAfter(30)
+                ->expireAfter((int) config('backup.lease_seconds', 7200)),
+        ];
     }
 
     public function handle(BackupService $backups): void

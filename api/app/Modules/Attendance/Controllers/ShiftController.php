@@ -59,7 +59,7 @@ class ShiftController
 
     public function restore(Shift $shift): JsonResponse
     {
-        $shift->restore();
+        $this->shifts->restore($shift);
         return response()->json(['message' => 'Shift restored.']);
     }
 

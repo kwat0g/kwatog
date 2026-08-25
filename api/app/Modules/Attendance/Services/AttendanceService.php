@@ -14,6 +14,7 @@ class AttendanceService
 {
     public function __construct(
         private readonly DTRComputationService $dtr,
+        private readonly AttendanceDateMutabilityGuard $mutability,
     ) {}
 
     /**
@@ -91,6 +92,7 @@ class AttendanceService
     public function create(array $data): Attendance
     {
         return DB::transaction(function () use ($data) {
+            $this->mutability->assertMutable((int) $data['employee_id'], (string) $data['date']);
             $a = Attendance::create($data + ['is_manual_entry' => true]);
             $a = $this->dtr->computeForRecord($a);
             $a->save();
@@ -102,26 +104,55 @@ class AttendanceService
     public function update(Attendance $a, array $data): Attendance
     {
         return DB::transaction(function () use ($a, $data) {
-            $a->update($data);
-            $a = $this->dtr->computeForRecord($a);
-            $a->save();
-            $this->overtime()->autoDetectFromAttendance($a);
-            return $a->fresh(['employee', 'employee.department', 'shift']);
+            $this->mutability->assertMutable((int) $a->employee_id, (string) $a->date);
+            $authoritative = Attendance::query()
+                ->lockForUpdate()
+                ->findOrFail($a->id);
+            $authoritative->update($data);
+            $authoritative = $this->dtr->computeForRecord($authoritative);
+            $authoritative->save();
+            $this->overtime()->autoDetectFromAttendance($authoritative);
+            return $authoritative->fresh(['employee', 'employee.department', 'shift']);
         });
     }
 
     public function delete(Attendance $a): void
     {
-        $a->delete();
+        DB::transaction(function () use ($a): void {
+            $this->mutability->assertMutable((int) $a->employee_id, (string) $a->date);
+            $authoritative = Attendance::query()
+                ->lockForUpdate()
+                ->findOrFail($a->id);
+            $authoritative->delete();
+        });
+    }
+
+    public function restore(Attendance $a): void
+    {
+        DB::transaction(function () use ($a): void {
+            $this->mutability->assertMutable((int) $a->employee_id, (string) $a->date);
+            $authoritative = Attendance::withTrashed()
+                ->lockForUpdate()
+                ->findOrFail($a->id);
+            $authoritative->restore();
+        });
     }
 
     public function recomputeForEmployeeOnDate(int $employeeId, string $date): ?Attendance
     {
-        $a = Attendance::where('employee_id', $employeeId)->where('date', $date)->first();
-        if (! $a) return null;
-        $a = $this->dtr->computeForRecord($a);
-        $a->save();
-        $this->overtime()->autoDetectFromAttendance($a);
-        return $a;
+        return DB::transaction(function () use ($employeeId, $date): ?Attendance {
+            $this->mutability->assertMutable($employeeId, $date);
+            $a = Attendance::query()
+                ->with(['employee', 'shift'])
+                ->where('employee_id', $employeeId)
+                ->where('date', $date)
+                ->lockForUpdate()
+                ->first();
+            if (! $a) return null;
+            $a = $this->dtr->computeForRecord($a);
+            $a->save();
+            $this->overtime()->autoDetectFromAttendance($a);
+            return $a;
+        });
     }
 }

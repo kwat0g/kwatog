@@ -1,8 +1,17 @@
 import { client } from './client';
 import type { DriverDelivery, DriverPaginated } from '@/types/driver';
 
-export const driverApi = {
- listDeliveries: (params?: Record<string, string>) =>
+ export interface DriverDeliveryListParams {
+  page?: number;
+  per_page?: number;
+  status?: string;
+  scheduled_date?: string;
+  date_from?: string;
+  date_to?: string;
+ }
+
+ export const driverApi = {
+ listDeliveries: (params?: DriverDeliveryListParams) =>
  client
  .get<DriverPaginated<DriverDelivery>>('/driver/deliveries', { params })
  .then(r => r.data),

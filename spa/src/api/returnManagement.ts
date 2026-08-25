@@ -1,15 +1,18 @@
 import { client } from '@/api/client';
-import type { ReturnRequest, ReturnRequestFormData, DispositionPayload } from '@/types/returnManagement';
+import type { ReturnRequest, ReturnRequestFormData, DispositionPayload, ReturnSourceOptions } from '@/types/returnManagement';
 
 export const returnManagementApi = {
- options: () => client.get<{ data: {
+ options: (params?: { type?: string; finance_only?: boolean }) => client.get<{ data: {
  types: Array<{ value: string; label: string }>;
  statuses: Array<{ value: string; label: string }>;
  reasons: Array<{ value: string; label: string }>;
  resolutions: Array<{ value: string; label: string }>;
  conditions: Array<{ value: string; label: string }>;
  dispositions: Array<{ value: string; label: string }>;
- } }>('/return-management/options').then((r) => r.data.data),
+ disposition_matrix: Record<string, Record<string, Array<{ value: string; label: string }>>>;
+ } }>('/return-management/options', { params }).then((r) => r.data.data),
+ sourceOptions: (params: { type: string; customer_id?: string; vendor_id?: string }) =>
+  client.get<{ data: ReturnSourceOptions }>('/return-management/return-requests/source-options', { params }).then((r) => r.data.data),
  list: (params?: Record<string, string | number | undefined>) =>
  client.get('/return-management/return-requests', { params }).then((r) => r.data),
 
@@ -18,6 +21,9 @@ export const returnManagementApi = {
 
  create: (data: ReturnRequestFormData) =>
  client.post('/return-management/return-requests', data).then((r) => r.data.data as ReturnRequest),
+
+ update: (id: string, data: ReturnRequestFormData) =>
+  client.patch(`/return-management/return-requests/${id}`, data).then((r) => r.data.data as ReturnRequest),
 
  submit: (id: string) =>
  client.post(`/return-management/return-requests/${id}/submit`).then((r) => r.data.data as ReturnRequest),

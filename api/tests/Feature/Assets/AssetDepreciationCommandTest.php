@@ -51,23 +51,23 @@ class AssetDepreciationCommandTest extends TestCase
             'status' => AssetStatus::Active->value,
         ]);
 
-        $this->artisan('assets:run-monthly-depreciation', ['--year' => 2025, '--month' => 12])
+        $this->artisan('assets:run-monthly-depreciation', ['--year' => 2025, '--month' => 12, '--backfill' => true])
             ->assertExitCode(0);
 
-        $this->assertDatabaseCount('asset_depreciations', 1);
+        $this->assertDatabaseCount('asset_depreciations', 12);
         $this->assertDatabaseHas('asset_depreciations', [
             'asset_id' => $asset->id,
             'period_year' => 2025,
             'period_month' => 12,
             'depreciation_amount' => '200.00',
         ]);
-        $this->assertSame('200.00', $asset->fresh()->accumulated_depreciation);
+        $this->assertSame('2400.00', $asset->fresh()->accumulated_depreciation);
 
-        $this->artisan('assets:run-monthly-depreciation', ['--year' => 2025, '--month' => 12])
+        $this->artisan('assets:run-monthly-depreciation', ['--year' => 2025, '--month' => 12, '--backfill' => true])
             ->assertExitCode(0);
 
-        $this->assertDatabaseCount('asset_depreciations', 1);
-        $this->assertDatabaseCount('journal_entries', 1);
-        $this->assertSame('200.00', $asset->fresh()->accumulated_depreciation);
+        $this->assertDatabaseCount('asset_depreciations', 12);
+        $this->assertDatabaseCount('journal_entries', 12);
+        $this->assertSame('2400.00', $asset->fresh()->accumulated_depreciation);
     }
 }

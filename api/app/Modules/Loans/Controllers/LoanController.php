@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace App\Modules\Loans\Controllers;
 
-use App\Common\Support\HashIdFilter;
 use App\Common\Services\SettingsService;
+use App\Common\Support\HashIdFilter;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Loans\Enums\LoanType;
 use App\Modules\Loans\Enums\LoanStatus;
 use App\Modules\Loans\Models\EmployeeLoan;
+use App\Modules\Loans\Policies\LoanAccessPolicy;
 use App\Modules\Loans\Requests\ApproveLoanRequest;
 use App\Modules\Loans\Requests\RejectLoanRequest;
 use App\Modules\Loans\Requests\StoreLoanRequest;
@@ -28,6 +29,7 @@ class LoanController
         private readonly LoanService $service,
         private readonly AmortizationService $amortization,
         private readonly SettingsService $settings,
+        private readonly LoanAccessPolicy $access,
     ) {}
 
     public function index(Request $request): AnonymousResourceCollection
@@ -70,23 +72,11 @@ class LoanController
 
     public function show(EmployeeLoan $loan, Request $request): EmployeeLoanResource
     {
-        $user = $request->user();
-        $isAdmin = $user?->role?->slug === 'system_admin';
-        $canApprove = $user?->hasPermission('loans.approve') ?? false;
-
-        if (! $isAdmin && ! $canApprove) {
-            $isOwn = (int) $loan->employee_id === (int) $user?->employee_id;
-            $isDeptMember = false;
-            $isDeptHead = $user?->role?->slug === 'department_head';
-            if ($isDeptHead && $user?->employee_id) {
-                $deptId = Employee::query()
-                    ->whereKey($user->employee_id)->value('department_id');
-                $isDeptMember = (int) $loan->employee?->department_id === (int) $deptId;
-            }
-            if (! $isOwn && ! $isDeptMember) {
-                abort(403, 'You do not have permission to view this loan.');
-            }
-        }
+        abort_unless(
+            $request->user() && $this->access->canView($request->user(), $loan),
+            403,
+            'You do not have permission to view this loan.',
+        );
 
         return new EmployeeLoanResource($this->service->show($loan));
     }
@@ -113,10 +103,10 @@ class LoanController
         return new EmployeeLoanResource($loan);
     }
 
-    public function cancel(EmployeeLoan $loan): EmployeeLoanResource
+    public function cancel(Request $request, EmployeeLoan $loan): EmployeeLoanResource
     {
         try {
-            $loan = $this->service->cancel($loan);
+            $loan = $this->service->cancel($loan, $request->user());
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
@@ -128,14 +118,11 @@ class LoanController
     public function limits(Request $request, Employee $employee): JsonResponse
     {
         $user = $request->user();
-        if ($user?->role?->slug === 'department_head') {
-            $ownDepartment = Employee::query()->whereKey($user->employee_id)->value('department_id');
-            abort_unless(
-                $ownDepartment && (int) $ownDepartment === (int) $employee->department_id,
-                403,
-                'You may only view loan limits for your department.',
-            );
-        }
+        abort_unless(
+            $user && $this->access->canViewEmployee($user, $employee),
+            403,
+            'You may only view loan limits within your loan-management scope.',
+        );
 
         $type = LoanType::tryFrom((string) $request->query('loan_type'));
         abort_if(! $type, 422, 'Invalid loan_type.');

@@ -11,18 +11,40 @@ import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { CompanyName } from '@/components/brand/CompanyName';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { DataTablePagination } from '@/components/ui/DataTablePagination';
+import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
+import { useUrlFilters } from '@/hooks/useUrlFilters';
+import type { PortalPoSummary } from '@/types/b2b';
+
+type PurchaseOrderFilters = { page: number; per_page: number; status?: string; search?: string };
 
 export default function SupplierPurchaseOrdersPage() {
+  const [filters, setFilters] = useUrlFilters<PurchaseOrderFilters>({ page: 1, per_page: 25 });
   const {
-    data: pos,
+    data,
     isLoading,
     isError,
     refetch,
   } = useQuery({
-    queryKey: ['portal', 'supplier', 'pos'],
-    queryFn: () => supplierPortalApi.listPos(),
+    queryKey: ['portal', 'supplier', 'pos', filters],
+    queryFn: () => supplierPortalApi.listPos(filters),
     placeholderData: (prev) => prev,
   });
+
+  const pos: PortalPoSummary[] = data?.data ?? [];
+  const filterConfig: FilterConfig[] = [{
+    key: 'status',
+    label: 'Status',
+    type: 'select',
+    options: [
+      { value: '', label: 'All' },
+      { value: 'approved', label: 'Approved' },
+      { value: 'sent', label: 'Sent' },
+      { value: 'partially_received', label: 'Partially received' },
+      { value: 'received', label: 'Received' },
+      { value: 'closed', label: 'Closed' },
+    ],
+  }];
 
   return (
     <div>
@@ -33,6 +55,14 @@ export default function SupplierPurchaseOrdersPage() {
             Orders issued to you by <CompanyName />
           </>
         }
+      />
+
+      <FilterBar
+        filters={filterConfig}
+        values={filters}
+        onSearch={(search) => setFilters((current) => ({ ...current, search: search || undefined, page: 1 }))}
+        onFilter={(key, value) => setFilters((current) => ({ ...current, [key]: value || undefined, page: 1 }))}
+        searchPlaceholder="Search PO number…"
       />
 
       {/* One padded body holds every state, so loading and loaded agree on width. */}
@@ -53,7 +83,7 @@ export default function SupplierPurchaseOrdersPage() {
 
         {!isLoading && !isError && (
           <Panel noPadding>
-            {pos && pos.length > 0 ? (
+            {pos.length > 0 ? (
               <PortalTable>
 <table className={tableCls}>
                 <thead>
@@ -103,6 +133,12 @@ export default function SupplierPurchaseOrdersPage() {
             )}
           </Panel>
         )}
+        {data && <DataTablePagination
+          meta={data.meta}
+          perPage={filters.per_page}
+          onPageChange={(page) => setFilters((current) => ({ ...current, page }))}
+          onPageSizeChange={(per_page) => setFilters((current) => ({ ...current, per_page, page: 1 }))}
+        />}
       </div>
     </div>
   );

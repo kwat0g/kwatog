@@ -13,20 +13,22 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { formatPeso } from '@/lib/formatNumber';
+import { formatPercent, formatPeso } from '@/lib/formatNumber';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import type { AmortizationItem, LoanType } from '@/types/loans';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { cn } from '@/lib/cn';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
+import { useDebounce } from '@/hooks/useDebounce';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  employee_id: z.string().min(1, 'Employee is required'),
  loan_type: z.string().min(1, 'Loan type is required'),
- principal: z.coerce.number({ invalid_type_error: 'Enter a number' })
- .positive('Must be positive'),
+ principal: z.string()
+ .regex(/^\d+(?:\.\d{1,2})?$/, 'Enter a valid amount (up to 2 decimals)')
+ .refine((value) => Number(value) > 0, 'Must be positive'),
  pay_periods: z.coerce.number({ invalid_type_error: 'Enter a number' })
  .int('Whole number').min(1, 'At least 1 period'),
  purpose: z.string().max(1000, 'Max 1000 characters').optional().or(z.literal('')),
@@ -36,10 +38,16 @@ type FormValues = z.infer<typeof schema>;
 export default function CreateLoanPage() {
  const navigate = useNavigate();
  const qc = useQueryClient();
+ const [employeeSearch, setEmployeeSearch] = useState('');
+ const debouncedEmployeeSearch = useDebounce(employeeSearch, 300);
 
  const { data: employeesResp } = useQuery({
- queryKey: ['hr', 'employees', 'all-active'],
- queryFn: () => employeesApi.list({ per_page: 100, status: 'active' }),
+ queryKey: ['hr', 'employees', 'active', debouncedEmployeeSearch],
+ queryFn: () => employeesApi.list({
+ per_page: 100,
+ status: 'active',
+ search: debouncedEmployeeSearch || undefined,
+ }),
  });
  const employees = employeesResp?.data ?? [];
 
@@ -78,8 +86,8 @@ export default function CreateLoanPage() {
 
  const [schedule, setSchedule] = useState<AmortizationItem[]>([]);
  useEffect(() => {
- if (loanType && principal && principal > 0 && periods && periods > 0) {
- loansApi.previewAmortization(loanType, Number(principal), Number(periods))
+ if (loanType && Number(principal) > 0 && periods && periods > 0) {
+ loansApi.previewAmortization(loanType, principal, Number(periods))
  .then(setSchedule);
  } else {
  setSchedule([]);
@@ -121,7 +129,7 @@ export default function CreateLoanPage() {
  <span>
  <span className="block font-medium">{type.label}</span>
  <span className="block text-xs text-muted">
- {type.approval_steps} approval steps · {(Number(type.interest_rate) * 100).toFixed(2)}% annual interest
+ {type.approval_steps} approval steps · {type.interest_rate_percent ? type.interest_rate_percent + '%' : formatPercent(type.interest_rate)} annual interest
  </span>
  </span>
  </label>
@@ -129,6 +137,12 @@ export default function CreateLoanPage() {
  </div>
  {errors.loan_type && <p className="mt-1 text-xs text-danger-fg">{errors.loan_type.message}</p>}
  </fieldset>
+ <Input
+ label="Find employee"
+ value={employeeSearch}
+ onChange={(event) => setEmployeeSearch(event.target.value)}
+ placeholder="Name or employee number"
+ />
  <Select label="Employee" required {...register('employee_id')} error={errors.employee_id?.message}>
  <option value="">— Select —</option>
  {employees.map((e) => <option key={e.id} value={e.id}>{e.full_name} ({e.employee_no})</option>)}

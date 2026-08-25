@@ -5,7 +5,12 @@ declare(strict_types=1);
 namespace Tests\Feature\Loans;
 
 use App\Modules\Loans\Enums\LoanType;
+use App\Modules\Loans\Enums\LoanStatus;
+use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Loans\Services\AmortizationService;
+use App\Modules\Loans\Support\LoanRate;
+use App\Modules\Loans\Support\LoanStateMachine;
+use App\Common\Exceptions\BusinessRuleException;
 use Tests\TestCase;
 
 class InterestBearingAmortizationTest extends TestCase
@@ -93,5 +98,28 @@ class InterestBearingAmortizationTest extends TestCase
         $this->assertEquals('0.00', $schedule[0]['remaining_after']);
         $this->assertEquals('50.00', $schedule[0]['interest']);
         $this->assertEquals('5000.00', $schedule[0]['principal']);
+    }
+
+    public function test_rate_normalization_preserves_half_percent_precision(): void
+    {
+        $this->assertSame('0.105', LoanRate::normalize('0.105000'));
+        $this->assertSame('10.5', LoanRate::percent('0.105'));
+    }
+
+    public function test_rate_normalization_rejects_more_than_six_decimals(): void
+    {
+        $this->expectException(BusinessRuleException::class);
+
+        LoanRate::normalize('0.1050001');
+    }
+
+    public function test_active_loan_cannot_be_cancelled_by_the_state_machine(): void
+    {
+        $loan = new EmployeeLoan();
+        $loan->forceFill(['status' => LoanStatus::Active->value]);
+
+        $this->expectException(BusinessRuleException::class);
+
+        (new LoanStateMachine())->transition($loan, LoanStatus::Cancelled);
     }
 }

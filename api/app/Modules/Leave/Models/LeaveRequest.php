@@ -29,7 +29,8 @@ class LeaveRequest extends Model
     protected $fillable = [
         'leave_request_no', 'employee_id', 'leave_type_id',
         'start_date', 'end_date', 'days', 'half_day_period',
-        'reason', 'document_path',
+        'reason', 'document_path', 'attendance_snapshot',
+        'cancelled_by', 'cancelled_at',
     ];
 
     protected $casts = [
@@ -40,6 +41,8 @@ class LeaveRequest extends Model
         'half_day_period'   => LeaveHalfDayPeriod::class,
         'dept_approved_at'  => 'datetime',
         'hr_approved_at'    => 'datetime',
+        'attendance_snapshot' => 'array',
+        'cancelled_at'      => 'datetime',
     ];
 
     public function employee(): BelongsTo
@@ -60,6 +63,11 @@ class LeaveRequest extends Model
     public function hrApprover(): BelongsTo
     {
         return $this->belongsTo(User::class, 'hr_approver_id');
+    }
+
+    public function canceller(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
     }
 
     /**

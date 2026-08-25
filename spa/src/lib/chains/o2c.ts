@@ -21,6 +21,7 @@ export interface O2cChainInvoice {
 
 export interface O2cChainInput {
   so?: O2cChainDoc | null;
+  soStatus?: string | null;
   delivery?: O2cChainDoc | null;
   /** Delivery lifecycle status — only delivered/confirmed satisfy the step. */
   deliveryStatus?: string | null;
@@ -29,6 +30,7 @@ export interface O2cChainInput {
 
 export function buildO2cChain(input: O2cChainInput): ChainStep[] {
   const { so, delivery, invoices } = input;
+  const isSoCancelled = input.soStatus === 'cancelled';
   const deliveryStatus = input.deliveryStatus ?? null;
   const hasInvoices = invoices.length > 0;
   // Goods must have been shipped before invoicing; an invoice existing also
@@ -39,7 +41,7 @@ export function buildO2cChain(input: O2cChainInput): ChainStep[] {
     deliveryStatus === 'delivered' ||
     deliveryStatus === 'confirmed' ||
     hasInvoices;
-  const isCancelled = deliveryStatus === 'cancelled';
+  const isCancelled = isSoCancelled || deliveryStatus === 'cancelled';
   // The draft invoice auto-creates on delivery confirm — until then the
   // invoice step only turns active once goods are delivered/confirmed.
   const invoiceReady =
@@ -57,46 +59,64 @@ export function buildO2cChain(input: O2cChainInput): ChainStep[] {
     {
       key: 'so',
       label: so ? `SO ${so.number}` : 'SO',
-      state: so ? 'done' : 'pending',
+      state: isSoCancelled ? 'rejected' : so ? 'done' : 'pending',
       href: so ? `/crm/sales-orders/${so.id}` : undefined,
-      description: so ? `Sales order ${so.number}` : 'No linked sales order',
+      description: isSoCancelled
+        ? `Sales order ${so?.number ?? ''} was cancelled`
+        : so
+          ? `Sales order ${so.number}`
+          : 'No linked sales order',
     },
     {
       key: 'delivery',
       label: 'Delivery',
-      state: deliverySatisfied ? 'done' : isCancelled ? 'pending' : delivery ? 'active' : 'pending',
+      state: isSoCancelled
+        ? 'skipped'
+        : deliveryStatus === 'cancelled'
+          ? 'rejected'
+          : deliverySatisfied
+            ? 'done'
+            : delivery
+              ? 'active'
+              : 'pending',
       href: delivery ? `/supply-chain/deliveries/${delivery.id}` : undefined,
-      description: deliverySatisfied
-        ? delivery
-          ? `Goods shipped on ${delivery.number}`
-          : 'Goods shipped — delivery not linked on this invoice'
-        : isCancelled
-          ? 'Delivery cancelled — awaiting a replacement shipment'
-          : delivery
-            ? 'Delivery in progress — awaiting shipment & customer confirmation'
-            : 'No delivery yet — created once the order is produced',
+      description: isSoCancelled
+        ? 'Delivery skipped because the sales order was cancelled'
+        : deliveryStatus === 'cancelled'
+          ? 'Delivery cancelled — downstream invoicing is skipped'
+          : deliverySatisfied
+            ? delivery
+              ? `Goods shipped on ${delivery.number}`
+              : 'Goods shipped — delivery not linked on this invoice'
+            : delivery
+              ? 'Delivery in progress — awaiting shipment & customer confirmation'
+              : 'No delivery yet — created once the order is produced',
     },
     {
       key: 'invoice',
       label: 'Invoice',
-      state: hasInvoices ? 'done' : invoiceReady ? 'active' : 'pending',
+      state: isCancelled ? 'skipped' : hasInvoices ? 'done' : invoiceReady ? 'active' : 'pending',
       href: firstInvoice ? `/accounting/invoices/${firstInvoice.id}` : undefined,
-      description: hasInvoices
-        ? `Invoice ${invoiceLabel} issued`
-        : invoiceReady
-          ? 'Draft invoice auto-creates when the delivery is confirmed'
-          : 'Awaiting delivery',
+      description: isCancelled
+        ? 'Invoice skipped because the upstream order or delivery was cancelled'
+        : hasInvoices
+          ? `Invoice ${invoiceLabel} issued`
+          : invoiceReady
+            ? 'Draft invoice auto-creates when the delivery is confirmed'
+            : 'Awaiting delivery',
     },
     {
       key: 'payment',
       label: 'Payment',
-      state: isPaid ? 'done' : hasInvoices ? 'active' : 'pending',
+      state: isCancelled ? 'skipped' : isPaid ? 'done' : hasInvoices ? 'active' : 'pending',
       href: firstInvoice ? `/accounting/invoices/${firstInvoice.id}` : undefined,
-      description: isPaid
-        ? 'Invoice settled — the AR collection was posted'
-        : hasInvoices
-          ? 'Record a collection on the invoice to complete the chain'
-          : 'Awaiting invoice',
+      description: isCancelled
+        ? 'Payment skipped because the upstream order or delivery was cancelled'
+        : isPaid
+          ? 'Invoice settled — the AR collection was posted'
+          : hasInvoices
+            ? 'Record a collection on the invoice to complete the chain'
+            : 'Awaiting invoice',
     },
   ];
 }

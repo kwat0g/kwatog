@@ -14,9 +14,9 @@ class BudgetResource extends JsonResource
     {
         return [
             'id'               => $this->hash_id,
-            'fiscal_year_id'   => $this->fiscal_year_id,
+            'fiscal_year_id'   => $this->fiscal_year_id === null ? null : app('hashids')->encode((int) $this->fiscal_year_id),
             'fiscal_year'      => new FiscalYearResource($this->whenLoaded('fiscalYear')),
-            'department_id'    => $this->department_id,
+            'department_id'    => $this->department_id === null ? null : app('hashids')->encode((int) $this->department_id),
             'department'       => $this->whenLoaded('department', fn () => [
                 'id'   => $this->department?->hash_id,
                 'name' => $this->department?->name,
@@ -24,10 +24,10 @@ class BudgetResource extends JsonResource
             ]),
             'budget_type'      => $this->budget_type,
             'name'             => $this->name,
-            'total_allocated'  => (float) $this->total_allocated,
-            'total_spent'      => (float) $this->total_spent,
-            'total_committed'  => (float) $this->total_committed,
-            'available'        => (float) $this->available,
+            'total_allocated'  => (string) $this->total_allocated,
+            'total_spent'      => (string) $this->total_spent,
+            'total_committed'  => (string) $this->total_committed,
+            'available'        => (string) $this->available,
             'utilization_pct'  => $this->utilization_percent,
             'status'           => $this->status,
             'status_label'     => BudgetStatus::tryFrom((string) $this->status)?->label() ?? (string) $this->status,

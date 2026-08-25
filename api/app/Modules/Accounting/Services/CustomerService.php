@@ -21,7 +21,10 @@ class CustomerService
 
     public function list(array $filters): LengthAwarePaginator
     {
-        $q = Customer::query();
+        $q = Customer::query()->withSum([
+            'invoices as credit_used' => fn ($invoice) => $invoice
+                ->whereIn('status', [InvoiceStatus::Finalized, InvoiceStatus::Partial]),
+        ], 'balance');
 
         TrashedFilter::apply($q, $filters);
 

@@ -22,7 +22,7 @@ class UpdateEmployeeSkillRequest extends FormRequest
             'acquired_date'               => ['sometimes', 'required', 'date'],
             'expires_at'                  => ['nullable', 'date', 'after_or_equal:acquired_date'],
             'certified_by'                => ['nullable', 'string'],
-            'certification_document_path' => ['nullable', 'string', 'max:255'],
+            'certificate'                 => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,doc,docx,xls,xlsx', 'max:10240'],
             'notes'                       => ['nullable', 'string'],
         ];
     }

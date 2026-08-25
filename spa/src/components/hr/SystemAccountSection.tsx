@@ -16,7 +16,6 @@ import type { EmployeeAccountStatus } from '@/types/hr';
 
 interface Props {
  employeeId: string;
- suggestedEmail?: string;
 }
 
 /**
@@ -24,7 +23,7 @@ interface Props {
  * Five-state aware (loading skeleton, error retry, empty no-account,
  * data active-account, refetching opacity).
  */
-export function SystemAccountSection({ employeeId, suggestedEmail }: Props) {
+export function SystemAccountSection({ employeeId }: Props) {
  const queryClient = useQueryClient();
  const { can } = usePermission();
  const [showCreate, setShowCreate] = useState(false);
@@ -161,13 +160,12 @@ export function SystemAccountSection({ employeeId, suggestedEmail }: Props) {
  isOpen={showCreate}
  onClose={() => setShowCreate(false)}
  employeeId={employeeId}
- suggestedEmail={suggestedEmail}
  />
 
  <ConfirmDialog
  isOpen={confirm === 'reset'}
  title="Reset password?"
- description="Generate a new temporary password and email it to the user. They will be required to change it on next login."
+ description="Generate a new temporary password and queue a notification to the user. They will be required to change it on next login."
  confirmLabel={reset.isPending ? 'Resetting…' : 'Reset Password'}
  variant="primary"
  onConfirm={() => reset.mutate()}

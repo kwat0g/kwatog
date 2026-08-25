@@ -1,4 +1,4 @@
-/** Sprint 8 — Task 10. Edit asset form. */
+/** Edit the non-financial identity and custody fields of an asset. */
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -15,191 +15,119 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
-
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
+
 const schema = z.object({
- name: z.string().min(1, 'Name is required').max(200),
- description: z.string().max(5000).optional().or(z.literal('')),
- category: z.string().min(1, 'Category is required'),
- department_id: z.coerce.number().int().optional(),
- acquisition_date: z.string().min(1, 'Acquisition date required'),
- acquisition_cost: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Enter amount like 100000.00'),
- useful_life_years: z.coerce.number().int().min(1).max(100),
- salvage_value: z.string().regex(/^\d+(\.\d{1,2})?$/).optional().or(z.literal('')),
- location: z.string().max(100).optional().or(z.literal('')),
+  name: z.string().min(1, 'Name is required').max(200),
+  description: z.string().max(5000).optional().or(z.literal('')),
+  department_id: z.string().optional().or(z.literal('')),
+  useful_life_years: z.coerce.number().int().min(1).max(100),
+  salvage_value: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Enter an amount with up to 2 decimals.').optional().or(z.literal('')),
+  location: z.string().max(100).optional().or(z.literal('')),
 });
 type FormValues = z.infer<typeof schema>;
 
 export default function EditAssetPage() {
- const { id = '' } = useParams<{ id: string }>();
- const navigate = useNavigate();
- const qc = useQueryClient();
+  const { id = '' } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const qc = useQueryClient();
 
- const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['asset', id],
- queryFn: () => assetsApi.show(id),
- enabled: !!id,
- });
-
- const { data: deptData, isLoading: deptLoading } = useQuery({
- queryKey: ['hr', 'departments', 'list'],
- queryFn: () => departmentsApi.list({ per_page: 200 }),
- staleTime: 300_000,
- });
- const { data: assetOptions } = useQuery({
- queryKey: ['assets', 'options'],
- queryFn: () => assetsApi.options(),
- });
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['asset', id],
+    queryFn: () => assetsApi.show(id),
+    enabled: !!id,
+  });
+  const { data: deptData, isLoading: deptLoading } = useQuery({
+    queryKey: ['hr', 'departments', 'list'],
+    queryFn: () => departmentsApi.list({ per_page: 200 }),
+    staleTime: 300_000,
+  });
 
   const form = useForm<FormValues>({
- resolver: zodResolver(schema),
- values: data
- ? {
- name: data.name,
- description: data.description ?? '',
- category: data.category,
- department_id: undefined,
- acquisition_date: data.acquisition_date.slice(0, 10),
- acquisition_cost: data.acquisition_cost,
- useful_life_years: data.useful_life_years,
- salvage_value: data.salvage_value ?? '',
- location: data.location ?? '',
- }
- : undefined,
- });
- const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = form;
+    resolver: zodResolver(schema),
+    values: data
+      ? {
+          name: data.name,
+          description: data.description ?? '',
+          department_id: data.department?.id ?? '',
+          useful_life_years: data.useful_life_years,
+          salvage_value: data.salvage_value ?? '',
+          location: data.location ?? '',
+        }
+      : undefined,
+  });
+  const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = form;
 
- const mutation = useMutation({
- mutationFn: (formData: FormValues) =>
- assetsApi.update(id, {
- ...formData,
- category: formData.category as import('@/types/assets').AssetCategory,
- description: formData.description || undefined,
- salvage_value: formData.salvage_value || undefined,
- location: formData.location || undefined,
- department_id: formData.department_id || null,
- }),
- onSuccess: (asset) => {
- qc.invalidateQueries({ queryKey: ['assets'] });
- qc.invalidateQueries({ queryKey: ['asset', id] });
- toast.success(`Asset ${asset.asset_code} updated.`);
- navigate(`/assets/${asset.id}`);
- },
- onError: (err) => {
-   applyServerValidationErrors(err, setError, 'Failed to update asset.');
- },
- });
- const safety = useFormSafety({ form, saved: mutation.isSuccess });
+  const mutation = useMutation({
+    mutationFn: (formData: FormValues) => assetsApi.update(id, {
+      name: formData.name,
+      description: formData.description || undefined,
+      department_id: formData.department_id || null,
+      useful_life_years: formData.useful_life_years,
+      salvage_value: formData.salvage_value || undefined,
+      location: formData.location || undefined,
+    }),
+    onSuccess: (asset) => {
+      qc.invalidateQueries({ queryKey: ['assets'] });
+      qc.invalidateQueries({ queryKey: ['asset', id] });
+      toast.success(`Asset ${asset.asset_code} updated.`);
+      navigate(`/assets/${asset.id}`);
+    },
+    onError: (error) => {
+      applyServerValidationErrors(error, setError, 'Failed to update asset.');
+    },
+  });
+  const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
- if (isLoading) return <SkeletonDetail />;
- if (isError || !data) {
- return (
- <EmptyState
- icon="alert-circle"
- title="Failed to load asset"
- action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
- />
- );
- }
+  if (isLoading) return <SkeletonDetail />;
+  if (isError || !data) {
+    return <EmptyState icon="alert-circle" title="Failed to load asset" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />;
+  }
 
- return (
- <div>
- <PageHeader
- title={`Edit ${data.asset_code}`}
- subtitle={data.name}
- backTo={`/assets/${id}`}
- backLabel={data.asset_code}
- />
+  return (
+    <div>
+      <PageHeader title={`Edit ${data.asset_code}`} subtitle={data.name} backTo={`/assets/${id}`} backLabel={data.asset_code} />
       <FormDraftBanner safety={safety} />
- <form
- onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())}
- className="max-w-3xl mx-auto px-5 py-4"
- >
- <fieldset className="mb-6">
- <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Identification</legend>
- <Input label="Name" {...register('name')} error={errors.name?.message} required />
- <div className="grid grid-cols-2 gap-3 mt-3">
- <Select label="Category" {...register('category')} error={errors.category?.message} required>
- {(assetOptions?.categories ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
- </Select>
- <Select
- label="Department"
- {...register('department_id')}
- error={errors.department_id?.message}
- disabled={deptLoading}
- >
- <option value="">{deptLoading ? 'Loading…' : '— None —'}</option>
- {deptData?.data?.map((d) => (
- <option key={d.id} value={d.id}>{d.name}</option>
- ))}
- </Select>
- </div>
- <div className="mt-3">
- <Input
- label="Location"
- {...register('location')}
- error={errors.location?.message}
- placeholder="Asset location"
- />
- </div>
- <div className="mt-3">
- <Textarea label="Description" {...register('description')} rows={3} error={errors.description?.message} />
- </div>
- </fieldset>
+      <form onSubmit={handleSubmit((values) => mutation.mutate(values), onFormInvalid<FormValues>())} className="max-w-3xl mx-auto px-5 py-4">
+        <fieldset className="mb-6">
+          <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Identity & custody</legend>
+          <Input label="Name" {...register('name')} error={errors.name?.message} required />
+          <div className="grid grid-cols-2 gap-3 mt-3">
+            <Input label="Category" value={data.category_label ?? data.category} disabled helper="Category is fixed at acquisition." />
+            <Select label="Department" {...register('department_id')} error={errors.department_id?.message} disabled={deptLoading}>
+              <option value="">{deptLoading ? 'Loading…' : '— None —'}</option>
+              {deptData?.data?.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}
+            </Select>
+          </div>
+          <div className="mt-3">
+            <Input label="Location" {...register('location')} error={errors.location?.message} placeholder="Asset location" />
+          </div>
+          <div className="mt-3">
+            <Textarea label="Description" {...register('description')} rows={3} error={errors.description?.message} />
+          </div>
+        </fieldset>
 
- <fieldset className="mb-6">
- <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Acquisition</legend>
- <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
- <Input
- label="Acquisition date"
- type="date"
- {...register('acquisition_date')}
- error={errors.acquisition_date?.message}
- required
- />
- <Input
- label="Acquisition cost"
- {...register('acquisition_cost')}
- error={errors.acquisition_cost?.message}
- className="font-mono"
- placeholder="0.00"
- required
- />
- <Input
- label="Useful life (years)"
- type="number"
- {...register('useful_life_years')}
- error={errors.useful_life_years?.message}
- required
- />
- </div>
- <div className="mt-3 max-w-xs">
- <Input
- label="Salvage value"
- {...register('salvage_value')}
- error={errors.salvage_value?.message}
- className="font-mono"
- placeholder="0.00"
- />
- </div>
- </fieldset>
+        <fieldset className="mb-6">
+          <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Depreciation schedule</legend>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <Input label="Acquisition date" type="date" value={data.acquisition_date.slice(0, 10)} disabled helper="Fixed at acquisition." />
+            <Input label="Acquisition cost" value={data.acquisition_cost} disabled className="font-mono" helper="Fixed at acquisition." />
+            <Input label="Useful life (years)" type="number" {...register('useful_life_years')} error={errors.useful_life_years?.message} required />
+          </div>
+          <div className="mt-3 max-w-xs">
+            <Input label="Salvage value" {...register('salvage_value')} error={errors.salvage_value?.message} className="font-mono" placeholder="0.00" helper={data.depreciations?.length ? 'Locked once depreciation history exists.' : undefined} />
+          </div>
+        </fieldset>
 
- <FormActions>
- <Button type="button" variant="secondary" onClick={() => navigate(`/assets/${id}`)}>
- Cancel
- </Button>
- <Button
- type="submit"
- variant="primary"
- disabled={isSubmitting || mutation.isPending}
- loading={mutation.isPending}
- >
- {mutation.isPending ? 'Saving…' : 'Save changes'}
- </Button>
- </FormActions>
- </form>
- </div>
- );
+        <FormActions>
+          <Button type="button" variant="secondary" onClick={() => navigate(`/assets/${id}`)}>Cancel</Button>
+          <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending} loading={mutation.isPending}>
+            {mutation.isPending ? 'Saving…' : 'Save changes'}
+          </Button>
+        </FormActions>
+      </form>
+    </div>
+  );
 }

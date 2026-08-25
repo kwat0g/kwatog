@@ -8,6 +8,7 @@ use App\Common\Concerns\ResolvesHashIds;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Models\PurchaseRequest;
+use App\Modules\Purchasing\Models\PurchaseRequestItem;
 use Illuminate\Foundation\Http\FormRequest;
 use App\Modules\SupplyChain\Enums\Incoterm;
 use Illuminate\Validation\Rule;
@@ -26,6 +27,7 @@ class StorePurchaseOrderRequest extends FormRequest
         return [
             'vendor_id'           => Vendor::class,
             'items.*.item_id'     => Item::class,
+            'items.*.purchase_request_item_id' => PurchaseRequestItem::class,
             'purchase_request_id' => PurchaseRequest::class,
         ];
     }
@@ -44,6 +46,7 @@ class StorePurchaseOrderRequest extends FormRequest
             'remarks'                => ['nullable', 'string', 'max:1000'],
             'items'                  => ['required', 'array', 'min:1'],
             'items.*.item_id'        => ['required', 'integer', 'exists:items,id'],
+            'items.*.purchase_request_item_id' => ['nullable', 'integer', 'exists:purchase_request_items,id'],
             'items.*.description'    => ['required', 'string', 'min:2', 'max:200'],
             'items.*.quantity'       => ['required', 'decimal:0,2', 'min:0.01'],
             'items.*.unit'           => ['nullable', 'string', 'max:20'],

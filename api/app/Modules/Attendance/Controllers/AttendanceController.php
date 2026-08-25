@@ -67,7 +67,7 @@ class AttendanceController
 
     public function restore(Attendance $attendance): JsonResponse
     {
-        $attendance->restore();
+        $this->service->restore($attendance);
         return response()->json(['message' => 'Attendance restored.']);
     }
 

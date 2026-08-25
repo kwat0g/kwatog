@@ -25,7 +25,7 @@ class Bill extends Model
 
     protected $fillable = [
         'bill_number', 'vendor_id', 'purchase_order_id', 'goods_receipt_note_id', 'provenance_type', 'exception_evidence', 'exception_owner_id', 'exception_approved_by', 'exception_approved_at',
-        'date', 'due_date', 'is_vatable',
+        'date', 'due_date', 'is_vatable', 'cancelled_at', 'cancelled_by',
         'subtotal', 'vat_amount', 'total_amount', 'amount_paid', 'balance',
         'status', 'journal_entry_id', 'created_by', 'remarks',
         'has_variances', 'three_way_match_snapshot',
@@ -47,6 +47,7 @@ class Bill extends Model
         'three_way_match_snapshot' => 'array',
         'three_way_overridden'     => 'boolean',
         'three_way_overridden_at'  => 'datetime', 'exception_approved_at' => 'datetime',
+        'cancelled_at'             => 'datetime',
     ];
 
     public function purchaseOrder(): BelongsTo
@@ -83,6 +84,26 @@ class Bill extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function exceptionOwner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'exception_owner_id');
+    }
+
+    public function exceptionApprover(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'exception_approved_by');
+    }
+
+    public function threeWayOverrider(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'three_way_overridden_by');
+    }
+
+    public function cancelledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
     }
 
     public function scopeOpen(Builder $q): Builder

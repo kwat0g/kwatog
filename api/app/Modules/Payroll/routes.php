@@ -71,6 +71,7 @@ if (class_exists(PayrollPeriodController::class)) {
             Route::patch('/{period}/finalize', [PayrollPeriodController::class, 'finalize'])->middleware('permission:payroll.periods.finalize');
             Route::post('/{period}/retry-gl', [PayrollPeriodController::class, 'retryGl'])->middleware('permission:accounting.journal.post');
             Route::get('/{period}/bank-file/preview', [PayrollPeriodController::class, 'bankFilePreview'])->middleware('permission:payroll.periods.finalize');
+            Route::post('/{period}/bank-file', [PayrollPeriodController::class, 'generateBankFile'])->middleware('permission:payroll.periods.finalize');
             Route::get('/{period}/bank-file', [PayrollPeriodController::class, 'bankFile'])->middleware('permission:payroll.periods.finalize');
             Route::get('/{period}/variance', [PayrollPeriodController::class, 'variance'])->middleware('permission:payroll.periods.view');
             // ADV1 — Disbursement proof (salary deposit slip / bank confirmation).
@@ -94,7 +95,9 @@ if (class_exists(PayrollPeriodController::class)) {
                 Route::post('/', [DisbursementProofController::class, 'store'])->middleware('permission:payroll.periods.finalize');
                 Route::get('/{proof}', [DisbursementProofController::class, 'show'])->middleware('permission:payroll.periods.view');
                 Route::delete('/{proof}', [DisbursementProofController::class, 'destroy'])->middleware('permission:payroll.periods.finalize');
-                Route::patch('/{proof}/restore', [DisbursementProofController::class, 'restore'])->middleware('permission:payroll.periods.finalize');
+                Route::patch('/{proof}/restore', [DisbursementProofController::class, 'restore'])
+                    ->middleware('permission:payroll.periods.finalize')
+                    ->withTrashed();
             });
         }
 
@@ -106,12 +109,12 @@ if (class_exists(PayrollPeriodController::class)) {
         });
 
         Route::prefix('payroll-adjustments')->group(function () {
-            Route::get('/options', [PayrollAdjustmentController::class, 'options'])->middleware('permission:payroll.adjustments.create');
-            Route::get('/', [PayrollAdjustmentController::class, 'index'])->middleware('permission:payroll.adjustments.create');
+            Route::get('/options', [PayrollAdjustmentController::class, 'options'])->middleware('permission:payroll.adjustments.view');
+            Route::get('/', [PayrollAdjustmentController::class, 'index'])->middleware('permission:payroll.adjustments.view');
             Route::post('/', [PayrollAdjustmentController::class, 'store'])->middleware('permission:payroll.adjustments.create');
-            Route::get('/{adjustment}', [PayrollAdjustmentController::class, 'show'])->middleware('permission:payroll.adjustments.create');
-            Route::patch('/{adjustment}/approve', [PayrollAdjustmentController::class, 'approve'])->middleware('permission:payroll.adjustments.create');
-            Route::patch('/{adjustment}/reject', [PayrollAdjustmentController::class, 'reject'])->middleware('permission:payroll.adjustments.create');
+            Route::get('/{adjustment}', [PayrollAdjustmentController::class, 'show'])->middleware('permission:payroll.adjustments.view');
+            Route::patch('/{adjustment}/approve', [PayrollAdjustmentController::class, 'approve'])->middleware('permission:payroll.adjustments.approve');
+            Route::patch('/{adjustment}/reject', [PayrollAdjustmentController::class, 'reject'])->middleware('permission:payroll.adjustments.reject');
         });
 
         // ─── De minimis benefits ──────────────────────────────────

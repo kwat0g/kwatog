@@ -12,12 +12,14 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { usePermission } from '@/hooks/usePermission';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 export default function BomDetailPage() {
  const { id } = useParams<{ id: string }>();
  const navigate = useNavigate();
  const qc = useQueryClient();
+ const { can } = usePermission();
  const [deleting, setDeleting] = useState(false);
  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
  const [restoring, setRestoring] = useState(false);
@@ -87,7 +89,7 @@ const handleDelete = async () => {
  }
  backTo="/mrp/boms"
  backLabel="BOMs"
-actions={
+actions={can('mrp.boms.manage') ? (
   <div className="flex gap-2">
   <Button variant="secondary" size="sm" onClick={() => recalculate.mutate()} loading={recalculate.isPending}>
   <LuRefreshCw className={`h-3.5 w-3.5 mr-1 ${recalculate.isPending ? 'animate-spin' : ''}`} /> Recalculate cost
@@ -102,7 +104,7 @@ actions={
   <LuTrash2 className="h-3.5 w-3.5 mr-1" /> Archive
   </Button>}
   </div>
-  }
+) : null}
  />
 <ConfirmDialog
   isOpen={showDeleteConfirm}

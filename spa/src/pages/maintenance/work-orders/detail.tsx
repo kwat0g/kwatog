@@ -1,5 +1,5 @@
 /** Sprint 8 — Task 69. Maintenance WO detail. Action buttons gated by status + permission. */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -21,6 +21,7 @@ import { maintenanceStatusVariant as STATUS_CHIP } from '@/lib/statusVariants';
 import type { ChainStep } from '@/types/chain';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import { formatPeso } from '@/lib/formatNumber';
 
 export default function MaintenanceWorkOrderDetailPage() {
@@ -34,6 +35,7 @@ export default function MaintenanceWorkOrderDetailPage() {
   // The cancellation reason is part of the work order's history, so it is
   // collected in ReasonDialog rather than window.prompt.
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [assigneeId, setAssigneeId] = useState('');
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['maintenance', 'work-order', id],
@@ -44,6 +46,16 @@ export default function MaintenanceWorkOrderDetailPage() {
     queryFn: workOrdersApi.options,
     staleTime: 5 * 60 * 1000,
   });
+  const { data: assignees } = useQuery({
+    queryKey: ['maintenance', 'work-order-assignees'],
+    queryFn: workOrdersApi.assignees,
+    enabled: can('maintenance.wo.assign'),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  useEffect(() => {
+    setAssigneeId(data?.assignee?.id ?? '');
+  }, [data?.assignee?.id]);
 
   const startMutation = useMutation({
     mutationFn: () => workOrdersApi.start(id),
@@ -74,6 +86,15 @@ export default function MaintenanceWorkOrderDetailPage() {
       setCancelOpen(false);
     },
     onError: () => toast.error('Failed to cancel.'),
+  });
+  const assignMutation = useMutation({
+    mutationFn: () => workOrdersApi.assign(id, assigneeId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['maintenance', 'work-order', id] });
+      qc.invalidateQueries({ queryKey: ['maintenance', 'work-orders'] });
+      toast.success('Work order assigned.');
+    },
+    onError: () => toast.error('Failed to assign.'),
   });
 
   if (isLoading) return <SkeletonDetail />;
@@ -109,7 +130,8 @@ export default function MaintenanceWorkOrderDetailPage() {
     return { key: s, label: statusLabel.get(s) ?? s.replace('_', ' '), state };
   });
 
-  const isActionable = data.status !== 'completed' && data.status !== 'cancelled';
+  const hasAction = (action: NonNullable<typeof data.available_actions>[number]) =>
+    data.available_actions?.includes(action) ?? false;
 
   return (
     <div>
@@ -125,7 +147,7 @@ export default function MaintenanceWorkOrderDetailPage() {
             <Chip variant={STATUS_CHIP[data.status]}>
               {data.status_label ?? statusLabel.get(data.status) ?? data.status}
             </Chip>
-            {isActionable && data.status !== 'in_progress' && can('maintenance.wo.complete') && (
+            {hasAction('start') && can('maintenance.wo.complete') && (
               <Button
                 variant="secondary"
                 size="sm"
@@ -135,12 +157,12 @@ export default function MaintenanceWorkOrderDetailPage() {
                 Start
               </Button>
             )}
-            {isActionable && can('maintenance.wo.complete') && (
+            {hasAction('complete') && can('maintenance.wo.complete') && (
               <Button variant="primary" size="sm" onClick={() => setCompleteOpen(true)}>
                 Complete
               </Button>
             )}
-            {isActionable && can('maintenance.wo.complete') && (
+            {hasAction('cancel') && can('maintenance.wo.complete') && (
               <Button
                 variant="danger"
                 size="sm"
@@ -256,6 +278,33 @@ export default function MaintenanceWorkOrderDetailPage() {
               </Detail>
             </dl>
           </Panel>
+          {hasAction('assign') && can('maintenance.wo.assign') && (
+            <Panel title="Assignment">
+              <Select
+                label="Assignee"
+                value={assigneeId}
+                onChange={(event) => setAssigneeId(event.target.value)}
+                disabled={assignMutation.isPending}
+              >
+                <option value="">Select an active employee</option>
+                {(assignees ?? []).map((employee) => (
+                  <option key={employee.id} value={employee.id}>
+                    {employee.employee_no} · {employee.name}
+                  </option>
+                ))}
+              </Select>
+              <Button
+                type="button"
+                variant="primary"
+                className="mt-3 w-full"
+                onClick={() => assignMutation.mutate()}
+                disabled={!assigneeId || assignMutation.isPending}
+                loading={assignMutation.isPending}
+              >
+                {assignMutation.isPending ? 'Assigning…' : 'Assign work order'}
+              </Button>
+            </Panel>
+          )}
         </aside>
       </div>
 

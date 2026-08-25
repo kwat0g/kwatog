@@ -32,15 +32,16 @@ class MrpPlanResource extends JsonResource
             'shortages_found' => (int) $this->shortages_found,
             'auto_pr_count'   => (int) $this->auto_pr_count,
             'draft_wo_count'  => (int) $this->draft_wo_count,
-            'diagnostics'     => $this->diagnostics ?? [],
-            'cost_summary'    => $this->cost_summary,
+            'diagnostics'     => MrpPlanningResponseSerializer::diagnostics($this->diagnostics ?? []),
+            'cost_summary'    => MrpPlanningResponseSerializer::costSummary($this->cost_summary),
+            'generation'      => MrpPlanningResponseSerializer::generationContext($this->generation_context),
             'generator'       => $this->whenLoaded('generator', fn () => $this->generator ? [
                 'id' => $this->generator->hash_id, 'name' => $this->generator->name,
             ] : null),
             'work_orders'     => $this->whenLoaded('workOrders', fn () =>
                 $this->workOrders->map(fn ($w) => [
                     'id' => $w->hash_id, 'wo_number' => $w->wo_number,
-                    'product_id' => $w->product_id,
+                    'product_id' => $w->product_id === null ? null : app('hashids')->encode((int) $w->product_id),
                     'parent' => $w->relationLoaded('parent') && $w->parent ? [
                         'id' => $w->parent->hash_id,
                         'wo_number' => $w->parent->wo_number,

@@ -2,6 +2,7 @@ import { lazy } from 'react';
 import { Route } from 'react-router-dom';
 import { ModuleGuard } from '@/components/guards/ModuleGuard';
 import { PermissionGuard } from '@/components/guards/PermissionGuard';
+import SelfServiceLayout from '@/layouts/SelfServiceLayout';
 
 // Self-service (Sprint 8 — Task 74; U3 adds /leaves, /profile, /loans canonical slugs)
 const SelfServiceHomePage = lazy(() => import('@/pages/self-service'));
@@ -18,6 +19,7 @@ const SelfServicePayslipsPage = lazy(() => import('@/pages/self-service/payslips
 
 export const selfServiceRoutes = (
  <>
+ <Route element={<SelfServiceLayout />}>
  <Route path="/self-service" element={<SelfServiceHomePage />} />
  <Route path="/self-service/profile" element={<SelfServiceProfilePage />} />
  <Route path="/self-service/me" element={<SelfServiceMePage />} />
@@ -47,6 +49,7 @@ export const selfServiceRoutes = (
  path="/self-service/payslips"
  element={<PermissionGuard permission="payroll.view"><SelfServicePayslipsPage /></PermissionGuard>}
  />
+ </Route>
  </Route>
  </>
 );

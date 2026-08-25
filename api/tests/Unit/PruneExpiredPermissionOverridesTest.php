@@ -109,6 +109,11 @@ class PruneExpiredPermissionOverridesTest extends TestCase
             'model_type' => $expired->getMorphClass(),
             'model_id'   => $expired->id,
         ]);
+        $this->assertSame(1, DB::table('audit_logs')
+            ->where('action', 'deleted')
+            ->where('model_type', $expired->getMorphClass())
+            ->where('model_id', $expired->id)
+            ->count());
 
         // Per-user cache flushed by the service path.
         $this->assertFalse(Cache::has("auth:permissions:{$user->id}"));

@@ -57,7 +57,7 @@ class HolidayController
 
     public function restore(Holiday $holiday): JsonResponse
     {
-        $holiday->restore();
+        $this->service->restore($holiday);
         return response()->json(['message' => 'Holiday restored.']);
     }
 }

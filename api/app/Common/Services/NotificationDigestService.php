@@ -52,18 +52,25 @@ class NotificationDigestService
         $failures = 0;
 
         foreach (array_chunk($this->subscriberIds(), self::USER_CHUNK) as $userIds) {
-            $unreadByUser = $this->unreadFor($userIds);
+            // Keep the exact unread total separate from the display window.
+            // The item query must never load an unbounded backlog merely to
+            // calculate the count shown in the digest.
+            $unreadCounts = $this->unreadCountsFor($userIds);
 
-            if ($unreadByUser->isEmpty()) {
+            if ($unreadCounts->isEmpty()) {
                 continue;
             }
 
+            $unreadByUser = $this->unreadFor($unreadCounts->keys()->map(
+                static fn ($id): int => (int) $id,
+            )->all());
+
             $users = User::query()
-                ->whereIn('id', $unreadByUser->keys()->all())
+                ->whereIn('id', $unreadCounts->keys()->all())
                 ->get()
                 ->keyBy('id');
 
-            foreach ($unreadByUser as $userId => $rows) {
+            foreach ($unreadCounts as $userId => $unreadCount) {
                 $evaluated++;
 
                 $user = $users->get((int) $userId);
@@ -71,7 +78,8 @@ class NotificationDigestService
                     continue;
                 }
 
-                $total = $rows->count();
+                $rows = $unreadByUser->get((int) $userId, collect());
+                $total = (int) $unreadCount;
 
                 try {
                     Mail::to($user->email)->queue(new NotificationDigestMail(
@@ -119,19 +127,64 @@ class NotificationDigestService
     }
 
     /**
-     * Unread notifications for a bounded set of users, newest first.
+     * Exact unread totals for a bounded set of users.
+     *
+     * This query intentionally does not select notification payloads. It is
+     * the count source for the digest total while unreadFor() fetches only the
+     * newest display window.
+     *
+     * @param  array<int, int>  $userIds
+     * @return Collection<int, int>
+     */
+    private function unreadCountsFor(array $userIds): Collection
+    {
+        return DB::table('notifications')
+            ->select('notifiable_id')
+            ->selectRaw('COUNT(*) as unread_count')
+            ->whereNull('read_at')
+            ->where('notifiable_type', User::class)
+            ->whereIn('notifiable_id', $userIds)
+            ->groupBy('notifiable_id')
+            ->pluck('unread_count', 'notifiable_id')
+            ->map(static fn ($count): int => (int) $count);
+    }
+
+    /**
+     * Newest notifications for a bounded set of users, limited per user.
+     *
+     * A window function keeps this to one item query per subscriber batch,
+     * while the outer filter prevents the PHP process from materialising an
+     * entire unread backlog for every opted-in user.
      *
      * @param  array<int, int>  $userIds
      * @return Collection<int, Collection<int, object>>
      */
-    private function unreadFor(array $userIds)
+    private function unreadFor(array $userIds): Collection
     {
-        return DB::table('notifications')
+        if ($userIds === [] || $this->maxItemsPerUser === 0) {
+            return collect();
+        }
+
+        $ranked = DB::table('notifications')
+            ->select([
+                'id',
+                'notifiable_id',
+                'type',
+                'data',
+                'created_at',
+            ])
+            ->selectRaw(
+                'ROW_NUMBER() OVER (PARTITION BY notifiable_id ORDER BY created_at DESC, id DESC) as notification_rank',
+            )
             ->whereNull('read_at')
             ->where('notifiable_type', User::class)
-            ->whereIn('notifiable_id', $userIds)
+            ->whereIn('notifiable_id', $userIds);
+
+        return DB::query()
+            ->fromSub($ranked, 'ranked_notifications')
+            ->where('notification_rank', '<=', $this->maxItemsPerUser)
             ->orderBy('notifiable_id')
-            ->orderByDesc('created_at')
+            ->orderBy('notification_rank')
             ->get(['notifiable_id', 'type', 'data', 'created_at'])
             ->groupBy('notifiable_id');
     }

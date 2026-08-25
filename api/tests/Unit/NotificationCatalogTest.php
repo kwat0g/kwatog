@@ -145,6 +145,32 @@ class NotificationCatalogTest extends TestCase
         $this->assertSame('RENAMED BY ADMIN', $groups[0]['types'][0]['label'], 'Admin wording must not be reverted.');
     }
 
+    public function test_malformed_stored_catalog_is_normalised_before_backfill(): void
+    {
+        $this->mock(SettingsService::class, function ($mock): void {
+            $mock->shouldReceive('get')
+                ->with('notifications.catalog')
+                ->andReturn([
+                    ['title' => 'Broken group', 'hint' => null, 'types' => 'not-an-array'],
+                    ['title' => 'Partial group', 'types' => [['key' => 'custom.type', 'label' => null]]],
+                    'not-a-group',
+                ]);
+        });
+
+        $groups = (new NotificationCatalog())->groups();
+
+        $this->assertNotEmpty($groups);
+        foreach ($groups as $group) {
+            $this->assertIsString($group['title']);
+            $this->assertIsString($group['hint']);
+            $this->assertIsArray($group['types']);
+        }
+
+        $keys = (new NotificationCatalog())->typeKeys();
+        $this->assertContains('custom.type', $keys);
+        $this->assertContains('ncr.escalation', $keys);
+    }
+
     public function test_no_code_path_writes_notifications_outside_the_service(): void
     {
         // Seven call sites used to write `$user->notifications()->create([...])`

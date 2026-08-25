@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\CRM;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
@@ -30,9 +31,9 @@ use Tests\TestCase;
 /**
  * C-2 — Wire SalesOrder lifecycle transitions.
  *
- * Asserts the four mark* helpers are idempotent, null-safe, gated against
- * disallowed transitions, and that the WorkOrder / Delivery / Invoice
- * hooks advance the SO through the full O2C chain.
+     * Asserts the four mark* helpers are idempotent, null-safe, reject
+     * disallowed transitions, and that the WorkOrder / Delivery / Invoice
+     * hooks advance the SO through the full O2C chain.
  */
 class SalesOrderStatusTransitionsTest extends TestCase
 {
@@ -75,10 +76,15 @@ class SalesOrderStatusTransitionsTest extends TestCase
         );
     }
 
-    public function test_mark_in_production_is_noop_when_cancelled(): void
+    public function test_mark_in_production_rejects_cancelled_so(): void
     {
         $so = $this->makeSo(SalesOrderStatus::Cancelled);
-        $this->soService->markInProduction($so->id);
+        try {
+            $this->soService->markInProduction($so->id);
+            $this->fail('A cancelled sales order must reject downstream lifecycle promotion.');
+        } catch (BusinessRuleException $e) {
+            $this->assertStringContainsString('not allowed', $e->getMessage());
+        }
 
         $this->assertSame(SalesOrderStatus::Cancelled->value, $so->fresh()->status->value);
     }
@@ -107,14 +113,17 @@ class SalesOrderStatusTransitionsTest extends TestCase
         $this->assertSame(SalesOrderStatus::PartiallyDelivered->value, $so->fresh()->status->value);
     }
 
-    public function test_backwards_transition_returns_typed_skipped_result_and_records_reason(): void
+    public function test_backwards_transition_throws_and_records_reason(): void
     {
         $so = $this->makeSo(SalesOrderStatus::Delivered);
-        $result = $this->soService->markInProduction($so->id);
+        try {
+            $this->soService->markInProduction($so->id);
+            $this->fail('A backwards transition must be rejected.');
+        } catch (BusinessRuleException $e) {
+            $this->assertStringContainsString('not allowed', $e->getMessage());
+        }
 
         $this->assertSame(SalesOrderStatus::Delivered->value, $so->fresh()->status->value);
-        $this->assertSame('skipped', $result->outcome);
-        $this->assertSame(409, $result->statusCode);
         $this->assertDatabaseHas('sales_order_transition_rejections', [
             'sales_order_id' => $so->id,
             'from_status' => SalesOrderStatus::Delivered->value,

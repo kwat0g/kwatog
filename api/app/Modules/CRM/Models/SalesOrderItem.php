@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\CRM\Models;
 
+use App\Common\Support\Money;
 use App\Common\Traits\HasHashId;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -46,7 +47,9 @@ class SalesOrderItem extends Model
     /** Outstanding qty (target − delivered). */
     public function getRemainingQuantityAttribute(): string
     {
-        $remaining = (float) $this->quantity - (float) $this->quantity_delivered;
-        return number_format(max(0.0, $remaining), 2, '.', '');
+        return Money::clampMin(
+            Money::sub((string) $this->quantity, (string) $this->quantity_delivered),
+            Money::zero(),
+        );
     }
 }

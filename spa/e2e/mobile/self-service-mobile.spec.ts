@@ -35,8 +35,30 @@ test.describe('Self-service portal — mobile (390px)', () => {
     await loginAs(page, 'employee', '/self-service');
     const bp = new BasePage(page);
     await expect(bp.deniedPageText).not.toBeVisible();
+    const nav = page.getByRole('navigation', { name: 'Self-service navigation' });
+    await expect(nav).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Home' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'DTR' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Leave' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Payslip' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Me' })).toBeVisible();
     // Some self-service tile/content
     await expect(page.getByText(/leave|payslip|dtr|profile/i).first()).toBeVisible();
+  });
+
+  test('self-service home does not present a partial summary after a home-query failure', async ({ page }) => {
+    await page.route('**/api/v1/hr/self-service/home', async (route) => {
+      await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ message: 'failed' }) });
+    });
+    await page.route('**/api/v1/dashboards/employee', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+        data: { kpis: [], panels: { latest_payslip: null, next_holiday: null } },
+      })});
+    });
+
+    await loginAs(page, 'employee', '/self-service');
+    await expect(page.getByText("Couldn't load your dashboard")).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible();
   });
 
   test('self-service /me renders employee info', async ({ page }) => {
@@ -62,7 +84,7 @@ test.describe('Self-service portal — mobile (390px)', () => {
         }],
       })});
     });
-    await page.route('**/api/v1/leaves/requests*', async (route) => {
+    await page.route('**/api/v1/hr/self-service/leave-requests*', async (route) => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
         data: [],
         meta: { current_page: 1, last_page: 1, per_page: 25, total: 0, from: null, to: null },
@@ -81,7 +103,7 @@ test.describe('Self-service portal — mobile (390px)', () => {
   });
 
   test('self-service /payslips renders (scoped to own employee_id)', async ({ page }) => {
-    await page.route('**/api/v1/payrolls*', async (route) => {
+    await page.route('**/api/v1/hr/self-service/payslips*', async (route) => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
         data: [{
           id: 'pay001', pay_type: 'monthly', days_worked: '11.00',
@@ -103,7 +125,13 @@ test.describe('Self-service portal — mobile (390px)', () => {
   });
 
   test('self-service /dtr renders', async ({ page }) => {
-    await page.route('**/api/v1/attendance/attendances*', async (route) => {
+    await page.route('**/api/v1/hr/self-service/attendance*', async (route) => {
+      if (new URL(route.request().url()).pathname.endsWith('/options')) {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+          data: { statuses: [{ value: 'present', label: 'Present' }] },
+        })});
+        return;
+      }
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
         data: [{ id: 'dtr001', date: '2026-06-15', time_in: '06:00', time_out: '17:00', status: 'present' }],
         meta: { current_page: 1, last_page: 1, per_page: 25, total: 1, from: 1, to: 1 },
@@ -137,9 +165,29 @@ test.describe('Self-service portal — mobile (390px)', () => {
     await expect(bp.deniedPageText).not.toBeVisible();
     await expect(page.getByText('Manuel Cruz')).toBeVisible();
   });
+
+  test('profile makes update-request failure explicit', async ({ page }) => {
+    await mockSelfServiceProfile(page, 500);
+    await loginAs(page, 'employee', '/self-service/profile');
+    await expect(page.getByText("Couldn’t load your change requests.")).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible();
+  });
+
+  test('notification catalogue failure does not render an empty preference matrix', async ({ page }) => {
+    await page.route('**/api/v1/notification-preferences', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) });
+    });
+    await page.route('**/api/v1/notification-preferences/options', async (route) => {
+      await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ message: 'failed' }) });
+    });
+
+    await loginAs(page, 'employee', '/self-service/notification-preferences');
+    await expect(page.getByText("Couldn't load your preferences")).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible();
+  });
 });
 
-async function mockSelfServiceProfile(page: import('@playwright/test').Page): Promise<void> {
+async function mockSelfServiceProfile(page: import('@playwright/test').Page, updateRequestsStatus = 200): Promise<void> {
   await page.route('**/api/v1/hr/self-service/profile', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
       data: {
@@ -156,6 +204,10 @@ async function mockSelfServiceProfile(page: import('@playwright/test').Page): Pr
     })});
   });
   await page.route('**/api/v1/hr/self-service/profile/update-requests', async (route) => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) });
+    await route.fulfill({
+      status: updateRequestsStatus,
+      contentType: 'application/json',
+      body: JSON.stringify(updateRequestsStatus === 200 ? { data: [] } : { message: 'failed' }),
+    });
   });
 }

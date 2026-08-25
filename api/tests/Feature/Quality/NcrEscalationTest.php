@@ -67,6 +67,25 @@ class NcrEscalationTest extends TestCase
         $this->assertSame(0, (int) $ncr->fresh()->escalation_level);
     }
 
+    public function test_in_progress_ncr_with_containment_only_remains_escalation_eligible(): void
+    {
+        $ncr = $this->openNcr(NcrSeverity::High, now()->subHours(25));
+        $ncr->forceFill(['status' => NcrStatus::InProgress->value])->save();
+
+        NcrAction::create([
+            'ncr_id'       => $ncr->id,
+            'action_type'  => NcrActionType::Containment->value,
+            'description'  => 'segregated affected stock',
+            'performed_by' => User::query()->first()->id,
+            'performed_at' => now(),
+        ]);
+
+        $count = app(NcrEscalationService::class)->run();
+
+        $this->assertSame(1, $count);
+        $this->assertSame(1, (int) $ncr->fresh()->escalation_level);
+    }
+
     public function test_critical_ncr_unactioned_8h_advances_to_tier_1(): void
     {
         $ncr = $this->openNcr(NcrSeverity::Critical, now()->subHours(9));

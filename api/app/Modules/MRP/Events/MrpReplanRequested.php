@@ -15,5 +15,6 @@ class MrpReplanRequested
     public function __construct(
         public readonly array $salesOrderIds,
         public readonly string $reason,
+        public readonly ?int $initiatedBy = null,
     ) {}
 }

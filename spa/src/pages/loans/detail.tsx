@@ -17,7 +17,7 @@ import { ChainHeader, ApprovalTimeline } from '@/components/chain';
 import { buildLoanChain } from '@/lib/chains';
 import { fromApprovalRecords } from '@/lib/approvals';
 import { usePermission } from '@/hooks/usePermission';
-import { formatPeso } from '@/lib/formatNumber';
+import { formatPercent, formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
@@ -59,8 +59,9 @@ export default function LoanDetailPage() {
  const isPending = loan.status === 'pending';
 
  const loanChain = buildLoanChain(loan);
- const remainingPercent = parseFloat(loan.principal) > 0
- ? Math.min(100, (parseFloat(loan.total_paid) / parseFloat(loan.principal)) * 100)
+ const totalDue = Number(loan.total_paid) + Number(loan.balance);
+ const remainingPercent = totalDue > 0
+ ? Math.min(100, (Number(loan.total_paid) / totalDue) * 100)
  : 0;
 
  return (
@@ -83,7 +84,7 @@ export default function LoanDetailPage() {
  <Button variant="danger" size="xs" icon={<LuX size={12} />} onClick={() => setReject(true)}>Reject</Button>
  </>
  )}
- {(isPending || loan.status === 'active') && can('loans.approve') && (
+ {isPending && can('loans.write_off') && (
  <Button variant="secondary" size="sm" onClick={() => setConfirmCancel(true)} disabled={cancel.isPending}>Cancel</Button>
  )}
  </>
@@ -118,7 +119,7 @@ export default function LoanDetailPage() {
  <Item label="Per period" value={formatPeso(loan.monthly_amortization)} mono />
  <Item label="Start date" value={loan.start_date ? formatDate(loan.start_date) : '—'} mono />
  <Item label="End date" value={loan.end_date ? formatDate(loan.end_date) : '—'} mono />
- <Item label="Interest rate" value={`${loan.interest_rate}%`} mono />
+ <Item label="Interest rate" value={formatPercent(loan.interest_rate)} mono />
  <Item label="Approval chain" value={`${loan.approval_chain_size} steps`} />
  </div>
  {loan.purpose && (

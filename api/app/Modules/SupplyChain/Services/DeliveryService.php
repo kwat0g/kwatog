@@ -108,6 +108,81 @@ class DeliveryService
         return $q->orderByDesc('id')->paginate(min((int) ($filters['per_page'] ?? 20), 100));
     }
 
+    /**
+     * Return passed outgoing inspections that can authorize a manual delivery
+     * for the selected sales order. The remaining capacity is calculated from
+     * the same reservation statuses used by create(), so the form cannot offer
+     * an inspection that has already been fully reserved.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function inspectionOptions(int $salesOrderId): array
+    {
+        $inspections = Inspection::query()
+            ->where('stage', InspectionStage::Outgoing->value)
+            ->where('status', InspectionStatus::Passed->value)
+            ->whereNotNull('work_order_output_id')
+            ->whereHas('workOrderOutput.workOrder', fn (Builder $q) => $q
+                ->where('sales_order_id', $salesOrderId)
+                ->whereNotNull('sales_order_item_id'))
+            ->with([
+                'product:id,part_number,name',
+                'workOrderOutput:id,work_order_id,good_count',
+                'workOrderOutput.workOrder:id,sales_order_id,sales_order_item_id,product_id,wo_number',
+                'workOrderOutput.workOrder.salesOrderItem:id,sales_order_id,product_id',
+            ])
+            ->orderByDesc('completed_at')
+            ->orderByDesc('id')
+            ->get();
+
+        if ($inspections->isEmpty()) {
+            return [];
+        }
+
+        $reservedByInspection = DB::table('delivery_items as di')
+            ->join('deliveries as d', 'd.id', '=', 'di.delivery_id')
+            ->whereIn('di.inspection_id', $inspections->pluck('id')->all())
+            ->whereNull('d.deleted_at')
+            ->whereIn('d.status', self::QUANTITY_RESERVING_STATUSES)
+            ->select('di.inspection_id')
+            ->selectRaw('COALESCE(SUM(di.quantity), 0) as reserved_quantity')
+            ->groupBy('di.inspection_id')
+            ->get()
+            ->mapWithKeys(fn (object $row): array => [
+                (int) $row->inspection_id => (string) $row->reserved_quantity,
+            ]);
+
+        return $inspections
+            ->map(function (Inspection $inspection) use ($reservedByInspection): ?array {
+                $reserved = $reservedByInspection->get($inspection->id, '0.00');
+                $remaining = bcsub((string) $inspection->accepted_quantity, $reserved, 2);
+
+                if (bccomp($remaining, '0.00', 2) <= 0) {
+                    return null;
+                }
+
+                $workOrder = $inspection->workOrderOutput?->workOrder;
+                $salesOrderItem = $workOrder?->salesOrderItem;
+
+                return [
+                    'id' => $inspection->hash_id,
+                    'inspection_number' => $inspection->inspection_number,
+                    'sales_order_item_id' => $salesOrderItem?->hash_id,
+                    'work_order_number' => $workOrder?->wo_number,
+                    'product' => $inspection->product ? [
+                        'part_number' => $inspection->product->part_number,
+                        'name' => $inspection->product->name,
+                    ] : null,
+                    'accepted_quantity' => (int) $inspection->accepted_quantity,
+                    'remaining_quantity' => $remaining,
+                    'completed_at' => optional($inspection->completed_at)->toISOString(),
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
+    }
+
     public function show(Delivery $d): Delivery
     {
         $d = $d->load([
@@ -168,6 +243,11 @@ class DeliveryService
             $requestedByItem = $this->normaliseRequestedQuantities($data['items']);
             $this->assertDeliveryQuantitiesAvailable($so, $requestedByItem);
 
+            $this->assertDispatchAssignmentAvailable(
+                isset($data['vehicle_id']) ? (int) $data['vehicle_id'] : null,
+                isset($data['driver_id']) ? (int) $data['driver_id'] : null,
+            );
+
             $delivery = Delivery::create([
                 'delivery_number' => $this->sequences->generate('delivery'),
                 'sales_order_id' => $so->id,
@@ -205,6 +285,99 @@ class DeliveryService
 
             return $this->show($delivery);
         });
+    }
+
+    /**
+     * Assign the operational driver and vehicle after a delivery draft exists.
+     *
+     * The delivery, vehicle, and driver are locked in one transaction so a
+     * repeated operator request cannot race a dispatch transition or book a
+     * vehicle that became unavailable while the form was open.
+     *
+     * @param array{vehicle_id:int,driver_id:int,reason:string} $data
+     */
+    public function assign(Delivery $delivery, array $data, User $by): Delivery
+    {
+        return DB::transaction(function () use ($delivery, $data, $by): Delivery {
+            $locked = Delivery::query()->lockForUpdate()->find($delivery->id);
+            if (! $locked) {
+                throw new BusinessRuleException('Delivery not found.');
+            }
+
+            $status = $locked->status instanceof DeliveryStatus
+                ? $locked->status
+                : DeliveryStatus::from((string) $locked->status);
+            if ($status !== DeliveryStatus::Scheduled) {
+                throw new BusinessRuleException('Only scheduled deliveries can be assigned or reassigned.');
+            }
+
+            $this->assertDispatchAssignmentAvailable(
+                (int) $data['vehicle_id'],
+                (int) $data['driver_id'],
+                $locked->id,
+            );
+
+            $reason = trim((string) $data['reason']);
+            $assignmentNote = sprintf(
+                '[Assignment %s] Driver and vehicle assigned. Reason: %s',
+                now()->toIso8601String(),
+                $reason,
+            );
+
+            $locked->forceFill([
+                'vehicle_id' => (int) $data['vehicle_id'],
+                'driver_id' => (int) $data['driver_id'],
+                'notes' => trim(($locked->notes ? $locked->notes."\n" : '').$assignmentNote),
+            ])->save();
+
+            return $this->show($locked);
+        });
+    }
+
+    /**
+     * Validate the optional direct-create assignment and the required
+     * post-draft assignment. The caller must already be inside a transaction.
+     */
+    private function assertDispatchAssignmentAvailable(
+        ?int $vehicleId,
+        ?int $driverId,
+        ?int $deliveryId = null,
+    ): void {
+        if ($vehicleId !== null) {
+            $vehicle = Vehicle::query()->lockForUpdate()->find($vehicleId);
+            if (! $vehicle) {
+                throw new BusinessRuleException('Assigned vehicle not found.');
+            }
+            if ($vehicle->status !== 'available') {
+                throw new BusinessRuleException("Vehicle {$vehicle->plate_number} is not available for assignment.");
+            }
+
+            $hasActiveDelivery = Delivery::query()
+                ->where('vehicle_id', $vehicle->id)
+                ->when($deliveryId !== null, fn (Builder $query) => $query->whereKeyNot($deliveryId))
+                ->whereIn('status', [
+                    DeliveryStatus::Loading->value,
+                    DeliveryStatus::InTransit->value,
+                ])
+                ->exists();
+            if ($hasActiveDelivery) {
+                throw new BusinessRuleException(
+                    "Vehicle {$vehicle->plate_number} is already assigned to another active delivery."
+                );
+            }
+        }
+
+        if ($driverId !== null) {
+            $driver = User::query()
+                ->lockForUpdate()
+                ->whereKey($driverId)
+                ->where('is_active', true)
+                ->whereHas('role', static fn (Builder $query) => $query->where('slug', 'driver'))
+                ->first();
+            if (! $driver) {
+                throw new BusinessRuleException('Assigned user is not an active driver.');
+            }
+        }
     }
 
     /**
@@ -330,6 +503,9 @@ class DeliveryService
             // vehicle status.
             $vehicle = null;
             $activeOtherDelivery = false;
+            if ($next === DeliveryStatus::Loading && ! $locked->vehicle_id) {
+                throw new BusinessRuleException('A dispatchable vehicle must be assigned before loading.');
+            }
             if ($locked->vehicle_id) {
                 $vehicle = Vehicle::query()
                     ->lockForUpdate()

@@ -1,6 +1,6 @@
 import type { PaginatedResponse } from './index';
 
-// ─── Admin LuUser Management (Task U2) ──────────────────────────────
+// ─── Admin User Management (Task U2) ────────────────────────────────
 export type AdminUserStatus = 'active' | 'inactive' | 'locked';
 
 export interface AdminUserRoleSummary {
@@ -86,7 +86,13 @@ export interface CreateAdminUserResponse {
  };
 }
 
-// ─── Per-LuUser Permission Overrides (Series R/R2) ──────────────────
+export interface AdminUserOptions {
+ statuses: Array<{ value: AdminUserStatus; label: string }>;
+ roles: Array<{ id: string; name: string; slug: string; is_system: boolean }>;
+ departments: Array<{ id: string; name: string }>;
+}
+
+// ─── Per-User Permission Overrides (Series R/R2) ────────────────────
 export type PermissionOverrideType = 'grant' | 'revoke';
 
 export interface UserPermissionOverride {
@@ -104,6 +110,8 @@ export interface UserPermissionOverride {
  reason: string;
  expires_at: string | null;
  is_expired: boolean;
+ is_deleted: boolean;
+ deleted_at: string | null;
  created_at: string | null;
  updated_at: string | null;
 }

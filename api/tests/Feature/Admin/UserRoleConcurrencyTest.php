@@ -35,6 +35,7 @@ class UserRoleConcurrencyTest extends TestCase
             ->patchJson("/api/v1/admin/users/{$target->hash_id}/role", [
                 'role_id' => $hrRole->hash_id,
                 'expected_role_id' => $employeeRole->hash_id,
+                'reason' => 'Resolve stale role assignment.',
             ])
             ->assertStatus(409)
             ->assertJsonPath('message', fn (string $message): bool => str_contains($message, 'changed'));

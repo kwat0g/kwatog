@@ -6,6 +6,7 @@ export interface PriceAgreementListParams extends ListParams {
  product_id?: string;
  customer_id?: string;
  active_on?: string;
+ trashed?: 'with' | 'only';
 }
 
 export const priceAgreementsApi = {

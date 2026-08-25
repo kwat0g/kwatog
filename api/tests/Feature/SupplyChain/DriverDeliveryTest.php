@@ -9,6 +9,7 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\SupplyChain\Models\Delivery;
+use App\Modules\SupplyChain\Models\Vehicle;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -68,10 +69,19 @@ class DriverDeliveryTest extends TestCase
             'created_by'   => $driver->id,
         ]);
 
+        $vehicle = Vehicle::create([
+            'plate_number' => 'DRV-'.substr(uniqid(), -8),
+            'name' => 'Driver test vehicle '.uniqid(),
+            'vehicle_type' => 'van',
+            'capacity_kg' => '1000.00',
+            'status' => 'available',
+        ]);
+
         return Delivery::create([
             'delivery_number' => 'DLV-T-' . substr(uniqid(), -5),
             'sales_order_id'  => $so->id,
             'driver_id'       => $driver->id,
+            'vehicle_id'      => $vehicle->id,
             'scheduled_date'  => now()->toDateString(),
             'status'          => $status,
             'created_by'      => $driver->id,

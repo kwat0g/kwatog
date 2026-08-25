@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Inventory;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
@@ -43,6 +45,11 @@ class GrnQcGateTest extends TestCase
         parent::setUp();
 
         $role = Role::firstOrCreate(['slug' => 'warehouse_staff'], ['name' => 'Warehouse Staff']);
+        $qualityPermission = Permission::firstOrCreate(
+            ['slug' => 'quality.inspections.manage'],
+            ['name' => 'Manage inspections', 'module' => 'quality'],
+        );
+        $role->permissions()->syncWithoutDetaching([$qualityPermission->id]);
         $this->user = User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
         $this->grnSvc = app(GrnService::class);
     }
@@ -212,5 +219,122 @@ class GrnQcGateTest extends TestCase
         $accepted = $this->grnSvc->accept($grn->fresh(), $this->user);
 
         $this->assertSame(GrnStatus::Accepted, $accepted->status);
+    }
+
+    public function test_fractional_terminal_single_screen_qc_cannot_truncate_and_accept(): void
+    {
+        $item = Item::factory()->create(['is_active' => true]);
+        [$po, $poItem] = $this->makePoAndLine($item);
+        $location = WarehouseLocation::factory()->create();
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('no incoming inspection');
+
+        $this->grnSvc->receiveWithQc(
+            $po,
+            [[
+                'purchase_order_item_id' => $poItem->id,
+                'item_id' => $item->id,
+                'location_id' => $location->id,
+                'quantity_received' => '0.500',
+                'unit_cost' => '10.00',
+            ]],
+            ['received_date' => now()->toDateString()],
+            ['result' => 'passed'],
+            $this->user,
+        );
+    }
+
+    public function test_create_rejects_an_item_that_does_not_match_the_po_line(): void
+    {
+        $orderedItem = Item::factory()->create(['is_active' => true]);
+        $submittedItem = Item::factory()->create(['is_active' => true]);
+        [$po, $poItem] = $this->makePoAndLine($orderedItem);
+        $location = WarehouseLocation::factory()->create();
+
+        try {
+            $this->grnSvc->create($po, [[
+                'purchase_order_item_id' => $poItem->id,
+                'item_id' => $submittedItem->id,
+                'location_id' => $location->id,
+                'quantity_received' => '10.000',
+                'unit_cost' => '10.00',
+            ]], ['received_date' => now()->toDateString()], $this->user);
+            $this->fail('A GRN line with a different item must be rejected.');
+        } catch (BusinessRuleException $e) {
+            $this->assertStringContainsString('does not match PO line', $e->getMessage());
+        }
+
+        $this->assertSame(0, GoodsReceiptNote::query()->where('purchase_order_id', $po->id)->count());
+        $this->assertSame('0.00', (string) $poItem->fresh()->quantity_received);
+    }
+
+    public function test_create_rejects_an_inactive_receiving_location(): void
+    {
+        $item = Item::factory()->create(['is_active' => true]);
+        [$po, $poItem] = $this->makePoAndLine($item);
+        $location = WarehouseLocation::factory()->create(['is_active' => false]);
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('inactive');
+
+        $this->grnSvc->create($po, [[
+            'purchase_order_item_id' => $poItem->id,
+            'item_id' => $item->id,
+            'location_id' => $location->id,
+            'quantity_received' => '10.000',
+            'unit_cost' => '10.00',
+        ]], ['received_date' => now()->toDateString()], $this->user);
+    }
+
+    public function test_create_rejects_blocked_and_quarantine_receiving_locations(): void
+    {
+        $item = Item::factory()->create(['is_active' => true]);
+        [$po, $poItem] = $this->makePoAndLine($item);
+        $location = WarehouseLocation::factory()->create();
+        $location->forceFill(['is_blocked' => true])->save();
+
+        try {
+            $this->grnSvc->create($po, [[
+                'purchase_order_item_id' => $poItem->id,
+                'item_id' => $item->id,
+                'location_id' => $location->id,
+                'quantity_received' => '10.000',
+                'unit_cost' => '10.00',
+            ]], ['received_date' => now()->toDateString()], $this->user);
+            $this->fail('A blocked location must be rejected.');
+        } catch (BusinessRuleException $e) {
+            $this->assertStringContainsString('blocked', $e->getMessage());
+        }
+
+        $location->forceFill(['is_blocked' => false])->save();
+        $location->zone->update(['zone_type' => 'quarantine']);
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('quarantine');
+
+        $this->grnSvc->create($po, [[
+            'purchase_order_item_id' => $poItem->id,
+            'item_id' => $item->id,
+            'location_id' => $location->id,
+            'quantity_received' => '10.000',
+            'unit_cost' => '10.00',
+        ]], ['received_date' => now()->toDateString()], $this->user);
+    }
+
+    public function test_accept_rejects_a_qc_anchor_that_is_not_an_incoming_inspection(): void
+    {
+        $item = Item::factory()->create(['is_active' => true]);
+        $grn = $this->createGrnFor($item);
+        $inspection = Inspection::query()
+            ->where('entity_type', 'grn')
+            ->where('entity_id', $grn->id)
+            ->firstOrFail();
+        $inspection->update(['stage' => 'in_process', 'status' => 'passed']);
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('invalid incoming QC inspection anchor');
+
+        $this->grnSvc->accept($grn->fresh(), $this->user);
     }
 }

@@ -41,6 +41,13 @@ const STATUS_CHIP: Record<InspectionStatus, 'success' | 'danger' | 'warning' | '
  cancelled: 'neutral',
 };
 
+const isNumericMeasurement = (measurement?: InspectionMeasurement): boolean => Boolean(
+ measurement && (
+ measurement.evaluation_mode === 'numeric'
+ || (measurement.evaluation_mode === undefined && (measurement.tolerance_min !== null || measurement.tolerance_max !== null))
+ ),
+);
+
 interface RowDraft {
  id: string;
  measured_value: string; // keep as string to allow empty input
@@ -116,12 +123,16 @@ export default function InspectionDetailPage() {
  mutationFn: () => {
  const dirty = Object.values(drafts).filter((d) => d.dirty);
  return inspectionsApi.recordMeasurements(id, {
- measurements: dirty.map((d) => ({
+ measurements: dirty.map((d) => {
+ const measurement = data?.measurements?.find((m) => m.id === d.id);
+ const hasTolerance = isNumericMeasurement(measurement);
+ return {
  id: d.id,
- measured_value: d.measured_value === '' ? null : Number(d.measured_value),
- is_pass: d.is_pass,
+ ...(hasTolerance ? { measured_value: d.measured_value === '' ? null : Number(d.measured_value) } : {}),
+ ...(!hasTolerance ? { is_pass: d.is_pass } : {}),
  notes: d.notes || null,
- })),
+ };
+ }),
  });
  },
  onSuccess: () => {
@@ -344,14 +355,18 @@ export default function InspectionDetailPage() {
  <Th align="center">
  Pass
  </Th>
+ <Th>
+ Notes
+ </Th>
  </tr>
  </thead>
  <tbody>
  {grouped[idx].map((m) => {
  const draft = drafts[m.id];
  if (!draft) return null;
+ const hasTolerance = isNumericMeasurement(m);
  const numericTol =
- m.tolerance_min !== null || m.tolerance_max !== null
+ hasTolerance
  ? `${m.tolerance_min ?? '−∞'} … ${m.tolerance_max ?? '+∞'}`
  : '—';
  return (
@@ -368,9 +383,7 @@ export default function InspectionDetailPage() {
  </Td>
  <Td align="right" mono>{numericTol}</Td>
  <Td align="right" mono>
- {m.parameter_type === 'visual' ? (
- <span className="text-muted text-2xs">N/A</span>
- ) : (
+ {hasTolerance ? (
  <div className="flex flex-col items-end gap-1">
  <Input
  fieldSize="sm"
@@ -394,14 +407,16 @@ export default function InspectionDetailPage() {
  className="mt-0.5"
  />
  </div>
+ ) : (
+ <span className="text-muted text-2xs">Manual result</span>
  )}
  </Td>
  <Td align="center">
- {m.parameter_type === 'visual' ? (
+ {!hasTolerance ? (
  <Select
  fieldSize="sm"
  containerClassName="inline-flex w-24"
- aria-label="Visual result"
+ aria-label={`${m.parameter_type_label ?? m.parameter_type} result`}
  disabled={isTerminal}
  value={draft.is_pass === null ? '' : draft.is_pass ? 'pass' : 'fail'}
  onChange={(e) =>
@@ -423,6 +438,17 @@ export default function InspectionDetailPage() {
  ) : (
  <Chip variant="danger">{measurementResultLabels.get('fail') ?? 'Fail'}</Chip>
  )}
+ </Td>
+ <Td>
+ <Input
+ fieldSize="sm"
+ type="text"
+ disabled={isTerminal}
+ aria-label={`${m.parameter_name} notes`}
+ containerClassName="inline-flex min-w-32"
+ value={draft.notes}
+ onChange={(e) => updateDraft(m.id, { notes: e.target.value })}
+ />
  </Td>
  </tr>
  );
@@ -455,7 +481,7 @@ export default function InspectionDetailPage() {
  </p>
  ) : (
  <p className="text-sm text-success-fg">
- All measurements recorded within tolerance. Completing will mark this inspection as{' '}
+ All measurements have a recorded result. Completing will compute the final inspection outcome as{' '}
  <strong>passed</strong>.
  </p>
  )}
@@ -504,24 +530,59 @@ export default function InspectionDetailPage() {
  </Panel>
  )}
 
- {/* Sprint 7 audit fix: LinkedRecords (Order-to-Cash chain) */}
- {data.product && (
+ {/* Provenance links are permission-aware: the API omits href when the
+     viewer cannot open the source module. */}
+ {(data.product || data.item || data.spec || data.quality_plan || data.entity_context || data.work_order_output) && (
  <Panel title="Linked records">
  <LinkedRecords
  groups={[
- {
+ ...(data.product ? [{
  label: 'Product',
  items: [{
  id: `${data.product.part_number} — ${data.product.name}`,
  href: `/crm/products/${data.product.id}`,
  }],
- },
+ }] : []),
+ ...(data.item ? [{
+ label: 'Inventory item',
+ items: [{
+ id: `${data.item.code} — ${data.item.name}`,
+ href: `/inventory/items/${data.item.id}`,
+ }],
+ }] : []),
+ ...(data.entity_context ? [{
+ label: 'Source record',
+ items: [{
+ id: data.entity_context.reference ?? data.entity_context.type,
+ href: data.entity_context.href ?? undefined,
+ meta: data.entity_context.status_label ?? data.entity_context.status,
+ }],
+ }] : []),
+ ...(data.work_order_output ? [{
+ label: 'Output batch',
+ items: [{
+ id: data.work_order_output.batch_code ?? data.work_order_output.id,
+ href: data.work_order_output.work_order ? `/production/work-orders/${data.work_order_output.work_order.id}` : undefined,
+ meta: `${data.work_order_output.work_order?.wo_number ?? 'Work order'} · good ${data.work_order_output.good_count}`,
+ }],
+ }] : []),
  ...(data.spec ? [{
  label: 'Inspection spec',
  items: [{
- id: `v${data.spec.version}`,
- href: `/quality/inspection-specs/${data.product.id}`,
- meta: data.spec.is_active ? 'active' : 'archived',
+ id: data.spec.version === null ? 'Legacy revision unknown' : `v${data.spec.version}`,
+ href: data.spec?.revision_id
+  ? `/quality/inspection-specs/spec/${data.spec.id}?revision=${data.spec.revision_id}`
+  : data.product ? `/quality/inspection-specs/${data.product.id}` : undefined,
+ meta: data.spec.revision_status === 'legacy_unknown'
+ ? 'historical revision not pinned'
+ : data.spec.is_active ? 'active' : 'archived',
+ }],
+ }] : []),
+ ...(data.quality_plan ? [{
+ label: 'Quality plan',
+ items: [{
+ id: `v${data.quality_plan.version}`,
+ meta: data.quality_plan.sampling_method,
  }],
  }] : []),
  ]}

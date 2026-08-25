@@ -64,6 +64,7 @@ class PayrollCalculatorService
         private readonly PhilhealthComputationService $philhealth,
         private readonly PagibigComputationService $pagibig,
         private readonly BirTaxComputationService $bir,
+        private readonly DeMinimisService $deMinimis,
         private readonly ThirteenthMonthService $thirteenthMonth,
         private readonly SettingsService $settings,
         private readonly PayrollPeriodService $periods,
@@ -770,27 +771,28 @@ class PayrollCalculatorService
     /**
      * Taxable-excess de minimis for the employee in this period's month.
      *
-     * The portion of de minimis benefits above the statutory ceiling is taxable
-     * compensation. Returns '0.00' (and never throws) when the de minimis module
-     * is absent — keeping the calculator backward compatible.
+     * A legitimate zero result is different from an unavailable statutory
+     * lookup. The latter must abort this employee's transaction so the batch
+     * writes an approval-blocking error row instead of under-withholding tax.
      */
     private function deMinimisTaxableExcess(Employee $employee, PayrollPeriod $period): string
     {
-        if (! class_exists(\App\Modules\Payroll\Services\DeMinimisService::class)) {
-            return '0.00';
-        }
         try {
             $year  = (int) $period->payroll_date->format('Y');
             $month = (int) $period->payroll_date->format('n');
-            return app(\App\Modules\Payroll\Services\DeMinimisService::class)
+            return $this->deMinimis
                 ->getTaxableExcessForEmployee($employee, $year, $month);
         } catch (\Throwable $e) {
-            Log::warning('De minimis taxable-excess lookup failed; treating as 0', [
+            Log::error('De minimis taxable-excess lookup failed; payroll computation blocked', [
                 'employee_id' => $employee->id,
                 'period_id'   => $period->id,
                 'error'       => $e->getMessage(),
             ]);
-            return '0.00';
+
+            throw new BusinessRuleException(
+                'Payroll computation is blocked because the de minimis taxable-excess table could not be read. Resolve the statutory data issue, then retry this employee.',
+                previous: $e,
+            );
         }
     }
 
@@ -970,6 +972,11 @@ class PayrollCalculatorService
             ->where('employee_id', $employee->id)
             ->where('status', PayrollAdjustmentStatus::Approved->value)
             ->whereNull('applied_at')
+            // Two payroll periods may compute the same employee concurrently.
+            // Claim approved adjustments in a deterministic order so only one
+            // transaction can read an unapplied row before marking it Applied.
+            ->orderBy('id')
+            ->lockForUpdate()
             ->get();
 
         $signedTotal = '0.00';

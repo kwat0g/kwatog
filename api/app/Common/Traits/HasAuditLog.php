@@ -26,7 +26,12 @@ trait HasAuditLog
     private static function writeAudit(Model $model, string $action, ?array $old, ?array $new): void
     {
         $request = request();
-        [$userId, $actorType] = static::auditActor();
+        $context = method_exists($model, 'auditContextOverride')
+            ? $model->auditContextOverride()
+            : null;
+        [$userId, $actorType] = is_array($context)
+            ? [$context['user_id'] ?? null, $context['actor_type'] ?? 'system']
+            : static::auditActor();
         $source = $request?->attributes->get('source_command')
             ?? $request?->route()?->getName()
             ?? (app()->runningInConsole() ? 'console' : 'unknown');
@@ -45,7 +50,7 @@ trait HasAuditLog
             'user_agent' => $request?->userAgent(),
             'source_command' => (string) $source,
             'correlation_id' => $correlation,
-            'reason' => static::auditReason($old, $new),
+            'reason' => ($context['reason'] ?? null) ?: static::auditReason($old, $new),
             'created_at' => now(),
         ]);
     }

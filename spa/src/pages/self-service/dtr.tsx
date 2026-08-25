@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react';
 import { LuChevronLeft, LuChevronRight } from '@/lib/icons';
 import { useQuery } from '@tanstack/react-query';
-import { client } from '@/api/client';
+import { selfServiceApi, type SelfServiceAttendanceRow } from '@/api/self-service';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Chip } from '@/components/ui/Chip';
 import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
@@ -10,17 +10,6 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { formatDate } from '@/lib/formatDate';
-
-interface AttendanceRow {
- id: string;
- date: string;
- time_in: string | null;
- time_out: string | null;
- regular_hours: string | number | null;
- overtime_hours?: string | number | null;
- status?: string;
- is_late?: boolean;
-}
 
 const MONTH_NAMES = [
  'January', 'February', 'March', 'April', 'May', 'June',
@@ -57,7 +46,7 @@ function monthRange(year: number, month: number): { from: string; to: string } {
  return { from, to };
 }
 
-function attendanceColumns(statusLabels: ReadonlyMap<string, string>): Column<AttendanceRow>[] {
+function attendanceColumns(statusLabels: ReadonlyMap<string, string>): Column<SelfServiceAttendanceRow>[] {
  return [
  {
  key: 'date',
@@ -127,25 +116,18 @@ export default function SelfServiceDtrPage() {
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['self-service', 'dtr', from, to],
- queryFn: () =>
- client
- .get<{ data: AttendanceRow[]; meta: unknown }>('/attendance/attendances', {
- params: { per_page: 100, scope: 'self', from, to },
- })
- .then((r) => r.data),
+ queryFn: () => selfServiceApi.attendance({ per_page: 100, from, to }),
  placeholderData: (prev) => prev,
  });
  const { data: attendanceOptions } = useQuery({
  queryKey: ['self-service', 'dtr', 'options'],
- queryFn: () => client
- .get<{ data: { statuses: Array<{ value: string; label: string }> } }>('/attendance/attendances/options')
- .then((r) => r.data.data),
+ queryFn: () => selfServiceApi.attendanceOptions(),
  staleTime: 300_000,
  });
  const statusLabels = new Map((attendanceOptions?.statuses ?? []).map((status) => [status.value, status.label]));
  const columns = attendanceColumns(statusLabels);
 
- const rows: AttendanceRow[] = data?.data ?? [];
+ const rows: SelfServiceAttendanceRow[] = data?.data ?? [];
 
  return (
  <div>

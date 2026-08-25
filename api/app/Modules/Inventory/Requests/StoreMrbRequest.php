@@ -46,4 +46,11 @@ class StoreMrbRequest extends FormRequest
             'notes'                  => ['nullable', 'string', 'max:1000'],
         ];
     }
+
+    public function idempotencyKey(): ?string
+    {
+        $key = trim((string) $this->header('Idempotency-Key', ''));
+
+        return $key === '' ? null : $key;
+    }
 }

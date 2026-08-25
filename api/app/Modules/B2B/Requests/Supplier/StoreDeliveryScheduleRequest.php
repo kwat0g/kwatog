@@ -36,9 +36,10 @@ class StoreDeliveryScheduleRequest extends FormRequest
                     $fail('Invalid purchase order.');
                 }
             }],
-            'month'                => ['required', 'string', 'regex:/^\d{4}-\d{2}$/'],
+            'month'                => ['required', 'date_format:Y-m'],
             'lines'                => ['required', 'array', 'min:1'],
-            'lines.*.product_name' => ['required', 'string', 'max:255'],
+            'lines.*.purchase_order_item_id' => ['required', 'string'],
+            'lines.*.product_name' => ['nullable', 'string', 'max:255'],
             'lines.*.quantity'     => ['required', 'numeric', 'min:0.01'],
             'lines.*.notes'        => ['nullable', 'string', 'max:500'],
         ];

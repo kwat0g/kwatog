@@ -16,6 +16,7 @@ class BankFileRecord extends Model
 
     protected $fillable = [
         'payroll_period_id',
+        'artifact_key',
         'file_path',
         'format',
         'record_count',

@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Modules\Accounting\Controllers;
 
 use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Models\BillPayment;
 use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Accounting\Requests\StoreBillPaymentRequest;
 use App\Modules\Accounting\Requests\StoreBillRequest;
+use App\Modules\Accounting\Requests\VoidBillPaymentRequest;
 use App\Modules\Accounting\Resources\BillPaymentResource;
 use App\Modules\Accounting\Resources\BillResource;
 use App\Modules\Accounting\Services\BillService;
@@ -17,6 +19,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Accounting\Exceptions\ClosedPeriodException;
+use Carbon\Carbon;
 
 class BillController
 {
@@ -93,9 +96,18 @@ class BillController
 
     public function cancel(Request $request, Bill $bill): BillResource|JsonResponse
     {
+        $data = $request->validate([
+            'reversal_date' => ['nullable', 'date_format:Y-m-d'],
+            'reason' => ['nullable', 'string', 'max:500'],
+        ]);
         try {
-            $bill = $this->service->cancel($bill, $request->user());
-        } catch (BusinessRuleException $e) {
+            $bill = $this->service->cancel(
+                $bill,
+                $request->user(),
+                ! empty($data['reversal_date']) ? Carbon::createFromFormat('!Y-m-d', $data['reversal_date']) : null,
+                $data['reason'] ?? null,
+            );
+        } catch (BusinessRuleException|ClosedPeriodException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return new BillResource($bill);
@@ -109,5 +121,16 @@ class BillController
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return (new BillPaymentResource($payment))->response()->setStatusCode(201);
+    }
+
+    public function voidPayment(VoidBillPaymentRequest $request, Bill $bill, BillPayment $payment): JsonResponse
+    {
+        try {
+            $payment = $this->service->voidPayment($bill, $payment, $request->validated(), $request->user());
+        } catch (BusinessRuleException|ClosedPeriodException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return (new BillPaymentResource($payment))->response()->setStatusCode(200);
     }
 }

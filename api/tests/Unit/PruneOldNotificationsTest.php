@@ -60,4 +60,26 @@ class PruneOldNotificationsTest extends TestCase
 
         $this->assertEquals(2, DB::table('notifications')->count());
     }
+
+    public function test_rejects_non_positive_days_before_deleting_anything(): void
+    {
+        $user = User::factory()->create();
+
+        DB::table('notifications')->insert([
+            'id' => (string) Str::uuid(),
+            'type' => 'test',
+            'notifiable_type' => User::class,
+            'notifiable_id' => $user->id,
+            'data' => json_encode(['title' => 'Keep me']),
+            'read_at' => now()->subDay(),
+            'created_at' => now()->subDay(),
+            'updated_at' => now()->subDay(),
+        ]);
+
+        $this->artisan('notifications:prune --days=0')
+            ->expectsOutputToContain('must be at least 1')
+            ->assertFailed();
+
+        $this->assertDatabaseCount('notifications', 1);
+    }
 }

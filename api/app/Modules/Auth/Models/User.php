@@ -18,6 +18,16 @@ class User extends Authenticatable
     use HasFactory, Notifiable, SoftDeletes, HasHashId;
 
     /**
+     * Internal login identity is case-insensitive. Keep every model-backed
+     * write canonical so the database's existing unique email constraint also
+     * behaves case-insensitively for application writes.
+     */
+    public function setEmailAttribute(string $value): void
+    {
+        $this->attributes['email'] = strtolower(trim($value));
+    }
+
+    /**
      * Always eager-load `role` so resources / authorization checks that call
      * `$user->role` (e.g. EmployeeResource::maskField, hasPermission) don't
      * trip Model::shouldBeStrict()'s lazy-loading guard outside production.

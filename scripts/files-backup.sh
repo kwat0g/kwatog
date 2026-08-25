@@ -47,6 +47,7 @@ fi
 
 mv -f "${TMP}" "${OUT}"
 TMP=""
+CHECKSUM="$(sha256sum "${OUT}" | awk '{print $1}')"
 echo "files backup written: ${OUT} ($(du -h "${OUT}" | cut -f1))"
 
 if [ -n "${BACKUP_S3_BUCKET:-}" ]; then
@@ -59,7 +60,9 @@ if [ -n "${BACKUP_S3_BUCKET:-}" ]; then
         PREFIX="${PREFIX}/"
     fi
     REMOTE="${BACKUP_S3_BUCKET%/}/${PREFIX}$(basename "${OUT}")"
-    aws s3 cp "${OUT}" "${REMOTE}" --only-show-errors
+    aws s3 cp "${OUT}" "${REMOTE}" \
+        --metadata "sha256=${CHECKSUM}" \
+        --only-show-errors
     echo "off-site files copy ok"
 fi
 

@@ -84,7 +84,9 @@ const [deleteTarget, setDeleteTarget] = useState<Training | null>(null);
   key: 'actions', header: '',
   cell: (row: Training) => (
   <div className="flex gap-1">
-  <Button variant="ghost" size="xs" iconOnly aria-label={`Edit ${row.name}`} icon={<LuPencil size={12} />} onClick={(e) => { e.stopPropagation(); navigate(`/hr/trainings/${row.id}/edit`); }} />
+  {scope !== 'only' && !row.deleted_at && (
+    <Button variant="ghost" size="xs" iconOnly aria-label={`Edit ${row.name}`} icon={<LuPencil size={12} />} onClick={(e) => { e.stopPropagation(); navigate(`/hr/trainings/${row.id}/edit`); }} />
+  )}
   {scope === 'only' ? (
   <Button variant="ghost" size="xs" iconOnly aria-label={`Restore ${row.name}`} icon={<LuArchiveRestore size={12} />} onClick={(e) => { e.stopPropagation(); setRestoreTarget(row); }} />
   ) : (
@@ -124,7 +126,9 @@ const [deleteTarget, setDeleteTarget] = useState<Training | null>(null);
  {data && data.data.length > 0 && (
  <DataTable columns={columns} data={data.data} meta={data.meta}
  onPageChange={(page) => setFilters((p) => ({ ...p, page }))}
- onRowClick={(row) => navigate(`/hr/trainings/${row.id}/edit`)}
+ onRowClick={(row) => {
+   if (scope !== 'only' && !row.deleted_at) navigate(`/hr/trainings/${row.id}/edit`);
+ }}
  />
  )}
  {/* These were two hand-built Modals reproducing what ConfirmDialog already

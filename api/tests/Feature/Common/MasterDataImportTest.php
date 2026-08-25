@@ -182,7 +182,7 @@ class MasterDataImportTest extends TestCase
         $juan = Employee::query()->where('last_name', 'Dela Cruz')->firstOrFail();
         $this->assertSame($dept->id, $juan->department_id);
         $this->assertNotNull($juan->employee_no); // generated
-        $this->assertSame('34-1234567-8', $juan->sss_no); // encrypted round-trips
+        $this->assertSame('3412345678', $juan->sss_no); // encrypted round-trips in canonical digits-only form
         // Position auto-created within the department.
         $this->assertSame(2, Position::query()->where('department_id', $dept->id)->count());
     }

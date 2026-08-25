@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Loans\Resources;
 
+use App\Modules\Loans\Support\LoanRate;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -23,6 +24,7 @@ class EmployeeLoanResource extends JsonResource
             'loan_type_label'        => $this->loan_type?->label(),
             'principal'              => (string) $this->principal,
             'interest_rate'          => (string) $this->interest_rate,
+            'interest_rate_percent'  => LoanRate::percent((string) $this->interest_rate),
             'monthly_amortization'   => (string) $this->monthly_amortization,
             'total_paid'             => (string) $this->total_paid,
             'balance'                => (string) $this->balance,

@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace App\Modules\Leave\Controllers;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\HashIdFilter;
-use App\Modules\HR\Models\Employee;
-use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Leave\Enums\LeaveRequestStatus;
 use App\Modules\Leave\Enums\LeaveHalfDayPeriod;
+use App\Modules\HR\Models\Employee;
+use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Leave\Requests\ApproveLeaveRequest;
 use App\Modules\Leave\Requests\RejectLeaveRequest;
 use App\Modules\Leave\Requests\StoreLeaveRequestRequest;
@@ -18,8 +19,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Validator;
-use App\Common\Exceptions\BusinessRuleException;
-use App\Modules\Leave\Exceptions\InsufficientLeaveBalanceException;
 
 class LeaveRequestController
 {
@@ -56,7 +55,7 @@ class LeaveRequestController
 
         try {
             $req = $this->service->submit($d['employee_id'], $d);
-        } catch (BusinessRuleException|InsufficientLeaveBalanceException|\InvalidArgumentException $e) {
+        } catch (BusinessRuleException|\InvalidArgumentException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
@@ -82,14 +81,20 @@ class LeaveRequestController
             }
         }
 
-        return new LeaveRequestResource($leaveRequest->load(['employee', 'leaveType', 'deptApprover', 'hrApprover']));
+        return new LeaveRequestResource($leaveRequest->load([
+            'employee',
+            'leaveType',
+            'deptApprover',
+            'hrApprover',
+            'canceller',
+        ]));
     }
 
     public function approveDept(ApproveLeaveRequest $request, LeaveRequest $leaveRequest): LeaveRequestResource
     {
         try {
             $req = $this->service->approveDept($leaveRequest, $request->user(), $request->input('remarks'));
-        } catch (BusinessRuleException|InsufficientLeaveBalanceException $e) {
+        } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
 
@@ -100,7 +105,7 @@ class LeaveRequestController
     {
         try {
             $req = $this->service->approveHR($leaveRequest, $request->user(), $request->input('remarks'));
-        } catch (BusinessRuleException|InsufficientLeaveBalanceException $e) {
+        } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
 

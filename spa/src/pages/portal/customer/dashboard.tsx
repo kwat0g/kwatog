@@ -156,6 +156,54 @@ export default function CustomerDashboardPage() {
  <EmptyState icon="receipt" title="No invoices yet" />
  )}
  </Panel>
+
+ {/* Recent Deliveries */}
+ <Panel title="Recent Deliveries" actions={
+ <Link to="/portal/customer/deliveries" className="text-2xs text-accent hover:underline flex items-center gap-1">
+ View all <LuArrowRight size={11} />
+ </Link>
+ }>
+ {dashboard?.recent_deliveries && dashboard.recent_deliveries.length > 0 ? (
+ <PortalTable>
+ <table className={tableCls}>
+ <thead><tr className={theadTrCls}><Th>Delivery #</Th><Th>Date</Th><Th align="right">Status</Th></tr></thead>
+ <tbody>
+ {dashboard.recent_deliveries.map((delivery) => (
+ <tr key={delivery.id} className={trCls}>
+ <Td><Link to={`/portal/customer/deliveries/${delivery.id}`} className="font-mono font-medium text-accent hover:underline">{delivery.delivery_number}</Link></Td>
+ <Td className="text-muted">{delivery.delivered_at ?? delivery.scheduled_date ?? '—'}</Td>
+ <Td align="right" mono><Chip variant={chipVariantForStatus(delivery.status)}>{delivery.status_label ?? delivery.status.replace(/_/g, ' ')}</Chip></Td>
+ </tr>
+ ))}
+ </tbody>
+ </table>
+ </PortalTable>
+ ) : <EmptyState icon="truck" title="No deliveries yet" />}
+ </Panel>
+
+ {/* Recent Quality Complaints */}
+ <Panel title="Recent Quality Complaints" actions={
+ <Link to="/portal/customer/complaints" className="text-2xs text-accent hover:underline flex items-center gap-1">
+ View all <LuArrowRight size={11} />
+ </Link>
+ }>
+ {dashboard?.recent_complaints && dashboard.recent_complaints.length > 0 ? (
+ <PortalTable>
+ <table className={tableCls}>
+ <thead><tr className={theadTrCls}><Th>Complaint #</Th><Th>Description</Th><Th align="right">Status</Th></tr></thead>
+ <tbody>
+ {dashboard.recent_complaints.map((complaint) => (
+ <tr key={complaint.id} className={trCls}>
+ <Td mono className="text-muted">{complaint.complaint_number}</Td>
+ <Td className="max-w-xs truncate">{complaint.description}</Td>
+ <Td align="right" mono><Chip variant={chipVariantForStatus(complaint.status)}>{complaint.status_label ?? complaint.status.replace(/_/g, ' ')}</Chip></Td>
+ </tr>
+ ))}
+ </tbody>
+ </table>
+ </PortalTable>
+ ) : <EmptyState icon="message-square" title="No complaints yet" />}
+ </Panel>
  </>
  )}
  </div>

@@ -93,10 +93,14 @@ class ReturnRequestResource extends JsonResource
             // 2026-08-08 — how many units actually moved in/out of stock (sum
             // of the per-line moved quantities): restocked for customer returns,
             // shipped back for supplier returns. Null until dispose() moves.
-            'moved_quantity'        => $this->whenLoaded('items', fn () => $this->items
-                ->sum(fn ($item) => (float) ($item->stock_movement_quantity ?? 0)) > 0
-                    ? (string) $this->items->sum(fn ($item) => (float) ($item->stock_movement_quantity ?? 0))
-                    : null),
+            'moved_quantity'        => $this->whenLoaded('items', function (): ?string {
+                $total = '0.000';
+                foreach ($this->items as $item) {
+                    $total = bcadd($total, (string) ($item->stock_movement_quantity ?? '0'), 3);
+                }
+
+                return bccomp($total, '0', 3) > 0 ? $total : null;
+            }),
 
             'stock_movement'        => $this->whenLoaded('stockMovement', fn () => $this->stockMovement ? [
                 'id'            => $this->stockMovement->hash_id,
@@ -118,6 +122,18 @@ class ReturnRequestResource extends JsonResource
                 'status'            => $this->inspection->status?->value,
             ] : null),
 
+            'inspections'          => $this->whenLoaded('inspections', fn () => $this->inspections->map(fn ($inspection): array => [
+                'id'                => $inspection->hash_id,
+                'inspection_number' => $inspection->inspection_number,
+                'status'            => $inspection->status?->value,
+                'notes'             => $inspection->notes,
+                'product'           => $inspection->relationLoaded('product') && $inspection->product ? [
+                    'id'          => $inspection->product->hash_id,
+                    'part_number' => $inspection->product->part_number,
+                    'name'        => $inspection->product->name,
+                ] : null,
+            ])->values()),
+
             'ncr'                  => $this->whenLoaded('ncr', fn () => $this->ncr ? [
                 'id'         => $this->ncr->hash_id,
                 'ncr_number' => $this->ncr->ncr_number,
@@ -138,6 +154,16 @@ class ReturnRequestResource extends JsonResource
             'approved_by'          => $this->whenLoaded('approver', fn () => $this->approver ? [
                 'id'   => $this->approver->hash_id,
                 'name' => $this->approver->name,
+            ] : null),
+
+            'completed_by'         => $this->whenLoaded('completer', fn () => $this->completer ? [
+                'id'   => $this->completer->hash_id,
+                'name' => $this->completer->name,
+            ] : null),
+
+            'rejected_by'          => $this->whenLoaded('rejecter', fn () => $this->rejecter ? [
+                'id'   => $this->rejecter->hash_id,
+                'name' => $this->rejecter->name,
             ] : null),
 
             'approved_at'          => optional($this->approved_at)->toIso8601String(),

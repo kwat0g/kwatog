@@ -77,6 +77,22 @@ class ContactInquiryTest extends TestCase
         $this->assertDatabaseHas('contact_inquiries', ['email' => 'applicant@example.com', 'company' => null]);
     }
 
+    public function test_user_agent_is_capped_to_the_database_column_length(): void
+    {
+        Notification::fake();
+
+        $this->withHeaders(['User-Agent' => str_repeat('U', 300)])
+            ->postJson('/api/v1/landing/contact-inquiry', $this->validPayload())
+            ->assertCreated();
+
+        $this->assertSame(
+            255,
+            strlen((string) ContactInquiry::query()
+                ->where('email', 'juan@toyota.com.ph')
+                ->value('user_agent')),
+        );
+    }
+
     public function test_validation_rejects_missing_and_oversized_fields(): void
     {
         $this->postJson('/api/v1/landing/contact-inquiry', [])
@@ -125,6 +141,48 @@ class ContactInquiryTest extends TestCase
         $response->assertJsonPath('data.0.email', 'listed@example.com');
         $this->assertNotSame((string) $inquiry->id, $response->json('data.0.id'));
         $this->assertSame($inquiry->hash_id, $response->json('data.0.id'));
+    }
+
+    public function test_inbox_clamps_non_positive_page_sizes(): void
+    {
+        ContactInquiry::factory()->count(2)->create();
+
+        $response = $this->actingAs($this->admin())
+            ->getJson('/api/v1/crm/inquiries?per_page=-1')
+            ->assertOk();
+
+        $response->assertJsonPath('meta.per_page', 1);
+        $this->assertCount(1, $response->json('data'));
+    }
+
+    public function test_inbox_rejects_malformed_or_unbounded_list_filters(): void
+    {
+        $admin = $this->admin();
+
+        $this->actingAs($admin)
+            ->getJson('/api/v1/crm/inquiries?status[]=new')
+            ->assertStatus(422)
+            ->assertJsonValidationErrorFor('status');
+
+        $this->actingAs($admin)
+            ->getJson('/api/v1/crm/inquiries?search[]=juan')
+            ->assertStatus(422)
+            ->assertJsonValidationErrorFor('search');
+
+        $this->actingAs($admin)
+            ->getJson('/api/v1/crm/inquiries?page[]=1')
+            ->assertStatus(422)
+            ->assertJsonValidationErrorFor('page');
+
+        $this->actingAs($admin)
+            ->getJson('/api/v1/crm/inquiries?per_page[]=25')
+            ->assertStatus(422)
+            ->assertJsonValidationErrorFor('per_page');
+
+        $this->actingAs($admin)
+            ->getJson('/api/v1/crm/inquiries?search=' . str_repeat('a', 121))
+            ->assertStatus(422)
+            ->assertJsonValidationErrorFor('search');
     }
 
     public function test_status_can_be_updated_and_unknown_statuses_are_rejected(): void

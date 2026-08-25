@@ -64,7 +64,10 @@ class EmployeeResource extends JsonResource
             'basic_monthly_salary' => $canViewSensitive ? $this->basic_monthly_salary : null,
             'semi_monthly_rate' => $canViewSensitive ? $this->semi_monthly_rate : null,
 
-            'bank_name' => $this->bank_name,
+            // Bank metadata is sensitive for the same reason as the encrypted
+            // account number; do not expose half of the credential pair to a
+            // department-scoped viewer.
+            'bank_name' => $canViewSensitive ? $this->bank_name : null,
 
             // Sensitive fields — masked unless self or sensitive permission.
             'sss_no' => $this->maskField($this->sss_no, $user),

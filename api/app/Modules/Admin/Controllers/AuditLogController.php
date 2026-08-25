@@ -8,7 +8,10 @@ use App\Common\Models\AuditLog;
 use App\Common\Support\AuditFieldLabels;
 use App\Common\Support\SearchOperator;
 use App\Common\Services\Pdf\PdfRenderService;
+use App\Modules\Auth\Models\User;
+use Carbon\CarbonImmutable;
 use App\Modules\Admin\Resources\AuditLogResource;
+use App\Modules\Admin\Support\AuditDiffBuilder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -20,14 +23,25 @@ class AuditLogController
     {
         $actions = AuditLog::query()->whereNotNull('action')->distinct()->orderBy('action')->pluck('action')
             ->map(static fn ($action): array => ['value' => (string) $action, 'label' => ucfirst((string) $action)])->values();
-        return response()->json(['data' => ['actions' => $actions]]);
+        $actors = User::query()
+            ->whereIn('id', AuditLog::query()->whereNotNull('user_id')->select('user_id')->distinct())
+            ->orderBy('name')
+            ->get(['id', 'name', 'email'])
+            ->map(static fn (User $user): array => [
+                'value' => $user->hash_id,
+                'label' => $user->name.' ('.$user->email.')',
+            ])
+            ->values();
+
+        return response()->json(['data' => ['actions' => $actions, 'actors' => $actors]]);
     }
 
     public function index(Request $request): AnonymousResourceCollection
     {
-        $query = $this->filteredQuery($request)->with(['user:id,name,email,role_id', 'user.role:id,name,slug']);
+        $filters = $this->validatedFilters($request);
+        $query = $this->filteredQuery($filters)->with(['user:id,name,email,role_id', 'user.role:id,name,slug']);
 
-        $perPage = min((int) ($request->integer('per_page') ?: 25), 100);
+        $perPage = (int) ($filters['per_page'] ?? 25);
 
         return AuditLogResource::collection($query->paginate($perPage));
     }
@@ -39,10 +53,10 @@ class AuditLogController
      */
     public function show(string $id): JsonResponse
     {
-        $decoded = AuditLog::tryDecodeHash($id) ?? (ctype_digit($id) ? (int) $id : null);
+        $decoded = $this->decodePublicId($id, AuditLog::class);
         abort_if($decoded === null, 404);
         $log = AuditLog::query()->with(['user:id,name,email,role_id', 'user.role:id,name,slug'])->findOrFail($decoded);
-        $diff = $this->buildDiff(
+        $diff = AuditDiffBuilder::build(
             (string) $log->model_type,
             (array) ($log->old_values ?? []),
             (array) ($log->new_values ?? []),
@@ -52,7 +66,11 @@ class AuditLogController
                 'id'         => $log->hash_id,
                 'action'     => $log->action,
                 'model_type' => $log->model_type,
-                'model_id'   => $log->model_id,
+                'model_id'   => $log->model_id !== null ? app('hashids')->encode((int) $log->model_id) : null,
+                'actor_type' => $log->actor_type,
+                'source_command' => $log->source_command,
+                'correlation_id' => $log->correlation_id,
+                'reason' => $log->reason,
                 'user'       => $log->user ? [
                     'id'    => $log->user->hash_id,
                     'name'  => $log->user->name,
@@ -78,7 +96,7 @@ class AuditLogController
      */
     public function export(Request $request): StreamedResponse
     {
-        $query = $this->filteredQuery($request)->with('user:id,name,email');
+        $query = $this->filteredQuery($this->validatedFilters($request))->with('user:id,name,email');
 
         $filename = 'audit-logs-'.now()->format('Ymd-His').'.csv';
 
@@ -102,7 +120,7 @@ class AuditLogController
                     $row->ip_address ?? '',
                     (string) $row->action,
                     self::basename((string) $row->model_type),
-                    (string) ($row->model_id ?? ''),
+                    $row->model_id !== null ? app('hashids')->encode((int) $row->model_id) : '',
                     self::summary(
                         (string) $row->model_type,
                         (string) $row->action,
@@ -127,14 +145,17 @@ class AuditLogController
      */
     public function entityTrail(Request $request): AnonymousResourceCollection
     {
-        $modelType = $request->input('model_type');
-        $modelId   = $request->input('model_id');
+        $params = $request->validate([
+            'model_type' => ['required', 'string', 'max:100'],
+            'model_id' => ['required', 'string', 'max:128'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:10', 'max:100'],
+        ]);
 
-        abort_if(!$modelType || !$modelId, 422, 'model_type and model_id required');
+        $modelType = $params['model_type'];
+        $modelId   = $params['model_id'];
 
-        // Decode hashid to integer if possible; fall back to raw int for tests.
-        $decoded = app('hashids')->decode((string) $modelId);
-        $numericId = !empty($decoded) ? (int) $decoded[0] : (ctype_digit((string) $modelId) ? (int) $modelId : null);
+        $numericId = $this->decodePublicId((string) $modelId);
         abort_if($numericId === null, 422, 'Invalid model_id');
 
         $query = AuditLog::query()
@@ -148,7 +169,7 @@ class AuditLogController
             ->with(['user:id,name,email,role_id', 'user.role:id,name,slug'])
             ->orderByDesc('created_at');
 
-        return AuditLogResource::collection($query->paginate(100));
+        return AuditLogResource::collection($query->paginate((int) ($params['per_page'] ?? 25)));
     }
 
     /**
@@ -157,14 +178,15 @@ class AuditLogController
      */
     public function exportPdf(Request $request, PdfRenderService $pdfService): \Illuminate\Http\Response
     {
-        $logs = $this->filteredQuery($request)
+        $filters = $this->validatedFilters($request);
+        $logs = $this->filteredQuery($filters)
             ->with('user:id,name,email')
             ->limit(500)
             ->get();
 
-        $filterSummary = collect($request->only([
+        $filterSummary = collect($filters)->only([
             'model_type', 'user_id', 'action', 'from', 'to',
-        ]))->filter()->map(fn ($v, $k) => "{$k}={$v}")->implode(', ') ?: 'None';
+        ])->filter()->map(fn ($v, $k) => "{$k}={$v}")->implode(', ') ?: 'None';
 
         $bytes = $pdfService->render('pdf.audit-log', [
             'logs'          => $logs,
@@ -187,74 +209,60 @@ class AuditLogController
      * Apply the same filter set as the index page but return the underlying
      * Eloquent builder so both `index` and `export` can reuse it.
      */
-    private function filteredQuery(Request $request)
+    /** @param array<string, mixed> $filters */
+    private function filteredQuery(array $filters)
     {
         $query = AuditLog::query()->orderByDesc('id');
 
-        if ($request->filled('action')) {
-            $query->where('action', $request->string('action'));
+        if (! empty($filters['action'])) {
+            $query->where('action', (string) $filters['action']);
         }
-        if ($request->filled('model_type')) {
-            $query->where('model_type', SearchOperator::like(), '%'.$request->string('model_type').'%');
+        if (! empty($filters['model_type'])) {
+            $query->where('model_type', SearchOperator::like(), '%'.(string) $filters['model_type'].'%');
         }
-        if ($request->filled('user_id')) {
-            $raw = $request->string('user_id')->toString();
-            $userId = ctype_digit($raw)
-                ? (int) $raw
-                : \App\Modules\Auth\Models\User::tryDecodeHash($raw);
-            if ($userId !== null) {
-                $query->where('user_id', $userId);
-            }
+        if (! empty($filters['user_id'])) {
+            $userId = $this->decodePublicId((string) $filters['user_id'], User::class);
+            $userId === null
+                ? $query->whereRaw('1 = 0')
+                : $query->where('user_id', $userId);
         }
-        if ($request->filled('from')) {
-            $query->where('created_at', '>=', $request->date('from'));
+        if (! empty($filters['model_id'])) {
+            $modelId = $this->decodePublicId((string) $filters['model_id']);
+            $modelId === null
+                ? $query->whereRaw('1 = 0')
+                : $query->where('model_id', $modelId);
         }
-        if ($request->filled('to')) {
-            $query->where('created_at', '<=', $request->date('to'));
+        if (! empty($filters['from'])) {
+            $query->where('created_at', '>=', CarbonImmutable::parse((string) $filters['from'])->startOfDay());
+        }
+        if (! empty($filters['to'])) {
+            $query->where('created_at', '<=', CarbonImmutable::parse((string) $filters['to'])->endOfDay());
         }
         return $query;
     }
 
-    /**
-     * Build a JSON-friendly per-key diff with human-readable labels and
-     * type metadata (used by the SPA for money/date/enum/encrypted formatting).
-     *
-     * Each row:
-     *   { kind:'added'|'removed'|'changed', key, label, type, old?, new? }
-     */
-    private function buildDiff(string $modelType, array $old, array $new): array
+    /** @return array<string, mixed> */
+    private function validatedFilters(Request $request): array
     {
-        $keys = array_unique(array_merge(array_keys($old), array_keys($new)));
-        $rows = [];
-        foreach ($keys as $key) {
-            $hasOld = array_key_exists($key, $old);
-            $hasNew = array_key_exists($key, $new);
-            $meta   = AuditFieldLabels::field($modelType, $key);
-            $label  = $meta['label'] ?? self::humanize($key);
-            $type   = $meta['type']  ?? 'text';
+        return $request->validate([
+            'action' => ['nullable', 'string', 'max:50'],
+            'model_type' => ['nullable', 'string', 'max:100'],
+            'model_id' => ['nullable', 'string', 'max:128'],
+            'user_id' => ['nullable', 'string', 'max:128'],
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date', 'after_or_equal:from'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+    }
 
-            // Encrypted fields: never expose the cleartext, even if it's in
-            // old/new values from a logged write. Just show "(changed)".
-            if ($type === 'encrypted') {
-                if ($hasOld && ! $hasNew) {
-                    $rows[] = ['kind' => 'removed', 'key' => $key, 'label' => $label, 'type' => $type, 'old' => null];
-                } elseif (! $hasOld && $hasNew) {
-                    $rows[] = ['kind' => 'added',   'key' => $key, 'label' => $label, 'type' => $type, 'new' => null];
-                } elseif ($old[$key] !== $new[$key]) {
-                    $rows[] = ['kind' => 'changed', 'key' => $key, 'label' => $label, 'type' => $type];
-                }
-                continue;
-            }
-
-            if ($hasOld && ! $hasNew) {
-                $rows[] = ['kind' => 'removed', 'key' => $key, 'label' => $label, 'type' => $type, 'old' => $old[$key]];
-            } elseif (! $hasOld && $hasNew) {
-                $rows[] = ['kind' => 'added',   'key' => $key, 'label' => $label, 'type' => $type, 'new' => $new[$key]];
-            } elseif ($old[$key] !== $new[$key]) {
-                $rows[] = ['kind' => 'changed', 'key' => $key, 'label' => $label, 'type' => $type, 'old' => $old[$key], 'new' => $new[$key]];
-            }
+    private function decodePublicId(string $value, string $modelClass = AuditLog::class): ?int
+    {
+        if (app()->environment('testing') && ctype_digit($value)) {
+            return (int) $value;
         }
-        return $rows;
+
+        return $modelClass::tryDecodeHash($value);
     }
 
     /**

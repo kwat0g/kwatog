@@ -15,12 +15,15 @@ import type {
  DeliveryScheduleLine,
 } from '@/types/b2b';
 import type { ChainStep } from '@/types/chain';
+import type { PaginatedResponse } from '@/types';
 import type { BusinessPolicies } from '@/api/businessPolicies';
 
-const { client: portalClient, setToken } = createPortalClient('ogami_customer_portal_token');
+// Customer portal authentication is the same HTTP-only cookie session used by
+// the internal SPA. There is deliberately no storage key or bearer-token
+// setter on this client.
+const { client: portalClient } = createPortalClient();
 
 type CustomerLoginResponse = {
- token: string;
  user: CustomerPortalUser;
 };
 
@@ -29,16 +32,13 @@ export const customerPortalApi = {
  login: async (email: string, password: string) => {
  await getPortalCsrf();
  const { data } = await portalClient.post<{ data: CustomerLoginResponse }>('/b2b/customer/login', { email, password });
- setToken(data.data.token);
  return data.data.user;
  },
 
  logout: async () => {
  try {
  await portalClient.post('/b2b/customer/logout');
- } finally {
- setToken(null);
- }
+ } finally { /* the server invalidates the HTTP-only session */ }
  },
 
  me: async () => {
@@ -67,7 +67,7 @@ export const customerPortalApi = {
   return data;
  },
 
- // Shared read-only policy values, authenticated with the portal bearer token.
+ // Shared read-only policy values, authenticated with the portal session.
  businessPolicies: async () => {
  const { data } = await portalClient.get<{ data: BusinessPolicies }>('/business-policies');
  return data.data;
@@ -80,9 +80,9 @@ export const customerPortalApi = {
  },
 
  // ── Sales Orders ───────────────────────────────────
- listOrders: async (params?: { status?: string; page?: number }) => {
- const { data } = await portalClient.get<{ data: PortalSoSummary[] }>('/b2b/customer/orders', { params });
- return data.data;
+ listOrders: async (params?: { status?: string; search?: string; page?: number; per_page?: number }) => {
+ const { data } = await portalClient.get<PaginatedResponse<PortalSoSummary>>('/b2b/customer/orders', { params });
+ return data;
  },
 
  getOrder: async (id: string) => {
@@ -96,9 +96,9 @@ export const customerPortalApi = {
  },
 
  // ── Invoices ───────────────────────────────────────
- listInvoices: async (params?: { status?: string; page?: number }) => {
- const { data } = await portalClient.get<{ data: PortalInvoiceSummary[] }>('/b2b/customer/invoices', { params });
- return data.data;
+ listInvoices: async (params?: { status?: string; page?: number; per_page?: number }) => {
+ const { data } = await portalClient.get<PaginatedResponse<PortalInvoiceSummary>>('/b2b/customer/invoices', { params });
+ return data;
  },
 
  getInvoice: async (id: string) => {
@@ -114,9 +114,9 @@ export const customerPortalApi = {
  },
 
  // ── Deliveries ─────────────────────────────────────
- listDeliveries: async () => {
- const { data } = await portalClient.get<{ data: PortalDeliverySummary[] }>('/b2b/customer/deliveries');
- return data.data;
+ listDeliveries: async (params?: { status?: string; page?: number; per_page?: number }) => {
+ const { data } = await portalClient.get<PaginatedResponse<PortalDeliverySummary>>('/b2b/customer/deliveries', { params });
+ return data;
  },
 
  getDelivery: async (id: string) => {
@@ -134,18 +134,27 @@ export const customerPortalApi = {
 
  // ── Complaints (RMA / Customer Complaints) ─────────
  complaintOptions: async () => {
- const { data } = await portalClient.get<{ data: { severities: Array<{ value: string; label: string }> } }>('/b2b/customer/complaints/options');
+ const { data } = await portalClient.get<{ data: {
+ severities: Array<{ value: string; label: string }>;
+ statuses: Array<{ value: string; label: string }>;
+ } }>('/b2b/customer/complaints/options');
  return data.data;
  },
- listComplaints: async () => {
- const { data } = await portalClient.get<{ data: PortalComplaint[] }>('/b2b/customer/complaints');
- return data.data;
+ listComplaints: async (params?: {
+ status?: string;
+ search?: string;
+ date_from?: string;
+ date_to?: string;
+ page?: number;
+ per_page?: number;
+ }) => {
+ const { data } = await portalClient.get<PaginatedResponse<PortalComplaint>>('/b2b/customer/complaints', { params });
+ return data;
  },
 
  createComplaint: async (form: {
- order_id?: string;
- product_id?: string;
- severity: string;
+  order_id?: string;
+  severity: string;
  description: string;
  affected_quantity: number;
  }) => {
@@ -166,9 +175,9 @@ export const customerPortalApi = {
  },
 
  // ── Delivery Schedules ────────────────────────────
- listDeliverySchedules: async () => {
- const { data } = await portalClient.get<{ data: DeliverySchedule[] }>('/b2b/customer/delivery-schedules');
- return data.data;
+ listDeliverySchedules: async (params?: { page?: number; per_page?: number }) => {
+ const { data } = await portalClient.get<PaginatedResponse<DeliverySchedule>>('/b2b/customer/delivery-schedules', { params });
+ return data;
  },
 
  createDeliverySchedule: async (form: {

@@ -7,6 +7,7 @@ namespace App\Modules\Maintenance\Jobs;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Maintenance\Services\MaintenanceScheduleService;
+use App\Modules\Maintenance\Services\MachineHoursService;
 use App\Modules\Maintenance\Services\MaintenanceWorkOrderService;
 use App\Modules\Maintenance\Services\PredictiveMaintenanceService;
 use Illuminate\Bus\Queueable;
@@ -25,7 +26,8 @@ use Throwable;
  *
  * Runs:
  *   - All active hours/days schedules whose next_due_at <= now without an open WO.
- *   - All active machine-hour schedules whose running_hours_total >= interval_value.
+ *   - All active machine-hour schedules whose runtime since the persisted
+ *     baseline reaches interval_value.
  *   - All active mold-shot schedules at >= 100% of threshold without an open WO.
  *   - Predictive maintenance evaluation: condition readings exceeding thresholds
  *     that trigger corrective WOs.
@@ -48,6 +50,7 @@ class GeneratePreventiveMaintenanceJob implements ShouldQueue
 
     public function handle(
         MaintenanceScheduleService $schedules,
+        MachineHoursService $machineHours,
         MaintenanceWorkOrderService $workOrders,
         PredictiveMaintenanceService $predictive,
         SettingsService $settings,
@@ -61,6 +64,10 @@ class GeneratePreventiveMaintenanceJob implements ShouldQueue
         if (! $systemUser) {
             throw new \RuntimeException('GeneratePreventiveMaintenanceJob: no configured automation actor found.');
         }
+
+        // The queue may run later than the scheduler's 01:30 recompute. Make
+        // current runtime an invariant of this job as well as a cron ordering.
+        $machineHours->recompute();
 
         // 1. Time-based (calendar hours / days)
         foreach ($schedules->dueNow() as $schedule) {

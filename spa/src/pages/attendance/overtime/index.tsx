@@ -59,7 +59,7 @@ export default function OvertimeListPage() {
  toast.success('Overtime approved.');
  setConfirmApprove(null);
  },
- onError: () => toast.error('Failed to approve.'),
+ onError: (error) => reportMutationError(error, 'Failed to approve overtime.'),
  });
 
  const rejectMutation = useMutation({
@@ -70,7 +70,7 @@ export default function OvertimeListPage() {
  setReject(null);
  setReason('');
  },
- onError: () => toast.error('Failed to reject.'),
+ onError: (error) => reportMutationError(error, 'Failed to reject overtime.'),
  });
 
  // L-23 — bulk approve. Two entry points share this mutation: the header

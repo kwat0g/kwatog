@@ -22,10 +22,24 @@ class InspectionSpecResource extends JsonResource
                 'id'          => $this->product->hash_id,
                 'part_number' => $this->product->part_number,
                 'name'        => $this->product->name,
+                'is_active'   => (bool) $this->product->is_active,
+                'deleted_at'  => optional($this->product->deleted_at)?->toIso8601String(),
             ] : null),
             'creator'    => $this->whenLoaded('creator', fn () => $this->creator ? [
                 'id'   => $this->creator->hash_id,
                 'name' => $this->creator->name,
+            ] : null),
+            'current_revision' => $this->whenLoaded('currentRevision', fn () => $this->currentRevision ? [
+                'id'         => $this->currentRevision->hash_id,
+                'version'    => (int) $this->currentRevision->version,
+                'notes'      => $this->currentRevision->notes,
+                'created_at' => optional($this->currentRevision->created_at)?->toIso8601String(),
+                'creator'    => $this->currentRevision->relationLoaded('creator') && $this->currentRevision->creator
+                    ? [
+                        'id'   => $this->currentRevision->creator->hash_id,
+                        'name' => $this->currentRevision->creator->name,
+                    ]
+                    : null,
             ] : null),
             'items'      => $this->whenLoaded('items', fn () =>
                 $this->items->map(fn ($it) => [

@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Modules\SupplyChain\Services;
 
-use App\Common\Services\SettingsService;
+use App\Common\Enums\DocumentType;
+use App\Common\Services\DocumentVaultService;
+use App\Common\Services\Pdf\PdfRenderService;
+use App\Modules\Auth\Models\User;
 use App\Modules\SupplyChain\Models\Shipment;
-use Barryvdh\DomPDF\Facade\Pdf;
-use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Generates packing list and commercial invoice PDFs for inbound
@@ -19,12 +21,15 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class ImpexDocumentService
 {
-    public function __construct(private readonly SettingsService $settings) {}
+    public function __construct(
+        private readonly PdfRenderService $renderer,
+        private readonly DocumentVaultService $vault,
+    ) {}
 
     /**
      * Packing list: shipper, consignee, vessel, container(s), items, quantities, weights.
      */
-    public function generatePackingList(Shipment $shipment): Response
+    public function generatePackingList(Shipment $shipment): StreamedResponse
     {
         $shipment->loadMissing([
             'purchaseOrder.vendor',
@@ -32,28 +37,21 @@ class ImpexDocumentService
             'containers',
         ]);
 
-        $pdf = Pdf::loadView('pdf.packing-list', [
+        $bytes = $this->renderer->render('pdf.packing-list', [
             'shipment'   => $shipment,
-            'company'    => $this->companyInfo(),
             'po'         => $shipment->purchaseOrder,
             'vendor'     => $shipment->purchaseOrder?->vendor,
             'containers' => $shipment->containers,
             'items'      => $shipment->purchaseOrder?->items ?? collect(),
             'now'        => now(),
-        ])->setPaper('a4', 'portrait');
-
-        $filename = "packing-list-{$shipment->shipment_number}.pdf";
-
-        return response($pdf->output(), 200, [
-            'Content-Type'        => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="' . $filename . '"',
-        ]);
+        ], ['orientation' => 'portrait', 'title' => DocumentType::PackingList->label()]);
+        return $this->storeAndStream($bytes, DocumentType::PackingList, $shipment);
     }
 
     /**
      * Commercial invoice: same header + unit prices, totals, payment terms, incoterms.
      */
-    public function generateCommercialInvoice(Shipment $shipment): Response
+    public function generateCommercialInvoice(Shipment $shipment): StreamedResponse
     {
         $shipment->loadMissing([
             'purchaseOrder.vendor',
@@ -63,43 +61,23 @@ class ImpexDocumentService
 
         $po = $shipment->purchaseOrder;
 
-        $pdf = Pdf::loadView('pdf.commercial-invoice', [
+        $bytes = $this->renderer->render('pdf.commercial-invoice', [
             'shipment'   => $shipment,
-            'company'    => $this->companyInfo(),
             'po'         => $po,
             'vendor'     => $po?->vendor,
             'containers' => $shipment->containers,
             'items'      => $po?->items ?? collect(),
             'now'        => now(),
-        ])->setPaper('a4', 'portrait');
-
-        $filename = "commercial-invoice-{$shipment->shipment_number}.pdf";
-
-        return response($pdf->output(), 200, [
-            'Content-Type'        => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="' . $filename . '"',
-        ]);
+        ], ['orientation' => 'portrait', 'title' => DocumentType::CommercialInvoice->label()]);
+        return $this->storeAndStream($bytes, DocumentType::CommercialInvoice, $shipment);
     }
 
-    /**
-     * @return array{name: string, address: string, tin: string}
-     */
-    private function companyInfo(): array
+    private function storeAndStream(string $bytes, DocumentType $type, Shipment $shipment): StreamedResponse
     {
-        return [
-            'name'    => $this->setting('company.legal_name'),
-            'address' => $this->setting('company.address'),
-            'tin'     => $this->setting('company.tin'),
-        ];
-    }
+        $actor = auth()->user();
+        $user = $actor instanceof User ? $actor : null;
+        $document = $this->vault->store($bytes, $type, $shipment, $user);
 
-    private function setting(string $key): string
-    {
-        try {
-            $val = $this->settings->get($key);
-            return is_string($val) && trim($val) !== '' ? $val : '';
-        } catch (\Throwable) {
-            return '';
-        }
+        return $this->vault->streamInline($document);
     }
 }

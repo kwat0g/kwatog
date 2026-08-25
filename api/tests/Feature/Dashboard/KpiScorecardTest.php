@@ -7,6 +7,7 @@ namespace Tests\Feature\Dashboard;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Services\KpiSnapshotService;
+use App\Modules\Dashboard\Models\KpiSnapshot;
 use Carbon\Carbon;
 use Database\Seeders\KpiDefinitionSeeder;
 use Database\Seeders\RolePermissionSeeder;
@@ -63,5 +64,29 @@ class KpiScorecardTest extends TestCase
             ->postJson('/api/v1/dashboard/kpi/compute')
             ->assertOk()
             ->assertJsonPath('message', 'KPIs computed for 2025-12');
+    }
+
+    public function test_batch_trends_returns_requested_kpis_in_one_payload(): void
+    {
+        $definition = \App\Modules\Dashboard\Models\KpiDefinition::query()
+            ->where('code', 'oee')->firstOrFail();
+        KpiSnapshot::query()->create([
+            'definition_id' => $definition->id,
+            'period_year' => 2026,
+            'period_month' => 6,
+            'actual_value' => '82.5000',
+            'target_value' => '85.0000',
+            'trend' => 'flat',
+            'status' => 'warning',
+            'computed_at' => now(),
+        ]);
+
+        $user = User::factory()->create(['role_id' => Role::where('slug', 'system_admin')->firstOrFail()->id]);
+
+        $this->actingAs($user, 'sanctum')
+            ->getJson('/api/v1/dashboard/kpi/trends?codes=oee&months=6')
+            ->assertOk()
+            ->assertJsonPath('data.oee.0.period', '2026-06')
+            ->assertJsonPath('data.oee.0.value', '82.5000');
     }
 }

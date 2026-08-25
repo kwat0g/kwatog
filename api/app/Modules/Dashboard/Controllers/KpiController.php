@@ -28,6 +28,15 @@ class KpiController
         return response()->json(['data' => $this->service->getTrend($code, $months, $request->user())]);
     }
 
+    public function trends(Request $request): JsonResponse
+    {
+        $codes = $request->query('codes', '');
+        $codes = is_array($codes) ? $codes : explode(',', (string) $codes);
+        $months = max(1, min(24, (int) $request->query('months', '12')));
+
+        return response()->json(['data' => $this->service->getTrends($codes, $months, $request->user())]);
+    }
+
     public function compute(Request $request): JsonResponse
     {
         $previousMonth = Carbon::now()->startOfMonth()->subMonth();

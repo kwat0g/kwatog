@@ -8,7 +8,7 @@ import { Select } from '@/components/ui/Select';
 import { returnManagementApi } from '@/api/returnManagement';
 import { warehouseApi } from '@/api/inventory/warehouse';
 import type { ReturnRequest, ReturnRequestItem, DispositionType, DispositionPayload } from '@/types/returnManagement';
-import { formatInt } from '@/lib/formatNumber';
+import { formatQuantity } from '@/lib/formatNumber';
 import toast from 'react-hot-toast';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
@@ -22,8 +22,8 @@ export default function DisposeDialog({ rma, isOpen, onClose }: Props) {
  const queryClient = useQueryClient();
  const items = useMemo(() => rma.items ?? [], [rma.items]);
  const { data: options } = useQuery({
- queryKey: ['return-management', 'options'],
- queryFn: () => returnManagementApi.options(),
+ queryKey: ['return-management', 'options', rma.type, rma.finance_only],
+ queryFn: () => returnManagementApi.options({ type: rma.type, finance_only: rma.finance_only === true }),
  staleTime: 5 * 60 * 1000,
  });
  const dispositionOptions = useMemo(() => (options?.dispositions ?? []) as Array<{ value: DispositionType; label: string }>, [options?.dispositions]);
@@ -47,8 +47,8 @@ export default function DisposeDialog({ rma, isOpen, onClose }: Props) {
   staleTime: 5 * 60 * 1000,
  });
  const locations = useMemo(() => (warehouses ?? []).flatMap((w) =>
-  (w.zones ?? []).flatMap((z) =>
-   (z.locations ?? []).map((l) => ({
+  (w.is_active ? (w.zones ?? []).filter((z) => z.zone_type !== 'quarantine' && z.zone_type !== 'scrap') : []).flatMap((z) =>
+   (z.locations ?? []).filter((l) => l.is_active).map((l) => ({
     id: l.id,
     label: `${w.code}-${z.code}-${l.code}`,
     sub: `${w.name} / ${z.name}`,
@@ -129,7 +129,7 @@ export default function DisposeDialog({ rma, isOpen, onClose }: Props) {
  <tr key={item.id} className={trCls}>
  <Td>{itemLabel(item)}</Td>
  <Td align="right" mono>
- {formatInt(item.returned_quantity || item.quantity)}
+ {formatQuantity(item.receipt_recorded ? item.returned_quantity : item.quantity)}
  </Td>
  <Td>
  <Select

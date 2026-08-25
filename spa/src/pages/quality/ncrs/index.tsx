@@ -1,7 +1,9 @@
+import { useState } from 'react';
+
 /**
  * Sprint 7 — Task 64 — NCR list page.
  */
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { LuPlus } from '@/lib/icons';
 import { ncrsApi, type NcrListParams } from '@/api/quality/ncrs';
@@ -9,7 +11,9 @@ import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
+import { Panel } from '@/components/ui/Panel';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
@@ -40,8 +44,13 @@ const DEFAULT_FILTERS: NcrListParams = {
 
 export default function NcrsListPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { can } = usePermission();
   const [filters, setFilters] = useUrlFilters<NcrListParams>(DEFAULT_FILTERS);
+  const [bulkRows, setBulkRows] = useState<Ncr[]>([]);
+  const [confirmBulkClose, setConfirmBulkClose] = useState(false);
+  const [bulkResult, setBulkResult] = useState<Awaited<ReturnType<typeof ncrsApi.bulkClose>> | null>(null);
+  const [tableInstance, setTableInstance] = useState(0);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['quality', 'ncrs', filters],
@@ -52,6 +61,16 @@ export default function NcrsListPage() {
     queryKey: ['quality', 'ncr-options'],
     queryFn: ncrsApi.options,
     staleTime: 5 * 60 * 1000,
+  });
+  const bulkClose = useMutation({
+    mutationFn: () => ncrsApi.bulkClose(bulkRows.map((row) => row.id)),
+    onSuccess: (result) => {
+      setBulkResult(result);
+      setBulkRows([]);
+      setConfirmBulkClose(false);
+      setTableInstance((value) => value + 1);
+      queryClient.invalidateQueries({ queryKey: ['quality', 'ncrs'] });
+    },
   });
   const labels = new Map(
     [
@@ -168,16 +187,21 @@ export default function NcrsListPage() {
         title="Non-conformance reports"
         subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'NCR' : 'NCRs'}` : undefined}
         actions={
-          can('quality.ncr.manage') ? (
-            <Button
-              variant="primary"
-              size="sm"
-              icon={<LuPlus size={14} />}
-              onClick={() => navigate('/quality/ncrs/new')}
-            >
-              New NCR
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="secondary" onClick={() => navigate('/quality/ncrs/effectiveness')}>
+              CAPA due checks
             </Button>
-          ) : undefined
+            {can('quality.ncr.manage') ? (
+              <Button
+                variant="primary"
+                size="sm"
+                icon={<LuPlus size={14} />}
+                onClick={() => navigate('/quality/ncrs/new')}
+              >
+                New NCR
+              </Button>
+            ) : undefined}
+          </div>
         }
       />
       <FilterBar
@@ -187,6 +211,22 @@ export default function NcrsListPage() {
         onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
         searchPlaceholder="Search NCR number or description…"
       />
+      {bulkResult && (
+        <div className="px-5 pt-4">
+          <Panel title="Bulk close results">
+            <p className="text-sm text-secondary">
+              {bulkResult.summary.success} closed · {bulkResult.summary.skipped} skipped · {bulkResult.summary.failed} failed
+            </p>
+            <ul className="mt-2 space-y-1 text-xs">
+              {bulkResult.results.map((result) => (
+                <li key={`${result.ncr_id}-${result.status}`} className={result.status === 'failed' ? 'text-danger-fg' : 'text-secondary'}>
+                  <span className="font-mono">{result.ncr_id}</span> — {result.message}
+                </li>
+              ))}
+            </ul>
+          </Panel>
+        </div>
+      )}
       {isLoading && !data && <SkeletonTable columns={8} rows={6} />}
       {isError && (
         <EmptyState
@@ -208,7 +248,18 @@ export default function NcrsListPage() {
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
           <DataTable
+            key={tableInstance}
             tableKey="ncrs"
+            selectable={can('quality.ncr.manage')}
+            getRowId={(row) => row.id}
+            bulkActions={can('quality.ncr.manage') ? [{
+              label: 'Close selected',
+              variant: 'primary',
+              onClick: (rows) => {
+                setBulkRows(rows);
+                setConfirmBulkClose(true);
+              },
+            }] : undefined}
             onRowClick={(r) => navigate(`/quality/ncrs/${r.id}`)}
             columns={columns}
             data={data.data}
@@ -218,6 +269,15 @@ export default function NcrsListPage() {
           />
         </div>
       )}
+      <ConfirmDialog
+        isOpen={confirmBulkClose}
+        title="Close selected NCRs?"
+        description={`This will attempt to close ${bulkRows.length} NCR(s). Rows without the required disposition/actions will remain open and appear in the result summary.`}
+        confirmLabel="Close selected"
+        onConfirm={() => bulkClose.mutate()}
+        onClose={() => setConfirmBulkClose(false)}
+        pending={bulkClose.isPending}
+      />
     </div>
   );
 }

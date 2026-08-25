@@ -9,6 +9,7 @@ const CreateAccountPage = lazy(() => import('@/pages/accounting/coa/create'));
 const EditAccountPage = lazy(() => import('@/pages/accounting/coa/edit'));
 const JournalEntriesPage = lazy(() => import('@/pages/accounting/journal-entries'));
 const CreateJournalEntryPage = lazy(() => import('@/pages/accounting/journal-entries/create'));
+const EditJournalEntryPage = lazy(() => import('@/pages/accounting/journal-entries/edit'));
 const JournalEntryDetailPage = lazy(() => import('@/pages/accounting/journal-entries/detail'));
 const VendorsPage = lazy(() => import('@/pages/accounting/vendors'));
 const CreateVendorPage = lazy(() => import('@/pages/accounting/vendors/create'));
@@ -35,6 +36,7 @@ const AccountingPeriodsPage = lazy(() => import('@/pages/accounting/periods'));
 // REC-13 — AR/AP credit notes
 const CreditNotesPage = lazy(() => import('@/pages/accounting/credit-notes'));
 const CreditNoteDetailPage = lazy(() => import('@/pages/accounting/credit-notes/detail'));
+const SupplierPortalAccessPage = lazy(() => import('@/pages/accounting/portal-access'));
 
 export const accountingRoutes = (
  <>
@@ -53,6 +55,8 @@ export const accountingRoutes = (
  element={<PermissionGuard permission="accounting.journal.view"><JournalEntriesPage /></PermissionGuard>} />
  <Route path="/accounting/journal-entries/create"
  element={<PermissionGuard permission="accounting.journal.create"><CreateJournalEntryPage /></PermissionGuard>} />
+ <Route path="/accounting/journal-entries/:id/edit"
+ element={<PermissionGuard permission="accounting.journal.create"><EditJournalEntryPage /></PermissionGuard>} />
  <Route path="/accounting/journal-entries/:id"
  element={<PermissionGuard permission="accounting.journal.view"><JournalEntryDetailPage /></PermissionGuard>} />
 
@@ -64,6 +68,9 @@ export const accountingRoutes = (
  element={<PermissionGuard permission="accounting.vendors.view"><VendorDetailPage /></PermissionGuard>} />
  <Route path="/accounting/vendors/:id/edit"
  element={<PermissionGuard permission="accounting.vendors.manage"><EditVendorPage /></PermissionGuard>} />
+
+ <Route path="/accounting/portal-access"
+ element={<PermissionGuard permission="b2b.portal_access.view"><SupplierPortalAccessPage /></PermissionGuard>} />
 
  <Route path="/accounting/bills"
  element={<PermissionGuard permission="accounting.bills.view"><BillsPage /></PermissionGuard>} />

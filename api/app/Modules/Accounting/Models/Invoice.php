@@ -30,7 +30,7 @@ class Invoice extends Model
         'subtotal', 'vat_amount', 'senior_pwd_discount', 'total_amount', 'amount_paid', 'balance',
         'buyer_tin', 'atp_number', 'serial_range', 'is_original',
         'status', 'journal_entry_id', 'created_by', 'remarks',
-        'last_dunning_tier', 'last_dunning_at',
+        'last_dunning_tier', 'last_dunning_at', 'cancelled_at', 'cancelled_by',
     ];
 
     protected $casts = [
@@ -48,6 +48,7 @@ class Invoice extends Model
         'status'       => InvoiceStatus::class,
         'last_dunning_tier' => 'integer',
         'last_dunning_at'   => 'datetime', 'prebill_approved_at' => 'datetime',
+        'cancelled_at'      => 'datetime',
     ];
 
     public function customer(): BelongsTo

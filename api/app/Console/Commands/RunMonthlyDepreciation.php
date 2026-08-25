@@ -20,7 +20,8 @@ class RunMonthlyDepreciation extends Command
 {
     protected $signature = 'assets:run-monthly-depreciation
         {--year= : Target year (requires --month)}
-        {--month= : Target month 1..12 (requires --year)}';
+        {--month= : Target month 1..12 (requires --year)}
+        {--backfill : Rebuild missing periods chronologically through the target}';
 
     protected $description = 'Run idempotent asset depreciation for a month (defaults to the previous month).';
 
@@ -28,6 +29,12 @@ class RunMonthlyDepreciation extends Command
     {
         $yearOption = $this->option('year');
         $monthOption = $this->option('month');
+
+        if ($this->option('backfill') && ($yearOption === null || $monthOption === null)) {
+            $this->error('The --backfill option requires an explicit --year and --month.');
+
+            return self::FAILURE;
+        }
 
         if (($yearOption !== null) !== ($monthOption !== null)) {
             $this->error('Both --year and --month must be provided together.');
@@ -49,6 +56,12 @@ class RunMonthlyDepreciation extends Command
             $month = $target->month;
         }
 
+        if (CarbonImmutable::create($year, $month, 1)->startOfMonth()->gte(CarbonImmutable::now()->startOfMonth())) {
+            $this->error('Depreciation can only be posted for a completed period.');
+
+            return self::FAILURE;
+        }
+
         $actor = $actors->resolve();
         if (! $actor) {
             $this->error('Asset depreciation cannot run without an automation actor.');
@@ -56,7 +69,9 @@ class RunMonthlyDepreciation extends Command
             return self::FAILURE;
         }
 
-        $result = $depreciation->runForMonth($year, $month, $actor);
+        $result = $this->option('backfill')
+            ? $depreciation->runBackfillTo($year, $month, $actor)
+            : $depreciation->runForMonth($year, $month, $actor);
         $this->info(sprintf(
             'Asset depreciation for %04d-%02d: posted=%d total=%s journal_entry=%s.',
             $year,

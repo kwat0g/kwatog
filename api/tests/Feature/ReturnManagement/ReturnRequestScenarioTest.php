@@ -6,9 +6,12 @@ namespace Tests\Feature\ReturnManagement;
 
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Accounting\Models\InvoiceItem;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
+use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockMovement;
@@ -20,6 +23,10 @@ use App\Modules\Quality\Models\Inspection;
 use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\ReturnManagement\Models\ReturnRequestItem;
+use App\Modules\ReturnManagement\Models\ReturnRequestSourceAllocation;
+use App\Modules\SupplyChain\Models\Delivery;
+use App\Modules\SupplyChain\Models\DeliveryItem;
+use App\Common\Services\ApprovalService;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\WorkflowSeeder;
@@ -423,10 +430,11 @@ class ReturnRequestScenarioTest extends TestCase
             ->assertStatus(422);
     }
 
-    public function test_reject_is_still_allowed_before_disposition(): void
+    public function test_reject_is_blocked_after_physical_receipt(): void
     {
-        // Nothing is booked to inventory until complete(), so rejecting a
-        // received-but-undisposed RMA is stock-neutral and must stay possible.
+        // A received RMA already has physical evidence and may have quarantine
+        // stock; rejection needs a compensating workflow and is therefore not
+        // a status-only action.
         $admin = $this->admin();
         $rma   = $this->inspectedRma($admin, $this->customer());
         $rma->forceFill(['status' => ReturnRequestStatus::Received->value])->save();
@@ -435,21 +443,26 @@ class ReturnRequestScenarioTest extends TestCase
             ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/reject", [
                 'reason' => 'Goods arrived outside the return window.',
             ])
-            ->assertOk();
+            ->assertStatus(422);
 
-        $this->assertSame(ReturnRequestStatus::Rejected, $rma->fresh()->status);
+        $this->assertSame(ReturnRequestStatus::Received, $rma->fresh()->status);
     }
 
     public function test_reject_preserves_the_existing_internal_notes(): void
     {
+        $this->seed(WorkflowSeeder::class);
         $admin = $this->admin();
         $rma   = $this->inspectedRma($admin, $this->customer());
         $rma->forceFill([
             'status'         => ReturnRequestStatus::PendingApproval->value,
             'internal_notes' => 'Original triage note.',
         ])->save();
+        app(ApprovalService::class)->submit($rma, 'return_request');
+        $approver = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'department_head')->value('id'),
+        ]);
 
-        $this->actingAs($admin)
+        $this->actingAs($approver)
             ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/reject", [
                 'reason' => 'Outside the return window.',
             ])
@@ -555,5 +568,173 @@ class ReturnRequestScenarioTest extends TestCase
             ->assertCreated();
 
         $this->assertSame($soItem->id, ReturnRequestItem::query()->value('source_sales_order_item_id'));
+    }
+
+    public function test_store_resolves_an_invoice_source_kind_and_reserves_its_authoritative_price(): void
+    {
+        $admin = $this->admin();
+        $customer = $this->customer();
+        $product = $this->product();
+        $item = Item::factory()->create();
+        $invoice = $this->invoice($customer, $admin);
+        $invoiceItem = InvoiceItem::create([
+            'invoice_id' => $invoice->id,
+            'product_id' => $product->id,
+            'quantity' => '5.000',
+            'unit_price' => '77.00',
+            'total' => '385.00',
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson('/api/v1/return-management/return-requests', [
+                'type' => 'customer_return',
+                'customer_id' => $customer->hash_id,
+                'invoice_id' => $invoice->hash_id,
+                'reason_code' => 'defective',
+                'items' => [[
+                    'product_id' => $product->hash_id,
+                    'item_id' => $item->hash_id,
+                    'quantity' => '2.000',
+                    'source_invoice_item_id' => $invoiceItem->hash_id,
+                ]],
+            ])
+            ->assertCreated();
+
+        $line = ReturnRequestItem::query()->firstOrFail();
+        $this->assertSame($invoiceItem->id, $line->source_invoice_item_id);
+        $this->assertSame('77.00', $line->unit_price);
+        $this->assertDatabaseHas('return_request_source_allocations', [
+            'return_request_item_id' => $line->id,
+            'source_kind' => 'invoice_item',
+            'source_id' => $invoiceItem->id,
+            'quantity' => '2.000',
+        ]);
+    }
+
+    public function test_store_rejects_a_source_backed_customer_return_without_product_provenance(): void
+    {
+        $admin = $this->admin();
+        $customer = $this->customer();
+        $item = Item::factory()->create();
+        $invoice = $this->invoice($customer, $admin);
+        $invoiceItem = InvoiceItem::create([
+            'invoice_id' => $invoice->id,
+            'product_id' => $this->product()->id,
+            'quantity' => '5.000',
+            'unit_price' => '77.00',
+            'total' => '385.00',
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson('/api/v1/return-management/return-requests', [
+                'type' => 'customer_return',
+                'customer_id' => $customer->hash_id,
+                'invoice_id' => $invoice->hash_id,
+                'reason_code' => 'defective',
+                'items' => [[
+                    'item_id' => $item->hash_id,
+                    'quantity' => '1.000',
+                    'source_invoice_item_id' => $invoiceItem->hash_id,
+                ]],
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('items.0.product_id');
+    }
+
+    public function test_store_resolves_a_sales_order_source_kind(): void
+    {
+        $admin = $this->admin();
+        $customer = $this->customer();
+        $product = $this->product();
+        $item = Item::factory()->create();
+        $salesOrder = SalesOrder::factory()->create([
+            'customer_id' => $customer->id,
+            'status' => 'confirmed',
+        ]);
+        $salesOrderItem = SalesOrderItem::factory()->create([
+            'sales_order_id' => $salesOrder->id,
+            'product_id' => $product->id,
+            'quantity_delivered' => '4.000',
+            'unit_price' => '88.00',
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson('/api/v1/return-management/return-requests', [
+                'type' => 'customer_return',
+                'customer_id' => $customer->hash_id,
+                'sales_order_id' => $salesOrder->hash_id,
+                'reason_code' => 'defective',
+                'items' => [[
+                    'product_id' => $product->hash_id,
+                    'item_id' => $item->hash_id,
+                    'quantity' => '1.000',
+                    'source_sales_order_item_id' => $salesOrderItem->hash_id,
+                ]],
+            ])
+            ->assertCreated();
+
+        $line = ReturnRequestItem::query()->firstOrFail();
+        $this->assertSame($salesOrderItem->id, $line->source_sales_order_item_id);
+        $this->assertSame('88.00', $line->unit_price);
+        $this->assertDatabaseHas('return_request_source_allocations', [
+            'return_request_item_id' => $line->id,
+            'source_kind' => 'sales_order_item',
+            'source_id' => $salesOrderItem->id,
+        ]);
+    }
+
+    public function test_store_resolves_a_delivery_source_kind(): void
+    {
+        $admin = $this->admin();
+        $customer = $this->customer();
+        $product = $this->product();
+        $item = Item::factory()->create();
+        $salesOrder = SalesOrder::factory()->create([
+            'customer_id' => $customer->id,
+            'status' => 'confirmed',
+        ]);
+        $salesOrderItem = SalesOrderItem::factory()->create([
+            'sales_order_id' => $salesOrder->id,
+            'product_id' => $product->id,
+            'quantity_delivered' => '3.000',
+            'unit_price' => '99.00',
+        ]);
+        $delivery = Delivery::create([
+            'delivery_number' => 'DLV-RMA-'.substr(uniqid(), -8),
+            'sales_order_id' => $salesOrder->id,
+            'status' => 'delivered',
+            'scheduled_date' => now()->toDateString(),
+            'created_by' => $admin->id,
+        ]);
+        $deliveryItem = DeliveryItem::create([
+            'delivery_id' => $delivery->id,
+            'sales_order_item_id' => $salesOrderItem->id,
+            'quantity' => '2.000',
+            'unit_price' => '99.00',
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson('/api/v1/return-management/return-requests', [
+                'type' => 'customer_return',
+                'customer_id' => $customer->hash_id,
+                'sales_order_id' => $salesOrder->hash_id,
+                'reason_code' => 'defective',
+                'items' => [[
+                    'product_id' => $product->hash_id,
+                    'item_id' => $item->hash_id,
+                    'quantity' => '1.000',
+                    'source_delivery_item_id' => $deliveryItem->hash_id,
+                ]],
+            ])
+            ->assertCreated();
+
+        $line = ReturnRequestItem::query()->firstOrFail();
+        $this->assertSame($deliveryItem->id, $line->source_delivery_item_id);
+        $this->assertSame('99.00', $line->unit_price);
+        $this->assertDatabaseHas('return_request_source_allocations', [
+            'return_request_item_id' => $line->id,
+            'source_kind' => 'delivery_item',
+            'source_id' => $deliveryItem->id,
+        ]);
     }
 }

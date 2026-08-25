@@ -13,7 +13,7 @@ class WorkflowSeeder extends Seeder
     {
         // Enforcement status (REC-03 audit). Workflows are ENFORCED only when a
         // service calls ApprovalService::submit() for that workflow_type:
-        //   ENFORCED: leave_request, purchase_request, purchase_order, payroll,
+        //   ENFORCED: leave_request, purchase_request, purchase_order,
         //             return_request, company_loan/cash_advance, salary_adjustment.
         //   RESERVED (defined, not yet wired to a submit() path — do NOT present
         //             these as working approvals): department_transfer, asset_disposal,
@@ -168,12 +168,23 @@ class WorkflowSeeder extends Seeder
             ],
         ];
 
+        $wiredTypes = [
+            'leave_request',
+            'cash_advance',
+            'company_loan',
+            'purchase_request',
+            'purchase_order',
+            'salary_adjustment',
+            'return_request',
+        ];
+
         foreach ($workflows as $w) {
             WorkflowDefinition::updateOrCreate(
                 ['workflow_type' => $w['workflow_type']],
                 [
-                    'name'  => $w['name'],
-                    'steps' => $w['steps'],
+                    'name'      => $w['name'],
+                    'steps'     => $w['steps'],
+                    'is_active' => in_array($w['workflow_type'], $wiredTypes, true),
                 ],
             );
         }

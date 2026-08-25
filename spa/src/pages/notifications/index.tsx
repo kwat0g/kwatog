@@ -12,7 +12,7 @@
  */
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { LuCheck, LuEye, LuTrash2, LuX } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { notificationsApi, type NotificationRow } from '@/api/notifications';
@@ -49,22 +49,31 @@ export default function NotificationsListPage() {
  const qc = useQueryClient();
  const navigate = useNavigate();
  const [filter, setFilter] = useState<FilterKey>('all');
- // The list is capped at PAGE_SIZE per request. Without this the page showed
- // the newest 50 and silently pretended nothing older existed.
- const [pageCount, setPageCount] = useState(1);
  const unreadOnly = filter === 'unread';
 
- const resetPaging = (next: FilterKey) => {
- setFilter(next);
- setPageCount(1);
- };
+ const resetPaging = (next: FilterKey) => setFilter(next);
 
- const { data, isLoading, isError, isFetching, refetch } = useQuery({
- queryKey: ['notifications', { filter, unreadOnly, pageCount }],
- queryFn: () =>
- notificationsApi.list({ per_page: PAGE_SIZE * pageCount, unread_only: unreadOnly }),
- placeholderData: (prev) => prev,
+ const {
+ data,
+ isLoading,
+ isError,
+ isFetchingNextPage,
+ hasNextPage,
+ fetchNextPage,
+ refetch,
+ } = useInfiniteQuery({
+ queryKey: ['notifications', { filter, unreadOnly }],
+ queryFn: ({ pageParam }) =>
+ notificationsApi.list({ per_page: PAGE_SIZE, page: pageParam, unread_only: unreadOnly }),
+ initialPageParam: 1,
+ getNextPageParam: (lastPage) =>
+ lastPage.meta.current_page < lastPage.meta.last_page
+ ? lastPage.meta.current_page + 1
+ : undefined,
  });
+
+ const rows = useMemo(() => data?.pages.flatMap((page) => page.data) ?? [], [data]);
+ const meta = data?.pages.at(-1)?.meta;
 
  const invalidate = () => qc.invalidateQueries({ queryKey: ['notifications'] });
 
@@ -98,10 +107,9 @@ export default function NotificationsListPage() {
 
  // Apply group filter client-side (filter chips other than All / Unread).
  const visibleRows = useMemo(() => {
- if (!data) return [];
- if (filter === 'all' || filter === 'unread') return data.data;
- return data.data.filter((n) => notificationMeta(n.type).group === filter);
- }, [data, filter]);
+ if (filter === 'all' || filter === 'unread') return rows;
+ return rows.filter((n) => notificationMeta(n.type).group === filter);
+ }, [filter, rows]);
 
  // Group rows into Today / Yesterday / Earlier / Older buckets.
  const grouped = useMemo(() => {
@@ -123,17 +131,16 @@ export default function NotificationsListPage() {
  if (link) navigate(link);
  };
 
- const loadedCount = data?.data.length ?? 0;
- const hasMore = (data?.meta.total ?? 0) > loadedCount;
- const readCount = (data?.meta.total ?? 0) - (data?.meta.unread_count ?? 0);
+ const loadedCount = rows.length;
+ const readCount = (meta?.total ?? 0) - (meta?.unread_count ?? 0);
 
  return (
  <div>
  <PageHeader
  title="Notifications"
  subtitle={
- data?.meta
- ? `${data.meta.unread_count} unread of ${data.meta.total} total`
+ meta
+ ? `${meta.unread_count} unread of ${meta.total} total`
  : undefined
  }
  actions={
@@ -154,7 +161,7 @@ export default function NotificationsListPage() {
  icon={<LuCheck size={14} />}
  onClick={() => markAll.mutate()}
  loading={markAll.isPending}
- disabled={(data?.meta.unread_count ?? 0) === 0}
+ disabled={(meta?.unread_count ?? 0) === 0}
  >
  Mark all read
  </Button>
@@ -173,8 +180,8 @@ export default function NotificationsListPage() {
  value: f.key,
  label: f.label,
  // Only the unread tab carries a number, and only when there is one.
- count: f.key === 'unread' && (data?.meta.unread_count ?? 0) > 0
- ? data?.meta.unread_count
+ count: f.key === 'unread' && (meta?.unread_count ?? 0) > 0
+ ? meta?.unread_count
  : undefined,
  }))}
  />
@@ -233,20 +240,14 @@ export default function NotificationsListPage() {
  const isUnread = !n.read_at;
  return (
  <li key={n.id}>
- <div
- role="button"
- tabIndex={0}
+ <div className={cn('w-full flex items-stretch', isUnread && 'border-l-2 border-accent')}>
+ <button
+ type="button"
  onClick={() => handleClickRow(n)}
- onKeyDown={(event) => {
- if (event.key === 'Enter' || event.key === ' ') {
- event.preventDefault();
- handleClickRow(n);
- }
- }}
+ aria-label={message ? `${title}: ${message}` : title}
  className={cn(
- 'w-full text-left px-3 py-2.5 flex items-start gap-3 hover:bg-elevated transition-colors duration-fast cursor-pointer',
+ 'min-w-0 flex-1 text-left px-3 py-2.5 flex items-start gap-3 hover:bg-elevated transition-colors duration-fast cursor-pointer',
  focusRingInset,
- isUnread && 'border-l-2 border-accent',
  )}
  >
  <span
@@ -271,7 +272,8 @@ export default function NotificationsListPage() {
  {timeAgo(n.created_at)}
  </span>
  </span>
- <span className="ml-auto shrink-0 flex items-center gap-0.5">
+ </button>
+ <span className="ml-auto shrink-0 flex items-center gap-0.5 px-2">
  {isUnread && (
  <Button
  type="button"
@@ -280,13 +282,7 @@ export default function NotificationsListPage() {
  iconOnly
  icon={<LuEye size={14} />}
  aria-label="Mark as read"
- // stopPropagation matters: without it the click bubbles
- // to the row handler, which navigates to link_to — the
- // button looked like it worked while leaving the page.
- onClick={(event) => {
- event.stopPropagation();
- markRead.mutate(n.id);
- }}
+ onClick={() => markRead.mutate(n.id)}
  className="text-muted hover:text-primary"
  />
  )}
@@ -297,10 +293,7 @@ export default function NotificationsListPage() {
  iconOnly
  icon={<LuX size={14} />}
  aria-label="Dismiss notification"
- onClick={(event) => {
- event.stopPropagation();
- dismiss.mutate(n.id);
- }}
+ onClick={() => dismiss.mutate(n.id)}
  className="text-muted hover:text-danger-fg"
  />
  </span>
@@ -314,18 +307,19 @@ export default function NotificationsListPage() {
  })}
 
  {/* ─── PAGING ─── */}
- {hasMore && (
+ {hasNextPage && (
  <div className="flex flex-col items-center gap-1.5 pt-1">
  <Button
  variant="secondary"
  size="sm"
- onClick={() => setPageCount((n) => n + 1)}
- loading={isFetching}
+ onClick={() => void fetchNextPage()}
+ loading={isFetchingNextPage}
+ disabled={isFetchingNextPage}
  >
  Load more
  </Button>
  <span className="text-2xs text-muted font-mono tabular-nums">
- {loadedCount} of {data?.meta.total}
+ {loadedCount} of {meta?.total}
  </span>
  </div>
  )}

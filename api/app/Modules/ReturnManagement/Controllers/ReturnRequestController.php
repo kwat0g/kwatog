@@ -5,20 +5,29 @@ declare(strict_types=1);
 namespace App\Modules\ReturnManagement\Controllers;
 
 use App\Common\Services\SettingsService;
+use App\Common\Support\HashId;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
 use App\Modules\ReturnManagement\Enums\ReturnRequestType;
 use App\Modules\ReturnManagement\Enums\DispositionType;
 use App\Common\Support\HashIdFilter;
-use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\Vendor;
+use App\Modules\Accounting\Models\Customer;
+use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\Inventory\Models\GoodsReceiptNote;
+use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\ReturnManagement\Requests\CompleteReturnRequest;
 use App\Modules\ReturnManagement\Requests\DisposeReturnRequest;
 use App\Modules\ReturnManagement\Requests\ReceiveReturnRequest;
 use App\Modules\ReturnManagement\Requests\StoreReturnRequestRequest;
+use App\Modules\ReturnManagement\Requests\UpdateReturnRequestRequest;
 use App\Modules\ReturnManagement\Resources\ReturnRequestResource;
 use App\Modules\ReturnManagement\Services\ReturnRequestService;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Routing\Controller;
 
@@ -29,12 +38,41 @@ class ReturnRequestController extends Controller
         private readonly SettingsService $settings,
     ) {}
 
-    public function options(): \Illuminate\Http\JsonResponse
+    public function options(Request $request): JsonResponse
     {
         $read = fn (string $key): array => array_values(array_filter(
             (array) $this->settings->get($key, []),
             static fn ($option): bool => is_array($option) && isset($option['value'], $option['label']),
         ));
+
+        $matrix = [
+            ReturnRequestType::CustomerReturn->value => [
+                'regular' => array_map(
+                    static fn (DispositionType $disposition): array => ['value' => $disposition->value, 'label' => $disposition->label()],
+                    DispositionType::allowedFor(ReturnRequestType::CustomerReturn),
+                ),
+                'finance_only' => array_map(
+                    static fn (DispositionType $disposition): array => ['value' => $disposition->value, 'label' => $disposition->label()],
+                    DispositionType::allowedFor(ReturnRequestType::CustomerReturn, true),
+                ),
+            ],
+            ReturnRequestType::SupplierReturn->value => [
+                'regular' => array_map(
+                    static fn (DispositionType $disposition): array => ['value' => $disposition->value, 'label' => $disposition->label()],
+                    DispositionType::allowedFor(ReturnRequestType::SupplierReturn),
+                ),
+            ],
+        ];
+
+        $requestedType = (string) $request->query('type', '');
+        $requestedFinanceOnly = filter_var($request->query('finance_only', false), FILTER_VALIDATE_BOOLEAN);
+        $requestedDispositions = $matrix[$requestedType] ?? null;
+        $dispositions = $requestedDispositions
+            ? ($requestedDispositions[$requestedFinanceOnly ? 'finance_only' : 'regular'] ?? $requestedDispositions['regular'])
+            : array_map(
+                static fn (DispositionType $disposition): array => ['value' => $disposition->value, 'label' => $disposition->label()],
+                DispositionType::cases(),
+            );
 
         return response()->json(['data' => [
             'types' => array_map(
@@ -48,10 +86,167 @@ class ReturnRequestController extends Controller
             'reasons' => $read('returns.reason_codes'),
             'resolutions' => $read('returns.resolutions'),
             'conditions' => $read('returns.item_conditions'),
-            'dispositions' => array_map(
-                static fn (DispositionType $disposition): array => ['value' => $disposition->value, 'label' => $disposition->label()],
-                DispositionType::cases(),
-            ),
+            'dispositions' => $dispositions,
+            'disposition_matrix' => $matrix,
+        ]]);
+    }
+
+    /**
+     * Return party-scoped source documents and line identities for RMA entry.
+     * The SPA never needs raw integer IDs; every document and line is returned
+     * as a HashID and the service remains the final authority on provenance.
+     */
+    public function sourceOptions(Request $request): JsonResponse
+    {
+        $type = (string) $request->query('type');
+
+        if ($type === ReturnRequestType::CustomerReturn->value) {
+            $customerId = HashIdFilter::decode($request->query('customer_id'), Customer::class);
+            if (! $customerId) {
+                return response()->json(['message' => 'Select a customer to load return source documents.'], 422);
+            }
+
+            $invoices = Invoice::query()
+                ->where('customer_id', $customerId)
+                ->whereNotIn('status', ['draft', 'cancelled'])
+                ->with('items')
+                ->latest('date')
+                ->limit(100)
+                ->get()
+                ->map(fn (Invoice $invoice): array => [
+                    'id' => $invoice->hash_id,
+                    'label' => $invoice->invoice_number,
+                    'sales_order_id' => $invoice->sales_order_id ? HashId::encode((int) $invoice->sales_order_id) : null,
+                    'lines' => $invoice->items->map(fn ($line): array => [
+                        'id' => $line->hash_id,
+                        'product_id' => $line->product_id ? HashId::encode((int) $line->product_id) : null,
+                        'quantity' => (string) $line->quantity,
+                        'unit_price' => (string) $line->unit_price,
+                        'label' => (string) ($line->description ?: 'Invoice line '.$line->id),
+                    ])->values(),
+                ])->values();
+
+            $salesOrders = SalesOrder::query()
+                ->where('customer_id', $customerId)
+                ->where('status', '<>', 'cancelled')
+                ->with('items')
+                ->latest('date')
+                ->limit(100)
+                ->get()
+                ->map(fn (SalesOrder $order): array => [
+                    'id' => $order->hash_id,
+                    'label' => $order->so_number,
+                    'lines' => $order->items->map(fn ($line): array => [
+                        'id' => $line->hash_id,
+                        'product_id' => $line->product_id ? HashId::encode((int) $line->product_id) : null,
+                        'quantity' => (string) $line->quantity_delivered,
+                        'unit_price' => (string) $line->unit_price,
+                        'label' => 'SO line '.$line->id,
+                    ])->values(),
+                ])->values();
+
+            $deliveries = Delivery::query()
+                ->whereHas('salesOrder', fn ($query) => $query->where('customer_id', $customerId))
+                ->whereNotIn('status', ['cancelled'])
+                ->with(['salesOrder:id,so_number', 'items.salesOrderItem'])
+                ->latest('delivered_at')
+                ->limit(100)
+                ->get()
+                ->map(fn (Delivery $delivery): array => [
+                    'id' => $delivery->hash_id,
+                    'label' => $delivery->delivery_number,
+                    'sales_order_id' => $delivery->sales_order_id ? HashId::encode((int) $delivery->sales_order_id) : null,
+                    'lines' => $delivery->items->map(fn ($line): array => [
+                        'id' => $line->hash_id,
+                        'product_id' => $line->salesOrderItem?->product_id ? HashId::encode((int) $line->salesOrderItem->product_id) : null,
+                        'quantity' => (string) $line->quantity,
+                        'unit_price' => (string) $line->unit_price,
+                        'label' => 'Delivery line '.$line->id,
+                    ])->values(),
+                ])->values();
+
+            return response()->json(['data' => [
+                'customer' => compact('invoices', 'salesOrders', 'deliveries'),
+                'supplier' => ['purchaseOrders' => [], 'goodsReceipts' => [], 'bills' => []],
+            ]]);
+        }
+
+        if ($type === ReturnRequestType::SupplierReturn->value) {
+            $vendorId = HashIdFilter::decode($request->query('vendor_id'), Vendor::class);
+            if (! $vendorId) {
+                return response()->json(['message' => 'Select a supplier to load return source documents.'], 422);
+            }
+
+            $purchaseOrders = PurchaseOrder::query()
+                ->where('vendor_id', $vendorId)
+                ->whereNotIn('status', ['draft', 'cancelled'])
+                ->with('items')
+                ->latest('date')
+                ->limit(100)
+                ->get()
+                ->map(fn (PurchaseOrder $order): array => [
+                    'id' => $order->hash_id,
+                    'label' => $order->po_number,
+                    'lines' => $order->items->map(fn ($line): array => [
+                        'id' => $line->hash_id,
+                        'item_id' => $line->item_id ? HashId::encode((int) $line->item_id) : null,
+                        'quantity' => (string) $line->quantity_accepted,
+                        'unit_price' => (string) $line->unit_price,
+                        'label' => (string) ($line->description ?: 'PO line '.$line->id),
+                    ])->values(),
+                ])->values();
+
+            $goodsReceipts = GoodsReceiptNote::query()
+                ->where('vendor_id', $vendorId)
+                ->whereNotIn('status', ['draft', 'rejected'])
+                ->with(['purchaseOrder:id,po_number', 'items.purchaseOrderItem'])
+                ->latest('received_date')
+                ->limit(100)
+                ->get()
+                ->map(fn (GoodsReceiptNote $grn): array => [
+                    'id' => $grn->hash_id,
+                    'label' => $grn->grn_number,
+                    'purchase_order_id' => $grn->purchase_order_id ? HashId::encode((int) $grn->purchase_order_id) : null,
+                    'lines' => $grn->items->map(fn ($line): array => [
+                        'id' => $line->hash_id,
+                        'po_item_id' => $line->purchase_order_item_id ? HashId::encode((int) $line->purchase_order_item_id) : null,
+                        'item_id' => $line->item_id ? HashId::encode((int) $line->item_id) : null,
+                        'quantity' => (string) $line->quantity_accepted,
+                        'unit_price' => (string) $line->unit_cost,
+                        'lot_number' => $line->material_lot_number,
+                        'label' => 'GRN line '.$line->id,
+                    ])->values(),
+                ])->values();
+
+            $bills = Bill::query()
+                ->where('vendor_id', $vendorId)
+                ->whereNotIn('status', ['draft', 'cancelled'])
+                ->with('items')
+                ->latest('date')
+                ->limit(100)
+                ->get()
+                ->map(fn (Bill $bill): array => [
+                    'id' => $bill->hash_id,
+                    'label' => $bill->bill_number,
+                    'purchase_order_id' => $bill->purchase_order_id ? HashId::encode((int) $bill->purchase_order_id) : null,
+                    'lines' => $bill->items->map(fn ($line): array => [
+                        'id' => $line->hash_id,
+                        'item_id' => $line->item_id ? HashId::encode((int) $line->item_id) : null,
+                        'quantity' => (string) $line->quantity,
+                        'unit_price' => (string) $line->unit_price,
+                        'label' => (string) ($line->description ?: 'Bill line '.$line->id),
+                    ])->values(),
+                ])->values();
+
+            return response()->json(['data' => [
+                'customer' => ['invoices' => [], 'salesOrders' => [], 'deliveries' => []],
+                'supplier' => compact('purchaseOrders', 'goodsReceipts', 'bills'),
+            ]]);
+        }
+
+        return response()->json(['data' => [
+            'customer' => ['invoices' => [], 'salesOrders' => [], 'deliveries' => []],
+            'supplier' => ['purchaseOrders' => [], 'goodsReceipts' => [], 'bills' => []],
         ]]);
     }
 
@@ -122,11 +317,13 @@ class ReturnRequestController extends Controller
             'replacementPurchaseOrder',
             'creditMemo',
             'inspection',
+            'inspections.product',
             'stockMovement.toLocation',
             'stockMovement.fromLocation',
             'creator:id,name',
             'approver:id,name',
             'completer:id,name',
+            'rejecter:id,name',
         ]);
         $returnRequest->loadCount('items');
 
@@ -140,7 +337,15 @@ class ReturnRequestController extends Controller
     {
         $rma = $this->service->create($request->validated(), $request->user());
 
-        return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor']));
+        return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor', 'inspections.product']));
+    }
+
+    /** Update a still-editable draft and revalidate its source contract. */
+    public function update(UpdateReturnRequestRequest $request, ReturnRequest $returnRequest): ReturnRequestResource
+    {
+        $rma = $this->service->update($returnRequest, $request->validated(), $request->user());
+
+        return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor', 'inspections.product']));
     }
 
     /**
@@ -149,7 +354,7 @@ class ReturnRequestController extends Controller
     public function submit(ReturnRequest $returnRequest): ReturnRequestResource
     {
         $rma = $this->service->submit($returnRequest);
-        return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor']));
+        return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor', 'inspections.product']));
     }
 
     /**
@@ -161,7 +366,7 @@ class ReturnRequestController extends Controller
             'remarks' => ['nullable', 'string', 'max:500'],
         ]);
         $rma = $this->service->approve($returnRequest, $request->user(), $validated['remarks'] ?? null);
-        return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor']));
+        return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor', 'inspections.product']));
     }
 
     /**
@@ -170,7 +375,7 @@ class ReturnRequestController extends Controller
     public function receive(ReceiveReturnRequest $request, ReturnRequest $returnRequest): ReturnRequestResource
     {
         $rma = $this->service->receive($returnRequest, $request->receivedQuantitiesById(), $request->quarantineLocationId(), $request->user());
-        return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor']));
+        return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor', 'inspections.product']));
     }
 
     /**
@@ -183,7 +388,7 @@ class ReturnRequestController extends Controller
         ]);
 
         $rma = $this->service->inspect($returnRequest, $validated['internal_notes'] ?? null, $request->user());
-        return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor']));
+        return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor', 'inspections.product']));
     }
 
     /** Retry a failed RMA → Quality inspection handoff. */
@@ -191,7 +396,7 @@ class ReturnRequestController extends Controller
     {
         $rma = $this->service->retryInspectionHandoff($returnRequest, $request->user());
 
-        return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor', 'inspection']));
+        return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor', 'inspection', 'inspections.product']));
     }
 
     /**
@@ -219,7 +424,7 @@ class ReturnRequestController extends Controller
             ? (int) $request->validated()['location_id']
             : null;
         $rma = $this->service->complete($returnRequest, $request->user(), $locationId);
-        return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor', 'stockMovement.toLocation', 'stockMovement.fromLocation']));
+        return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor', 'inspections.product', 'stockMovement.toLocation', 'stockMovement.fromLocation']));
     }
 
     /**
@@ -228,11 +433,11 @@ class ReturnRequestController extends Controller
     public function reject(Request $request, ReturnRequest $returnRequest): ReturnRequestResource
     {
         $validated = $request->validate([
-            'reason' => ['nullable', 'string', 'max:1000'],
+            'reason' => ['required', 'string', 'min:10', 'max:1000'],
         ]);
 
-        $rma = $this->service->reject($returnRequest, $validated['reason'] ?? null);
-        return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor']));
+        $rma = $this->service->reject($returnRequest, $request->user(), $validated['reason']);
+        return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor', 'inspections.product']));
     }
 
     /**
@@ -245,7 +450,7 @@ class ReturnRequestController extends Controller
         ]);
 
         $rma = $this->service->cancel($returnRequest, $validated['reason'] ?? null);
-        return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor']));
+        return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor', 'inspections.product']));
     }
 
 }

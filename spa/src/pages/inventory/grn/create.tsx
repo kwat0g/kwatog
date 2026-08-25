@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { AxiosError } from 'axios';
@@ -30,6 +30,12 @@ interface Line {
  location_id: string;
  quantity_received: string;
  unit_cost: string;
+ received_uom_code: string;
+ lot_number: string;
+ supplier_lot_reference: string;
+ expiry_date: string;
+ moisture_percentage: string;
+ coa_document_path: string;
  remarks?: string;
 }
 
@@ -66,10 +72,12 @@ export default function CreateGrnPage() {
  });
  const locations = useMemo(
  () => (warehouses ?? []).flatMap((w) =>
- (w.zones ?? []).flatMap((z) => (z.locations ?? []).map((l) => ({
- id: l.id,
- label: `${w.code}-${z.code}-${l.code}`,
- sub: `${w.name} / ${z.name}`,
+ (w.is_active ? (w.zones ?? []) : []).flatMap((z) => (z.locations ?? [])
+  .filter((l) => l.is_active && z.zone_type !== 'quarantine' && z.zone_type !== 'scrap')
+  .map((l) => ({
+  id: l.id,
+  label: `${w.code}-${z.code}-${l.code}`,
+  sub: `${w.name} / ${z.name}`,
  }))),
  ),
  [warehouses],
@@ -89,6 +97,12 @@ export default function CreateGrnPage() {
  location_id: '',
  quantity_received: l.quantity_remaining,
  unit_cost: l.unit_price,
+ received_uom_code: '',
+ lot_number: '',
+ supplier_lot_reference: '',
+ expiry_date: '',
+ moisture_percentage: '',
+ coa_document_path: '',
  })));
  } else {
  setItems([]);
@@ -151,8 +165,14 @@ export default function CreateGrnPage() {
  purchase_order_item_id: i.purchase_order_item_id,
  item_id: i.item_id,
  location_id: i.location_id,
- quantity_received: i.quantity_received,
- unit_cost: i.unit_cost,
+   quantity_received: i.quantity_received,
+   received_uom_code: i.received_uom_code.trim() || undefined,
+   lot_number: i.lot_number.trim() || undefined,
+   supplier_lot_reference: i.supplier_lot_reference.trim() || undefined,
+   expiry_date: i.expiry_date || undefined,
+   moisture_percentage: i.moisture_percentage.trim() || undefined,
+   coa_document_path: i.coa_document_path.trim() || undefined,
+   unit_cost: i.unit_cost,
  remarks: i.remarks?.trim() || undefined,
  })),
  });
@@ -212,6 +232,7 @@ export default function CreateGrnPage() {
  </thead>
  <tbody>
  {items.map((line, i) => (
+ <Fragment key={line.purchase_order_item_id}>
  <tr key={line.purchase_order_item_id} className={cn(trCls, 'align-top')}>
  <Td>
  <span className="font-mono">{line.item_code}</span>
@@ -272,6 +293,20 @@ export default function CreateGrnPage() {
  />
  </Td>
  </tr>
+ <tr className="border-b border-subtle bg-subtle/40">
+ <Td colSpan={7}>
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2">
+ <Input fieldSize="sm" label="Received UOM" placeholder="Base / BAG" value={line.received_uom_code} onChange={(e) => setItems(items.map((it, k) => k === i ? { ...it, received_uom_code: e.target.value } : it))} />
+ <Input fieldSize="sm" label="Lot number" maxLength={50} value={line.lot_number} onChange={(e) => setItems(items.map((it, k) => k === i ? { ...it, lot_number: e.target.value } : it))} />
+ <Input fieldSize="sm" label="Supplier lot" maxLength={100} value={line.supplier_lot_reference} onChange={(e) => setItems(items.map((it, k) => k === i ? { ...it, supplier_lot_reference: e.target.value } : it))} />
+ <Input fieldSize="sm" label="Expiry" type="date" value={line.expiry_date} onChange={(e) => setItems(items.map((it, k) => k === i ? { ...it, expiry_date: e.target.value } : it))} />
+ <Input fieldSize="sm" label="Moisture %" inputMode="decimal" value={line.moisture_percentage} onChange={(e) => setItems(items.map((it, k) => k === i ? { ...it, moisture_percentage: e.target.value } : it))} />
+ <Input fieldSize="sm" label="COA path" maxLength={500} value={line.coa_document_path} onChange={(e) => setItems(items.map((it, k) => k === i ? { ...it, coa_document_path: e.target.value } : it))} />
+ <div className="text-2xs text-muted self-center">COA verification is completed by Quality after receipt.</div>
+ </div>
+ </Td>
+ </tr>
+ </Fragment>
  ))}
  </tbody>
  </table>

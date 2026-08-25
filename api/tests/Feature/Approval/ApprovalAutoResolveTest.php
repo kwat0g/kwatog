@@ -178,4 +178,66 @@ class ApprovalAutoResolveTest extends TestCase
 
         $this->assertSame('approved', $rec->fresh()->action);
     }
+
+    public function test_ambiguous_legacy_workflow_match_uses_global_policy(): void
+    {
+        app(SettingsService::class)->set('approvals.auto_resolve.enabled', true, 'approvals');
+        app(SettingsService::class)->set('approvals.auto_resolve.default_hours', 1, 'approvals');
+        app(SettingsService::class)->set('approvals.auto_resolve.default_action', 'reject', 'approvals');
+        Cache::forget('settings:approvals.auto_resolve.enabled');
+        Cache::forget('settings:approvals.auto_resolve.default_hours');
+        Cache::forget('settings:approvals.auto_resolve.default_action');
+
+        foreach (['legacy_a', 'legacy_b'] as $type) {
+            DB::table('workflow_definitions')->insert([
+                'workflow_type' => $type,
+                'name' => $type,
+                'steps' => json_encode([[
+                    'order' => 1,
+                    'role' => 'department_head',
+                    'auto_resolve_after_hours' => 1,
+                    'auto_resolve_action' => 'approve',
+                ]]),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $rec = ApprovalRecord::create([
+            'approvable_type' => 'TestApprovable',
+            'approvable_id'   => 88,
+            'step_order'      => 1,
+            'role_slug'       => 'department_head',
+            'action'          => 'pending',
+            'created_at'      => now()->subHours(5),
+            'escalated_at'    => now()->subHours(3),
+        ]);
+
+        app(ApprovalEscalationService::class)->runAutoResolve();
+
+        $this->assertSame('rejected', $rec->fresh()->action);
+    }
+
+    public function test_auto_decision_stays_pending_without_an_active_actor(): void
+    {
+        app(SettingsService::class)->set('approvals.auto_resolve.enabled', true, 'approvals');
+        Cache::forget('settings:approvals.auto_resolve.enabled');
+        User::query()->update(['is_active' => false]);
+
+        $rec = ApprovalRecord::create([
+            'approvable_type' => 'TestApprovable',
+            'approvable_id'   => 89,
+            'step_order'      => 1,
+            'role_slug'       => 'department_head',
+            'action'          => 'pending',
+            'created_at'      => now()->subDays(5),
+            'escalated_at'    => now()->subHours(80),
+        ]);
+
+        $count = app(ApprovalEscalationService::class)->runAutoResolve();
+
+        $this->assertSame(0, $count);
+        $this->assertSame('pending', $rec->fresh()->action);
+        $this->assertNull($rec->fresh()->approver_id);
+    }
 }

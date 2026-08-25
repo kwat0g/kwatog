@@ -28,11 +28,14 @@ Route::middleware(['auth:sanctum', 'feature:maintenance'])->prefix('maintenance'
     Route::delete('/schedules/{schedule}',   [MaintenanceScheduleController::class, 'destroy'])
         ->middleware('permission:maintenance.schedules.manage');
     Route::patch('/schedules/{schedule}/restore', [MaintenanceScheduleController::class, 'restore'])
-        ->middleware('permission:maintenance.schedules.manage');
+        ->middleware('permission:maintenance.schedules.manage')
+        ->withTrashed();
 
     /* ── Work orders ───────────────────────────────────────── */
     Route::get('/work-orders/options',                 [MaintenanceWorkOrderController::class, 'options'])
         ->middleware('permission:maintenance.view');
+    Route::get('/work-orders/assignees',               [MaintenanceWorkOrderController::class, 'assignees'])
+        ->middleware('permission:maintenance.wo.assign');
     Route::get('/work-orders',                          [MaintenanceWorkOrderController::class, 'index'])
         ->middleware('permission:maintenance.view');
     Route::get('/work-orders/{workOrder}',              [MaintenanceWorkOrderController::class, 'show'])

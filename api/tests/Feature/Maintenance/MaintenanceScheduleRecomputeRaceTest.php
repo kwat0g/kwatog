@@ -8,6 +8,8 @@ use App\Modules\Maintenance\Enums\MaintainableType;
 use App\Modules\Maintenance\Enums\MaintenanceScheduleInterval;
 use App\Modules\Maintenance\Models\MaintenanceSchedule;
 use App\Modules\Maintenance\Services\MaintenanceScheduleService;
+use App\Modules\MRP\Models\Machine;
+use Database\Seeders\MachineSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
@@ -59,5 +61,39 @@ class MaintenanceScheduleRecomputeRaceTest extends TestCase
             'last_performed_at must reflect the newer completion, not regress.'
         );
         $this->assertSame('2026-09-12', $fresh->next_due_at->toDateString());
+    }
+
+    public function test_machine_hour_schedule_uses_runtime_since_persisted_baseline(): void
+    {
+        $this->seed(MachineSeeder::class);
+        $machine = Machine::query()->firstOrFail();
+        $machine->forceFill(['running_hours_total' => '100.00'])->save();
+
+        $svc = app(MaintenanceScheduleService::class);
+        $schedule = $svc->create([
+            'maintainable_type' => MaintainableType::Machine->value,
+            'maintainable_id'   => $machine->id,
+            'description'       => 'Runtime PM',
+            'interval_type'     => MaintenanceScheduleInterval::Hours->value,
+            'interval_value'    => 10,
+            'is_active'         => true,
+        ]);
+
+        $this->assertSame('100.00', (string) $schedule->refresh()->running_hours_baseline);
+        $this->assertNull($schedule->next_due_at);
+
+        $machine->forceFill(['running_hours_total' => '109.99'])->save();
+        $this->assertCount(0, $svc->machineHourSchedulesAtOrAboveThreshold());
+
+        $machine->forceFill(['running_hours_total' => '110.00'])->save();
+        $this->assertCount(1, $svc->machineHourSchedulesAtOrAboveThreshold());
+
+        $svc->recomputeNextDueAt($schedule, Carbon::parse('2026-08-25 10:00:00'));
+        $fresh = $schedule->refresh();
+        $this->assertSame('110.00', (string) $fresh->running_hours_baseline);
+        $this->assertNull($fresh->next_due_at);
+
+        $machine->forceFill(['running_hours_total' => '119.99'])->save();
+        $this->assertCount(0, $svc->machineHourSchedulesAtOrAboveThreshold());
     }
 }

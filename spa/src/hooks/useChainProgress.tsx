@@ -28,6 +28,7 @@ export function useChainProgress(
    * accept that the effect re-binds when the key reference changes.
    */
   queryKey: ReadonlyArray<unknown>,
+  additionalQueryKeys: ReadonlyArray<ReadonlyArray<unknown>> = [],
 ): void {
   const queryClient = useQueryClient();
 
@@ -45,8 +46,11 @@ export function useChainProgress(
       const sub = echo.private(channelName);
 
       const handler = (payload: ChainStepEvent) => {
-        // Invalidate the page's main query so it refetches.
-        queryClient.invalidateQueries({ queryKey: [...queryKey] });
+        // Invalidate every view derived from the entity so a page-local
+        // detail query and its separate chain query cannot drift apart.
+        [queryKey, ...additionalQueryKeys].forEach((key) => {
+          queryClient.invalidateQueries({ queryKey: [...key] });
+        });
 
         // Only toast when somebody else triggered the change. We don't
         // know the current user's name here so we just always show it —
@@ -79,7 +83,12 @@ export function useChainProgress(
     // queryKey is intentionally dereferenced into a stable join string in
     // the dep list so callers can pass an inline array.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entityType, entityId, queryKey.join('|')]);
+  }, [
+    entityType,
+    entityId,
+    queryKey.join('|'),
+    additionalQueryKeys.map((key) => key.join('|')).join('::'),
+  ]);
 }
 
 function humanize(step: string): string {

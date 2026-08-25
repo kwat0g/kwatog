@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Purchasing\Requests;
 
 use App\Common\Concerns\ResolvesHashIds;
+use App\Modules\HR\Models\Department;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Enums\PurchaseRequestPriority;
 use Illuminate\Foundation\Http\FormRequest;
@@ -21,12 +22,16 @@ class UpdatePurchaseRequestRequest extends FormRequest
 
     protected function hashIdFields(): array
     {
-        return ['items.*.item_id' => Item::class];
+        return [
+            'department_id' => Department::class,
+            'items.*.item_id' => Item::class,
+        ];
     }
 
     public function rules(): array
     {
         return [
+            'department_id'                 => ['nullable', 'integer', 'exists:departments,id'],
             'date'                         => ['nullable', 'date'],
             'reason'                       => ['nullable', 'string', 'max:1000'],
             'priority'                     => ['nullable', Rule::in(PurchaseRequestPriority::values())],

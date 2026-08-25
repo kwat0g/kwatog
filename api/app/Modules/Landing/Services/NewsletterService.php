@@ -12,13 +12,19 @@ class NewsletterService
 {
     public function subscribe(string $email, Request $request): void
     {
-        $subscriber = NewsletterSubscriber::updateOrCreate(
-            ['email' => $email],
-            ['ip_address' => $request->ip(), 'unsubscribed_at' => null],
-        );
+        $now = now();
 
-        if ($subscriber->status === NewsletterStatus::Unsubscribed) {
-            $subscriber->forceFill(['status' => NewsletterStatus::Subscribed->value])->save();
-        }
+        NewsletterSubscriber::query()->upsert(
+            [[
+                'email' => $email,
+                'status' => NewsletterStatus::Subscribed->value,
+                'ip_address' => $request->ip(),
+                'unsubscribed_at' => null,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]],
+            ['email'],
+            ['status', 'ip_address', 'unsubscribed_at', 'updated_at'],
+        );
     }
 }

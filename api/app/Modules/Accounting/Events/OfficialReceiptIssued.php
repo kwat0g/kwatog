@@ -7,8 +7,9 @@ namespace App\Modules\Accounting\Events;
 use App\Modules\Accounting\Models\OfficialReceipt;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Contracts\Events\ShouldDispatchAfterCommit;
 
-class OfficialReceiptIssued
+class OfficialReceiptIssued implements ShouldDispatchAfterCommit
 {
     use Dispatchable, SerializesModels;
 

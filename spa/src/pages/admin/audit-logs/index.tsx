@@ -16,7 +16,7 @@ import { formatInt } from '@/lib/formatNumber';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
-const actionVariant = {
+const actionVariant: Record<string, 'success' | 'info' | 'danger' | 'neutral'> = {
  created: 'success',
  updated: 'info',
  deleted: 'danger',
@@ -103,7 +103,14 @@ export default function AuditLogsPage() {
  type: 'select',
  options: auditOptions?.actions ?? [],
  },
+ {
+ key: 'user_id',
+ label: 'Actor',
+ type: 'select',
+ options: auditOptions?.actors ?? [],
+ },
  ]}
+ dateRange={{ fromKey: 'from', toKey: 'to', label: 'Date' }}
  onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
  />
 

@@ -6,6 +6,7 @@ namespace App\Modules\Purchasing\Controllers;
 
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Vendor;
+use App\Modules\Purchasing\Requests\SupplierRankingRequest;
 use App\Modules\Purchasing\Services\SupplierPerformanceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -100,25 +101,18 @@ class SupplierPerformanceController
      * T3.3.B — GET /api/v1/purchasing/vendors/ranking
      *
      * Cross-vendor ranking for a given period. Defaults to the previous
-     * calendar month. Optional ?tier=A|B|C|D filter, ?limit clamped to 100.
+     * calendar month. Optional ?tier=A|B|C|D filter, ?limit in the range 1..100.
      */
-    public function ranking(Request $request): JsonResponse
+    public function ranking(SupplierRankingRequest $request): JsonResponse
     {
         $now = Carbon::now();
         // Default to the previous calendar month.
         $defaultPeriod = $now->copy()->subMonthNoOverflow();
-        $year  = (int) $request->query('period_year',  (string) $defaultPeriod->year);
-        $month = (int) $request->query('period_month', (string) $defaultPeriod->month);
-
-        $tier  = $request->query('tier');
-        if ($tier !== null) {
-            $tier = strtoupper((string) $tier);
-            if (! in_array($tier, ['A', 'B', 'C', 'D'], true)) {
-                $tier = null;
-            }
-        }
-
-        $limit = (int) $request->query('limit', '50');
+        $validated = $request->validated();
+        $year  = (int) ($validated['period_year'] ?? $defaultPeriod->year);
+        $month = (int) ($validated['period_month'] ?? $defaultPeriod->month);
+        $tier  = $validated['tier'] ?? null;
+        $limit = (int) ($validated['limit'] ?? 50);
 
         $rows = $this->service->ranking($year, $month, $tier, $limit);
 
@@ -128,6 +122,8 @@ class SupplierPerformanceController
                     'id'   => $s->vendor?->hash_id,
                     'name' => $s->vendor?->name,
                 ],
+                'period_year'            => $s->period_year,
+                'period_month'           => $s->period_month,
                 'tier'                  => $s->tier,
                 'overall_score'         => $s->overall_score,
                 'on_time_delivery_rate' => $s->on_time_delivery_rate,
@@ -140,8 +136,9 @@ class SupplierPerformanceController
             'meta' => [
                 'period_year'  => $year,
                 'period_month' => $month,
+                'count'        => $rows->count(),
                 'tier'         => $tier,
-                'limit'        => max(1, min($limit, 100)),
+                'limit'        => $limit,
             ],
         ]);
     }

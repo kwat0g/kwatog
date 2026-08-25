@@ -31,6 +31,7 @@ export default function CustomersPage() {
  { key: 'phone', header: 'Phone', cell: (r) => <span className="font-mono">{r.phone ?? '—'}</span> },
  { key: 'terms', header: 'Terms', align: 'right', cell: (r) => <NumCell>{r.payment_terms_days}d</NumCell> },
  { key: 'credit_limit', header: 'Credit limit', align: 'right', cell: (r) => <NumCell>{r.credit_limit ? formatPeso(r.credit_limit) : '—'}</NumCell> },
+ { key: 'credit_used', header: 'Credit used', align: 'right', cell: (r) => <NumCell>{r.credit_used ? formatPeso(r.credit_used) : '—'}</NumCell> },
  { key: 'status', header: 'Status', cell: (r) => <Chip variant={r.is_active ? 'success' : 'neutral'}>{r.is_active ? 'active' : 'inactive'}</Chip> },
  ];
 
@@ -56,7 +57,7 @@ export default function CustomersPage() {
  onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
  searchPlaceholder="Search name or contact…"
  />
- {isLoading && !data && <SkeletonTable columns={6} rows={6} />}
+ {isLoading && !data && <SkeletonTable columns={7} rows={6} />}
  {isError && <EmptyState icon="alert-circle" title="Failed to load customers" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />}
  {data && data.data.length === 0 && (
  <ListEmptyState />

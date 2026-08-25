@@ -9,6 +9,7 @@ import type {
  InspectionStage,
  InspectionStatus,
  InspectionEntityType,
+ WorkOrderOutputOption,
 } from '@/types/quality';
 
 export interface InspectionListParams extends ListParams {
@@ -24,6 +25,8 @@ export interface InspectionListParams extends ListParams {
 
 export const inspectionsApi = {
  options: () => client.get<{ data: { stages: Array<{ value: string; label: string }>; statuses: Array<{ value: string; label: string }>; entity_types: Array<{ value: string; label: string }>; measurement_results: Array<{ value: string; label: string }>; sampling_methods: Array<{ stage: string; value: string; label: string }> } }>('/quality/inspections/options').then((r) => r.data.data),
+ workOrderOutputs: (productId: string) =>
+ client.get<{ data: WorkOrderOutputOption[] }>('/quality/inspections/work-order-outputs', { params: { product_id: productId } }).then((r) => r.data.data),
  list: (params?: InspectionListParams) =>
  client.get<PaginatedResponse<Inspection>>('/quality/inspections', { params }).then((r) => r.data),
  show: (id: string) =>

@@ -121,7 +121,7 @@ export default function InquiryDetailPage() {
  <dd className="font-mono tabular-nums">{data.ip_address ?? '—'}</dd>
  </div>
  <div className="flex justify-between gap-4 px-4 py-2.5">
- <dt className="shrink-0 text-muted">LuUser agent</dt>
+ <dt className="shrink-0 text-muted">User agent</dt>
  <dd className="truncate font-mono text-xs" title={data.user_agent ?? undefined}>
  {data.user_agent ?? '—'}
  </dd>

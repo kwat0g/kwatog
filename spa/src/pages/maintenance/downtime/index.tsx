@@ -84,23 +84,23 @@ export default function DowntimeAnalyticsPage() {
 
  const { data: summary, isLoading: summaryLoading, isError: summaryError, refetch: summaryRefetch } = useQuery({
  queryKey: ['downtime-analytics', 'summary', days, filters.search],
- queryFn: () => downtimeAnalyticsApi.summary({ days }),
+ queryFn: () => downtimeAnalyticsApi.summary({ days, search: filters.search || undefined }),
  placeholderData: (prev) => prev,
  });
 
  const { data: trend, isLoading: trendLoading } = useQuery({
  queryKey: ['downtime-analytics', 'daily-trend', days, filters.search],
- queryFn: () => downtimeAnalyticsApi.dailyTrend({ days }),
+ queryFn: () => downtimeAnalyticsApi.dailyTrend({ days, search: filters.search || undefined }),
  });
 
  const { data: topMachines, isLoading: topLoading } = useQuery({
  queryKey: ['downtime-analytics', 'top-machines', days, filters.search],
- queryFn: () => downtimeAnalyticsApi.topMachines({ days, limit: 10 }),
+ queryFn: () => downtimeAnalyticsApi.topMachines({ days, limit: 10, search: filters.search || undefined }),
  });
 
  const { data: allMachines, isLoading: allLoading } = useQuery({
  queryKey: ['downtime-analytics', 'all-machines', days, filters.search],
- queryFn: () => downtimeAnalyticsApi.allMachines({ days }),
+ queryFn: () => downtimeAnalyticsApi.allMachines({ days, search: filters.search || undefined }),
  });
 
  const maxTrendMinutes = trend && trend.length > 0

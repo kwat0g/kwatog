@@ -20,8 +20,10 @@ use Tests\TestCase;
 /**
  * Loan request lifecycle notification events.
  *
- * Tests confirm that each service method fires the expected domain event.
- * Event::fake() intercepts dispatches without running actual listeners.
+ * Tests confirm that submission and terminal decisions fire domain events.
+ * Intermediate approvals remain pending and must not masquerade as a final
+ * approval notification. Event::fake() intercepts dispatches without running
+ * actual listeners.
  */
 class LoanNotificationTest extends TestCase
 {
@@ -36,10 +38,23 @@ class LoanNotificationTest extends TestCase
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private function userWithRole(string $slug): User
+    private function userWithRole(string $slug, ?int $employeeId = null): User
     {
         $role = Role::where('slug', $slug)->firstOrFail();
-        return User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
+        return User::factory()->create([
+            'role_id' => $role->id,
+            'employee_id' => $employeeId,
+            'is_active' => true,
+        ]);
+    }
+
+    private function departmentHeadFor(Employee $loanEmployee): User
+    {
+        $approverEmployee = Employee::factory()->create([
+            'department_id' => $loanEmployee->department_id,
+        ]);
+
+        return $this->userWithRole('department_head', $approverEmployee->id);
     }
 
     // ── Tests ─────────────────────────────────────────────────────────────────
@@ -63,7 +78,7 @@ class LoanNotificationTest extends TestCase
     }
 
     /**
-     * approve() fires LoanDecided with approved = true.
+     * Intermediate approvals do not fire a final decision event.
      */
     public function test_loan_approved_fires_decided_event(): void
     {
@@ -76,14 +91,12 @@ class LoanNotificationTest extends TestCase
             'purpose'     => 'Emergency expense',
         ]);
 
-        $approver = $this->userWithRole('department_head');
+        $approver = $this->departmentHeadFor($employee);
 
         app(LoanService::class)->approve($loan, $approver);
 
-        Event::assertDispatched(
-            LoanDecided::class,
-            fn ($e) => $e->approved === true && $e->loan->getKey() === $loan->getKey(),
-        );
+        Event::assertNotDispatched(LoanDecided::class);
+        $this->assertSame('pending', $loan->fresh()->status->value);
     }
 
     /**
@@ -100,7 +113,7 @@ class LoanNotificationTest extends TestCase
             'purpose'     => 'Emergency expense',
         ]);
 
-        $approver = $this->userWithRole('department_head');
+        $approver = $this->departmentHeadFor($employee);
 
         app(LoanService::class)->reject($loan, $approver, 'Insufficient budget.');
 

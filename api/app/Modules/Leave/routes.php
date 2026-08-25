@@ -15,7 +15,9 @@ Route::middleware(['auth:sanctum', 'feature:leave'])->prefix('leaves')->group(fu
     Route::get('/types/{leaveType}', [LeaveTypeController::class, 'show'])->middleware('permission:leave.view');
     Route::put('/types/{leaveType}', [LeaveTypeController::class, 'update'])->middleware('permission:leave.types.manage');
     Route::delete('/types/{leaveType}', [LeaveTypeController::class, 'destroy'])->middleware('permission:leave.types.manage');
-    Route::patch('/types/{leaveType}/restore', [LeaveTypeController::class, 'restore'])->middleware('permission:leave.types.manage');
+    Route::patch('/types/{leaveType}/restore', [LeaveTypeController::class, 'restore'])
+        ->withTrashed()
+        ->middleware('permission:leave.types.manage');
 
     // Year-end processing (OGAMI-104)
     Route::post('/process-year-end', [LeaveTypeController::class, 'processYearEnd'])->middleware('permission:leave.types.manage');
@@ -40,6 +42,7 @@ Route::middleware(['auth:sanctum', 'feature:leave'])->prefix('leaves')->group(fu
         ->middleware('permission:leave.approve_dept');
     Route::post('/requests/bulk-approve-hr', [LeaveRequestController::class, 'bulkApproveHR'])
         ->middleware('permission:leave.approve_hr');
-    Route::patch('/requests/{leaveRequest}/reject', [LeaveRequestController::class, 'reject'])->middleware('permission:leave.approve_dept');
+    Route::patch('/requests/{leaveRequest}/reject', [LeaveRequestController::class, 'reject'])
+        ->middleware('permission_any:leave.approve_dept,leave.approve_hr');
     Route::patch('/requests/{leaveRequest}/cancel', [LeaveRequestController::class, 'cancel'])->middleware('permission:leave.create');
 });

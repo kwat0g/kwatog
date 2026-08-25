@@ -9,16 +9,16 @@ export interface FiscalYear {
 
 export interface Budget {
  id: string;
- fiscal_year_id: number;
+ fiscal_year_id: string;
  fiscal_year?: FiscalYear;
- department_id?: number | null;
+ department_id?: string | null;
  department?: { id: string; name: string; code: string } | null;
  budget_type: string;
  name: string;
- total_allocated: number;
- total_spent: number;
- total_committed: number;
- available: number;
+ total_allocated: string;
+ total_spent: string;
+ total_committed: string;
+ available: string;
  utilization_pct: number;
  status: 'draft' | 'submitted' | 'approved' | 'active' | 'closed';
  status_label?: string;
@@ -33,42 +33,43 @@ export interface Budget {
 
 export interface BudgetLineItem {
  id: string;
- budget_id: number;
- account_id: number;
+ budget_id: string | null;
+ account_id: string | null;
  account?: { id: string; code: string; name: string };
- jan: number;
- feb: number;
- mar: number;
- apr: number;
- may: number;
- jun: number;
- jul: number;
- aug: number;
- sep: number;
- oct: number;
- nov: number;
- dec: number;
- annual_total: number;
- actual_total: number;
- variance: number;
+ jan: string;
+ feb: string;
+ mar: string;
+ apr: string;
+ may: string;
+ jun: string;
+ jul: string;
+ aug: string;
+ sep: string;
+ oct: string;
+ nov: string;
+ dec: string;
+ annual_total: string;
+ actual_total: string;
+ variance: string;
 }
 
 
 export interface BudgetOverview {
- total_allocated: number;
- total_spent: number;
- total_committed: number;
- total_available: number;
+ total_allocated: string;
+ total_spent: string;
+ total_committed: string;
+ total_available: string;
  utilization_pct: number;
  by_department: BudgetOverviewDepartment[];
 }
 
 export interface BudgetOverviewDepartment {
+ department_id?: string | null;
  department: string;
- allocated: number;
- spent: number;
- committed: number;
- available: number;
+ allocated: string;
+ spent: string;
+ committed: string;
+ available: string;
  pct: number;
 }
 
@@ -78,17 +79,30 @@ export interface BudgetVsActualRow {
  account_name: string;
  budget_type: string;
  department: string;
- budgeted: number;
- actual: number;
- variance: number;
+ budgeted: string;
+ actual: string;
+ variance: string;
  variance_pct: number;
 }
 
 export interface BudgetVsActual {
  rows: BudgetVsActualRow[];
- total_budgeted: number;
- total_actual: number;
- total_variance: number;
+ total_budgeted: string;
+ total_actual: string;
+ total_variance: string;
+}
+
+export interface BudgetSyncRun {
+ id: string;
+ fiscal_year_id: string | null;
+ status: 'queued' | 'running' | 'completed' | 'failed';
+ processed_lines: number;
+ total_lines: number;
+ last_error: string | null;
+ queued_at: string | null;
+ started_at: string | null;
+ completed_at: string | null;
+ failed_at: string | null;
 }
 
 export interface BudgetCheckAvailability {

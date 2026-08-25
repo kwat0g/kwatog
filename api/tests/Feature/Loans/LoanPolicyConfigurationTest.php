@@ -26,7 +26,7 @@ class LoanPolicyConfigurationTest extends TestCase
 
     public function test_persisted_interest_rate_and_workflow_drive_new_loan_terms(): void
     {
-        app(SettingsService::class)->set('loans.cash_advance.annual_interest_rate', 0.12, 'loans');
+        app(SettingsService::class)->set('loans.cash_advance.annual_interest_rate', '0.105', 'loans');
         $employee = Employee::factory()->create(['basic_monthly_salary' => 30000]);
 
         $loan = app(LoanService::class)->request($employee->id, LoanType::CashAdvance, [
@@ -35,7 +35,7 @@ class LoanPolicyConfigurationTest extends TestCase
             'purpose' => 'Configured policy regression',
         ]);
 
-        $this->assertSame('0.12', (string) $loan->interest_rate);
+        $this->assertSame('0.105000', (string) $loan->interest_rate);
         $this->assertGreaterThan(1000.0, (float) $loan->monthly_amortization);
         $this->assertGreaterThan(12000.0, (float) $loan->balance);
         $this->assertSame(3, $loan->approval_chain_size);

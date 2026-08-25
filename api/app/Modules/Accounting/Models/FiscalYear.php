@@ -44,6 +44,8 @@ class FiscalYear extends Model
 
     public function scopeCurrent(Builder $q): Builder
     {
-        return $q->whereYear('start_date', now()->year);
+        return $q
+            ->whereDate('start_date', '<=', today())
+            ->whereDate('end_date', '>=', today());
     }
 }

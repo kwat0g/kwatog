@@ -21,13 +21,19 @@ import { numberInputProps } from '@/lib/numberInput';
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
+import { fromCents, toCents } from './money';
+
+const amountSchema = z.string()
+ .regex(/^\d+(\.\d{1,2})?$/, 'Use an amount with up to two decimals.')
+ .or(z.literal(''));
+
 const lineSchema = z.object({
  account_id: z.string().min(1, 'Account is required'),
- debit: z.preprocess((value) => value === '' || value == null ? undefined : value, z.coerce.number({ invalid_type_error: 'Number' }).min(0, 'Min 0').optional()),
- credit: z.preprocess((value) => value === '' || value == null ? undefined : value, z.coerce.number({ invalid_type_error: 'Number' }).min(0, 'Min 0').optional()),
+ debit: amountSchema,
+ credit: amountSchema,
  description: z.string().max(200).optional().or(z.literal('')),
-}).refine((line) => (line.debit ?? 0) > 0 || (line.credit ?? 0) > 0, {
- message: 'Enter a debit or credit amount',
+}).refine((line) => (toCents(line.debit) > 0n) !== (toCents(line.credit) > 0n), {
+ message: 'Enter exactly one debit or credit amount',
  path: ['debit'],
 });
 
@@ -55,8 +61,8 @@ export default function CreateJournalEntryPage() {
  date: new Date().toISOString().slice(0, 10),
  description: '',
  lines: [
- { account_id: '', debit: undefined, credit: undefined, description: '' },
- { account_id: '', debit: undefined, credit: undefined, description: '' },
+ { account_id: '', debit: '', credit: '', description: '' },
+ { account_id: '', debit: '', credit: '', description: '' },
  ],
  },
  });
@@ -65,13 +71,17 @@ export default function CreateJournalEntryPage() {
  const lines = watch('lines');
 
  const totals = useMemo(() => {
- let d = 0, c = 0;
+ let d = 0n, c = 0n;
  for (const l of lines) {
- d += Number(l.debit) || 0;
- c += Number(l.credit) || 0;
+ d += toCents(l.debit);
+ c += toCents(l.credit);
  }
- const diff = d - c;
- return { d: d.toFixed(2), c: c.toFixed(2), diff: diff.toFixed(2), balanced: Math.abs(diff) < 0.005 };
+ return {
+ d: fromCents(d),
+ c: fromCents(c),
+ diff: fromCents(d - c),
+ balanced: d === c,
+ };
  }, [lines]);
 
  const mutation = useMutation({
@@ -80,8 +90,8 @@ export default function CreateJournalEntryPage() {
  description: d.description,
  lines: d.lines.map((l) => ({
  account_id: l.account_id,
- debit: String(l.debit ?? 0),
- credit: String(l.credit ?? 0),
+ debit: l.debit || '0',
+ credit: l.credit || '0',
  description: l.description || undefined,
  })),
  }),
@@ -163,7 +173,7 @@ export default function CreateJournalEntryPage() {
  </div>
 
  <div className="flex items-center justify-between mt-3">
- <Button type="button" variant="secondary" size="sm" icon={<LuPlus size={14} />} onClick={() => append({ account_id: '', debit: undefined, credit: undefined, description: '' })}>
+ <Button type="button" variant="secondary" size="sm" icon={<LuPlus size={14} />} onClick={() => append({ account_id: '', debit: '', credit: '', description: '' })}>
  Add line
  </Button>
  <div className="flex items-center gap-4 text-sm font-mono tabular-nums">

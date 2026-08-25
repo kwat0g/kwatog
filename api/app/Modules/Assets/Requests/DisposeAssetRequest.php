@@ -17,7 +17,7 @@ class DisposeAssetRequest extends FormRequest
     {
         return [
             'disposal_amount' => ['required', 'decimal:0,2', 'min:0'],
-            'disposed_date'   => ['nullable', 'date'],
+            'disposed_date'   => ['nullable', 'date', 'before_or_equal:today'],
             'remarks'         => ['nullable', 'string', 'max:5000'],
         ];
     }

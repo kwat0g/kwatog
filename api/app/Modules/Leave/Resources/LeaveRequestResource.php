@@ -30,7 +30,9 @@ class LeaveRequestResource extends JsonResource
             'days'             => (string) $this->days,
             'half_day_period'  => $this->half_day_period?->value,
             'reason'           => $this->reason,
-            'document_path'    => $this->document_path,
+            // The stored path is on the private disk and is never a client-owned
+            // URL. Expose only the fact that a supporting document exists.
+            'has_document'     => $this->document_path !== null,
             'status'           => $this->status?->value,
             'status_label'     => $this->status?->label(),
             'dept_approver'    => $this->whenLoaded('deptApprover', fn () => $this->deptApprover ? [
@@ -41,6 +43,11 @@ class LeaveRequestResource extends JsonResource
                 'id' => $this->hrApprover->hash_id, 'name' => $this->hrApprover->name,
             ] : null),
             'hr_approved_at'   => optional($this->hr_approved_at)->toIso8601String(),
+            'cancelled_by'     => $this->whenLoaded('canceller', fn () => $this->canceller ? [
+                'id' => $this->canceller->hash_id,
+                'name' => $this->canceller->name,
+            ] : null),
+            'cancelled_at'     => optional($this->cancelled_at)->toIso8601String(),
             'rejection_reason' => $this->rejection_reason,
             'created_at'       => optional($this->created_at)->toIso8601String(),
             'updated_at'       => optional($this->updated_at)->toIso8601String(),

@@ -22,6 +22,10 @@ class NcrActionResource extends JsonResource
                 'id'   => $this->performer->hash_id,
                 'name' => $this->performer->name,
             ] : null),
+            'owner'        => $this->whenLoaded('owner', fn () => $this->owner ? [
+                'id'   => $this->owner->hash_id,
+                'name' => $this->owner->name,
+            ] : null),
             // CAPA effectiveness loop.
             'due_date'                    => optional($this->due_date)?->toDateString(),
             'effectiveness_status'        => $this->effectiveness_status instanceof \BackedEnum ? $this->effectiveness_status->value : $this->effectiveness_status,
@@ -33,6 +37,10 @@ class NcrActionResource extends JsonResource
             'verifier'                    => $this->whenLoaded('verifier', fn () => $this->verifier ? [
                 'id'   => $this->verifier->hash_id,
                 'name' => $this->verifier->name,
+            ] : null),
+            'ncr'                         => $this->whenLoaded('ncr', fn () => $this->ncr ? [
+                'id'         => $this->ncr->hash_id,
+                'ncr_number' => $this->ncr->ncr_number,
             ] : null),
         ];
     }

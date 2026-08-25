@@ -9,15 +9,20 @@ use App\Common\Support\SearchOperator;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
+use App\Modules\Accounting\Models\Customer;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Enums\ComplaintNcrHandoffStatus;
 use App\Modules\CRM\Enums\ComplaintStatus;
+use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Models\Complaint8DReport;
 use App\Modules\CRM\Models\CustomerComplaint;
+use App\Modules\CRM\Models\Product;
+use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Events\ComplaintNcrRequested;
 use App\Modules\CRM\Events\CustomerComplaintUpdated;
 use App\Modules\Quality\Enums\NcrSeverity;
 use App\Modules\Quality\Enums\NcrSource;
+use App\Modules\Quality\Enums\NcrStatus;
 use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\Quality\Services\NcrService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -31,11 +36,30 @@ use Illuminate\Support\Facades\DB;
  *   create()         — opens the complaint and auto-creates an NCR
  *   update8DReport() — upserts the 8D report fields
  *   finalize8D()     — locks the 8D report, stamps finalized_by/_at
- *   resolve()        — flags status=resolved (NCR closure handled separately)
- *   close()          — flags status=closed; if NCR still open, do nothing
+ *   resolve()        — flags status=resolved after quality completion
+ *   close()          — flags status=closed after quality completion
  */
 class ComplaintService
 {
+    /**
+     * Complaint lifecycle operations currently exposed by the CRM routes.
+     *
+     * The complaint row is the authoritative state machine. The matrix is
+     * deliberately local to this service until a separate cancellation/start-
+     * investigation workflow is introduced.
+     *
+     * @var array<string, list<string>>
+     */
+    private const LIFECYCLE_TRANSITIONS = [
+        'resolve' => [
+            ComplaintStatus::Open->value,
+            ComplaintStatus::Investigating->value,
+        ],
+        'close' => [
+            ComplaintStatus::Resolved->value,
+        ],
+    ];
+
     public function __construct(
         private readonly DocumentSequenceService $sequences,
         private readonly SettingsService $settings,
@@ -87,6 +111,8 @@ class ComplaintService
     public function create(array $data, User $by): CustomerComplaint
     {
         $complaint = DB::transaction(function () use ($data, $by) {
+            $this->assertSourceRecords($data);
+
             $complaint = CustomerComplaint::create([
                 'complaint_number'  => $this->sequences->generate('complaint'),
                 'customer_id'       => (int) $data['customer_id'],
@@ -150,73 +176,94 @@ class ComplaintService
 
     public function update8DReport(CustomerComplaint $c, array $data): Complaint8DReport
     {
-        $report = $c->eightDReport ?? Complaint8DReport::firstOrCreate(['complaint_id' => $c->id]);
-        if ($report->finalized_at) {
-            throw new BusinessRuleException('8D report is finalised and cannot be edited.');
-        }
-        $allowed = ['d1_team','d2_problem','d3_containment','d4_root_cause','d5_corrective_action','d6_verification','d7_prevention','d8_recognition'];
-        $patch = array_intersect_key($data, array_flip($allowed));
-        if (! empty($patch)) {
-            $report->update($patch);
-        }
-        return $report->fresh();
+        return DB::transaction(function () use ($c, $data): Complaint8DReport {
+            // Lock the parent first so update and finalize use one order and a
+            // stale route-bound report cannot race a finalized write.
+            $lockedComplaint = CustomerComplaint::query()
+                ->lockForUpdate()
+                ->findOrFail($c->id);
+            $report = Complaint8DReport::query()
+                ->where('complaint_id', $lockedComplaint->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $report) {
+                $report = Complaint8DReport::create(['complaint_id' => $lockedComplaint->id]);
+            }
+            if ($report->finalized_at) {
+                throw new BusinessRuleException('8D report is finalised and cannot be edited.');
+            }
+
+            $allowed = [
+                'd1_team', 'd2_problem', 'd3_containment', 'd4_root_cause',
+                'd5_corrective_action', 'd6_verification', 'd7_prevention',
+                'd8_recognition',
+            ];
+            $patch = array_intersect_key($data, array_flip($allowed));
+            if (! empty($patch)) {
+                $report->update($patch);
+            }
+
+            return $report->fresh();
+        });
     }
 
     public function finalize8D(CustomerComplaint $c, User $by): Complaint8DReport
     {
-        $report = $c->eightDReport ?? throw new BusinessRuleException('No 8D report exists for this complaint.');
-        if ($report->finalized_at) return $report;
+        [$report, $finalizedNow] = DB::transaction(function () use ($c, $by): array {
+            // Match update8DReport's complaint → report lock order. The
+            // finalization guard must run against the locked authoritative row.
+            $lockedComplaint = CustomerComplaint::query()
+                ->lockForUpdate()
+                ->findOrFail($c->id);
+            $report = Complaint8DReport::query()
+                ->where('complaint_id', $lockedComplaint->id)
+                ->lockForUpdate()
+                ->first();
 
-        // T3.2.A — every D must be populated (non-empty after trim).
-        $required = [
-            'd1_team', 'd2_problem', 'd3_containment', 'd4_root_cause',
-            'd5_corrective_action', 'd6_verification', 'd7_prevention', 'd8_recognition',
-        ];
-        foreach ($required as $field) {
-            if (trim((string) $report->{$field}) === '') {
-                throw new BusinessRuleException("Cannot finalize 8D: {$field} is required.");
+            if (! $report) {
+                throw new BusinessRuleException('No 8D report exists for this complaint.');
             }
+            if ($report->finalized_at) {
+                return [$report->fresh(['complaint']), false];
+            }
+
+            // T3.2.A — every D must be populated (non-empty after trim).
+            $required = [
+                'd1_team', 'd2_problem', 'd3_containment', 'd4_root_cause',
+                'd5_corrective_action', 'd6_verification', 'd7_prevention', 'd8_recognition',
+            ];
+            foreach ($required as $field) {
+                if (trim((string) $report->{$field}) === '') {
+                    throw new BusinessRuleException("Cannot finalize 8D: {$field} is required.");
+                }
+            }
+
+            $report->update([
+                'finalized_at' => now(),
+                'finalized_by' => $by->id,
+            ]);
+
+            return [$report->fresh(['complaint']), true];
+        });
+
+        // Publish only after the transaction commits. A rollback must not tell
+        // listeners that a formal 8D report exists.
+        if ($finalizedNow && $report->complaint) {
+            event(new CustomerComplaintUpdated($report->complaint, '8D report finalized'));
         }
 
-        $report->update([
-            'finalized_at' => now(),
-            'finalized_by' => $by->id,
-        ]);
-        $fresh = $report->fresh(['complaint']);
-        if ($fresh->complaint) {
-            event(new CustomerComplaintUpdated($fresh->complaint, '8D report finalized'));
-        }
-        return $fresh;
+        return $report;
     }
 
     public function resolve(CustomerComplaint $c): CustomerComplaint
     {
-        $current = $c->status instanceof ComplaintStatus ? $c->status : ComplaintStatus::from((string) $c->status);
-        if ($current->isTerminal()) {
-            throw new BusinessRuleException('Complaint is already terminal.');
-        }
-        $this->ensureNcrHandoffReady($c);
-        $c->forceFill([
-            'status'      => ComplaintStatus::Resolved->value,
-            'resolved_at' => now(),
-        ])->save();
-        $updated = $this->show($c);
-        event(new CustomerComplaintUpdated($updated, 'resolved'));
-        return $updated;
+        return $this->transitionLifecycle($c, ComplaintStatus::Resolved, 'resolve');
     }
 
     public function close(CustomerComplaint $c): CustomerComplaint
     {
-        $current = $c->status instanceof ComplaintStatus ? $c->status : ComplaintStatus::from((string) $c->status);
-        if ($current->isTerminal()) return $this->show($c);
-        $this->ensureNcrHandoffReady($c);
-        $c->forceFill([
-            'status'    => ComplaintStatus::Closed->value,
-            'closed_at' => now(),
-        ])->save();
-        $updated = $this->show($c);
-        event(new CustomerComplaintUpdated($updated, 'closed'));
-        return $updated;
+        return $this->transitionLifecycle($c, ComplaintStatus::Closed, 'close');
     }
 
     /** Retry a previously failed complaint → Quality NCR handoff. */
@@ -284,6 +331,146 @@ class ComplaintService
             throw new BusinessRuleException(
                 'The complaint cannot be resolved or closed until its Quality NCR handoff succeeds.'
             );
+        }
+    }
+
+    /**
+     * A complaint cannot advertise commercial resolution until the linked
+     * quality investigation is complete. The caller already owns the
+     * complaint row lock; report and NCR locks follow the same order used by
+     * update8DReport()/finalize8D() and the Quality service's NCR writes.
+     */
+    private function ensureQualityCompletionReady(CustomerComplaint $complaint): void
+    {
+        $this->ensureNcrHandoffReady($complaint);
+
+        $report = Complaint8DReport::query()
+            ->where('complaint_id', $complaint->id)
+            ->lockForUpdate()
+            ->first();
+        if (! $report || ! $report->finalized_at) {
+            throw new BusinessRuleException(
+                'The complaint cannot be resolved or closed until its 8D report is finalised.',
+            );
+        }
+
+        $ncr = NonConformanceReport::query()
+            ->lockForUpdate()
+            ->find($complaint->ncr_id);
+        if (! $ncr
+            || (int) $ncr->complaint_id !== (int) $complaint->id
+            || $ncr->status !== NcrStatus::Closed
+            || $ncr->disposition === null) {
+            throw new BusinessRuleException(
+                'The complaint cannot be resolved or closed until its linked NCR is closed with a disposition.',
+            );
+        }
+    }
+
+    private function transitionLifecycle(
+        CustomerComplaint $complaint,
+        ComplaintStatus $target,
+        string $operation,
+    ): CustomerComplaint {
+        [$updated, $changed] = DB::transaction(function () use ($complaint, $target, $operation): array {
+            $locked = CustomerComplaint::query()
+                ->lockForUpdate()
+                ->findOrFail($complaint->id);
+            $current = $locked->status instanceof ComplaintStatus
+                ? $locked->status
+                : ComplaintStatus::from((string) $locked->status);
+
+            // Replaying the same operation is safe and does not rewrite its
+            // audit timestamp or emit a duplicate lifecycle event.
+            if ($current === $target) {
+                return [$this->show($locked), false];
+            }
+
+            $allowed = self::LIFECYCLE_TRANSITIONS[$operation] ?? [];
+            if (! in_array($current->value, $allowed, true)) {
+                throw new BusinessRuleException(sprintf(
+                    'Complaint cannot %s from status %s.',
+                    $operation,
+                    $current->value,
+                ));
+            }
+
+            $this->ensureQualityCompletionReady($locked);
+            $locked->forceFill(match ($target) {
+                ComplaintStatus::Resolved => [
+                    'status' => $target->value,
+                    'resolved_at' => now(),
+                ],
+                ComplaintStatus::Closed => [
+                    'status' => $target->value,
+                    'closed_at' => now(),
+                ],
+                default => ['status' => $target->value],
+            })->save();
+
+            return [$this->show($locked), true];
+        });
+
+        if ($changed) {
+            event(new CustomerComplaintUpdated($updated, $target->value));
+        }
+
+        return $updated;
+    }
+
+    /**
+     * Re-check all complaint provenance and assignment references while the
+     * write transaction owns the authoritative rows. Request validation alone
+     * cannot prevent a source record being archived or reassigned mid-request.
+     *
+     * @param array<string, mixed> $data
+     */
+    private function assertSourceRecords(array $data): void
+    {
+        $customerId = (int) ($data['customer_id'] ?? 0);
+        $productId = isset($data['product_id']) && $data['product_id'] !== null
+            ? (int) $data['product_id']
+            : null;
+        $salesOrderId = isset($data['sales_order_id']) && $data['sales_order_id'] !== null
+            ? (int) $data['sales_order_id']
+            : null;
+
+        // Match SalesOrderService's order → product → customer lock order for
+        // complaints that cite a sales order, reducing cross-module deadlocks.
+        $salesOrder = null;
+        if ($salesOrderId !== null) {
+            $salesOrder = SalesOrder::query()->lockForUpdate()->find($salesOrderId);
+            if (! $salesOrder || $salesOrder->status === SalesOrderStatus::Cancelled) {
+                throw new BusinessRuleException('The selected sales order is inactive or no longer exists.');
+            }
+        }
+
+        if ($productId !== null) {
+            $product = Product::query()->lockForUpdate()->find($productId);
+            if (! $product || ! $product->is_active) {
+                throw new BusinessRuleException('The selected product is inactive or no longer exists.');
+            }
+        }
+
+        $customer = Customer::query()->lockForUpdate()->find($customerId);
+        if (! $customer || ! $customer->is_active) {
+            throw new BusinessRuleException('The selected customer is inactive or no longer exists.');
+        }
+
+        if ($salesOrder) {
+            if ((int) $salesOrder->customer_id !== (int) $customer->id) {
+                throw new BusinessRuleException('The selected sales order does not belong to the selected customer.');
+            }
+            if ($productId !== null && ! $salesOrder->items()->where('product_id', $productId)->exists()) {
+                throw new BusinessRuleException('The selected product is not part of the selected sales order.');
+            }
+        }
+
+        if (array_key_exists('assigned_to', $data) && $data['assigned_to'] !== null) {
+            $assignee = User::query()->lockForUpdate()->find((int) $data['assigned_to']);
+            if (! $assignee || ! $assignee->is_active || ! $assignee->hasPermission('crm.complaints.manage')) {
+                throw new BusinessRuleException('The selected assignee is inactive or not authorized to manage complaints.');
+            }
         }
     }
 

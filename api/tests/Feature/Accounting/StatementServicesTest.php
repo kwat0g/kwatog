@@ -6,6 +6,7 @@ namespace Tests\Feature\Accounting;
 
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Services\JournalEntryService;
+use App\Modules\Accounting\Services\Statements\BalanceSheetService;
 use App\Modules\Accounting\Services\Statements\IncomeStatementService;
 use App\Modules\Accounting\Services\Statements\TrialBalanceService;
 use App\Modules\Auth\Models\Role;
@@ -79,5 +80,10 @@ class StatementServicesTest extends TestCase
         );
         $this->assertSame('5000.00', $is['revenue']['total']);
         $this->assertSame('5000.00', $is['net_income']);
+
+        $bs = app(BalanceSheetService::class)->generate(Carbon::parse('2026-04-30'));
+        $this->assertTrue($bs['balanced'], 'Balance sheet must include current-period net income in equity');
+        $this->assertSame('105000.00', $bs['total_assets']);
+        $this->assertSame('105000.00', $bs['total_liabilities_equity']);
     }
 }

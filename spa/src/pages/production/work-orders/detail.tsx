@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Input } from '@/components/ui/Input';
 import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { Panel } from '@/components/ui/Panel';
 import { Select } from '@/components/ui/Select';
@@ -22,6 +23,7 @@ import { ChainHeader, LinkedRecords, ActivityStream } from '@/components/chain';
 import { useEcho } from '@/hooks/useEcho';
 import { useChainProgress } from '@/hooks/useChainProgress';
 import { usePermission } from '@/hooks/usePermission';
+import { useAuthStore } from '@/stores/authStore';
 import { formatInt, formatPeso } from '@/lib/formatNumber';
 import { workOrderStatusVariant as variant } from '@/lib/statusVariants';
 import type { MachineDowntimeCategory } from '@/types/production';
@@ -40,12 +42,14 @@ const OP_STATUS_CHIP: Record<WoOperationStatus, 'success' | 'info' | 'warning' |
 type DetailTab = 'details' | 'operations';
 
 type LifecycleAction = 'confirm' | 'start' | 'pause' | 'resume' | 'complete' | 'close' | 'cancel';
+type OperationDialog = { kind: 'record' | 'skip'; operation: NonNullable<Awaited<ReturnType<typeof woOperationsApi.list>>>[number] } | null;
 
 export default function WorkOrderDetailPage() {
  const { id } = useParams<{ id: string }>();
  const navigate = useNavigate();
  const qc = useQueryClient();
  const { can } = usePermission();
+ const employeeId = useAuthStore((state) => state.user?.employee?.id);
  const canLifecycle = can('production.work_orders.lifecycle');
  const canConfirm = can('production.wo.confirm');
  const canRecord = can('production.wo.record');
@@ -58,6 +62,11 @@ export default function WorkOrderDetailPage() {
  const [selectedMachineId, setSelectedMachineId] = useState<string>('');
  const [selectedMoldId, setSelectedMoldId] = useState<string>('');
  const [tab, setTab] = useState<DetailTab>('details');
+ const [operationDialog, setOperationDialog] = useState<OperationDialog>(null);
+ const [operationQty, setOperationQty] = useState('');
+ const [operationScrap, setOperationScrap] = useState('0');
+ const [operationScrapReason, setOperationScrapReason] = useState('');
+ const [operationSkipReason, setOperationSkipReason] = useState('');
  const machineList = useQuery({
  queryKey: ['mrp', 'machines', 'all'],
  queryFn: () => machinesApi.list({ per_page: 100 }),
@@ -138,6 +147,61 @@ export default function WorkOrderDetailPage() {
  },
  onError: (error: AxiosError<{ message?: string }>) => {
  toast.error(error.response?.data?.message ?? 'Finished-goods receipt could not be posted.');
+ },
+ });
+
+ const operationMut = useMutation({
+ mutationFn: async ({ action, operationId }: { action: 'startSetup' | 'endSetup' | 'start' | 'pause' | 'resume' | 'complete'; operationId: string }) => {
+ switch (action) {
+ case 'startSetup':
+ if (!employeeId) throw new Error('Your account is not linked to an employee profile.');
+ return woOperationsApi.startSetup(operationId, employeeId);
+ case 'start':
+ if (!employeeId) throw new Error('Your account is not linked to an employee profile.');
+ return woOperationsApi.start(operationId, employeeId);
+ case 'resume':
+ if (!employeeId) throw new Error('Your account is not linked to an employee profile.');
+ return woOperationsApi.resume(operationId, employeeId);
+ case 'endSetup': return woOperationsApi.endSetup(operationId);
+ case 'pause': return woOperationsApi.pause(operationId);
+ case 'complete': return woOperationsApi.complete(operationId);
+ }
+ },
+ onSuccess: () => {
+ qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'operations', id] });
+ qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'detail', id] });
+ toast.success('Operation updated.');
+ },
+ onError: (error: AxiosError<{ message?: string }> | Error) => {
+ toast.error(error instanceof AxiosError ? error.response?.data?.message ?? error.message : error.message);
+ },
+ });
+
+ const operationDialogMut = useMutation({
+ mutationFn: async () => {
+ if (!operationDialog) throw new Error('Choose an operation first.');
+ if (!employeeId) throw new Error('Your account is not linked to an employee profile.');
+ if (operationDialog.kind === 'skip') {
+ return woOperationsApi.skip(operationDialog.operation.id, operationSkipReason.trim(), employeeId);
+ }
+ return woOperationsApi.recordOutput(operationDialog.operation.id, {
+ qty: Number(operationQty),
+ scrap: Number(operationScrap || 0),
+ scrap_reason: operationScrapReason.trim() || undefined,
+ });
+ },
+ onSuccess: () => {
+ qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'operations', id] });
+ qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'detail', id] });
+ toast.success(operationDialog?.kind === 'skip' ? 'Operation skipped.' : 'Operation output recorded.');
+ setOperationDialog(null);
+ setOperationQty('');
+ setOperationScrap('0');
+ setOperationScrapReason('');
+ setOperationSkipReason('');
+ },
+ onError: (error: AxiosError<{ message?: string }> | Error) => {
+ toast.error(error instanceof AxiosError ? error.response?.data?.message ?? error.message : error.message);
  },
  });
 
@@ -266,7 +330,7 @@ export default function WorkOrderDetailPage() {
  </Panel>
  )}
  {data.production_readiness && !data.production_readiness.ready && (
- <div className="rounded-md border border-warning/30 bg-warning-bg/10 px-3 py-2 text-sm">
+ <div className="rounded-md border border-warning bg-warning-bg px-3 py-2 text-sm">
  <div className="font-medium text-warning-fg">Waiting for subassembly production</div>
  <div className="mt-1 text-muted">
  {data.production_readiness.blocking_work_orders.map((child) => (
@@ -498,7 +562,8 @@ export default function WorkOrderDetailPage() {
  <div className="p-4 text-sm text-muted">No operations defined for this work order.</div>
  )}
  {operations.data && operations.data.length > 0 && (
- <table className={tableCls}>
+ <div className="overflow-x-auto">
+ <table className={`${tableCls} min-w-[980px]`}>
  <thead>
  <tr className={theadTrCls}>
  <Th align="right" className="w-14">#</Th>
@@ -509,6 +574,7 @@ export default function WorkOrderDetailPage() {
  <Th align="right">Qty progress</Th>
  <Th>Start</Th>
  <Th>End</Th>
+ <Th>Actions</Th>
  </tr>
  </thead>
  <tbody>
@@ -532,10 +598,42 @@ export default function WorkOrderDetailPage() {
  </Td>
  <Td mono>{op.actual_start?.slice(0, 16) ?? '—'}</Td>
  <Td mono>{op.actual_end?.slice(0, 16) ?? '—'}</Td>
+ <Td>
+ {data.status !== 'in_progress' ? <span className="text-xs text-muted">Available after WO start</span> : (
+ <div className="flex flex-wrap gap-1">
+ {op.status === 'pending' && (
+ <>
+ {canLifecycle && <Button size="xs" variant="secondary" disabled={!employeeId || operationMut.isPending} onClick={() => operationMut.mutate({ action: 'startSetup', operationId: op.id })}>Setup</Button>}
+ {canLifecycle && <Button size="xs" variant="primary" disabled={!employeeId || operationMut.isPending} onClick={() => operationMut.mutate({ action: 'start', operationId: op.id })}>Start</Button>}
+ </>
+ )}
+ {op.status === 'setup' && (
+ <>
+ {canLifecycle && <Button size="xs" variant="secondary" disabled={operationMut.isPending} onClick={() => operationMut.mutate({ action: 'endSetup', operationId: op.id })}>End setup</Button>}
+ {canLifecycle && <Button size="xs" variant="primary" disabled={!employeeId || operationMut.isPending} onClick={() => operationMut.mutate({ action: 'start', operationId: op.id })}>Start</Button>}
+ </>
+ )}
+ {op.status === 'in_progress' && (
+ <>
+ {canLifecycle && <Button size="xs" variant="secondary" disabled={operationMut.isPending} onClick={() => operationMut.mutate({ action: 'pause', operationId: op.id })}>Pause</Button>}
+ {canRecord && <Button size="xs" variant="primary" disabled={!employeeId || operationDialogMut.isPending} onClick={() => setOperationDialog({ kind: 'record', operation: op })}>Output</Button>}
+ {canLifecycle && <Button size="xs" variant="secondary" disabled={operationMut.isPending} onClick={() => operationMut.mutate({ action: 'complete', operationId: op.id })}>Complete</Button>}
+ </>
+ )}
+ {op.status === 'paused' && canLifecycle && (
+ <Button size="xs" variant="primary" disabled={!employeeId || operationMut.isPending} onClick={() => operationMut.mutate({ action: 'resume', operationId: op.id })}>Resume</Button>
+ )}
+ {canLifecycle && !['completed', 'skipped'].includes(op.status) && (
+ <Button size="xs" variant="ghost" disabled={!employeeId || operationDialogMut.isPending} onClick={() => setOperationDialog({ kind: 'skip', operation: op })}>Skip</Button>
+ )}
+ </div>
+ )}
+ </Td>
  </tr>
  ))}
  </tbody>
  </table>
+ </div>
  )}
  </Panel>
  </div>
@@ -635,6 +733,63 @@ export default function WorkOrderDetailPage() {
  onClick={() => mut.mutate('pause')}
  >
  {mut.isPending ? 'Pausing…' : 'Pause work order'}
+ </Button>
+ </ModalFooter>
+ </div>
+ </Modal>
+
+ <Modal
+ isOpen={operationDialog !== null}
+ onClose={() => {
+ if (!operationDialogMut.isPending) setOperationDialog(null);
+ }}
+ title={operationDialog?.kind === 'skip' ? 'Skip operation' : 'Record operation output'}
+ size="md"
+ >
+ <div className="space-y-4">
+ {operationDialog?.kind === 'skip' ? (
+ <>
+ <p className="text-sm text-muted">
+ Skip <span className="font-medium text-primary">{operationDialog.operation.operation_name}</span> only when the routing step will not run.
+ </p>
+ <Textarea
+ label="Reason"
+ required
+ rows={3}
+ maxLength={500}
+ value={operationSkipReason}
+ onChange={(event) => setOperationSkipReason(event.target.value)}
+ placeholder="Explain why this operation is being skipped."
+ />
+ </>
+ ) : (
+ <>
+ <p className="text-sm text-muted">
+ Record output for <span className="font-medium text-primary">{operationDialog?.operation.operation_name}</span>. The server enforces the routing quantity policy.
+ </p>
+ <div className="grid grid-cols-2 gap-3">
+ <Input label="Quantity" required type="number" min={0.0001} step="0.0001" value={operationQty} onChange={(event) => setOperationQty(event.target.value)} className="font-mono text-right" />
+ <Input label="Scrap" type="number" min={0} step="0.0001" value={operationScrap} onChange={(event) => setOperationScrap(event.target.value)} className="font-mono text-right" />
+ </div>
+ <Textarea
+ label="Scrap reason"
+ rows={2}
+ maxLength={500}
+ value={operationScrapReason}
+ onChange={(event) => setOperationScrapReason(event.target.value)}
+ placeholder="Optional reason for scrap."
+ />
+ </>
+ )}
+ <ModalFooter>
+ <Button variant="secondary" disabled={operationDialogMut.isPending} onClick={() => setOperationDialog(null)}>Cancel</Button>
+ <Button
+ variant={operationDialog?.kind === 'skip' ? 'danger' : 'primary'}
+ disabled={operationDialogMut.isPending || !employeeId || (operationDialog?.kind === 'skip' ? !operationSkipReason.trim() : !(Number(operationQty) > 0) || Number(operationScrap) < 0 || Number(operationScrap) > Number(operationQty))}
+ loading={operationDialogMut.isPending}
+ onClick={() => operationDialogMut.mutate()}
+ >
+ {operationDialog?.kind === 'skip' ? 'Skip operation' : 'Record output'}
  </Button>
  </ModalFooter>
  </div>

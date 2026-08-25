@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Quality\Resources;
 
 use App\Modules\Quality\Enums\InspectionStage;
+use App\Modules\Quality\Resources\InspectionSpecRevisionResource;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Str;
@@ -22,6 +23,43 @@ class InspectionResource extends JsonResource
             'status_label' => Str::headline((string) ($this->status instanceof \BackedEnum ? $this->status->value : $this->status)),
             'entity_type' => $this->entity_type instanceof \BackedEnum ? $this->entity_type->value : $this->entity_type,
             'entity_hash_id' => $this->entity_id ? app('hashids')->encode($this->entity_id) : null,
+            'entity_context' => $this->whenLoaded('entityRecord', function () use ($request) {
+                $entity = $this->getRelation('entityRecord');
+                if (! $entity) return null;
+
+                $type = $this->entity_type instanceof \BackedEnum ? $this->entity_type->value : (string) $this->entity_type;
+                $permission = match ($type) {
+                    'grn' => 'inventory.view',
+                    'work_order' => 'production.work_orders.view',
+                    'delivery' => 'supply_chain.deliveries.view',
+                    'return_request' => 'return_management.view',
+                    default => null,
+                };
+                $href = match ($type) {
+                    'grn' => "/inventory/grn/{$entity->hash_id}",
+                    'work_order' => "/production/work-orders/{$entity->hash_id}",
+                    'delivery' => "/supply-chain/deliveries/{$entity->hash_id}",
+                    'return_request' => "/return-management/{$entity->hash_id}",
+                    default => null,
+                };
+                $reference = match ($type) {
+                    'grn' => $entity->grn_number,
+                    'work_order' => $entity->wo_number,
+                    'delivery' => $entity->delivery_number,
+                    'return_request' => $entity->rma_number,
+                    default => null,
+                };
+                $status = $entity->status instanceof \BackedEnum ? $entity->status->value : (string) $entity->status;
+
+                return [
+                    'id' => $entity->hash_id,
+                    'type' => $type,
+                    'reference' => $reference,
+                    'status' => $status,
+                    'status_label' => $status !== '' ? Str::headline($status) : null,
+                    'href' => $permission && $request->user()?->hasPermission($permission) ? $href : null,
+                ];
+            }),
             'batch_quantity' => (int) $this->batch_quantity,
             'accepted_quantity' => (int) $this->accepted_quantity,
             'work_order_output' => $this->whenLoaded('workOrderOutput', fn () => $this->workOrderOutput ? [
@@ -57,9 +95,23 @@ class InspectionResource extends JsonResource
             ] : null),
             'spec' => $this->whenLoaded('spec', fn () => $this->spec ? [
                 'id' => $this->spec->hash_id,
-                'version' => (int) $this->spec->version,
+                'version' => $this->relationLoaded('specRevision') && $this->specRevision
+                    ? (int) $this->specRevision->version
+                    : null,
                 'is_active' => (bool) $this->spec->is_active,
-            ] : null),
+                'revision_id' => $this->relationLoaded('specRevision') && $this->specRevision
+                    ? $this->specRevision->hash_id
+                    : null,
+                'revision_status' => $this->relationLoaded('specRevision') && $this->specRevision
+                    ? 'pinned'
+                    : 'legacy_unknown',
+                'revision_notes' => $this->relationLoaded('specRevision') && $this->specRevision
+                    ? $this->specRevision->notes
+                    : null,
+                ] : null),
+            'spec_revision' => $this->whenLoaded('specRevision', fn () => $this->specRevision
+                ? (new InspectionSpecRevisionResource($this->specRevision))->toArray($request)
+                : null),
             'quality_plan' => $this->whenLoaded('qualityPlan', fn () => $this->qualityPlan ? [
                 'id' => $this->qualityPlan->hash_id,
                 'version' => (int) $this->qualityPlan->version,

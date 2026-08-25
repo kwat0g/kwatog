@@ -28,6 +28,11 @@ export interface CalendarLayerOption {
  variant: CalendarEventVariant;
 }
 
+export interface CalendarDepartmentOption {
+ value: string;
+ label: string;
+}
+
 export interface CalendarEvent {
  id: string;
  type: CalendarLayer;
@@ -37,8 +42,13 @@ export interface CalendarEvent {
  end: string; // YYYY-MM-DD
  all_day: boolean;
  color_variant: CalendarEventVariant;
- link: string;
+ link: string | null;
  meta?: Record<string, unknown>;
+}
+
+export interface CalendarLayerCount {
+ returned: number;
+ truncated: boolean;
 }
 
 export interface CalendarEventsResponse {
@@ -47,13 +57,16 @@ export interface CalendarEventsResponse {
  from: string;
  to: string;
  count: number;
+ requested_layers: CalendarLayer[];
  layers: CalendarLayer[];
+ layer_counts: Partial<Record<CalendarLayer, CalendarLayerCount>>;
  };
 }
 
 export interface CalendarOptionsResponse {
  data: {
   layers: CalendarLayerOption[];
+  departments: CalendarDepartmentOption[];
  };
 }
 

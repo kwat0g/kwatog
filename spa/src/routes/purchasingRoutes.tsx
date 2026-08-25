@@ -19,37 +19,100 @@ const ProcurementChainPage = lazy(() => import('@/pages/purchasing/chain'));
 
 // Series F / Task F4 — Supplier performance dashboard
 const SupplierPerformancePage = lazy(() => import('@/pages/purchasing/suppliers/performance'));
+const SupplierRankingPage = lazy(() => import('@/pages/purchasing/suppliers/ranking'));
 
 export const purchasingRoutes = (
- <>
- {/* Purchasing module (Sprint 5) */}
- <Route element={<ModuleGuard module="purchasing" />}>
- <Route path="/purchasing" element={<Navigate to="/purchasing/purchase-orders" replace />} />
+  <>
+    {/* Purchasing module (Sprint 5) */}
+    <Route element={<ModuleGuard module="purchasing" />}>
+      <Route path="/purchasing" element={<Navigate to="/purchasing/purchase-orders" replace />} />
 
- <Route path="/purchasing/purchase-requests"
- element={<PermissionGuard permission="purchasing.view"><PurchaseRequestsListPage /></PermissionGuard>} />
- <Route path="/purchasing/purchase-requests/create"
- element={<PermissionGuard permission="purchasing.pr.create"><CreatePurchaseRequestPage /></PermissionGuard>} />
- <Route path="/purchasing/purchase-requests/:id"
- element={<PermissionGuard permission="purchasing.view"><PurchaseRequestDetailPage /></PermissionGuard>} />
+      <Route
+        path="/purchasing/purchase-requests"
+        element={
+          <PermissionGuard permission="purchasing.view">
+            <PurchaseRequestsListPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/purchasing/purchase-requests/create"
+        element={
+          <PermissionGuard permission="purchasing.pr.create">
+            <CreatePurchaseRequestPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/purchasing/purchase-requests/:id"
+        element={
+          <PermissionGuard permission="purchasing.view">
+            <PurchaseRequestDetailPage />
+          </PermissionGuard>
+        }
+      />
 
- <Route path="/purchasing/purchase-orders"
- element={<PermissionGuard permission="purchasing.view"><PurchaseOrdersListPage /></PermissionGuard>} />
- <Route path="/purchasing/purchase-orders/create"
- element={<PermissionGuard permission="purchasing.po.create"><CreatePurchaseOrderPage /></PermissionGuard>} />
- <Route path="/purchasing/purchase-orders/:id"
- element={<PermissionGuard permission="purchasing.view"><PurchaseOrderDetailPage /></PermissionGuard>} />
+      <Route
+        path="/purchasing/purchase-orders"
+        element={
+          <PermissionGuard permission="purchasing.view">
+            <PurchaseOrdersListPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/purchasing/purchase-orders/create"
+        element={
+          <PermissionGuard permission="purchasing.po.create">
+            <CreatePurchaseOrderPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/purchasing/purchase-orders/:id"
+        element={
+          <PermissionGuard permission="purchasing.view">
+            <PurchaseOrderDetailPage />
+          </PermissionGuard>
+        }
+      />
 
- <Route path="/purchasing/approved-suppliers"
- element={<PermissionGuard permission="purchasing.view"><ApprovedSuppliersPage /></PermissionGuard>} />
+      <Route
+        path="/purchasing/approved-suppliers"
+        element={
+          <PermissionGuard permission="purchasing.view">
+            <ApprovedSuppliersPage />
+          </PermissionGuard>
+        }
+      />
 
- {/* ADV5 — Procurement Chain overview */}
- <Route path="/purchasing/chain"
- element={<PermissionGuard permission="purchasing.view"><ProcurementChainPage /></PermissionGuard>} />
+      {/* ADV5 — Procurement Chain overview */}
+      <Route
+        path="/purchasing/chain"
+        element={
+          <PermissionGuard permission="purchasing.view">
+            <ProcurementChainPage />
+          </PermissionGuard>
+        }
+      />
 
- {/* Series F / Task F4 — Supplier performance dashboard */}
- <Route path="/purchasing/suppliers/:id/performance"
- element={<PermissionGuard permission="purchasing.suppliers.performance.view"><SupplierPerformancePage /></PermissionGuard>} />
- </Route>
- </>
+      {/* Series F / Task F4 — Supplier performance dashboard */}
+      <Route
+        path="/purchasing/suppliers/performance"
+        element={
+          <PermissionGuard permission="purchasing.suppliers.performance.view">
+            <SupplierRankingPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/purchasing/suppliers/:id/performance"
+        element={
+          <PermissionGuard permission="purchasing.suppliers.performance.view">
+            <SupplierPerformancePage />
+          </PermissionGuard>
+        }
+      />
+    </Route>
+  </>
 );

@@ -17,6 +17,7 @@ class RestoreBackupRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'backup_operation_id' => ['nullable', 'uuid'],
             'database_filename' => ['required', 'string', 'max:180'],
             'files_filename' => ['nullable', 'string', 'max:180'],
             'confirmation' => ['required', 'string', 'max:220'],

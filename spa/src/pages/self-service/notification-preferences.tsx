@@ -51,11 +51,21 @@ export default function NotificationPreferencesPage() {
  const qc = useQueryClient();
  const [search, setSearch] = useState('');
 
- const { data, isLoading, isError, refetch } = useQuery({
+ const {
+ data,
+ isLoading: preferencesLoading,
+ isError,
+ refetch,
+ } = useQuery({
  queryKey: ['notification-preferences'],
  queryFn: () => client.get<{ data: Pref[] }>('/notification-preferences').then(r => r.data.data),
  });
- const { data: catalog } = useQuery({
+ const {
+ data: catalog,
+ isLoading: catalogLoading,
+ isError: catalogError,
+ refetch: refetchCatalog,
+ } = useQuery({
  queryKey: ['notification-preferences', 'options'],
  queryFn: () => client.get<{ data: { groups: NotificationGroup[] } }>('/notification-preferences/options').then((r) => r.data.data),
  staleTime: 5 * 60 * 1000,
@@ -109,6 +119,8 @@ export default function NotificationPreferencesPage() {
  const enabledCount = (channel: 'in_app' | 'email') =>
  allTypes.filter((t) => isEnabled(t.key, channel)).length;
 
+ const catalogueUnavailable = isError || catalogError;
+
  return (
  <div>
  <PageHeader
@@ -124,7 +136,7 @@ export default function NotificationPreferencesPage() {
 
  <div className="px-5 py-4 space-y-4">
  {/* LOADING */}
- {isLoading && !data && (
+ {(preferencesLoading || catalogLoading) && (!data || !catalog) && (
  <div className="space-y-4">
  <SkeletonBlock className="h-16 rounded-md" />
  <SkeletonBlock className="h-96 rounded-md" />
@@ -132,16 +144,26 @@ export default function NotificationPreferencesPage() {
  )}
 
  {/* ERROR */}
- {isError && (
+ {catalogueUnavailable && (
  <EmptyState
  icon="alert-circle"
  title="Couldn't load your preferences"
  description="An error occurred while loading your notification settings. Please try again."
- action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
+ action={
+ <Button
+ variant="secondary"
+ onClick={() => {
+ void refetch();
+ void refetchCatalog();
+ }}
+ >
+ Retry
+ </Button>
+ }
  />
  )}
 
- {data && (
+ {data && catalog && !catalogueUnavailable && (
  <>
  {/* REC-06 — daily email digest opt-in (global, all unread types). */}
  <Panel title="Daily email digest">

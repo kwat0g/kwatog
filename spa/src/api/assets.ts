@@ -1,6 +1,6 @@
 import { client } from './client';
 import type { ApiSuccess, PaginatedResponse, ListParams } from '@/types';
-import type { Asset, AssetCategory, AssetStatus, CreateAssetData, DisposeAssetData, AssetTransfer, AssetTransferStatus, CreateTransferData } from '@/types/assets';
+import type { Asset, AssetCategory, AssetStatus, CreateAssetData, DisposeAssetData, UpdateAssetData, AssetTransfer, AssetTransferStatus, CreateTransferData } from '@/types/assets';
 
 export interface AssetListParams extends ListParams {
  category?: AssetCategory;
@@ -16,7 +16,7 @@ export const assetsApi = {
  client.get<ApiSuccess<Asset>>(`/assets/${id}`).then(r => r.data.data),
  create: (data: CreateAssetData) =>
  client.post<ApiSuccess<Asset>>('/assets', data).then(r => r.data.data),
- update: (id: string, data: Partial<CreateAssetData>) =>
+ update: (id: string, data: UpdateAssetData) =>
  client.put<ApiSuccess<Asset>>(`/assets/${id}`, data).then(r => r.data.data),
  destroy: (id: string) =>
  client.delete(`/assets/${id}`),

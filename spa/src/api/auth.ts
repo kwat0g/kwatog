@@ -32,7 +32,6 @@ export interface AuthUser {
 export interface LoginPayload {
  email: string;
  password: string;
- remember?: boolean;
 }
 
 export interface ChangePasswordPayload {

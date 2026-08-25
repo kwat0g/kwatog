@@ -9,6 +9,8 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Tests\TestCase;
@@ -193,6 +195,55 @@ class AuthEventsAuditTest extends TestCase
 
         $this->assertNotNull($row, 'password.changed row should be persisted');
         $this->assertSame($user->id, (int) $row->user_id);
+    }
+
+    public function test_password_change_preserves_current_session_and_revokes_other_sessions(): void
+    {
+        $original = 'Original-1!';
+        $user = $this->makeUser($original);
+        $currentSessionId = 'auth-current-'.uniqid();
+        $otherSessionId = 'auth-other-'.uniqid();
+
+        DB::table('sessions')->insert([
+            [
+                'id' => $currentSessionId,
+                'user_id' => $user->id,
+                'payload' => 'current',
+                'last_activity' => now()->timestamp,
+            ],
+            [
+                'id' => $otherSessionId,
+                'user_id' => $user->id,
+                'payload' => 'other',
+                'last_activity' => now()->timestamp,
+            ],
+        ]);
+
+        $session = app('session')->driver();
+        $session->setId($currentSessionId);
+        $request = Request::create('/api/v1/auth/change-password', 'POST');
+        $request->setLaravelSession($session);
+
+        app(\App\Modules\Auth\Services\AuthService::class)->changePassword(
+            $user,
+            $original,
+            'NewPass-9!',
+            $request,
+        );
+
+        $this->assertDatabaseHas('sessions', ['id' => $currentSessionId]);
+        $this->assertDatabaseMissing('sessions', ['id' => $otherSessionId]);
+    }
+
+    public function test_login_accepts_mixed_case_email_stored_by_an_older_writer(): void
+    {
+        $password = 'CorrectHorse-1!';
+        $user = $this->makeUser($password);
+        DB::table('users')->whereKey($user->id)->update(['email' => 'Legacy.Mixed+'.uniqid().'@t.test']);
+        $legacyEmail = (string) DB::table('users')->whereKey($user->id)->value('email');
+        $this->clearAuthThrottle($legacyEmail);
+
+        $this->postLogin(strtoupper($legacyEmail), $password)->assertOk();
     }
 
     public function test_unknown_email_does_not_write_audit_row(): void

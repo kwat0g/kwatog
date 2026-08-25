@@ -36,6 +36,7 @@ export const advancedRoutes = (
  <Route element={<ModuleGuard module="budgeting" />}>
  <Route path="/budgeting" element={<PermissionGuard permission="budgeting.view"><BudgetOverviewPage /></PermissionGuard>} />
  <Route path="/budgeting/create" element={<PermissionGuard permission="budgeting.manage"><BudgetCreatePage /></PermissionGuard>} />
+ <Route path="/budgeting/:id/edit" element={<PermissionGuard permission="budgeting.manage"><BudgetCreatePage /></PermissionGuard>} />
  <Route path="/budgeting/:id" element={<PermissionGuard permission="budgeting.view"><BudgetDetailPage /></PermissionGuard>} />
  <Route path="/budgeting/departments/:id" element={<PermissionGuard permission="budgeting.view"><DepartmentBudgetDetailPage /></PermissionGuard>} />
  <Route path="/budgeting/budget-vs-actual" element={<PermissionGuard permission="budgeting.view"><BudgetVsActualPage /></PermissionGuard>} />
@@ -44,6 +45,7 @@ export const advancedRoutes = (
  {/* ADV12 — Return Management (RMA) */}
  <Route path="/return-management" element={<PermissionGuard permission="return_management.view"><ReturnManagementListPage /></PermissionGuard>} />
  <Route path="/return-management/new" element={<PermissionGuard permission="return_management.manage"><CreateReturnRequestPage /></PermissionGuard>} />
+ <Route path="/return-management/:id/edit" element={<PermissionGuard permission="return_management.manage"><CreateReturnRequestPage /></PermissionGuard>} />
  <Route path="/return-management/:id" element={<PermissionGuard permission="return_management.view"><ReturnManagementDetailPage /></PermissionGuard>} />
  </>
 );

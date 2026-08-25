@@ -1,9 +1,8 @@
 /**
  * Series E (E1/E3) — document vault API client.
  *
- * Note: view_url and download_url are absolute URLs returned by the
- * API. They include the auth cookie when navigated via <a href>, so we
- * never need to fetch the blob in JS just to display it.
+ * Note: view_url and download_url are relative API paths returned by the
+ * server. The SPA proxy keeps the Sanctum session cookie on the request.
  */
 
 import { client } from './client';
@@ -22,8 +21,13 @@ export interface ListDocumentsParams {
 export const documentsApi = {
  list: (params?: ListDocumentsParams) =>
  client
- .get<PaginatedResponse<DocumentRecord>>('/documents', { params })
- .then((r) => r.data),
+  .get<PaginatedResponse<DocumentRecord>>('/documents', { params })
+  .then((r) => r.data),
+
+ listForEntity: (entityType: 'employees', entityId: string, params?: Pick<ListDocumentsParams, 'per_page' | 'page'>) =>
+  client
+   .get<PaginatedResponse<DocumentRecord>>(`/documents/entity/${entityType}/${entityId}`, { params })
+   .then((r) => r.data),
 
  show: (id: string) =>
  client

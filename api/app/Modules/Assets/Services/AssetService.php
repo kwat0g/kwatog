@@ -8,12 +8,17 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\SettingsService;
 use App\Common\Support\SearchOperator;
+use App\Common\Support\Money;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Services\AccountingPeriodService;
 use App\Modules\Accounting\Services\JournalEntryService;
 use App\Modules\Assets\Enums\AssetCategory;
 use App\Modules\Assets\Enums\AssetStatus;
 use App\Modules\Assets\Models\Asset;
+use App\Modules\Assets\Models\AssetDepreciation;
+use App\Modules\Assets\Models\AssetTransfer;
 use App\Modules\Auth\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -24,6 +29,7 @@ class AssetService
     public function __construct(
         private readonly DocumentSequenceService $sequences,
         private readonly JournalEntryService $journals,
+        private readonly AccountingPeriodService $periods,
         private readonly SettingsService $settings,
     ) {}
 
@@ -61,7 +67,7 @@ class AssetService
                 'acquisition_cost'  => $data['acquisition_cost'],
                 'useful_life_years' => (int) $data['useful_life_years'],
                 'depreciation_method' => $data['depreciation_method'] ?? \App\Modules\Assets\Enums\DepreciationMethod::StraightLine->value,
-                'salvage_value'     => $data['salvage_value'] ?? null,
+                'salvage_value'     => $data['salvage_value'] ?? Money::zero(),
                 'status'            => AssetStatus::Active->value,
                 'location'          => $data['location'] ?? null,
                 'insurance_policy_no' => $data['insurance_policy_no'] ?? null,
@@ -82,10 +88,34 @@ class AssetService
             if ($locked->status === AssetStatus::Disposed) {
                 throw new BusinessRuleException('Disposed assets are immutable.');
             }
-            $locked->fill(array_intersect_key($data, array_flip([
+
+            $hasDepreciationHistory = AssetDepreciation::query()
+                ->where('asset_id', $locked->getKey())
+                ->exists();
+            if ($hasDepreciationHistory) {
+                if (array_key_exists('useful_life_years', $data)
+                    && (int) $data['useful_life_years'] !== (int) $locked->useful_life_years) {
+                    throw new BusinessRuleException('Useful life cannot change after depreciation has been posted.');
+                }
+                $requestedSalvage = $data['salvage_value'] ?? Money::zero();
+                if ($requestedSalvage === null || trim((string) $requestedSalvage) === '') {
+                    $requestedSalvage = Money::zero();
+                }
+                if (array_key_exists('salvage_value', $data)
+                    && Money::cmp((string) $requestedSalvage, (string) $locked->salvage_value) !== 0) {
+                    throw new BusinessRuleException('Salvage value cannot change after depreciation has been posted.');
+                }
+            }
+
+            $changes = array_intersect_key($data, array_flip([
                 'name', 'description', 'department_id', 'location',
                 'useful_life_years', 'salvage_value',
-            ])));
+            ]));
+            if (array_key_exists('salvage_value', $changes)
+                && ($changes['salvage_value'] === null || trim((string) $changes['salvage_value']) === '')) {
+                $changes['salvage_value'] = Money::zero();
+            }
+            $locked->fill($changes);
             $locked->save();
             return $locked->fresh();
         });
@@ -103,9 +133,6 @@ class AssetService
      */
     public function dispose(Asset $asset, array $data, User $by): Asset
     {
-        if ($asset->status === AssetStatus::Disposed) {
-            throw new BusinessRuleException('Asset already disposed.');
-        }
         return DB::transaction(function () use ($asset, $data, $by) {
             // Lock-then-guard: re-read so a concurrent dispose cannot post a
             // second disposal JE from a stale snapshot.
@@ -114,10 +141,29 @@ class AssetService
                 throw new BusinessRuleException('Asset already disposed.');
             }
 
-            $disposalAmount = (float) ($data['disposal_amount'] ?? 0);
-            $cost           = (float) $locked->acquisition_cost;
-            $accum          = (float) $locked->accumulated_depreciation;
-            $bookValue      = max(0.0, $cost - $accum);
+            $disposedDate = CarbonImmutable::parse((string) ($data['disposed_date'] ?? now()->toDateString()))->startOfDay();
+            $acquisitionDate = CarbonImmutable::parse($locked->acquisition_date->toDateString())->startOfDay();
+            if ($disposedDate->lt($acquisitionDate)) {
+                throw new BusinessRuleException('Disposal date cannot be before the acquisition date.');
+            }
+            if ($disposedDate->gt(CarbonImmutable::today())) {
+                throw new BusinessRuleException('Disposal date cannot be in the future.');
+            }
+
+            // Surface the canonical closed-period error before checking the
+            // operator-entered reason. This keeps a closed-period rejection
+            // actionable even when an old client omitted the new reason field.
+            $this->periods->assertPostingAllowed($disposedDate->toDateString());
+
+            $reason = trim((string) ($data['remarks'] ?? $data['disposal_reason'] ?? ''));
+            if ($reason === '') {
+                throw new BusinessRuleException('A disposal reason is required.');
+            }
+
+            $disposalAmount = Money::round2((string) ($data['disposal_amount'] ?? Money::zero()));
+            $cost = Money::round2((string) $locked->acquisition_cost);
+            $accumulated = Money::round2((string) $locked->accumulated_depreciation);
+            $bookValue = Money::clampMin(Money::sub($cost, $accumulated), Money::zero());
 
             $cashAcct  = Account::where('code', $this->settings->requiredString('accounting.accounts.asset_cash_code'))->firstOrFail();
             $accumAcct = Account::where('code', $this->settings->requiredString('accounting.accounts.asset_accumulated_depreciation_code'))->firstOrFail();
@@ -126,22 +172,22 @@ class AssetService
             $gainAcct  = Account::where('code', $this->settings->requiredString('accounting.accounts.asset_disposal_gain_code'))->firstOrFail();
 
             $lines = [
-                ['account_id' => $cashAcct->id,  'debit' => number_format($disposalAmount, 2, '.', ''), 'credit' => '0.00', 'description' => 'Disposal proceeds'],
-                ['account_id' => $accumAcct->id, 'debit' => number_format($accum, 2, '.', ''),          'credit' => '0.00', 'description' => 'Reverse accumulated depreciation'],
+                ['account_id' => $cashAcct->id,  'debit' => $disposalAmount, 'credit' => Money::zero(), 'description' => 'Disposal proceeds'],
+                ['account_id' => $accumAcct->id, 'debit' => $accumulated, 'credit' => Money::zero(), 'description' => 'Reverse accumulated depreciation'],
             ];
-            if ($disposalAmount < $bookValue) {
-                $loss = $bookValue - $disposalAmount;
-                $lines[] = ['account_id' => $lossAcct->id, 'debit' => number_format($loss, 2, '.', ''), 'credit' => '0.00', 'description' => 'Loss on disposal'];
+            if (Money::lt($disposalAmount, $bookValue)) {
+                $loss = Money::sub($bookValue, $disposalAmount);
+                $lines[] = ['account_id' => $lossAcct->id, 'debit' => $loss, 'credit' => Money::zero(), 'description' => 'Loss on disposal'];
             }
-            $lines[] = ['account_id' => $assetAcct->id, 'debit' => '0.00', 'credit' => number_format($cost, 2, '.', ''), 'description' => 'Remove asset at cost'];
-            if ($disposalAmount > $bookValue) {
-                $gain = $disposalAmount - $bookValue;
-                $lines[] = ['account_id' => $gainAcct->id, 'debit' => '0.00', 'credit' => number_format($gain, 2, '.', ''), 'description' => 'Gain on disposal'];
+            $lines[] = ['account_id' => $assetAcct->id, 'debit' => Money::zero(), 'credit' => $cost, 'description' => 'Remove asset at cost'];
+            if (Money::gt($disposalAmount, $bookValue)) {
+                $gain = Money::sub($disposalAmount, $bookValue);
+                $lines[] = ['account_id' => $gainAcct->id, 'debit' => Money::zero(), 'credit' => $gain, 'description' => 'Gain on disposal'];
             }
 
             $je = $this->journals->create([
-                'date'           => $data['disposed_date'] ?? now()->toDateString(),
-                'description'    => 'Disposal of asset '.$locked->asset_code.' — '.$locked->name,
+                'date'           => $disposedDate->toDateString(),
+                'description'    => 'Disposal of asset '.$locked->asset_code.' — '.$locked->name.' — Reason: '.$reason,
                 'reference_type' => Asset::class,
                 'reference_id'   => $locked->id,
                 'lines'          => $lines,
@@ -150,8 +196,9 @@ class AssetService
 
             $locked->forceFill([
                 'status'          => AssetStatus::Disposed->value,
-                'disposed_date'   => $data['disposed_date'] ?? now()->toDateString(),
+                'disposed_date'   => $disposedDate->toDateString(),
                 'disposal_amount' => $disposalAmount,
+                'disposal_reason' => $reason,
             ])->save();
 
             return $locked->fresh();
@@ -160,12 +207,19 @@ class AssetService
 
     public function delete(Asset $asset): void
     {
-        if ($asset->status !== AssetStatus::Active) {
-            throw new BusinessRuleException('Only active assets that have not been depreciated can be deleted.');
-        }
-        if ($asset->depreciations()->exists()) {
-            throw new BusinessRuleException('Asset has depreciation history; dispose instead.');
-        }
-        $asset->delete();
+        DB::transaction(function () use ($asset): void {
+            $locked = Asset::query()->lockForUpdate()->findOrFail($asset->getKey());
+            if ($locked->status !== AssetStatus::Active) {
+                throw new BusinessRuleException('Only active assets without financial or custody history can be deleted.');
+            }
+            if (AssetDepreciation::query()->where('asset_id', $locked->getKey())->exists()) {
+                throw new BusinessRuleException('Asset has depreciation history; dispose instead.');
+            }
+            if (AssetTransfer::query()->where('asset_id', $locked->getKey())->exists()) {
+                throw new BusinessRuleException('Asset has custody history; it cannot be deleted.');
+            }
+
+            $locked->delete();
+        });
     }
 }

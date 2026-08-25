@@ -6,6 +6,7 @@ namespace App\Modules\Payroll\Services;
 
 use App\Common\Services\SettingsService;
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Support\Money;
 use App\Modules\Auth\Models\User;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use App\Modules\Payroll\Enums\BankFileFormat;
@@ -15,6 +16,7 @@ use App\Modules\Payroll\Models\PayrollPeriod;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -68,7 +70,10 @@ class BankFileService
             return;
         }
 
-        $missing = $unbankable->sum(fn (Payroll $p) => (float) $p->net_pay);
+        $missing = $unbankable->reduce(
+            static fn (string $total, Payroll $payroll): string => Money::add($total, (string) $payroll->net_pay),
+            Money::zero(),
+        );
         $sample  = $unbankable->take(3)
             ->map(fn (Payroll $p) => sprintf(
                 '%s %s',
@@ -80,7 +85,7 @@ class BankFileService
         throw new BusinessRuleException(sprintf(
             '%d employee(s) in this period have no bank account on file, so %s would be left out of the bank file and never paid (e.g. %s). Add their bank details, then generate the file again.',
             $unbankable->count(),
-            number_format($missing, 2),
+            $this->formatMoneyForMessage($missing),
             $sample,
         ));
     }
@@ -89,7 +94,12 @@ class BankFileService
      * Build the CSV in memory, persist a copy to private storage, write a
      * BankFileRecord audit row, and return that record.
      */
-    public function generate(PayrollPeriod $period, User $generator, ?string $format = null): BankFileRecord
+    public function generate(
+        PayrollPeriod $period,
+        User $generator,
+        ?string $format = null,
+        bool $force = false,
+    ): BankFileRecord
     {
         $writtenPath = null;
 
@@ -99,7 +109,9 @@ class BankFileService
                 throw new BusinessRuleException("Unsupported bank file format: {$format}");
             }
 
-            return DB::transaction(function () use ($period, $generator, $format, &$writtenPath) {
+            $artifactKey = $this->artifactKey($period, $format);
+
+            return DB::transaction(function () use ($period, $generator, $format, $force, $artifactKey, &$writtenPath) {
                 // The route-bound period can be stale while finalization,
                 // disbursement, or another download is in flight. The locked
                 // row is the authority for both the lifecycle and the payroll
@@ -112,6 +124,27 @@ class BankFileService
                 }
                 if (! in_array($lockedPeriod->status, [PayrollPeriodStatus::Finalized, PayrollPeriodStatus::Disbursed], true)) {
                     throw new BusinessRuleException('Bank file can only be generated for finalized or disbursed periods.');
+                }
+
+                $existing = BankFileRecord::query()
+                    ->where('payroll_period_id', $lockedPeriod->id)
+                    ->where(function ($query) use ($artifactKey, $format): void {
+                        $query->where('artifact_key', $artifactKey)
+                            ->orWhere(function ($legacy) use ($format): void {
+                                $legacy->whereNull('artifact_key')->where('format', $format);
+                            });
+                    })
+                    ->orderByDesc('generated_at')
+                    ->orderByDesc('id')
+                    ->lockForUpdate()
+                    ->first();
+
+                $disk = Storage::disk('local');
+                if ($existing && ! $force && $disk->exists((string) $existing->file_path)) {
+                    if ((string) $existing->artifact_key !== $artifactKey) {
+                        $existing->forceFill(['artifact_key' => $artifactKey])->save();
+                    }
+                    return $existing->fresh();
                 }
 
                 $this->assertEveryoneIsBankable($lockedPeriod);
@@ -145,13 +178,16 @@ class BankFileService
                     ->whereNull('error_message')
                     ->where('net_pay', '>', 0)
                     ->get(['net_pay'])
-                    ->reduce(fn (string $carry, Payroll $p) => bcadd($carry, (string) $p->net_pay, 2), '0.00');
+                    ->reduce(
+                        static fn (string $carry, Payroll $payroll): string => Money::add($carry, (string) $payroll->net_pay),
+                        Money::zero(),
+                    );
 
                 if (bccomp($total, $expected, 2) !== 0) {
                     throw new BusinessRuleException(sprintf(
                         'Bank file failed reconciliation: the file totals %s but this period owes %s. Nothing was generated — this is a bug, please report it.',
-                        number_format((float) $total, 2),
-                        number_format((float) $expected, 2),
+                        $total,
+                        $expected,
                     ));
                 }
 
@@ -160,27 +196,30 @@ class BankFileService
                     $csv .= implode(',', array_map(fn ($v) => $this->escape((string) $v), $r))."\n";
                 }
 
-                $disk = Storage::disk('local');
                 $dir  = 'bank-files';
                 if (! $disk->exists($dir)) $disk->makeDirectory($dir);
 
-                $filename = sprintf(
-                    'bank_%s_%s_%s.csv',
-                    $lockedPeriod->id,
-                    $lockedPeriod->period_start?->format('Ymd'),
-                    bin2hex(random_bytes(4)),
-                );
+                // One deterministic private path per period/format makes a
+                // retry overwrite the current artifact instead of creating a
+                // new random file and audit row on every browser request.
+                $filename = sprintf('bank_%s_%s.csv', $lockedPeriod->id, $format);
                 $relative = $dir.DIRECTORY_SEPARATOR.$filename;
-                $writtenPath = $relative;
-                if ($disk->put($relative, $csv) !== true) {
+                $temporary = $relative.'.tmp.'.Str::uuid();
+                $writtenPath = $temporary;
+                if ($disk->put($temporary, $csv) !== true) {
                     // Infrastructure: a full or unwritable disk. A 500 is the
                     // honest answer — the payroll officer cannot fix storage,
                     // and a 422 would invite them to retry a failing write.
                     throw new RuntimeException("Unable to write bank file to {$relative}.");
                 }
+                if (! $disk->move($temporary, $relative)) {
+                    throw new RuntimeException("Unable to publish bank file to {$relative}.");
+                }
+                $writtenPath = $relative;
 
-                $record = BankFileRecord::create([
+                $payload = [
                     'payroll_period_id' => $lockedPeriod->id,
+                    'artifact_key'      => $artifactKey,
                     'file_path'         => $relative,
                     'format'            => $format,
                     'record_count'      => $count,
@@ -188,7 +227,13 @@ class BankFileService
                     'generated_by'      => $generator->id,
                     'generated_at'      => now(),
                     'created_at'        => now(),
-                ]);
+                ];
+                if ($existing) {
+                    $existing->forceFill($payload)->save();
+                    $record = $existing->fresh();
+                } else {
+                    $record = BankFileRecord::create($payload);
+                }
 
                 $lockedPeriod->markBankFileGenerated();
 
@@ -229,13 +274,25 @@ class BankFileService
     }
 
     /**
-     * Generate (or regenerate) and stream the file as an attachment download.
+     * Stream the current durable artifact as an attachment download.
+     *
+     * Generation is intentionally a separate, explicit action. A browser
+     * refresh or a repeated download must not create a new audit row or
+     * replace the artifact that Finance already reviewed.
      */
-    public function stream(PayrollPeriod $period, User $generator, ?string $format = null): StreamedResponse
+    public function stream(PayrollPeriod $period, ?string $format = null): StreamedResponse
     {
-        $record = $this->generate($period, $generator, $format);
+        $format ??= $this->defaultFormat();
+        $this->assertSupportedFormat($format);
+
+        $freshPeriod = $period->fresh();
+        if (! $freshPeriod || ! in_array($freshPeriod->status, [PayrollPeriodStatus::Finalized, PayrollPeriodStatus::Disbursed], true)) {
+            throw new BusinessRuleException('Bank file can only be downloaded for finalized or disbursed periods.');
+        }
+
+        $record = $this->currentRecord($freshPeriod, $format);
         $contents = Storage::disk('local')->get($record->file_path);
-        $filename = sprintf('bank_%s_%s.csv', $record->format, $period->period_start?->format('Y-m-d'));
+        $filename = sprintf('bank_%s_%s.csv', $record->format, $freshPeriod->period_start?->format('Y-m-d'));
 
         return response()->streamDownload(
             fn () => print $contents,
@@ -245,6 +302,25 @@ class BankFileService
                 'Cache-Control' => 'no-store',
             ],
         );
+    }
+
+    /**
+     * Resolve the durable current artifact without generating or mutating it.
+     */
+    public function currentRecord(PayrollPeriod $period, ?string $format = null): BankFileRecord
+    {
+        $format ??= $this->defaultFormat();
+        $this->assertSupportedFormat($format);
+
+        $record = BankFileRecord::query()
+            ->where('payroll_period_id', $period->id)
+            ->where('artifact_key', $this->artifactKey($period, $format))
+            ->first();
+        if (! $record || ! Storage::disk('local')->exists((string) $record->file_path)) {
+            throw new BusinessRuleException('No current bank artifact exists for this period and format. Generate it explicitly, then download it.');
+        }
+
+        return $record;
     }
 
     /**
@@ -286,8 +362,9 @@ class BankFileService
             'total'   => $rows['total'],
             'count'   => $rows['count'],
             'unbankable_count'  => $unbankable->count(),
-            'unbankable_amount' => number_format(
-                $unbankable->sum(fn (Payroll $p) => (float) $p->net_pay), 2, '.', '',
+            'unbankable_amount' => $unbankable->reduce(
+                static fn (string $total, Payroll $payroll): string => Money::add($total, (string) $payroll->net_pay),
+                Money::zero(),
             ),
             'unbankable_sample' => $unbankable->take(5)->map(fn (Payroll $p) => [
                 'employee_no' => $p->employee?->employee_no,
@@ -306,6 +383,29 @@ class BankFileService
     public function defaultFormat(): string
     {
         return (string) $this->settings->requiredString('payroll.bank_file.default_format');
+    }
+
+    private function artifactKey(PayrollPeriod $period, string $format): string
+    {
+        return sprintf('payroll-period:%s:bank-format:%s', $period->id, $format);
+    }
+
+    private function assertSupportedFormat(string $format): void
+    {
+        if (! in_array($format, $this->formats(), true)) {
+            throw new BusinessRuleException("Unsupported bank file format: {$format}");
+        }
+    }
+
+    private function formatMoneyForMessage(string $amount): string
+    {
+        $amount = Money::round2($amount);
+        [$whole, $fraction] = array_pad(explode('.', $amount, 2), 2, '00');
+        $sign = str_starts_with($whole, '-') ? '-' : '';
+        $whole = ltrim($whole, '-');
+        $whole = preg_replace('/\B(?=(\d{3})+(?!\d))/', ',', $whole) ?: $whole;
+
+        return $sign.$whole.'.'.$fraction;
     }
 
     // ---------------------------------------------------------------
@@ -333,9 +433,9 @@ class BankFileService
                 $emp->full_name,
                 $emp->bank_name ?? '',
                 $bankAcct,
-                number_format((float) $p->net_pay, 2, '.', ''),
+                Money::round2((string) $p->net_pay),
             ];
-            $total = bcadd($total, (string) $p->net_pay, 2);
+            $total = Money::add($total, (string) $p->net_pay);
             $count++;
         }
 
@@ -366,11 +466,11 @@ class BankFileService
                 $emp->employee_no,
                 $bankAcct,
                 $emp->full_name,
-                number_format((float) $p->net_pay, 2, '.', ''),
+                Money::round2((string) $p->net_pay),
                 $currency,
                 $reference,
             ];
-            $total = bcadd($total, (string) $p->net_pay, 2);
+            $total = Money::add($total, (string) $p->net_pay);
             $count++;
         }
 
@@ -398,7 +498,7 @@ class BankFileService
             if ($bankAcct === '') continue;
 
             // Amount in centavos (integer, no decimal)
-            $centavos = bcmul((string) $p->net_pay, '100', 0);
+            $centavos = bcmul(Money::round2((string) $p->net_pay), '100', 0);
 
             $data[] = [
                 $bankAcct,
@@ -407,7 +507,7 @@ class BankFileService
                 $reference,
                 '', // branch code — empty string, field included for mandatory column header
             ];
-            $total = bcadd($total, (string) $p->net_pay, 2);
+            $total = Money::add($total, (string) $p->net_pay);
             $count++;
         }
 
@@ -437,10 +537,10 @@ class BankFileService
                 $emp->first_name ?? '',
                 $emp->middle_name ? strtoupper(substr($emp->middle_name, 0, 1)) : '',
                 $bankAcct,
-                number_format((float) $p->net_pay, 2, '.', ''),
+                Money::round2((string) $p->net_pay),
                 'SALARY',
             ];
-            $total = bcadd($total, (string) $p->net_pay, 2);
+            $total = Money::add($total, (string) $p->net_pay);
             $count++;
         }
 

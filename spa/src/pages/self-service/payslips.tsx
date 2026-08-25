@@ -3,7 +3,8 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { LuCircleCheck, LuClock } from '@/lib/icons';
 import { downloadAuthenticatedFile } from '@/api/download';
-import { payrollsApi, type PayrollListParams } from '@/api/payroll/payrolls';
+import { selfServiceApi } from '@/api/self-service';
+import type { PayrollListParams } from '@/api/payroll/payrolls';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -24,7 +25,9 @@ const columns: Column<Payroll>[] = [
  header: 'Period',
  cell: (p) => (
  <NumCell className="font-medium">
- {p.computed_at ? formatDate(p.computed_at) : '—'}
+ {p.period_start && p.period_end
+ ? `${formatDate(p.period_start)} – ${formatDate(p.period_end)}`
+ : '—'}
  </NumCell>
  ),
  },
@@ -54,7 +57,9 @@ const columns: Column<Payroll>[] = [
  {p.error_message ? (
  <Chip variant="danger">Error</Chip>
  ) : (
- <Chip variant="success">Computed</Chip>
+ <Chip variant={p.period_status === 'disbursed' ? 'success' : 'info'}>
+ {p.period_status_label ?? 'Published'}
+ </Chip>
  )}
  {/* ADV1 — Show disbursement status if available */}
  {p.period_disbursement_status === 'disbursed' && (
@@ -78,7 +83,7 @@ export default function SelfServicePayslipsPage() {
  });
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['my-payslips', filters],
- queryFn: () => payrollsApi.list(filters),
+ queryFn: () => selfServiceApi.payslips(filters),
  placeholderData: (prev) => prev,
  });
 
@@ -117,7 +122,7 @@ export default function SelfServicePayslipsPage() {
  onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
  onRowClick={(p) => {
  if (!p.error_message) {
- void downloadAuthenticatedFile(payrollsApi.payslipUrl(p.id), {
+ void downloadAuthenticatedFile(selfServiceApi.payslipUrl(p.id), {
  openInNewTab: true,
  errorMessage: 'Failed to generate the payslip.',
  });

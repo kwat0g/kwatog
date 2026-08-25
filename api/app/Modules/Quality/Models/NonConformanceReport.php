@@ -36,7 +36,7 @@ class NonConformanceReport extends Model
     protected $fillable = [
         'ncr_number', 'source', 'severity', 'status',
         'product_id', 'inspection_id', 'complaint_id',
-        'defect_description', 'affected_quantity', 'disposition',
+        'defect_description', 'defect_signature', 'affected_quantity', 'disposition',
         'root_cause', 'corrective_action',
         'created_by', 'assigned_to', 'closed_by', 'closed_at',
         'replacement_work_order_id',
@@ -99,6 +99,11 @@ class NonConformanceReport extends Model
     public function recurrenceOf(): BelongsTo
     {
         return $this->belongsTo(self::class, 'recurrence_of_ncr_id');
+    }
+
+    public function recurrenceScans(): HasMany
+    {
+        return $this->hasMany(NcrRecurrenceScan::class, 'ncr_id');
     }
 
     public function reworkWorkOrder(): BelongsTo

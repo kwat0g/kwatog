@@ -41,6 +41,7 @@ class AssetResource extends JsonResource
             'status_label'             => Str::headline((string) ($this->status instanceof \BackedEnum ? $this->status->value : $this->status)),
             'disposed_date'            => optional($this->disposed_date)?->toDateString(),
             'disposal_amount'          => $this->disposal_amount !== null ? (string) $this->disposal_amount : null,
+            'disposal_reason'          => $this->disposal_reason,
             'location'                 => $this->location,
             'insurance_policy_no'      => $this->insurance_policy_no,
             'insurance_provider'       => $this->insurance_provider,

@@ -218,6 +218,7 @@ export default function CreatePurchaseRequestPage() {
           {errors.items?.root && (
             <div className="text-xs text-danger-fg mb-2">{errors.items.root.message}</div>
           )}
+          <div className="overflow-x-auto">
           <table className={tableCls}>
             <thead>
               <tr className={theadTrCls}>
@@ -339,6 +340,7 @@ export default function CreatePurchaseRequestPage() {
               </tr>
             </tbody>
           </table>
+          </div>
         </Panel>
         <FormActions>
           <Button

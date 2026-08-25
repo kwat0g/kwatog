@@ -18,8 +18,9 @@ class UpdateJournalEntryRequest extends FormRequest
         return [
             'date'                => ['sometimes', 'date'],
             'description'         => ['sometimes', 'string', 'max:500'],
-            'reference_type'      => ['sometimes', 'nullable', 'string', 'max:50'],
-            'reference_id'        => ['sometimes', 'nullable', 'integer'],
+            // Source provenance is immutable from the manual API boundary.
+            'reference_type'      => ['prohibited'],
+            'reference_id'        => ['prohibited'],
             'lines'               => ['required', 'array', 'min:2'],
             'lines.*.account_id'  => ['required', 'string'],
             'lines.*.debit'       => ['nullable', 'numeric', 'min:0'],

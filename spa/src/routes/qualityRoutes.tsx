@@ -13,6 +13,7 @@ const QualityDashboardPage = lazy(() => import('@/pages/quality/dashboard'));
 const NcrsListPage = lazy(() => import('@/pages/quality/ncrs'));
 const NcrDetailPage = lazy(() => import('@/pages/quality/ncrs/detail'));
 const NcrCreatePage = lazy(() => import('@/pages/quality/ncrs/create'));
+const NcrEffectivenessPage = lazy(() => import('@/pages/quality/ncrs/effectiveness'));
 // ADV7 — NCR Templates
 const NcrTemplatesListPage = lazy(() => import('@/pages/quality/ncr-templates'));
 const NcrTemplateFormPage = lazy(() => import('@/pages/quality/ncr-templates/create'));
@@ -20,6 +21,9 @@ const NcrTemplateFormPage = lazy(() => import('@/pages/quality/ncr-templates/cre
 const TraceabilityPage = lazy(() => import('@/pages/quality/traceability'));
 // Process capability (Cp/Cpk)
 const CapabilityStudyPage = lazy(() => import('@/pages/quality/capability'));
+// OGAMI-016 — IATF calibration register
+const CalibrationListPage = lazy(() => import('@/pages/quality/calibration'));
+const CalibrationFormPage = lazy(() => import('@/pages/quality/calibration/form'));
 // Task 16 — Document Control
 
 export const qualityRoutes = (
@@ -31,8 +35,18 @@ export const qualityRoutes = (
  element={<PermissionGuard permission="quality.view"><QualityDashboardPage /></PermissionGuard>} />
  <Route path="/quality/inspection-specs"
  element={<PermissionGuard permission="quality.specs.view"><InspectionSpecsListPage /></PermissionGuard>} />
+ <Route path="/quality/inspection-specs/new"
+ element={<PermissionGuard permission="quality.specs.view"><InspectionSpecEditorPage /></PermissionGuard>} />
+ <Route path="/quality/inspection-specs/spec/:specId"
+ element={<PermissionGuard permission="quality.specs.view"><InspectionSpecEditorPage /></PermissionGuard>} />
  <Route path="/quality/inspection-specs/:productId"
  element={<PermissionGuard permission="quality.specs.view"><InspectionSpecEditorPage /></PermissionGuard>} />
+ <Route path="/quality/calibration"
+ element={<PermissionGuard permission="quality.calibration.view"><CalibrationListPage /></PermissionGuard>} />
+ <Route path="/quality/calibration/new"
+ element={<PermissionGuard permission="quality.calibration.manage"><CalibrationFormPage /></PermissionGuard>} />
+ <Route path="/quality/calibration/:id/edit"
+ element={<PermissionGuard permission="quality.calibration.manage"><CalibrationFormPage /></PermissionGuard>} />
  <Route path="/quality/inspections"
  element={<PermissionGuard permission="quality.inspections.view"><InspectionsListPage /></PermissionGuard>} />
  <Route path="/quality/inspections/new"
@@ -41,6 +55,8 @@ export const qualityRoutes = (
  element={<PermissionGuard permission="quality.inspections.view"><InspectionDetailPage /></PermissionGuard>} />
  <Route path="/quality/ncrs"
  element={<PermissionGuard permission="quality.ncr.view"><NcrsListPage /></PermissionGuard>} />
+ <Route path="/quality/ncrs/effectiveness"
+ element={<PermissionGuard permission="quality.ncr.view"><NcrEffectivenessPage /></PermissionGuard>} />
  <Route path="/quality/ncrs/new"
  element={<PermissionGuard permission="quality.ncr.manage"><NcrCreatePage /></PermissionGuard>} />
  <Route path="/quality/ncrs/:id"

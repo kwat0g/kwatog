@@ -3,12 +3,13 @@
  *
  * Folded off the /admin/depreciation page 2026-08-08 (scope cut): it was a
  * single-action settings chore wearing a sidebar slot under Administration,
- * despite being an asset operation (permission assets.depreciation.view).
+ * despite being an asset operation (permission assets.depreciation.run).
  * Now it lives on the Fixed Assets page behind a header button. Idempotent —
  * re-running for an already-processed month is a no-op.
  */
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
+import { isAxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { depreciationApi } from '@/api/assets';
 import { Button } from '@/components/ui/Button';
@@ -17,21 +18,19 @@ import { Input } from '@/components/ui/Input';
 import { PendingHint } from '@/components/ui/PendingHint';
 import { formatPeso } from '@/lib/formatNumber';export function DepreciationRunner({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
  const now = new Date();
- const [year, setYear] = useState<number>(now.getFullYear());
- // Defaults to the PREVIOUS month: `getMonth()` is 0-indexed, and the input is
- // 1-based, so August (getMonth() = 7) renders as "7" = July. Kept from the
- // original /admin/depreciation page. Re-running a processed month is a no-op.
- const [month, setMonth] = useState<number>(now.getMonth());
+ const previousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+ const [year, setYear] = useState<number>(previousMonth.getFullYear());
+ // Date#getMonth() is zero-based; the API input is the human 1–12 month.
+ const [month, setMonth] = useState<number>(previousMonth.getMonth() + 1);
 
   const run = useMutation({
     mutationFn: () => depreciationApi.runMonth(year, month),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onSuccess: (res: any) => {
-      const d = res.data ?? res;
+    onSuccess: (res) => {
+      const d = (res.data ?? res) as { posted_count?: number; total_amount?: string };
       toast.success(`Posted ${d.posted_count ?? '—'} entries totalling ${formatPeso(d.total_amount)}.`);
       onClose();
     },
-    onError: () => toast.error('Failed to run depreciation.'),
+    onError: (error) => toast.error(isAxiosError(error) ? error.response?.data?.message ?? 'Failed to run depreciation.' : 'Failed to run depreciation.'),
   });
 
   return (

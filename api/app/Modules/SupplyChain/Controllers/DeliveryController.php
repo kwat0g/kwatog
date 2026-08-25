@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace App\Modules\SupplyChain\Controllers;
 
 use App\Modules\SupplyChain\Enums\DeliveryStatus;
+use App\Modules\Auth\Models\User;
 use App\Modules\SupplyChain\Models\Delivery;
+use App\Modules\SupplyChain\Requests\AssignDeliveryRequest;
 use App\Modules\SupplyChain\Requests\CreateDeliveryRequest;
+use App\Modules\SupplyChain\Requests\DeliveryInspectionOptionsRequest;
 use App\Modules\SupplyChain\Resources\DeliveryResource;
 use App\Modules\SupplyChain\Services\DeliveryService;
 use Illuminate\Http\JsonResponse;
@@ -37,6 +40,32 @@ class DeliveryController
         ]]);
     }
 
+    public function inspectionOptions(DeliveryInspectionOptionsRequest $request): JsonResponse
+    {
+        return response()->json([
+            'data' => $this->service->inspectionOptions(
+                (int) $request->validated()['sales_order_id'],
+            ),
+        ]);
+    }
+
+    public function driverOptions(): JsonResponse
+    {
+        return response()->json([
+            'data' => User::query()
+                ->where('is_active', true)
+                ->whereHas('role', static fn ($query) => $query->where('slug', 'driver'))
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(static fn (User $driver): array => [
+                    'id' => $driver->hash_id,
+                    'name' => $driver->name,
+                ])
+                ->values()
+                ->all(),
+        ]);
+    }
+
     private static function nextStatus(DeliveryStatus $status): ?DeliveryStatus
     {
         foreach (DeliveryStatus::cases() as $candidate) {
@@ -53,6 +82,15 @@ class DeliveryController
     public function store(CreateDeliveryRequest $request): DeliveryResource
     {
         return new DeliveryResource($this->service->create($request->validated(), $request->user()));
+    }
+
+    public function assign(AssignDeliveryRequest $request, Delivery $delivery): DeliveryResource
+    {
+        return new DeliveryResource($this->service->assign(
+            $delivery,
+            $request->validated(),
+            $request->user(),
+        ));
     }
 
     public function updateStatus(Request $request, Delivery $delivery): DeliveryResource

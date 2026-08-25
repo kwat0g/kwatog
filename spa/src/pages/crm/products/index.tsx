@@ -173,7 +173,7 @@ export default function ProductsListPage() {
  <span className="font-mono font-medium text-primary">{confirmDelete.part_number}</span>{' '}
  <span className="text-muted">— {confirmDelete.name}</span>
  <br />
- Archiving fails if the product appears on any sales order. Deactivate instead in that case. It will be archived and can be restored later.
+	 Archiving fails if the product appears on a sales order, has an active BOM, or has a price agreement. Retire those dependent records first; otherwise deactivate the product instead. It can be restored later.
  </>
  ) : null
  }

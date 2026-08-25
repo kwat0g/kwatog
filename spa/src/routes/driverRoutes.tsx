@@ -1,6 +1,7 @@
 import { lazy } from 'react';
 import { Route } from 'react-router-dom';
 import { AuthGuard } from '@/components/guards/AuthGuard';
+import { ModuleGuard } from '@/components/guards/ModuleGuard';
 import { PermissionGuard } from '@/components/guards/PermissionGuard';
 
 // T2.5 — Driver PWA (mobile-first, no sidebar, self-scoped to driver_id)
@@ -13,9 +14,11 @@ export const driverRoutes = (
  <Route
  element={
  <AuthGuard>
+ <ModuleGuard module="supply_chain">
  <PermissionGuard permission="supply_chain.driver.access">
  <DriverLayout />
  </PermissionGuard>
+ </ModuleGuard>
  </AuthGuard>
  }
  >

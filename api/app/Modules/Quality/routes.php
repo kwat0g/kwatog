@@ -40,15 +40,24 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
     Route::get('/inspection-specs',                       [InspectionSpecController::class, 'index'])
         ->middleware('permission:quality.specs.view');
     Route::get('/inspection-specs/{inspectionSpec}',      [InspectionSpecController::class, 'show'])
-        ->middleware('permission:quality.specs.view');
+        ->middleware('permission:quality.specs.view')
+        ->withTrashed();
+    Route::get('/inspection-specs/{inspectionSpec}/revisions', [InspectionSpecController::class, 'revisions'])
+        ->middleware('permission:quality.specs.view')
+        ->withTrashed();
+    Route::get('/inspection-specs/{inspectionSpec}/revisions/{revision}', [InspectionSpecController::class, 'revision'])
+        ->middleware('permission:quality.specs.view')
+        ->withTrashed();
     Route::post('/inspection-specs',                      [InspectionSpecController::class, 'upsert'])
         ->middleware('permission:quality.specs.manage');
     Route::delete('/inspection-specs/{inspectionSpec}',   [InspectionSpecController::class, 'destroy'])
         ->middleware('permission:quality.specs.manage');
     Route::patch('/inspection-specs/{inspectionSpec}/restore', [InspectionSpecController::class, 'restore'])
-        ->middleware('permission:quality.specs.manage');
+        ->middleware('permission:quality.specs.manage')
+        ->withTrashed();
     Route::get('/inspection-specs/{inspectionSpec}/spc', [InspectionSpecController::class, 'spcData'])
-        ->middleware('permission:quality.specs.view');
+        ->middleware('permission:quality.specs.view')
+        ->withTrashed();
 
     Route::get('/products/{product}/inspection-spec',     [InspectionSpecController::class, 'forProduct'])
         ->middleware('permission:quality.specs.view');
@@ -59,6 +68,8 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
     Route::get('/inspections',                                  [InspectionController::class, 'index'])
         ->middleware('permission:quality.inspections.view');
     Route::get('/inspections/aql-preview',                      [InspectionController::class, 'aqlPreview'])
+        ->middleware('permission:quality.inspections.view');
+    Route::get('/inspections/work-order-outputs',               [InspectionController::class, 'workOrderOutputs'])
         ->middleware('permission:quality.inspections.view');
     Route::get('/inspections/{inspection}',                     [InspectionController::class, 'show'])
         ->middleware('permission:quality.inspections.view');
@@ -98,6 +109,9 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
     /* ─── NCRs (Task 61) ─── */
     Route::get('/ncrs',                                         [NcrController::class, 'index'])
         ->middleware('permission:quality.ncr.view');
+
+    Route::get('/ncrs/assignees',                              [NcrController::class, 'assignees'])
+        ->middleware('permission:quality.ncr.manage');
 
     // Series F / Task F6 — Bulk close NCRs (must precede /ncrs/{ncr}).
     Route::post('/ncrs/bulk-close',                             [NcrController::class, 'bulkClose'])

@@ -16,14 +16,16 @@ use App\Modules\Quality\Enums\NcrDisposition;
 use App\Modules\Quality\Enums\NcrSeverity;
 use App\Modules\Quality\Enums\NcrSource;
 use App\Modules\Quality\Enums\NcrStatus;
+use App\Modules\Quality\Jobs\ProcessNcrRecurrenceScan;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\NcrAction;
+use App\Modules\Quality\Models\NcrRecurrenceScan;
 use App\Modules\Quality\Models\NonConformanceReport;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Notifications\DatabaseNotification;
-use Illuminate\Notifications\Notification as BaseNotification;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Sprint 7 — Task 61. NCR lifecycle service.
@@ -78,8 +80,13 @@ class NcrService
             'creator:id,name,role_id',
             'assignee:id,name',
             'closer:id,name',
+            'recurrenceOf:id,ncr_number',
             'replacementWorkOrder:id,wo_number,status,quantity_target',
-            'actions' => fn ($q) => $q->with('performer:id,name,role_id')->orderBy('performed_at'),
+            'actions' => fn ($q) => $q->with([
+                'performer:id,name,role_id',
+                'owner:id,name',
+                'verifier:id,name',
+            ])->orderBy('performed_at'),
         ]);
     }
 
@@ -94,6 +101,16 @@ class NcrService
     public function create(array $data, User $by): NonConformanceReport
     {
         $ncr = DB::transaction(function () use ($data, $by) {
+            $inspection = ! empty($data['inspection_id'])
+                ? Inspection::query()->with('measurements')->find((int) $data['inspection_id'])
+                : null;
+            $defectSignature = (string) ($data['defect_signature'] ?? '');
+            if ($defectSignature === '') {
+                $defectSignature = $inspection
+                    ? NcrRecurrenceDetector::signatureForInspection($inspection)
+                    : NcrRecurrenceDetector::descriptionSignature((string) $data['defect_description']);
+            }
+
             $ncr = NonConformanceReport::create([
                 'ncr_number'        => $this->sequences->generate('ncr'),
                 'source'            => NcrSource::from((string) $data['source'])->value,
@@ -102,20 +119,23 @@ class NcrService
                 'product_id'        => $data['product_id'] ?? null,
                 'inspection_id'     => $data['inspection_id'] ?? null,
                 'complaint_id'      => $data['complaint_id'] ?? null,
-                'defect_description'=> $data['defect_description'],
+                'defect_description' => $data['defect_description'],
+                'defect_signature'  => $defectSignature,
                 'affected_quantity' => (int) ($data['affected_quantity'] ?? 0),
                 'created_by'        => $by->id,
                 'assigned_to'       => $data['assigned_to'] ?? null,
                 'is_auto_generated' => (bool) ($data['is_auto_generated'] ?? false),
             ]);
-            $fresh = $this->show($ncr);
 
-            // Recurrence is part of the NCR's persisted lineage. Run it while
-            // the new row is still in the owning transaction so a crash cannot
-            // leave an unlinked NCR after the create has committed.
-            app(NcrRecurrenceDetector::class)->scan($fresh->fresh());
+            NcrRecurrenceScan::create([
+                'ncr_id'       => $ncr->id,
+                'status'       => 'pending',
+                'available_at' => now(),
+            ]);
 
-            return $fresh->fresh();
+            DB::afterCommit(fn () => ProcessNcrRecurrenceScan::dispatch($ncr->id));
+
+            return $ncr->fresh();
         });
 
         return $ncr;
@@ -142,18 +162,33 @@ class NcrService
                 ? NcrSeverity::High->value
                 : NcrSeverity::Medium->value);
 
-        $ncr = $this->create([
-            'source'             => NcrSource::InspectionFail->value,
-            'severity'           => $severity,
-            'product_id'         => $inspection->product_id,
-            'inspection_id'      => $inspection->id,
-            'defect_description' => 'Automated NCR from inspection '.$inspection->inspection_number.': '
-                                   .$inspection->defect_count.' defect(s) on '
-                                   .$inspection->stage->value.' stage'
-                                   .($criticalFail ? ' (critical parameter failure)' : '').'.',
-            'affected_quantity'  => $inspection->batch_quantity,
-            'is_auto_generated'  => true,
-        ], $by);
+        try {
+            $ncr = $this->create([
+                'source'             => NcrSource::InspectionFail->value,
+                'severity'           => $severity,
+                'product_id'         => $inspection->product_id,
+                'inspection_id'      => $inspection->id,
+                'defect_description' => 'Automated NCR from inspection '.$inspection->inspection_number.': '
+                                       .$inspection->defect_count.' defect(s) on '
+                                       .$inspection->stage->value.' stage'
+                                       .($criticalFail ? ' (critical parameter failure)' : '').'.',
+                'affected_quantity'  => $inspection->batch_quantity,
+                'is_auto_generated'  => true,
+            ], $by);
+        } catch (QueryException $exception) {
+            if (! $this->isInspectionUniqueViolation($exception)) {
+                throw $exception;
+            }
+
+            $winner = NonConformanceReport::query()
+                ->where('inspection_id', $inspection->id)
+                ->first();
+            if (! $winner) {
+                throw $exception;
+            }
+
+            return $this->show($winner);
+        }
 
         // Task A6 — notify QC Head so root cause / disposition can be filled.
         try {
@@ -213,7 +248,7 @@ class NcrService
             if ($locked->status === NcrStatus::Open) {
                 $locked->forceFill(['status' => NcrStatus::InProgress->value])->save();
             }
-            return $action->load('performer:id,name,role_id');
+            return $action->load(['performer:id,name,role_id', 'owner:id,name']);
         });
     }
 
@@ -287,18 +322,16 @@ class NcrService
                 && $locked->affected_quantity > 0) {
                 $insp = Inspection::find($locked->inspection_id);
                 if ($insp && $insp->stage === InspectionStage::Outgoing) {
-                    $wo = $this->workOrderService()?->createDraft([
+                    $wo = $this->createRequiredWorkOrder([
                         'product_id'      => $locked->product_id,
                         'quantity_target' => $locked->affected_quantity,
                         'planned_start'   => now()->addDay()->toDateString(),
                         'planned_end'     => now()->addDays($this->settings->requiredInt('quality.ncr.replacement_work_order_lead_days', 1))->toDateString(),
                         'priority'        => $this->settings->requiredInt('quality.ncr.replacement_work_order_priority', 0, 10),
                         'parent_ncr_id'   => $locked->id,
-                        'created_by'     => $by->id,
+                        'created_by'      => $by->id,
                     ]);
-                    if ($wo) {
-                        $locked->forceFill(['replacement_work_order_id' => $wo->id])->save();
-                    }
+                    $locked->forceFill(['replacement_work_order_id' => $wo->id])->save();
                 }
             }
 
@@ -310,7 +343,7 @@ class NcrService
                 && $locked->affected_quantity > 0) {
                 $insp = Inspection::find($locked->inspection_id);
                 if ($insp && $insp->stage === InspectionStage::Outgoing) {
-                    $wo = $this->workOrderService()?->createDraft([
+                    $wo = $this->createRequiredWorkOrder([
                         'product_id'      => $locked->product_id,
                         'quantity_target' => (int) $locked->affected_quantity,
                         'planned_start'   => now()->addDay()->toDateString(),
@@ -319,9 +352,7 @@ class NcrService
                         'parent_ncr_id'   => $locked->id,
                         'created_by'      => $by->id,
                     ]);
-                    if ($wo) {
-                        $locked->forceFill(['rework_work_order_id' => $wo->id])->save();
-                    }
+                    $locked->forceFill(['rework_work_order_id' => $wo->id])->save();
                 }
             }
 
@@ -370,27 +401,62 @@ class NcrService
         }
     }
 
+    private function createRequiredWorkOrder(array $data): \App\Modules\Production\Models\WorkOrder
+    {
+        $service = $this->workOrderService();
+        if ($service === null) {
+            throw new BusinessRuleException(
+                'This NCR disposition requires the Production work-order service, which is currently unavailable.'
+            );
+        }
+
+        try {
+            return $service->createDraft($data);
+        } catch (\Throwable $exception) {
+            Log::error('NCR close could not create the required production work order.', [
+                'parent_ncr_id' => $data['parent_ncr_id'] ?? null,
+                'exception'     => $exception::class,
+                'message'       => $exception->getMessage(),
+            ]);
+
+            throw new BusinessRuleException(
+                'The required production work order could not be created; the NCR remains open.',
+                0,
+                $exception,
+            );
+        }
+    }
+
     private function notifyPurchasing(NonConformanceReport $ncr): void
     {
         $roles = array_values(array_filter((array) $this->settings->get('quality.ncr.return_to_supplier.notification_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
         if ($roles === []) return;
-        $recipients = User::query()->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))->get();
+        $recipients = User::query()
+            ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
+            ->where('is_active', true)
+            ->get();
         if ($recipients->isEmpty()) return;
 
-        $payload = [
-            'subject'   => "Return-to-supplier required: NCR {$ncr->ncr_number}",
-            'body'      => "NCR {$ncr->ncr_number} closed with disposition return_to_supplier. Quantity: {$ncr->affected_quantity}.",
-            'ncr_id'    => $ncr->hash_id,
-            'severity'  => $ncr->severity->value,
-        ];
+        $severity = $ncr->severity instanceof \BackedEnum
+            ? $ncr->severity->value
+            : (string) $ncr->severity;
+        $this->notifications->send($recipients, 'ncr.return_to_supplier', [
+            'title'         => "Return-to-supplier required: NCR {$ncr->ncr_number}",
+            'message'       => "NCR {$ncr->ncr_number} closed with disposition return_to_supplier. Quantity: {$ncr->affected_quantity}.",
+            'link_to'       => "/quality/ncrs/{$ncr->hash_id}",
+            'entity_type'   => 'ncr',
+            'entity_id'     => $ncr->hash_id,
+            'ncr_number'    => $ncr->ncr_number,
+            'affected_qty'  => (int) $ncr->affected_quantity,
+            'severity'      => $severity,
+        ]);
+    }
 
-        // Custom anonymous notification — DatabaseNotification fallback.
-        $notification = new class($payload) extends BaseNotification {
-            public function __construct(public readonly array $payload) {}
-            public function via($notifiable): array { return ['database']; }
-            public function toDatabase($notifiable): array { return $this->payload; }
-        };
+    private function isInspectionUniqueViolation(QueryException $exception): bool
+    {
+        $message = strtolower($exception->getMessage());
 
-        $this->notifications->notify($recipients, $notification, 'ncr.return_to_supplier');
+        return str_contains($message, 'ncr_inspection_unique')
+            || str_contains($message, 'non_conformance_reports.inspection_id');
     }
 }

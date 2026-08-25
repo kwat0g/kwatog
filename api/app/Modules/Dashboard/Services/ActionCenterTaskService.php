@@ -92,7 +92,7 @@ class ActionCenterTaskService
         $permissions = match (true) {
             str_starts_with($key, 'approval:') => ['approvals.board.view'],
             str_starts_with($key, 'alert:') => ['alerts.view'],
-            str_starts_with($key, 'quality:') => ['quality.view', 'quality.ncr.view'],
+            str_starts_with($key, 'quality:') => $this->qualityPermissions($key),
             str_starts_with($key, 'maintenance:') => ['maintenance.view'],
             str_starts_with($key, 'production:') => ['production.work_orders.view'],
             str_starts_with($key, 'supply-chain:') => ['supply_chain.view'],
@@ -107,5 +107,17 @@ class ActionCenterTaskService
             }
         }
         throw new ForbiddenActionException('You do not have access to this action-center item.');
+    }
+
+    /** @return array<int, string> */
+    private function qualityPermissions(string $key): array
+    {
+        if (preg_match('/^quality:(inspection|ncr):[^:]+$/', $key, $matches) !== 1) {
+            throw new BusinessRuleException('Unknown action-center item.');
+        }
+
+        return $matches[1] === 'inspection'
+            ? ['quality.view', 'quality.inspections.view']
+            : ['quality.view', 'quality.ncr.view'];
     }
 }

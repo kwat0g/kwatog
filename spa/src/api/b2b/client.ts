@@ -3,6 +3,7 @@ import axios from 'axios';
 export const createPortalClient = (storageKey?: string) => {
  const client = axios.create({
  baseURL: '/api/v1',
+ withCredentials: true,
  timeout: 30_000,
  headers: {
  Accept: 'application/json',

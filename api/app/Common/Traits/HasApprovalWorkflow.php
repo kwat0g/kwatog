@@ -15,7 +15,19 @@ trait HasApprovalWorkflow
 {
     public function approvalRecords(): MorphMany
     {
-        return $this->morphMany(ApprovalRecord::class, 'approvable')->orderBy('step_order');
+        return $this->morphMany(ApprovalRecord::class, 'approvable')
+            ->where('is_current', true)
+            ->orderBy('step_order');
+    }
+
+    /**
+     * Full immutable audit history, including superseded attempts.
+     */
+    public function approvalHistory(): MorphMany
+    {
+        return $this->morphMany(ApprovalRecord::class, 'approvable')
+            ->orderByDesc('attempt')
+            ->orderBy('step_order');
     }
 
     public function submitForApproval(string $workflowType, ?string $amount = null): void

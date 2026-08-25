@@ -25,7 +25,10 @@ class WarehouseLocation extends Model
 
     protected $fillable = ['zone_id', 'code', 'rack', 'bin', 'is_active'];
 
-    protected $casts = ['is_active' => 'boolean'];
+    protected $casts = [
+        'is_active' => 'boolean',
+        'is_blocked' => 'boolean',
+    ];
 
     public function zone(): BelongsTo
     {

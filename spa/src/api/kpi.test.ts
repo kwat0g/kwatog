@@ -35,4 +35,12 @@ describe('kpiApi', () => {
 
  await expect(kpiApi.scorecard(2026, 6)).resolves.toEqual([scorecardItem]);
  });
+
+ it('loads all requested trends through one batch endpoint', async () => {
+ const trends = { on_time_delivery: [{ period: '2026-06', value: '95', target: '95', status: 'on_target' }] };
+ const get = vi.spyOn(client, 'get').mockResolvedValue({ data: { data: trends } } as never);
+
+ await expect(kpiApi.trends(['on_time_delivery'], 6)).resolves.toEqual(trends);
+ expect(get).toHaveBeenCalledWith('/dashboard/kpi/trends', { params: { codes: 'on_time_delivery', months: 6 } });
+ });
 });

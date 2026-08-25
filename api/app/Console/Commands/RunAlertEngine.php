@@ -12,22 +12,24 @@ use Illuminate\Console\Command;
  */
 class RunAlertEngine extends Command
 {
-    protected $signature   = 'alerts:run';
+    protected $signature = 'alerts:run';
+
     protected $description = 'Run all alert engine threshold checks (Task A2)';
 
     public function handle(AlertEngineService $engine): int
     {
         $start = microtime(true);
         $stats = $engine->runAllChecks();
-        $ms    = (int) round((microtime(true) - $start) * 1000);
+        $ms = (int) round((microtime(true) - $start) * 1000);
 
         $this->info("Alert engine completed in {$ms}ms — raised {$stats['raised']} new alerts.");
         if (! empty($stats['by_severity'])) {
-            $this->line('Recent by severity: '.json_encode($stats['by_severity']));
+            $this->line('Created by severity in this run: '.json_encode($stats['by_severity']));
         }
 
         if ($stats['failed'] !== []) {
             $this->error('Alert checks failed: '.implode(', ', $stats['failed']));
+
             return self::FAILURE;
         }
 

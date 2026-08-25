@@ -114,7 +114,7 @@ export function kpiLink(label: string): string | undefined {
  case 'Open NCRs':
  return `/quality/ncrs?status=open`;
  case 'CoCs Gen. MTD':
- return `/quality/certificates`;
+ return `/quality/inspections?stage=outgoing&status=passed&from=${startOfThisMonth()}`;
 
  default:
  return undefined;

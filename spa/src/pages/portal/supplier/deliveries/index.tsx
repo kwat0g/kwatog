@@ -9,13 +9,20 @@ import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { CompanyName } from '@/components/brand/CompanyName';
+import { DataTablePagination } from '@/components/ui/DataTablePagination';
+import { useUrlFilters } from '@/hooks/useUrlFilters';
+import type { SupplierDeliverySummary } from '@/types/b2b';
+
+type DeliveryFilters = { page: number; per_page: number; status?: string };
 
 export default function SupplierDeliveriesPage() {
- const { data: deliveries, isLoading, isError, refetch } = useQuery({
- queryKey: ['portal', 'supplier', 'deliveries'],
- queryFn: () => supplierPortalApi.listDeliveries(),
+ const [filters, setFilters] = useUrlFilters<DeliveryFilters>({ page: 1, per_page: 25 });
+ const { data, isLoading, isError, refetch } = useQuery({
+ queryKey: ['portal', 'supplier', 'deliveries', filters],
+ queryFn: () => supplierPortalApi.listDeliveries(filters),
  placeholderData: (prev) => prev,
  });
+ const deliveries: SupplierDeliverySummary[] = data?.data ?? [];
 
  return (
  <div>
@@ -35,7 +42,7 @@ export default function SupplierDeliveriesPage() {
 
  {!isLoading && !isError && (
  <Panel noPadding>
- {deliveries && deliveries.length > 0 ? (
+ {deliveries.length > 0 ? (
  <PortalTable>
 <table className={tableCls}>
  <thead>
@@ -63,6 +70,12 @@ export default function SupplierDeliveriesPage() {
  )}
  </Panel>
  )}
+ {data && <DataTablePagination
+  meta={data.meta}
+  perPage={filters.per_page}
+  onPageChange={(page) => setFilters((current) => ({ ...current, page }))}
+  onPageSizeChange={(per_page) => setFilters((current) => ({ ...current, per_page, page: 1 }))}
+ />}
  </div>
  </div>
  );

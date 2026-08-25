@@ -16,8 +16,13 @@ class CompleteEmployeeTrainingRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'completed_at'     => ['required', 'date'],
-            'certificate_path' => ['nullable', 'string', 'max:255'],
+            'completed_at' => ['required', 'date'],
+            'certificate' => [
+                'nullable',
+                'file',
+                'mimes:pdf,jpg,jpeg,png,doc,docx,xls,xlsx',
+                'max:10240',
+            ],
         ];
     }
 }

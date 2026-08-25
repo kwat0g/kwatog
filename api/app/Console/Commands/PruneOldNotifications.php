@@ -15,6 +15,13 @@ class PruneOldNotifications extends Command
     public function handle(): int
     {
         $days = (int) $this->option('days');
+
+        if ($days < 1) {
+            $this->error('The --days option must be at least 1.');
+
+            return self::FAILURE;
+        }
+
         $cutoff = now()->subDays($days);
 
         $deleted = DB::table('notifications')

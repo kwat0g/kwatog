@@ -201,7 +201,6 @@ export default function PortalLoginPage({ portalType }: { portalType: PortalType
                 suffix={
                   <button
                     type="button"
-                    tabIndex={-1}
                     onClick={() => setShowPassword((value) => !value)}
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                     className="flex h-full items-center justify-center px-2 text-muted transition-colors hover:text-primary"

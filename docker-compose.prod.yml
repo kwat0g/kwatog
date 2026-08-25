@@ -28,6 +28,8 @@ services:
     environment:
       APP_ENV: production
       APP_DEBUG: "false"
+      APP_MAINTENANCE_DRIVER: cache
+      APP_MAINTENANCE_STORE: redis
     command: php artisan migrate --force --no-interaction
     depends_on:
       db:
@@ -49,6 +51,8 @@ services:
     environment:
       APP_ENV: production
       APP_DEBUG: "false"
+      APP_MAINTENANCE_DRIVER: cache
+      APP_MAINTENANCE_STORE: redis
     depends_on:
       db:
         condition: service_healthy
@@ -134,6 +138,11 @@ services:
     env_file:
       - path: .env
         format: raw
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_MAINTENANCE_DRIVER: cache
+      APP_MAINTENANCE_STORE: redis
     command: php artisan reverb:start --host=0.0.0.0 --port=8080
     depends_on:
       - api
@@ -151,6 +160,11 @@ services:
     env_file:
       - path: .env
         format: raw
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_MAINTENANCE_DRIVER: cache
+      APP_MAINTENANCE_STORE: redis
     # 1800s matches the longest durable listener; retry_after is kept above it
     # so Redis does not redeliver a live long-running job.
     command: php artisan queue:work --tries=3 --timeout=1800 --sleep=3
@@ -177,6 +191,11 @@ services:
     env_file:
       - path: .env
         format: raw
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_MAINTENANCE_DRIVER: cache
+      APP_MAINTENANCE_STORE: redis
     # Run one truthful scheduler tick every 60s. The wrapper observes
     # ScheduledTaskFailed because Laravel's native schedule:run catches task
     # exceptions and otherwise exits 0; a failed tick must restart this

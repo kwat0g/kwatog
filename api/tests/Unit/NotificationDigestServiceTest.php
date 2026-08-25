@@ -142,6 +142,45 @@ class NotificationDigestServiceTest extends TestCase
         $this->assertSame(25, $result['notifications_summarised']);
     }
 
+    public function test_large_backlog_uses_a_bounded_item_query_and_exact_count(): void
+    {
+        $user = User::factory()->create(['email' => 'sub@ogami.test']);
+        $this->optIn($user);
+
+        for ($i = 0; $i < 100; $i++) {
+            $this->notify($user, title: "Item {$i}");
+        }
+
+        Mail::fake();
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $result = (new NotificationDigestService(maxItemsPerUser: 20))->run();
+
+        $queries = DB::getQueryLog();
+        DB::disableQueryLog();
+
+        $notificationQueries = array_values(array_filter(
+            $queries,
+            static fn (array $query): bool => str_contains(strtolower($query['query']), 'notifications'),
+        ));
+
+        $this->assertCount(2, $notificationQueries, 'Digest should use one count query and one bounded item query.');
+        $this->assertTrue(
+            str_contains(strtolower($notificationQueries[0]['query']), 'count(*)')
+            || str_contains(strtolower($notificationQueries[1]['query']), 'count(*)'),
+        );
+        $this->assertTrue(
+            str_contains(strtolower($notificationQueries[0]['query']), 'row_number()')
+            || str_contains(strtolower($notificationQueries[1]['query']), 'row_number()'),
+        );
+
+        Mail::assertQueued(NotificationDigestMail::class, function (NotificationDigestMail $mail): bool {
+            return count($mail->items) === 20 && $mail->totalUnread === 100;
+        });
+        $this->assertSame(100, $result['notifications_summarised']);
+    }
+
     public function test_subscriber_without_an_email_address_is_skipped(): void
     {
         $user = User::factory()->create(['email' => '']);

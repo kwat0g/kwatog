@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { LuPlus, LuKeyRound, LuCoins, LuDownload } from '@/lib/icons';
+import { LuPlus, LuKeyRound, LuCoins, LuDownload, LuCalendarClock } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { employeesApi, type EmployeeListParams } from '@/api/hr/employees';
 import { departmentsApi } from '@/api/hr/departments';
@@ -24,6 +24,7 @@ import type { Employee, BulkProvisionResponse } from '@/types/hr';
 
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
 import { ColumnSelectorModal } from '@/components/exports/ColumnSelectorModal';
+import { ScheduledExportFormModal } from '@/components/exports/ScheduledExportFormModal';
 const DEFAULT_FILTERS: EmployeeListParams = {
   page: 1,
   per_page: 25,
@@ -33,7 +34,7 @@ const DEFAULT_FILTERS: EmployeeListParams = {
 };
 
 /**
- * The four headcount tiles. `polarity` is declarative: StatCard only colours a
+ * The six headcount tiles. `polarity` is declarative: StatCard only colours a
  * `delta`, and these show none today, but resignations and terminations rising
  * is bad news and the tile should never render that in success green if a trend
  * is added later.
@@ -70,6 +71,18 @@ const STATUS_TILES: Array<{
     polarity: 'lower-is-better',
     className: 'border-danger/30 bg-danger-bg/20',
   },
+  {
+    status: 'suspended',
+    label: 'Suspended',
+    helper: 'all matching employees',
+    className: 'border-warning/30 bg-warning-bg/20',
+  },
+  {
+    status: 'retired',
+    label: 'Retired',
+    helper: 'all matching employees',
+    polarity: 'lower-is-better',
+  },
 ];
 
 export default function EmployeesListPage() {
@@ -78,6 +91,7 @@ export default function EmployeesListPage() {
   const queryClient = useQueryClient();
   const [bulkResult, setBulkResult] = useState<BulkProvisionResponse | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const canViewDepartments = can('hr.departments.view');
   const canViewEmployees = can('hr.employees.view');
   const canViewAdjustments = can('hr.salary_adjustments.view');
@@ -91,6 +105,11 @@ export default function EmployeesListPage() {
   // Bound to the URL so dashboard drill-downs (?status=active, ?status=on_leave)
   // arrive pre-filtered and the browser back button restores the previous view.
   const [filters, setFilters] = useUrlFilters<EmployeeListParams>(DEFAULT_FILTERS);
+  const exportFilters = {
+    status: filters.status,
+    department_id: filters.department_id,
+    pay_type: filters.pay_type,
+  };
 
   // U1 — bulk system-account provisioning.
   const bulkProvision = useMutation({
@@ -268,14 +287,24 @@ export default function EmployeesListPage() {
                 they could not export by hand. Current filters are passed through,
                 so what you see is what you get. */}
             {view === 'employees' && can('hr.employees.export') && (
-              <Button
-                variant="secondary"
-                size="sm"
-                icon={<LuDownload size={14} />}
-                onClick={() => setExportOpen(true)}
-              >
-                Export
-              </Button>
+              <>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<LuDownload size={14} />}
+                  onClick={() => setExportOpen(true)}
+                >
+                  Export
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<LuCalendarClock size={14} />}
+                  onClick={() => setScheduleOpen(true)}
+                >
+                  Schedule
+                </Button>
+              </>
             )}
             {view === 'employees' && can('hr.employees.create') && (
               <Button
@@ -319,7 +348,7 @@ export default function EmployeesListPage() {
           )}
 
           {data && (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 px-5 py-4 border-b border-default bg-canvas">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 px-5 py-4 border-b border-default bg-canvas">
               {STATUS_TILES.map((tile) => (
                 <StatCard
                   key={tile.status}
@@ -426,7 +455,13 @@ export default function EmployeesListPage() {
         isOpen={exportOpen}
         onClose={() => setExportOpen(false)}
         module="hr.employees"
-        filters={filters as Record<string, unknown>}
+        filters={exportFilters}
+      />
+      <ScheduledExportFormModal
+        isOpen={scheduleOpen}
+        onClose={() => setScheduleOpen(false)}
+        module="hr.employees"
+        filters={exportFilters}
       />
     </div>
   );

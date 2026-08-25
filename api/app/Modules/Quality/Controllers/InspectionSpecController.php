@@ -6,9 +6,11 @@ namespace App\Modules\Quality\Controllers;
 
 use App\Modules\CRM\Models\Product;
 use App\Modules\Quality\Models\InspectionSpec;
+use App\Modules\Quality\Models\InspectionSpecRevision;
 use App\Modules\Quality\Enums\InspectionParameterType;
 use App\Modules\Quality\Requests\UpsertInspectionSpecRequest;
 use App\Modules\Quality\Resources\InspectionSpecResource;
+use App\Modules\Quality\Resources\InspectionSpecRevisionResource;
 use App\Modules\Quality\Services\InspectionSpecService;
 use App\Modules\Quality\Services\SpcService;
 use Illuminate\Http\JsonResponse;
@@ -42,6 +44,18 @@ class InspectionSpecController
         return new InspectionSpecResource($this->service->show($inspectionSpec));
     }
 
+    public function revisions(InspectionSpec $inspectionSpec): AnonymousResourceCollection
+    {
+        return InspectionSpecRevisionResource::collection($this->service->revisions($inspectionSpec));
+    }
+
+    public function revision(
+        InspectionSpec $inspectionSpec,
+        InspectionSpecRevision $revision,
+    ): InspectionSpecRevisionResource {
+        return new InspectionSpecRevisionResource($this->service->revision($inspectionSpec, $revision));
+    }
+
     /**
      * Upsert: create-or-replace the spec for a product. The same endpoint
      * powers both initial authoring and revisions; the service bumps the
@@ -71,15 +85,14 @@ class InspectionSpecController
         return new InspectionSpecResource($this->service->deactivate($inspectionSpec));
     }
 
-    public function restore(InspectionSpec $inspectionSpec): JsonResponse
+    public function restore(InspectionSpec $inspectionSpec): InspectionSpecResource
     {
-        $inspectionSpec->restore();
-        return response()->json(['message' => 'Inspection spec restored.']);
+        return new InspectionSpecResource($this->service->restore($inspectionSpec));
     }
 
     /**
-     * Return SPC Cp/Cpk indices for every bilateral spec item on this spec,
-     * computed across all historical inspection measurements.
+     * Return SPC Cp/Cpk indices for bilateral items in the current revision,
+     * computed from completed measurements governed by that same revision.
      *
      * Items with < 5 measurements or no bilateral tolerances are omitted.
      * Keyed by inspection_spec_item_id (integer, internal key — not exposed
@@ -87,8 +100,17 @@ class InspectionSpecController
      */
     public function spcData(InspectionSpec $inspectionSpec): JsonResponse
     {
+        $inspectionSpec->loadMissing('currentRevision');
+
         return response()->json([
             'data' => $this->spc->computeForSpec($inspectionSpec->id),
+            'meta' => [
+                'population_policy' => 'current_revision_only',
+                'revision_id' => $inspectionSpec->currentRevision?->hash_id,
+                'revision_version' => $inspectionSpec->currentRevision
+                    ? (int) $inspectionSpec->currentRevision->version
+                    : null,
+            ],
         ]);
     }
 }

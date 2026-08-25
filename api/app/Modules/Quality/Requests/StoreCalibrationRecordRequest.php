@@ -25,7 +25,10 @@ class StoreCalibrationRecordRequest extends FormRequest
             'location'              => ['nullable', 'string', 'max:100'],
             'last_calibration_date' => ['nullable', 'date'],
             'next_calibration_date' => ['nullable', 'date'],
-            'frequency_days'        => ['nullable', 'integer', 'min:1', 'max:3650'],
+            // Omitted means "keep the current value" on PATCH or the database
+            // default on INSERT. An explicit null must fail before it reaches
+            // the non-null database column.
+            'frequency_days'        => ['sometimes', 'integer', 'min:1', 'max:3650'],
             'status'                => ['nullable', Rule::in(CalibrationStatus::values())],
             'responsible'           => ['nullable', 'string', 'max:100'],
             'remarks'               => ['nullable', 'string', 'max:2000'],

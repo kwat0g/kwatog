@@ -60,13 +60,15 @@ class ComprehensiveDemoSeeder extends Seeder
         $this->seedReturnRequests();
         $this->seedDeliveries();
         $this->seedNCRs();
+        $this->seedInspectionSpecs();
         $this->seedInspections();
+        $this->seedInspectionMeasurements();
         $this->seedOvertime();
         $this->seedSupplierPerformance();
         $this->seedAssetDepreciations();
-        $this->seedInspectionSpecs();
         $this->seedDeliveryItems();
         $this->seedShipments();
+        $this->assertInspectionFixtureIntegrity();
 
         $this->command?->info('ComprehensiveDemoSeeder: ALL modules populated.');
     }
@@ -87,8 +89,8 @@ class ComprehensiveDemoSeeder extends Seeder
             'return_requests', 'return_request_items',
             'deliveries',            'delivery_items',
             'non_conformance_reports', 'ncr_actions',
-            'inspections',
-            'inspection_specs', 'inspection_spec_items', 'inspection_measurements',
+            'inspection_measurements', 'inspections',
+            'inspection_spec_items', 'inspection_spec_revisions', 'inspection_specs',
             'overtime_requests',
             'supplier_performance_snapshots',
             'asset_depreciations',
@@ -840,6 +842,20 @@ class ComprehensiveDemoSeeder extends Seeder
             return;
         }
 
+        $spec = DB::table('inspection_specs as s')
+            ->join('inspection_spec_revisions as r', function ($join): void {
+                $join->on('r.inspection_spec_id', '=', 's.id')
+                    ->on('r.version', '=', 's.version');
+            })
+            ->where('s.product_id', $product->id)
+            ->where('s.is_active', true)
+            ->select(['s.id as inspection_spec_id', 'r.id as inspection_spec_revision_id'])
+            ->first();
+        if (! $spec) {
+            $this->command?->warn('[Inspections] No revision-linked inspection spec, skipping.');
+            return;
+        }
+
         $now = Carbon::now();
         for ($i = 0; $i < 3; $i++) {
             $isPass = $i !== 2;
@@ -848,11 +864,18 @@ class ComprehensiveDemoSeeder extends Seeder
                 'stage'  => ['in_process', 'outgoing', 'in_process'][$i],
                 'status' => $isPass ? 'passed' : 'failed',
                 'product_id'        => $product->id,
+                'inspection_spec_id' => $spec->inspection_spec_id,
+                'inspection_spec_revision_id' => $spec->inspection_spec_revision_id,
                 'batch_quantity'    => 100,
                 'sample_size'       => 10,
                 'accept_count'      => $isPass ? 10 : 8,
                 'reject_count'      => $isPass ? 0 : 2,
                 'defect_count'      => $isPass ? 0 : 3,
+                'inspector_id'      => $this->admin->id,
+                'started_at'        => $now->copy()->subDays(3 - $i),
+                'completed_at'      => $now->copy()->subDays(3 - $i)->addHour(),
+                'created_at'        => $now->copy()->subDays(3 - $i),
+                'updated_at'        => $now->copy()->subDays(3 - $i)->addHour(),
             ]);
         }
 
@@ -964,13 +987,13 @@ class ComprehensiveDemoSeeder extends Seeder
 
         // Define standard inspection parameters
         $specParams = [
-            ['name' => 'Length',           'type' => 'dimensional', 'uom' => 'mm',  'nominal' => 100,   'tol_min' => -0.5, 'tol_max' => 0.5, 'critical' => true],
-            ['name' => 'Width',            'type' => 'dimensional', 'uom' => 'mm',  'nominal' => 50,    'tol_min' => -0.3, 'tol_max' => 0.3, 'critical' => true],
-            ['name' => 'Height',           'type' => 'dimensional', 'uom' => 'mm',  'nominal' => 30,    'tol_min' => -0.2, 'tol_max' => 0.2, 'critical' => false],
+            ['name' => 'Length',           'type' => 'dimensional', 'uom' => 'mm',  'nominal' => 100,   'tol_min' => 99.5, 'tol_max' => 100.5, 'critical' => true],
+            ['name' => 'Width',            'type' => 'dimensional', 'uom' => 'mm',  'nominal' => 50,    'tol_min' => 49.7, 'tol_max' => 50.3, 'critical' => true],
+            ['name' => 'Height',           'type' => 'dimensional', 'uom' => 'mm',  'nominal' => 30,    'tol_min' => 29.8, 'tol_max' => 30.2, 'critical' => false],
             // "Weight" is a numeric measurement with a tolerance window, so it
             // rides the Dimensional path — InspectionParameterType has no
             // 'weight' case and casting one back out of the DB throws.
-            ['name' => 'Weight',           'type' => 'dimensional', 'uom' => 'g',   'nominal' => 200,   'tol_min' => -5,   'tol_max' => 5,   'critical' => false],
+            ['name' => 'Weight',           'type' => 'dimensional', 'uom' => 'g',   'nominal' => 200,   'tol_min' => 195,  'tol_max' => 205,  'critical' => false],
             ['name' => 'Surface Finish',   'type' => 'visual',      'uom' => null,  'nominal' => null,  'tol_min' => null, 'tol_max' => null, 'critical' => false],
         ];
 
@@ -978,18 +1001,31 @@ class ComprehensiveDemoSeeder extends Seeder
         $createdItems = 0;
 
         foreach ($products as $product) {
+            $now = Carbon::now();
             $specId = DB::table('inspection_specs')->insertGetId([
                 'product_id' => $product->id,
                 'version'    => 1,
                 'is_active'  => true,
                 'notes'      => "Standard inspection spec for {$product->name}",
                 'created_by' => $this->admin->id,
+                'created_at' => $now,
+                'updated_at' => $now,
             ]);
             $createdSpecs++;
+
+            $revisionId = DB::table('inspection_spec_revisions')->insertGetId([
+                'inspection_spec_id' => $specId,
+                'version'            => 1,
+                'created_by'         => $this->admin->id,
+                'notes'              => "Initial demo revision for {$product->name}",
+                'created_at'         => $now,
+                'updated_at'         => $now,
+            ]);
 
             foreach ($specParams as $i => $p) {
                 DB::table('inspection_spec_items')->insert([
                     'inspection_spec_id' => $specId,
+                    'inspection_spec_revision_id' => $revisionId,
                     'parameter_name'     => $p['name'],
                     'parameter_type'     => $p['type'],
                     'unit_of_measure'    => $p['uom'],
@@ -999,36 +1035,53 @@ class ComprehensiveDemoSeeder extends Seeder
                     'is_critical'        => $p['critical'],
                     'sort_order'         => $i + 1,
                     'notes'              => null,
+                    'created_at'         => $now,
+                    'updated_at'         => $now,
                 ]);
                 $createdItems++;
             }
         }
 
-        // Now add measurements to existing inspections
+        $this->command?->info("[Inspection Specs] Created {$createdSpecs} specs with {$createdItems} items.");
+    }
+
+    private function seedInspectionMeasurements(): void
+    {
         $inspections = DB::table('inspections')->get();
         $createdMeasurements = 0;
 
         foreach ($inspections as $inspection) {
-            $product = DB::table('products')->where('id', $inspection->product_id)->first();
-            if (!$product) continue;
+            if (! $inspection->inspection_spec_id || ! $inspection->inspection_spec_revision_id) {
+                continue;
+            }
 
-            // Find matching spec
-            $spec = DB::table('inspection_specs')->where('product_id', $inspection->product_id)->first();
-            $specItems = $spec
-                ? DB::table('inspection_spec_items')->where('inspection_spec_id', $spec->id)->get()
-                : collect();
+            $specItems = DB::table('inspection_spec_items')
+                ->where('inspection_spec_id', $inspection->inspection_spec_id)
+                ->where('inspection_spec_revision_id', $inspection->inspection_spec_revision_id)
+                ->orderBy('sort_order')
+                ->get();
 
             $sampleCount = (int) ($inspection->sample_size ?? 10);
             $sampleSize = min(3, $sampleCount);
 
             for ($s = 1; $s <= $sampleSize; $s++) {
                 foreach ($specItems as $si) {
-                    $nominal = (float) ($si->nominal_value ?? 0);
-                    $tolMin = (float) ($si->tolerance_min ?? -0.5);
-                    $tolMax = (float) ($si->tolerance_max ?? 0.5);
-                    $measuredVal = $nominal + $tolMin + (float)rand(0, 100) / 100 * ($tolMax - $tolMin);
-                    $isPass = $measuredVal >= $nominal + $tolMin && $measuredVal <= $nominal + $tolMax;
+                    $hasNumericBounds = $si->tolerance_min !== null && $si->tolerance_max !== null;
+                    $measuredVal = null;
+                    $isPass = true;
+                    if ($hasNumericBounds) {
+                        $tolMin = (float) $si->tolerance_min;
+                        $tolMax = (float) $si->tolerance_max;
+                        $span = max($tolMax - $tolMin, 0.0001);
+                        $fraction = ((($inspection->id + $s) % 3) + 1) / 4;
+                        $measuredVal = $tolMin + ($span * $fraction);
+                        if ($inspection->status === 'failed' && $s === 1 && (bool) $si->is_critical) {
+                            $measuredVal = $tolMax + ($span * 0.1);
+                        }
+                        $isPass = $measuredVal >= $tolMin && $measuredVal <= $tolMax;
+                    }
 
+                    $timestamp = Carbon::now();
                     DB::table('inspection_measurements')->insert([
                         'inspection_id'        => $inspection->id,
                         'inspection_spec_item_id' => $si->id ?? null,
@@ -1039,18 +1092,79 @@ class ComprehensiveDemoSeeder extends Seeder
                         'nominal_value'        => $si->nominal_value,
                         'tolerance_min'        => $si->tolerance_min,
                         'tolerance_max'        => $si->tolerance_max,
-                        'measured_value'       => round($measuredVal, 2),
+                        'measured_value'       => $measuredVal !== null ? round($measuredVal, 4) : null,
                         'is_critical'          => $si->is_critical,
                         'is_pass'              => $isPass,
                         'notes'                => null,
+                        'created_at'           => $timestamp,
+                        'updated_at'           => $timestamp,
                     ]);
                     $createdMeasurements++;
                 }
             }
         }
 
-        $this->command?->info("[Inspection Specs] Created {$createdSpecs} specs with {$createdItems} items.");
         $this->command?->info("[Inspection Measurements] Created {$createdMeasurements} measurement records.");
+    }
+
+    /**
+     * Fail the seed instead of presenting a partially linked quality demo.
+     * This is deliberately run after every clean seed, so a second run proves
+     * that reset/rebuild logic did not leave stale or revisionless evidence.
+     */
+    private function assertInspectionFixtureIntegrity(): void
+    {
+        $missingSpecRevision = DB::table('inspection_specs as s')
+            ->leftJoin('inspection_spec_revisions as r', function ($join): void {
+                $join->on('r.inspection_spec_id', '=', 's.id')
+                    ->on('r.version', '=', 's.version');
+            })
+            ->whereNull('r.id')
+            ->count();
+
+        $missingInspectionRevision = DB::table('inspections')
+            ->whereNotNull('inspection_spec_id')
+            ->whereNull('inspection_spec_revision_id')
+            ->count();
+
+        $mismatchedItems = DB::table('inspection_spec_items as item')
+            ->join('inspection_spec_revisions as revision', 'revision.id', '=', 'item.inspection_spec_revision_id')
+            ->whereColumn('item.inspection_spec_id', '<>', 'revision.inspection_spec_id')
+            ->count();
+
+        $invalidGeometry = DB::table('inspection_spec_items')
+            ->where(function ($query): void {
+                $query->where(function ($bounds): void {
+                    $bounds->whereNotNull('tolerance_min')
+                        ->whereNotNull('tolerance_max')
+                        ->whereColumn('tolerance_min', '>', 'tolerance_max');
+                })->orWhere(function ($nominal): void {
+                    $nominal->whereNotNull('nominal_value')
+                        ->whereNotNull('tolerance_min')
+                        ->whereColumn('nominal_value', '<', 'tolerance_min');
+                })->orWhere(function ($nominal): void {
+                    $nominal->whereNotNull('nominal_value')
+                        ->whereNotNull('tolerance_max')
+                        ->whereColumn('nominal_value', '>', 'tolerance_max');
+                });
+            })
+            ->count();
+
+        $mismatchedMeasurements = DB::table('inspection_measurements as measurement')
+            ->join('inspections as inspection', 'inspection.id', '=', 'measurement.inspection_id')
+            ->join('inspection_spec_items as item', 'item.id', '=', 'measurement.inspection_spec_item_id')
+            ->whereNotNull('inspection.inspection_spec_id')
+            ->where(function ($query): void {
+                $query->whereColumn('inspection.inspection_spec_id', '<>', 'item.inspection_spec_id')
+                    ->orWhereColumn('inspection.inspection_spec_revision_id', '<>', 'item.inspection_spec_revision_id');
+            })
+            ->count();
+
+        if ($missingSpecRevision > 0 || $missingInspectionRevision > 0 || $mismatchedItems > 0 || $invalidGeometry > 0 || $mismatchedMeasurements > 0) {
+            throw new \RuntimeException(
+                "Quality demo fixture integrity failed: {$missingSpecRevision} spec(s) without a current revision, {$missingInspectionRevision} inspection(s) without a revision, {$mismatchedItems} mismatched item lineage row(s), {$invalidGeometry} invalid geometry row(s), {$mismatchedMeasurements} mismatched measurement row(s)."
+            );
+        }
     }
 
     /* ===================================================================

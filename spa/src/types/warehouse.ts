@@ -14,6 +14,7 @@ export interface WarehouseMapLocation {
  current_item: { id: string; code: string; name: string } | null;
  current_quantity: string;
  current_lot_number: string | null;
+ current_expiry_date: string | null;
  stock_status: BinStockStatus;
  stock_status_label?: string;
  stock_quantity: string;
@@ -140,6 +141,8 @@ export interface PickingSuggestion {
  quantity_available: string;
  quantity_to_pick: string;
  lot_number: string | null;
+ picking_method?: 'FEFO' | 'FIFO';
+ expires_on?: string;
 }
 
 export interface PickingLine {

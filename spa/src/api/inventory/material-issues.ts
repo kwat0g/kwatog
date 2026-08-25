@@ -16,6 +16,8 @@ export const materialIssuesApi = {
  item_id: string;
  location_id: string;
  quantity_issued: string;
+ issued_uom_code?: string;
+ lot_number?: string;
  material_reservation_id?: number;
  remarks?: string;
  }>;

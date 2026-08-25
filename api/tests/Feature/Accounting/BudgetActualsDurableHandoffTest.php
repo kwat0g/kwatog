@@ -7,6 +7,7 @@ namespace Tests\Feature\Accounting;
 use App\Common\Jobs\DispatchOutboxMessage;
 use App\Common\Services\OutboxEventCodec;
 use App\Modules\Accounting\Events\BudgetActualsSyncRequested;
+use App\Modules\Accounting\Models\FiscalYear;
 use App\Modules\Accounting\Services\BudgetActualsSyncService;
 use Illuminate\Support\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -27,8 +28,12 @@ class BudgetActualsDurableHandoffTest extends TestCase
     public function test_sync_request_is_durable_and_replayable(): void
     {
         Queue::fake();
+        $fiscalYear = FiscalYear::factory()->create([
+            'start_date' => '2026-01-01',
+            'end_date' => '2026-12-31',
+        ]);
 
-        $outbox = app(BudgetActualsSyncService::class)->request(42);
+        $outbox = app(BudgetActualsSyncService::class)->request($fiscalYear->id);
 
         $this->assertDatabaseHas('event_outbox', [
             'id' => $outbox->getKey(),
@@ -43,7 +48,7 @@ class BudgetActualsDurableHandoffTest extends TestCase
         );
 
         $this->assertInstanceOf(BudgetActualsSyncRequested::class, $event);
-        $this->assertSame(42, $event->fiscalYearId);
+        $this->assertSame($fiscalYear->id, $event->fiscalYearId);
         $this->assertNotSame('', $event->requestId);
     }
 
@@ -51,9 +56,13 @@ class BudgetActualsDurableHandoffTest extends TestCase
     {
         Queue::fake();
         Carbon::setTestNow('2026-08-11 12:00:00');
+        $fiscalYear = FiscalYear::factory()->create([
+            'start_date' => '2026-01-01',
+            'end_date' => '2026-12-31',
+        ]);
 
-        $first = app(BudgetActualsSyncService::class)->request(42);
-        $second = app(BudgetActualsSyncService::class)->request(42);
+        $first = app(BudgetActualsSyncService::class)->request($fiscalYear->id);
+        $second = app(BudgetActualsSyncService::class)->request($fiscalYear->id);
 
         $this->assertSame($first->getKey(), $second->getKey());
         $this->assertSame(1, DB::table('event_outbox')

@@ -31,7 +31,7 @@ class NotifyOnSalesOrderConfirmed implements ShouldQueue
 
             $this->notifications->send($audience, 'chain.so_confirmed', [
                 'title'       => "SO {$so->so_number} Confirmed",
-                'message'     => "Sales order confirmed for {$so->customer?->name}. MRP run completed.",
+                'message'     => "Sales order confirmed for {$so->customer?->name}. MRP planning has been queued and will update the production chain when it completes.",
                 'link_to'     => "/crm/sales-orders/{$so->hash_id}",
                 'entity_type' => 'sales_order',
                 'entity_id'   => $so->hash_id,

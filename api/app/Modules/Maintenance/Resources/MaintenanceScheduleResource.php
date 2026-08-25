@@ -35,6 +35,9 @@ class MaintenanceScheduleResource extends JsonResource
             'description'       => $this->description,
             'interval_type'     => $this->interval_type instanceof \BackedEnum ? $this->interval_type->value : $this->interval_type,
             'interval_value'    => (int) $this->interval_value,
+            'running_hours_baseline' => $this->running_hours_baseline !== null
+                ? (string) $this->running_hours_baseline
+                : null,
             'last_performed_at' => optional($this->last_performed_at)?->toISOString(),
             'next_due_at'       => optional($this->next_due_at)?->toISOString(),
             'is_active'         => (bool) $this->is_active,

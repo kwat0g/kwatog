@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Enums;
 
+use App\Modules\HR\Support\RecruitmentApplicationStateMachine;
+
 enum ApplicationStage: string
 {
     case New       = 'new';
@@ -44,13 +46,7 @@ enum ApplicationStage: string
 
     public function next(): ?self
     {
-        return match ($this) {
-            self::New       => self::Screening,
-            self::Screening => self::Interview,
-            self::Interview => self::Offer,
-            self::Offer     => self::Hired,
-            default         => null,
-        };
+        return RecruitmentApplicationStateMachine::next($this);
     }
 
     public static function values(): array

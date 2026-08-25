@@ -12,15 +12,18 @@ use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Events\CreditNoteFinalized;
 use App\Modules\Accounting\Enums\BillStatus;
+use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Enums\CreditNoteStatus;
 use App\Modules\Accounting\Enums\CreditNoteType;
 use App\Modules\Accounting\Enums\InvoiceStatus;
+use App\Modules\Accounting\Enums\JournalEntryStatus;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\CreditNote;
 use App\Modules\Accounting\Models\CreditNoteApplication;
 use App\Modules\Accounting\Models\CreditNoteLine;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Auth\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -43,6 +46,7 @@ class CreditNoteService
         private readonly AccountingPeriodService $periods,
         private readonly TaxPolicyService $taxPolicy,
         private readonly AccountingAccountPolicyService $accounts,
+        private readonly PostingAccountResolver $postingAccounts,
     ) {}
 
     /**
@@ -109,12 +113,8 @@ class CreditNoteService
             $subtotal = Money::zero();
             $resolvedLines = [];
             foreach ($lines as $l) {
-                $accountId = is_numeric($l['account_id'] ?? null)
-                    ? (int) $l['account_id']
-                    : HashIdFilter::decode((string) ($l['account_id'] ?? ''), Account::class);
-                if (! $accountId) {
-                    throw new BusinessRuleException('Invalid account on a credit-note line.');
-                }
+                $accountType = $type === CreditNoteType::Customer ? AccountType::Revenue : AccountType::Expense;
+                $accountId = $this->postingAccounts->idForTypes($l['account_id'] ?? null, $accountType);
                 $amount = Money::round2((string) $l['amount']);
                 if (Money::lte($amount, '0')) {
                     throw new BusinessRuleException('Credit-note line amount must be > 0.');
@@ -243,6 +243,15 @@ class CreditNoteService
                 if ($invoice->customer_id !== $creditNote->customer_id) {
                     throw new BusinessRuleException('Credit note and invoice belong to different customers.');
                 }
+                if (! in_array($invoice->status, [InvoiceStatus::Finalized, InvoiceStatus::Partial], true)) {
+                    throw new BusinessRuleException('A credit note can only be applied to a finalized or partially paid invoice.');
+                }
+                if (! $invoice->journal_entry_id || ! JournalEntry::query()
+                    ->whereKey($invoice->journal_entry_id)
+                    ->where('status', JournalEntryStatus::Posted)
+                    ->exists()) {
+                    throw new BusinessRuleException('The target invoice does not have a posted journal entry.');
+                }
                 if (Money::gt($amount, (string) $invoice->balance)) {
                     throw new BusinessRuleException("Amount {$amount} exceeds the invoice's outstanding balance {$invoice->balance}.");
                 }
@@ -267,6 +276,15 @@ class CreditNoteService
                 );
                 if ($bill->vendor_id !== $creditNote->vendor_id) {
                     throw new BusinessRuleException('Credit note and bill belong to different vendors.');
+                }
+                if (! in_array($bill->status, [BillStatus::Unpaid, BillStatus::Partial], true)) {
+                    throw new BusinessRuleException('A credit note can only be applied to an unpaid or partially paid bill.');
+                }
+                if (! $bill->journal_entry_id || ! JournalEntry::query()
+                    ->whereKey($bill->journal_entry_id)
+                    ->where('status', JournalEntryStatus::Posted)
+                    ->exists()) {
+                    throw new BusinessRuleException('The target bill does not have a posted journal entry.');
                 }
                 if (Money::gt($amount, (string) $bill->balance)) {
                     throw new BusinessRuleException("Amount {$amount} exceeds the bill's outstanding balance {$bill->balance}.");
@@ -314,7 +332,12 @@ class CreditNoteService
         if ($cn->type === CreditNoteType::Customer) {
             // Reverse revenue: DR each revenue account for its line amount.
             foreach ($cn->lines as $l) {
-                $lines[] = ['account_id' => (int) $l->account_id, 'debit' => (string) $l->amount, 'credit' => '0.00', 'description' => $l->description];
+                $lines[] = [
+                    'account_id' => $this->postingAccounts->assertTypes((int) $l->account_id, AccountType::Revenue),
+                    'debit' => (string) $l->amount,
+                    'credit' => '0.00',
+                    'description' => $l->description,
+                ];
             }
             if ($cn->is_vatable && Money::gt((string) $cn->vat_amount, '0')) {
                 $lines[] = ['account_id' => $this->accountId($this->accounts->vatOutput()), 'debit' => (string) $cn->vat_amount, 'credit' => '0.00', 'description' => 'VAT Output reversal'];
@@ -324,7 +347,12 @@ class CreditNoteService
             // Supplier credit: DR AP, CR each expense account, CR VAT input.
             $lines[] = ['account_id' => $this->accountId($this->accounts->ap()), 'debit' => (string) $cn->total_amount, 'credit' => '0.00', 'description' => 'AP reduction'];
             foreach ($cn->lines as $l) {
-                $lines[] = ['account_id' => (int) $l->account_id, 'debit' => '0.00', 'credit' => (string) $l->amount, 'description' => $l->description];
+                $lines[] = [
+                    'account_id' => $this->postingAccounts->assertTypes((int) $l->account_id, AccountType::Expense),
+                    'debit' => '0.00',
+                    'credit' => (string) $l->amount,
+                    'description' => $l->description,
+                ];
             }
             if ($cn->is_vatable && Money::gt((string) $cn->vat_amount, '0')) {
                 $lines[] = ['account_id' => $this->accountId($this->accounts->vatInput()), 'debit' => '0.00', 'credit' => (string) $cn->vat_amount, 'description' => 'VAT Input reversal'];
@@ -351,10 +379,16 @@ class CreditNoteService
 
     private function accountId(string $code): int
     {
-        $id = Account::query()->where('code', $code)->value('id');
-        if (! $id) {
-            throw new BusinessRuleException("Required account {$code} not found in COA.");
-        }
-        return (int) $id;
+        $type = match ($code) {
+            $this->accounts->ar() => AccountType::Asset,
+            $this->accounts->ap() => AccountType::Liability,
+            $this->accounts->vatOutput() => AccountType::Liability,
+            $this->accounts->vatInput() => AccountType::Asset,
+            default => null,
+        };
+
+        return $type
+            ? $this->postingAccounts->configuredIdByCode($code, $type)
+            : $this->postingAccounts->idByCode($code);
     }
 }

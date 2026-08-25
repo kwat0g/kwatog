@@ -21,6 +21,7 @@ export interface MaintenanceSchedule {
  description: string;
  interval_type: MaintenanceScheduleInterval;
  interval_value: number;
+ running_hours_baseline: string | null;
  last_performed_at: string | null;
  next_due_at: string | null;
  is_active: boolean;
@@ -63,7 +64,7 @@ export interface MaintenanceWorkOrder {
  description: string;
  status: MaintenanceWorkOrderStatus;
  status_label?: string;
- available_actions?: Array<'start' | 'complete' | 'cancel'>;
+ available_actions?: Array<'assign' | 'start' | 'complete' | 'cancel'>;
  started_at: string | null;
  completed_at: string | null;
  downtime_minutes: number;
@@ -180,7 +181,7 @@ export interface TopMachineDowntime {
 
 export interface MachineDowntimeSummary {
  machine: {
- id: number;
+ id: string;
  code: string;
  name: string;
  };

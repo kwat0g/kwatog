@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Quality\Controllers;
 
 use App\Modules\Quality\Enums\EffectivenessStatus;
+use App\Modules\Quality\Enums\NcrActionType;
+use App\Modules\Quality\Enums\NcrStatus;
 use App\Modules\Quality\Models\NcrAction;
 use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\Quality\Resources\NcrActionResource;
@@ -47,13 +49,22 @@ class EffectivenessController
      */
     public function dueIndex(Request $request): AnonymousResourceCollection
     {
+        $data = $request->validate([
+            'per_page' => ['nullable', 'integer', 'between:1,100'],
+        ]);
+
         $due = NcrAction::query()
-            ->with(['owner:id,name', 'performer:id,name', 'ncr:id,ncr_number'])
-            ->where('effectiveness_status', EffectivenessStatus::PendingVerification->value)
+            ->with(['owner:id,name', 'performer:id,name', 'ncr:id,ncr_number,status'])
+            ->whereIn('action_type', [NcrActionType::Corrective->value, NcrActionType::Preventive->value])
+            ->whereHas('ncr', fn ($q) => $q->where('status', NcrStatus::Closed->value))
+            ->whereIn('effectiveness_status', [
+                EffectivenessStatus::PendingVerification->value,
+                EffectivenessStatus::Ineffective->value,
+            ])
             ->whereNotNull('next_effectiveness_check_at')
             ->whereDate('next_effectiveness_check_at', '<=', now()->toDateString())
             ->orderBy('next_effectiveness_check_at')
-            ->paginate(min((int) $request->query('per_page', 25), 100));
+            ->paginate((int) ($data['per_page'] ?? 25));
 
         return NcrActionResource::collection($due);
     }

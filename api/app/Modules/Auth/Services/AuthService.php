@@ -23,6 +23,7 @@ class AuthService
         private readonly LoginHistoryService $loginHistory,
         private readonly DashboardLayoutService $dashboardLayouts,
         private readonly SettingsService $settings,
+        private readonly SessionRevocationService $sessions,
     ) {}
 
     /**
@@ -33,6 +34,8 @@ class AuthService
      */
     public function login(string $email, string $password, Request $request): User
     {
+        $email = strtolower(trim($email));
+
         // Resolve policy before taking the user row lock. The authoritative
         // user row is then locked for the complete decision (active/locked
         // check, password verification, and counter mutation). Therefore the
@@ -47,7 +50,7 @@ class AuthService
         $result = DB::transaction(function () use ($email, $password, $maxAttempts, $lockMinutes): array {
             /** @var User|null $user */
             $user = User::query()
-                ->where('email', $email)
+                ->whereRaw('LOWER(email) = ?', [$email])
                 ->lockForUpdate()
                 ->first();
 
@@ -183,12 +186,14 @@ class AuthService
     public function changePassword(User $user, string $current, string $new, Request $request): void
     {
         DB::transaction(function () use ($user, $current, $new, $request) {
-            if (! Hash::check($current, $user->password)) {
+            $locked = User::query()->lockForUpdate()->findOrFail($user->getKey());
+
+            if (! Hash::check($current, $locked->password)) {
                 throw ValidationException::withMessages(['current_password' => 'Current password is incorrect.']);
             }
 
             $historyDepth = $this->settings->requiredInt('security.password_history_depth', 0);
-            $recent = $user->passwordHistory()->limit($historyDepth)->pluck('password_hash');
+            $recent = $locked->passwordHistory()->limit($historyDepth)->pluck('password_hash');
             foreach ($recent as $oldHash) {
                 if (Hash::check($new, $oldHash)) {
                     throw ValidationException::withMessages([
@@ -199,27 +204,32 @@ class AuthService
 
             // Store the OLD hash to history before replacing
             PasswordHistory::create([
-                'user_id' => $user->id,
-                'password_hash' => $user->password,
+                'user_id' => $locked->id,
+                'password_hash' => $locked->password,
                 'created_at' => now(),
             ]);
 
-            $user->forceFill([
+            $locked->forceFill([
                 'password' => Hash::make($new),
                 'password_changed_at' => now(),
                 'must_change_password' => false,
             ])->save();
 
             // Trim history beyond depth
-            $keepIds = $user->passwordHistory()
+            $keepIds = $locked->passwordHistory()
                 ->limit($historyDepth)
                 ->pluck('id')
                 ->all();
             if (! empty($keepIds)) {
-                $user->passwordHistory()->whereNotIn('id', $keepIds)->delete();
+                $locked->passwordHistory()->whereNotIn('id', $keepIds)->delete();
             }
 
-            $this->logAuthEvent('password.changed', $user, $request);
+            $this->sessions->revokeOtherSessions(
+                $locked,
+                $request->hasSession() ? $request->session()->getId() : null,
+            );
+
+            $this->logAuthEvent('password.changed', $locked, $request);
         });
     }
 

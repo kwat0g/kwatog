@@ -1,5 +1,7 @@
 // Sprint 6 — CRM types. IDs are hash strings; decimals are strings.
 
+import type { Incoterm } from '@/types/supplyChain';
+
 export interface Product {
  id: string;
  part_number: string;
@@ -23,9 +25,18 @@ export interface PriceAgreement {
  price: string;
  effective_from: string;
  effective_to: string;
+ pricing_method: 'flat' | 'tiered';
+ pricing_method_label: string;
+ tiers: PriceTier[] | null;
  is_currently_active: boolean;
+ deleted_at?: string | null;
  created_at: string;
  updated_at: string;
+}
+
+export interface PriceTier {
+ min_qty: number;
+ unit_price: string;
 }
 
 export interface CreateProductData {
@@ -45,6 +56,8 @@ export interface CreatePriceAgreementData {
  price: string;
  effective_from: string;
  effective_to: string;
+ pricing_method: 'flat' | 'tiered';
+ tiers?: PriceTier[] | null;
 }
 
 export type UpdatePriceAgreementData = Partial<CreatePriceAgreementData>;
@@ -109,6 +122,7 @@ export interface SalesOrder {
  id: string; invoice_number: string; status: string; status_label?: string; total_amount: string; balance: string;
  }>;
  delivery_terms: string | null;
+ incoterm: Incoterm | null;
  notes: string | null;
  is_editable: boolean;
  is_cancellable: boolean;
@@ -131,6 +145,7 @@ export interface CreateSalesOrderData {
  date: string;
  payment_terms_days?: number;
  delivery_terms?: string;
+ incoterm?: Incoterm;
  notes?: string;
  items: CreateSalesOrderItem[];
 }
@@ -141,7 +156,7 @@ export interface SalesOrderChainStep {
  key: string;
  label: string;
  date: string | null;
- state: 'done' | 'active' | 'pending';
+ state: 'done' | 'active' | 'pending' | 'rejected' | 'skipped';
 }
 
 // ─── Sprint 7 Task 68 — Customer Complaints + 8D ────────────────────

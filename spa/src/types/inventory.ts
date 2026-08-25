@@ -134,6 +134,7 @@ export interface StockLevel {
  available: string;
  weighted_avg_cost: string;
  total_value: string;
+ lock_version: number;
  last_counted_at: string | null;
 }
 
@@ -148,6 +149,8 @@ export interface StockMovement {
  quantity: string;
  unit_cost: string;
  total_cost: string;
+ lot_number: string | null;
+ expiry_date: string | null;
  gl_handoff: {
   status: 'not_started' | 'generated' | 'manual_required' | 'not_required';
   status_label: string | null;
@@ -189,6 +192,13 @@ export interface GrnItem {
  quantity_received: string;
  quantity_accepted: string;
  unit_cost: string;
+ received_uom_code: string | null;
+ lot_number: string | null;
+ supplier_lot_reference: string | null;
+ expiry_date: string | null;
+ moisture_percentage: string | null;
+ coa_document_path: string | null;
+ coa_verified: boolean;
  remarks: string | null;
 }
 
@@ -207,6 +217,20 @@ export interface GoodsReceiptNote {
   message: string | null;
   at: string | null;
  };
+ qc_inspection?: {
+  id: string;
+  inspection_number: string;
+  stage: string | null;
+  stage_label?: string | null;
+  status: string | null;
+  status_label?: string | null;
+ } | null;
+ journal_entry?: {
+  id: string;
+  entry_number: string;
+  status: string | null;
+  status_label?: string | null;
+ } | null;
  vendor: { id: string; name: string } | null;
  purchase_order: {
   id: string;
@@ -227,6 +251,13 @@ export interface FinalizeGrnData {
  purchase_order_item_id: string;
  location_id: string;
  quantity_received: string;
+ received_uom_code?: string;
+ lot_number?: string;
+ material_lot_number?: string;
+ supplier_lot_reference?: string;
+ expiry_date?: string;
+ moisture_percentage?: string;
+ coa_document_path?: string;
  remarks?: string;
  }>;
 }
@@ -240,6 +271,13 @@ export interface CreateGrnData {
  item_id: string;
  location_id: string;
  quantity_received: string;
+ received_uom_code?: string;
+ lot_number?: string;
+ material_lot_number?: string;
+ supplier_lot_reference?: string;
+ expiry_date?: string;
+ moisture_percentage?: string;
+ coa_document_path?: string;
  unit_cost?: string;
  remarks?: string;
  }>;
@@ -252,6 +290,8 @@ export interface MaterialIssueSlipItem {
  quantity_issued: string;
  unit_cost: string;
  total_cost: string;
+ issued_uom_code: string | null;
+ lot_number: string | null;
  remarks: string | null;
 }
 
@@ -278,6 +318,10 @@ export interface MrbLocation {
  id: string;
  code: string;
  full_code: string;
+ warehouse_id: string | null;
+ warehouse_code: string | null;
+ warehouse_name: string | null;
+ is_active: boolean;
  zone: string | null;
  zone_type: string | null;
 }
@@ -291,8 +335,23 @@ export interface MrbRecord {
  disposition_label?: string | null;
  quantity: string;
  item: { id: string; code: string; name: string; unit_of_measure: string } | null;
- ncr: { id: string; ncr_number: string } | null;
- inspection: { id: string } | null;
+ ncr: {
+  id: string;
+  ncr_number: string;
+  status?: string | null;
+  status_label?: string | null;
+  affected_quantity?: number;
+  inspection?: { id: string; inspection_number: string; stage: string; status: string } | null;
+ } | null;
+ inspection: {
+  id: string;
+  inspection_number?: string;
+  stage?: string;
+  stage_label?: string | null;
+  status?: string;
+  status_label?: string | null;
+  batch_quantity?: number;
+ } | null;
  source_location: MrbLocation | null;
  quarantine_location: MrbLocation | null;
  release_location: MrbLocation | null;

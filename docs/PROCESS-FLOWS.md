@@ -1265,7 +1265,7 @@ Track measurement equipment calibration:
 
 - Defect Pareto: `GET /api/v1/quality/analytics/defect-pareto`
 - Pareto drill-down: `GET .../drill`
-- COPQ trend: `GET /api/v1/quality/copq/trend`
+- Capability study: `POST /api/v1/quality/spc/capability`
 - Traceability search: `GET /api/v1/quality/traceability/search`
 
 ---
@@ -1370,7 +1370,6 @@ This is the complete map of events and what they automatically trigger. Understa
 | `MachineStatusChanged` | `HandleMachineBreakdown` | Auto-creates maintenance work order |
 | `MachineBreakdownDetected` | `NotifyOnMachineBreakdown` | Notifies maintenance team |
 | `NcrRecurrenceLinked` | `AutoSpawn8DOnNcrRecurrence` | Auto-creates 8D investigation |
-| `CopqSnapshotComputed` | `AlertOnCopqSpike` | Alerts on cost of poor quality spike |
 
 ---
 
@@ -1685,7 +1684,6 @@ twice.
 | 1st @ 03:00 | `assets:run-monthly-depreciation` | Asset depreciation |
 | Every 15 min | `ncr:escalate` | Escalate overdue NCRs |
 | 06:30 daily | `training:check-expiries` | Flag expired training certs |
-| 1st @ 02:30 | `copq:snap-monthly` | Cost of Poor Quality snapshot |
 | Every 15 min | `complaints:check-8d-slas` | Check 8D SLA deadlines |
 | 06:45 daily | `docs:check-reviews` | Flag documents due for review |
 

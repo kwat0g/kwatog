@@ -128,6 +128,16 @@ class YearEndLeaveReconciliationTest extends TestCase
         $this->assertNotNull($new);
         $this->assertSame('15.0', (string) $new->total_credits);
         $this->assertSame('15.0', (string) $new->remaining);
+
+        // A retry after approved leave must preserve the target year's
+        // consumption instead of resetting the row to its initial total.
+        $new->forceFill(['used' => '2.0', 'remaining' => '13.0'])->save();
+        Artisan::call('hr:reset-leave-balances', ['--year' => 2026]);
+
+        $retried = $new->fresh();
+        $this->assertSame('15.0', (string) $retried->total_credits);
+        $this->assertSame('2.0', (string) $retried->used);
+        $this->assertSame('13.0', (string) $retried->remaining);
     }
 
     public function test_idempotent_second_run_does_not_double_pay(): void

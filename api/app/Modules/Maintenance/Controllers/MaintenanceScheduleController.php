@@ -66,7 +66,7 @@ class MaintenanceScheduleController
 
     public function restore(MaintenanceSchedule $schedule): JsonResponse
     {
-        $schedule->restore();
+        $this->service->restore($schedule);
         return response()->json(['message' => 'Maintenance schedule restored.']);
     }
 }

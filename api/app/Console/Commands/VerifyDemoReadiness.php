@@ -183,7 +183,10 @@ class VerifyDemoReadiness extends Command
     /** @return array{ok: bool, message: string} */
     private function checkApprovalInbox(): array
     {
-        $pending = DB::table('approval_records')->where('action', 'pending')->count();
+        $pending = DB::table('approval_records')
+            ->where('action', 'pending')
+            ->where('is_current', true)
+            ->count();
 
         return $pending > 0
             ? ['ok' => true, 'message' => "{$pending} pending approval record(s) — the approval inbox has live items."]

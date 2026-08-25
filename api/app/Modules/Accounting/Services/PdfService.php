@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Services;
 
+use App\Common\Enums\DocumentType;
+use App\Common\Services\DocumentVaultService;
+use App\Common\Services\Pdf\PdfRenderService;
 use App\Common\Services\SettingsService;
+use App\Modules\Auth\Models\User;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\JournalEntry;
@@ -12,10 +16,9 @@ use App\Modules\Accounting\Services\Statements\BalanceSheetService;
 use App\Modules\Accounting\Services\Statements\IncomeStatementService;
 use App\Modules\Accounting\Services\Statements\TrialBalanceService;
 use App\Modules\Purchasing\Models\PurchaseOrder;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\Log;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Generates PDFs for printable accounting artifacts using DomPDF.
@@ -30,65 +33,58 @@ class PdfService
         private readonly TrialBalanceService $trialBalance,
         private readonly IncomeStatementService $incomeStatement,
         private readonly BalanceSheetService $balanceSheet,
+        private readonly StatementMoneyFormatter $statementMoney,
+        private readonly PdfRenderService $renderer,
+        private readonly DocumentVaultService $vault,
     ) {}
 
-    public function bill(Bill $bill): Response
+    public function bill(Bill $bill): StreamedResponse
     {
         $bill->load(['vendor', 'items.expenseAccount', 'payments.cashAccount']);
-        $pdf = Pdf::loadView('pdf.bill', [
-            'bill'    => $bill,
-            'company' => $this->company(),
-            'user'    => optional(request()->user())->name,
-        ])->setPaper('a4');
-        return $pdf->stream("Bill-{$bill->bill_number}.pdf");
+        return $this->storeAndStream($bill, DocumentType::Bill, 'pdf.bill', ['bill' => $bill]);
     }
 
-    public function invoice(Invoice $invoice): Response
+    public function invoice(Invoice $invoice): StreamedResponse
     {
         $invoice->load(['customer', 'items.revenueAccount', 'collections']);
-        $pdf = Pdf::loadView('pdf.invoice', [
-            'invoice' => $invoice,
-            'company' => $this->company(),
-            'user'    => optional(request()->user())->name,
-        ])->setPaper('a4');
-        $label = $invoice->invoice_number ?? "Draft-{$invoice->hash_id}";
-        return $pdf->stream("Invoice-{$label}.pdf");
+        return $this->storeAndStream($invoice, DocumentType::Invoice, 'pdf.invoice', ['invoice' => $invoice]);
     }
 
-    public function journalEntry(JournalEntry $je): Response
+    public function customerInvoice(Invoice $invoice): StreamedResponse
+    {
+        $invoice->load(['customer', 'items', 'collections']);
+        return $this->storeAndStream($invoice, DocumentType::Invoice, 'pdf.customer-invoice', ['invoice' => $invoice]);
+    }
+
+    public function journalEntry(JournalEntry $je): StreamedResponse
     {
         $je->load(['lines.account', 'creator', 'poster']);
-        $pdf = Pdf::loadView('pdf.journal-entry', [
-            'je'      => $je,
-            'company' => $this->company(),
-            'user'    => optional(request()->user())->name,
-        ])->setPaper('a4');
-        return $pdf->stream("JE-{$je->entry_number}.pdf");
+        return $this->storeAndStream($je, DocumentType::JournalEntry, 'pdf.journal-entry', ['je' => $je]);
     }
 
     public function trialBalance(Carbon $from, Carbon $to): Response
     {
         $data = $this->trialBalance->generate($from, $to);
-        $pdf = Pdf::loadView('pdf.trial-balance', [
+        $bytes = $this->renderer->render('pdf.trial-balance', [
             'data'    => $data,
-            'company' => $this->company(),
-            'user'    => optional(request()->user())->name,
-        ])->setPaper('a4');
-        return $pdf->stream("TrialBalance-{$from->toDateString()}-{$to->toDateString()}.pdf");
+            'currency' => $this->currency(),
+            'money'   => $this->statementMoney,
+        ], ['title' => 'Trial Balance']);
+        return response($bytes, 200, ['Content-Type' => 'application/pdf', 'Content-Disposition' => 'inline; filename="TrialBalance-'.$from->toDateString().'-'.$to->toDateString().'.pdf"']);
     }
 
     public function incomeStatement(Carbon $from, Carbon $to): Response
     {
         $data = $this->incomeStatement->generate($from, $to);
-        $pdf = Pdf::loadView('pdf.income-statement', [
+        $bytes = $this->renderer->render('pdf.income-statement', [
             'data'    => $data,
-            'company' => $this->company(),
-            'user'    => optional(request()->user())->name,
-        ])->setPaper('a4');
-        return $pdf->stream("IncomeStatement-{$from->toDateString()}-{$to->toDateString()}.pdf");
+            'currency' => $this->currency(),
+            'money'   => $this->statementMoney,
+        ], ['title' => 'Income Statement']);
+        return response($bytes, 200, ['Content-Type' => 'application/pdf', 'Content-Disposition' => 'inline; filename="IncomeStatement-'.$from->toDateString().'-'.$to->toDateString().'.pdf"']);
     }
 
-    public function purchaseOrder(PurchaseOrder $po): Response
+    public function purchaseOrder(PurchaseOrder $po): StreamedResponse
     {
         $po->load(['vendor', 'items.item']);
 
@@ -101,34 +97,37 @@ class PdfService
             ]);
         }
 
-        $pdf = Pdf::loadView('pdf.purchase-order', [
-            'po'        => $po,
-            'company'   => $this->company(),
-            'user'      => optional(request()->user())->name,
-            'now'       => now(),
+        return $this->storeAndStream($po, DocumentType::PurchaseOrder, 'pdf.purchase-order', [
+            'po' => $po,
+            'now' => now(),
             'approvals' => $approvals,
-        ])->setPaper('a4');
-        return $pdf->stream("{$po->po_number}.pdf");
+        ]);
     }
 
     public function balanceSheet(Carbon $asOf): Response
     {
         $data = $this->balanceSheet->generate($asOf);
-        $pdf = Pdf::loadView('pdf.balance-sheet', [
+        $bytes = $this->renderer->render('pdf.balance-sheet', [
             'data'    => $data,
-            'company' => $this->company(),
-            'user'    => optional(request()->user())->name,
-        ])->setPaper('a4');
-        return $pdf->stream("BalanceSheet-{$asOf->toDateString()}.pdf");
+            'currency' => $this->currency(),
+            'money'   => $this->statementMoney,
+        ], ['title' => 'Balance Sheet']);
+        return response($bytes, 200, ['Content-Type' => 'application/pdf', 'Content-Disposition' => 'inline; filename="BalanceSheet-'.$asOf->toDateString().'.pdf"']);
     }
 
-    /** @return array{name:string, address:string, tin:?string} */
-    private function company(): array
+    private function currency(): string
     {
-        return [
-            'name'    => $this->settings->requiredString('company.legal_name'),
-            'address' => $this->settings->requiredString('company.address'),
-            'tin'     => $this->settings->requiredString('company.tin'),
-        ];
+        return strtoupper($this->settings->requiredString('accounting.functional_currency_code'));
+    }
+
+    /** @param array<string, mixed> $data */
+    private function storeAndStream(\Illuminate\Database\Eloquent\Model $entity, DocumentType $type, string $view, array $data): StreamedResponse
+    {
+        $bytes = $this->renderer->render($view, $data, ['title' => $type->label()]);
+        $actor = auth()->user();
+        $user = $actor instanceof User ? $actor : null;
+        $document = $this->vault->store($bytes, $type, $entity, $user);
+
+        return $this->vault->streamInline($document);
     }
 }

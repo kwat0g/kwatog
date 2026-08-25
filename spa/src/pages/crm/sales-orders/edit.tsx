@@ -19,6 +19,7 @@ import { onFormInvalid } from '@/lib/formErrors';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
+import { QueryErrorState } from '@/components/ui/QueryErrorState';
 import { Select } from '@/components/ui/Select';
 import { SkeletonForm } from '@/components/ui/Skeleton';
 import { Textarea } from '@/components/ui/Textarea';
@@ -27,11 +28,26 @@ import { customersApi } from '@/api/accounting/customers';
 import { productsApi } from '@/api/crm/products';
 import { salesOrdersApi } from '@/api/crm/salesOrders';
 import type { UpdateSalesOrderData } from '@/types/crm';
+import type { Incoterm } from '@/types/supplyChain';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
+
+const INCOTERM_OPTIONS: Array<{ value: Incoterm; label: string }> = [
+ { value: 'EXW', label: 'Ex Works' },
+ { value: 'FCA', label: 'Free Carrier' },
+ { value: 'FAS', label: 'Free Alongside Ship' },
+ { value: 'FOB', label: 'Free on Board' },
+ { value: 'CFR', label: 'Cost and Freight' },
+ { value: 'CIF', label: 'Cost, Insurance & Freight' },
+ { value: 'CPT', label: 'Carriage Paid To' },
+ { value: 'CIP', label: 'Carriage & Insurance Paid To' },
+ { value: 'DAP', label: 'Delivered at Place' },
+ { value: 'DPU', label: 'Delivered at Place Unloaded' },
+ { value: 'DDP', label: 'Delivered Duty Paid' },
+];
 const itemSchema = z.object({
  product_id: z.string().min(1, 'Product is required'),
  quantity: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Use a positive decimal with up to 2 places').refine((v) => Number(v) > 0, 'Must be greater than 0'),
@@ -43,8 +59,19 @@ const schema = z.object({
  date: z.string().min(1, 'Order date is required'),
  payment_terms_days: z.string().regex(/^\d+$/, 'Use a non-negative integer').optional().or(z.literal('')),
  delivery_terms: z.string().max(50).optional().or(z.literal('')),
+ incoterm: z.string().optional().or(z.literal('')),
  notes: z.string().max(2000).optional().or(z.literal('')),
  items: z.array(itemSchema).min(1, 'Add at least one line item'),
+}).superRefine((values, ctx) => {
+ values.items.forEach((item, index) => {
+ if (item.delivery_date && values.date && item.delivery_date < values.date) {
+ ctx.addIssue({
+ code: z.ZodIssueCode.custom,
+ path: ['items', index, 'delivery_date'],
+ message: 'Delivery date must be on or after the order date',
+ });
+ }
+ });
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -75,6 +102,7 @@ export default function EditSalesOrderPage() {
  date: '',
  payment_terms_days: '',
  delivery_terms: '',
+ incoterm: '',
  notes: '',
  items: [{ product_id: '', quantity: '', delivery_date: '' }],
  },
@@ -94,6 +122,7 @@ export default function EditSalesOrderPage() {
  date: so.date,
  payment_terms_days: String(so.payment_terms_days),
  delivery_terms: so.delivery_terms ?? '',
+ incoterm: so.incoterm ?? '',
  notes: so.notes ?? '',
  items: (so.items ?? []).map((it) => ({
  product_id: it.product?.id ?? '',
@@ -110,6 +139,7 @@ export default function EditSalesOrderPage() {
  date: values.date,
  payment_terms_days: values.payment_terms_days ? Number(values.payment_terms_days) : undefined,
  delivery_terms: values.delivery_terms || undefined,
+ incoterm: values.incoterm ? values.incoterm as Incoterm : undefined,
  notes: values.notes || undefined,
  items: values.items.map((i) => ({
  product_id: i.product_id,
@@ -137,6 +167,18 @@ export default function EditSalesOrderPage() {
  },
  });
  const safety = useFormSafety({ form, saved: update.isSuccess });
+ const customerLookupDisabled = customers.isLoading || customers.isError || customers.data?.data?.length === 0;
+ const productLookupDisabled = products.isLoading || products.isError || products.data?.data?.length === 0;
+ const customerLookupHelper = customers.isLoading
+  ? 'Loading active customers…'
+  : customers.data?.data?.length === 0
+    ? 'No active customers are available.'
+    : undefined;
+ const productLookupHelper = products.isLoading
+  ? 'Loading active products…'
+  : products.data?.data?.length === 0
+    ? 'No active products are available.'
+    : undefined;
 
  const isDraft = useMemo(() => detail.data?.status === 'draft', [detail.data]);
 
@@ -183,11 +225,20 @@ export default function EditSalesOrderPage() {
  <div>
  <PageHeader title={`Edit ${detail.data.so_number}`} backTo={`/crm/sales-orders/${id}`} backLabel="Back to sales order"
  />
+ {customers.isError && <QueryErrorState size="compact" subject="active customers" onRetry={() => void customers.refetch()} />}
+ {products.isError && <QueryErrorState size="compact" subject="active products" onRetry={() => void products.refetch()} />}
  <form onSubmit={handleSubmit((v) => update.mutate(v), onFormInvalid<FormValues>())} className="max-w-4xl mx-auto px-5 py-4">
  <fieldset className="mb-8">
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Order header</legend>
  <div className="grid grid-cols-2 gap-3">
- <Select label="Customer" required {...register('customer_id')} error={errors.customer_id?.message}>
+ <Select
+ label="Customer"
+ required
+ disabled={customerLookupDisabled}
+ helper={customerLookupHelper}
+ {...register('customer_id')}
+ error={errors.customer_id?.message}
+ >
  <option value="">Select customer…</option>
  {customers.data?.data?.map((c) => (
  <option key={c.id} value={c.id}>{c.name}</option>
@@ -200,6 +251,12 @@ export default function EditSalesOrderPage() {
  className="font-mono"
  />
  <Input label="Delivery terms" {...register('delivery_terms')} error={errors.delivery_terms?.message} placeholder="Enter delivery terms" />
+ <Select label="Incoterm" {...register('incoterm')} error={errors.incoterm?.message}>
+ <option value="">— Select incoterm —</option>
+ {INCOTERM_OPTIONS.map((option) => (
+ <option key={option.value} value={option.value}>{option.value} — {option.label}</option>
+ ))}
+ </Select>
  </div>
  </fieldset>
 
@@ -219,7 +276,12 @@ export default function EditSalesOrderPage() {
  {fields.map((field, i) => (
  <tr key={field.id} className={trCls}>
  <Td>
- <Select {...register(`items.${i}.product_id` as const)} error={errors.items?.[i]?.product_id?.message}>
+ <Select
+ {...register(`items.${i}.product_id` as const)}
+ disabled={productLookupDisabled}
+ helper={productLookupHelper}
+ error={errors.items?.[i]?.product_id?.message}
+ >
  <option value="">Select product…</option>
  {products.data?.data?.map((p) => (
  <option key={p.id} value={p.id}>{p.part_number} — {p.name}</option>

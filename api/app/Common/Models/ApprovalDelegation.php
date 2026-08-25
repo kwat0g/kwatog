@@ -87,7 +87,7 @@ class ApprovalDelegation extends Model
                 $q->where('role_slug', $roleSlug)
                     ->orWhereNull('role_slug');
             })
-            ->with('delegator:id,role_id')
+            ->with('delegator:id,role_id', 'delegator.role:id,slug')
             ->get();
 
         $ids = [];
@@ -114,7 +114,7 @@ class ApprovalDelegation extends Model
     {
         $rows = static::coveringQuery($on)
             ->where('delegate_user_id', $userId)
-            ->with('delegator:id,role_id')
+            ->with('delegator:id,role_id', 'delegator.role:id,slug')
             ->get();
 
         $slugs = [];

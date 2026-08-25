@@ -18,6 +18,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { StatCard } from '@/components/ui/StatCard';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
+import { QueryErrorState } from '@/components/ui/QueryErrorState';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { focusRingInset } from '@/lib/focus';
 
@@ -62,13 +63,13 @@ export default function QualityDashboardPage() {
  <div className="px-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
  <StatCard
  label="Pass rate"
- value={passRate.isLoading ? '—' : passRate.data?.pass_rate != null ? `${passRate.data.pass_rate.toFixed(1)}%` : '—'}
- helper={passRate.data ? `${passRate.data.total} inspections` : '—'}
+ value={passRate.isLoading ? '—' : passRate.isError ? 'Unavailable' : passRate.data?.pass_rate != null ? `${passRate.data.pass_rate.toFixed(1)}%` : '—'}
+ helper={passRate.isError ? 'Retry below' : passRate.data ? `${passRate.data.total} inspections` : '—'}
  />
  <StatCard
  label="Open NCRs"
- value={openNcrs.isLoading ? '—' : openNcrs.data?.meta.total != null ? String(openNcrs.data.meta.total) : '—'}
- helper="awaiting disposition"
+ value={openNcrs.isLoading ? '—' : openNcrs.isError ? 'Unavailable' : openNcrs.data?.meta.total != null ? String(openNcrs.data.meta.total) : '—'}
+ helper={openNcrs.isError ? 'Retry below' : 'awaiting disposition'}
  />
  <StatCard
  label="Total defects"
@@ -76,6 +77,13 @@ export default function QualityDashboardPage() {
  helper="across top 10 parameters"
  />
  </div>
+
+ {(passRate.isError || openNcrs.isError) && (
+ <div className="px-5 grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+ {passRate.isError && <QueryErrorState size="compact" subject="the pass-rate KPI" onRetry={() => void passRate.refetch()} />}
+ {openNcrs.isError && <QueryErrorState size="compact" subject="open NCRs" onRetry={() => void openNcrs.refetch()} />}
+ </div>
+ )}
 
  <div className="px-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
  <Panel title="Defect Pareto" meta="Top 10 parameters" className="col-span-2">

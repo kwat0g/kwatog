@@ -284,6 +284,7 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
             <div className="mt-2 grid grid-cols-2 gap-2">
               <Link
                 to="/portal/customer/login"
+                tabIndex={open ? undefined : -1}
                 onClick={() => onOpenChange(false)}
                 className="rounded-md border border-default bg-surface px-3 py-2.5 text-center text-[12px] text-secondary transition-colors hover:border-accent/40 hover:bg-elevated hover:text-primary"
               >
@@ -291,6 +292,7 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
               </Link>
               <Link
                 to="/portal/supplier/login"
+                tabIndex={open ? undefined : -1}
                 onClick={() => onOpenChange(false)}
                 className="rounded-md border border-default bg-surface px-3 py-2.5 text-center text-[12px] text-secondary transition-colors hover:border-accent/40 hover:bg-elevated hover:text-primary"
               >

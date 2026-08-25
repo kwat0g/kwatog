@@ -59,9 +59,14 @@ return [
 
         'dpi' => 96,
 
-        'enable_php' => true,
+        // Official PDFs render trusted Blade templates only. PHP execution
+        // inside a template is unnecessary and would turn a template/data
+        // mistake into code execution.
+        'enable_php' => false,
 
-        'enable_javascript' => true,
+        // No official template relies on browser-side JavaScript. Keep the
+        // renderer deterministic and inert for user-controlled text.
+        'enable_javascript' => false,
 
         'enable_remote' => false,
 

@@ -20,6 +20,7 @@ export interface EmployeeLoan {
  loan_type_label?: string;
  principal: string;
  interest_rate: string;
+ interest_rate_percent?: string;
  monthly_amortization: string;
  total_paid: string;
  balance: string;
@@ -43,7 +44,7 @@ export interface EmployeeLoan {
 export interface CreateLoanData {
  employee_id: string;
  loan_type: LoanType;
- principal: number;
+ principal: string | number;
  pay_periods: number;
  purpose?: string;
 }
@@ -60,6 +61,7 @@ export interface LoanTypeOption {
  value: LoanType;
  label: string;
  interest_rate: string;
+ interest_rate_percent?: string;
  approval_steps: number;
 }
 

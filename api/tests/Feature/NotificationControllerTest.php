@@ -123,4 +123,30 @@ class NotificationControllerTest extends TestCase
             'enabled'           => true,
         ]);
     }
+
+    public function test_duplicate_preference_keys_are_collapsed_last_row_wins(): void
+    {
+        $response = $this->actingAs($this->user)->putJson('/api/v1/notification-preferences', [
+            'preferences' => [
+                ['notification_type' => 'leave.approved', 'channel' => 'in_app', 'enabled' => false],
+                ['notification_type' => 'leave.approved', 'channel' => 'in_app', 'enabled' => true],
+            ],
+        ]);
+
+        $response->assertOk();
+        $this->assertSame(
+            1,
+            DB::table('notification_preferences')
+                ->where('user_id', $this->user->id)
+                ->where('notification_type', 'leave.approved')
+                ->where('channel', 'in_app')
+                ->count(),
+        );
+        $this->assertDatabaseHas('notification_preferences', [
+            'user_id'           => $this->user->id,
+            'notification_type' => 'leave.approved',
+            'channel'           => 'in_app',
+            'enabled'           => true,
+        ]);
+    }
 }

@@ -196,13 +196,18 @@ class StockAdjustmentService
                 (int) $locked->item_id,
                 (int) $locked->location_id,
                 (string) $locked->quantity,
-                (string) $locked->unit_cost,
+                $locked->direction === 'out' ? null : (string) $locked->unit_cost,
                 (string) $locked->reason,
                 $by,
                 false,
                 'stock_adjustment',
                 (int) $locked->id,
             );
+            // Outbound approvals use the WAC held by StockMovementService under
+            // the source row lock. Replace the creation snapshot with the
+            // authoritative approval-time cost and value for the audit trail.
+            $locked->unit_cost = (string) $mvmt->unit_cost;
+            $locked->value = $this->absValue((string) $locked->quantity, (string) $mvmt->unit_cost);
             $locked->stock_movement_id = $mvmt->id;
             $locked->approved_by = $by->id;
             $locked->approved_at = now();
@@ -221,7 +226,7 @@ class StockAdjustmentService
         int $itemId,
         int $locationId,
         string $qty,
-        string $unitCost,
+        ?string $unitCost,
         string $reason,
         User $by,
         bool $bypassCountFreeze = false,
@@ -280,6 +285,7 @@ class StockAdjustmentService
         $level = StockLevel::query()
             ->where('item_id', $itemId)
             ->where('location_id', $locationId)
+            ->lockForUpdate()
             ->first();
         if ($level === null || $level->weighted_avg_cost === null) {
             throw new BusinessRuleException('No authoritative weighted-average cost exists for this stock level.');

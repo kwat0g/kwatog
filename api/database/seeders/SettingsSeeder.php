@@ -274,13 +274,6 @@ class SettingsSeeder extends Seeder
 
             // ── Inventory ────────────────────────────────────
             [
-                'key'         => 'inventory.allow_negative',
-                'value'       => false,
-                'group'       => 'inventory',
-                'label'       => 'Allow Negative Stock',
-                'description' => 'Permit issuing items even when warehouse stock would go below zero.',
-            ],
-            [
                 'key'         => 'inventory.safety_stock.enabled',
                 'value'       => true,
                 'group'       => 'inventory',

@@ -7,6 +7,7 @@ namespace App\Modules\Landing\Controllers;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Landing\Enums\ContactInquiryStatus;
 use App\Modules\Landing\Models\ContactInquiry;
+use App\Modules\Landing\Requests\ListContactInquiryRequest;
 use App\Modules\Landing\Resources\ContactInquiryResource;
 use App\Modules\Landing\Services\ContactInquiryInboxService;
 use Illuminate\Http\JsonResponse;
@@ -31,9 +32,9 @@ class ContactInquiryInboxController
         ]]);
     }
 
-    public function index(Request $request): AnonymousResourceCollection
+    public function index(ListContactInquiryRequest $request): AnonymousResourceCollection
     {
-        return ContactInquiryResource::collection($this->service->list($request->query()));
+        return ContactInquiryResource::collection($this->service->list($request->validated()));
     }
 
     public function show(ContactInquiry $inquiry): ContactInquiryResource

@@ -60,7 +60,7 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
     Route::post('/purchase-orders',      [PurchaseOrderController::class, 'store'])->middleware('permission:purchasing.po.create');
     Route::put('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'update'])->middleware('permission:purchasing.po.create');
     Route::delete('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'destroy'])->middleware('permission:purchasing.po.create');
-    Route::patch('/purchase-orders/{purchaseOrder}/restore', [PurchaseOrderController::class, 'restore'])->middleware('permission:purchasing.po.manage');
+    Route::patch('/purchase-orders/{purchaseOrder}/restore', [PurchaseOrderController::class, 'restore'])->middleware('permission:purchasing.po.manage')->withTrashed();
     Route::patch('/purchase-orders/{purchaseOrder}/submit',  [PurchaseOrderController::class, 'submit'])->middleware('permission:purchasing.po.create');
     Route::patch('/purchase-orders/{purchaseOrder}/acknowledge-budget', [PurchaseOrderController::class, 'acknowledgeBudget'])->middleware('permission:budgeting.approve');
     Route::patch('/purchase-orders/{purchaseOrder}/approve', [PurchaseOrderController::class, 'approve'])->middleware('permission:purchasing.po.approve');

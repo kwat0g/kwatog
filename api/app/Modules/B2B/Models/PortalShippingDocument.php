@@ -22,6 +22,7 @@ class PortalShippingDocument extends Model
         'file_path',
         'original_filename',
         'file_size_bytes',
+        'content_sha256',
         'mime_type',
         'notes',
         'uploaded_by',
@@ -40,6 +41,6 @@ class PortalShippingDocument extends Model
 
     public function uploader(): BelongsTo
     {
-        return $this->belongsTo(SupplierPortalUser::class, 'uploaded_by');
+        return $this->belongsTo(SupplierPortalUser::class, 'uploaded_by')->withTrashed();
     }
 }

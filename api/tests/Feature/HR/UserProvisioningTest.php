@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature\HR;
 
-use App\Modules\Auth\Notifications\PasswordResetNotification;
-use App\Modules\Auth\Notifications\WelcomeNotification;
+use App\Modules\HR\Notifications\EmployeePasswordResetNotification;
+use App\Modules\HR\Notifications\EmployeeWelcomeNotification;
 use App\Modules\HR\Exceptions\AccountAlreadyProvisionedException;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
@@ -62,7 +62,7 @@ class UserProvisioningTest extends TestCase
         $this->assertTrue((bool) $user->must_change_password);
         $this->assertTrue((bool) $user->is_active);
         $this->assertNotEmpty($user->email);
-        Notification::assertSentTo($user, WelcomeNotification::class);
+        Notification::assertSentTo($user, EmployeeWelcomeNotification::class);
 
         // Reverse relation works.
         $this->assertNotNull($employee->fresh()->user);
@@ -143,7 +143,7 @@ class UserProvisioningTest extends TestCase
         $this->assertNotSame($oldHash, $fresh->password);
         $this->assertTrue((bool) $fresh->must_change_password);
         $this->assertTrue(Hash::check($temp, $fresh->password));
-        Notification::assertSentTo($fresh, PasswordResetNotification::class);
+        Notification::assertSentTo($fresh, EmployeePasswordResetNotification::class);
     }
 
     public function test_account_status_when_no_account(): void

@@ -5,11 +5,12 @@ declare(strict_types=1);
 namespace App\Modules\Maintenance\Services;
 
 use App\Common\Services\SettingsService;
+use App\Modules\MRP\Models\Machine;
 use App\Modules\Production\Enums\MachineDowntimeCategory;
 use App\Modules\Production\Models\MachineDowntime;
-use App\Modules\MRP\Models\Machine;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Collection;
 
 /**
  * ADV8 — Maintenance Automation.
@@ -23,6 +24,10 @@ class DowntimeAnalyticsService
     /**
      * Overall summary for a machine or all machines.
      *
+     * Downtime is treated as an interval. Every row is clipped to the requested
+     * window, including open rows, so the summary cannot import time from
+     * outside the report period.
+     *
      * @return array{
      *   total_downtime_minutes: int,
      *   breakdown_count: int,
@@ -32,160 +37,171 @@ class DowntimeAnalyticsService
      *   category_breakdown: array<int, array{category: string, minutes: int, count: int}>,
      * }
      */
-    public function summary(?int $machineId = null, ?Carbon $from = null, ?Carbon $to = null): array
+    public function summary(?int $machineId = null, ?Carbon $from = null, ?Carbon $to = null, ?string $search = null): array
     {
         $from = $from ?? now()->subDays($this->settings->requiredInt('maintenance.downtime.default_history_days', 1));
-        $to   = $to   ?? now();
+        $to = $to ?? now();
+        $rows = $this->overlappingRows($machineId, $from, $to, $search);
 
-        $base = MachineDowntime::query()
-            ->whereBetween('start_time', [$from, $to])
-            ->when($machineId, fn ($q) => $q->where('machine_id', $machineId));
+        $totalMinutes = 0;
+        $breakdownCount = 0;
+        $breakdownMinutes = 0;
+        $categories = [];
 
-        $totalMinutes = (int) $base->clone()->sum('duration_minutes');
-        $breakdownCount = (int) $base->clone()->where('category', MachineDowntimeCategory::Breakdown->value)->count();
+        foreach ($rows as $row) {
+            $minutes = $this->clippedMinutes($row, $from, $to);
+            if ($minutes <= 0) {
+                continue;
+            }
 
-        // MTBF = total uptime / number of breakdowns
+            $category = $this->categoryValue($row);
+            $totalMinutes += $minutes;
+            $categories[$category]['minutes'] = ($categories[$category]['minutes'] ?? 0) + $minutes;
+            $categories[$category]['count'] = ($categories[$category]['count'] ?? 0) + 1;
+
+            if ($category === MachineDowntimeCategory::Breakdown->value) {
+                $breakdownCount++;
+                $breakdownMinutes += $minutes;
+            }
+        }
+
+        // MTBF = total uptime / number of breakdowns.
         $mtbf = null;
-        // Argument-later, receiver-earlier. Carbon 3 made diffIn* SIGNED, so
-        // $to->diffInMinutes($from) returned a NEGATIVE window: uptime collapsed
-        // to max(0, negative) = 0 and MTBF was pinned at 0 for every machine.
-        $windowMinutes = (int) $from->diffInMinutes($to, true);
+        $windowMinutes = max(0, (int) floor($from->diffInSeconds($to, true) / 60));
         if ($breakdownCount > 0) {
             $uptimeMinutes = max(0, $windowMinutes - $totalMinutes);
-            $mtbf = round($uptimeMinutes / $breakdownCount / 60, 2); // hours
+            $mtbf = round($uptimeMinutes / $breakdownCount / 60, 2);
         }
 
-        // MTTR = total repair time / number of breakdowns
-        $mttr = null;
-        $breakdownMinutes = (int) $base->clone()
-            ->where('category', MachineDowntimeCategory::Breakdown->value)
-            ->sum('duration_minutes');
-        if ($breakdownCount > 0) {
-            $mttr = round($breakdownMinutes / $breakdownCount, 2);
-        }
-
-        // Availability = uptime / total time. Same window as MTBF above, computed
-        // once: the negative value also made this guard false, so availability
-        // came back null rather than a percentage.
+        // MTTR = total repair time / number of breakdowns.
+        $mttr = $breakdownCount > 0 ? round($breakdownMinutes / $breakdownCount, 2) : null;
         $availabilityPct = $windowMinutes > 0
             ? round(max(0, $windowMinutes - $totalMinutes) / $windowMinutes * 100, 2)
             : null;
 
-        // Category breakdown
-        $categoryBreakdown = $base->clone()
-            ->select('category', DB::raw('COALESCE(SUM(duration_minutes),0) as minutes'), DB::raw('COUNT(*) as cnt'))
-            ->groupBy('category')
-            ->orderByDesc('minutes')
-            ->get()
-            ->map(fn ($row) => [
-                'category' => $row->category,
-                'minutes'  => (int) $row->minutes,
-                'count'    => (int) $row->cnt,
-            ])
-            ->toArray();
+        uasort($categories, static fn (array $left, array $right): int => $right['minutes'] <=> $left['minutes']);
+        $categoryBreakdown = [];
+        foreach ($categories as $category => $values) {
+            $categoryBreakdown[] = [
+                'category' => $category,
+                'minutes' => (int) $values['minutes'],
+                'count' => (int) $values['count'],
+            ];
+        }
 
         return [
             'total_downtime_minutes' => $totalMinutes,
-            'breakdown_count'        => $breakdownCount,
-            'mtbf_hours'             => $mtbf,
-            'mttr_minutes'           => $mttr,
-            'availability_pct'       => $availabilityPct,
-            'category_breakdown'     => $categoryBreakdown,
+            'breakdown_count' => $breakdownCount,
+            'mtbf_hours' => $mtbf,
+            'mttr_minutes' => $mttr,
+            'availability_pct' => $availabilityPct,
+            'category_breakdown' => $categoryBreakdown,
         ];
     }
 
     /**
-     * Daily downtime trend for charting.
+     * Daily downtime trend for charting. Intervals spanning midnight are split
+     * across each affected day instead of being assigned to their start date.
      *
      * @return array<int, array{date: string, total_minutes: int, breakdown_minutes: int}>
      */
-    public function dailyTrend(?int $machineId = null, ?int $days = null): array
+    public function dailyTrend(?int $machineId = null, ?int $days = null, ?string $search = null): array
     {
         $days ??= $this->historyDays();
         $from = now()->subDays($days)->startOfDay();
-        $to   = now()->endOfDay();
+        $to = now()->endOfDay();
+        $trend = [];
 
-        // NOTE: DATE(start_time) is used for MySQL compatibility. For PostgreSQL,
-        // date_trunc('day', start_time) would also work. This project uses PostgreSQL.
-        $rows = DB::table('machine_downtimes')
-            ->select(
-                DB::raw('DATE(start_time) as date'),
-                DB::raw('COALESCE(SUM(duration_minutes),0) as total_minutes'),
-                DB::raw("COALESCE(SUM(CASE WHEN category = 'breakdown' THEN duration_minutes ELSE 0 END),0) as breakdown_minutes")
-            )
-            ->whereBetween('start_time', [$from, $to])
-            ->when($machineId, fn ($q) => $q->where('machine_id', $machineId))
-            ->groupBy(DB::raw('DATE(start_time)'))
-            ->orderBy('date')
-            ->get();
+        foreach ($this->overlappingRows($machineId, $from, $to, $search) as $row) {
+            $category = $this->categoryValue($row);
+            $this->forEachDaySegment($row, $from, $to, function (string $date, int $minutes) use (&$trend, $category): void {
+                $trend[$date]['total_minutes'] = ($trend[$date]['total_minutes'] ?? 0) + $minutes;
+                if ($category === MachineDowntimeCategory::Breakdown->value) {
+                    $trend[$date]['breakdown_minutes'] = ($trend[$date]['breakdown_minutes'] ?? 0) + $minutes;
+                }
+            });
+        }
 
-        return $rows->map(fn ($row) => [
-            'date'               => $row->date,
-            'total_minutes'      => (int) $row->total_minutes,
-            'breakdown_minutes'  => (int) $row->breakdown_minutes,
-        ])->toArray();
+        ksort($trend);
+        $result = [];
+        foreach ($trend as $date => $values) {
+            $result[] = [
+                'date' => $date,
+                'total_minutes' => (int) ($values['total_minutes'] ?? 0),
+                'breakdown_minutes' => (int) ($values['breakdown_minutes'] ?? 0),
+            ];
+        }
+
+        return $result;
     }
 
     /**
-     * Top offending machines by downtime.
+     * Top offending machines by clipped downtime.
      *
-     * @return array<int, array{machine_id: int, machine_code: string, name: string, downtime_minutes: int, breakdown_count: int}>
+     * @return array<int, array{machine_id: string, machine_code: string, name: string, downtime_minutes: int, breakdown_count: int}>
      */
-    public function topMachines(int $limit = 10, ?int $days = null): array
+    public function topMachines(int $limit = 10, ?int $days = null, ?string $search = null): array
     {
         $days ??= $this->historyDays();
         $from = now()->subDays($days)->startOfDay();
-        $to   = now()->endOfDay();
+        $to = now()->endOfDay();
+        $grouped = [];
 
-        return DB::table('machine_downtimes as md')
-            ->join('machines as m', 'm.id', '=', 'md.machine_id')
-            ->select(
-                'm.id as machine_id',
-                'm.machine_code',
-                'm.name',
-                DB::raw('COALESCE(SUM(md.duration_minutes),0) as downtime_minutes'),
-                DB::raw("COUNT(CASE WHEN md.category = 'breakdown' THEN 1 END) as breakdown_count")
-            )
-            ->whereBetween('md.start_time', [$from, $to])
-            ->groupBy('m.id', 'm.machine_code', 'm.name')
-            ->orderByDesc('downtime_minutes')
-            ->limit($limit)
-            ->get()
-            ->map(fn ($row) => [
-                'machine_id'        => (int) $row->machine_id,
-                'machine_code'      => $row->machine_code,
-                'name'              => $row->name,
-                'downtime_minutes'  => (int) $row->downtime_minutes,
-                'breakdown_count'   => (int) $row->breakdown_count,
-            ])
-            ->toArray();
+        foreach ($this->overlappingRows(null, $from, $to, $search) as $row) {
+            $minutes = $this->clippedMinutes($row, $from, $to);
+            $machine = $row->machine;
+            if ($minutes <= 0 || ! $machine) {
+                continue;
+            }
+
+            $key = (string) $machine->id;
+            $grouped[$key]['machine_id'] = $machine->hash_id;
+            $grouped[$key]['machine_code'] = $machine->machine_code;
+            $grouped[$key]['name'] = $machine->name;
+            $grouped[$key]['downtime_minutes'] = ($grouped[$key]['downtime_minutes'] ?? 0) + $minutes;
+            $grouped[$key]['breakdown_count'] ??= 0;
+            if ($this->categoryValue($row) === MachineDowntimeCategory::Breakdown->value) {
+                $grouped[$key]['breakdown_count'] = ($grouped[$key]['breakdown_count'] ?? 0) + 1;
+            }
+        }
+
+        usort($grouped, static fn (array $left, array $right): int => $right['downtime_minutes'] <=> $left['downtime_minutes']);
+        return array_slice(array_values($grouped), 0, max(1, $limit));
     }
 
     /**
      * Per-machine summary for the downtime dashboard.
      *
-     * @return array<int, array{machine: array{id: int, code: string, name: string}, summary: array}>
+     * @return array<int, array{machine: array{id: string, code: string, name: string}, summary: array}>
      */
-    public function allMachinesSummary(?int $days = null): array
+    public function allMachinesSummary(?int $days = null, ?string $search = null): array
     {
         $days ??= $this->historyDays();
+        $from = now()->subDays($days)->startOfDay();
+        $to = now()->endOfDay();
+
         $machines = Machine::query()
+            ->when(trim((string) $search) !== '', function (Builder $query) use ($search): void {
+                $term = '%'.trim((string) $search).'%';
+                $query->where(function (Builder $machineQuery) use ($term): void {
+                    $machineQuery
+                        ->where('machine_code', 'ilike', $term)
+                        ->orWhere('name', 'ilike', $term);
+                });
+            })
             ->orderBy('machine_code')
             ->get();
 
-        $from = now()->subDays($days)->startOfDay();
-        $to   = now()->endOfDay();
-
-        return $machines->map(function (Machine $machine) use ($from, $to) {
+        return $machines->map(function (Machine $machine) use ($from, $to): array {
             return [
                 'machine' => [
-                    'id'    => $machine->id,
-                    'code'  => $machine->machine_code,
-                    'name'  => $machine->name,
+                    'id' => $machine->hash_id,
+                    'code' => $machine->machine_code,
+                    'name' => $machine->name,
                 ],
                 'summary' => $this->summary((int) $machine->id, $from, $to),
             ];
-        })->toArray();
+        })->values()->all();
     }
 
     /**
@@ -198,57 +214,116 @@ class DowntimeAnalyticsService
      *   percent: float, cumulative_percent: float
      * }>
      */
-    public function categoryPareto(?int $machineId = null, ?int $days = null): array
+    public function categoryPareto(?int $machineId = null, ?int $days = null, ?string $search = null): array
     {
         $days ??= $this->historyDays();
         $from = now()->subDays($days)->startOfDay();
-        $to   = now()->endOfDay();
+        $to = now()->endOfDay();
+        $categories = [];
 
-        $rows = MachineDowntime::query()
-            ->whereBetween('start_time', [$from, $to])
-            ->when($machineId, fn ($q) => $q->where('machine_id', $machineId))
-            ->select('category',
-                DB::raw('COALESCE(SUM(duration_minutes),0) as minutes'),
-                DB::raw('COUNT(*) as cnt')
-            )
-            ->groupBy('category')
-            ->orderByDesc('minutes')
-            ->get();
+        foreach ($this->overlappingRows($machineId, $from, $to, $search) as $row) {
+            $minutes = $this->clippedMinutes($row, $from, $to);
+            if ($minutes <= 0) {
+                continue;
+            }
 
-        $totalMinutes = (int) $rows->sum('minutes');
-        if ($totalMinutes === 0) {
+            $category = $this->categoryValue($row);
+            $categories[$category]['minutes'] = ($categories[$category]['minutes'] ?? 0) + $minutes;
+            $categories[$category]['count'] = ($categories[$category]['count'] ?? 0) + 1;
+        }
+
+        if ($categories === []) {
             return [];
         }
 
+        uasort($categories, static fn (array $left, array $right): int => $right['minutes'] <=> $left['minutes']);
+        $totalMinutes = array_sum(array_column($categories, 'minutes'));
         $running = 0;
-        return $rows->map(function ($row) use ($totalMinutes, &$running) {
-            $minutes = (int) $row->minutes;
+        $result = [];
+
+        foreach ($categories as $category => $values) {
+            $minutes = (int) $values['minutes'];
             $running += $minutes;
-
-            $category = $row->category instanceof MachineDowntimeCategory
-                ? $row->category->value
-                : (string) $row->category;
-
-            return [
-                'category'           => $category,
-                'label'              => $this->labelFor($category),
-                'minutes'            => $minutes,
-                'count'              => (int) $row->cnt,
-                'percent'            => round($minutes / $totalMinutes * 100, 2),
+            $result[] = [
+                'category' => $category,
+                'label' => $this->labelFor($category),
+                'minutes' => $minutes,
+                'count' => (int) $values['count'],
+                'percent' => round($minutes / $totalMinutes * 100, 2),
                 'cumulative_percent' => round($running / $totalMinutes * 100, 2),
             ];
-        })->toArray();
+        }
+
+        return $result;
+    }
+
+    private function overlappingRows(?int $machineId, Carbon $from, Carbon $to, ?string $search): Collection
+    {
+        return MachineDowntime::query()
+            ->with('machine:id,machine_code,name')
+            ->where('start_time', '<', $to)
+            ->where(function (Builder $query) use ($from): void {
+                $query->whereNull('end_time')->orWhere('end_time', '>', $from);
+            })
+            ->when($machineId !== null, fn (Builder $query) => $query->where('machine_id', $machineId))
+            ->when(trim((string) $search) !== '', function (Builder $query) use ($search): void {
+                $term = '%'.trim((string) $search).'%';
+                $query->whereHas('machine', function (Builder $machineQuery) use ($term): void {
+                    $machineQuery
+                        ->where('machine_code', 'ilike', $term)
+                        ->orWhere('name', 'ilike', $term);
+                });
+            })
+            ->get();
+    }
+
+    private function clippedMinutes(MachineDowntime $row, Carbon $from, Carbon $to): int
+    {
+        $start = $row->start_time instanceof Carbon ? $row->start_time->copy() : Carbon::parse($row->start_time);
+        $end = $row->end_time instanceof Carbon ? $row->end_time->copy() : ($row->end_time ? Carbon::parse($row->end_time) : $to->copy());
+        $start = $start->greaterThan($from) ? $start : $from->copy();
+        $end = $end->lessThan($to) ? $end : $to->copy();
+
+        return $end->greaterThan($start)
+            ? max(0, (int) floor($start->diffInSeconds($end, true) / 60))
+            : 0;
+    }
+
+    /** @param callable(string, int): void $consumer */
+    private function forEachDaySegment(MachineDowntime $row, Carbon $from, Carbon $to, callable $consumer): void
+    {
+        $start = $row->start_time instanceof Carbon ? $row->start_time->copy() : Carbon::parse($row->start_time);
+        $end = $row->end_time instanceof Carbon ? $row->end_time->copy() : ($row->end_time ? Carbon::parse($row->end_time) : $to->copy());
+        $start = $start->greaterThan($from) ? $start : $from->copy();
+        $end = $end->lessThan($to) ? $end : $to->copy();
+
+        while ($start->lessThan($end)) {
+            $dayEnd = $start->copy()->startOfDay()->addDay();
+            $segmentEnd = $end->lessThan($dayEnd) ? $end->copy() : $dayEnd;
+            $minutes = max(0, (int) floor($start->diffInSeconds($segmentEnd, true) / 60));
+            if ($minutes > 0) {
+                $consumer($start->toDateString(), $minutes);
+            }
+            $start = $segmentEnd;
+        }
+    }
+
+    private function categoryValue(MachineDowntime $row): string
+    {
+        return $row->category instanceof MachineDowntimeCategory
+            ? $row->category->value
+            : (string) $row->category;
     }
 
     private function labelFor(string $category): string
     {
         return match ($category) {
-            'breakdown'           => 'Breakdown',
-            'changeover'          => 'Changeover',
-            'material_shortage'   => 'Material Shortage',
-            'no_order'            => 'No Order',
+            'breakdown' => 'Breakdown',
+            'changeover' => 'Changeover',
+            'material_shortage' => 'Material Shortage',
+            'no_order' => 'No Order',
             'planned_maintenance' => 'Planned Maintenance',
-            default               => ucwords(str_replace('_', ' ', $category)),
+            default => ucwords(str_replace('_', ' ', $category)),
         };
     }
 

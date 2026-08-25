@@ -4,18 +4,18 @@ declare(strict_types=1);
 
 namespace App\Modules\Admin\Services;
 
-use App\Common\Models\AuditLog;
 use App\Common\Support\TrashedFilter;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class RoleService
 {
+    public function __construct(private readonly RbacAuditService $audit) {}
+
     public function list(array $filters): LengthAwarePaginator
     {
         $query = Role::query()
@@ -64,10 +64,9 @@ class RoleService
     }
 
     /**
-     * ADV4 — Compute the most recent edit (updated, permissions_synced, or
-     * cloned) for each given role from `audit_logs`, joined to the actor's
-     * name. Returns a map keyed by role id; absent ids fall back to nulls
-     * upstream.
+     * Compute the most recent authoritative lifecycle edit for each given role
+     * from `audit_logs`, joined to the actor's name. Returns a map keyed by
+     * role id; absent ids fall back to nulls upstream.
      *
      * P3.8 fix: uses a correlated subquery to fetch only ONE row per role id
      * (the one with the latest created_at) instead of loading all audit rows
@@ -93,13 +92,13 @@ class RoleService
             ->select('a.model_id', 'a.created_at', 'u.name as actor_name')
             ->where('a.model_type', $morph)
             ->whereIn('a.model_id', $roleIds)
-            ->whereIn('a.action', ['updated', 'permissions_synced', 'cloned'])
+            ->whereIn('a.action', ['created', 'updated', 'deleted', 'restored', 'permissions_synced', 'cloned'])
             ->whereRaw('a.created_at = (
                 SELECT MAX(a2.created_at)
                 FROM audit_logs AS a2
                 WHERE a2.model_type = a.model_type
                   AND a2.model_id   = a.model_id
-                  AND a2.action     IN (\'updated\', \'permissions_synced\', \'cloned\')
+                  AND a2.action     IN (\'created\', \'updated\', \'deleted\', \'restored\', \'permissions_synced\', \'cloned\')
             )')
             ->get();
 
@@ -181,44 +180,63 @@ class RoleService
 
     public function create(array $data): Role
     {
-        return DB::transaction(fn () => Role::create([
-            'name'        => $data['name'],
-            'slug'        => $data['slug'],
-            'description' => $data['description'] ?? null,
-            'is_system'   => false, // R1: only seeders can create system roles
-        ]));
+        return DB::transaction(function () use ($data): Role {
+            $role = Role::create([
+                'name'        => $data['name'],
+                'slug'        => $data['slug'],
+                'description' => $data['description'] ?? null,
+                'is_system'   => false, // R1: only seeders can create system roles
+            ]);
+
+            $this->audit->record($role, 'created', null, $this->roleSnapshot($role));
+
+            return $role;
+        });
     }
 
     public function update(Role $role, array $data): Role
     {
-        // R1: refuse rename/edit on system roles. Allow description tweak only
-        // through a separate path if business decides — for now: hard block.
-        abort_if(
-            (bool) $role->is_system,
-            422,
-            'System roles cannot be edited. Clone the role first to create a customizable copy.',
-        );
-
         return DB::transaction(function () use ($role, $data) {
-            $role->update($data);
-            return $role->fresh();
+            $locked = Role::query()->lockForUpdate()->findOrFail($role->getKey());
+            $this->assertEditable($locked);
+            $oldValues = $this->roleSnapshot($locked);
+
+            $locked->fill($data);
+            if ($locked->isDirty()) {
+                $locked->save();
+                $this->audit->record($locked, 'updated', $oldValues, $this->roleSnapshot($locked));
+            }
+
+            return $locked;
         });
     }
 
     public function delete(Role $role): void
     {
-        abort_if((bool) $role->is_system, 422, 'System roles cannot be deleted.');
-        abort_if($role->users()->exists(), 422, 'Cannot delete a role that still has assigned users.');
-
         DB::transaction(function () use ($role) {
             // Re-check under the row lock: a user may have been assigned to the
             // role between the outer guard and this transaction.
             $locked = Role::query()->lockForUpdate()->findOrFail($role->getKey());
             abort_if((bool) $locked->is_system, 422, 'System roles cannot be deleted.');
             abort_if($locked->users()->exists(), 422, 'Cannot delete a role that still has assigned users.');
+            $oldValues = $this->roleSnapshot($locked);
 
-            $locked->permissions()->detach();
             $locked->delete();
+            $this->audit->record($locked, 'deleted', $oldValues, null);
+        });
+    }
+
+    public function restore(Role $role): Role
+    {
+        return DB::transaction(function () use ($role): Role {
+            $locked = Role::withTrashed()->lockForUpdate()->findOrFail($role->getKey());
+            if ($locked->trashed()) {
+                $oldValues = $this->roleSnapshot($locked);
+                $locked->restore();
+                $this->audit->record($locked, 'restored', $oldValues, $this->roleSnapshot($locked));
+            }
+
+            return $locked;
         });
     }
 
@@ -242,20 +260,13 @@ class RoleService
             }
 
             // Audit the clone explicitly so reviewers can trace lineage.
-            AuditLog::create([
-                'user_id'    => Auth::id(),
-                'action'     => 'cloned',
-                'model_type' => $clone->getMorphClass(),
-                'model_id'   => $clone->getKey(),
-                'old_values' => null,
-                'new_values' => [
+            $this->audit->record($clone, 'cloned', null, [
+                ...$this->roleSnapshot($clone),
+                ...[
                     'cloned_from_role_id' => $source->id,
                     'cloned_from_slug'    => $source->slug,
                     'permissions_copied'  => count($permissionIds),
                 ],
-                'ip_address' => request()?->ip(),
-                'user_agent' => request()?->userAgent(),
-                'created_at' => now(),
             ]);
 
             return $clone->load('permissions');
@@ -272,45 +283,37 @@ class RoleService
         // direct API attempt to alter a system role's permission set —
         // including non-`system_admin` ones like `hr_officer`. Custom roles
         // (is_system=false) remain freely editable.
-        abort_if(
-            (bool) $role->is_system,
-            422,
-            in_array($role->slug, config('rbac.immutable_roles'), true)
-                ? 'The System Administrator role always has every permission and cannot be edited.'
-                : 'System roles cannot be edited. Clone the role first to create a customizable copy.',
-        );
-
         return DB::transaction(function () use ($role, $slugs) {
-            $existing = $role->permissions()->pluck('permissions.slug')->all();
-            $ids = Permission::whereIn('slug', $slugs)->pluck('id')->all();
-            $role->permissions()->sync($ids);
+            // Lock the stable parent row before reading the pivot. This
+            // serializes concurrent permission saves for the same role and
+            // makes the audit diff describe the state that actually won.
+            $locked = Role::query()->lockForUpdate()->findOrFail($role->getKey());
+            $this->assertEditable($locked);
 
-            $added   = array_values(array_diff($slugs, $existing));
-            $removed = array_values(array_diff($existing, $slugs));
+            $existing = $locked->permissions()->pluck('permissions.slug')->all();
+            $requested = array_values(array_unique($slugs));
+            sort($existing);
+            sort($requested);
+            $ids = Permission::whereIn('slug', $requested)->pluck('id')->all();
+            abort_if(count($ids) !== count($requested), 422, 'One or more permissions do not exist.');
+            $locked->permissions()->sync($ids);
+
+            $added   = array_values(array_diff($requested, $existing));
+            $removed = array_values(array_diff($existing, $requested));
 
             // Audit the diff so reviewers can answer "who granted X to role Y".
-            AuditLog::create([
-                'user_id'    => Auth::id(),
-                'action'     => 'permissions_synced',
-                'model_type' => $role->getMorphClass(),
-                'model_id'   => $role->getKey(),
-                'old_values' => ['permissions' => $existing],
-                'new_values' => [
-                    'permissions' => $slugs,
+            $this->audit->record($locked, 'permissions_synced', ['permissions' => $existing], [
+                    'permissions' => $requested,
                     'added'       => $added,
                     'removed'     => $removed,
-                ],
-                'ip_address' => request()?->ip(),
-                'user_agent' => request()?->userAgent(),
-                'created_at' => now(),
             ]);
 
             // H-9 — Bust the role-permission cache key directly. One forget
             // serves every user of this role (cache is keyed by role_id, not
             // user_id, since H-9 split the cache).
-            Cache::forget("auth:role_perms:{$role->id}");
+            Cache::forget("auth:role_perms:{$locked->id}");
 
-            return $role->fresh('permissions');
+            return $locked->load('permissions');
         });
     }
 
@@ -332,5 +335,29 @@ class RoleService
                 'description' => $p->description,
             ])->all())
             ->all();
+    }
+
+    private function assertEditable(Role $role): void
+    {
+        abort_if(
+            (bool) $role->is_system,
+            422,
+            in_array($role->slug, config('rbac.immutable_roles'), true)
+                ? 'The System Administrator role always has every permission and cannot be edited.'
+                : 'System roles cannot be edited. Clone the role first to create a customizable copy.',
+        );
+    }
+
+    /** @return array<string, mixed> */
+    private function roleSnapshot(Role $role): array
+    {
+        return [
+            'id' => $role->getKey(),
+            'name' => $role->name,
+            'slug' => $role->slug,
+            'description' => $role->description,
+            'is_system' => (bool) $role->is_system,
+            'deleted_at' => $role->deleted_at?->toIso8601String(),
+        ];
     }
 }

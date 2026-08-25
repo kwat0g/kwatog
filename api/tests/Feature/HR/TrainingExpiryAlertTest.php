@@ -6,16 +6,19 @@ namespace Tests\Feature\HR;
 
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Common\Services\SettingsService;
 use App\Modules\HR\Enums\EmployeeTrainingStatus;
 use App\Modules\HR\Enums\TrainingAlertLevel;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\EmployeeTraining;
 use App\Modules\HR\Models\Training;
+use App\Modules\HR\Models\TrainingExpiryAlertDelivery;
 use App\Modules\HR\Services\TrainingExpiryService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class TrainingExpiryAlertTest extends TestCase
@@ -136,5 +139,63 @@ class TrainingExpiryAlertTest extends TestCase
         $exit = Artisan::call('training:check-expiries');
         $this->assertSame(0, $exit);
         $this->assertStringContainsString('Training expiry check:', Artisan::output());
+    }
+
+    public function test_empty_recipient_set_does_not_advance_alert_marker_or_expire_record(): void
+    {
+        [$emp, $training] = $this->setupEmpAndTraining();
+        $record = $this->makeCompleted($emp, $training, now()->subDay()->toDateString());
+        app(SettingsService::class)->set('hr.training_expiry.notification_roles', []);
+
+        /** @var TrainingExpiryService $service */
+        $service = app(TrainingExpiryService::class);
+        $result = $service->check();
+
+        $this->assertSame(0, $result['alerts_sent']);
+        $this->assertSame(0, $result['expired_marked']);
+        $this->assertNull($record->refresh()->last_alert_level);
+        $this->assertSame(EmployeeTrainingStatus::Completed, $record->status);
+        $this->assertSame(0, TrainingExpiryAlertDelivery::query()->count());
+    }
+
+    public function test_all_disabled_channels_do_not_advance_alert_marker(): void
+    {
+        $hr = $this->seedHrOfficer();
+        [$emp, $training] = $this->setupEmpAndTraining();
+        $record = $this->makeCompleted($emp, $training, now()->addDays(30)->toDateString());
+        app(SettingsService::class)->set('hr.training_expiry.notification_roles', ['hr_officer']);
+        DB::table('notification_preferences')->insert([
+            ['user_id' => $hr->id, 'notification_type' => 'training.expiry', 'channel' => 'in_app', 'enabled' => false, 'created_at' => now(), 'updated_at' => now()],
+            ['user_id' => $hr->id, 'notification_type' => 'training.expiry', 'channel' => 'email', 'enabled' => false, 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        /** @var TrainingExpiryService $service */
+        $service = app(TrainingExpiryService::class);
+        $result = $service->check();
+
+        $this->assertSame(0, $result['alerts_sent']);
+        $this->assertNull($record->refresh()->last_alert_level);
+        $this->assertDatabaseCount('training_expiry_alert_deliveries', 0);
+    }
+
+    public function test_delivery_claim_is_persisted_with_the_alert_marker(): void
+    {
+        $hr = $this->seedHrOfficer();
+        [$emp, $training] = $this->setupEmpAndTraining();
+        $record = $this->makeCompleted($emp, $training, now()->addDays(30)->toDateString());
+        app(SettingsService::class)->set('hr.training_expiry.notification_roles', ['hr_officer']);
+
+        /** @var TrainingExpiryService $service */
+        $service = app(TrainingExpiryService::class);
+        $result = $service->check();
+
+        $this->assertSame(1, $result['alerts_sent']);
+        $this->assertDatabaseHas('training_expiry_alert_deliveries', [
+            'employee_training_id' => $record->id,
+            'alert_level' => TrainingAlertLevel::T30->value,
+            'recipient_user_id' => $hr->id,
+            'channel' => 'in_app',
+            'status' => 'delivered',
+        ]);
     }
 }

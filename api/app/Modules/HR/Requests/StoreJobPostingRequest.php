@@ -36,7 +36,12 @@ class StoreJobPostingRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'position_id'      => ['nullable', 'exists:positions,id'],
+            'position_id'      => [
+                'nullable',
+                Rule::exists('positions', 'id')->where(fn ($query) => $query
+                    ->where('department_id', $this->input('department_id'))
+                    ->whereNull('deleted_at')),
+            ],
             'department_id'    => ['required', 'exists:departments,id'],
             'title'            => ['required', 'string', 'max:200'],
             'description'      => ['required', 'string'],

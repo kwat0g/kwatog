@@ -16,6 +16,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import type { DeliveryScheduleLine } from '@/types/b2b';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { CompanyName } from '@/components/brand/CompanyName';
+import { DataTablePagination } from '@/components/ui/DataTablePagination';
 
 const MONTH_OPTIONS: string[] = [];
 const now = new Date();
@@ -31,12 +32,14 @@ export default function DeliverySchedulesPage() {
  const [lines, setLines] = useState<DeliveryScheduleLine[]>([
  { product_name: '', quantity: 0, notes: '' },
  ]);
+ const [page, setPage] = useState(1);
 
- const { data: schedules, isLoading, isError, refetch } = useQuery({
- queryKey: ['portal', 'customer', 'delivery-schedules'],
- queryFn: () => customerPortalApi.listDeliverySchedules(),
+ const { data: schedulesPage, isLoading, isError, refetch } = useQuery({
+ queryKey: ['portal', 'customer', 'delivery-schedules', { page }],
+ queryFn: () => customerPortalApi.listDeliverySchedules({ page }),
  placeholderData: (prev) => prev,
  });
+ const schedules = schedulesPage?.data ?? [];
 
  const createMut = useMutation({
  mutationFn: () => customerPortalApi.createDeliverySchedule({ month, lines }),
@@ -165,7 +168,8 @@ export default function DeliverySchedulesPage() {
  {/* Submitted schedules list */}
  {!isLoading && !isError && (
  <Panel title="Submitted schedules">
- {schedules && schedules.length > 0 ? (
+ {schedules.length > 0 ? (
+ <>
  <div className="space-y-3">
  {schedules.map((s) => (
  <div key={s.id} className="border border-default rounded-md p-3 hover:bg-subtle/50 transition-colors">
@@ -199,6 +203,10 @@ export default function DeliverySchedulesPage() {
  </div>
  ))}
  </div>
+ {schedulesPage?.meta && (
+ <DataTablePagination meta={schedulesPage.meta} onPageChange={setPage} />
+ )}
+ </>
  ) : (
  <EmptyState icon="clipboard-list" title="No schedules yet" description="Submit your monthly delivery requirements above." />
  )}

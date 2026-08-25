@@ -3,23 +3,28 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import type { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
-import { Button, Chip, ConfirmDialog, EmptyState, Panel, Select, SkeletonDetail, Td, Th } from '@/components/ui';
+import { Button, Chip, ConfirmDialog, EmptyState, Input, Modal, ModalFooter, Panel, Select, SkeletonDetail, Td, Textarea, Th } from '@/components/ui';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { adminUsersApi } from '@/api/admin/users';
-import { client } from '@/api/client';
 import type { AdminUserDetail } from '@/types/admin';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
 import { PermissionOverrides } from './_components/PermissionOverrides';
 import { tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
-interface RoleOption { id: string; name: string }
-interface RolesResponse { data: RoleOption[] }
+type ProfileDraft = { name: string; email: string };
 
-/** U2 — Admin > LuUser detail page. */
+/** U2 — Admin > User detail page. */
 export default function AdminUserDetailPage() {
  const { id = '' } = useParams<{ id: string }>();
  const queryClient = useQueryClient();
  const [confirm, setConfirm] = useState<null | 'reset' | 'deactivate' | 'unlock'>(null);
+ const [roleDialogOpen, setRoleDialogOpen] = useState(false);
+ const [pendingRoleId, setPendingRoleId] = useState('');
+ const [roleReason, setRoleReason] = useState('');
+ const [profileDialogOpen, setProfileDialogOpen] = useState(false);
+ const [profileDraft, setProfileDraft] = useState<ProfileDraft>({ name: '', email: '' });
+ const [profileErrors, setProfileErrors] = useState<Record<string, string>>({});
+ const [tempPasswordModal, setTempPasswordModal] = useState<string | null>(null);
 
  const userQuery = useQuery<AdminUserDetail>({
  queryKey: ['admin-user', id],
@@ -27,9 +32,9 @@ export default function AdminUserDetailPage() {
  enabled: !!id,
  });
 
- const rolesQuery = useQuery<RolesResponse>({
- queryKey: ['admin-roles-list'],
- queryFn: () => client.get('/admin/roles').then((r) => r.data),
+ const rolesQuery = useQuery({
+ queryKey: ['admin-user-options'],
+ queryFn: adminUsersApi.options,
  staleTime: 60_000,
  });
 
@@ -38,6 +43,7 @@ export default function AdminUserDetailPage() {
  onSuccess: (r) => {
  toast.success(r.message);
  setConfirm(null);
+ setTempPasswordModal(r.temp_password);
  queryClient.invalidateQueries({ queryKey: ['admin-user', id] });
  },
  onError: () => toast.error('Failed to reset password.'),
@@ -75,14 +81,43 @@ export default function AdminUserDetailPage() {
  });
 
  const changeRole = useMutation({
- mutationFn: (roleId: string) => adminUsersApi.changeRole(id, roleId, userQuery.data?.role?.id ?? ''),
+ mutationFn: ({ roleId, reason }: { roleId: string; reason: string }) => adminUsersApi.changeRole(id, roleId, userQuery.data?.role?.id ?? '', reason),
  onSuccess: () => {
  toast.success('Role updated.');
+ setRoleDialogOpen(false);
+ setPendingRoleId('');
+ setRoleReason('');
  queryClient.invalidateQueries({ queryKey: ['admin-user', id] });
  queryClient.invalidateQueries({ queryKey: ['admin-users'] });
  },
  onError: (error: AxiosError<{ message?: string }>) => toast.error(error.response?.data?.message ?? 'Failed to update role.'),
  });
+
+ const updateProfile = useMutation({
+ mutationFn: () => adminUsersApi.updateProfile(id, profileDraft),
+ onSuccess: () => {
+ toast.success('User profile updated.');
+ setProfileDialogOpen(false);
+ setProfileErrors({});
+ queryClient.invalidateQueries({ queryKey: ['admin-user', id] });
+ queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+ },
+ onError: (error: AxiosError<{ message?: string; errors?: Record<string, string[]> }>) => {
+ const next: Record<string, string> = {};
+ for (const [field, messages] of Object.entries(error.response?.data?.errors ?? {})) {
+ next[field] = messages[0] ?? '';
+ }
+ setProfileErrors(next);
+ toast.error(error.response?.data?.message ?? 'Failed to update user profile.');
+ },
+ });
+
+ const openRoleDialog = (roleId: string) => {
+ if (!roleId || roleId === userQuery.data?.role?.id) return;
+ setPendingRoleId(roleId);
+ setRoleReason('');
+ setRoleDialogOpen(true);
+ };
 
  if (userQuery.isLoading) return <SkeletonDetail />;
  if (userQuery.isError) {
@@ -113,6 +148,19 @@ export default function AdminUserDetailPage() {
  backLabel="Users"
  actions={
  <div className="flex gap-1.5">
+ {!user.employee && (
+ <Button
+ variant="secondary"
+ size="sm"
+ onClick={() => {
+ setProfileDraft({ name: user.name, email: user.email });
+ setProfileErrors({});
+ setProfileDialogOpen(true);
+ }}
+ >
+ Edit profile
+ </Button>
+ )}
  {user.is_locked && (
  <Button variant="secondary" size="sm" onClick={() => setConfirm('unlock')}>
  Unlock
@@ -181,17 +229,23 @@ export default function AdminUserDetailPage() {
  <Field label="Role">
  <Select
  value={user.role?.id ?? ''}
- onChange={(e) => changeRole.mutate(e.target.value)}
- disabled={changeRole.isPending}
+ onChange={(e) => openRoleDialog(e.target.value)}
+ disabled={changeRole.isPending || rolesQuery.isLoading || rolesQuery.isError}
+ error={rolesQuery.isError ? 'Could not load roles. Retry below.' : undefined}
  aria-label="Role"
  >
  <option value="">—</option>
- {(rolesQuery.data?.data ?? []).map((r) => (
+ {(rolesQuery.data?.roles ?? []).map((r) => (
  <option key={r.id} value={r.id}>
  {r.name}
  </option>
  ))}
  </Select>
+ {rolesQuery.isError && (
+ <Button variant="ghost" size="xs" onClick={() => rolesQuery.refetch()}>
+ Retry role list
+ </Button>
+ )}
  </Field>
  <Field label="Created">
  <span className="font-mono tabular-nums">
@@ -248,9 +302,7 @@ export default function AdminUserDetailPage() {
  <Th>
  IP
  </Th>
- <Th>
- LuUser Agent
- </Th>
+ <Th>User Agent</Th>
  <Th>
  Reason
  </Th>
@@ -293,7 +345,7 @@ export default function AdminUserDetailPage() {
  <ConfirmDialog
  isOpen={confirm === 'reset'}
  title="Reset password?"
- description="Generate a new temporary password and email it to the user."
+ description="Generate a new temporary password. It will be shown once here so it can be shared through an approved channel if email delivery fails."
  confirmLabel={reset.isPending ? 'Resetting…' : 'Reset Password'}
  variant="primary"
  onConfirm={() => reset.mutate()}
@@ -320,6 +372,130 @@ export default function AdminUserDetailPage() {
  onClose={() => setConfirm(null)}
  pending={unlock.isPending}
  />
+
+ <Modal
+ isOpen={roleDialogOpen}
+ onClose={() => {
+ if (changeRole.isPending) return;
+ setRoleDialogOpen(false);
+ setPendingRoleId('');
+ setRoleReason('');
+ }}
+ title="Confirm role change"
+ size="sm"
+ closeOnOverlayClick={!changeRole.isPending}
+ >
+ <div className="space-y-4">
+ <p className="text-sm text-secondary">
+ Change <span className="font-medium text-primary">{user.name}</span> to{' '}
+ <span className="font-medium text-primary">
+ {rolesQuery.data?.roles.find((role) => role.id === pendingRoleId)?.name ?? 'the selected role'}
+ </span>?
+ </p>
+ <Textarea
+ label="Reason"
+ value={roleReason}
+ onChange={(event) => setRoleReason(event.target.value)}
+ placeholder="Explain why this role change is needed…"
+ helper="At least 5 characters; recorded in the audit log."
+ rows={3}
+ required
+ disabled={changeRole.isPending}
+ />
+ <ModalFooter>
+ <Button
+ variant="secondary"
+ onClick={() => {
+ setRoleDialogOpen(false);
+ setPendingRoleId('');
+ setRoleReason('');
+ }}
+ disabled={changeRole.isPending}
+ >
+ Cancel
+ </Button>
+ <Button
+ variant="primary"
+ onClick={() => {
+ if (pendingRoleId && roleReason.trim().length >= 5) {
+ changeRole.mutate({ roleId: pendingRoleId, reason: roleReason.trim() });
+ }
+ }}
+ disabled={changeRole.isPending || roleReason.trim().length < 5 || !pendingRoleId}
+ loading={changeRole.isPending}
+ >
+ Confirm change
+ </Button>
+ </ModalFooter>
+ </div>
+ </Modal>
+
+ <Modal
+ isOpen={profileDialogOpen}
+ onClose={() => {
+ if (!updateProfile.isPending) setProfileDialogOpen(false);
+ }}
+ title="Edit user profile"
+ size="sm"
+ closeOnOverlayClick={!updateProfile.isPending}
+ >
+ <div className="space-y-4">
+ <p className="text-sm text-secondary">
+ Standalone account details can be corrected here. Linked employee accounts must be updated from the employee profile.
+ </p>
+ <Input
+ label="Full name"
+ value={profileDraft.name}
+ onChange={(event) => setProfileDraft((draft) => ({ ...draft, name: event.target.value }))}
+ error={profileErrors.name}
+ required
+ disabled={updateProfile.isPending}
+ />
+ <Input
+ label="Email"
+ type="email"
+ value={profileDraft.email}
+ onChange={(event) => setProfileDraft((draft) => ({ ...draft, email: event.target.value }))}
+ error={profileErrors.email}
+ required
+ disabled={updateProfile.isPending}
+ />
+ <ModalFooter>
+ <Button variant="secondary" onClick={() => setProfileDialogOpen(false)} disabled={updateProfile.isPending}>
+ Cancel
+ </Button>
+ <Button
+ variant="primary"
+ onClick={() => updateProfile.mutate()}
+ disabled={updateProfile.isPending || profileDraft.name.trim().length === 0 || profileDraft.email.trim().length === 0}
+ loading={updateProfile.isPending}
+ >
+ Save profile
+ </Button>
+ </ModalFooter>
+ </div>
+ </Modal>
+
+ <Modal
+ isOpen={!!tempPasswordModal}
+ onClose={() => setTempPasswordModal(null)}
+ title="Temporary password"
+ size="sm"
+ >
+ <div className="space-y-3">
+ <p className="text-sm text-secondary">
+ Copy this one-time temporary password and share it through an approved channel. The user must change it on first login.
+ </p>
+ <code className="block rounded-md bg-elevated p-3 font-mono tabular-nums select-all">
+ {tempPasswordModal}
+ </code>
+ <ModalFooter>
+ <Button variant="primary" onClick={() => setTempPasswordModal(null)}>
+ Done
+ </Button>
+ </ModalFooter>
+ </div>
+ </Modal>
  </div>
  );
 }

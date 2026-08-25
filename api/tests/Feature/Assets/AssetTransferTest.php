@@ -144,4 +144,54 @@ class AssetTransferTest extends TestCase
             'transfer_date'      => '2026-07-01',
         ]);
     }
+
+    public function test_disposed_asset_cannot_receive_a_transfer_request(): void
+    {
+        $deptA = Department::factory()->create();
+        $deptB = Department::factory()->create();
+        $asset = Asset::create([
+            'asset_code' => 'AST-T-DISPOSED', 'name' => 'Disposed asset', 'category' => 'equipment',
+            'acquisition_date' => '2025-01-01', 'acquisition_cost' => '5000.00',
+            'useful_life_years' => 5, 'status' => AssetStatus::Disposed->value, 'department_id' => $deptA->id,
+        ]);
+
+        $this->actingAs($this->admin);
+        $this->expectExceptionMessage('Only active assets can be transferred.');
+
+        app(AssetTransferService::class)->create([
+            'asset_id' => $asset->id,
+            'from_department_id' => $deptA->id,
+            'to_department_id' => $deptB->id,
+            'transfer_date' => '2026-07-01',
+        ]);
+    }
+
+    public function test_second_pending_transfer_is_rejected_while_asset_row_is_locked(): void
+    {
+        $deptA = Department::factory()->create();
+        $deptB = Department::factory()->create();
+        $deptC = Department::factory()->create();
+        $asset = Asset::create([
+            'asset_code' => 'AST-T-PENDING', 'name' => 'Pending transfer asset', 'category' => 'equipment',
+            'acquisition_date' => '2025-01-01', 'acquisition_cost' => '5000.00',
+            'useful_life_years' => 5, 'status' => AssetStatus::Active->value, 'department_id' => $deptA->id,
+        ]);
+
+        $this->actingAs($this->admin);
+        $service = app(AssetTransferService::class);
+        $service->create([
+            'asset_id' => $asset->id,
+            'from_department_id' => $deptA->id,
+            'to_department_id' => $deptB->id,
+            'transfer_date' => '2026-07-01',
+        ]);
+
+        $this->expectExceptionMessage('already has a pending transfer');
+        $service->create([
+            'asset_id' => $asset->id,
+            'from_department_id' => $deptA->id,
+            'to_department_id' => $deptC->id,
+            'transfer_date' => '2026-07-02',
+        ]);
+    }
 }

@@ -83,10 +83,9 @@ class StoreReturnRequestRequest extends FormRequest
             'items.*.product_id'  => ['nullable', 'integer', 'exists:products,id'],
             'items.*.item_id'     => ['nullable', 'integer', 'exists:items,id'],
             'items.*.quantity'    => ['required', 'decimal:0,3', 'min:0.001'],
-            // The service rejects a null price, so require it here where the
-            // error keys to the offending line instead of failing as a 422 with
-            // no field association.
-            'items.*.unit_price'  => ['required', 'decimal:0,2', 'min:0'],
+            // Source-backed lines receive their price from the source document;
+            // only finance-only lines need a caller-supplied amount.
+            'items.*.unit_price'  => ['nullable', 'decimal:0,2', 'min:0'],
             'items.*.reason'      => ['nullable', 'string', 'max:500'],
             'items.*.condition'   => ['nullable', 'string', 'max:30'],
             // These two were absent from the old rule set, so validate() stripped
@@ -133,6 +132,9 @@ class StoreReturnRequestRequest extends FormRequest
                 if ($this->input('customer_id')) {
                     $validator->errors()->add('customer_id', 'A supplier return cannot name a customer.');
                 }
+                if ($this->boolean('finance_only')) {
+                    $validator->errors()->add('finance_only', 'Supplier returns require purchase and receipt lineage; finance-only is only available for customer credits.');
+                }
             }
 
             foreach ((array) $this->input('items', []) as $index => $line) {
@@ -143,14 +145,50 @@ class StoreReturnRequestRequest extends FormRequest
                     );
                 }
                 if ($type === ReturnRequestType::CustomerReturn->value
+                    && ! $this->boolean('finance_only')
+                    && empty($line['item_id'])) {
+                    $validator->errors()->add(
+                        "items.{$index}.item_id",
+                        'A stockable customer return must reference an inventory item; use finance-only for a product-only credit.',
+                    );
+                }
+                if ($type === ReturnRequestType::CustomerReturn->value
+                    && ! $this->boolean('finance_only')
+                    && ! empty($line['item_id'])
+                    && empty($line['product_id'])) {
+                    $validator->errors()->add(
+                        "items.{$index}.product_id",
+                        'Source-backed customer returns require product provenance for Quality inspection.',
+                    );
+                }
+                if ($type === ReturnRequestType::CustomerReturn->value
                     && !empty($line['item_id']) && !$this->boolean('finance_only')
                     && empty($line['source_invoice_item_id']) && empty($line['source_sales_order_item_id'])
                     && empty($line['source_delivery_item_id'])) {
                     $validator->errors()->add("items.{$index}.source_invoice_item_id", 'Stockable returns require invoice or sales-order line provenance.');
                 }
+                if ($type === ReturnRequestType::CustomerReturn->value
+                    && ! $this->boolean('finance_only')
+                    && collect([
+                        $line['source_invoice_item_id'] ?? null,
+                        $line['source_sales_order_item_id'] ?? null,
+                        $line['source_delivery_item_id'] ?? null,
+                    ])->filter()->count() > 1) {
+                    $validator->errors()->add(
+                        "items.{$index}.source_invoice_item_id",
+                        'Choose exactly one customer source line per returned line.',
+                    );
+                }
             }
             if ($this->boolean('finance_only') && trim((string) $this->input('finance_only_reason')) === '') {
                 $validator->errors()->add('finance_only_reason', 'Finance-only returns require an explicit non-stock reason.');
+            }
+            if ($this->boolean('finance_only')) {
+                foreach ((array) $this->input('items', []) as $index => $line) {
+                    if (! array_key_exists('unit_price', $line) || $line['unit_price'] === null || $line['unit_price'] === '') {
+                        $validator->errors()->add("items.{$index}.unit_price", 'Finance-only lines require a unit price.');
+                    }
+                }
             }
         });
     }

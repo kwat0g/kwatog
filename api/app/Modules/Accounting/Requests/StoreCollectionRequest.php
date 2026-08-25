@@ -23,6 +23,7 @@ class StoreCollectionRequest extends FormRequest
             'amount'           => ['required', 'numeric', 'min:0.01'],
             'payment_method'   => ['required', Rule::in(PaymentMethod::values())],
             'reference_number' => ['nullable', 'string', 'max:50'],
+            'idempotency_key'  => ['nullable', 'string', 'max:100'],
         ];
     }
 }

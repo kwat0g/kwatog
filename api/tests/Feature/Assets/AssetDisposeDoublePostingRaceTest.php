@@ -65,10 +65,11 @@ class AssetDisposeDoublePostingRaceTest extends TestCase
         $disposerA = Asset::find($asset->id);
         $disposerB = Asset::find($asset->id);
 
-        app(AssetService::class)->dispose($disposerA, [
-            'disposal_amount' => 90000,
-            'disposed_date'   => '2026-08-13',
-        ], $by);
+            app(AssetService::class)->dispose($disposerA, [
+                'disposal_amount' => 90000,
+                'disposed_date'   => '2026-08-13',
+                'remarks'         => 'Asset sold.',
+            ], $by);
 
         $this->assertSame(
             1,
@@ -83,6 +84,7 @@ class AssetDisposeDoublePostingRaceTest extends TestCase
             app(AssetService::class)->dispose($disposerB, [
                 'disposal_amount' => 90000,
                 'disposed_date'   => '2026-08-13',
+                'remarks'         => 'Asset sold.',
             ], $by);
             $this->fail('A stale second dispose must be rejected.');
         } catch (BusinessRuleException $e) {

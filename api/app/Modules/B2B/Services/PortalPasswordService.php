@@ -4,16 +4,21 @@ declare(strict_types=1);
 
 namespace App\Modules\B2B\Services;
 
+use App\Modules\Auth\Services\AuthAuditLogger;
 use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\B2B\Models\SupplierPortalUser;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 class PortalPasswordService
 {
+    public function __construct(
+        private readonly PortalPasswordHistoryService $history,
+        private readonly AuthAuditLogger $audit,
+    ) {}
+
     public function change(CustomerPortalUser|SupplierPortalUser $user, string $current, string $new, Request $request): void
     {
         DB::transaction(function () use ($user, $current, $new): void {
@@ -25,11 +30,8 @@ class PortalPasswordService
                 ]);
             }
 
-            if (Hash::check($new, $locked->password)) {
-                throw ValidationException::withMessages([
-                    'new_password' => 'The new password must be different from your current password.',
-                ]);
-            }
+            $this->history->assertAllowed($locked, $new);
+            $oldPasswordHash = (string) $locked->password;
 
             $locked->forceFill([
                 'password' => Hash::make($new),
@@ -39,15 +41,11 @@ class PortalPasswordService
                 'locked_until' => null,
             ])->save();
 
+            $this->history->record($locked, $oldPasswordHash);
+
             $locked->tokens()->delete();
         });
 
-        Log::channel('auth')->info('portal.password.changed', [
-            'portal_user_type' => $user::class,
-            'portal_user_id' => $user->getKey(),
-            'email' => $user->email,
-            'ip' => $request->ip(),
-            'user_agent' => $request->userAgent(),
-        ]);
+        $this->audit->portal('portal.password.changed', $user, $request);
     }
 }

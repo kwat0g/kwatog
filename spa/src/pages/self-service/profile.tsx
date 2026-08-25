@@ -90,7 +90,11 @@ export default function SelfServiceProfilePage() {
  queryFn: () => selfServiceApi.profile(),
  });
 
- const { data: requests } = useQuery({
+ const {
+ data: requests,
+ isError: requestsError,
+ refetch: refetchRequests,
+ } = useQuery({
  queryKey: ['self-service', 'profile-requests'],
  queryFn: () => selfServiceApi.profileUpdateRequests(),
  });
@@ -215,7 +219,12 @@ export default function SelfServiceProfilePage() {
  {/* ─── Right rail ─── */}
  <div className="space-y-4">
  <IdentityPanel profile={profile} email={user?.email || profile.email} />
- <UpdateRequestsPanel requests={requests ?? []} pendingCount={pendingCount} />
+ <UpdateRequestsPanel
+ requests={requests ?? []}
+ pendingCount={pendingCount}
+ error={requestsError}
+ onRetry={() => { void refetchRequests(); }}
+ />
  <PreferencesPanel />
  </div>
  </div>
@@ -345,9 +354,13 @@ function IdentityPanel({ profile, email }: { profile: SelfServiceProfile; email:
 function UpdateRequestsPanel({
  requests,
  pendingCount,
+ error,
+ onRetry,
 }: {
  requests: ProfileUpdateRequestRecord[];
  pendingCount: number;
+ error: boolean;
+ onRetry: () => void;
 }) {
  return (
  <Panel
@@ -355,7 +368,12 @@ function UpdateRequestsPanel({
  meta={requests.length > 0 ? `${pendingCount} pending · ${requests.length} total` : undefined}
  noPadding
  >
- {requests.length === 0 ? (
+ {error ? (
+ <div className="px-4 py-4 space-y-2" role="alert">
+ <p className="text-xs text-danger-fg">Couldn’t load your change requests.</p>
+ <Button variant="secondary" size="sm" onClick={onRetry}>Retry</Button>
+ </div>
+ ) : requests.length === 0 ? (
  <div className="px-4 py-4">
  <EmptyState
  size="compact"

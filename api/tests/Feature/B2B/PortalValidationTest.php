@@ -78,4 +78,24 @@ class PortalValidationTest extends TestCase
             ->assertStatus(422)
             ->assertJsonValidationErrors(['severity', 'description', 'affected_quantity']);
     }
+
+    public function test_customer_list_and_statement_queries_reject_invalid_ranges(): void
+    {
+        $customerUser = $this->makeCustomerUser();
+
+        $this->actingAs($customerUser, 'customer_portal')
+            ->getJson('/api/v1/b2b/customer/orders?per_page=0')
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['per_page']);
+
+        $this->actingAs($customerUser, 'customer_portal')
+            ->getJson('/api/v1/b2b/customer/statement-of-account?as_of=not-a-date')
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['as_of']);
+
+        $this->actingAs($customerUser, 'customer_portal')
+            ->getJson('/api/v1/b2b/customer/statement-of-account?as_of='.now()->addDay()->toDateString())
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['as_of']);
+    }
 }

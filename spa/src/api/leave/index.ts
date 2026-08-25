@@ -21,7 +21,7 @@ export interface CreateLeaveTypeData {
 export type UpdateLeaveTypeData = Partial<CreateLeaveTypeData>;
 
 export const leaveTypesApi = {
- list: (params?: { trashed?: string } & Record<string, unknown>) =>
+ list: (params?: { trashed?: string; is_active?: string } & Record<string, unknown>) =>
  client.get<PaginatedResponse<LeaveType>>('/leaves/types', { params: { per_page: 100, ...params }, ...QUIET })
  .then((r) => r.data),
  show: (id: string) =>
@@ -59,6 +59,18 @@ export interface BulkApproveLeaveResult {
  failed: Array<{ reason: string }>;
 }
 
+function leaveRequestFormData(data: CreateLeaveRequestData): FormData {
+ const form = new FormData();
+ form.append('employee_id', data.employee_id);
+ form.append('leave_type_id', data.leave_type_id);
+ form.append('start_date', data.start_date);
+ form.append('end_date', data.end_date);
+ if (data.half_day_period) form.append('half_day_period', data.half_day_period);
+ if (data.reason) form.append('reason', data.reason);
+ if (data.document) form.append('document', data.document);
+ return form;
+}
+
 export const leaveRequestsApi = {
  options: () => client.get<{ data: { statuses: Array<{ value: string; label: string }>; half_day_periods: Array<{ value: string; label: string }> } }>('/leaves/requests/options').then((r) => r.data.data),
  list: (params?: LeaveListParams) =>
@@ -66,7 +78,7 @@ export const leaveRequestsApi = {
  show: (id: string) =>
  client.get<ApiSuccess<LeaveRequest>>(`/leaves/requests/${id}`).then((r) => r.data.data),
  create: (data: CreateLeaveRequestData) =>
- client.post<ApiSuccess<LeaveRequest>>('/leaves/requests', data).then((r) => r.data.data),
+ client.post<ApiSuccess<LeaveRequest>>('/leaves/requests', leaveRequestFormData(data)).then((r) => r.data.data),
  approveDept: (id: string, remarks?: string) =>
  client.patch<ApiSuccess<LeaveRequest>>(`/leaves/requests/${id}/approve-dept`, { remarks }).then((r) => r.data.data),
  approveHR: (id: string, remarks?: string) =>

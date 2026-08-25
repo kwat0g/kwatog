@@ -14,10 +14,10 @@ class SalesOrderItemResource extends JsonResource
         return [
             'id'                 => $this->hash_id,
             'product'            => $this->whenLoaded('product', fn () => [
-                'id'              => $this->product->hash_id,
-                'part_number'     => $this->product->part_number,
-                'name'            => $this->product->name,
-                'unit_of_measure' => $this->product->unit_of_measure,
+                'id'              => $this->product?->hash_id,
+                'part_number'     => $this->product?->part_number,
+                'name'            => $this->product?->name,
+                'unit_of_measure' => $this->product?->unit_of_measure,
             ]),
             'quantity'           => (string) $this->quantity,
             'unit_price'         => (string) $this->unit_price,

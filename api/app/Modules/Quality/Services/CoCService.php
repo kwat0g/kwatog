@@ -4,15 +4,19 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Services;
 
+use App\Common\Enums\DocumentType;
+use App\Common\Services\DocumentVaultService;
+use App\Common\Services\Pdf\PdfRenderService;
 use App\Common\Services\SettingsService;
+use App\Modules\Auth\Models\User;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
+use App\Modules\Quality\Exceptions\InspectionCertificateException;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\ShipmentLot;
-use Barryvdh\DomPDF\Facade\Pdf;
-use Illuminate\Http\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Sprint 7 — Task 62. Certificate of Conformance generator.
@@ -27,20 +31,27 @@ class CoCService
 {
     public function __construct(
         private readonly SettingsService $settings,
+        private readonly PdfRenderService $renderer,
+        private readonly DocumentVaultService $vault,
     ) {}
 
     /**
      * Generate a CoC PDF for the given inspection. Optionally accepts a
      * delivery_number string to print on the certificate (Task 66 wiring).
      */
-    public function generateForInspection(Inspection $inspection, ?string $deliveryNumber = null): Response
+    public function generateForInspection(Inspection $inspection, ?string $deliveryNumber = null): StreamedResponse
     {
         $this->assertEligible($inspection);
         [$cocNumber, $payload] = $this->buildPayload($inspection, $deliveryNumber);
 
-        return Pdf::loadView('pdf.coc', $payload)
-            ->setPaper('a4')
-            ->stream("CoC-{$cocNumber}.pdf");
+        $bytes = $this->renderer->render('pdf.coc', $payload, [
+            'title' => DocumentType::Coc->label(),
+        ]);
+        $actor = auth()->user();
+        $user = $actor instanceof User ? $actor : null;
+        $document = $this->vault->store($bytes, DocumentType::Coc, $inspection, $user);
+
+        return $this->vault->streamInline($document);
     }
 
     /**
@@ -55,10 +66,12 @@ class CoCService
         $this->assertEligible($inspection);
         [$cocNumber, $payload] = $this->buildPayload($inspection, $deliveryNumber);
 
-        $pdf = Pdf::loadView('pdf.coc', $payload)->setPaper('a4');
+        $bytes = $this->renderer->render('pdf.coc', $payload, [
+            'title' => DocumentType::Coc->label(),
+        ]);
         return [
             'file_name'  => "CoC-{$cocNumber}.pdf",
-            'contents'   => $pdf->output(),
+            'contents'   => $bytes,
             'coc_number' => $cocNumber,
         ];
     }
@@ -148,10 +161,16 @@ class CoCService
         $status = $inspection->status instanceof InspectionStatus ? $inspection->status : InspectionStatus::from((string) $inspection->status);
 
         if ($stage !== InspectionStage::Outgoing) {
-            abort(422, 'CoC is only issued for outgoing-stage inspections.');
+            throw new InspectionCertificateException(
+                'CoC is only issued for outgoing-stage inspections.',
+                'COC_STAGE_INVALID',
+            );
         }
         if ($status !== InspectionStatus::Passed) {
-            abort(422, "CoC requires a passed inspection (current: {$status->value}).");
+            throw new InspectionCertificateException(
+                "CoC requires a passed inspection (current: {$status->value}).",
+                'COC_INSPECTION_NOT_PASSED',
+            );
         }
     }
 

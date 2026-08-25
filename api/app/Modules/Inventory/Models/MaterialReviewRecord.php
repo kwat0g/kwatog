@@ -34,6 +34,7 @@ class MaterialReviewRecord extends Model
         'disposition', 'hold_movement_id', 'release_movement_id',
         'held_by', 'held_at', 'released_by', 'released_at',
         'release_location_id', 'notes',
+        'idempotency_key', 'idempotency_fingerprint',
         // 'status' intentionally excluded — lifecycle written via property-set.
     ];
 

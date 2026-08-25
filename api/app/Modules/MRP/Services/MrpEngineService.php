@@ -70,12 +70,32 @@ class MrpEngineService
      * Run MRP for a confirmed sales order. Idempotent at the per-run level;
      * re-running supersedes the prior active plan for this SO.
      */
-    public function runForSalesOrder(SalesOrder $so, ?array &$sharedSupply = null): MrpPlan
+    public function runForSalesOrder(
+        SalesOrder $so,
+        ?array &$sharedSupply = null,
+        ?MrpRun $run = null,
+        ?int $initiatingActorId = null,
+        ?string $triggerReason = null,
+    ): MrpPlan
     {
         $sharedSupplyBeforeRun = $sharedSupply;
 
         try {
-            return DB::transaction(function () use ($so, &$sharedSupply) {
+            return DB::transaction(function () use ($so, &$sharedSupply, $run, $initiatingActorId, $triggerReason) {
+            $actorId = $initiatingActorId ?? $run?->triggered_by_user_id;
+            $recordedBy = $actorId ?? (int) $so->created_by;
+            $trigger = $run?->triggered_by instanceof MrpRunTrigger
+                ? $run->triggered_by->value
+                : (string) ($run?->triggered_by ?? 'direct');
+            $generationContext = [
+                'source' => 'sales_order',
+                'source_id' => (int) $so->id,
+                'trigger' => $trigger,
+                'reason' => $triggerReason ?? 'mrp_planning',
+                'run_id' => $run?->id,
+                'actor_type' => $actorId === null ? 'system' : 'user',
+                'actor_id' => $actorId,
+            ];
             // Lock + supersede prior active plan.
             $previous = MrpPlan::where('sales_order_id', $so->id)
                 ->where('status', MrpPlanStatus::Active->value)
@@ -117,6 +137,7 @@ class MrpEngineService
             };
 
             $remainingQuantityByLine = [];
+            $bomAvailableByLine = [];
 
             foreach ($lines as $line) {
                 $remainingQuantity = max(0.0, (float) $line->quantity - (float) $line->quantity_delivered);
@@ -127,19 +148,22 @@ class MrpEngineService
 
                 $activeBom = $this->boms->activeForProduct((int) $line->product_id);
                 if ($activeBom === null) {
-                    // L-32 — No active BOM. Skip the demand explosion (the WO
-                    // side still produces a planned WO so PPC can act), but
-                    // record a warning row so the plan detail page surfaces
-                    // the gap instead of failing silently.
+                    // A standard work order without a material plan is not an
+                    // executable production commitment. Keep the plan
+                    // visible, but block both explosion and WO creation.
+                    $bomAvailableByLine[$line->id] = false;
                     $diagnostics[] = [
                         'kind'             => 'warning',
                         'type'             => 'missing_bom',
                         'product_id'       => (int) $line->product_id,
                         'sales_order_line_id' => (int) $line->id,
-                        'message'          => 'No active BOM found for this product; demand explosion skipped.',
+                        'message'          => 'No active BOM found for this product; demand explosion and standard work-order creation were skipped.',
                     ];
                     continue;
                 }
+                $activeBom = $this->boms->ensureFreshForPlanning($activeBom);
+                $this->boms->assertComponentIntegrity($activeBom);
+                $bomAvailableByLine[$line->id] = true;
 
                 $unitMaterialCost = (string) ($activeBom->material_cost ?? '0.00');
                 $unitLaborCost = (string) ($activeBom->labor_cost ?? '0.00');
@@ -199,13 +223,15 @@ class MrpEngineService
                 'sales_order_id'  => $so->id,
                 'version'         => $previous ? $previous->version + 1 : 1,
                 'status'          => MrpPlanStatus::Active->value,
-                'generated_by'    => $so->created_by,
+                'generated_by'    => $recordedBy,
+                'mrp_run_id'      => $run?->id,
                 'total_lines'     => count($lines),
                 'shortages_found' => 0,
                 'auto_pr_count'   => 0,
                 'draft_wo_count'  => 0,
                 'diagnostics'     => [],
                 'cost_summary'    => [],
+                'generation_context' => $generationContext,
                 'generated_at'    => Carbon::now(),
             ]);
 
@@ -243,7 +269,7 @@ class MrpEngineService
                     'reserved'   => round((float) $supply['reserved'], 3),
                     'in_transit' => round((float) $supply['in_transit'], 3),
                     'open_purchase_requests' => round($openPurchaseRequests, 3),
-                    'standard_unit_cost' => round((float) $item->standard_cost, 4),
+                    'standard_unit_cost' => (string) $item->standard_cost,
                     'gross_cost' => Money::round2(bcmul((string) $gross, (string) $item->standard_cost, 8)),
                     'net_cost' => Money::round2(bcmul((string) $net, (string) $item->standard_cost, 8)),
                     'net'        => round($net, 3),
@@ -264,7 +290,7 @@ class MrpEngineService
                         'order_by' => $orderBy,
                         'priority' => $priority,
                         'unit'     => $item->unit_of_measure,
-                        'estimated_unit_price' => (float) $item->standard_cost,
+                        'estimated_unit_price' => (string) $item->standard_cost,
                         'name'     => $item->name,
                     ];
 
@@ -306,7 +332,7 @@ class MrpEngineService
                 if ($pr === null) {
                     $pr = PurchaseRequest::create([
                         'pr_number'         => $this->sequences->generate('pr'),
-                        'requested_by'      => $so->created_by,
+                        'requested_by'      => $recordedBy,
                         'department_id'     => null, // SO creator's dept; resolved at submit time
                         'mrp_plan_id'       => $plan->id,
                         'date'              => Carbon::today(),
@@ -337,7 +363,7 @@ class MrpEngineService
                         // under-order a fractional BOM requirement.
                         'quantity'             => number_format(ceil(max(0.0, (float) $s['net']) * 100 - 0.000000001) / 100, 2, '.', ''),
                         'unit'                 => $s['unit'],
-                        'estimated_unit_price' => round($s['estimated_unit_price'], 2),
+                        'estimated_unit_price' => Money::round2((string) $s['estimated_unit_price']),
                         'purpose'              => "MRP demand for SO {$so->so_number}",
                     ]);
                 }
@@ -368,6 +394,12 @@ class MrpEngineService
             foreach ($lines as $line) {
                 $remainingQuantity = $remainingQuantityByLine[$line->id] ?? 0.0;
                 if ($remainingQuantity <= 0.000001) {
+                    continue;
+                }
+
+                if (($bomAvailableByLine[$line->id] ?? false) !== true) {
+                    $this->cancelStalePlannedRootWorkOrders($line->id, $plan->id);
+                    $this->cancelStalePlannedChildWorkOrders($line->id, $plan->id);
                     continue;
                 }
 
@@ -450,7 +482,7 @@ class MrpEngineService
                         'planned_start'       => $plannedStart,
                         'planned_end'         => $plannedEnd,
                         'priority'            => $priority,
-                        'created_by'          => $so->created_by,
+                        'created_by'          => $recordedBy,
                     ]);
                     $draftWoCount++;
                 }
@@ -483,7 +515,7 @@ class MrpEngineService
 
             $finalPlan = $plan->fresh();
             app(OutboxService::class)->recordForChain(
-                new MrpPlanGenerated($finalPlan),
+                new MrpPlanGenerated($finalPlan, $run?->id, $actorId, $triggerReason ?? 'mrp_planning'),
                 $so,
                 'o2c',
                 'sales_order',
@@ -501,9 +533,33 @@ class MrpEngineService
         }
     }
 
-    public function rerun(MrpPlan $plan): MrpPlan
+    public function rerun(MrpPlan $plan, ?int $userId = null): MrpPlan
     {
-        return $this->runForSalesOrder($plan->salesOrder()->firstOrFail());
+        $salesOrder = $plan->salesOrder()->firstOrFail();
+        $run = $this->runForActiveSalesOrders(
+            MrpRunTrigger::Manual,
+            $userId,
+            [$salesOrder->id],
+            'manual_rerun',
+        );
+
+        if ($run->status !== MrpRunStatus::Completed || (int) $run->plans_generated < 1) {
+            throw new BusinessRuleException(
+                'MRP rerun did not generate a new plan. Correct the reported planning error and try again.'
+            );
+        }
+
+        $newPlan = MrpPlan::query()
+            ->where('sales_order_id', $salesOrder->id)
+            ->where('status', MrpPlanStatus::Active->value)
+            ->orderByDesc('version')
+            ->first();
+
+        if ($newPlan === null) {
+            throw new BusinessRuleException('MRP rerun completed without an active plan. Run MRP again after reviewing the run history.');
+        }
+
+        return $this->show($newPlan);
     }
 
     /**
@@ -520,7 +576,7 @@ class MrpEngineService
      */
     public function runForAllActiveSalesOrders(MrpRunTrigger $trigger, ?int $userId = null): MrpRun
     {
-        return $this->runForActiveSalesOrders($trigger, $userId, null);
+        return $this->runForActiveSalesOrders($trigger, $userId, null, null);
     }
 
     /**
@@ -533,6 +589,7 @@ class MrpEngineService
         MrpRunTrigger $trigger,
         ?int $userId = null,
         ?array $salesOrderIds = null,
+        ?string $reason = null,
     ): MrpRun
     {
         $start = microtime(true);
@@ -559,6 +616,7 @@ class MrpEngineService
             $prsCreated     = 0;
             $prsUpdated     = 0;
             $plansGenerated = 0;
+            $failedSalesOrders = 0;
             $perSo          = [];
             $sharedSupply   = [];
 
@@ -571,7 +629,7 @@ class MrpEngineService
                         ->where('status', 'draft')
                         ->count();
 
-                    $plan = $this->runForSalesOrder($so, $sharedSupply);
+                    $plan = $this->runForSalesOrder($so, $sharedSupply, $run, $userId, $reason);
                     $plansGenerated++;
                     $shortagesTotal += (int) $plan->shortages_found;
 
@@ -595,6 +653,8 @@ class MrpEngineService
                     ];
                     $run->forceFill(['heartbeat_at' => now()])->saveQuietly();
                 } catch (\Throwable $inner) {
+                    $failure = MrpErrorPolicy::describe($inner);
+                    $failedSalesOrders++;
                     Log::warning('MRP run: SO failed', [
                         'so_id'   => $so->id,
                         'so_number' => $so->so_number,
@@ -603,7 +663,9 @@ class MrpEngineService
                     $perSo[] = [
                         'so_id'     => $so->id,
                         'so_number' => $so->so_number,
-                        'error'     => $inner->getMessage(),
+                        'error'     => $failure['message'],
+                        'error_code' => $failure['code'],
+                        'recovery_action' => $failure['recovery_action'],
                     ];
                     $run->forceFill(['heartbeat_at' => now()])->saveQuietly();
                 }
@@ -615,15 +677,24 @@ class MrpEngineService
                 'prs_created'            => $prsCreated,
                 'prs_updated'            => $prsUpdated,
                 'plans_generated'        => $plansGenerated,
+                'failed_sales_orders'    => $failedSalesOrders,
                 'duration_ms'            => (int) round((microtime(true) - $start) * 1000),
-                'status'                 => MrpRunStatus::Completed->value,
-                'summary'                => ['per_sales_order' => $perSo],
+                'status'                 => $failedSalesOrders > 0
+                    ? MrpRunStatus::Partial->value
+                    : MrpRunStatus::Completed->value,
+                'summary'                => [
+                    'per_sales_order' => $perSo,
+                    'failed_sales_orders' => $failedSalesOrders,
+                ],
             ]);
         } catch (\Throwable $e) {
+            $failure = MrpErrorPolicy::describe($e);
             $run->update([
                 'duration_ms'   => (int) round((microtime(true) - $start) * 1000),
                 'status'        => MrpRunStatus::Failed->value,
-                'error_message' => $e->getMessage(),
+                'error_message' => $failure['message'],
+                'error_code'    => $failure['code'],
+                'recovery_action' => $failure['recovery_action'],
             ]);
             Log::error('MRP run: catastrophic failure', ['error' => $e->getMessage()]);
         }
@@ -657,6 +728,21 @@ class MrpEngineService
             'workOrders.parent:id,wo_number',
             'purchaseRequests:id,pr_number,priority,status,is_auto_generated,date,mrp_plan_id',
         ]);
+    }
+
+    /** Cancel only automatically planned roots made obsolete by a BOM gap. */
+    private function cancelStalePlannedRootWorkOrders(int $salesOrderItemId, int $planId): void
+    {
+        WorkOrder::query()
+            ->where('sales_order_item_id', $salesOrderItemId)
+            ->whereNull('parent_wo_id')
+            ->whereNotNull('mrp_plan_id')
+            ->where('mrp_plan_id', '!=', $planId)
+            ->where('status', WorkOrderStatus::Planned->value)
+            ->update([
+                'status' => WorkOrderStatus::Cancelled->value,
+                'updated_at' => now(),
+            ]);
     }
 
     /**
@@ -723,7 +809,7 @@ class MrpEngineService
                     'planned_start'       => $childStart,
                     'planned_end'         => $childEnd,
                     'priority'            => $priority,
-                    'created_by'          => $so->created_by,
+                    'created_by'          => $plan->generated_by,
                 ]);
             }
 

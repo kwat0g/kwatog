@@ -193,6 +193,19 @@ export default function PayrollPeriodDetailPage() {
     staleTime: 30_000,
   });
   const bankBlocked = (bankPreview?.unbankable_count ?? 0) > 0;
+  const bankFileMutation = useMutation({
+    mutationFn: () => periodsApi.bankFileGenerate(period!.id, bankFormat),
+    onSuccess: () => {
+      toast.success('Bank file generated. Downloading the reviewed artifact.');
+      qc.invalidateQueries({ queryKey: ['payroll-period', id] });
+      void downloadAuthenticatedFile(periodsApi.bankFileUrl(period!.id, bankFormat), {
+        filename: `payroll-bank-file-${period!.id}-${bankFormat || bankFileOptions?.default_format || 'bank'}.csv`,
+        errorMessage: 'Failed to download the bank file.',
+      });
+    },
+    onError: (err: { response?: { data?: { message?: string } } }) =>
+      toast.error(err.response?.data?.message ?? 'Failed to generate the bank file.'),
+  });
 
   const payrollFilters: PayrollListParams = {
     period_id: id,
@@ -386,7 +399,7 @@ export default function PayrollPeriodDetailPage() {
     (period.gl_handoff_status === 'manual_required' || period.gl_handoff_status === 'not_required');
   const canUploadProof =
     can('payroll.periods.finalize') &&
-    (period.status === 'finalized' || period.status === 'disbursed');
+    period.status === 'finalized';
   // H-8 — Force-unlock only surfaces when the period is stuck at Processing.
   const canForceUnlock = can('payroll.periods.force_unlock') && period.status === 'processing';
   // REC-01 — Void only a finalized (not yet disbursed) period.
@@ -601,20 +614,16 @@ export default function PayrollPeriodDetailPage() {
                   variant="secondary"
                   size="sm"
                   icon={<LuDownload size={14} />}
-                  onClick={() =>
-                    void downloadAuthenticatedFile(periodsApi.bankFileUrl(period.id, bankFormat), {
-                      filename: `payroll-bank-file-${period.id}-${bankFormat || bankFileOptions?.default_format || 'bank'}.csv`,
-                      errorMessage: 'Failed to download the bank file.',
-                    })
-                  }
-                  disabled={!bankFormat || bankBlocked}
+                  onClick={() => bankFileMutation.mutate()}
+                  disabled={!bankFormat || bankBlocked || bankFileMutation.isPending}
+                  loading={bankFileMutation.isPending}
                   title={
                     bankBlocked
                       ? `${bankPreview?.unbankable_count} employee(s) have no bank account on file`
                       : undefined
                   }
                 >
-                  Bank file
+                  Generate & download
                 </Button>
               </span>
             )}
@@ -1338,9 +1347,11 @@ function UploadProofModal({
     queryFn: () => periodsApi.proofOptions(periodId),
   });
   const disbursedError =
-    disbursedAmount !== '' && !/^\d+(\.\d{1,2})?$/.test(disbursedAmount)
-      ? 'Enter a valid amount, up to 2 decimals.'
-      : undefined;
+    disbursedAmount === ''
+      ? 'Enter the amount covered by this proof.'
+      : !/^\d+(\.\d{1,2})?$/.test(disbursedAmount) || Number(disbursedAmount) <= 0
+        ? 'Enter a positive amount, up to 2 decimals.'
+        : undefined;
 
   useEffect(() => {
     if (!proofType && proofOptions?.proof_types?.length) {
@@ -1355,7 +1366,7 @@ function UploadProofModal({
       if (file) fd.append('file', file);
       if (bankName) fd.append('bank_name', bankName);
       if (transactionReference) fd.append('transaction_reference', transactionReference);
-      if (disbursedAmount) fd.append('disbursed_amount', disbursedAmount);
+      fd.append('disbursed_amount', disbursedAmount);
       fd.append('disbursement_date', disbursementDate);
       if (notes) fd.append('notes', notes);
       return periodsApi.uploadProof(periodId, fd);
@@ -1407,7 +1418,7 @@ function UploadProofModal({
             label="Disbursed amount"
             value={disbursedAmount}
             onChange={(e) => setDisbursedAmount(e.target.value)}
-            placeholder="Enter amount"
+          placeholder="Enter amount covered"
             prefix="₱"
             error={disbursedError}
           />

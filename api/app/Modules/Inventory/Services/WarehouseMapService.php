@@ -13,19 +13,34 @@ use Illuminate\Support\Str;
 
 class WarehouseMapService
 {
+    public function __construct(private readonly StockLocationSummaryService $locationSummary) {}
+
     /**
      * Get full warehouse tree with bin occupancy data for the visual map.
      */
     public function map(): Collection
     {
-        return Warehouse::query()
+        $warehouses = Warehouse::query()
             ->with([
                 'zones' => fn ($q) => $q->orderBy('code'),
-                'zones.locations' => fn ($q) => $q->orderBy('code')->with('currentItem'),
+                'zones.locations' => fn ($q) => $q->orderBy('code')->with('stockLevels.item'),
                 'zones.locations.zone.warehouse',
             ])
             ->orderBy('name')
             ->get();
+
+        foreach ($warehouses as $warehouse) {
+            foreach ($warehouse->zones as $zone) {
+                foreach ($zone->locations as $location) {
+                    $location->setAttribute(
+                        'inventory_summary',
+                        $this->locationSummary->summarize($location->stockLevels),
+                    );
+                }
+            }
+        }
+
+        return $warehouses;
     }
 
     /**
@@ -33,16 +48,15 @@ class WarehouseMapService
      */
     public function binDetail(int $locationId): ?array
     {
-        $loc = WarehouseLocation::with(['zone.warehouse', 'currentItem'])->find($locationId);
+        $loc = WarehouseLocation::with(['zone.warehouse', 'stockLevels.item'])->find($locationId);
         if (! $loc) {
             return null;
         }
 
-        // Get stock levels at this location
-        $stockLevels = StockLevel::query()
-            ->where('location_id', $locationId)
-            ->with('item')
-            ->get();
+        // Stock levels are authoritative; current_* on warehouse_locations is
+        // a legacy projection and is deliberately not read.
+        $stockLevels = $loc->stockLevels;
+        $summary = $this->locationSummary->summarize($stockLevels);
 
         // Get last movement to/from this location
         $lastMovement = StockMovement::query()
@@ -63,13 +77,14 @@ class WarehouseMapService
                 'is_blocked' => $loc->is_blocked,
                 'blocked_reason' => $loc->blocked_reason,
                 'capacity_kg' => $loc->capacity_kg,
-                'current_item' => $loc->current_item_id ? [
-                    'id' => $loc->currentItem?->hash_id,
-                    'code' => $loc->currentItem?->code,
-                    'name' => $loc->currentItem?->name,
+                'current_item' => $summary['current_item'] ? [
+                    'id' => $summary['current_item']->hash_id,
+                    'code' => $summary['current_item']->code,
+                    'name' => $summary['current_item']->name,
                 ] : null,
-                'current_quantity' => $loc->current_quantity,
-                'current_lot_number' => $loc->current_lot_number,
+                'current_quantity' => $summary['current_quantity'],
+                'current_lot_number' => $summary['current_lot_number'],
+                'current_expiry_date' => $summary['current_expiry_date'],
                 'zone' => [
                     'id' => $loc->zone?->hash_id,
                     'code' => $loc->zone?->code,

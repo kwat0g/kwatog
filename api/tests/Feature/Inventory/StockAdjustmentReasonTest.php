@@ -99,6 +99,44 @@ class StockAdjustmentReasonTest extends TestCase
         $this->assertNotNull($approved->stock_movement_id);
     }
 
+    public function test_pending_out_adjustment_uses_wac_at_approval_time(): void
+    {
+        app(SettingsService::class)->set('inventory.adjustment_approval_threshold', 500);
+
+        $pending = $this->svc->create(
+            itemId: $this->item->id,
+            locationId: $this->location->id,
+            direction: 'out',
+            qty: '100',
+            unitCost: null,
+            reason: 'Write off damaged stock after review',
+            by: $this->admin,
+            reasonCode: StockAdjustmentReason::Damage,
+        );
+
+        // Change the ledger WAC while the approval is pending through a real
+        // inbound movement, not by mutating the adjustment snapshot.
+        app(SettingsService::class)->set('inventory.adjustment_approval_threshold', 0);
+        $this->svc->create(
+            itemId: $this->item->id,
+            locationId: $this->location->id,
+            direction: 'in',
+            qty: '100',
+            unitCost: '20.00',
+            reason: 'Receipt landed before approval',
+            by: $this->admin,
+            reasonCode: StockAdjustmentReason::SystemCorrection,
+        );
+        app(SettingsService::class)->set('inventory.adjustment_approval_threshold', 500);
+
+        $approved = $this->svc->approve($pending->fresh(), $this->admin);
+        $movement = $approved->stockMovement()->firstOrFail();
+
+        $this->assertSame('10.9091', (string) $movement->unit_cost);
+        $this->assertSame('1090.91', (string) $approved->value);
+        $this->assertSame((string) $movement->unit_cost, (string) $approved->unit_cost);
+    }
+
     public function test_below_threshold_adjustment_applies_immediately(): void
     {
         app(SettingsService::class)->set('inventory.adjustment_approval_threshold', 500);

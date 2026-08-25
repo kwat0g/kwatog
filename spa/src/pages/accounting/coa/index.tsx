@@ -1,10 +1,12 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { LuChevronDown, LuChevronRight } from '@/lib/icons';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { LuChevronDown, LuChevronRight, LuEye, LuEyeOff } from '@/lib/icons';
+import toast from 'react-hot-toast';
 import { accountsApi } from '@/api/accounting/accounts';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
@@ -18,7 +20,9 @@ import { focusRing } from '@/lib/focus';
 
 export default function ChartOfAccountsPage() {
  const { can } = usePermission();
+ const qc = useQueryClient();
  const [filters, setFilters] = useUrlFilters({ search: '' });
+ const [statusTarget, setStatusTarget] = useState<{ account: Account; activate: boolean } | null>(null);
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['accounting', 'accounts', 'tree'],
@@ -67,6 +71,18 @@ export default function ChartOfAccountsPage() {
 
  const expandAll = () => setExpanded(new Set([...collectIds(filteredData ?? [])]));
  const collapseAll = () => setExpanded(new Set());
+
+ const statusMutation = useMutation({
+ mutationFn: (target: { account: Account; activate: boolean }) => target.activate
+  ? accountsApi.activate(target.account.id)
+  : accountsApi.deactivate(target.account.id),
+ onSuccess: (account) => {
+ qc.invalidateQueries({ queryKey: ['accounting', 'accounts'] });
+ setStatusTarget(null);
+ toast.success(`Account ${account.code} ${account.is_active ? 'activated' : 'deactivated'}.`);
+ },
+ onError: () => toast.error('Failed to update account status.'),
+ });
 
  return (
  <div>
@@ -120,12 +136,33 @@ export default function ChartOfAccountsPage() {
  </div>
  <div>
  {filteredData.map((root) => (
- <TreeRow key={root.id} node={root} depth={0} expanded={expanded} onToggle={toggle} canManage={can('accounting.coa.manage')} />
+ <TreeRow
+ key={root.id}
+ node={root}
+ depth={0}
+ expanded={expanded}
+ onToggle={toggle}
+ canManage={can('accounting.coa.manage')}
+ canChangeStatus={can('accounting.coa.deactivate')}
+ onStatusChange={(account) => setStatusTarget({ account, activate: !account.is_active })}
+ statusPending={statusMutation.isPending}
+ />
  ))}
  </div>
  </div>
  </div>
  )}
+
+ <ConfirmDialog
+ isOpen={statusTarget !== null}
+ onClose={() => setStatusTarget(null)}
+ onConfirm={() => { if (statusTarget) statusMutation.mutate(statusTarget); }}
+ title={statusTarget?.activate ? 'Activate this account?' : 'Deactivate this account?'}
+ description={statusTarget ? `${statusTarget.account.code} · ${statusTarget.account.name}` : undefined}
+ variant={statusTarget?.activate ? 'primary' : 'warning'}
+ confirmLabel={statusTarget?.activate ? 'Activate' : 'Deactivate'}
+ pending={statusMutation.isPending}
+ />
  </div>
  );
 }
@@ -149,8 +186,17 @@ function collectIds(nodes: Account[]): string[] {
 }
 
 function TreeRow({
- node, depth, expanded, onToggle, canManage,
-}: { node: Account; depth: number; expanded: Set<string>; onToggle: (id: string) => void; canManage: boolean }) {
+ node, depth, expanded, onToggle, canManage, canChangeStatus, onStatusChange, statusPending,
+}: {
+ node: Account;
+ depth: number;
+ expanded: Set<string>;
+ onToggle: (id: string) => void;
+ canManage: boolean;
+ canChangeStatus: boolean;
+ onStatusChange: (account: Account) => void;
+ statusPending: boolean;
+}) {
  const hasChildren = (node.children?.length ?? 0) > 0;
  const isOpen = expanded.has(node.id);
 
@@ -188,6 +234,19 @@ function TreeRow({
  Edit
  </Link>
  )}
+ {canChangeStatus && (
+ <Button
+ type="button"
+ variant="ghost"
+ size="xs"
+ iconOnly
+ icon={node.is_active ? <LuEyeOff size={13} /> : <LuEye size={13} />}
+ aria-label={`${node.is_active ? 'Deactivate' : 'Activate'} ${node.code}`}
+ title={`${node.is_active ? 'Deactivate' : 'Activate'} account`}
+ onClick={(e) => { e.stopPropagation(); onStatusChange(node); }}
+ disabled={statusPending}
+ />
+ )}
  {!node.is_active && <Chip variant="neutral">inactive</Chip>}
  </div>
  <div className="col-span-2 text-sm text-muted">{node.type_label ?? node.type} · {node.normal_balance_label ?? node.normal_balance}</div>
@@ -195,7 +254,17 @@ function TreeRow({
  <div className="col-span-2 text-right font-mono tabular-nums font-medium">{formatPeso(node.current_balance, '—')}</div>
  </div>
  {isOpen && hasChildren && node.children!.map((c) => (
- <TreeRow key={c.id} node={c} depth={depth + 1} expanded={expanded} onToggle={onToggle} canManage={canManage} />
+ <TreeRow
+ key={c.id}
+ node={c}
+ depth={depth + 1}
+ expanded={expanded}
+ onToggle={onToggle}
+ canManage={canManage}
+ canChangeStatus={canChangeStatus}
+ onStatusChange={onStatusChange}
+ statusPending={statusPending}
+ />
  ))}
  </>
  );

@@ -37,9 +37,9 @@ class MrpPlanController
         return new MrpPlanResource($this->engine->show($mrpPlan));
     }
 
-    public function rerun(MrpPlan $mrpPlan): MrpPlanResource
+    public function rerun(Request $request, MrpPlan $mrpPlan): MrpPlanResource
     {
-        return new MrpPlanResource($this->engine->rerun($mrpPlan));
+        return new MrpPlanResource($this->engine->rerun($mrpPlan, $request->user()?->id));
     }
 
     /** GET /sales-orders/{so}/mrp-plan — returns active plan or null. */

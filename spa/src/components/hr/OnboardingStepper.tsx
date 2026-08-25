@@ -1,6 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { LuCheck } from '@/lib/icons';
 import { Panel, SkeletonBlock } from '@/components/ui';
+import { Button } from '@/components/ui/Button';
 import { onboardingApi } from '@/api/hr/onboarding';
 import { cn } from '@/lib/cn';
 import type { EmployeeOnboarding, OnboardingStep } from '@/types/hr';
@@ -16,9 +17,15 @@ interface Props {
  * Re-derives step status from canonical data on every fetch (server-side).
  */
 export function OnboardingStepper({ employeeId, bare = false }: Props) {
- const { data, isLoading, isError } = useQuery<EmployeeOnboarding>({
- queryKey: ['employee-onboarding', employeeId],
+ const queryClient = useQueryClient();
+ const queryKey = ['employee-onboarding', employeeId] as const;
+ const { data, isLoading, isError, refetch, isFetching } = useQuery<EmployeeOnboarding>({
+ queryKey,
  queryFn: () => onboardingApi.show(employeeId),
+ });
+ const markDepartmentTeamNotified = useMutation({
+ mutationFn: () => onboardingApi.markDepartmentTeamNotified(employeeId),
+ onSuccess: (next) => queryClient.setQueryData(queryKey, next),
  });
 
  const inner = (
@@ -32,16 +39,35 @@ export function OnboardingStepper({ employeeId, bare = false }: Props) {
  )}
 
  {isError && (
- <div className="text-xs text-danger-fg">Failed to load onboarding status.</div>
+ <div className="flex flex-wrap items-center gap-2 text-xs text-danger-fg">
+ <span>Failed to load onboarding status.</span>
+ <Button size="xs" variant="secondary" loading={isFetching} onClick={() => void refetch()}>
+ Retry
+ </Button>
+ </div>
  )}
 
  {data && Array.isArray(data.steps) && (
  <>
  <div className="flex flex-wrap items-start gap-x-4 gap-y-3">
- {data.steps.map((step, idx) => (
- <StepNode key={step.key} step={step} isLast={idx === data.steps.length - 1} />
+ {data.steps.map((step) => (
+ <StepNode
+ key={step.key}
+ step={step}
+ onMark={
+ step.key === 'dept_team_notified' && step.completed_at === null
+ ? () => markDepartmentTeamNotified.mutate()
+ : undefined
+ }
+ isMarking={markDepartmentTeamNotified.isPending}
+ />
  ))}
  </div>
+ {markDepartmentTeamNotified.isError && (
+ <div className="mt-3 text-xs text-danger-fg">
+ Unable to record the department-team notification. Try again.
+ </div>
+ )}
  {data.is_complete && data.completed_at && (
  <div className="mt-3 text-xs text-muted">
  Onboarding completed on{' '}
@@ -59,7 +85,15 @@ export function OnboardingStepper({ employeeId, bare = false }: Props) {
  return <Panel title="Onboarding">{inner}</Panel>;
 }
 
-function StepNode({ step }: { step: OnboardingStep; isLast: boolean }) {
+function StepNode({
+ step,
+ onMark,
+ isMarking = false,
+}: {
+ step: OnboardingStep;
+ onMark?: () => void;
+ isMarking?: boolean;
+}) {
  const done = step.completed_at !== null;
  return (
  <div className="flex items-center gap-2 min-w-0">
@@ -81,6 +115,14 @@ function StepNode({ step }: { step: OnboardingStep; isLast: boolean }) {
  {done && step.completed_at && (
  <div className="text-2xs font-mono tabular-nums text-muted leading-tight">
  {new Date(step.completed_at).toLocaleDateString()}
+ </div>
+ )}
+ {onMark && (
+ <div className="mt-2 space-y-1.5">
+ <div className="text-2xs text-muted">HR confirmation is required for this step.</div>
+ <Button size="xs" variant="secondary" loading={isMarking} onClick={onMark}>
+ Mark team notified
+ </Button>
  </div>
  )}
  </div>

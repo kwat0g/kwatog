@@ -182,15 +182,25 @@ export default function FinanceDashboardPage() {
  <ChainBottleneckWidget audience="finance_officer" hideWhenEmpty />
  )}
 
- {/* Financial statements — accessible here, not via sidebar. */}
+ {/* Financial statements — the dashboard entry point for Finance. */}
  {can('accounting.statements.view') && (
  <Panel title="Financial Statements">
- <div className="flex flex-wrap gap-4">
- Trial Balance →
- Trial Balance →
- Trial Balance →
- Trial Balance →
- Trial Balance →
+ <div className="flex flex-wrap gap-2">
+ {[
+ ['Trial Balance', '/accounting/trial-balance'],
+ ['Income Statement', '/accounting/income-statement'],
+ ['Balance Sheet', '/accounting/balance-sheet'],
+ ['AR Aging', '/accounting/ar-aging'],
+ ['AP Aging', '/accounting/ap-aging'],
+ ].map(([label, to]) => (
+ <Link
+ key={to}
+ to={to}
+ className="inline-flex items-center rounded-md border border-default px-2.5 py-1.5 text-xs text-link hover:bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+ >
+ {label} →
+ </Link>
+ ))}
  </div>
  </Panel>
  )}

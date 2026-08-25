@@ -10,7 +10,7 @@
  * input. Server returns 422 with field-targeted errors when no agreement
  * exists; those land on the offending row.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFieldArray, useForm } from 'react-hook-form';
@@ -24,18 +24,35 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
+import { QueryErrorState } from '@/components/ui/QueryErrorState';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { customersApi } from '@/api/accounting/customers';
 import { productsApi } from '@/api/crm/products';
 import { salesOrdersApi } from '@/api/crm/salesOrders';
 import { businessPoliciesApi } from '@/api/businessPolicies';
 import type { CreateSalesOrderData } from '@/types/crm';
+import type { Incoterm } from '@/types/supplyChain';
 import { formatPeso } from '@/lib/formatNumber';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
+
+const INCOTERM_OPTIONS: Array<{ value: Incoterm; label: string }> = [
+ { value: 'EXW', label: 'Ex Works' },
+ { value: 'FCA', label: 'Free Carrier' },
+ { value: 'FAS', label: 'Free Alongside Ship' },
+ { value: 'FOB', label: 'Free on Board' },
+ { value: 'CFR', label: 'Cost and Freight' },
+ { value: 'CIF', label: 'Cost, Insurance & Freight' },
+ { value: 'CPT', label: 'Carriage Paid To' },
+ { value: 'CIP', label: 'Carriage & Insurance Paid To' },
+ { value: 'DAP', label: 'Delivered at Place' },
+ { value: 'DPU', label: 'Delivered at Place Unloaded' },
+ { value: 'DDP', label: 'Delivered Duty Paid' },
+];
+
 const itemSchema = z.object({
  product_id: z.string().min(1, 'Product is required'),
  quantity: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Use a positive decimal with up to 2 places').refine((v) => Number(v) > 0, 'Must be greater than 0'),
@@ -47,8 +64,19 @@ const schema = z.object({
  date: z.string().min(1, 'Order date is required'),
  payment_terms_days: z.string().regex(/^\d+$/, 'Use a non-negative integer').optional().or(z.literal('')),
  delivery_terms: z.string().max(50).optional().or(z.literal('')),
+ incoterm: z.string().optional().or(z.literal('')),
  notes: z.string().max(2000).optional().or(z.literal('')),
  items: z.array(itemSchema).min(1, 'Add at least one line item'),
+}).superRefine((values, ctx) => {
+ values.items.forEach((item, index) => {
+ if (item.delivery_date && values.date && item.delivery_date < values.date) {
+ ctx.addIssue({
+ code: z.ZodIssueCode.custom,
+ path: ['items', index, 'delivery_date'],
+ message: 'Delivery date must be on or after the order date',
+ });
+ }
+ });
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -97,6 +125,8 @@ export default function CreateSalesOrderPage() {
  }, [customers.data, policies.data, selectedCustomerId, setValue]);
 
  const [submitMode, setSubmitMode] = useState<'draft' | 'confirm'>('draft');
+ const [createdDraft, setCreatedDraft] = useState<{ id: string; so_number: string } | null>(null);
+ const createdDraftRef = useRef<{ id: string; so_number: string } | null>(null);
 
  const create = useMutation({
  mutationFn: async (values: FormValues) => {
@@ -105,6 +135,7 @@ export default function CreateSalesOrderPage() {
  date: values.date,
  payment_terms_days: values.payment_terms_days ? Number(values.payment_terms_days) : undefined,
  delivery_terms: values.delivery_terms || undefined,
+ incoterm: values.incoterm ? values.incoterm as Incoterm : undefined,
  notes: values.notes || undefined,
  items: values.items.map((i) => ({
  product_id: i.product_id,
@@ -114,19 +145,29 @@ export default function CreateSalesOrderPage() {
  };
  const so = await salesOrdersApi.create(payload);
  if (submitMode === 'confirm') {
+ createdDraftRef.current = { id: so.id, so_number: so.so_number };
+ setCreatedDraft(createdDraftRef.current);
  // confirm() returns { data, chain_result } — unwrap to the SalesOrder
  // so the mutation result type is always SalesOrder.
  const confirmed = await salesOrdersApi.confirm(so.id);
  return confirmed.data;
  }
+ createdDraftRef.current = null;
+ setCreatedDraft(null);
  return so;
  },
  onSuccess: (so) => {
+ createdDraftRef.current = null;
+ setCreatedDraft(null);
  qc.invalidateQueries({ queryKey: ['crm', 'sales-orders'] });
  toast.success(submitMode === 'confirm' ? `Sales order ${so.so_number} confirmed.` : `Draft ${so.so_number} created.`);
  navigate(`/crm/sales-orders/${so.id}`);
  },
  onError: (e: AxiosError<{ message?: string; errors?: Record<string, string[]> }>) => {
+ const draft = createdDraftRef.current;
+ if (submitMode === 'confirm' && draft) {
+ toast.error(`Draft ${draft.so_number} was saved, but confirmation failed. Retry confirmation below.`);
+ }
  if (e.response?.status === 422 && e.response.data.errors) {
  Object.entries(e.response.data.errors).forEach(([field, msgs]) => {
  // Map Laravel-style nested keys like items.0.product_id back to RHF paths.
@@ -138,7 +179,32 @@ export default function CreateSalesOrderPage() {
  }
  },
  });
+ const retryConfirm = useMutation({
+ mutationFn: () => salesOrdersApi.confirm(createdDraftRef.current!.id),
+ onSuccess: (result) => {
+ createdDraftRef.current = null;
+ setCreatedDraft(null);
+ qc.invalidateQueries({ queryKey: ['crm', 'sales-orders'] });
+ toast.success(`Sales order ${result.data.so_number} confirmed.`);
+ navigate(`/crm/sales-orders/${result.data.id}`);
+ },
+ onError: (e: AxiosError<{ message?: string }>) => {
+ toast.error(e.response?.data?.message ?? 'Confirmation failed again. The draft is still available.');
+ },
+ });
  const safety = useFormSafety({ form, saved: create.isSuccess });
+ const customerLookupDisabled = customers.isLoading || customers.isError || customers.data?.data?.length === 0;
+ const productLookupDisabled = products.isLoading || products.isError || products.data?.data?.length === 0;
+ const customerLookupHelper = customers.isLoading
+  ? 'Loading active customers…'
+  : customers.data?.data?.length === 0
+    ? 'No active customers are available.'
+    : undefined;
+ const productLookupHelper = products.isLoading
+  ? 'Loading active products…'
+  : products.data?.data?.length === 0
+    ? 'No active products are available.'
+    : undefined;
 
  // Live preview of subtotal (best-effort: pulls unit_price from product list — server
  // re-resolves from the actual price agreement on save, so this is approximate).
@@ -160,6 +226,24 @@ export default function CreateSalesOrderPage() {
  <PageHeader title="New sales order" backTo="/crm/sales-orders" backLabel="Sales orders"
  />
       <FormDraftBanner safety={safety} />
+ {customers.isError && <QueryErrorState size="compact" subject="active customers" onRetry={() => void customers.refetch()} />}
+ {products.isError && <QueryErrorState size="compact" subject="active products" onRetry={() => void products.refetch()} />}
+ {createdDraft && (
+ <div className="max-w-4xl mx-auto px-5 pt-4">
+ <div className="flex flex-wrap items-center gap-3 rounded-md border border-warning/40 bg-warning-bg/20 px-4 py-3 text-sm">
+ <div className="flex-1 min-w-[220px]">
+ <div className="font-medium">Draft saved: <span className="font-mono">{createdDraft.so_number}</span></div>
+ <div className="text-muted">Confirmation failed, but the draft is safe to retry.</div>
+ </div>
+ <Button type="button" size="sm" variant="secondary" onClick={() => navigate(`/crm/sales-orders/${createdDraft.id}`)}>
+ Open draft
+ </Button>
+ <Button type="button" size="sm" variant="primary" loading={retryConfirm.isPending} onClick={() => retryConfirm.mutate()}>
+ Retry confirmation
+ </Button>
+ </div>
+ </div>
+ )}
  <form
  onSubmit={handleSubmit((v) => create.mutate(v), onFormInvalid<FormValues>())}
  className="max-w-4xl mx-auto px-5 py-4"
@@ -167,7 +251,14 @@ export default function CreateSalesOrderPage() {
  <fieldset className="mb-8">
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Order header</legend>
  <div className="grid grid-cols-2 gap-3">
- <Select label="Customer" required {...register('customer_id')} error={errors.customer_id?.message}>
+ <Select
+ label="Customer"
+ required
+ disabled={customerLookupDisabled}
+ helper={customerLookupHelper}
+ {...register('customer_id')}
+ error={errors.customer_id?.message}
+ >
  <option value="">Select customer…</option>
  {customers.data?.data?.map((c) => (
  <option key={c.id} value={c.id}>{c.name}</option>
@@ -187,6 +278,12 @@ export default function CreateSalesOrderPage() {
  {...register('delivery_terms')} error={errors.delivery_terms?.message}
  placeholder="Enter delivery terms"
  />
+ <Select label="Incoterm" {...register('incoterm')} error={errors.incoterm?.message}>
+ <option value="">— Select incoterm —</option>
+ {INCOTERM_OPTIONS.map((option) => (
+ <option key={option.value} value={option.value}>{option.value} — {option.label}</option>
+ ))}
+ </Select>
  </div>
  </fieldset>
 
@@ -209,6 +306,8 @@ export default function CreateSalesOrderPage() {
  <Td>
  <Select
  {...register(`items.${i}.product_id` as const)}
+ disabled={productLookupDisabled}
+ helper={productLookupHelper}
  error={errors.items?.[i]?.product_id?.message}
  >
  <option value="">Select product…</option>
@@ -228,6 +327,7 @@ export default function CreateSalesOrderPage() {
  <Td align="right" mono>
  <Input
  type="date"
+ min={watch('date')}
  {...register(`items.${i}.delivery_date` as const)}
  error={errors.items?.[i]?.delivery_date?.message}
  className="font-mono"

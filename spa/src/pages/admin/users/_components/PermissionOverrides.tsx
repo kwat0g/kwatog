@@ -18,6 +18,7 @@ import { CanDo } from '@/components/guards/CanDo';
 import { permissionsApi } from '@/api/admin/permissions';
 import { userOverridesApi } from '@/api/admin/user-overrides';
 import { usePermission } from '@/hooks/usePermission';
+import { useAuthStore } from '@/stores/authStore';
 import { formatDateTime } from '@/lib/formatDate';
 import type { ApiValidationError } from '@/types';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
@@ -36,7 +37,7 @@ interface PermissionOverridesSectionProps {
 /**
  * Series R — Task R2.
  *
- * Mounted on the LuUser detail page. Lists active overrides for the user and
+ * Mounted on the user detail page. Lists active overrides for the user and
  * provides Add/Remove actions gated by `admin.users.manage_permissions`.
  *
  * Server is the source of truth: the list endpoint already excludes expired
@@ -48,14 +49,16 @@ export function PermissionOverrides({
 }: PermissionOverridesSectionProps) {
  const queryClient = useQueryClient();
  const { can } = usePermission();
- const canManage = can('admin.users.manage_permissions');
+ const isSystemAdmin = useAuthStore((state) => state.user?.role?.slug === 'system_admin');
+ const canManage = isSystemAdmin && can('admin.users.manage_permissions');
 
  const [showAdd, setShowAdd] = useState(false);
+ const [includeDeleted, setIncludeDeleted] = useState(false);
  const [confirmRemove, setConfirmRemove] = useState<UserPermissionOverride | null>(null);
 
  const list = useQuery({
- queryKey: ['admin', 'users', userId, 'overrides'],
- queryFn: () => userOverridesApi.list(userId),
+ queryKey: ['admin', 'users', userId, 'overrides', includeDeleted],
+ queryFn: () => userOverridesApi.list(userId, includeDeleted),
  enabled: !!userId && canManage,
  });
 
@@ -71,10 +74,25 @@ export function PermissionOverrides({
  onError: () => toast.error('Failed to remove override.'),
  });
 
+ const restore = useMutation({
+ mutationFn: (override: UserPermissionOverride) => userOverridesApi.restore(userId, override.id),
+ onSuccess: () => {
+ toast.success('Override restored.');
+ queryClient.invalidateQueries({ queryKey: ['admin', 'users', userId, 'overrides'] });
+ queryClient.invalidateQueries({ queryKey: ['admin-user', userId] });
+ },
+ onError: () => toast.error('Failed to restore override.'),
+ });
+
  return (
  <div>
- <div className="flex items-center justify-between mb-3">
+ <div className="flex items-center justify-between mb-3 gap-2">
  <h3 className="text-sm font-medium">Permission overrides</h3>
+ {canManage && (
+ <div className="flex items-center gap-2">
+ <Button variant="ghost" size="sm" onClick={() => setIncludeDeleted((value) => !value)}>
+ {includeDeleted ? 'Hide removed' : 'Show removed'}
+ </Button>
  <CanDo permission="admin.users.manage_permissions">
  <Button
  variant="secondary"
@@ -87,6 +105,8 @@ export function PermissionOverrides({
  Add override
  </Button>
  </CanDo>
+ </div>
+ )}
  </div>
 
  {!canManage && (
@@ -118,7 +138,7 @@ export function PermissionOverrides({
 
  {canManage && list.data && list.data.length === 0 && (
  <p className="text-sm text-text-subtle">
- No active overrides. The user inherits exactly their role's permissions.
+ {includeDeleted ? 'No active or removed overrides found.' : 'No active overrides. The user inherits exactly their role\'s permissions.'}
  </p>
  )}
 
@@ -152,8 +172,8 @@ export function PermissionOverrides({
  <div className="text-xs font-mono text-muted">{o.permission.slug}</div>
  </Td>
  <Td>
- <Chip variant={o.type === 'grant' ? 'success' : 'danger'}>
- {o.type_label ?? (o.type === 'grant' ? 'Granted' : 'Revoked')}
+ <Chip variant={o.is_deleted ? 'neutral' : o.type === 'grant' ? 'success' : 'danger'}>
+ {o.is_deleted ? 'Removed' : (o.type_label ?? (o.type === 'grant' ? 'Granted' : 'Revoked'))}
  </Chip>
  </Td>
  <Td>
@@ -172,9 +192,21 @@ export function PermissionOverrides({
  </Tooltip>
  </Td>
  <Td mono className="text-secondary">
- {o.expires_at ? formatDateTime(o.expires_at) : 'No expiry'}
+ {o.is_deleted ? (o.deleted_at ? `Removed ${formatDateTime(o.deleted_at)}` : 'Removed') : o.expires_at ? formatDateTime(o.expires_at) : 'No expiry'}
  </Td>
  <Td align="right" mono onClick={(e) => e.stopPropagation()}>
+ {o.is_deleted ? (
+ <Button
+ variant="ghost"
+ size="sm"
+ onClick={() => restore.mutate(o)}
+ disabled={restore.isPending}
+ loading={restore.isPending}
+ aria-label={`Restore ${o.permission.slug} override`}
+ >
+ Restore
+ </Button>
+ ) : (
  <CanDo permission="admin.users.manage_permissions">
  <Button
  variant="ghost"
@@ -186,6 +218,7 @@ export function PermissionOverrides({
  Remove
  </Button>
  </CanDo>
+ )}
  </Td>
  </tr>
  ))}

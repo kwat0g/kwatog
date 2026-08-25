@@ -1,13 +1,30 @@
 import { client } from '../client';
 import type { PaginatedResponse, ListParams } from '@/types';
 
+export type AuditDiffKind = 'added' | 'removed' | 'changed';
+export type AuditDiffType = 'text' | 'money' | 'date' | 'datetime' | 'enum' | 'boolean' | 'decimal' | 'encrypted';
+
+export interface AuditDiffRow {
+ kind: AuditDiffKind;
+ key: string;
+ label: string;
+ type: AuditDiffType;
+ old?: unknown;
+ new?: unknown;
+}
+
 export interface AuditLogEntry {
  id: string;
- action: 'created' | 'updated' | 'deleted';
+ action: string;
  model_type: string;
- model_id: number | null;
+ model_id: string | null;
+ actor_type: 'user' | 'system' | string | null;
+ source_command: string | null;
+ correlation_id: string | null;
+ reason: string | null;
  old_values: Record<string, unknown> | null;
  new_values: Record<string, unknown> | null;
+ diff: AuditDiffRow[];
  ip_address: string | null;
  user_agent: string | null;
  created_at: string;
@@ -24,7 +41,10 @@ export interface AuditLogParams extends ListParams {
 }
 
 export const auditLogsApi = {
- options: () => client.get<{ data: { actions: Array<{ value: string; label: string }> } }>('/admin/audit-logs/options').then((r) => r.data.data),
+ options: () => client.get<{ data: {
+ actions: Array<{ value: string; label: string }>;
+ actors: Array<{ value: string; label: string }>;
+ } }>('/admin/audit-logs/options').then((r) => r.data.data),
  list: (params?: AuditLogParams) =>
  client.get<PaginatedResponse<AuditLogEntry>>('/admin/audit-logs', { params }).then((r) => r.data),
 
@@ -32,7 +52,7 @@ export const auditLogsApi = {
  * Entity-scoped audit trail — all changes to a specific record.
  * IATF compliance: "show me all changes to PO-202604-0015".
  */
- entityTrail: (modelType: string, modelId: string, params?: { page?: number }) =>
+ entityTrail: (modelType: string, modelId: string, params?: { page?: number; per_page?: number }) =>
  client
  .get<PaginatedResponse<AuditLogEntry>>('/admin/audit-logs/entity', {
  params: { model_type: modelType, model_id: modelId, ...params },

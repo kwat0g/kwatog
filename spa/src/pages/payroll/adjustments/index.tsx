@@ -158,25 +158,29 @@ export default function PayrollAdjustmentsPage() {
       key: 'actions',
       header: 'Actions',
       cell: (r) =>
-        r.status === 'pending' && can('payroll.adjustments.create') ? (
+        r.status === 'pending' && (can('payroll.adjustments.approve') || can('payroll.adjustments.reject')) ? (
           <div className="flex items-center gap-1">
-            <Button
-              size="xs"
-              variant="ghost"
-              icon={<LuCheck size={12} />}
-              onClick={() => setConfirmApprove(r)}
-              disabled={approveMutation.isPending}
-            >
-              Approve
-            </Button>
-            <Button
-              size="xs"
-              variant="ghost"
-              icon={<LuX size={12} />}
-              onClick={() => setRejectTarget(r)}
-            >
-              Reject
-            </Button>
+            {can('payroll.adjustments.approve') && (
+              <Button
+                size="xs"
+                variant="ghost"
+                icon={<LuCheck size={12} />}
+                onClick={() => setConfirmApprove(r)}
+                disabled={approveMutation.isPending}
+              >
+                Approve
+              </Button>
+            )}
+            {can('payroll.adjustments.reject') && (
+              <Button
+                size="xs"
+                variant="ghost"
+                icon={<LuX size={12} />}
+                onClick={() => setRejectTarget(r)}
+              >
+                Reject
+              </Button>
+            )}
           </div>
         ) : null,
     },

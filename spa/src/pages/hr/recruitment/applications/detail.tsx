@@ -8,6 +8,7 @@ import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
+import { Select } from '@/components/ui/Select';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
@@ -17,7 +18,12 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
 import toast from 'react-hot-toast';
-import type { ApplicationStage, ApplicationInterview } from '@/types/recruitment';
+import type {
+ ApplicationStage,
+ ApplicationInterview,
+ InterviewOutcome,
+ RecruitmentApplicationEvent,
+} from '@/types/recruitment';
 
 const STAGE_CHIP: Record<ApplicationStage, 'neutral' | 'info' | 'warning' | 'success' | 'danger'> = {
  new: 'neutral',
@@ -41,6 +47,7 @@ export default function ApplicationDetailPage() {
  const [showInterviewForm, setShowInterviewForm] = useState(false);
  const [interviewData, setInterviewData] = useState({ scheduled_at: '', location: '', interviewer_name: '' });
  const [noteBody, setNoteBody] = useState('');
+ const [isDownloading, setIsDownloading] = useState(false);
 
  const { data: application, isLoading, isError, refetch } = useQuery({
  queryKey: ['recruitment-application', id],
@@ -86,6 +93,16 @@ export default function ApplicationDetailPage() {
  queryClient.invalidateQueries({ queryKey: ['recruitment-application', id] });
  },
  onError: () => toast.error('Failed to schedule interview.'),
+ });
+
+ const interviewOutcomeMutation = useMutation({
+  mutationFn: ({ id: interviewId, outcome }: { id: string; outcome: InterviewOutcome }) =>
+   recruitmentApi.updateInterview(interviewId, { outcome }),
+  onSuccess: () => {
+   toast.success('Interview outcome saved.');
+   queryClient.invalidateQueries({ queryKey: ['recruitment-application', id] });
+  },
+  onError: () => toast.error('Failed to save interview outcome.'),
  });
 
  const noteMutation = useMutation({
@@ -172,7 +189,7 @@ export default function ApplicationDetailPage() {
 
  {/* Reject dialog */}
  {showRejectDialog && (
- <div className="mx-5 mb-4 rounded-md border border-danger/30 bg-danger-bg/5 p-4">
+ <div className="mx-5 mb-4 rounded-md border border-danger/30 bg-danger-bg p-4">
  <p className="text-sm font-medium">Rejection reason:</p>
  <Textarea
  className="mt-2"
@@ -192,7 +209,7 @@ export default function ApplicationDetailPage() {
 
  {/* Advance to interview — schedule interview form */}
  {showAdvanceInterview && (
- <div className="mx-5 mb-4 rounded-md border border-accent/30 bg-accent/5 p-4">
+ <div className="mx-5 mb-4 rounded-md border border-accent/30 bg-surface p-4">
  <p className="text-sm font-medium mb-3">Schedule an interview to move this applicant to the interview stage:</p>
  <div className="space-y-2">
  <Input
@@ -254,15 +271,18 @@ export default function ApplicationDetailPage() {
  size="sm"
  icon={<LuDownload size={12} />}
  onClick={() => {
+ setIsDownloading(true);
  recruitmentApi.downloadResume(id!).then((res) => {
- const url = URL.createObjectURL(res.data);
- const a = document.createElement('a');
- a.href = url;
- a.download = 'resume';
- a.click();
- URL.revokeObjectURL(url);
- });
+  const url = URL.createObjectURL(res.data);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'resume';
+  a.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+ }).catch(() => toast.error('Unable to download the resume. Please try again.'))
+ .finally(() => setIsDownloading(false));
  }}
+ loading={isDownloading}
  >
  Download Resume
  </Button>
@@ -331,11 +351,28 @@ export default function ApplicationDetailPage() {
  {iv.location && ` · ${iv.location}`}
  </p>
  </div>
- {iv.outcome && (
- <Chip variant={iv.outcome === 'passed' ? 'success' : iv.outcome === 'failed' ? 'danger' : 'neutral'}>
- {iv.outcome_label ?? iv.outcome}
- </Chip>
- )}
+ <div className="flex items-center gap-2">
+ {can('hr.recruitment.applications') ? (
+  <Select
+   fieldSize="sm"
+   aria-label={'Outcome for interview with ' + iv.interviewer_name}
+   value={iv.outcome ?? 'pending'}
+   onChange={(event) => interviewOutcomeMutation.mutate({
+    id: iv.id,
+    outcome: event.target.value as InterviewOutcome,
+   })}
+   disabled={interviewOutcomeMutation.isPending}
+  >
+   <option value="pending">Pending</option>
+   <option value="passed">Passed</option>
+   <option value="failed">Failed</option>
+  </Select>
+ ) : iv.outcome ? (
+  <Chip variant={iv.outcome === 'passed' ? 'success' : iv.outcome === 'failed' ? 'danger' : 'neutral'}>
+   {iv.outcome_label ?? iv.outcome}
+  </Chip>
+ ) : null}
+ </div>
  </li>
  ))}
  </ul>
@@ -392,6 +429,32 @@ export default function ApplicationDetailPage() {
  <p className="text-sm text-muted">No notes yet.</p>
  )}
  </Panel>
+
+ <Panel title="Decision history">
+ {application.history?.length ? (
+  <ActivityStream
+   items={application.history.map((event: RecruitmentApplicationEvent) => ({
+    id: event.id,
+    dot: event.event_type.includes('rejected')
+      ? 'danger'
+      : event.event_type.includes('converted')
+        ? 'success'
+        : 'info',
+    text: (
+     <>
+      {historyLabel(event)}
+      <span className="text-muted block mt-0.5">
+       {event.actor?.name ?? 'System'} · {event.actor_type}
+      </span>
+     </>
+    ),
+    time: formatDateTime(event.created_at),
+   }))}
+  />
+ ) : (
+  <p className="text-sm text-muted">No workflow decisions recorded yet.</p>
+ )}
+ </Panel>
  </div>
 
  {/* Sidebar */}
@@ -410,14 +473,14 @@ export default function ApplicationDetailPage() {
  </dl>
 
  {application.rejection_reason && (
- <div className="mt-3 rounded-md bg-danger-bg/5 p-3 border border-danger/20">
+ <div className="mt-3 rounded-md bg-danger-bg p-3 border border-danger/20">
  <span className="text-2xs uppercase tracking-wider text-danger-fg font-medium">Rejection reason</span>
  <p className="mt-1 text-xs">{application.rejection_reason}</p>
  </div>
  )}
 
  {application.converted_employee && (
- <div className="mt-3 rounded-md bg-success-bg/5 p-3 border border-success/20">
+ <div className="mt-3 rounded-md bg-success-bg p-3 border border-success/20">
  <span className="text-2xs uppercase tracking-wider text-success-fg font-medium">Converted to employee</span>
  <p className="mt-1 text-xs font-mono">{application.converted_employee.employee_no}</p>
  </div>
@@ -447,4 +510,28 @@ function DetailItem({ label, children }: { label: string; children: React.ReactN
  <dd className="mt-0.5">{children}</dd>
  </div>
  );
+}
+
+function historyLabel(event: RecruitmentApplicationEvent): string {
+ const fromStage = event.from_stage ?? 'unknown';
+ const toStage = event.to_stage ?? (
+  typeof event.after?.stage === 'string' ? event.after.stage : 'unknown'
+ );
+
+ switch (event.event_type) {
+  case 'stage.advanced':
+   return 'Advanced from ' + fromStage + ' to ' + toStage;
+  case 'application.rejected':
+   return 'Rejected from ' + fromStage;
+  case 'interview.scheduled':
+   return 'Interview scheduled';
+  case 'interview.updated':
+   return 'Interview details or outcome updated';
+  case 'note.added':
+   return 'Recruitment note added';
+  case 'application.converted':
+   return 'Application converted to an employee';
+  default:
+   return event.event_type;
+ }
 }

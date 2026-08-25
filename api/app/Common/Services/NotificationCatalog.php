@@ -57,6 +57,7 @@ final class NotificationCatalog
      */
     private static function mergeMissingDefaults(array $configured): array
     {
+        $configured = self::normaliseConfiguredGroups($configured);
         $known = array_flip(self::flattenKeys($configured));
 
         // Index the configured groups by title so a missing type rejoins the
@@ -93,6 +94,49 @@ final class NotificationCatalog
         }
 
         return array_values($configured);
+    }
+
+    /**
+     * Settings validation guarantees an array at the top level, but the
+     * nested catalog is editable JSON. Keep a malformed admin snapshot from
+     * taking down the preferences endpoint or the SPA table.
+     *
+     * @param array<int, mixed> $configured
+     * @return array<int, array{title:string,hint:string,types:array<int,array{key:string,label:string,description:string}>}>
+     */
+    private static function normaliseConfiguredGroups(array $configured): array
+    {
+        $groups = [];
+
+        foreach ($configured as $group) {
+            if (! is_array($group) || ! is_string($group['title'] ?? null) || trim($group['title']) === '') {
+                continue;
+            }
+
+            $types = [];
+            foreach (is_array($group['types'] ?? null) ? $group['types'] : [] as $type) {
+                if (! is_array($type) || ! is_string($type['key'] ?? null) || trim($type['key']) === '') {
+                    continue;
+                }
+
+                $key = trim($type['key']);
+                $types[] = [
+                    'key' => $key,
+                    'label' => is_string($type['label'] ?? null) && trim($type['label']) !== ''
+                        ? $type['label']
+                        : $key,
+                    'description' => is_string($type['description'] ?? null) ? $type['description'] : '',
+                ];
+            }
+
+            $groups[] = [
+                'title' => $group['title'],
+                'hint' => is_string($group['hint'] ?? null) ? $group['hint'] : '',
+                'types' => $types,
+            ];
+        }
+
+        return $groups;
     }
 
     /**
@@ -155,6 +199,7 @@ final class NotificationCatalog
                 ['key' => 'recruitment.new_application', 'label' => 'New job application', 'description' => 'A candidate applied to an open requisition.'],
                 ['key' => 'recruitment.bottleneck', 'label' => 'Recruitment bottleneck', 'description' => 'An application, interview, or job posting has been waiting long enough to require HR action.'],
                 ['key' => 'training.expiry', 'label' => 'Training about to expire', 'description' => 'An employee certification is approaching its expiry date.'],
+                ['key' => 'hr.onboarding.stale', 'label' => 'Stale onboarding', 'description' => 'An employee onboarding record has remained incomplete beyond its reminder window.'],
             ]],
             ['title' => 'Quality & compliance', 'hint' => 'NCRs, SPC, cost of poor quality, and IATF document control', 'types' => [
                 ['key' => 'auto_ncr_created', 'label' => 'NCR auto-created', 'description' => 'A failed inspection raised an NCR automatically. Root cause and disposition are needed.'],

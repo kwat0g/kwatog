@@ -78,4 +78,20 @@ class AccountingPeriodCloseRegressionTest extends TestCase
 
         $this->svc->reopen(2026, 6, $this->user, 'Second reopen');
     }
+
+    public function test_scheduler_relock_rechecks_the_authoritative_stale_row(): void
+    {
+        $period = $this->svc->close(2026, 5, $this->user);
+        $this->svc->reopen(2026, 5, $this->user, 'Correction window');
+        AccountingPeriod::query()->whereKey($period->id)->update([
+            'reopened_at' => now()->subHours(49),
+        ]);
+
+        $this->assertSame(1, $this->svc->relockStaleReopenedPeriods(48));
+        $relocked = $period->fresh();
+        $this->assertSame(AccountingPeriodStatus::Closed, $relocked->status);
+        $this->assertNotNull($relocked->closed_at);
+        $this->assertNull($relocked->reopened_at);
+        $this->assertNull($relocked->reopen_reason);
+    }
 }

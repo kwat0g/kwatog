@@ -148,6 +148,36 @@ class MobileMaintenanceTest extends TestCase
         $response->assertJsonPath('data.status', 'in_progress');
     }
 
+    public function test_mobile_mwo_cannot_complete_before_start(): void
+    {
+        $wo = $this->createMwo(MaintenanceWorkOrderStatus::Open);
+
+        $response = $this->actingAs($this->admin)
+            ->patchJson("/api/v1/maintenance/work-orders/{$wo->hash_id}/complete");
+
+        $response->assertStatus(422)->assertJsonValidationErrors('status');
+        $this->assertDatabaseHas('maintenance_work_orders', [
+            'id' => $wo->id,
+            'status' => MaintenanceWorkOrderStatus::Open->value,
+        ]);
+    }
+
+    public function test_mobile_mwo_log_cannot_mutate_a_completed_order(): void
+    {
+        $wo = $this->createMwo(MaintenanceWorkOrderStatus::InProgress);
+
+        $this->actingAs($this->admin)
+            ->patchJson("/api/v1/maintenance/work-orders/{$wo->hash_id}/complete")
+            ->assertOk();
+
+        $this->actingAs($this->admin)
+            ->postJson("/api/v1/maintenance/work-orders/{$wo->hash_id}/logs", [
+                'description' => 'Late log entry',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('status');
+    }
+
     // ─── Condition readings (service-level — routes hidden 2026-08-08) ─
     //
     // The condition-reading HTTP surface (desktop page, mobile entry, backend

@@ -54,7 +54,7 @@ export interface LeaveRequest {
  /** M-18 — 'am' | 'pm' when the request is a half-day; null for full-day. */
  half_day_period: 'am' | 'pm' | null;
  reason: string | null;
- document_path: string | null;
+ has_document: boolean;
  status: LeaveStatus;
  status_label?: string;
  dept_approver: { id: string; name: string } | null;
@@ -74,7 +74,7 @@ export interface CreateLeaveRequestData {
  /** M-18 — 'am' / 'pm' for half-day; omit for full-day. */
  half_day_period?: 'am' | 'pm';
  reason?: string;
- document_path?: string;
+ document?: File;
 }
 
 export interface LeaveCalendarDay {

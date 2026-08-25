@@ -75,7 +75,7 @@ export interface DeliveryListParams extends ListParams {
 export interface CreateDeliveryItemData {
  sales_order_item_id: string;
  quantity: number;
- inspection_id?: string;
+ inspection_id: string;
 }
 
 export interface CreateDeliveryData {
@@ -87,14 +87,42 @@ export interface CreateDeliveryData {
  items: CreateDeliveryItemData[];
 }
 
+export interface DeliveryInspectionOption {
+ id: string;
+ inspection_number: string;
+ sales_order_item_id: string | null;
+ work_order_number: string | null;
+ product: { part_number: string; name: string } | null;
+ accepted_quantity: number;
+ remaining_quantity: string;
+ completed_at: string | null;
+}
+
+export interface DeliveryDriverOption {
+ id: string;
+ name: string;
+}
+
+export interface DeliveryAssignmentData {
+ vehicle_id: string;
+ driver_id: string;
+ reason: string;
+}
+
 export const deliveriesApi = {
  options: () => client.get<{ data: { statuses: Array<{ value: DeliveryStatus; label: string; next_status: DeliveryStatus | null; is_terminal: boolean }> } }>('/supply-chain/deliveries/options').then((r) => r.data.data),
+ inspectionOptions: (salesOrderId: string) =>
+  client.get<{ data: DeliveryInspectionOption[] }>('/supply-chain/deliveries/inspection-options', { params: { sales_order_id: salesOrderId } }).then((r) => r.data.data),
+ driverOptions: () =>
+  client.get<{ data: DeliveryDriverOption[] }>('/supply-chain/deliveries/driver-options').then((r) => r.data.data),
  create: (data: CreateDeliveryData) =>
  client.post<ApiSuccess<Delivery>>('/supply-chain/deliveries', data).then((r) => r.data.data),
  list: (params?: DeliveryListParams) =>
  client.get<PaginatedResponse<Delivery>>('/supply-chain/deliveries', { params }).then((r) => r.data),
  show: (id: string) =>
- client.get<ApiSuccess<Delivery>>(`/supply-chain/deliveries/${id}`).then((r) => r.data.data),
+  client.get<ApiSuccess<Delivery>>(`/supply-chain/deliveries/${id}`).then((r) => r.data.data),
+ assign: (id: string, data: DeliveryAssignmentData) =>
+  client.patch<ApiSuccess<Delivery>>(`/supply-chain/deliveries/${id}/assignment`, data).then((r) => r.data.data),
  updateStatus: (id: string, status: DeliveryStatus, note?: string) =>
  client.patch<ApiSuccess<Delivery>>(`/supply-chain/deliveries/${id}/status`, { status, note }).then((r) => r.data.data),
  uploadReceipt: (id: string, file: File) => {
@@ -124,11 +152,31 @@ export const deliveryProofsApi = {
   client.patch(`/supply-chain/deliveries/${deliveryId}/proofs/${proofId}/restore`).then((r) => r.data),
 };
 
+export interface VehicleListParams extends ListParams {
+ status?: string;
+ trashed?: 'only' | 'with';
+}
+
+export interface VehicleData {
+ plate_number: string;
+ name: string;
+ vehicle_type: string;
+ capacity_kg?: number | null;
+ status?: string;
+ notes?: string | null;
+}
+
 export const vehiclesApi = {
  options: () => client.get<{ data: {
  types: Array<{ value: string; label: string }>;
  statuses: Array<{ value: string; label: string }>;
  } }>('/supply-chain/vehicles/options').then((r) => r.data.data),
- list: (params?: ListParams) =>
- client.get<PaginatedResponse<Vehicle>>('/supply-chain/vehicles', { params }).then((r) => r.data),
+ list: (params?: VehicleListParams) =>
+  client.get<PaginatedResponse<Vehicle>>('/supply-chain/vehicles', { params }).then((r) => r.data),
+ create: (data: VehicleData) =>
+  client.post<ApiSuccess<Vehicle>>('/supply-chain/vehicles', data).then((r) => r.data.data),
+ update: (id: string, data: Partial<VehicleData>) =>
+  client.patch<ApiSuccess<Vehicle>>(`/supply-chain/vehicles/${id}`, data).then((r) => r.data.data),
+ destroy: (id: string) => client.delete(`/supply-chain/vehicles/${id}`),
+ restore: (id: string) => client.patch(`/supply-chain/vehicles/${id}/restore`),
 };

@@ -11,12 +11,14 @@ use App\Modules\Payroll\Enums\PayrollGlHandoffStatus;
 use App\Modules\Payroll\Events\PayrollPeriodDisbursed;
 use App\Modules\Payroll\Events\PayrollPeriodFinalized;
 use App\Modules\Payroll\Models\DisbursementProof;
+use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Payroll\Services\PayrollPeriodService;
 use Database\Seeders\GovernmentTableSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
@@ -38,6 +40,7 @@ class PayrollPeriodEventsTest extends TestCase
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
         $this->seed(GovernmentTableSeeder::class);
+        Storage::fake('local');
     }
 
     private function makeUser(): User
@@ -75,6 +78,15 @@ class PayrollPeriodEventsTest extends TestCase
             'status'       => PayrollPeriodStatus::Finalized->value,
             'gl_handoff_status' => PayrollGlHandoffStatus::NotRequired->value,
         ]);
+
+        Payroll::factory()->create([
+            'payroll_period_id' => $period->id,
+            'basic_pay' => '100000.00',
+            'gross_pay' => '100000.00',
+            'net_pay' => '100000.00',
+            'total_deductions' => '0.00',
+        ]);
+        Storage::disk('local')->put('proofs/proof.pdf', 'proof');
 
         DisbursementProof::create([
             'payroll_period_id'    => $period->id,
@@ -192,6 +204,22 @@ class PayrollPeriodEventsTest extends TestCase
         $svc->markDisbursed($period, $user);
 
         Event::assertNotDispatched(PayrollPeriodFinalized::class);
+    }
+
+    public function test_markDisbursed_rejects_proof_total_that_does_not_match_payroll_net(): void
+    {
+        $user = $this->makeUser();
+        $period = $this->makeFinalizedPeriodWithProof($user);
+        $period->payrolls()->firstOrFail()->forceFill([
+            'net_pay' => '100001.00',
+            'gross_pay' => '100001.00',
+            'basic_pay' => '100001.00',
+        ])->save();
+
+        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->expectExceptionMessage('totals 100000.00');
+
+        app(PayrollPeriodService::class)->markDisbursed($period->fresh(), $user);
     }
 
     /** Sanity: markDisbursed still sets the correct status. */

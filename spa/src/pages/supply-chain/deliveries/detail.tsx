@@ -6,7 +6,7 @@ import { LuCamera, LuCheck, LuArrowRight, LuTag, LuTrash2, LuFileText, LuImage a
 import toast from 'react-hot-toast';
 import type { AxiosError } from 'axios';
 import { downloadAuthenticatedFile } from '@/api/download';
-import { deliveriesApi, deliveryProofsApi } from '@/api/supply-chain';
+import { deliveriesApi, deliveryProofsApi, vehiclesApi } from '@/api/supply-chain';
 import { invoicesApi } from '@/api/accounting/invoices';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -48,6 +48,10 @@ export default function DeliveryDetailPage() {
  const [deleteProofId, setDeleteProofId] = useState<string | null>(null);
  const [restoreProofId, setRestoreProofId] = useState<string | null>(null);
  const [finalizeInvoiceId, setFinalizeInvoiceId] = useState<string | null>(null);
+ const [assignmentModalOpen, setAssignmentModalOpen] = useState(false);
+ const [assignmentVehicleId, setAssignmentVehicleId] = useState('');
+ const [assignmentDriverId, setAssignmentDriverId] = useState('');
+ const [assignmentReason, setAssignmentReason] = useState('');
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['supply-chain', 'deliveries', id],
@@ -65,6 +69,20 @@ export default function DeliveryDetailPage() {
  queryKey: ['supply-chain', 'deliveries', 'options'],
  queryFn: deliveriesApi.options,
  staleTime: 5 * 60_000,
+ });
+ const canEdit = can('supply_chain.deliveries.create');
+ const assignmentEnabled = canEdit && data?.status === 'scheduled';
+ const { data: availableVehicles } = useQuery({
+  queryKey: ['supply-chain', 'vehicles', 'available-for-assignment'],
+  queryFn: () => vehiclesApi.list({ status: 'available', per_page: 100 }),
+  enabled: assignmentEnabled,
+  staleTime: 30_000,
+ });
+ const { data: driverOptions = [] } = useQuery({
+  queryKey: ['supply-chain', 'deliveries', 'driver-options'],
+  queryFn: deliveriesApi.driverOptions,
+  enabled: assignmentEnabled,
+  staleTime: 30_000,
  });
  const availableProofTypes = proofOptions?.proof_types ?? [];
  const selectedProofType = proofType ?? availableProofTypes[0]?.value;
@@ -155,6 +173,23 @@ const removeProof = useMutation({
  onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed to finalize invoice.'),
  });
 
+ const assign = useMutation({
+  mutationFn: () => deliveriesApi.assign(id, {
+   vehicle_id: assignmentVehicleId,
+   driver_id: assignmentDriverId,
+   reason: assignmentReason.trim(),
+  }),
+  onSuccess: () => {
+   toast.success('Delivery assignment saved.');
+   setAssignmentModalOpen(false);
+   setAssignmentReason('');
+   qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries', id] });
+   qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries'] });
+   qc.invalidateQueries({ queryKey: ['driver'] });
+  },
+  onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed to assign delivery'),
+ });
+
  if (isLoading && !data) return <SkeletonDetail />;
  if (isError || !data) {
  return <EmptyState icon="alert-circle" title="Failed to load delivery"
@@ -166,7 +201,6 @@ const removeProof = useMutation({
  const proofs = data.proofs ?? [];
  const hasProof = proofs.length > 0;
  const canConfirm = data.status === 'delivered' && can('supply_chain.deliveries.confirm');
- const canEdit = can('supply_chain.deliveries.create');
  const canUploadProofNow = ['in_transit', 'delivered', 'confirmed'].includes(data.status)
  && canEdit && Boolean(selectedProofType);
 
@@ -194,6 +228,20 @@ const removeProof = useMutation({
  <Button variant="secondary" size="sm" icon={<LuArrowRight size={14} />}
  loading={advance.isPending} onClick={() => advance.mutate(next)}>
  {next === 'delivered' ? 'Mark delivered' : `Mark ${statusOptions.get(next)?.label ?? next.replace('_', ' ')}`}
+ </Button>
+ )}
+ {data.status === 'scheduled' && canEdit && (
+ <Button
+  variant="secondary"
+  size="sm"
+  onClick={() => {
+   setAssignmentVehicleId(data.vehicle?.id ?? '');
+   setAssignmentDriverId(data.driver?.id ?? '');
+   setAssignmentReason('');
+   setAssignmentModalOpen(true);
+  }}
+ >
+  {data.vehicle && data.driver ? 'Reassign' : 'Assign driver & vehicle'}
  </Button>
  )}
  {data.status === 'delivered' && canEdit && (
@@ -648,6 +696,62 @@ const removeProof = useMutation({
  </div>
  </div>
  </Modal>  {/* 2026-08-08 — finalize the auto-created draft invoice from the delivery. */}
+  <Modal
+  isOpen={assignmentModalOpen}
+  onClose={() => { if (!assign.isPending) setAssignmentModalOpen(false); }}
+  title={data.vehicle && data.driver ? 'Reassign delivery' : 'Assign delivery'}
+  >
+  <div className="space-y-3">
+  <p className="text-sm text-muted">
+  The assignment is recorded with the operator and reason. Only active drivers and available vehicles can be selected.
+  </p>
+  <Select
+  label="Vehicle"
+  required
+  value={assignmentVehicleId}
+  onChange={(e) => setAssignmentVehicleId(e.target.value)}
+  disabled={assign.isPending}
+  >
+  <option value="">— Select available vehicle —</option>
+  {(availableVehicles?.data ?? []).map((vehicle) => (
+  <option key={vehicle.id} value={vehicle.id}>{vehicle.name} ({vehicle.plate_number})</option>
+  ))}
+  </Select>
+  <Select
+  label="Driver"
+  required
+  value={assignmentDriverId}
+  onChange={(e) => setAssignmentDriverId(e.target.value)}
+  disabled={assign.isPending}
+  >
+  <option value="">— Select active driver —</option>
+  {driverOptions.map((driver) => (
+  <option key={driver.id} value={driver.id}>{driver.name}</option>
+  ))}
+  </Select>
+  <Textarea
+  label="Assignment reason"
+  required
+  value={assignmentReason}
+  onChange={(e) => setAssignmentReason(e.target.value)}
+  maxLength={500}
+  placeholder="Why is this driver and vehicle being assigned?"
+  />
+  <div className="flex justify-end gap-2 pt-2">
+  <Button variant="secondary" onClick={() => setAssignmentModalOpen(false)} disabled={assign.isPending}>Cancel</Button>
+  <Button
+  variant="primary"
+  loading={assign.isPending}
+  disabled={!assignmentVehicleId || !assignmentDriverId || assignmentReason.trim().length < 5}
+  onClick={() => assign.mutate()}
+  >
+  Save assignment
+  </Button>
+  </div>
+  </div>
+  </Modal>
+
+  {/* 2026-08-08 — finalize the auto-created draft invoice from the delivery. */}
   <ConfirmDialog
   isOpen={!!finalizeInvoiceId}
   onClose={() => setFinalizeInvoiceId(null)}

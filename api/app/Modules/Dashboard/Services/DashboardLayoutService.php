@@ -103,6 +103,11 @@ class DashboardLayoutService
         }
 
         DB::transaction(function () use ($user) {
+            // Serialize first-login clones for this account. Without locking
+            // the user row, two concurrent logins can both pass the exists()
+            // check and insert the role defaults twice.
+            $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
+
             $hasUserRows = DashboardLayout::query()
                 ->where('owner_type', DashboardLayout::OWNER_USER)
                 ->where('owner_id', $user->id)
@@ -113,7 +118,7 @@ class DashboardLayoutService
 
             $roleRows = DashboardLayout::query()
                 ->where('owner_type', DashboardLayout::OWNER_ROLE)
-                ->where('owner_id', $user->role_id)
+                ->where('owner_id', $lockedUser->role_id)
                 ->get();
             if ($roleRows->isEmpty()) {
                 return;

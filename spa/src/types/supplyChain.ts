@@ -119,6 +119,7 @@ export interface Vehicle {
  capacity_kg: number | null;
  status: string;
  notes: string | null;
+ deleted_at?: string | null;
 }
 
 /** ADV3 — IATF 16949 outgoing shipment lot. One Delivery → one Lot → N WO batches. */

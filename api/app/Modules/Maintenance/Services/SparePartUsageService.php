@@ -13,6 +13,7 @@ use App\Modules\Inventory\Services\StockMovementService;
 use App\Modules\Inventory\Support\StockMovementInput;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\Maintenance\Models\SparePartUsage;
+use App\Modules\Maintenance\Support\MaintenanceWorkOrderStateMachine;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -21,6 +22,7 @@ class SparePartUsageService
 {
     public function __construct(
         private readonly StockMovementService $stockMovements,
+        private readonly MaintenanceWorkOrderStateMachine $stateMachine,
     ) {}
 
     /**
@@ -34,6 +36,7 @@ class SparePartUsageService
             // Lock the WO so concurrent spare-part issues serialize the running-
             // cost read-modify-write instead of losing cost contributions.
             $lockedWo = MaintenanceWorkOrder::query()->lockForUpdate()->findOrFail($wo->getKey());
+            $this->stateMachine->assertInProgress($lockedWo, 'issue spare parts');
 
             $item = Item::query()->whereKey((int) $data['item_id'])->lockForUpdate()->firstOrFail();
             if ($item->item_type !== ItemType::SparePart) {
@@ -46,6 +49,7 @@ class SparePartUsageService
             $level = StockLevel::query()
                 ->where('item_id', $item->id)
                 ->where('location_id', (int) $data['location_id'])
+                ->lockForUpdate()
                 ->first();
             if ($level === null) {
                 throw ValidationException::withMessages([

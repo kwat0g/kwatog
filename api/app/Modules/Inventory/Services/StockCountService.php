@@ -95,20 +95,6 @@ class StockCountService
                             'updated_at'      => now(),
                         ];
                     }
-                } elseif ($loc->current_item_id) {
-                    $items[] = [
-                        'session_id'      => $session->id,
-                        'location_id'     => $loc->id,
-                        'item_id'         => $loc->current_item_id,
-                        'system_quantity' => $loc->current_quantity ?? 0,
-                        'counted_quantity' => null,
-                        'variance'        => 0,
-                        'variance_percent' => 0,
-                        'lot_number'      => $loc->current_lot_number,
-                        'status'          => StockCountItemStatus::Pending->value,
-                        'created_at'      => now(),
-                        'updated_at'      => now(),
-                    ];
                 }
             }
 
@@ -147,47 +133,56 @@ class StockCountService
 
     public function recordCount(int $itemId, array $data, User $user): StockCountItem
     {
-        $item = StockCountItem::findOrFail($itemId);
-        if ($item->session->status !== StockCountSessionStatus::InProgress) {
-            throw new BusinessRuleException('Session is not in progress.');
-        }
+        return DB::transaction(function () use ($itemId, $data, $user) {
+            // Match completeSession()/reconcileStockCountItem() lock order:
+            // session first, then item. A completion that wins the race makes
+            // this write fail before any count fields are changed.
+            $sessionId = StockCountItem::query()->whereKey($itemId)->value('session_id');
+            $session = StockCountSession::query()->lockForUpdate()->findOrFail($sessionId);
+            $item = StockCountItem::query()->lockForUpdate()->findOrFail($itemId);
+            if ($session->status !== StockCountSessionStatus::InProgress) {
+                throw new BusinessRuleException('Session is not in progress.');
+            }
 
-        $item->update([
-            'counted_quantity'  => $data['counted_quantity'],
-            'variance'          => bcsub((string) $data['counted_quantity'], (string) $item->system_quantity, 3),
-            'variance_percent'  => $item->system_quantity > 0
-                ? round(abs((float) $data['counted_quantity'] - (float) $item->system_quantity) / (float) $item->system_quantity * 100, 2)
-                : ($data['counted_quantity'] > 0 ? 100 : 0),
-            'lot_number'        => $data['lot_number'] ?? $item->lot_number,
-            'status'            => StockCountItemStatus::Counted->value,
-            'counted_by'        => $user->id,
-            'counted_at'        => now(),
-            'notes'             => $data['notes'] ?? $item->notes,
-        ]);
+            $item->update([
+                'counted_quantity'  => $data['counted_quantity'],
+                'variance'          => bcsub((string) $data['counted_quantity'], (string) $item->system_quantity, 3),
+                'variance_percent'  => $item->system_quantity > 0
+                    ? round(abs((float) $data['counted_quantity'] - (float) $item->system_quantity) / (float) $item->system_quantity * 100, 2)
+                    : ($data['counted_quantity'] > 0 ? 100 : 0),
+                'lot_number'        => $data['lot_number'] ?? $item->lot_number,
+                'status'            => StockCountItemStatus::Counted->value,
+                'counted_by'        => $user->id,
+                'counted_at'        => now(),
+                'notes'             => $data['notes'] ?? $item->notes,
+            ]);
 
-        // Update session progress
-        $session = $item->session;
-        $counted = $session->items()->whereIn('status', [StockCountItemStatus::Counted->value, StockCountItemStatus::Verified->value, StockCountItemStatus::Adjusted->value])->count();
-        $session->update(['counted_locations' => $counted]);
+            $counted = $session->items()
+                ->whereIn('status', [StockCountItemStatus::Counted->value, StockCountItemStatus::Verified->value, StockCountItemStatus::Adjusted->value])
+                ->count();
+            $session->update(['counted_locations' => $counted]);
 
-        return $item->fresh()->load(['location', 'item', 'counter']);
+            return $item->fresh()->load(['location', 'item', 'counter']);
+        });
     }
 
     public function approveVariance(int $itemId, User $user): StockCountItem
     {
-        $item = StockCountItem::with('session')->findOrFail($itemId);
-        if ($item->session->status !== StockCountSessionStatus::InProgress) {
-            throw new BusinessRuleException('Session is not in progress.');
-        }
-        if ($item->status !== StockCountItemStatus::Counted) {
-            throw new BusinessRuleException('Item must be counted first.');
-        }
+        return DB::transaction(function () use ($itemId) {
+            $sessionId = StockCountItem::query()->whereKey($itemId)->value('session_id');
+            $session = StockCountSession::query()->lockForUpdate()->findOrFail($sessionId);
+            $item = StockCountItem::query()->lockForUpdate()->findOrFail($itemId);
+            if ($session->status !== StockCountSessionStatus::InProgress) {
+                throw new BusinessRuleException('Session is not in progress.');
+            }
+            if ($item->status !== StockCountItemStatus::Counted) {
+                throw new BusinessRuleException('Item must be counted first.');
+            }
 
-        $item->update([
-            'status' => StockCountItemStatus::Verified->value,
-        ]);
+            $item->update(['status' => StockCountItemStatus::Verified->value]);
 
-        return $item->fresh()->load(['location', 'item']);
+            return $item->fresh()->load(['location', 'item']);
+        });
     }
 
     public function completeSession(int $id, User $user): StockCountSession

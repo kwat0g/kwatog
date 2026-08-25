@@ -79,6 +79,7 @@ export interface Attendance {
  status_label?: string;
  is_manual_entry: boolean;
  remarks: string | null;
+ deleted_at?: string | null;
 }
 
 export interface OvertimeRequest {

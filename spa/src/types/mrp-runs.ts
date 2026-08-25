@@ -3,7 +3,7 @@
  */
 
 export type MrpRunTrigger = 'scheduled' | 'manual' | 'automatic';
-export type MrpRunStatus = 'running' | 'completed' | 'failed';
+export type MrpRunStatus = 'running' | 'completed' | 'partial' | 'failed';
 
 export interface MrpRunConflict {
  work_order_id: string;
@@ -35,7 +35,10 @@ export interface MrpRun {
  duration_ms: number | null;
  status: MrpRunStatus;
  status_label?: string;
+ failed_sales_orders?: number;
  error_message: string | null;
+ error_code?: string | null;
+ recovery_action?: string | null;
  summary: MrpRunSummary;
  created_at: string;
 }

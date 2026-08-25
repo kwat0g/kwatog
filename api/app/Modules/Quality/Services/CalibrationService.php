@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\SettingsService;
 use App\Modules\Quality\Enums\CalibrationStatus;
 use App\Modules\Quality\Models\CalibrationRecord;
@@ -19,6 +20,8 @@ class CalibrationService
 
     public function create(array $data): CalibrationRecord
     {
+        $this->assertFrequencyIsPresentWhenSupplied($data);
+
         return DB::transaction(function () use ($data) {
             $record = new CalibrationRecord();
             $record->fill($this->withDerived($data));
@@ -30,6 +33,8 @@ class CalibrationService
 
     public function update(CalibrationRecord $record, array $data): CalibrationRecord
     {
+        $this->assertFrequencyIsPresentWhenSupplied($data);
+
         return DB::transaction(function () use ($record, $data) {
             $record->fill($this->withDerived(array_merge($record->toArray(), $data)));
             $record->save();
@@ -49,6 +54,10 @@ class CalibrationService
             // register from a stale snapshot.
             $locked = CalibrationRecord::query()->lockForUpdate()->findOrFail($record->getKey());
             $last = CarbonImmutable::parse($onDate);
+
+            if ($last->startOfDay()->gt(CarbonImmutable::today())) {
+                throw new BusinessRuleException('Calibration date cannot be in the future.');
+            }
 
             // Never regress: a backdated entry must not roll last/next dates
             // back after a newer calibration already committed.
@@ -107,6 +116,13 @@ class CalibrationService
         }
 
         return $data;
+    }
+
+    private function assertFrequencyIsPresentWhenSupplied(array $data): void
+    {
+        if (array_key_exists('frequency_days', $data) && $data['frequency_days'] === null) {
+            throw new BusinessRuleException('Calibration frequency is required when supplied.');
+        }
     }
 
     private function statusFor(?string $nextDate, CalibrationStatus $current): CalibrationStatus

@@ -19,6 +19,7 @@ use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Foundation\Http\Middleware\PreventRequestsDuringMaintenance;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\RateLimiter;
@@ -43,6 +44,9 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Global API middleware additions — every API request gets these.
         $middleware->api(prepend: [
+            // Must read the shared cache-backed maintenance gate before any
+            // authenticated API handler can read or write restored data.
+            PreventRequestsDuringMaintenance::class,
             RequestId::class,
             ForceJsonResponse::class,
             SanitizeInput::class,

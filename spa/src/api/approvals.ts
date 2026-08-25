@@ -17,7 +17,11 @@ export const approvalsApi = {
  board: (params?: ApprovalBoardParams) =>
  client
  .get<ApprovalBoardResponse>('/approvals/board', {
- params: { type: params?.type },
+ params: {
+  type: params?.type,
+  pending_limit: params?.pending_limit,
+  history_limit: params?.history_limit,
+ },
  })
  .then((r) => r.data.data),
 };

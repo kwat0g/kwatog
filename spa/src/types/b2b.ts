@@ -5,7 +5,11 @@ export interface SupplierPortalUser {
  name: string;
  email: string;
  must_change_password: boolean;
- phone: string | null;
+ is_active: boolean;
+ status: 'active' | 'inactive' | 'locked' | 'pending';
+ failed_login_attempts: number;
+ locked_until: string | null;
+ deleted_at: string | null;
  vendor: { id: string; name: string } | null;
  last_login_at: string | null;
  created_at: string;
@@ -15,9 +19,9 @@ export interface CustomerPortalUser {
  id: string;
  name: string;
  email: string;
+ customer_id: string;
+ customer_name: string | null;
  must_change_password: boolean;
- phone: string | null;
- company_name: string | null;
  customer: { id: string; name: string } | null;
  last_login_at: string | null;
  created_at: string;
@@ -34,19 +38,38 @@ export interface PortalPoSummary {
  status_label?: string;
  expected_delivery_date: string | null;
  sent_to_supplier_at: string | null;
+ incoterm: string | null;
+ capabilities?: PortalPoCapabilities;
+}
+
+export interface PortalPoCapabilities {
+ can_acknowledge: boolean;
+ can_update_shipment: boolean;
+ can_upload_document: boolean;
+ can_submit_invoice: boolean;
 }
 
 export interface PortalPoItem {
  id: string;
  part_number: string;
  name: string;
- quantity_ordered: number;
- quantity_received: number;
+ quantity_ordered: string;
+ quantity_received: string;
  unit_price: string;
  total_price: string;
 }
 
 export interface PortalPoDetail extends PortalPoSummary {
+ capabilities: PortalPoCapabilities;
+ shipment?: {
+  id: string;
+  shipped_date: string | null;
+  carrier: string | null;
+  tracking_number: string | null;
+  estimated_arrival: string | null;
+  notes: string | null;
+  updated_at: string | null;
+ } | null;
  items: PortalPoItem[];
  goods_receipt_notes: Array<{
  id: string;
@@ -220,7 +243,7 @@ export interface PortalPaymentSummary {
 
 export interface PortalShippingDocument {
  id: string;
- purchase_order_id: number;
+ purchase_order_id: string | null;
  document_type: string;
  document_type_label: string;
  original_filename: string;
@@ -228,7 +251,7 @@ export interface PortalShippingDocument {
  file_size_formatted: string;
  mime_type: string | null;
  notes: string | null;
- uploaded_by: number | null;
+ uploaded_by: { id: string; name: string } | null;
  uploaded_at: string | null;
  download_url: string;
 }
@@ -251,14 +274,9 @@ export interface PortalComplaint {
  status_label?: string;
  description: string;
  affected_quantity: number;
- ncr_handoff?: {
-  status: string;
-  status_label?: string | null;
-  message?: string | null;
-  at?: string | null;
- };
  received_date: string | null;
  resolved_at: string | null;
+ closed_at: string | null;
  created_at: string;
 }
 
@@ -314,8 +332,9 @@ export interface StatementOfAccount {
 // ── Delivery Schedule ────────────────────────────────
 
 export interface DeliveryScheduleLine {
+ purchase_order_item_id?: string | null;
  product_name: string;
- quantity: number;
+ quantity: string | number;
  notes?: string;
 }
 

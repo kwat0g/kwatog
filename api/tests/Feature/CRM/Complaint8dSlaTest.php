@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\CRM;
 
+use App\Common\Services\NotificationService;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -15,6 +16,7 @@ use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use RuntimeException;
 use Tests\TestCase;
 
 class Complaint8dSlaTest extends TestCase
@@ -78,6 +80,12 @@ class Complaint8dSlaTest extends TestCase
 
         $this->assertSame(1, $counts['d3']);
         $this->assertSame(['d3'], $c->fresh()->sla_alert_levels);
+        $this->assertDatabaseHas('complaint_8d_escalation_deliveries', [
+            'complaint_id' => $c->id,
+            'tier' => 'd3',
+            'status' => 'sent',
+            'attempts' => 1,
+        ]);
     }
 
     public function test_d3_idempotent_re_run_does_not_double_fire(): void
@@ -95,6 +103,10 @@ class Complaint8dSlaTest extends TestCase
 
         $this->assertSame(['d3' => 0, 'd4' => 0, 'finalize' => 0], $counts);
         $this->assertSame(['d3'], $c->fresh()->sla_alert_levels);
+        $this->assertSame(1, DB::table('complaint_8d_escalation_deliveries')
+            ->where('complaint_id', $c->id)
+            ->where('tier', 'd3')
+            ->count());
     }
 
     public function test_d4_fires_after_d3_already_recorded(): void
@@ -133,5 +145,64 @@ class Complaint8dSlaTest extends TestCase
         $this->assertSame(['d3' => 0, 'd4' => 0, 'finalize' => 0], $counts);
         // Service must not have touched sla_alert_levels for a terminal complaint.
         $this->assertSame([], $c->fresh()->sla_alert_levels ?? []);
+    }
+
+    public function test_failed_notification_rolls_back_tier_claim_and_inbox_rows(): void
+    {
+        $c = $this->makeComplaint();
+        DB::table('customer_complaints')->where('id', $c->id)->update([
+            'created_at' => now()->subHours(49),
+            'd3_due_at' => now()->subHour(),
+            'd4_due_at' => now()->addDays(5),
+            'finalize_due_at' => now()->addDays(28),
+        ]);
+
+        $inboxRowsBefore = DB::table('notifications')->count();
+        $realNotifications = app(NotificationService::class);
+        $notifications = \Mockery::mock(NotificationService::class)->makePartial();
+        $notifications->shouldReceive('send')->once()->andReturnUsing(
+            function (array $recipients, string $type, array $data) use ($realNotifications): void {
+                $realNotifications->send($recipients, $type, $data);
+                throw new RuntimeException('simulated notification failure');
+            },
+        );
+        $this->app->instance(NotificationService::class, $notifications);
+
+        $counts = app(Complaint8dEscalationService::class)->run();
+
+        $this->assertSame(['d3' => 0, 'd4' => 0, 'finalize' => 0], $counts);
+        $this->assertSame([], $c->fresh()->sla_alert_levels ?? []);
+        $this->assertSame($inboxRowsBefore, DB::table('notifications')->count());
+        $this->assertDatabaseHas('complaint_8d_escalation_deliveries', [
+            'complaint_id' => $c->id,
+            'tier' => 'd3',
+            'status' => 'pending',
+        ]);
+    }
+
+    public function test_no_active_recipient_keeps_overdue_tier_retryable(): void
+    {
+        $c = $this->makeComplaint();
+        DB::table('customer_complaints')->where('id', $c->id)->update([
+            'created_at' => now()->subHours(49),
+            'd3_due_at' => now()->subHour(),
+            'd4_due_at' => now()->addDays(5),
+            'finalize_due_at' => now()->addDays(28),
+        ]);
+        app(\App\Common\Services\SettingsService::class)->set(
+            'crm.complaint_8d.notification_roles',
+            [],
+        );
+
+        $counts = app(Complaint8dEscalationService::class)->run();
+
+        $this->assertSame(0, $counts['d3']);
+        $this->assertSame([], $c->fresh()->sla_alert_levels ?? []);
+        $this->assertDatabaseHas('complaint_8d_escalation_deliveries', [
+            'complaint_id' => $c->id,
+            'tier' => 'd3',
+            'status' => 'pending',
+            'attempts' => 1,
+        ]);
     }
 }

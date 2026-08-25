@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Tests\Feature\Accounting;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Modules\Accounting\Enums\JournalEntryStatus;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Services\JournalEntryService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -63,10 +65,32 @@ class JournalEntryPostRaceTest extends TestCase
             ],
         ], $maker);
 
-        // A concurrent reversal flips the authoritative row to 'reversed'
-        // AFTER the draft model was loaded. The in-memory model is still
-        // Draft, so an unlocked guard cannot see the flip.
-        DB::table('journal_entries')->where('id', $je->id)->update(['status' => 'reversed']);
+        // A concurrent, already-posted reversal flips the authoritative row
+        // to 'reversed' AFTER the draft model was loaded. The in-memory model
+        // is still Draft, so an unlocked guard cannot see the flip.
+        $replacement = JournalEntry::create([
+            'entry_number' => 'JE-999999-9999',
+            'date' => '2026-04-15',
+            'description' => 'Existing valid reversal',
+            'reference_type' => 'journal_entry_reversal',
+            'reference_id' => $je->id,
+            'total_debit' => '500.00',
+            'total_credit' => '500.00',
+            'status' => JournalEntryStatus::Posted,
+            'posted_at' => now(),
+            'posted_by' => $maker->id,
+        ]);
+        DB::table('journal_entries')->where('id', $je->id)->update([
+            'status' => 'posted',
+            'posted_at' => now(),
+            'posted_by' => $maker->id,
+            'total_debit' => '500.00',
+            'total_credit' => '500.00',
+        ]);
+        DB::table('journal_entries')->where('id', $je->id)->update([
+            'status' => 'reversed',
+            'reversed_by_entry_id' => $replacement->id,
+        ]);
 
         $this->expectException(BusinessRuleException::class);
         $this->expectExceptionMessage('Only draft entries can be posted.');

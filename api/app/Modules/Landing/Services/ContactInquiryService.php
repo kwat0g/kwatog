@@ -33,7 +33,9 @@ class ContactInquiryService
             $inquiry->fill([
                 ...$data,
                 'ip_address' => $request->ip(),
-                'user_agent' => substr((string) $request->userAgent(), 0, 500),
+                // contact_inquiries.user_agent is varchar(255); keep public
+                // submissions inside the database contract.
+                'user_agent' => substr((string) $request->userAgent(), 0, 255),
             ]);
             $inquiry->inquiry_no = $this->sequences->generate('contact_inquiry');
             $inquiry->status = ContactInquiryStatus::New;

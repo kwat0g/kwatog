@@ -11,18 +11,40 @@ import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { CompanyName } from '@/components/brand/CompanyName';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { DataTablePagination } from '@/components/ui/DataTablePagination';
+import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
+import { useUrlFilters } from '@/hooks/useUrlFilters';
+import type { SupplierBillSummary } from '@/types/b2b';
+
+type InvoiceFilters = { page: number; per_page: number; status?: string };
 
 export default function SupplierInvoicesPage() {
+  const [filters, setFilters] = useUrlFilters<InvoiceFilters>({ page: 1, per_page: 25 });
   const {
-    data: invoices,
+    data,
     isLoading,
     isError,
     refetch,
   } = useQuery({
-    queryKey: ['portal', 'supplier', 'invoices'],
-    queryFn: () => supplierPortalApi.listInvoices(),
+    queryKey: ['portal', 'supplier', 'invoices', filters],
+    queryFn: () => supplierPortalApi.listInvoices(filters),
     placeholderData: (prev) => prev,
   });
+
+  const invoices: SupplierBillSummary[] = data?.data ?? [];
+  const filterConfig: FilterConfig[] = [{
+    key: 'status',
+    label: 'Status',
+    type: 'select',
+    options: [
+      { value: '', label: 'All' },
+      { value: 'draft', label: 'Draft' },
+      { value: 'unpaid', label: 'Unpaid' },
+      { value: 'partial', label: 'Partially paid' },
+      { value: 'paid', label: 'Paid' },
+      { value: 'cancelled', label: 'Cancelled' },
+    ],
+  }];
 
   return (
     <div>
@@ -33,6 +55,13 @@ export default function SupplierInvoicesPage() {
             Bills you have issued to <CompanyName />
           </>
         }
+      />
+
+      <FilterBar
+        filters={filterConfig}
+        values={filters}
+        onFilter={(key, value) => setFilters((current) => ({ ...current, [key]: value || undefined, page: 1 }))}
+        searchable={false}
       />
 
       {/* One padded body holds every state, so loading and loaded agree on width. */}
@@ -53,7 +82,7 @@ export default function SupplierInvoicesPage() {
 
         {!isLoading && !isError && (
           <Panel noPadding>
-            {invoices && invoices.length > 0 ? (
+            {invoices.length > 0 ? (
               <PortalTable>
 <table className={tableCls}>
                 <thead>
@@ -102,11 +131,17 @@ export default function SupplierInvoicesPage() {
               <EmptyState
                 icon="receipt"
                 title="No invoices"
-                description="Invoices from your customers will appear here."
+                description="Invoices you submitted will appear here with their AP review status."
               />
             )}
           </Panel>
         )}
+        {data && <DataTablePagination
+          meta={data.meta}
+          perPage={filters.per_page}
+          onPageChange={(page) => setFilters((current) => ({ ...current, page }))}
+          onPageSizeChange={(per_page) => setFilters((current) => ({ ...current, per_page, page: 1 }))}
+        />}
       </div>
     </div>
   );

@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Controllers;
 
+use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Resources\EmployeeOnboardingResource;
 use App\Modules\HR\Services\OnboardingService;
+use Illuminate\Http\Request;
 
 class EmployeeOnboardingController
 {
@@ -23,9 +25,18 @@ class EmployeeOnboardingController
 
     public function recompute(Employee $employee): EmployeeOnboardingResource
     {
-        $this->onboarding->recompute($employee);
         return new EmployeeOnboardingResource(
-            $this->onboarding->status($employee),
+            $this->onboarding->recomputeStatus($employee),
         );
+    }
+
+    public function markDepartmentTeamNotified(Request $request, Employee $employee): EmployeeOnboardingResource
+    {
+        /** @var User $actor */
+        $actor = $request->user();
+
+        $this->onboarding->markDepartmentTeamNotified($employee, $actor);
+
+        return new EmployeeOnboardingResource($this->onboarding->status($employee));
     }
 }

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { PortalTable } from '@/components/portal/PortalTable';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
@@ -11,18 +12,21 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { formatPeso } from '@/lib/formatNumber';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { CompanyName } from '@/components/brand/CompanyName';
+import { DataTablePagination } from '@/components/ui/DataTablePagination';
 
 export default function CustomerInvoicesPage() {
+  const [page, setPage] = useState(1);
   const {
-    data: invoices,
+    data: invoicesPage,
     isLoading,
     isError,
     refetch,
   } = useQuery({
-    queryKey: ['portal', 'customer', 'invoices'],
-    queryFn: () => customerPortalApi.listInvoices(),
+    queryKey: ['portal', 'customer', 'invoices', { page }],
+    queryFn: () => customerPortalApi.listInvoices({ page }),
     placeholderData: (prev) => prev,
   });
+  const invoices = invoicesPage?.data ?? [];
 
   return (
     <div>
@@ -53,7 +57,8 @@ export default function CustomerInvoicesPage() {
 
         {!isLoading && !isError && (
           <Panel noPadding>
-            {invoices && invoices.length > 0 ? (
+            {invoices.length > 0 ? (
+              <>
               <PortalTable>
 <table className={tableCls}>
                 <thead>
@@ -98,6 +103,12 @@ export default function CustomerInvoicesPage() {
                 </tbody>
               </table>
 </PortalTable>
+              {invoicesPage?.meta && (
+                <div className="px-4 pb-4">
+                  <DataTablePagination meta={invoicesPage.meta} onPageChange={setPage} />
+                </div>
+              )}
+              </>
             ) : (
               <EmptyState
                 icon="receipt"

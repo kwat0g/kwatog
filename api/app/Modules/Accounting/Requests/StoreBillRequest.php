@@ -24,7 +24,6 @@ class StoreBillRequest extends FormRequest
             'exception_evidence'           => ['required_if:provenance_type,service', 'string', 'max:2000'],
             'exception_approved'           => ['required_if:provenance_type,service', 'boolean', 'accepted'],
             'department_id'                => ['nullable', 'string'],
-            'allow_override'               => ['nullable', 'boolean'],
             'date'                         => ['required', 'date'],
             'due_date'                     => ['nullable', 'date', 'after_or_equal:date'],
             'is_vatable'                   => ['nullable', 'boolean'],

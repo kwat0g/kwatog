@@ -7,6 +7,8 @@ namespace App\Modules\HR\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\TrashedFilter;
 use App\Modules\HR\Models\Department;
+use App\Modules\HR\Models\Employee;
+use App\Modules\HR\Enums\EmployeeStatus;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -51,7 +53,7 @@ class DepartmentService
     public function tree(array $filters = []): Collection
     {
         $query = Department::query()
-            ->with(['headEmployee'])
+            ->with(['parent', 'headEmployee'])
             ->withCount(['positions', 'employees'])
             ->orderBy('name');
 
@@ -68,20 +70,22 @@ class DepartmentService
 
     public function create(array $data): Department
     {
-        return DB::transaction(fn () => Department::create($data)
-            ->load(['parent', 'headEmployee'])
-            ->loadCount(['positions', 'employees']));
+        return DB::transaction(function () use ($data): Department {
+            $this->validateHierarchy(null, $data);
+
+            return Department::create($data)
+                ->load(['parent', 'headEmployee'])
+                ->loadCount(['positions', 'employees']);
+        });
     }
 
     public function update(Department $department, array $data): Department
     {
         return DB::transaction(function () use ($department, $data) {
-            // Prevent self-parenting / cycle (one-level safe-guard).
-            if (!empty($data['parent_id']) && (int) $data['parent_id'] === $department->id) {
-                throw new \InvalidArgumentException('A department cannot be its own parent.');
-            }
-            $department->update($data);
-            return $department->fresh(['parent', 'headEmployee'])
+            $locked = Department::query()->lockForUpdate()->findOrFail($department->id);
+            $this->validateHierarchy($locked, $data);
+            $locked->update($data);
+            return $locked->fresh(['parent', 'headEmployee'])
                 ->loadCount(['positions', 'employees']);
         });
     }
@@ -98,5 +102,50 @@ class DepartmentService
             throw new BusinessRuleException('Cannot delete department: child departments exist.');
         }
         $department->delete();
+    }
+
+    /** @param array<string, mixed> $data */
+    private function validateHierarchy(?Department $department, array $data): void
+    {
+        $parentId = array_key_exists('parent_id', $data)
+            ? ($data['parent_id'] === null ? null : (int) $data['parent_id'])
+            : $department?->parent_id;
+
+        if ($parentId !== null) {
+            $parent = Department::query()->find($parentId);
+            if (! $parent) {
+                throw new BusinessRuleException('Parent department does not exist or is archived.');
+            }
+            if ($department && $parentId === (int) $department->id) {
+                throw new BusinessRuleException('A department cannot be its own parent.');
+            }
+
+            $seen = [];
+            $cursor = $parentId;
+            while ($cursor !== null) {
+                if (isset($seen[$cursor])) {
+                    throw new BusinessRuleException('The department hierarchy already contains a cycle.');
+                }
+                $seen[$cursor] = true;
+                if ($department && $cursor === (int) $department->id) {
+                    throw new BusinessRuleException('A department cannot be placed below one of its descendants.');
+                }
+                $cursor = Department::query()->whereKey($cursor)->value('parent_id');
+            }
+        }
+
+        if (array_key_exists('head_employee_id', $data) && $data['head_employee_id'] !== null) {
+            $targetDepartmentId = $department?->id;
+            $head = Employee::query()->find((int) $data['head_employee_id']);
+            if (! $head) {
+                throw new BusinessRuleException('Department head employee does not exist or is archived.');
+            }
+            if ($targetDepartmentId === null || (int) $head->department_id !== (int) $targetDepartmentId) {
+                throw new BusinessRuleException('Department head must belong to the department.');
+            }
+            if ($head->status !== EmployeeStatus::Active) {
+                throw new BusinessRuleException('Department head must be an active employee.');
+            }
+        }
     }
 }

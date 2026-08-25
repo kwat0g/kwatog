@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Attendance\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Attendance\Models\EmployeeShiftAssignment;
 use App\Modules\Attendance\Models\Shift;
 use App\Modules\HR\Models\Employee;
@@ -22,24 +23,17 @@ class ShiftAssignmentService
     public function bulkAssign(int $departmentId, int $shiftId, string $effectiveDate, ?string $endDate = null): array
     {
         return DB::transaction(function () use ($departmentId, $shiftId, $effectiveDate, $endDate) {
-            $employees = Employee::query()->where('department_id', $departmentId)->pluck('id');
             $effective = Carbon::parse($effectiveDate);
-            $closeOn   = $effective->copy()->subDay()->toDateString();
-
-            EmployeeShiftAssignment::query()
-                ->whereIn('employee_id', $employees)
-                ->whereNull('end_date')
-                ->update(['end_date' => $closeOn]);
+            $this->assertValidRange($effective, $endDate);
+            $employees = Employee::query()
+                ->where('department_id', $departmentId)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->pluck('id');
 
             $count = 0;
             foreach ($employees as $eid) {
-                EmployeeShiftAssignment::create([
-                    'employee_id'    => $eid,
-                    'shift_id'       => $shiftId,
-                    'effective_date' => $effective->toDateString(),
-                    'end_date'       => $endDate,
-                    'created_at'     => now(),
-                ]);
+                $this->replaceForEmployee((int) $eid, $shiftId, $effective, $endDate);
                 $count++;
             }
 
@@ -54,20 +48,9 @@ class ShiftAssignmentService
     {
         DB::transaction(function () use ($employeeId, $shiftId, $effectiveDate, $endDate) {
             $effective = Carbon::parse($effectiveDate);
-            $closeOn = $effective->copy()->subDay()->toDateString();
-
-            EmployeeShiftAssignment::query()
-                ->where('employee_id', $employeeId)
-                ->whereNull('end_date')
-                ->update(['end_date' => $closeOn]);
-
-            EmployeeShiftAssignment::create([
-                'employee_id'    => $employeeId,
-                'shift_id'       => $shiftId,
-                'effective_date' => $effective->toDateString(),
-                'end_date'       => $endDate,
-                'created_at'     => now(),
-            ]);
+            $this->assertValidRange($effective, $endDate);
+            Employee::query()->lockForUpdate()->findOrFail($employeeId);
+            $this->replaceForEmployee($employeeId, $shiftId, $effective, $endDate);
         });
     }
 
@@ -87,5 +70,53 @@ class ShiftAssignmentService
             ->first();
 
         return $assignment?->shift()->first();
+    }
+
+    private function replaceForEmployee(int $employeeId, int $shiftId, Carbon $effective, ?string $endDate): void
+    {
+        $newStart = $effective->copy()->startOfDay();
+        $newEnd = $endDate !== null ? Carbon::parse($endDate)->startOfDay() : null;
+        $assignments = EmployeeShiftAssignment::query()
+            ->where('employee_id', $employeeId)
+            ->orderBy('effective_date')
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($assignments as $assignment) {
+            $existingStart = Carbon::parse($assignment->effective_date)->startOfDay();
+            $existingEnd = $assignment->end_date !== null
+                ? Carbon::parse($assignment->end_date)->startOfDay()
+                : null;
+            $overlaps = ($existingEnd === null || $existingEnd->gte($newStart))
+                && ($newEnd === null || $existingStart->lte($newEnd));
+            if (! $overlaps) {
+                continue;
+            }
+
+            if ($existingStart->lt($newStart)) {
+                $assignment->update(['end_date' => $newStart->copy()->subDay()->toDateString()]);
+                continue;
+            }
+
+            throw new BusinessRuleException(sprintf(
+                'The new shift assignment overlaps an existing future assignment beginning %s. End or remove that assignment first.',
+                $existingStart->toDateString(),
+            ));
+        }
+
+        EmployeeShiftAssignment::create([
+            'employee_id'    => $employeeId,
+            'shift_id'       => $shiftId,
+            'effective_date' => $newStart->toDateString(),
+            'end_date'       => $newEnd?->toDateString(),
+            'created_at'     => now(),
+        ]);
+    }
+
+    private function assertValidRange(Carbon $effective, ?string $endDate): void
+    {
+        if ($endDate !== null && Carbon::parse($endDate)->startOfDay()->lt($effective->copy()->startOfDay())) {
+            throw new BusinessRuleException('Shift assignment end date must be on or after its effective date.');
+        }
     }
 }

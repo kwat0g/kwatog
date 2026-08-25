@@ -39,8 +39,9 @@ export default function PortalChangePasswordPage() {
       if (type === 'supplier') await supplierPortalApi.changePassword(payload);
       else await customerPortalApi.changePassword(payload);
       toast.success('Password updated. Please sign in again.');
+      // The customer session is invalidated by the password-change endpoint;
+      // calling logout again would correctly return 401 and mask the success.
       if (type === 'supplier') await supplierPortalApi.logout();
-      else await customerPortalApi.logout();
       navigate(`/portal/${type}/login`, { replace: true });
     } catch (error) {
       const body = (error as AxiosError<{ message?: string }>).response?.data;

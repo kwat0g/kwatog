@@ -101,8 +101,11 @@ class ProcessPayrollJob implements ShouldQueue
             });
         }
 
-        $employees = $periods->availableEmployees($period);
-        $total     = $employees->count();
+        // Keep only a bounded lazy chunk in worker memory. The previous
+        // materialized collection grew with the entire workforce before the
+        // first employee transaction started.
+        $employeeQuery = $periods->availableEmployeeQuery($period);
+        $total         = (clone $employeeQuery)->count();
         $processed = 0;
         $failures  = 0;
 
@@ -116,7 +119,7 @@ class ProcessPayrollJob implements ShouldQueue
         $emit();
 
         try {
-            foreach ($employees as $emp) {
+            foreach ($employeeQuery->lazyById(100) as $emp) {
                 try {
                     // internal: true — the period is legitimately Processing
                     // because WE claimed it. External callers are refused that

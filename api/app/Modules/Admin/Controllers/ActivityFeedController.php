@@ -9,6 +9,7 @@ use App\Modules\Admin\Enums\ActivityType;
 use App\Modules\Admin\Enums\ActivitySeverity;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 /**
  * Series F — Task F7. Admin activity feed.
@@ -30,9 +31,9 @@ class ActivityFeedController
     public function index(Request $request): JsonResponse
     {
         $request->validate([
-            'type'      => ['nullable', 'string', 'max:30'],
-            'severity'  => ['nullable', \Illuminate\Validation\Rule::enum(ActivitySeverity::class)],
-            'actor_user_id' => ['nullable', 'string'],
+            'type'      => ['nullable', Rule::enum(ActivityType::class)],
+            'severity'  => ['nullable', Rule::enum(ActivitySeverity::class)],
+            'actor_user_id' => ['nullable', 'string', 'max:128'],
             'from'      => ['nullable', 'date'],
             'to'        => ['nullable', 'date', 'after_or_equal:from'],
             'search'    => ['nullable', 'string', 'max:120'],

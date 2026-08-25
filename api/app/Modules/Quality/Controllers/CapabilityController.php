@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Modules\Quality\Controllers;
 
 use App\Modules\CRM\Models\Product;
+use App\Modules\Quality\Exceptions\CapabilityStudyException;
 use App\Modules\Quality\Models\InspectionSpecItem;
 use App\Modules\Quality\Services\SpcService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -31,6 +33,9 @@ class CapabilityController
         $items = InspectionSpecItem::query()
             ->whereNotNull('tolerance_min')
             ->whereNotNull('tolerance_max')
+            ->whereHas('spec', static fn (Builder $spec): Builder => $spec
+                ->where('is_active', true)
+                ->whereNull('inspection_specs.deleted_at'))
             ->with('spec:id,product_id')
             ->get(['id', 'inspection_spec_id', 'parameter_name', 'unit_of_measure']);
 
@@ -42,6 +47,7 @@ class CapabilityController
                     'unit'           => $i->unit_of_measure,
                 ])->values(),
                 'capability_thresholds' => $this->spc->capabilityThresholds(),
+                'population_policy' => 'current_revision_only',
             ],
         ]);
     }
@@ -57,8 +63,27 @@ class CapabilityController
             'sample_size'  => ['nullable', 'integer', 'min:5', 'max:500'],
         ]);
 
-        $product  = Product::where('id', $this->decode($validated['product_id']))->firstOrFail();
-        $specItem = InspectionSpecItem::where('id', $this->decode($validated['spec_item_id']))->firstOrFail();
+        $product  = Product::query()->whereKey($this->decode($validated['product_id']))->firstOrFail();
+        $specItem = InspectionSpecItem::query()
+            ->with('spec')
+            ->whereKey($this->decode($validated['spec_item_id']))
+            ->firstOrFail();
+
+        $spec = $specItem->spec;
+        if ($spec === null || ! $spec->is_active || $spec->deleted_at !== null) {
+            throw new CapabilityStudyException(
+                'The selected inspection specification is archived or unavailable.',
+                'quality_capability_spec_unavailable',
+            );
+        }
+        if ((int) $spec->product_id !== (int) $product->id) {
+            throw new CapabilityStudyException(
+                'The selected dimension does not belong to the selected product.',
+                'quality_capability_spec_product_mismatch',
+            );
+        }
+
+        $thresholds = $this->spc->capabilityThresholds();
 
         $result = $this->spc->computeCapabilityStudy(
             $product->id,
@@ -66,12 +91,24 @@ class CapabilityController
             $validated['sample_size'] ?? 50,
         );
 
+        if ($result === null) {
+            throw new CapabilityStudyException(
+                sprintf('At least %d completed inspection measurements with measurable variation are required for a capability study.', $thresholds['minimum_samples']),
+                'quality_capability_insufficient_samples',
+            );
+        }
+
         return response()->json([
             'data' => $result,
             'meta' => [
-                'thresholds'     => $this->spc->capabilityThresholds(),
+                'thresholds'     => $thresholds,
                 'parameter_name' => $specItem->parameter_name,
                 'unit'           => $specItem->unit_of_measure,
+                'population_policy' => 'current_revision_only',
+                'revision_id' => $specItem->revision?->hash_id,
+                'revision_version' => $specItem->revision?->version !== null
+                    ? (int) $specItem->revision->version
+                    : null,
             ],
         ]);
     }

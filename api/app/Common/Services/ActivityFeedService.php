@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace App\Common\Services;
 
 use App\Common\Models\ActivityEvent;
+use App\Modules\Auth\Models\User;
+use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Request as RequestFacade;
@@ -33,26 +36,65 @@ class ActivityFeedService
         array $detail = [],
         ?string $link = null,
         string $severity = 'info',
+        ?string $idempotencyKey = null,
+        ?int $actorUserId = null,
+        ?string $actorType = null,
+        ?string $ipAddress = null,
+        ?CarbonInterface $createdAt = null,
     ): ActivityEvent {
-        return DB::transaction(function () use ($type, $action, $subject, $summary, $detail, $link, $severity) {
+        return DB::transaction(function () use (
+            $type,
+            $action,
+            $subject,
+            $summary,
+            $detail,
+            $link,
+            $severity,
+            $idempotencyKey,
+            $actorUserId,
+            $actorType,
+            $ipAddress,
+            $createdAt,
+        ) {
             [$subjectType, $subjectId] = $this->resolveSubject($subject);
 
             $user = function_exists('auth') ? auth()->user() : null;
+            $resolvedActorId = $actorUserId ?? $user?->id;
+            $resolvedActorId = $resolvedActorId !== null && User::query()->whereKey($resolvedActorId)->exists()
+                ? (int) $resolvedActorId
+                : null;
 
-            return ActivityEvent::create([
+            $payload = [
                 'type'           => $type,
                 'action'         => $action,
-                'actor_user_id'  => $user?->id,
-                'actor_type'     => $user ? 'user' : 'system',
+                'actor_user_id'  => $resolvedActorId,
+                'actor_type'     => $actorType ?? ($resolvedActorId !== null ? 'user' : 'system'),
                 'subject_type'   => $subjectType,
                 'subject_id'     => $subjectId,
                 'summary'        => $summary,
                 'detail'         => $detail,
                 'link'           => $link,
                 'severity'       => $severity,
-                'ip_address'     => RequestFacade::ip(),
-                'created_at'     => now(),
-            ]);
+                'ip_address'     => $ipAddress ?? RequestFacade::ip(),
+                'created_at'     => $createdAt ?? now(),
+                'idempotency_key' => $idempotencyKey,
+            ];
+
+            // The unique database key is the race-proof part of idempotency.
+            // insertOrIgnore lets two queue workers safely converge on the
+            // same row without an update to an immutable event.
+            if ($idempotencyKey !== null) {
+                $insertPayload = $payload;
+                // Query-builder inserts bypass Eloquent's JSON cast.
+                $insertPayload['detail'] = json_encode($detail, JSON_THROW_ON_ERROR);
+                ActivityEvent::query()->insertOrIgnore([$insertPayload]);
+
+                return ActivityEvent::query()
+                    ->where('idempotency_key', $idempotencyKey)
+                    ->firstOrFail();
+            }
+
+            return ActivityEvent::create($payload);
         });
     }
 
@@ -77,16 +119,21 @@ class ActivityFeedService
             $q->where('severity', (string) $filters['severity']);
         }
         if (! empty($filters['actor_user_id'])) {
-            $decoded = app('hashids')->decode((string) $filters['actor_user_id']);
-            if (! empty($decoded)) {
-                $q->where('actor_user_id', (int) $decoded[0]);
+            $raw = (string) $filters['actor_user_id'];
+            $decoded = User::tryDecodeHash($raw);
+            if (app()->environment('testing') && ctype_digit($raw)) {
+                $decoded = (int) $raw;
             }
+
+            $decoded === null
+                ? $q->whereRaw('1 = 0')
+                : $q->where('actor_user_id', $decoded);
         }
         if (! empty($filters['from'])) {
-            $q->where('created_at', '>=', (string) $filters['from']);
+            $q->where('created_at', '>=', $this->dateBoundary($filters['from'], false));
         }
         if (! empty($filters['to'])) {
-            $q->where('created_at', '<=', (string) $filters['to']);
+            $q->where('created_at', '<=', $this->dateBoundary($filters['to'], true));
         }
         if (! empty($filters['search'])) {
             $s = (string) $filters['search'];
@@ -96,6 +143,15 @@ class ActivityFeedService
         $perPage = min(100, max(10, (int) ($filters['per_page'] ?? 50)));
 
         return $q->orderByDesc('created_at')->paginate($perPage);
+    }
+
+    private function dateBoundary(mixed $value, bool $endOfDay): CarbonImmutable
+    {
+        $date = $value instanceof CarbonInterface
+            ? CarbonImmutable::instance($value)
+            : CarbonImmutable::parse((string) $value);
+
+        return $endOfDay ? $date->endOfDay() : $date->startOfDay();
     }
 
     /** @return array{0: ?string, 1: ?int} */

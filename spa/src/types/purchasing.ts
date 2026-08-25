@@ -1,5 +1,7 @@
 // Sprint 5 — Purchasing types.
 
+import type { Incoterm } from '@/types/supplyChain';
+
 export type PurchaseRequestStatus =
  | 'draft' | 'pending' | 'approved' | 'rejected' | 'converted' | 'cancelled';
 export type PurchaseRequestConversionStatus =
@@ -61,6 +63,18 @@ export interface PurchaseRequest {
  budget_warning_message?: string | null;
  budget_acknowledged_at?: string | null;
  total_estimated_amount: string;
+ actions?: {
+  can_view: boolean;
+  can_update: boolean;
+  can_delete: boolean;
+  can_submit: boolean;
+  can_cancel: boolean;
+  can_approve: boolean;
+  can_reject: boolean;
+  can_acknowledge_budget: boolean;
+  can_convert: boolean;
+  can_print: boolean;
+ };
  requester: { id: string; name: string } | null;
  department: { id: string; name: string; code: string } | null;
  template: { id: number; name: string } | null;
@@ -110,8 +124,8 @@ export interface CreatePurchaseRequestData {
 }
 
 export interface PurchaseOrderItem {
- id: number;
- purchase_request_item_id: number | null;
+ id: string;
+ purchase_request_item_id: string | null;
  item: { id: string; code: string; name: string; unit_of_measure: string };
  description: string;
  quantity: string;
@@ -136,6 +150,7 @@ export interface PurchaseOrder {
  is_billable?: boolean;
  requires_vp_approval: boolean;
  is_auto_generated: boolean;
+ incoterm: Incoterm | null;
  has_overdue_approval: boolean;
  current_approval_step: number;
  approved_at: string | null;
@@ -175,10 +190,12 @@ export interface CreatePurchaseOrderData {
  date?: string;
  expected_delivery_date?: string;
  is_vatable?: boolean;
+ incoterm?: Incoterm;
  remarks?: string;
  items: Array<{
- item_id: string;
- description: string;
+  item_id: string;
+  purchase_request_item_id?: string;
+  description: string;
  quantity: string;
  unit?: string;
  unit_price: string;

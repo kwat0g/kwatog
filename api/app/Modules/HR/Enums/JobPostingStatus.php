@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Enums;
 
+use App\Modules\HR\Support\RecruitmentPostingStateMachine;
+
 enum JobPostingStatus: string
 {
     case Draft  = 'draft';
@@ -23,12 +25,7 @@ enum JobPostingStatus: string
 
     public function canTransitionTo(self $target): bool
     {
-        return match ($this) {
-            self::Draft  => $target === self::Open,
-            self::Open   => in_array($target, [self::Closed, self::Filled], true),
-            self::Closed => $target === self::Open,
-            self::Filled => false,
-        };
+        return RecruitmentPostingStateMachine::canTransition($this, $target);
     }
 
     public static function values(): array

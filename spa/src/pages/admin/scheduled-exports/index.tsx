@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { LuTrash2, LuArchiveRestore } from '@/lib/icons';
+import { LuTrash2, LuArchiveRestore, LuPencil, LuPlus } from '@/lib/icons';
 import { scheduledExportsApi } from '@/api/exports';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -26,6 +26,7 @@ import type { ScheduledExport } from '@/types/exports';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { showUndoToast } from '@/lib/undoToast';
+import { ScheduledExportFormModal } from '@/components/exports/ScheduledExportFormModal';
 export default function ScheduledExportsPage() {
 const [filters, setFilters] = useUrlFilters<{ page: number; scope: ArchiveScope }>({
  page: 1,
@@ -34,8 +35,10 @@ const [filters, setFilters] = useUrlFilters<{ page: number; scope: ArchiveScope 
  const { page, scope } = filters;
  const setPage = (next: number) => setFilters((f) => ({ ...f, page: next }));
  const setScope = (next: ArchiveScope) => setFilters((f) => ({ ...f, scope: next, page: 1 }));
- const [deleteTarget, setDeleteTarget] = useState<ScheduledExport | null>(null);
- const [restoreTarget, setRestoreTarget] = useState<ScheduledExport | null>(null);
+const [deleteTarget, setDeleteTarget] = useState<ScheduledExport | null>(null);
+const [restoreTarget, setRestoreTarget] = useState<ScheduledExport | null>(null);
+ const [formOpen, setFormOpen] = useState(false);
+ const [editTarget, setEditTarget] = useState<ScheduledExport | null>(null);
  const queryClient = useQueryClient();
 
  const { data, isLoading, isError, refetch } = useQuery({
@@ -157,29 +160,45 @@ const [filters, setFilters] = useUrlFilters<{ page: number; scope: ArchiveScope 
  </LinkButton>
  ),
  },
-{
-  key: 'actions',
+ {
+ key: 'actions',
   header: '',
   align: 'right',
-  cell: (row) =>
-  scope === 'only' ? (
-  <Button
-  size="sm"
-  variant="ghost"
-  icon={<LuArchiveRestore size={14} />}
-  onClick={() => setRestoreTarget(row)}
-  >
-  Restore
-  </Button>
-  ) : (
-  <Button
-  size="sm"
-  variant="ghost"
-  icon={<LuTrash2 size={14} />}
-  onClick={() => setDeleteTarget(row)}
-  >
-  Archive
-  </Button>
+  cell: (row) => (
+  <div className="flex items-center justify-end gap-1">
+    {scope !== 'only' && (
+      <Button
+        size="sm"
+        variant="ghost"
+        icon={<LuPencil size={14} />}
+        onClick={() => {
+          setEditTarget(row);
+          setFormOpen(true);
+        }}
+      >
+        Edit
+      </Button>
+    )}
+    {scope === 'only' ? (
+      <Button
+        size="sm"
+        variant="ghost"
+        icon={<LuArchiveRestore size={14} />}
+        onClick={() => setRestoreTarget(row)}
+      >
+        Restore
+      </Button>
+    ) : (
+      <Button
+        size="sm"
+        variant="ghost"
+        icon={<LuTrash2 size={14} />}
+        onClick={() => setDeleteTarget(row)}
+      >
+        Archive
+      </Button>
+    )}
+  </div>
   ),
   },
   ];
@@ -189,6 +208,19 @@ const [filters, setFilters] = useUrlFilters<{ page: number; scope: ArchiveScope 
 <PageHeader
   title="Scheduled exports"
   subtitle={data ? `${data.meta.total} schedules` : undefined}
+  actions={
+    <Button
+      variant="primary"
+      size="sm"
+      icon={<LuPlus size={14} />}
+      onClick={() => {
+        setEditTarget(null);
+        setFormOpen(true);
+      }}
+    >
+      New schedule
+    </Button>
+  }
   />
 
   <div className="px-5 pt-4 flex justify-end">
@@ -257,6 +289,18 @@ const [filters, setFilters] = useUrlFilters<{ page: number; scope: ArchiveScope 
   if (restoreTarget) restoreMutation.mutate(restoreTarget.id);
   }}
   pending={restoreMutation.isPending}
+  />
+
+  <ScheduledExportFormModal
+    isOpen={formOpen}
+    onClose={() => {
+      setFormOpen(false);
+      setEditTarget(null);
+    }}
+    module={editTarget?.module ?? 'hr.employees'}
+    filters={editTarget?.filters}
+    initial={editTarget}
+    onSaved={() => queryClient.invalidateQueries({ queryKey: ['scheduled-exports'] })}
   />
  </div>
  );

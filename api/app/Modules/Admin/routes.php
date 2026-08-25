@@ -19,6 +19,7 @@ use App\Modules\Admin\Controllers\SettingsController;
 use App\Modules\Admin\Controllers\SodController;
 use App\Modules\Admin\Controllers\UserAdminController;
 use App\Modules\Admin\Controllers\UserPermissionOverrideController;
+use App\Modules\Admin\Middleware\RequireSystemAdmin;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('admin')
@@ -41,7 +42,9 @@ Route::prefix('admin')
             Route::get('roles/{role}', [RoleController::class, 'show'])->middleware('permission:admin.roles.manage');
             Route::put('roles/{role}', [RoleController::class, 'update'])->middleware('permission:admin.roles.manage');
             Route::delete('roles/{role}', [RoleController::class, 'destroy'])->middleware('permission:admin.roles.manage');
-            Route::patch('roles/{role}/restore', [RoleController::class, 'restore'])->middleware('permission:admin.roles.manage');
+            Route::patch('roles/{role}/restore', [RoleController::class, 'restore'])
+                ->middleware('permission:admin.roles.manage')
+                ->withTrashed();
             Route::put('roles/{role}/permissions', [RoleController::class, 'syncPermissions'])->middleware('permission:admin.roles.manage');
             // Series R — Task R1: clone an existing role into a new custom role.
             Route::post('roles/{role}/clone', [RoleController::class, 'clone'])->middleware('permission:admin.roles.manage');
@@ -50,13 +53,15 @@ Route::prefix('admin')
         });
 
         // Series R — Task R2: per-user permission overrides.
-        Route::middleware('permission:admin.users.manage_permissions')
+        Route::middleware([RequireSystemAdmin::class, 'permission:admin.users.manage_permissions'])
             ->prefix('users/{user}/overrides')
             ->group(function (): void {
                 Route::get('/', [UserPermissionOverrideController::class, 'index']);
                 Route::post('/', [UserPermissionOverrideController::class, 'store']);
-                Route::delete('{override}', [UserPermissionOverrideController::class, 'destroy']);
-                Route::patch('{override}/restore', [UserPermissionOverrideController::class, 'restore']);
+                Route::delete('{override}', [UserPermissionOverrideController::class, 'destroy'])
+                    ->withTrashed();
+                Route::patch('{override}/restore', [UserPermissionOverrideController::class, 'restore'])
+                    ->withTrashed();
             });
 
         // U2 — central user-management surface.
@@ -69,6 +74,7 @@ Route::prefix('admin')
                 // ADV — bulk role update. MUST be declared before `{user}` wildcard routes
                 // or the literal string `bulk-role` gets captured as a hash ID and 404s.
                 Route::patch('bulk-role', [UserAdminController::class, 'bulkChangeRole']);
+                Route::patch('{user}/profile', [UserAdminController::class, 'updateProfile']);
                 Route::get('{user}', [UserAdminController::class, 'show']);
                 Route::patch('{user}/unlock', [UserAdminController::class, 'unlock']);
                 Route::patch('{user}/deactivate', [UserAdminController::class, 'deactivate']);
@@ -156,6 +162,8 @@ Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired'])
     ->group(function (): void {
         Route::get('/', [DocumentController::class, 'index'])
             ->middleware('permission:admin.audit_logs.view');
+        Route::get('entity/{entityType}/{entityId}', [DocumentController::class, 'entityList'])
+            ->middleware('permission:hr.employees.documents.view');
         // NOTE: show/view/download are deliberately NOT gated by a blanket
         // permission — DocumentController::authorizeAccess() enforces per-document
         // access (confidentiality + ownership) so non-admin users can fetch their
@@ -198,13 +206,14 @@ Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired', 'permi
     });
 
 /*
- * Series E (E2) — Scheduled-export CRUD. Anyone with the view permission can
- * list + create their own; ownership-or-admin enforced inside the controller
- * for show/update/destroy.
+ * Series E (E2) — Scheduled-export CRUD. Any authenticated user can list and
+ * create schedules for a module they can export directly; ownership-or-admin
+ * is enforced inside the controller for show/update/destroy. The old blanket
+ * admin.scheduled_exports.view gate made the HR export flow impossible even
+ * though HR users had the direct export capability.
  */
 Route::middleware([
     'auth:sanctum', 'session.timeout', 'password.expired',
-    'permission:admin.scheduled_exports.view',
 ])
     ->prefix('scheduled-exports')
     ->group(function (): void {

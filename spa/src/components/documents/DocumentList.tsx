@@ -6,8 +6,8 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { LuEye, LuDownload } from '@/lib/icons';
-import { client } from '@/api/client';
 import { downloadAuthenticatedFile } from '@/api/download';
+import { documentsApi } from '@/api/documents';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { DataTable, NumCell, StackedCell, type Column } from '@/components/ui/DataTable';
@@ -15,15 +15,13 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { formatDateTime } from '@/lib/formatDate';
 import type { DocumentRecord } from '@/types/documents';
-import type { PaginatedResponse } from '@/types';
 import { PdfPreviewModal } from './PdfPreviewModal';
 
 interface DocumentListProps {
- /** Module-relative path that returns vault rows for an entity. Must
- * accept ?entity_type=...&entity_id=... in the query string. */
- endpoint?: string;
- /** Filters passed straight through to the listing endpoint. */
- filters?: Record<string, string | number | undefined>;
+ /** Canonical entity alias supported by the vault endpoint. */
+ entityType: 'employees';
+ /** Hash ID of the owning entity. */
+ entityId: string;
 }
 
 function formatBytes(n: number): string {
@@ -32,15 +30,12 @@ function formatBytes(n: number): string {
  return `${(n / 1024 / 1024).toFixed(2)} MB`;
 }
 
-export function DocumentList({ endpoint = '/documents', filters }: DocumentListProps) {
+export function DocumentList({ entityType, entityId }: DocumentListProps) {
  const [previewing, setPreviewing] = useState<DocumentRecord | null>(null);
 
  const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['documents', endpoint, filters],
- queryFn: () =>
- client
- .get<PaginatedResponse<DocumentRecord>>(endpoint, { params: filters })
- .then((r) => r.data),
+ queryKey: ['documents', entityType, entityId],
+ queryFn: () => documentsApi.listForEntity(entityType, entityId),
  placeholderData: (prev) => prev,
  });
 

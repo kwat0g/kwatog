@@ -6,6 +6,7 @@ namespace Tests\Feature\HR;
 
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Enums\EmployeeTrainingStatus;
+use App\Common\Services\SettingsService;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\EmployeeTraining;
@@ -74,5 +75,39 @@ class SelfServiceTrainingsTest extends TestCase
         $this->actingAs($user)
             ->getJson('/api/v1/hr/self-service/trainings')
             ->assertStatus(403);
+    }
+
+    public function test_history_limit_keeps_scheduled_training_and_caps_old_records(): void
+    {
+        $employee = Employee::factory()->create();
+        $user = User::factory()->create(['employee_id' => $employee->id]);
+        $training = Training::create([
+            'name' => 'Safety orientation', 'validity_months' => 12, 'is_active' => true,
+        ]);
+        app(SettingsService::class)->set('self_service.history_limit', 1);
+
+        foreach (['2026-08-01', '2026-08-02'] as $date) {
+            $row = EmployeeTraining::create([
+                'employee_id' => $employee->id,
+                'training_id' => $training->id,
+                'scheduled_for' => $date,
+            ]);
+            $row->forceFill(['status' => EmployeeTrainingStatus::Scheduled->value])->save();
+        }
+        foreach (['2026-07-01', '2026-07-02'] as $date) {
+            $row = EmployeeTraining::create([
+                'employee_id' => $employee->id,
+                'training_id' => $training->id,
+                'scheduled_for' => $date,
+            ]);
+            $row->forceFill(['status' => EmployeeTrainingStatus::Completed->value])->save();
+        }
+
+        $this->actingAs($user)
+            ->getJson('/api/v1/hr/self-service/trainings')
+            ->assertOk()
+            ->assertJsonCount(3, 'data')
+            ->assertJsonPath('data.0.status', EmployeeTrainingStatus::Scheduled->value)
+            ->assertJsonPath('data.1.status', EmployeeTrainingStatus::Scheduled->value);
     }
 }

@@ -58,7 +58,15 @@ id, key (string 100 unique), value (json), group (string 50), created_at, update
 id, user_id (FK users cascade), permission_id (FK permissions cascade), type (string 10: 'grant'|'revoke'), granted_by (FK users), reason (text), expires_at (timestamp nullable), created_at, updated_at, UNIQUE (user_id, permission_id), INDEX (expires_at), INDEX (user_id, type)
 
 ### activity_events (Series F — Task F7)
-id, type (string 30: transaction|approval|automation|alert|auth), action (string 50), actor_user_id (FK users nullable), actor_type (string 20: user|system), subject_type (string 100 nullable), subject_id (bigint nullable), summary (string 200), detail (json nullable), link (string 200 nullable), severity (string 10: info|success|warning|danger), ip_address (string 45 nullable), created_at, INDEX (created_at), INDEX (type), INDEX (actor_user_id), INDEX (subject_type, subject_id), INDEX (severity)
+id, type (string 30: transaction|approval|automation|alert|auth), action (string 50), actor_user_id (FK users nullable), actor_type (string 20: user|system), subject_type (string 100 nullable), subject_id (bigint nullable), summary (string 200), detail (json nullable), link (string 200 nullable), severity (string 10: info|success|warning|danger), ip_address (string 45 nullable), idempotency_key (string 128 nullable, UNIQUE), created_at, INDEX (created_at), INDEX (type), INDEX (actor_user_id), INDEX (subject_type, subject_id), INDEX (severity)
+
+Activity events are an append-only operational projection of canonical domain
+events and authentication audit rows. Eloquent guards and the PostgreSQL
+`activity_events_prevent_update` / `activity_events_prevent_delete` triggers
+reject mutation; producers converge on `idempotency_key` during outbox replay.
+Rows older than the shared 12-month policy are copied to
+`storage/app/activity-archives/activity-YYYY-MM.json.gz` by
+`activity:archive`; source rows remain available for integrity checks.
 
 > Per-user permission overrides. At runtime the effective permission set is `role.permissions + grants - revokes`, expired rows ignored. The runtime resolver lives in `User::getPermissionSlugsAttribute`. `system_admin` short-circuits before overrides are applied (deliberate policy: hard escape hatch).
 

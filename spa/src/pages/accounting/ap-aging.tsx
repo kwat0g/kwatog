@@ -8,10 +8,12 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 import { Td, Th, tableCls, theadTrCls, totalsTrCls, trCls } from '@/components/ui/table-cells';
 
 export default function ApAgingPage() {
+ const { can } = usePermission();
  const [asOf, setAsOf] = useState(new Date().toISOString().slice(0, 10));
 
  const { data, isLoading, isError, refetch } = useQuery({
@@ -24,14 +26,15 @@ export default function ApAgingPage() {
  <div>
  <PageHeader
  title="AP Aging"
- subtitle="Accounts Payable"
+ subtitle={data ? `Accounts Payable · Currency: ${data.currency}` : 'Accounts Payable'}
+ crumbLabel="AP Aging"
  backTo="/accounting/journal-entries"
  backLabel="Journal Entries"
- actions={
+ actions={can('accounting.statements.export') && (
  <div className="flex gap-1.5">
  <Button variant="secondary" size="sm" icon={<LuDownload size={14} />} onClick={() => void downloadAuthenticatedFile(statementsApi.csvUrl('ap-aging', { as_of: asOf }), { errorMessage: 'Failed to export AP aging.' })}>CSV</Button>
  </div>
- }
+ )}
  />
 
  <div className="px-5 py-3 border-b border-default flex items-end gap-3">
@@ -44,7 +47,8 @@ export default function ApAgingPage() {
  {data && data.by_vendor.length > 0 && (
  <div className="px-5 py-4">
  <div className="border border-default rounded-md overflow-hidden">
- <table className={tableCls}>
+ <div className="overflow-x-auto">
+ <table className={`${tableCls} min-w-[760px]`}>
  <thead>
  <tr className={theadTrCls}>
  <Th>Vendor</Th>
@@ -79,6 +83,7 @@ export default function ApAgingPage() {
  </tr>
  </tbody>
  </table>
+ </div>
  </div>
  </div>
  )}

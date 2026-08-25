@@ -45,7 +45,10 @@ class BudgetCheckAvailabilityAmountTest extends TestCase
     private function check(string $amount): TestResponse
     {
         $department = Department::factory()->create();
-        $fiscalYear = FiscalYear::factory()->create();
+        $fiscalYear = FiscalYear::factory()->create([
+            'start_date' => today()->startOfYear()->toDateString(),
+            'end_date' => today()->endOfYear()->toDateString(),
+        ]);
 
         Budget::factory()->create([
             'fiscal_year_id'  => $fiscalYear->id,

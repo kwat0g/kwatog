@@ -31,9 +31,24 @@ class Inspection extends Model
 {
     use HasAuditLog, HasFactory, HasHashId;
 
+    protected static function booted(): void
+    {
+        static::creating(function (self $inspection): void {
+            if ($inspection->inspection_spec_revision_id || ! $inspection->inspection_spec_id) {
+                return;
+            }
+
+            $spec = InspectionSpec::withTrashed()->find((int) $inspection->inspection_spec_id);
+            if ($spec) {
+                $inspection->inspection_spec_revision_id = $spec->ensureCurrentRevision()->id;
+            }
+        });
+    }
+
     protected $fillable = [
         'inspection_number', 'stage', 'status',
         'product_id', 'item_id', 'inspection_spec_id',
+        'inspection_spec_revision_id',
         'item_quality_plan_id', 'entity_type', 'entity_id', 'work_order_output_id', 'grn_item_id',
         'batch_quantity', 'accepted_quantity', 'sample_size',
         'aql_code', 'accept_count', 'reject_count', 'defect_count',
@@ -67,6 +82,11 @@ class Inspection extends Model
     public function spec(): BelongsTo
     {
         return $this->belongsTo(InspectionSpec::class, 'inspection_spec_id');
+    }
+
+    public function specRevision(): BelongsTo
+    {
+        return $this->belongsTo(InspectionSpecRevision::class, 'inspection_spec_revision_id');
     }
 
     public function qualityPlan(): BelongsTo

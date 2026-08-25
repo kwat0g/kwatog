@@ -31,14 +31,14 @@ class StoreSalesOrderRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'customer_id'              => ['required', 'integer', 'exists:customers,id'],
+            'customer_id'              => ['required', 'integer', Rule::exists('customers', 'id')->where(fn ($q) => $q->where('is_active', true)->whereNull('deleted_at'))],
             'date'                     => ['required', 'date'],
             'payment_terms_days'       => ['nullable', 'integer', 'min:0', 'max:365'],
             'delivery_terms'           => ['nullable', 'string', 'max:50'],
             'incoterm'                 => ['nullable', Rule::enum(Incoterm::class)],
             'notes'                    => ['nullable', 'string', 'max:2000'],
             'items'                    => ['required', 'array', 'min:1'],
-            'items.*.product_id'       => ['required', 'integer', 'exists:products,id'],
+            'items.*.product_id'       => ['required', 'integer', Rule::exists('products', 'id')->where(fn ($q) => $q->where('is_active', true)->whereNull('deleted_at'))],
             'items.*.quantity'         => ['required', 'decimal:0,2', 'min:0.01'],
             'items.*.delivery_date'    => ['required', 'date', 'after_or_equal:date'],
         ];

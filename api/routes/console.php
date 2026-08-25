@@ -56,6 +56,13 @@ Schedule::command('alerts:run')
     ->withoutOverlapping(10)
     ->onOneServer();
 
+// Retry failed critical-alert email handoffs without creating another alert
+// row. The delivery state on the alert supplies bounded backoff and recovery.
+Schedule::command('alerts:retry-critical-emails --limit=100')
+    ->everyFifteenMinutes()
+    ->withoutOverlapping(10)
+    ->onOneServer();
+
 // OGAMI-001 — Auto-relock reopened accounting periods that have been open for > 48h
 Schedule::call(function () {
     app(AccountingPeriodService::class)->relockStaleReopenedPeriods(48);
@@ -101,10 +108,10 @@ Schedule::command('payroll:reconcile-payslip-emails')
     ->withoutOverlapping(10)
     ->onOneServer();
 
-// A5 — Preventive maintenance evaluation runs the existing Sprint 8
-//      job; the new running-hours recompute runs daily before that job.
+// A5 — Recompute runtime before the 02:00 preventive-maintenance sweep so
+//      machine-hour schedules evaluate current hours, not yesterday's tally.
 Schedule::command('maintenance:recompute-hours')
-    ->dailyAt('06:30')
+    ->dailyAt('01:30')
     ->withoutOverlapping(120)
     ->onOneServer();
 
@@ -205,6 +212,21 @@ Schedule::command('exports:run-due')
     ->withoutOverlapping(120)
     ->onOneServer();
 
+// Durable queued-export attachments are retained for seven days so mail
+// retries and support investigations can still read them. The job is safe to
+// rerun and only removes artifacts older than that window.
+Schedule::command('exports:prune-artifacts --days=7')
+    ->dailyAt('03:00')
+    ->withoutOverlapping(120)
+    ->onOneServer();
+
+// Vault reconciliation is a read-only health report by default. Operations
+// may run documents:reconcile --delete-orphans after reviewing its output.
+Schedule::command('documents:reconcile')
+    ->dailyAt('03:15')
+    ->withoutOverlapping(120)
+    ->onOneServer();
+
 // Notification prune — delete read notifications older than 90 days.
 Schedule::command('notifications:prune --days=90')
     ->dailyAt('02:30')
@@ -229,6 +251,20 @@ Schedule::command('audit:prune --months=12')
     ->withoutOverlapping(120)
     ->onOneServer();
 
+// Resolved alerts are operational history, not an unbounded archive. The
+// command never removes an alert whose condition is still open.
+Schedule::command('alerts:prune --months=12')
+    ->monthlyOn(1, '04:10')
+    ->withoutOverlapping(120)
+    ->onOneServer();
+
+// Activity events are an append-only operational projection. Archive old
+// calendar months on the same retention cadence, but never delete source rows.
+Schedule::command('activity:archive --months=12')
+    ->monthlyOn(1, '04:05')
+    ->withoutOverlapping(120)
+    ->onOneServer();
+
 // OGAMI-018 — Daily full backup at 03:17 (off-peak, off-:00 to avoid the
 // global cron stampede). Wraps scripts/db-backup.sh plus the private-file
 // archive (gzip/tar + retention + optional S3). Backups underpin the restore
@@ -236,6 +272,14 @@ Schedule::command('audit:prune --months=12')
 Schedule::command('db:full-backup')
     ->dailyAt('03:17')
     ->withoutOverlapping(120)
+    ->onOneServer();
+
+// Recovery fence for a dead backup/restore worker. A restore that may have
+// replaced the database is deliberately left rollback-required by the service;
+// this sweep never clears that state automatically.
+Schedule::command('backup:reconcile-stale')
+    ->everyTenMinutes()
+    ->withoutOverlapping(10)
     ->onOneServer();
 
 // Keep scheduler evidence bounded without deleting a running/stuck record.

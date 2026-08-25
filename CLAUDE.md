@@ -101,35 +101,6 @@ Plus: **Quality** (specs, inspections, NCR, CoC at 4 chain touchpoints, not a mo
 5. JavaScript cannot read HTTP-only cookies → immune to XSS token theft
 ```
 
-```php
-// config/cors.php
-'supports_credentials' => true,
-'allowed_origins' => [env('FRONTEND_URL', 'http://localhost:3000')],
-
-// config/sanctum.php
-'stateful' => explode(',', env('SANCTUM_STATEFUL_DOMAINS', 'localhost,localhost:3000')),
-
-// config/session.php
-'driver' => 'database',
-'lifetime' => 30,
-'secure' => env('SESSION_SECURE_COOKIE', true),
-'http_only' => true,
-'same_site' => 'lax',
-```
-
-```typescript
-// spa/src/api/client.ts
-const client = axios.create({
-  baseURL: '/api/v1',
-  withCredentials: true,  // MANDATORY
-  headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-});
-
-// Before login:
-await axios.get('/sanctum/csrf-cookie', { withCredentials: true });
-await client.post('/auth/login', { email, password });
-```
-
 ### URL ID Obfuscation (HashIDs)
 
 **NEVER expose integer IDs in URLs or API responses.**
@@ -175,14 +146,10 @@ public function toArray($request) {
 
 ### Security Headers (Nginx)
 
-```nginx
-add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-add_header X-Frame-Options "DENY" always;
-add_header X-Content-Type-Options "nosniff" always;
-add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
-add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' ws: wss:;" always;
-```
+Required on every response: HSTS, `X-Frame-Options: DENY`, `X-Content-Type-Options`,
+`Referrer-Policy`, `Permissions-Policy`, and a CSP. Live values in
+`docker/nginx/security-headers-dev.conf` and `security-headers-prod.conf` — edit those,
+never inline headers into a server block.
 
 ### Rate Limiting & Account Protection
 
@@ -227,46 +194,11 @@ protected $casts = [
 
 ## FILE STRUCTURE
 
-```
-ogami-erp/
-├── CLAUDE.md
-├── docker-compose.yml
-├── docker/ (php/, nginx/, node/)
-├── Makefile
-├── api/                                    # Laravel 11
-│   ├── app/
-│   │   ├── Modules/                        # Modular Monolith
-│   │   │   ├── Auth/ HR/ Attendance/ Leave/ Payroll/ Loans/
-│   │   │   ├── Accounting/ Inventory/ Purchasing/ SupplyChain/
-│   │   │   ├── Production/ MRP/ CRM/ Quality/ Maintenance/ Dashboard/
-│   │   │   └── (each: Controllers/ Models/ Services/ Requests/ Resources/ Jobs/ routes.php)
-│   │   ├── Common/
-│   │   │   ├── Traits/ (HasHashId, HasAuditLog, HasApprovalWorkflow)
-│   │   │   ├── Services/ (ApprovalService, DocumentSequenceService, NotificationService)
-│   │   │   ├── Enums/
-│   │   │   └── Middleware/
-│   │   └── Providers/
-│   ├── database/migrations/ (numbered: 0001_, 0002_, ...)
-│   ├── database/seeders/
-│   ├── resources/views/pdf/                # DomPDF Blade templates
-│   ├── routes/api.php
-│   └── tests/
-└── spa/                                    # React 18 + TypeScript + Vite
-    ├── src/
-    │   ├── api/                            # Per-module Axios functions
-    │   ├── components/
-    │   │   ├── ui/                         # Base primitives
-    │   │   ├── chain/                      # ChainHeader, StageBreakdown, LinkedRecords
-    │   │   └── layout/                     # Sidebar, Topbar, PageHeader
-    │   ├── hooks/
-    │   ├── layouts/                        # AppLayout, AuthLayout, SelfServiceLayout
-    │   ├── pages/                          # Grouped by module
-    │   ├── stores/                         # Zustand (auth, theme, sidebar)
-    │   ├── types/
-    │   ├── lib/
-    │   └── styles/tokens.css               # CSS variables for design system
-    └── tailwind.config.ts
-```
+Two apps: `api/` (Laravel 11) and `spa/` (React 18 + Vite), plus `docker/`, `docs/`, `Makefile`.
+
+Only convention worth stating (the rest, run `ls`): every module under `api/app/Modules/<Name>/`
+gets its own `Controllers/ Models/ Services/ Requests/ Resources/ Jobs/ routes.php` — a new module
+that puts models or services anywhere else is wrong even if it works.
 
 ## URL ROUTING CONVENTION (Modular Monolith)
 
@@ -321,128 +253,25 @@ business module lives under a top-level path that names its umbrella module:
 
 ### PHP / Laravel
 
-```php
-declare(strict_types=1);
+Full templates in `docs/PATTERNS.md` — copy from there, don't improvise. The rules those
+templates encode (not obvious from reading one file):
 
-// Enums for ALL status/type fields
-enum EmployeeStatus: string {
-    case Active = 'active';
-    case OnLeave = 'on_leave';
-    case Resigned = 'resigned';
-    case Terminated = 'terminated';
-}
-
-// Models: fillable, casts, relationships, traits
-class Employee extends Model {
-    use HasFactory, SoftDeletes, HasHashId, HasAuditLog;
-
-    protected $fillable = [/* ... */];
-
-    protected $casts = [
-        'basic_monthly_salary' => 'decimal:2',
-        'daily_rate' => 'decimal:2',
-        'status' => EmployeeStatus::class,
-        'date_hired' => 'date',
-        'sss_no' => 'encrypted',
-        'tin' => 'encrypted',
-        'bank_account_no' => 'encrypted',
-    ];
-
-    public function department(): BelongsTo {
-        return $this->belongsTo(Department::class);
-    }
-}
-
-// Controllers: thin — delegate to Services
-class EmployeeController extends Controller {
-    public function __construct(private EmployeeService $service) {}
-
-    public function index(ListEmployeesRequest $request): AnonymousResourceCollection {
-        return EmployeeResource::collection($this->service->list($request->validated()));
-    }
-
-    public function store(StoreEmployeeRequest $request): EmployeeResource {
-        return new EmployeeResource($this->service->create($request->validated()));
-    }
-}
-
-// Services: ALL business logic
-class EmployeeService {
-    public function __construct(private DocumentSequenceService $sequences) {}
-
-    public function create(array $data): Employee {
-        return DB::transaction(function () use ($data) {
-            $data['employee_no'] = $this->sequences->generate('employee');
-            return Employee::create($data);
-        });
-    }
-}
-
-// Form Requests: validation + authorization
-class StoreEmployeeRequest extends FormRequest {
-    public function authorize(): bool {
-        return $this->user()->can('hr.employees.create');
-    }
-    public function rules(): array {
-        return [
-            'first_name' => ['required', 'string', 'max:100'],
-            'basic_monthly_salary' => ['nullable', 'decimal:0,2', 'min:0'],
-        ];
-    }
-}
-
-// API Resources: shape JSON, mask sensitive, return hash_id
-class EmployeeResource extends JsonResource {
-    public function toArray($request): array {
-        return [
-            'id' => $this->hash_id,
-            'employee_no' => $this->employee_no,
-            'full_name' => $this->full_name,
-            'sss_no' => $this->maskIfNotAuthorized($this->sss_no, $request->user(), 'hr.employees.view_sensitive'),
-            'department' => new DepartmentResource($this->whenLoaded('department')),
-        ];
-    }
-}
-```
+- `declare(strict_types=1);` at the top of every PHP file.
+- Enums for **all** status/type fields — never a bare string column.
+- Controllers are thin: constructor-inject the Service, return a Resource. **All** business
+  logic lives in the Service, wrapped in `DB::transaction()` when it touches money.
+- Authorization goes in the FormRequest's `authorize()`, never in the controller body.
+- Resources return `hash_id` and mask sensitive fields per-permission.
 
 ### TypeScript / React
 
-```typescript
-// Types match Laravel models
-interface Employee {
-  id: string;  // hash_id, always string
-  employee_no: string;
-  first_name: string;
-  last_name: string;
-  full_name: string;
-  status: 'active' | 'on_leave' | 'resigned' | 'terminated';
-  basic_monthly_salary: string;  // decimals come as strings
-  department: Department;
-}
+Full templates in `docs/PATTERNS.md`. Non-obvious parts:
 
-// API layer per module
-export const employeesApi = {
-  list: (params?: ListParams) => client.get<Paginated<Employee>>('/employees', { params }),
-  show: (id: string) => client.get<{ data: Employee }>(`/employees/${id}`),
-  create: (data: CreateEmployeeData) => client.post<{ data: Employee }>('/employees', data),
-  update: (id: string, data: UpdateEmployeeData) => client.put<{ data: Employee }>(`/employees/${id}`, data),
-  delete: (id: string) => client.delete(`/employees/${id}`),
-};
-
-// Pages use TanStack Query
-export default function EmployeeList() {
-  const { data, isLoading } = useQuery({
-    queryKey: ['employees', filters],
-    queryFn: () => employeesApi.list(filters).then(r => r.data),
-  });
-}
-
-// Forms use React Hook Form + Zod
-const schema = z.object({
-  first_name: z.string().min(1).max(100),
-  basic_monthly_salary: z.string().regex(/^\d+\.?\d{0,2}$/),
-});
-```
+- `id` is always a `string` (a HashID), never a number.
+- **Decimals arrive as strings**, not numbers — `basic_monthly_salary: string`. Parsing them
+  into JS floats reintroduces the rounding error `decimal(15,2)` exists to prevent.
+- Data fetching is TanStack Query; forms are React Hook Form + Zod with the Zod schema
+  mirroring the backend FormRequest rules.
 
 ### Database Conventions
 
@@ -643,22 +472,14 @@ Explicit `Event::listen($EventClass, [$ListenerClass, 'handle'])` in `AppService
 - `WidgetSeedIntegrityTest` is the drift guard: rich↔provider bijection, every row has a `link_path`, KPI widgets match `kpi_definitions`, KPI gates match `KpiSnapshotService::MODULE_PERMISSIONS`, and no role default references a widget that role cannot see.
 - Role defaults (`DashboardRoleLayoutSeeder`) are a UX seed, NOT an access decision. A leaky default is stripped at render, so it fails silently — the test above is what catches it.
 
-### Cron inventory (post-Track-3)
-```
-mrp:run-daily                            (06:00)
-alerts:run                               (every 15m)
-payroll:auto-create-period               (14th + last-day @ 23:00)
-approvals:run-escalations                (every 6h)
-purchasing:recompute-supplier-performance
-maintenance:generate-preventive          (02:00)
-assets:run-monthly-depreciation          (1st @ 03:00)
-ncr:escalate                             (every 15m)
-training:check-expiries                  (06:30)
-copq:snap-monthly                        (1st @ 02:30)
-kpi:compute-monthly                      (2nd @ 03:00 — the ONLY thing that fills kpi_snapshots, so every `kpi.*` widget reads one month behind)
-complaints:check-8d-slas                 (every 15m)
-docs:check-reviews                       (06:45)
-```
+### Cron inventory
+
+Authoritative list is `api/routes/console.php` (43 scheduled commands as of 2026-08-25) —
+read it rather than trusting a copy here. One scheduling gotcha worth knowing without looking:
+
+- `kpi:compute-monthly` (2nd @ 03:00) is the **only** thing that fills `kpi_snapshots`, so every
+  `kpi.*` dashboard widget reads one month behind. A "missing" KPI early in the month is expected,
+  not a bug.
 
 ### Migration numbering
 Recent additions use 4-digit numbered (`0186_*`, `0187_*`, …). Highest as of 2026-08-20 = **0474**. New migrations use highest+1. The sequence is contiguous through 0474: `0472_add_link_path_to_dashboard_widgets` used to be missing from `main` because it lived on an unmerged frontend branch, and that branch has now merged. Mixed timestamp-style migrations (`2026_06_09_*`, `2026_08_16_*`) coexist for older HR/Payroll changes and recent BOM-costing work — don't introduce more.
@@ -732,3 +553,17 @@ than Chrome, and worth using for anything crawl-shaped.
 Do not "fix" a geometry assertion to make it pass under Lightpanda — a passing
 `getBoundingClientRect` there is a fabricated number, so the test would assert
 nothing. Reach for Chromium instead.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live as GitHub issues in `kwat0g/kwatog`, driven by the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five-role vocabulary, label string equal to role name. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.

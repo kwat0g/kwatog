@@ -38,6 +38,7 @@ class EmailPayslipOnFinalizeTest extends TestCase
         Queue::fake();
 
         $period = PayrollPeriod::factory()->create();
+        $period->forceFill(['status' => 'finalized'])->saveQuietly();
         $employeeA = Employee::factory()->create(['email' => 'a@example.test']);
         $employeeB = Employee::factory()->create(['email' => null]);
         $payrollA = Payroll::factory()->create([
@@ -62,6 +63,7 @@ class EmailPayslipOnFinalizeTest extends TestCase
         Queue::fake();
 
         $period = PayrollPeriod::factory()->create();
+        $period->forceFill(['status' => 'finalized'])->saveQuietly();
         $employee = Employee::factory()->create(['email' => 'x@example.test']);
         Payroll::factory()->create([
             'payroll_period_id' => $period->id,
@@ -82,6 +84,7 @@ class EmailPayslipOnFinalizeTest extends TestCase
         Cache::forget('settings:payroll.payslip_email.enabled');
 
         $period = PayrollPeriod::factory()->create();
+        $period->forceFill(['status' => 'finalized'])->saveQuietly();
         $employee = Employee::factory()->create(['email' => 'y@example.test']);
         Payroll::factory()->create([
             'payroll_period_id' => $period->id,
@@ -91,5 +94,23 @@ class EmailPayslipOnFinalizeTest extends TestCase
         app(EmailPayslipPdfOnPayrollFinalized::class)->handle(new PayrollPeriodFinalized($period));
 
         Queue::assertNotPushed(SendPayslipEmailJob::class);
+    }
+
+    public function test_listener_does_not_queue_for_a_period_that_is_no_longer_publishable(): void
+    {
+        Queue::fake();
+
+        $period = PayrollPeriod::factory()->create();
+        $period->forceFill(['status' => 'voided'])->saveQuietly();
+        $employee = Employee::factory()->create(['email' => 'voided@example.test']);
+        $payroll = Payroll::factory()->create([
+            'payroll_period_id' => $period->id,
+            'employee_id' => $employee->id,
+        ]);
+
+        app(EmailPayslipPdfOnPayrollFinalized::class)->handle(new PayrollPeriodFinalized($period));
+
+        Queue::assertNotPushed(SendPayslipEmailJob::class);
+        $this->assertNotSame(Payroll::EMAIL_QUEUED, $payroll->fresh()->payslip_email_status);
     }
 }

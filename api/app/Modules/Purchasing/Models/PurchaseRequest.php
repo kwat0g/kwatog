@@ -7,6 +7,7 @@ namespace App\Modules\Purchasing\Models;
 use App\Common\Traits\HasApprovalWorkflow;
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
+use App\Common\Support\Money;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
 use App\Modules\MRP\Models\MrpPlan;
@@ -100,10 +101,23 @@ class PurchaseRequest extends Model
 
     public function totalEstimatedAmount(): string
     {
-        $total = (float) $this->items()
-            ->selectRaw('COALESCE(SUM(quantity * estimated_unit_price), 0) as total')
-            ->value('total');
-        return number_format($total, 2, '.', '');
+        $total = Money::zero();
+
+        $items = $this->relationLoaded('items')
+            ? $this->items
+            : $this->items()->get(['quantity', 'estimated_unit_price']);
+
+        foreach ($items as $item) {
+            $total = Money::add(
+                $total,
+                Money::mul(
+                    (string) $item->quantity,
+                    (string) ($item->estimated_unit_price ?? '0'),
+                ),
+            );
+        }
+
+        return $total;
     }
 
     public function markPoConversionPending(): bool

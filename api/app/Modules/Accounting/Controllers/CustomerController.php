@@ -68,7 +68,9 @@ class CustomerController
      */
     public function statementOfAccount(Customer $customer, Request $request): JsonResponse
     {
-        $asOf = $request->query('as_of');
+        $asOf = $request->validate([
+            'as_of' => ['sometimes', 'nullable', 'date_format:Y-m-d'],
+        ])['as_of'] ?? null;
 
         $result = $this->soa->forCustomer($customer, $asOf);
 

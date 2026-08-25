@@ -103,30 +103,28 @@ class NotificationService
 
         foreach ($users as $userId => $user) {
             // in_app is opt-OUT: it fires unless an explicit row disables it.
-            if (($prefs["{$userId}:in_app"] ?? true) === false) {
-                continue;
+            if (($prefs["{$userId}:in_app"] ?? true) !== false) {
+                $id = (string) Str::uuid();
+
+                $rows[] = [
+                    'id' => $id,
+                    'type' => $type,
+                    'notifiable_type' => $user::class,
+                    'notifiable_id' => $userId,
+                    'data' => $encoded,
+                    'read_at' => null,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+
+                $events[] = new UserNotificationCreated($userId, [
+                    'id' => $id,
+                    'type' => $type,
+                    'data' => $data,
+                    'read_at' => null,
+                    'created_at' => $now->toISOString(),
+                ]);
             }
-
-            $id = (string) Str::uuid();
-
-            $rows[] = [
-                'id' => $id,
-                'type' => $type,
-                'notifiable_type' => $user::class,
-                'notifiable_id' => $userId,
-                'data' => $encoded,
-                'read_at' => null,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ];
-
-            $events[] = new UserNotificationCreated($userId, [
-                'id' => $id,
-                'type' => $type,
-                'data' => $data,
-                'read_at' => null,
-                'created_at' => $now->toISOString(),
-            ]);
 
             // email is opt-IN: it requires an explicit enabled row plus a
             // usable address, so we never mail someone who never asked.
@@ -137,12 +135,14 @@ class NotificationService
             }
         }
 
-        if ($rows === []) {
+        if ($rows === [] && $emails === []) {
             return;
         }
 
         foreach (array_chunk($rows, self::INSERT_CHUNK) as $chunk) {
-            DB::table('notifications')->insert($chunk);
+            if ($chunk !== []) {
+                DB::table('notifications')->insert($chunk);
+            }
         }
 
         // Deferred: a rollback after this point must not leave a broadcast or

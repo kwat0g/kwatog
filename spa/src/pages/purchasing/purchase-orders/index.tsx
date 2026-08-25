@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
 import { LuPlus, LuPrinter } from '@/lib/icons';
 import { purchaseOrdersApi } from '@/api/purchasing/purchase-orders';
+import { vendorsApi } from '@/api/accounting/vendors';
 import { bulkPrint } from '@/api/print';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -60,6 +61,11 @@ export default function PurchaseOrdersListPage() {
   const { data: orderOptions } = useQuery({
     queryKey: ['purchasing', 'purchase-orders', 'options'],
     queryFn: purchaseOrdersApi.options,
+    staleTime: 5 * 60 * 1000,
+  });
+  const { data: vendors } = useQuery({
+    queryKey: ['accounting', 'vendors', { per_page: 100, is_active: 'true' }],
+    queryFn: () => vendorsApi.list({ per_page: 100, is_active: 'true' }),
     staleTime: 5 * 60 * 1000,
   });
   const statusLabels = new Map(
@@ -145,6 +151,15 @@ export default function PurchaseOrdersListPage() {
       options: [{ value: '', label: 'All' }, ...(orderOptions?.statuses ?? [])],
     },
     {
+      key: 'vendor_id',
+      label: 'Vendor',
+      type: 'select',
+      options: [
+        { value: '', label: 'All' },
+        ...(vendors?.data ?? []).map((vendor) => ({ value: vendor.id, label: vendor.name })),
+      ],
+    },
+    {
       key: 'requires_vp_approval',
       label: 'VP threshold',
       type: 'select',
@@ -152,6 +167,15 @@ export default function PurchaseOrdersListPage() {
         { value: '', label: 'All' },
         { value: 'true', label: 'Yes' },
         { value: 'false', label: 'No' },
+      ],
+    },
+    {
+      key: 'overdue',
+      label: 'Delivery',
+      type: 'select',
+      options: [
+        { value: '', label: 'All' },
+        { value: 'true', label: 'Overdue only' },
       ],
     },
   ];
@@ -180,6 +204,7 @@ export default function PurchaseOrdersListPage() {
         onSearch={(s) => setFilters((f) => ({ ...f, search: s, page: 1 }))}
         onFilter={(k, v) => setFilters((f) => ({ ...f, [k]: v, page: 1 }))}
         searchPlaceholder="Search PO number…"
+        dateRange={{ fromKey: 'from', toKey: 'to', label: 'PO date' }}
       />
       {isLoading && !data && <SkeletonTable columns={7} rows={6} />}
       {isError && (
@@ -292,7 +317,7 @@ function ApprovalQueue({
       items: overdue,
       note: 'Past expected delivery date',
       tone: 'text-danger',
-      href: '?status=sent',
+      href: '?status=&overdue=true',
     },
   ];
 

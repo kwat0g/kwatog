@@ -12,15 +12,19 @@ use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\TaxPolicyService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
+use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Enums\JournalEntryStatus;
 use App\Modules\Accounting\Events\InvoiceFinalized;
 use App\Modules\Accounting\Enums\VatClassification;
-use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Collection as InvoiceCollection;
+use App\Modules\Accounting\Models\CreditNoteApplication;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\InvoiceItem;
+use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\SupplyChain\Enums\DeliveryStatus;
+use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\Auth\Models\User;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -38,6 +42,8 @@ class InvoiceService
         private readonly AccountingPeriodService $periods,
         private readonly TaxPolicyService $taxPolicy,
         private readonly AccountingAccountPolicyService $accounts,
+        private readonly PostingAccountResolver $postingAccounts,
+        private readonly OfficialReceiptService $receipts,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -75,6 +81,7 @@ class InvoiceService
             'customer',
             'items.revenueAccount:id,code,name',
             'collections.cashAccount:id,code,name',
+            'collections.journalEntry:id,entry_number',
             'journalEntry:id,entry_number,date,status,total_debit,total_credit',
             // 2026-08-08 — compact O2C stepper: the upstream SO + delivery.
             'salesOrder:id,so_number',
@@ -98,9 +105,15 @@ class InvoiceService
             if ($lifecycle === 'prebill' && ! $by->hasPermission('accounting.invoices.prebill_approve')) {
                 throw new BusinessRuleException('You are not authorized to approve a prebill invoice.');
             }
-            $customer = Customer::findOrFail(
-                HashIdFilter::decode($data['customer_id'], Customer::class),
-            );
+            $customerId = HashIdFilter::decode($data['customer_id'], Customer::class);
+            if (! $customerId) {
+                throw new BusinessRuleException('Invalid customer selected for invoice.');
+            }
+            $customer = Customer::query()->lockForUpdate()->find($customerId);
+            if (! $customer) {
+                throw new BusinessRuleException('Selected customer no longer exists.');
+            }
+            $source = $this->resolveSourceChain($data, $customer);
             $classification = $this->resolveClassification($data);
             $isVatable = $classification === VatClassification::Vatable;
             [$items, $subtotal] = $this->normalizeItems($data['items'] ?? []);
@@ -113,12 +126,8 @@ class InvoiceService
                 'customer_id'    => $customer->id,
                 // C-2 — Persist optional SO/Delivery linkage when supplied so
                 // finalize() can promote the parent SO to 'invoiced'.
-                'sales_order_id' => isset($data['sales_order_id'])
-                    ? HashIdFilter::decode($data['sales_order_id'], \App\Modules\CRM\Models\SalesOrder::class)
-                    : null,
-                'delivery_id'    => isset($data['delivery_id'])
-                    ? HashIdFilter::decode($data['delivery_id'], \App\Modules\SupplyChain\Models\Delivery::class)
-                    : null,
+                'sales_order_id' => $source['sales_order_id'],
+                'delivery_id'    => $source['delivery_id'],
                 'lifecycle_type' => $lifecycle,
                 'prebill_approved_by' => $lifecycle === 'prebill' ? $by->id : null,
                 'prebill_approved_at' => $lifecycle === 'prebill' ? now() : null,
@@ -153,42 +162,45 @@ class InvoiceService
 
     public function update(Invoice $invoice, array $data, User $by): Invoice
     {
-        if ($invoice->status !== InvoiceStatus::Draft) {
-            throw new BusinessRuleException('Only draft invoices can be edited.');
-        }
-
         return DB::transaction(function () use ($invoice, $data) {
-            $classification = $this->resolveClassification($data, $invoice);
+            // Re-read the aggregate under lock. A route-bound draft can be
+            // stale after a concurrent finalize or cancel.
+            $lockedInvoice = Invoice::query()->lockForUpdate()->findOrFail($invoice->getKey());
+            if ($lockedInvoice->status !== InvoiceStatus::Draft) {
+                throw new BusinessRuleException('Only draft invoices can be edited.');
+            }
+
+            $classification = $this->resolveClassification($data, $lockedInvoice);
             $isVatable = $classification === VatClassification::Vatable;
             [$items, $subtotal] = $this->normalizeItems($data['items'] ?? []);
             $discount = $this->normalizeDiscount(
-                $data['senior_pwd_discount'] ?? (string) $invoice->senior_pwd_discount,
+                $data['senior_pwd_discount'] ?? (string) $lockedInvoice->senior_pwd_discount,
                 $subtotal,
             );
             [$vat, $total] = $this->computeTotals($classification, $subtotal, $discount);
 
-            $invoice->update([
-                'date'         => $data['date']     ?? $invoice->date,
-                'due_date'     => $data['due_date'] ?? $invoice->due_date,
+            $lockedInvoice->update([
+                'date'         => $data['date']     ?? $lockedInvoice->date,
+                'due_date'     => $data['due_date'] ?? $lockedInvoice->due_date,
                 'is_vatable'   => $isVatable,
                 'vat_classification'  => $classification,
                 'subtotal'     => $subtotal,
                 'vat_amount'   => $vat,
                 'senior_pwd_discount' => $discount,
-                'buyer_tin'    => $data['buyer_tin']    ?? $invoice->buyer_tin,
-                'atp_number'   => $data['atp_number']   ?? $invoice->atp_number,
-                'serial_range' => $data['serial_range'] ?? $invoice->serial_range,
-                'is_original'  => array_key_exists('is_original', $data) ? (bool) $data['is_original'] : $invoice->is_original,
+                'buyer_tin'    => $data['buyer_tin']    ?? $lockedInvoice->buyer_tin,
+                'atp_number'   => $data['atp_number']   ?? $lockedInvoice->atp_number,
+                'serial_range' => $data['serial_range'] ?? $lockedInvoice->serial_range,
+                'is_original'  => array_key_exists('is_original', $data) ? (bool) $data['is_original'] : $lockedInvoice->is_original,
                 'total_amount' => $total,
                 'balance'      => $total, // no payments yet on a draft
-                'remarks'      => $data['remarks'] ?? $invoice->remarks,
+                'remarks'      => $data['remarks'] ?? $lockedInvoice->remarks,
             ]);
 
-            InvoiceItem::where('invoice_id', $invoice->id)->forceDelete();
+            InvoiceItem::where('invoice_id', $lockedInvoice->id)->forceDelete();
             foreach ($items as $row) {
-                InvoiceItem::create(array_merge($row, ['invoice_id' => $invoice->id]));
+                InvoiceItem::create(array_merge($row, ['invoice_id' => $lockedInvoice->id]));
             }
-            return $this->show($invoice->fresh());
+            return $this->show($lockedInvoice->fresh());
         });
     }
 
@@ -215,17 +227,18 @@ class InvoiceService
             // distinct, explicitly approved lifecycle and never masquerades
             // as a delivered sale.
             if (($lockedInvoice->lifecycle_type ?? 'standard') === 'standard') {
-                $delivery = $lockedInvoice->delivery_id
-                    ? \App\Modules\SupplyChain\Models\Delivery::query()->with('items')->find($lockedInvoice->delivery_id)
+                $source = $this->lockSourceChain($lockedInvoice);
+                $delivery = $source['delivery']
+                    ? $source['delivery']->load('items')
                     : null;
-                if (! $lockedInvoice->sales_order_id || ! $delivery || $delivery->status !== \App\Modules\SupplyChain\Enums\DeliveryStatus::Confirmed) {
+                if (! $lockedInvoice->sales_order_id || ! $delivery || $delivery->status !== DeliveryStatus::Confirmed) {
                     throw new BusinessRuleException('A standard sales-order invoice requires a confirmed delivered quantity. Use the approved prebill lifecycle for prebilling.');
                 }
                 $this->assertInvoiceMatchesConfirmedDelivery($lockedInvoice, $delivery);
             }
 
-            $arId        = $this->accountId($this->accounts->ar());
-            $vatOutputId = $this->accountId($this->accounts->vatOutput());
+            $arId        = $this->configuredAccountId($this->accounts->ar(), AccountType::Asset);
+            $vatOutputId = $this->configuredAccountId($this->accounts->vatOutput(), AccountType::Liability);
 
             $lines = [];
             $lines[] = [
@@ -235,6 +248,7 @@ class InvoiceService
                 'description'=> "AR — {$lockedInvoice->customer->name}",
             ];
             foreach ($lockedInvoice->items as $item) {
+                $this->postingAccounts->assertTypes((int) $item->revenue_account_id, AccountType::Revenue);
                 $lines[] = [
                     'account_id' => $item->revenue_account_id,
                     'debit'      => '0.00',
@@ -325,12 +339,19 @@ class InvoiceService
                 $lockedInvoice->loadMissing('journalEntry');
                 $je = $lockedInvoice->journalEntry;
                 if ($je && $je->status === JournalEntryStatus::Posted) {
-                    $this->journals->reverse($je, $by);
+                    $this->journals->reverse(
+                        $je,
+                        $by,
+                        now(),
+                        "Invoice {$lockedInvoice->invoice_number} cancellation",
+                    );
                 }
             }
             $lockedInvoice->update([
-                'status'  => InvoiceStatus::Cancelled,
-                'balance' => Money::zero(),
+                'status'       => InvoiceStatus::Cancelled,
+                'balance'      => Money::zero(),
+                'cancelled_at' => now(),
+                'cancelled_by' => $by->id,
             ]);
             return $lockedInvoice->fresh();
         });
@@ -347,19 +368,43 @@ class InvoiceService
             $lockedInvoice = Invoice::query()
                 ->lockForUpdate()
                 ->findOrFail($invoice->getKey());
-            if (in_array($lockedInvoice->status, [InvoiceStatus::Draft, InvoiceStatus::Cancelled, InvoiceStatus::Paid], true)) {
-                throw new BusinessRuleException("Cannot record a collection while invoice status is {$lockedInvoice->status->value}.");
-            }
             if (Money::lte($amount, '0')) {
                 throw new BusinessRuleException('Amount must be > 0.');
             }
-            if (Money::gt($amount, (string) $lockedInvoice->balance)) {
-                throw new BusinessRuleException("Amount {$amount} exceeds outstanding balance " . $lockedInvoice->balance . '.');
+
+            $cashAccountId = $this->postingAccounts->idForTypes($data['cash_account_id'], AccountType::Asset);
+
+            $idempotencyKey = isset($data['idempotency_key'])
+                ? trim((string) $data['idempotency_key'])
+                : null;
+            if ($idempotencyKey === '') {
+                $idempotencyKey = null;
+            }
+            if ($idempotencyKey !== null) {
+                $existing = InvoiceCollection::query()
+                    ->where('idempotency_key', $idempotencyKey)
+                    ->lockForUpdate()
+                    ->first();
+                if ($existing) {
+                    if ((int) $existing->invoice_id !== (int) $lockedInvoice->id) {
+                        throw new BusinessRuleException('This idempotency key is already used for another invoice.');
+                    }
+                    if (Money::cmp((string) $existing->amount, $amount) !== 0
+                        || (int) $existing->cash_account_id !== $cashAccountId
+                        || $existing->collection_date->toDateString() !== (string) $data['collection_date']
+                        || $existing->payment_method?->value !== (string) $data['payment_method']) {
+                        throw new BusinessRuleException('The idempotency key was already used with a different collection payload.');
+                    }
+
+                    return $existing->fresh(['cashAccount', 'journalEntry', 'officialReceipt']);
+                }
             }
 
-            $cashAccountId = HashIdFilter::decode($data['cash_account_id'], Account::class);
-            if (! $cashAccountId) {
-                throw new BusinessRuleException('Invalid cash account.');
+            if (in_array($lockedInvoice->status, [InvoiceStatus::Draft, InvoiceStatus::Cancelled, InvoiceStatus::Paid], true)) {
+                throw new BusinessRuleException("Cannot record a collection while invoice status is {$lockedInvoice->status->value}.");
+            }
+            if (Money::gt($amount, (string) $lockedInvoice->balance)) {
+                throw new BusinessRuleException("Amount {$amount} exceeds outstanding balance " . $lockedInvoice->balance . '.');
             }
 
             $coll = InvoiceCollection::create([
@@ -369,10 +414,11 @@ class InvoiceService
                 'amount'           => $amount,
                 'payment_method'   => $data['payment_method'],
                 'reference_number' => $data['reference_number'] ?? null,
+                'idempotency_key'  => $idempotencyKey,
                 'created_by'       => $by->id,
             ]);
 
-            $arId = $this->accountId($this->accounts->ar());
+            $arId = $this->configuredAccountId($this->accounts->ar(), AccountType::Asset);
             $je = $this->journals->create([
                 'date'           => $coll->collection_date->toDateString(),
                 'description'    => "Collection for Invoice {$lockedInvoice->invoice_number}",
@@ -385,6 +431,7 @@ class InvoiceService
             ], $by);
             $je = $this->journals->post($je, $by);
             $coll->update(['journal_entry_id' => $je->id]);
+            $this->receipts->issueForCollection($coll->fresh(['invoice']), $by);
 
             $newPaid    = Money::add((string) $lockedInvoice->amount_paid, $amount);
             $newBalance = Money::sub((string) $lockedInvoice->total_amount, $newPaid);
@@ -403,26 +450,72 @@ class InvoiceService
                 auth()->user(),
             );
 
-            return $coll->fresh(['cashAccount']);
+            return $coll->fresh(['cashAccount', 'journalEntry', 'officialReceipt']);
         });
     }
 
     public function aging(?Carbon $asOf = null): array
     {
-        $asOf = $asOf ?? now();
+        $asOf = ($asOf ?? now())->copy();
+        $cutoff = $asOf->copy()->endOfDay();
         $rows = Invoice::query()
             ->with('customer:id,name')
-            ->whereIn('status', [InvoiceStatus::Finalized, InvoiceStatus::Partial])
+            ->whereDate('date', '<=', $asOf->toDateString())
+            ->where(function ($query) use ($cutoff): void {
+                $query
+                    ->whereIn('status', [InvoiceStatus::Finalized, InvoiceStatus::Partial, InvoiceStatus::Paid])
+                    ->orWhere(function ($cancelled) use ($cutoff): void {
+                        $cancelled
+                            ->where('status', InvoiceStatus::Cancelled)
+                            ->whereNotNull('cancelled_at')
+                            ->where('cancelled_at', '>', $cutoff);
+                    });
+            })
             ->orderBy('customer_id')
             ->get();
+
+        $invoiceIds = $rows->modelKeys();
+        $collectionRows = InvoiceCollection::query()
+            ->whereIn('invoice_id', $invoiceIds)
+            ->get(['invoice_id', 'amount', 'collection_date']);
+        $collectionHistory = $collectionRows->groupBy('invoice_id');
+        $collected = $collectionHistory
+            ->map(fn ($items): string => Money::add(
+                ...$items
+                    ->filter(fn ($item): bool => $item->collection_date->lte($cutoff))
+                    ->pluck('amount')
+                    ->all(),
+            ));
+        $credited = CreditNoteApplication::query()
+            ->whereIn('invoice_id', $invoiceIds)
+            ->where('created_at', '<=', $cutoff)
+            ->get(['invoice_id', 'amount'])
+            ->groupBy('invoice_id')
+            ->map(static fn ($items): string => Money::add(...$items->pluck('amount')->all()));
 
         $buckets = ['current' => '0.00', 'd1_30' => '0.00', 'd31_60' => '0.00', 'd61_90' => '0.00', 'd91_plus' => '0.00', 'total' => '0.00'];
         $byCustomer = [];
 
         foreach ($rows as $inv) {
-            $bucket = $inv->agingBucket($asOf);
-            $balance = (string) $inv->balance;
-            if (! isset($buckets[$bucket])) continue; // safety
+            $settled = Money::add(
+                (string) ($collected[$inv->id] ?? Money::zero()),
+                (string) ($credited[$inv->id] ?? Money::zero()),
+            );
+            if (Money::isZero($settled)
+                && ! isset($collectionHistory[$inv->id])
+                && in_array($inv->status, [InvoiceStatus::Partial, InvoiceStatus::Paid], true)
+                && $inv->updated_at?->lte($cutoff)) {
+                // Legacy/manual fixtures may have amount_paid without child
+                // collection rows. Use that snapshot only when it existed by
+                // the cutoff; once event rows exist, the event history wins.
+                $settled = (string) $inv->amount_paid;
+            }
+            $balance = Money::clampMin(Money::sub((string) $inv->total_amount, $settled), Money::zero());
+            if (Money::isZero($balance)) {
+                continue;
+            }
+
+            $bucket = $this->agingBucketAt($inv, $asOf);
             $buckets[$bucket] = Money::add($buckets[$bucket], $balance);
             $buckets['total'] = Money::add($buckets['total'], $balance);
 
@@ -443,7 +536,27 @@ class InvoiceService
             $byCustomer[$cid]['total'] = Money::add($byCustomer[$cid]['total'], $balance);
         }
 
-        return ['buckets' => $buckets, 'by_customer' => array_values($byCustomer)];
+        return [
+            'as_of' => $asOf->toDateString(),
+            'buckets' => $buckets,
+            'by_customer' => array_values($byCustomer),
+        ];
+    }
+
+    private function agingBucketAt(Invoice $invoice, Carbon $asOf): string
+    {
+        if (! $invoice->due_date || $invoice->due_date->toDateString() >= $asOf->toDateString()) {
+            return 'current';
+        }
+
+        $days = $invoice->due_date->diffInDays($asOf->copy()->startOfDay(), true);
+
+        return match (true) {
+            $days <= 30 => 'd1_30',
+            $days <= 60 => 'd31_60',
+            $days <= 90 => 'd61_90',
+            default => 'd91_plus',
+        };
     }
 
     /**
@@ -473,10 +586,10 @@ class InvoiceService
         }
         $rows = []; $subtotal = Money::zero();
         foreach ($rawItems as $raw) {
-            $accountId = HashIdFilter::decode($raw['revenue_account_id'] ?? null, Account::class);
-            if (! $accountId) {
-                throw new BusinessRuleException('Invalid revenue account selected on invoice item.');
-            }
+            $accountId = $this->postingAccounts->idForTypes(
+                $raw['revenue_account_id'] ?? null,
+                AccountType::Revenue,
+            );
             $qty   = Money::round2((string) $raw['quantity']);
             $price = Money::round2((string) $raw['unit_price']);
             $total = Money::round2(bcmul($qty, $price, 4));
@@ -529,18 +642,82 @@ class InvoiceService
         }
     }
 
-    private function accountId(string $code): int
+    private function configuredAccountId(string $code, AccountType $type): int
     {
-        $id = Account::query()->where('code', $code)->value('id');
-        if (! $id) {
-            // Deliberately NOT a BusinessRuleException: $code comes from the
-            // accounting settings / COA seed, never from the request. A user
-            // told "AR account 1200 not found" can do nothing about it, and
-            // dressing a broken chart of accounts as a 422 would hide a real
-            // deployment fault behind a form error.
-            throw new RuntimeException("Required account {$code} not found in COA.");
+        return $this->postingAccounts->configuredIdByCode($code, $type);
+    }
+
+    /**
+     * Resolve and lock the invoice's source chain before persisting it. The
+     * customer is authoritative on the invoice; source records may not be
+     * combined across customers or across sales orders.
+     *
+     * @return array{sales_order_id:?int, delivery_id:?int}
+     */
+    private function resolveSourceChain(array $data, Customer $customer): array
+    {
+        $salesOrderId = $this->decodeSourceId($data['sales_order_id'] ?? null, SalesOrder::class);
+        $deliveryId = $this->decodeSourceId($data['delivery_id'] ?? null, Delivery::class);
+        if ($deliveryId !== null && $salesOrderId === null) {
+            throw new BusinessRuleException('A delivery invoice must identify its sales order.');
         }
-        return (int) $id;
+
+        if ($salesOrderId !== null) {
+            $salesOrder = SalesOrder::query()->lockForUpdate()->find($salesOrderId);
+            if (! $salesOrder) {
+                throw new BusinessRuleException('Selected sales order no longer exists.');
+            }
+            if ((int) $salesOrder->customer_id !== (int) $customer->id) {
+                throw new BusinessRuleException('Invoice customer must match the selected sales order customer.');
+            }
+        }
+
+        if ($deliveryId !== null) {
+            $delivery = Delivery::query()->lockForUpdate()->find($deliveryId);
+            if (! $delivery || (int) $delivery->sales_order_id !== $salesOrderId) {
+                throw new BusinessRuleException('Selected delivery does not belong to the selected sales order.');
+            }
+        }
+
+        return ['sales_order_id' => $salesOrderId, 'delivery_id' => $deliveryId];
+    }
+
+    /**
+     * Re-lock the persisted source chain during finalization so a stale draft
+     * cannot be finalized after its customer/order relationship changes.
+     *
+     * @return array{sales_order:?SalesOrder, delivery:?Delivery}
+     */
+    private function lockSourceChain(Invoice $invoice): array
+    {
+        $salesOrder = null;
+        $delivery = null;
+        if ($invoice->sales_order_id) {
+            $salesOrder = SalesOrder::query()->lockForUpdate()->find($invoice->sales_order_id);
+            if (! $salesOrder || (int) $salesOrder->customer_id !== (int) $invoice->customer_id) {
+                throw new BusinessRuleException('Invoice customer no longer matches its sales order.');
+            }
+        }
+        if ($invoice->delivery_id) {
+            $delivery = Delivery::query()->lockForUpdate()->find($invoice->delivery_id);
+            if (! $delivery || (int) $delivery->sales_order_id !== (int) $invoice->sales_order_id) {
+                throw new BusinessRuleException('Invoice delivery no longer belongs to its sales order.');
+            }
+        }
+
+        return ['sales_order' => $salesOrder, 'delivery' => $delivery];
+    }
+
+    private function decodeSourceId(mixed $value, string $modelClass): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        $id = is_numeric($value) ? (int) $value : HashIdFilter::decode((string) $value, $modelClass);
+        if (! $id) {
+            throw new BusinessRuleException('Invalid source document selected for invoice.');
+        }
+        return $id;
     }
 
     /**
@@ -611,6 +788,6 @@ class InvoiceService
     /** OGAMI-008 — account debited for the Senior/PWD discount contra-revenue line. */
     private function discountAccountId(): int
     {
-        return $this->accountId($this->accounts->discount());
+        return $this->configuredAccountId($this->accounts->discount(), AccountType::Revenue);
     }
 }

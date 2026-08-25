@@ -13,7 +13,7 @@ export interface UploadProofData {
  proof_type: ProofType;
  bank_name?: string;
  transaction_reference?: string;
- disbursed_amount?: number;
+ disbursed_amount: string;
  disbursement_date: string;
  notes?: string;
 }
@@ -78,6 +78,13 @@ export const periodsApi = {
      .get<{ data: BankFilePreview }>(`/payroll-periods/${id}/bank-file/preview`, {
        params: format ? { format } : undefined,
      })
+     .then((r) => r.data.data),
+ bankFileGenerate: (id: string, format?: string) =>
+   client
+     .post<ApiSuccess<{ id: string; format: string; record_count: number; total_amount: string }>>(
+       `/payroll-periods/${id}/bank-file`,
+       format ? { format } : {},
+     )
      .then((r) => r.data.data),
  bankFileUrl: (id: string, format?: string) =>
  `/api/v1/payroll-periods/${id}/bank-file${format ? `?format=${encodeURIComponent(format)}` : ''}`,

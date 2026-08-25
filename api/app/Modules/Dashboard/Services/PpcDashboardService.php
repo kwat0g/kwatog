@@ -38,30 +38,21 @@ class PpcDashboardService
     public function ppc(User $user): array
     {
         return Cache::remember("dashboard:ppc:{$user->id}", self::CACHE_TTL, function () use ($user) {
-            $activeWos    = $this->safeCount('work_orders', fn ($q) => $q->whereIn('status', [
-                WorkOrderStatus::Planned->value,
-                WorkOrderStatus::Confirmed->value,
-                WorkOrderStatus::InProgress->value,
-                WorkOrderStatus::Paused->value,
-            ]));
-            $shortages    = $this->safeCount('purchase_requests', fn ($q) => $q->where('is_auto_generated', true)->where('status', 'pending'));
-            $breakdowns   = $this->safeCount('machine_downtimes', fn ($q) => $q->whereNull('end_time')->where('category', 'breakdown'));
-            $moldsAtLimit = $this->moldsNearingLimit();
-
-            $mrpLastRun   = $this->mrpLastRun();
-            $unplannedWos = $this->unplannedWorkOrders();
-            $capacityUsed = $this->capacityUtilization();
-
             return [
                 'kpis' => $this->gate->kpis($user, [
-                    ['production.work_orders.view', fn () => $this->kpi('Active WOs',         (string) $activeWos,    'count')],
+                    ['production.work_orders.view', fn () => $this->kpi('Active WOs', (string) $this->safeCount('work_orders', fn ($q) => $q->whereIn('status', [
+                        WorkOrderStatus::Planned->value,
+                        WorkOrderStatus::Confirmed->value,
+                        WorkOrderStatus::InProgress->value,
+                        WorkOrderStatus::Paused->value,
+                    ])), 'count')],
                     // Sourced from auto-generated PRs but read as MRP's shortage
                     // signal — the same gate `mrp.shortages` uses. ppc_head holds
                     // no purchasing grant, and does not need one to see that
                     // material is short.
-                    ['mrp.plans.view',              fn () => $this->kpi('Material Shortages',  (string) $shortages,   'count')],
-                    ['mrp.view',                    fn () => $this->kpi('Capacity Used',       $capacityUsed,          'pct')],
-                    ['mrp.molds.view',              fn () => $this->kpi('Molds ≥ '.round($this->settings->requiredFloat('alerts.mold.warning_ratio', 0, 1) * 100, 1).'%', (string) $moldsAtLimit, 'count')],
+                    ['mrp.plans.view', fn () => $this->kpi('Material Shortages', (string) $this->safeCount('purchase_requests', fn ($q) => $q->where('is_auto_generated', true)->where('status', 'pending')), 'count')],
+                    ['mrp.view', fn () => $this->kpi('Capacity Used', $this->capacityUtilization(), 'pct')],
+                    ['mrp.molds.view', fn () => $this->kpi('Molds ≥ '.round($this->settings->requiredFloat('alerts.mold.warning_ratio', 0, 1) * 100, 1).'%', (string) $this->moldsNearingLimit(), 'count')],
                 ]),
                 'panels' => $this->gate->panels($user, [
                     'chain_stages'         => ['dashboard.view_bottlenecks',   fn () => $this->chainStageBreakdown()],
@@ -71,8 +62,8 @@ class PpcDashboardService
                     // that would have stripped the machine panels from the role
                     // that schedules the machines.
                     'machine_util'         => ['mrp.machines.view',            fn () => $this->machineUtilization()],
-                    'mrp_last_run'         => ['mrp.plans.view',               fn () => $mrpLastRun],
-                    'unplanned_wos'        => ['production.work_orders.view',  fn () => $unplannedWos],
+                    'mrp_last_run'         => ['mrp.plans.view',               fn () => $this->mrpLastRun()],
+                    'unplanned_wos'        => ['production.work_orders.view',  fn () => $this->unplannedWorkOrders()],
                     'production_gantt'     => ['production.schedule.view',     fn () => $this->productionGantt()],
                     'mrp_shortages'        => ['mrp.plans.view',               fn () => $this->ppcMrpShortages()],
                     'machine_availability' => ['mrp.machines.view',            fn () => $this->machineAvailabilityGrid()],
@@ -87,17 +78,12 @@ class PpcDashboardService
     public function accounting(User $user): array
     {
         return Cache::remember("dashboard:accounting:{$user->id}", self::CACHE_TTL, function () use ($user) {
-            $cashBalance = $this->cashBalance();
-            $arOpen      = $this->safeSum('invoices', 'balance', fn ($q) => $q->whereIn('status', [InvoiceStatus::Finalized->value, InvoiceStatus::Partial->value]));
-            $apOpen      = $this->safeSum('bills',    'balance', fn ($q) => $q->whereIn('status', [BillStatus::Unpaid->value, BillStatus::Partial->value]));
-            $jeDraft     = $this->safeCount('journal_entries', fn ($q) => $q->where('status', 'draft'));
-
             return [
                 'kpis' => $this->gate->kpis($user, [
-                    ['accounting.dashboard.view', fn () => $this->kpi('Cash Balance',   $cashBalance,       $this->functionalCurrency())],
-                    ['accounting.invoices.view',  fn () => $this->kpi('AR Outstanding',  $arOpen,           $this->functionalCurrency())],
-                    ['accounting.bills.view',     fn () => $this->kpi('AP Outstanding',  $apOpen,           $this->functionalCurrency())],
-                    ['accounting.journal.view',   fn () => $this->kpi('Draft JEs',       (string) $jeDraft, 'count')],
+                    ['accounting.dashboard.view', fn () => $this->kpi('Cash Balance', $this->cashBalance(), $this->functionalCurrency())],
+                    ['accounting.invoices.view', fn () => $this->kpi('AR Outstanding', $this->safeSum('invoices', 'balance', fn ($q) => $q->whereIn('status', [InvoiceStatus::Finalized->value, InvoiceStatus::Partial->value])), $this->functionalCurrency())],
+                    ['accounting.bills.view', fn () => $this->kpi('AP Outstanding', $this->safeSum('bills', 'balance', fn ($q) => $q->whereIn('status', [BillStatus::Unpaid->value, BillStatus::Partial->value])), $this->functionalCurrency())],
+                    ['accounting.journal.view', fn () => $this->kpi('Draft JEs', (string) $this->safeCount('journal_entries', fn ($q) => $q->where('status', 'draft')), 'count')],
                 ]),
                 'panels' => $this->gate->panels($user, [
                     'recent_jes'     => ['accounting.journal.view',  fn () => $this->recentJournalEntries()],

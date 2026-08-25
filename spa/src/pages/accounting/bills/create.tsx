@@ -44,7 +44,6 @@ const schema = z.object({
  goods_receipt_note_id: z.string().optional().or(z.literal('')),
  exception_evidence: z.string().max(2000).optional().or(z.literal('')),
  exception_approved: z.boolean().default(false),
- allow_override: z.boolean().default(false),
  date: z.string().min(1, 'Date is required'),
  due_date: z.string().optional().or(z.literal('')),
  is_vatable: z.boolean(),
@@ -96,7 +95,7 @@ export default function CreateBillPage() {
  resolver: zodResolver(schema),
  defaultValues: {
  bill_number: '', vendor_id: presetVendor, provenance_type: 'stock', purchase_order_id: '', goods_receipt_note_id: '',
- exception_evidence: '', exception_approved: false, allow_override: false,
+ exception_evidence: '', exception_approved: false,
  date: new Date().toISOString().slice(0, 10),
  due_date: '', is_vatable: undefined as unknown as boolean, remarks: '',
  items: [{ expense_account_id: '', item_id: '', description: '', quantity: undefined as unknown as number, unit: '', unit_price: undefined as unknown as number }],
@@ -181,7 +180,6 @@ export default function CreateBillPage() {
  goods_receipt_note_id: d.provenance_type === 'stock' ? d.goods_receipt_note_id || undefined : undefined,
  exception_evidence: d.provenance_type === 'service' ? d.exception_evidence?.trim() || undefined : undefined,
  exception_approved: d.provenance_type === 'service' ? d.exception_approved : undefined,
- allow_override: d.purchase_order_id ? d.allow_override : undefined,
  date: d.date,
  due_date: d.due_date || undefined,
  is_vatable: d.is_vatable,
@@ -242,15 +240,6 @@ export default function CreateBillPage() {
  <div className="flex items-end">
  <Switch label={`VAT-able (${vatRateLabel})`} disabled={!vatConfigured} {...register('is_vatable')} />
  </div>
- {provenanceType === 'stock' && purchaseOrderId && (
- <div className="col-span-3">
- <Switch
- label="Allow override"
- description="Post the bill even if the 3-way match flags a blocking variance. The override is recorded in the audit trail."
- {...register('allow_override')}
- />
- </div>
- )}
  <Textarea label="Remarks" rows={2} className="col-span-3" {...register('remarks')} error={errors.remarks?.message} />
  </div>
  </Panel>

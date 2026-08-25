@@ -29,10 +29,13 @@ const schema = z.object({
  // M-18 — half-day support. 'none' = full-day request.
  half_day_period: z.string().min(1).default('none'),
  reason: z.string().max(2000, 'Max 2000 characters').optional().or(z.literal('')),
+ document: z.any().optional(),
 }).refine((d) => !d.start_date || !d.end_date || new Date(d.end_date) >= new Date(d.start_date),
  { message: 'End date must be on or after start date', path: ['end_date'] })
  .refine((d) => d.half_day_period === 'none' || d.start_date === d.end_date,
- { message: 'Half-day leave must start and end on the same date.', path: ['half_day_period'] });
+ { message: 'Half-day leave must start and end on the same date.', path: ['half_day_period'] })
+ .refine((d) => !d.start_date || !d.end_date || d.start_date.slice(0, 4) === d.end_date.slice(0, 4),
+ { message: 'Submit separate leave requests for dates in different calendar years.', path: ['end_date'] });
 type FormValues = z.infer<typeof schema>;
 
 export default function CreateLeavePage() {
@@ -42,7 +45,7 @@ export default function CreateLeavePage() {
  const { can } = usePermission();
  const isAdmin = can('leave.view') && (user?.role.slug === 'system_admin' || user?.role.slug === 'hr_officer');
 
- const { data: typesResp } = useQuery({ queryKey: ['leaves', 'types'], queryFn: () => leaveTypesApi.list() });
+ const { data: typesResp } = useQuery({ queryKey: ['leaves', 'types', 'active'], queryFn: () => leaveTypesApi.list({ is_active: 'true' }) });
  const { data: leaveOptions } = useQuery({
  queryKey: ['leaves', 'request-options'],
  queryFn: () => leaveRequestsApi.options(),
@@ -72,6 +75,7 @@ export default function CreateLeavePage() {
  const leaveTypeId = watch('leave_type_id');
  const startDate = watch('start_date');
  const endDate = watch('end_date');
+ const selectedType = types.find((t) => t.id === leaveTypeId);
 
  const { data: balances = [] } = useQuery({
  queryKey: ['leaves', 'balances', employeeId],
@@ -106,6 +110,7 @@ export default function CreateLeavePage() {
  end_date: d.end_date,
  half_day_period: d.half_day_period === 'none' ? undefined : d.half_day_period as 'am' | 'pm',
  reason: d.reason || undefined,
+ document: d.document?.[0],
  }),
  onSuccess: (req) => {
  qc.invalidateQueries({ queryKey: ['leaves'] });
@@ -146,6 +151,15 @@ export default function CreateLeavePage() {
  </div>
  <div className="mt-3">
  <Textarea label="Reason" {...register('reason')} error={errors.reason?.message} rows={3} />
+ <Input
+ label="Supporting document"
+ type="file"
+ accept=".pdf,.jpg,.jpeg,.png"
+ required={!!selectedType?.requires_document}
+ helper={selectedType?.requires_document ? 'Required for this leave type. PDF or image, up to 10 MB.' : 'Optional. PDF or image, up to 10 MB.'}
+ error={errors.document?.message as string | undefined}
+ {...register('document')}
+ />
  </div>
  {selectedBalance && (
  <div className="mt-3 p-3 bg-surface border border-default rounded-md text-sm">

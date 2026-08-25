@@ -12,6 +12,8 @@ const MONTHS = [
  'January', 'February', 'March', 'April', 'May', 'June',
  'July', 'August', 'September', 'October', 'November', 'December',
 ];
+const MIN_YEAR = 2000;
+const MAX_YEAR = 2100;
 
 interface ExportCardProps {
  title: string;
@@ -50,6 +52,9 @@ export default function StatutoryExportsPage() {
  const [year, setYear] = useState(now.getFullYear());
  const [month, setMonth] = useState(now.getMonth() + 1);
  const [downloading, setDownloading] = useState<string | null>(null);
+ const yearIsValid = Number.isInteger(year) && year >= MIN_YEAR && year <= MAX_YEAR;
+ const monthIsValid = Number.isInteger(month) && month >= 1 && month <= 12;
+ const periodIsValid = yearIsValid && monthIsValid;
 
  const runExport = async (key: string, request: () => Promise<boolean>) => {
  if (downloading) return;
@@ -65,7 +70,7 @@ export default function StatutoryExportsPage() {
  <div>
  <PageHeader
  title="Statutory filing exports"
- subtitle="Generate BIR, PhilHealth, and Pag-IBIG remittance files for finalized payroll periods."
+ subtitle="Generate statutory extracts for finalized payroll periods. The alphalist remains an internal staging CSV pending the official filing-format decision."
  />
 
  <div className="px-5 py-4 space-y-3">
@@ -76,6 +81,9 @@ export default function StatutoryExportsPage() {
  type="number"
  value={year}
  onChange={(e) => setYear(Number(e.target.value))}
+ min={MIN_YEAR}
+ max={MAX_YEAR}
+ error={!yearIsValid ? `Enter a year from ${MIN_YEAR} to ${MAX_YEAR}.` : undefined}
  className="font-mono tabular-nums"
  containerClassName="w-28"
  />
@@ -83,6 +91,7 @@ export default function StatutoryExportsPage() {
  label="Month"
  value={month}
  onChange={(e) => setMonth(Number(e.target.value))}
+ error={!monthIsValid ? 'Choose a valid month.' : undefined}
  containerClassName="w-40"
  >
  {MONTHS.map((m, i) => (
@@ -92,41 +101,44 @@ export default function StatutoryExportsPage() {
  </div>
  </Panel>
 
- <Panel title="Available files" meta={`${MONTHS[month - 1]} ${year}`}>
+ <Panel title="Available files" meta={periodIsValid ? `${MONTHS[month - 1]} ${year}` : 'Fix the filing period'}>
+ <p className="mb-3 text-xs text-muted" role="status">
+ Verify included periods, identifier exceptions, reconciliation totals, and filing readiness with the filing owner before downloading; this screen does not yet expose that preflight.
+ </p>
  <div className="grid gap-3 sm:grid-cols-2 max-w-3xl">
  <ExportCard
  title="BIR 1601-C"
  description="Monthly withholding tax on compensation"
  onClick={() => void runExport('bir1601c', () => statutoryApi.bir1601c(year, month))}
- disabled={Boolean(downloading)}
+ disabled={Boolean(downloading) || !periodIsValid}
  loading={downloading === 'bir1601c'}
  />
  <ExportCard
  title="PhilHealth RF-1"
  description="Monthly employer remittance"
  onClick={() => void runExport('philhealth', () => statutoryApi.philhealthRf1(year, month))}
- disabled={Boolean(downloading)}
+ disabled={Boolean(downloading) || !periodIsValid}
  loading={downloading === 'philhealth'}
  />
  <ExportCard
  title="Pag-IBIG MCRF"
  description="Monthly contribution remittance"
  onClick={() => void runExport('pagibig', () => statutoryApi.pagibigMcrf(year, month))}
- disabled={Boolean(downloading)}
+ disabled={Boolean(downloading) || !periodIsValid}
  loading={downloading === 'pagibig'}
  />
  <ExportCard
  title="BIR 1604-CF"
  description={`Annual return for ${year}`}
  onClick={() => void runExport('bir1604cf', () => statutoryApi.bir1604cf(year))}
- disabled={Boolean(downloading)}
+ disabled={Boolean(downloading) || !yearIsValid}
  loading={downloading === 'bir1604cf'}
  />
  <ExportCard
  title="BIR 2316 Alphalist"
- description={`Annual employee income-tax alphalist (CSV) for ${year}`}
+ description={`Internal staging CSV for ${year}; not an official DAT/XML filing artifact`}
  onClick={() => void runExport('alphalist', () => statutoryApi.bir2316Alphalist(year))}
- disabled={Boolean(downloading)}
+ disabled={Boolean(downloading) || !yearIsValid}
  loading={downloading === 'alphalist'}
  />
  </div>

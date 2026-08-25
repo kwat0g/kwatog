@@ -36,7 +36,7 @@ export const payrollRoutes = (
  />
  <Route
  path="/payroll/adjustments"
- element={<PermissionGuard permission="payroll.adjustments.create"><PayrollAdjustmentsPage /></PermissionGuard>}
+ element={<PermissionGuard permission="payroll.adjustments.view"><PayrollAdjustmentsPage /></PermissionGuard>}
  />
  <Route
  path="/payroll/adjustments/create"

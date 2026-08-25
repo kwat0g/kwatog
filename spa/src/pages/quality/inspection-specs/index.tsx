@@ -2,12 +2,13 @@
  * Sprint 7 — Task 59 — Inspection specs list page.
  *
  * One row per product that has a spec. Clicking the part number opens the
- * editor (always /quality/inspection-specs/{product_hash_id} — keyed on
- * product because there is exactly one active spec per product).
+ * editor (keyed by the spec hash so archived or unavailable products remain
+ * addressable without constructing an undefined product URL).
  */
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
-import { LuPlus } from '@/lib/icons';
+import { LuArchiveRestore, LuPlus, LuTrash2 } from '@/lib/icons';
+import toast from 'react-hot-toast';
 import { inspectionSpecsApi, type InspectionSpecListParams } from '@/api/quality/inspectionSpecs';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -23,13 +24,31 @@ import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
 export default function InspectionSpecsListPage() {
  const navigate = useNavigate();
+ const queryClient = useQueryClient();
  const { can } = usePermission();
- const [filters, setFilters] = useUrlFilters<InspectionSpecListParams>({ page: 1, per_page: 25 });
+ const [filters, setFilters] = useUrlFilters<InspectionSpecListParams>({ page: 1, per_page: 25, trashed: 'with' });
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['quality', 'inspection-specs', filters],
  queryFn: () => inspectionSpecsApi.list(filters),
  placeholderData: (prev) => prev });
+
+ const archiveMutation = useMutation({
+  mutationFn: (id: string) => inspectionSpecsApi.deactivate(id),
+  onSuccess: () => {
+   toast.success('Inspection spec archived');
+   queryClient.invalidateQueries({ queryKey: ['quality', 'inspection-specs'] });
+  },
+  onError: () => toast.error('Failed to archive inspection spec'),
+ });
+ const restoreMutation = useMutation({
+  mutationFn: (id: string) => inspectionSpecsApi.restore(id),
+  onSuccess: () => {
+   toast.success('Inspection spec restored');
+   queryClient.invalidateQueries({ queryKey: ['quality', 'inspection-specs'] });
+  },
+  onError: () => toast.error('Failed to restore inspection spec'),
+ });
 
  const columns: Column<InspectionSpec>[] = [
  {
@@ -38,6 +57,7 @@ export default function InspectionSpecsListPage() {
  ? <span>
  <span className="font-mono">{r.product.part_number}</span>
  <span className="ml-2 text-muted">{r.product.name}</span>
+ {(r.product.deleted_at || r.product.is_active === false) && <Chip variant="neutral" className="ml-2">Unavailable</Chip>}
  </span>
  : <span className="text-muted">—</span> },
  { key: 'version', header: 'Version', align: 'right',
@@ -50,6 +70,30 @@ export default function InspectionSpecsListPage() {
  : <Chip variant="neutral">Archived</Chip> },
  { key: 'updated', header: 'Updated', align: 'right',
  cell: (r) => <NumCell>{r.updated_at?.slice(0, 10) ?? '—'}</NumCell> },
+ { key: 'actions', header: '', align: 'right',
+  cell: (r) => can('quality.specs.manage') ? (
+   <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+    {r.is_active && !r.deleted_at ? (
+     <Button
+      size="sm"
+      variant="ghost"
+      icon={<LuTrash2 size={13} />}
+      aria-label="Archive inspection spec"
+      onClick={() => archiveMutation.mutate(r.id)}
+      disabled={archiveMutation.isPending}
+     />
+    ) : (
+     <Button
+      size="sm"
+      variant="ghost"
+      icon={<LuArchiveRestore size={13} />}
+      aria-label="Restore inspection spec"
+      onClick={() => restoreMutation.mutate(r.id)}
+      disabled={restoreMutation.isPending}
+     />
+    )}
+   </div>
+  ) : null },
  ];
 
  const filterConfig: FilterConfig[] = [
@@ -76,7 +120,7 @@ export default function InspectionSpecsListPage() {
  onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
  searchPlaceholder="Search…"
  />
- {isLoading && !data && <SkeletonTable columns={5} rows={6} />}
+ {isLoading && !data && <SkeletonTable columns={6} rows={6} />}
  {isError && <EmptyState
  icon="alert-circle"
  title="Failed to load inspection specs"
@@ -88,7 +132,7 @@ export default function InspectionSpecsListPage() {
  {data && data.data.length > 0 && (
  <div className="px-5 py-4">
  <DataTable
- onRowClick={(r) => navigate(`/quality/inspection-specs/${r.product?.id}`)}
+ onRowClick={(r) => navigate('/quality/inspection-specs/spec/' + r.id)}
  columns={columns}
  data={data.data}
  meta={data.meta}

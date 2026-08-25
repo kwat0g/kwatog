@@ -13,6 +13,7 @@ use App\Modules\Auth\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class ApprovalService
 {
@@ -38,17 +39,48 @@ class ApprovalService
     public function submit(Model $approvable, string $workflowType, ?string $amount = null): void
     {
         DB::transaction(function () use ($approvable, $workflowType, $amount) {
-            $workflow = WorkflowDefinition::where('workflow_type', $workflowType)->firstOrFail();
+            // Serialize submissions for persisted approvables. The lightweight
+            // transient model used by the unit suite has no backing table, so it
+            // intentionally skips this optional lock.
+            if ($approvable->exists && Schema::hasTable($approvable->getTable())) {
+                $approvable->newQuery()
+                    ->whereKey($approvable->getKey())
+                    ->lockForUpdate()
+                    ->firstOrFail();
+            }
 
-            // Resubmission: keep approved/rejected rows as audit history. Pending and
-            // skipped rows are cleared so the new attempt starts clean. This may yield
-            // multiple rows at the same step_order (one historical, one current);
-            // callers reading the chain should treat the latest non-terminal record
-            // per step_order as authoritative.
-            ApprovalRecord::where('approvable_type', $approvable->getMorphClass())
-                ->where('approvable_id', $approvable->getKey())
+            $workflow = WorkflowDefinition::where('workflow_type', $workflowType)
+                ->where('is_active', true)
+                ->firstOrFail();
+
+            $type = $approvable->getMorphClass();
+            $id = $approvable->getKey();
+            $nextAttempt = ((int) ApprovalRecord::query()
+                ->where('approvable_type', $type)
+                ->where('approvable_id', $id)
+                ->max('attempt')) + 1;
+
+            // Keep every prior row for audit/history, but mark the old open
+            // attempt as superseded so consumers filtering action=pending can
+            // never act on a stale row. Terminal actions remain unchanged.
+            ApprovalRecord::query()
+                ->where('approvable_type', $type)
+                ->where('approvable_id', $id)
+                ->where('is_current', true)
                 ->whereIn('action', ['pending', 'skipped'])
-                ->forceDelete();
+                ->update(['action' => 'superseded']);
+            ApprovalRecord::query()
+                ->where('approvable_type', $type)
+                ->where('approvable_id', $id)
+                ->where('is_current', true)
+                ->update(['is_current' => false]);
+
+            $snapshot = [
+                'workflow_type' => (string) $workflow->workflow_type,
+                'name' => (string) $workflow->name,
+                'steps' => array_values($workflow->steps ?? []),
+            ];
+            $version = hash('sha256', json_encode($snapshot, JSON_THROW_ON_ERROR));
 
             foreach ($workflow->steps as $step) {
                 $threshold = isset($step['threshold']) ? (string) $step['threshold'] : null;
@@ -57,12 +89,17 @@ class ApprovalService
                     : 'pending';
 
                 ApprovalRecord::create([
-                    'approvable_type' => $approvable->getMorphClass(),
-                    'approvable_id'   => $approvable->getKey(),
-                    'step_order'      => (int) $step['order'],
-                    'role_slug'       => (string) $step['role'],
-                    'action'          => $action,
-                    'created_at'      => now(),
+                    'approvable_type'      => $type,
+                    'approvable_id'        => $id,
+                    'step_order'           => (int) $step['order'],
+                    'role_slug'            => (string) $step['role'],
+                    'attempt'              => $nextAttempt,
+                    'is_current'           => true,
+                    'workflow_definition_id' => $workflow->id,
+                    'workflow_version'     => $version,
+                    'workflow_snapshot'    => $snapshot,
+                    'action'               => $action,
+                    'created_at'           => now(),
                 ]);
             }
         });
@@ -82,7 +119,7 @@ class ApprovalService
     public function approve(Model $approvable, User $user, ?string $remarks = null): void
     {
         DB::transaction(function () use ($approvable, $user, $remarks) {
-            $next = $this->records($approvable)
+            $next = $this->currentRecords($approvable)
                 ->where('action', 'pending')
                 ->lockForUpdate()
                 ->first();
@@ -109,7 +146,7 @@ class ApprovalService
     public function reject(Model $approvable, User $user, string $remarks): void
     {
         DB::transaction(function () use ($approvable, $user, $remarks) {
-            $next = $this->records($approvable)
+            $next = $this->currentRecords($approvable)
                 ->where('action', 'pending')
                 ->lockForUpdate()
                 ->first();
@@ -132,7 +169,7 @@ class ApprovalService
             ]);
 
             // Mark all subsequent pending steps as skipped.
-            $this->records($approvable)
+            $this->currentRecords($approvable)
                 ->where('step_order', '>', $next->step_order)
                 ->where('action', 'pending')
                 ->update(['action' => 'skipped', 'acted_at' => now()]);
@@ -143,30 +180,43 @@ class ApprovalService
     {
         return ApprovalRecord::where('approvable_type', $approvable->getMorphClass())
             ->where('approvable_id', $approvable->getKey())
-            ->orderBy('step_order');
+            ->orderByDesc('attempt')
+            ->orderBy('step_order')
+            ->orderBy('id');
+    }
+
+    public function currentRecords(Model $approvable): \Illuminate\Database\Eloquent\Builder
+    {
+        return $this->records($approvable)->where('is_current', true);
     }
 
     public function nextStep(Model $approvable): ?ApprovalRecord
     {
-        return $this->records($approvable)->where('action', 'pending')->first();
+        return $this->currentRecords($approvable)->where('action', 'pending')->first();
     }
 
     public function isFullyApproved(Model $approvable): bool
     {
-        $records = $this->records($approvable)->get();
+        $records = $this->currentRecords($approvable)->get();
         if ($records->isEmpty()) return false;
         return $records->every(fn ($r) => in_array($r->action, ['approved', 'skipped'], true));
     }
 
     public function isRejected(Model $approvable): bool
     {
-        return $this->records($approvable)->where('action', 'rejected')->exists();
+        return $this->currentRecords($approvable)->where('action', 'rejected')->exists();
     }
 
     /** @return Collection<int, ApprovalRecord> */
     public function chain(Model $approvable): Collection
     {
         return $this->records($approvable)->get();
+    }
+
+    /** @return Collection<int, ApprovalRecord> */
+    public function currentChain(Model $approvable): Collection
+    {
+        return $this->currentRecords($approvable)->get();
     }
 
     private function userMayActFor(User $user, string $roleSlug): bool

@@ -65,7 +65,10 @@ class AssetUpdateVsDisposeRaceTest extends TestCase
         $updater = Asset::find($asset->id);
 
         // Disposer commits first — asset is now Disposed in the DB.
-        app(AssetService::class)->dispose($disposer, ['disposal_amount' => 40000], $by);
+        app(AssetService::class)->dispose($disposer, [
+            'disposal_amount' => 40000,
+            'remarks' => 'Asset retired.',
+        ], $by);
 
         // Concurrent stale updater still sees `active` in memory.
         try {

@@ -53,10 +53,14 @@ class StoreDepartmentRequest extends FormRequest
     {
         $data = $this->validated();
         if (!empty($data['parent_id'])) {
-            $data['parent_id'] = Department::tryDecodeHash($data['parent_id']);
+            $parentId = Department::tryDecodeHash($data['parent_id']);
+            abort_if($parentId === null, 422, 'Invalid parent department.');
+            $data['parent_id'] = $parentId;
         }
         if (!empty($data['head_employee_id'])) {
-            $data['head_employee_id'] = Employee::tryDecodeHash($data['head_employee_id']);
+            $headId = Employee::tryDecodeHash($data['head_employee_id']);
+            abort_if($headId === null, 422, 'Invalid department head.');
+            $data['head_employee_id'] = $headId;
         }
         return $data;
     }

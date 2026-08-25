@@ -6,9 +6,12 @@ namespace App\Modules\Production\Requests;
 
 use App\Common\Concerns\ResolvesHashIds;
 use App\Modules\CRM\Models\Product;
+use App\Modules\MRP\Enums\MachineStatus;
+use App\Modules\MRP\Enums\MoldStatus;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreRoutingRequest extends FormRequest
 {
@@ -31,25 +34,43 @@ class StoreRoutingRequest extends FormRequest
     public function rules(): array
     {
         $rules = [
-            'notes'                          => ['nullable', 'string'],
+            'notes'                          => ['nullable', 'string', 'max:1000'],
             'operations'                     => ['required', 'array', 'min:1'],
-            'operations.*.sequence'          => ['required', 'integer', 'min:1'],
+            'operations.*.sequence'          => ['required', 'integer', 'distinct', 'min:1'],
             'operations.*.operation_name'    => ['required', 'string', 'max:100'],
             'operations.*.work_center'       => ['nullable', 'string', 'max:100'],
-            'operations.*.machine_id'        => ['nullable', 'integer', 'exists:machines,id'],
-            'operations.*.mold_id'           => ['nullable', 'integer', 'exists:molds,id'],
-            'operations.*.setup_time_minutes' => ['nullable', 'numeric', 'min:0'],
-            'operations.*.cycle_time_minutes' => ['required', 'numeric', 'min:0.01'],
-            'operations.*.labor_rate_per_hour' => ['nullable', 'numeric', 'min:0'],
-            'operations.*.machine_rate_per_hour' => ['nullable', 'numeric', 'min:0'],
-            'operations.*.overhead_rate_per_hour' => ['nullable', 'numeric', 'min:0'],
-            'operations.*.description'       => ['nullable', 'string'],
+            'operations.*.machine_id'        => [
+                'nullable',
+                'integer',
+                Rule::exists('machines', 'id')->where(fn ($query) => $query
+                    ->whereNull('deleted_at')
+                    ->whereIn('status', [MachineStatus::Idle->value, MachineStatus::Running->value])),
+            ],
+            'operations.*.mold_id'           => [
+                'nullable',
+                'integer',
+                Rule::exists('molds', 'id')->where(fn ($query) => $query
+                    ->whereNull('deleted_at')
+                    ->whereIn('status', [MoldStatus::Available->value, MoldStatus::InUse->value])),
+            ],
+            'operations.*.setup_time_minutes' => ['nullable', 'decimal:0,2', 'min:0', 'max:999999.99'],
+            'operations.*.cycle_time_minutes' => ['required', 'decimal:0,2', 'min:0.01', 'max:999999.99'],
+            'operations.*.labor_rate_per_hour' => ['nullable', 'decimal:0,4', 'min:0', 'max:99999999999.9999'],
+            'operations.*.machine_rate_per_hour' => ['nullable', 'decimal:0,4', 'min:0', 'max:99999999999.9999'],
+            'operations.*.overhead_rate_per_hour' => ['nullable', 'decimal:0,4', 'min:0', 'max:99999999999.9999'],
+            'operations.*.description'       => ['nullable', 'string', 'max:500'],
             'operations.*.qc_required'       => ['nullable', 'boolean'],
         ];
 
         // product_id is required on store, not on update.
         if ($this->isMethod('POST') && ! $this->route('routing')) {
-            $rules['product_id'] = ['required', 'integer', 'exists:products,id'];
+            $rules['product_id'] = [
+                'required',
+                'integer',
+                Rule::exists('products', 'id')->where(fn ($query) => $query
+                    ->where('is_active', true)
+                    ->whereNull('deleted_at')),
+            ];
         }
 
         return $rules;

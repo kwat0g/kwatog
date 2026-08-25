@@ -6,8 +6,7 @@ namespace App\Modules\B2B\Controllers;
 
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Enums\BillStatus;
-use App\Modules\Accounting\Resources\BillResource;
-use App\Modules\Accounting\Services\PdfService;
+use App\Modules\Accounting\Resources\SupplierBillResource;
 use App\Modules\B2B\Models\SupplierPortalUser;
 use App\Modules\B2B\Enums\SupplierShippingDocumentType;
 use App\Modules\B2B\Requests\Supplier\AcknowledgePoRequest;
@@ -19,8 +18,9 @@ use App\Modules\B2B\Resources\DeliveryScheduleResource;
 use App\Modules\B2B\Resources\PortalShippingDocumentResource;
 use App\Modules\B2B\Resources\SupplierDeliveryResource;
 use App\Modules\B2B\Services\SupplierPortalService;
+use App\Modules\B2B\Services\SupplierPortalPdfService;
 use App\Modules\Purchasing\Models\PurchaseOrder;
-use App\Modules\Purchasing\Resources\PurchaseOrderResource;
+use App\Modules\B2B\Resources\SupplierPurchaseOrderResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -35,7 +35,7 @@ class SupplierPortalController extends Controller
 {
     public function __construct(
         private readonly SupplierPortalService $service,
-        private readonly PdfService $pdf,
+        private readonly SupplierPortalPdfService $pdf,
     ) {}
 
     private function user(Request $request): SupplierPortalUser
@@ -64,8 +64,8 @@ class SupplierPortalController extends Controller
         $data = $this->service->dashboard($user->vendor_id);
 
         // Wrap collection fields in API Resources for consistent serialization.
-        $data['recent_pos']      = PurchaseOrderResource::collection($data['recent_pos']);
-        $data['recent_invoices'] = BillResource::collection($data['recent_invoices']);
+        $data['recent_pos']      = SupplierPurchaseOrderResource::collection($data['recent_pos']);
+        $data['recent_invoices'] = SupplierBillResource::collection($data['recent_invoices']);
 
         return response()->json(['data' => $data]);
     }
@@ -85,18 +85,18 @@ class SupplierPortalController extends Controller
             'per_page' => $request->query('per_page', 25),
         ]);
 
-        return PurchaseOrderResource::collection($paginator);
+        return SupplierPurchaseOrderResource::collection($paginator);
     }
 
     /**
      * GET /api/v1/b2b/supplier/purchase-orders/{id}
      */
-    public function purchaseOrderShow(PurchaseOrder $purchaseOrder, Request $request): PurchaseOrderResource
+    public function purchaseOrderShow(PurchaseOrder $purchaseOrder, Request $request): SupplierPurchaseOrderResource
     {
         $user = $this->user($request);
         $purchaseOrder = $this->service->purchaseOrderDetail($user->vendor_id, $purchaseOrder);
 
-        return new PurchaseOrderResource($purchaseOrder);
+        return new SupplierPurchaseOrderResource($purchaseOrder);
     }
 
     /**
@@ -228,8 +228,8 @@ class SupplierPortalController extends Controller
         $user = $this->user($request);
         $data = $this->service->statementOfAccount($user->vendor_id);
 
-        // Wrap open_bills in BillResource for consistent serialization
-        $data['open_bills'] = BillResource::collection($data['open_bills']);
+        // Keep supplier bill data separate from internal AP exception evidence.
+        $data['open_bills'] = SupplierBillResource::collection($data['open_bills']);
 
         return response()->json(['data' => $data]);
     }
@@ -237,14 +237,14 @@ class SupplierPortalController extends Controller
     /**
      * GET /api/v1/b2b/supplier/delivery-schedules
      */
-    public function deliverySchedules(Request $request): JsonResponse
+    public function deliverySchedules(Request $request): AnonymousResourceCollection
     {
         $user = $this->user($request);
-        $schedules = $this->service->deliverySchedules($user->vendor_id);
-
-        return response()->json([
-            'data' => DeliveryScheduleResource::collection($schedules),
+        $schedules = $this->service->deliverySchedules($user->vendor_id, [
+            'per_page' => $request->query('per_page', 25),
         ]);
+
+        return DeliveryScheduleResource::collection($schedules);
     }
 
     /**
@@ -253,7 +253,7 @@ class SupplierPortalController extends Controller
     public function storeDeliverySchedule(StoreDeliveryScheduleRequest $request): JsonResponse
     {
         $user = $this->user($request);
-        $schedule = $this->service->storeDeliverySchedule($user->vendor_id, $request->validated());
+        $schedule = $this->service->storeDeliverySchedule($user->vendor_id, $user->id, $request->validated());
 
         return response()->json([
             'data'    => new DeliveryScheduleResource($schedule),
@@ -267,7 +267,7 @@ class SupplierPortalController extends Controller
     public function acknowledgePo(PurchaseOrder $purchaseOrder, AcknowledgePoRequest $request): JsonResponse
     {
         $user = $this->user($request);
-        $this->service->acknowledgePo($user->vendor_id, $purchaseOrder, $request->validated());
+        $this->service->acknowledgePo($user->vendor_id, $user->id, $purchaseOrder, $request->validated());
 
         return response()->json(['message' => 'Purchase order acknowledged.']);
     }
@@ -278,7 +278,7 @@ class SupplierPortalController extends Controller
     public function updateShipment(PurchaseOrder $purchaseOrder, ShipmentUpdateRequest $request): JsonResponse
     {
         $user = $this->user($request);
-        $this->service->updateShipment($user->vendor_id, $purchaseOrder, $request->validated());
+        $this->service->updateShipment($user->vendor_id, $user->id, $purchaseOrder, $request->validated());
 
         return response()->json(['message' => 'Shipment information updated.']);
     }
@@ -291,21 +291,22 @@ class SupplierPortalController extends Controller
         $user = $this->user($request);
 
         $paginator = $this->service->invoices($user->vendor_id, [
+            'status'   => $request->query('status'),
             'per_page' => $request->query('per_page', 25),
         ]);
 
-        return BillResource::collection($paginator);
+        return SupplierBillResource::collection($paginator);
     }
 
     /**
      * GET /api/v1/b2b/supplier/invoices/{id}
      */
-    public function invoiceDetail(Bill $invoice, Request $request): BillResource
+    public function invoiceDetail(Bill $invoice, Request $request): SupplierBillResource
     {
         $user = $this->user($request);
         $invoice = $this->service->invoiceDetail($user->vendor_id, $invoice);
 
-        return new BillResource($invoice);
+        return new SupplierBillResource($invoice);
     }
 
     /**
@@ -317,6 +318,7 @@ class SupplierPortalController extends Controller
 
         $deliveries = $this->service->deliveries($user->vendor_id, [
             'status' => $request->query('status'),
+            'per_page' => $request->query('per_page', 25),
         ]);
 
         return SupplierDeliveryResource::collection($deliveries);

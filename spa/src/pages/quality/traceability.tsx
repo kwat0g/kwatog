@@ -48,10 +48,15 @@ export default function TraceabilityPage() {
  />
 
  <div className="px-5 pt-4">
- <form onSubmit={onSubmit} className="flex items-center gap-2 max-w-2xl">
- <div className="flex-1 flex items-center h-8 rounded-md border border-default bg-canvas px-2.5 transition-colors duration-fast focus-within:ring-2 focus-within:ring-accent focus-within:border-accent">
+ <form onSubmit={onSubmit} className="flex items-end gap-2 max-w-2xl">
+ <div className="flex-1">
+ <label htmlFor="traceability-term" className="mb-1 block text-xs text-muted font-medium">
+ Batch, shipment lot, or material lot
+ </label>
+ <div className="flex items-center h-8 rounded-md border border-default bg-canvas px-2.5 transition-colors duration-fast focus-within:ring-2 focus-within:ring-accent focus-within:border-accent">
  <LuSearch size={14} className="text-muted shrink-0" aria-hidden />
  <input
+ id="traceability-term"
  autoFocus
  type="text"
  value={term}
@@ -60,6 +65,7 @@ export default function TraceabilityPage() {
  aria-label="Batch, lot, or material lot number"
  className="flex-1 min-w-0 h-full px-2 bg-transparent text-sm outline-none placeholder:text-text-subtle font-mono"
  />
+ </div>
  </div>
  <Button type="submit" variant="primary" size="sm" loading={isFetching} disabled={!term.trim()}>
  Trace

@@ -17,6 +17,7 @@ use App\Modules\Maintenance\Requests\StoreMaintenanceWorkOrderRequest;
 use App\Modules\Maintenance\Resources\MaintenanceWorkOrderResource;
 use App\Modules\Maintenance\Services\MaintenanceWorkOrderService;
 use App\Modules\Maintenance\Services\SparePartUsageService;
+use App\Modules\HR\Models\Employee;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -62,6 +63,23 @@ class MaintenanceWorkOrderController
             'default_type' => (string) $this->settings->get('maintenance.work_order.default_type', ''),
             'default_priority' => (string) $this->settings->get('maintenance.work_order.default_priority', ''),
         ]]);
+    }
+
+    public function assignees(): JsonResponse
+    {
+        $employees = Employee::query()
+            ->where('status', 'active')
+            ->orderBy('last_name')
+            ->orderBy('first_name')
+            ->get(['id', 'employee_no', 'first_name', 'last_name'])
+            ->map(static fn (Employee $employee): array => [
+                'id'          => $employee->hash_id,
+                'employee_no' => $employee->employee_no,
+                'name'        => trim($employee->first_name.' '.$employee->last_name),
+            ])
+            ->values();
+
+        return response()->json(['data' => $employees]);
     }
 
     public function show(MaintenanceWorkOrder $workOrder): MaintenanceWorkOrderResource

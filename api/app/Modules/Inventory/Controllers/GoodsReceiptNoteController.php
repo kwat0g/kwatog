@@ -150,7 +150,7 @@ class GoodsReceiptNoteController
      */
     public function receiveWithQc(Request $request): JsonResponse
     {
-        $request->validate([
+        $data = $request->validate([
             'purchase_order_id'                  => ['required', 'string'],
             'received_date'                      => ['nullable', 'date'],
             'remarks'                            => ['nullable', 'string'],
@@ -160,6 +160,14 @@ class GoodsReceiptNoteController
             'items.*.location_id'                => ['required', 'string'],
             'items.*.quantity_received'           => ['required', 'numeric', 'min:0.001'],
             'items.*.unit_cost'                  => ['nullable', 'numeric', 'min:0'],
+            'items.*.received_uom_code'          => ['nullable', 'string', 'max:20'],
+            'items.*.lot_number'                 => ['nullable', 'string', 'max:50'],
+            'items.*.material_lot_number'        => ['nullable', 'string', 'max:50'],
+            'items.*.supplier_lot_reference'     => ['nullable', 'string', 'max:100'],
+            'items.*.expiry_date'                => ['nullable', 'date'],
+            'items.*.moisture_percentage'       => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'items.*.coa_document_path'         => ['nullable', 'string', 'max:500'],
+            'items.*.coa_verified'              => ['prohibited'],
             'items.*.remarks'                    => ['nullable', 'string'],
             'qc.result'                          => ['required', 'in:passed,failed,passed_with_remarks,pending'],
             'qc.inspector_id'                    => ['nullable', 'string'],
@@ -168,12 +176,13 @@ class GoodsReceiptNoteController
             'qc.remarks'                         => ['nullable', 'string'],
             'qc.failure_reason'                  => ['nullable', 'required_if:qc.result,failed', 'string'],
             'qc.disposition'                     => ['nullable', 'string', 'in:return_to_supplier,use_under_concession,partial_accept'],
+            'qc.is_quality_failure'              => ['nullable', 'boolean'],
         ]);
 
         // Receiving and Quality are separate responsibilities. Inventory may
         // stage a receipt as pending_qc, but only Quality may submit a
         // terminal verdict that completes an inspection or changes stock.
-        if (in_array($request->input('qc.result'), ['passed', 'passed_with_remarks', 'failed'], true)) {
+        if (in_array($data['qc']['result'], ['passed', 'passed_with_remarks', 'failed'], true)) {
             abort_unless(
                 $request->user()?->hasPermission('quality.inspections.manage'),
                 403,
@@ -182,7 +191,7 @@ class GoodsReceiptNoteController
         }
 
         $poId = HashIdFilter::decode(
-            $request->input('purchase_order_id'),
+            $data['purchase_order_id'],
             PurchaseOrder::class,
         );
         $po = PurchaseOrder::findOrFail($poId);
@@ -190,12 +199,12 @@ class GoodsReceiptNoteController
         try {
             $result = $this->service->receiveWithQc(
                 $po,
-                $request->input('items'),
+                $data['items'],
                 [
-                    'received_date' => $request->input('received_date'),
-                    'remarks'       => $request->input('remarks'),
+                    'received_date' => $data['received_date'] ?? null,
+                    'remarks'       => $data['remarks'] ?? null,
                 ],
-                $request->input('qc', []),
+                $data['qc'],
                 $request->user(),
             );
         } catch (BusinessRuleException|ClosedPeriodException|InsufficientStockException|InvalidMovementException $e) {

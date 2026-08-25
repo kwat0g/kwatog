@@ -29,6 +29,13 @@ class GrnItemResource extends JsonResource
             'quantity_received' => (string) $this->quantity_received,
             'quantity_accepted' => (string) $this->quantity_accepted,
             'unit_cost' => (string) $this->unit_cost,
+            'received_uom_code' => $this->received_uom_code,
+            'lot_number' => $this->material_lot_number,
+            'supplier_lot_reference' => $this->supplier_lot_reference,
+            'expiry_date' => optional($this->expiry_date)->toDateString(),
+            'moisture_percentage' => $this->moisture_percentage !== null ? (string) $this->moisture_percentage : null,
+            'coa_document_path' => $this->coa_document_path,
+            'coa_verified' => (bool) $this->coa_verified,
             'remarks' => $this->remarks,
         ];
     }

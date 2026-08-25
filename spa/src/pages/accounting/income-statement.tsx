@@ -9,11 +9,13 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
-import { Td, tableCls, totalsTrCls, trCls } from '@/components/ui/table-cells';
+import { Td, Th, tableCls, theadTrCls, totalsTrCls, trCls } from '@/components/ui/table-cells';
 import { cn } from '@/lib/cn';
 
 export default function IncomeStatementPage() {
+ const { can } = usePermission();
  const today = new Date();
  const yearStart = new Date(today.getFullYear(), 0, 1).toISOString().slice(0, 10);
  const yearEnd = new Date(today.getFullYear(), 11, 31).toISOString().slice(0, 10);
@@ -31,14 +33,15 @@ export default function IncomeStatementPage() {
  <div>
  <PageHeader
  title="Income Statement"
+ subtitle={data ? `Currency: ${data.currency}` : undefined}
  backTo="/accounting/journal-entries"
  backLabel="Journal Entries"
- actions={
+ actions={can('accounting.statements.export') && (
  <div className="flex gap-1.5">
  <Button variant="secondary" size="sm" icon={<LuDownload size={14} />} onClick={() => void downloadAuthenticatedFile(statementsApi.csvUrl('income-statement', { from, to }), { errorMessage: 'Failed to export income statement.' })}>CSV</Button>
  <Button variant="secondary" size="sm" icon={<LuPrinter size={14} />} onClick={() => void downloadAuthenticatedFile(statementsApi.pdfUrl('income-statement', { from, to }), { openInNewTab: true, errorMessage: 'Failed to generate income statement PDF.' })}>PDF</Button>
  </div>
- }
+ )}
  />
 
  <div className="px-5 py-3 border-b border-default flex items-end gap-3">
@@ -51,7 +54,11 @@ export default function IncomeStatementPage() {
  {data && (
  <div className="px-5 py-4">
  <div className="border border-default rounded-md overflow-hidden max-w-3xl">
- <table className={tableCls}>
+ <div className="overflow-x-auto">
+ <table className={`${tableCls} min-w-[520px]`}>
+ <thead>
+ <tr className={theadTrCls}><Th>Account</Th><Th align="right">Amount</Th></tr>
+ </thead>
  <tbody>
  <Section label="REVENUE" rows={data.revenue.accounts} totalLabel="Total Revenue" total={data.revenue.total} />
  {data.cogs.accounts.length > 0 && <Section label="COST OF GOODS SOLD" rows={data.cogs.accounts} totalLabel="Total COGS" total={data.cogs.total} />}
@@ -63,6 +70,7 @@ export default function IncomeStatementPage() {
  </tr>
  </tbody>
  </table>
+ </div>
  </div>
  </div>
  )}

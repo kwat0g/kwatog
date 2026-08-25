@@ -6,7 +6,7 @@ namespace Tests\Feature\HR;
 
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
-use App\Modules\Auth\Notifications\WelcomeNotification;
+use App\Modules\HR\Notifications\EmployeeWelcomeNotification;
 use App\Modules\HR\Events\EmployeeCreated;
 use App\Modules\HR\Listeners\AutoProvisionUserOnEmployeeHire;
 use App\Modules\HR\Models\Employee;
@@ -42,7 +42,7 @@ class AutoProvisionUserOnHireTest extends TestCase
 
         Notification::assertSentTo(
             User::where('employee_id', $employee->id)->first(),
-            WelcomeNotification::class,
+            EmployeeWelcomeNotification::class,
         );
     }
 

@@ -116,6 +116,90 @@ class UserPermissionOverrideTest extends TestCase
         $this->assertContains('hr.employees.view', $target->fresh()->permission_slugs);
     }
 
+    public function test_remove_then_regrant_restores_the_same_row_and_audits_each_mutation_once(): void
+    {
+        $admin = $this->seedAdmin();
+        $target = $this->seedUserWithRole('employee');
+
+        $this->actingAs($admin)
+            ->postJson("/api/v1/admin/users/{$target->hash_id}/overrides", [
+                'permission_slug' => 'hr.employees.view',
+                'type' => 'grant',
+                'reason' => 'Temporary access for coverage.',
+            ])
+            ->assertCreated();
+
+        $override = UserPermissionOverride::where('user_id', $target->id)->firstOrFail();
+        $overrideId = $override->id;
+
+        $this->actingAs($admin)
+            ->deleteJson("/api/v1/admin/users/{$target->hash_id}/overrides/{$override->hash_id}")
+            ->assertNoContent();
+
+        $this->assertSoftDeleted('user_permission_overrides', ['id' => $overrideId]);
+
+        // Removing an already archived override is an idempotent no-op.
+        $this->actingAs($admin)
+            ->deleteJson("/api/v1/admin/users/{$target->hash_id}/overrides/{$override->hash_id}")
+            ->assertNoContent();
+
+        $this->actingAs($admin)
+            ->postJson("/api/v1/admin/users/{$target->hash_id}/overrides", [
+                'permission_slug' => 'hr.employees.view',
+                'type' => 'revoke',
+                'reason' => 'Regrant as a temporary data freeze.',
+            ])
+            ->assertCreated();
+
+        $restored = UserPermissionOverride::withTrashed()->findOrFail($overrideId);
+        $this->assertSame($overrideId, $restored->id);
+        $this->assertNull($restored->deleted_at);
+        $this->assertSame(1, UserPermissionOverride::withTrashed()
+            ->where('user_id', $target->id)
+            ->where('permission_id', $restored->permission_id)
+            ->count());
+
+        $audit = AuditLog::query()
+            ->where('model_type', $restored->getMorphClass())
+            ->where('model_id', $overrideId);
+        $this->assertSame(1, (clone $audit)->where('action', 'created')->count());
+        $this->assertSame(1, (clone $audit)->where('action', 'deleted')->count());
+        $this->assertSame(1, (clone $audit)->where('action', 'restored')->count());
+    }
+
+    public function test_restore_endpoint_includes_trashed_rows_and_enforces_route_user_scope(): void
+    {
+        $admin = $this->seedAdmin();
+        $target = $this->seedUserWithRole('employee');
+        $otherTarget = $this->seedUserWithRole('employee');
+
+        app(UserPermissionOverrideService::class)->set(
+            $target,
+            $admin,
+            'hr.employees.view',
+            PermissionOverrideType::Grant,
+            'Restore endpoint coverage.',
+        );
+        $override = UserPermissionOverride::where('user_id', $target->id)->firstOrFail();
+
+        $this->actingAs($admin)
+            ->deleteJson("/api/v1/admin/users/{$target->hash_id}/overrides/{$override->hash_id}")
+            ->assertNoContent();
+
+        $this->actingAs($admin)
+            ->patchJson("/api/v1/admin/users/{$target->hash_id}/overrides/{$override->hash_id}/restore")
+            ->assertOk();
+        $this->assertNotNull(UserPermissionOverride::find($override->id));
+
+        $this->actingAs($admin)
+            ->deleteJson("/api/v1/admin/users/{$target->hash_id}/overrides/{$override->hash_id}")
+            ->assertNoContent();
+
+        $this->actingAs($admin)
+            ->patchJson("/api/v1/admin/users/{$otherTarget->hash_id}/overrides/{$override->hash_id}/restore")
+            ->assertNotFound();
+    }
+
     public function test_endpoint_requires_admin_users_manage_permissions(): void
     {
         // A user with admin.users.manage but NOT admin.users.manage_permissions must be 403.
@@ -319,6 +403,43 @@ class UserPermissionOverrideTest extends TestCase
 
         $this->actingAs($weakAdmin)
             ->deleteJson("/api/v1/admin/users/{$target->hash_id}/overrides/{$overrideModel->hash_id}")
+            ->assertForbidden();
+    }
+
+    public function test_override_management_remains_system_admin_only_even_with_route_permission(): void
+    {
+        $admin = $this->seedAdmin();
+        $delegated = $this->seedUserWithCustomPerms(['admin.users.manage_permissions']);
+        $target = $this->seedUserWithRole('employee');
+
+        $this->actingAs($admin)
+            ->postJson("/api/v1/admin/users/{$target->hash_id}/overrides", [
+                'permission_slug' => 'hr.employees.view',
+                'type' => 'grant',
+                'reason' => 'Policy boundary test.',
+            ])
+            ->assertCreated();
+        $override = UserPermissionOverride::where('user_id', $target->id)->firstOrFail();
+
+        $this->actingAs($delegated)
+            ->getJson("/api/v1/admin/users/{$target->hash_id}/overrides")
+            ->assertForbidden();
+        $this->actingAs($delegated)
+            ->postJson("/api/v1/admin/users/{$target->hash_id}/overrides", [
+                'permission_slug' => 'hr.employees.view',
+                'type' => 'revoke',
+                'reason' => 'Delegation attempt.',
+            ])
+            ->assertForbidden();
+        $this->actingAs($delegated)
+            ->deleteJson("/api/v1/admin/users/{$target->hash_id}/overrides/{$override->hash_id}")
+            ->assertForbidden();
+
+        $this->actingAs($admin)
+            ->deleteJson("/api/v1/admin/users/{$target->hash_id}/overrides/{$override->hash_id}")
+            ->assertNoContent();
+        $this->actingAs($delegated)
+            ->patchJson("/api/v1/admin/users/{$target->hash_id}/overrides/{$override->hash_id}/restore")
             ->assertForbidden();
     }
 

@@ -3,6 +3,9 @@ import type { TrainingMatrixData } from '@/types/hr';
 
 export interface TrainingMatrixParams {
  department_id?: string;
+ skill_id?: string;
+ employee_limit?: number;
+ skill_limit?: number;
 }
 
 export const trainingMatrixApi = {

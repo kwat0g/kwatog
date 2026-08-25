@@ -151,26 +151,27 @@ class PurchaseOrderService
                     ? $data['purchase_request_id']
                     : HashIdFilter::decode($data['purchase_request_id'], PurchaseRequest::class))
                 : null;
-            if (! $systemGenerated) {
-                if ($prId === null) {
-                    throw new BusinessRuleException('A purchase order must be created from a purchase request (PR).');
-                }
-                // Serialize direct/manual PO creation with the approved-PR
-                // converter. The PR intentionally permits multiple POs by
-                // vendor, so the source row is the idempotency boundary.
-                $pr = PurchaseRequest::query()
-                    ->lockForUpdate()
-                    ->find($prId);
-                if (! $pr || $pr->status !== PurchaseRequestStatus::Approved) {
-                    throw new BusinessRuleException('Only approved purchase requests can be converted to purchase orders.');
-                }
+            if (! $systemGenerated && $prId === null) {
+                throw new BusinessRuleException('A purchase order must be created from a purchase request (PR).');
+            }
+
+            // Serialize the source row before validating line provenance. The
+            // PR intentionally permits multiple POs by vendor, so the source
+            // row is the idempotency boundary as well as the provenance
+            // authority.
+            $sourcePr = $prId === null ? null : PurchaseRequest::query()
+                ->lockForUpdate()
+                ->with('items')
+                ->find($prId);
+            if ($prId !== null && (! $sourcePr || (! $systemGenerated && $sourcePr->status !== PurchaseRequestStatus::Approved))) {
+                throw new BusinessRuleException('Only approved purchase requests can be converted to purchase orders.');
             }
 
             $vendorId = HashIdFilter::decode($data['vendor_id'], Vendor::class)
                 ?? (int) $data['vendor_id'];
             $isVatable = (bool) ($data['is_vatable'] ?? $this->taxPolicy->isVatRegistered());
 
-            [$lines, $subtotal] = $this->normalizeLines($data['items'] ?? []);
+            [$lines, $subtotal] = $this->normalizeLines($data['items'] ?? [], $sourcePr);
             $vat = $isVatable ? Money::mul($subtotal, $this->taxPolicy->requiredVatRate()) : Money::zero();
             $total = Money::add($subtotal, $vat);
             $threshold = $this->businessPolicy->purchaseOrderVpThreshold();
@@ -191,6 +192,7 @@ class PurchaseOrderService
                 'requires_vp_approval' => (float) $total >= $threshold,
                 'created_by'           => $by->id,
                 'remarks'              => $data['remarks'] ?? null,
+                'incoterm'             => $data['incoterm'] ?? null,
             ]);
             // status is non-fillable; service-only.
             $po->forceFill(['status' => PurchaseOrderStatus::Draft])->save();
@@ -290,44 +292,91 @@ class PurchaseOrderService
 
     public function update(PurchaseOrder $po, array $data): PurchaseOrder
     {
-        if ($po->status !== PurchaseOrderStatus::Draft) {
-            throw new BusinessRuleException('Only draft POs can be edited.');
-        }
         return DB::transaction(function () use ($po, $data) {
-            $isVatable = (bool) ($data['is_vatable'] ?? $po->is_vatable);
-            [$lines, $subtotal] = $this->normalizeLines($data['items'] ?? []);
+            // Never trust the route-bound snapshot for the state guard. A
+            // concurrent submit/approve/delete may have changed it after
+            // binding; the row lock serializes this mutation with those
+            // lifecycle actions and with line replacement.
+            $locked = PurchaseOrder::query()
+                ->lockForUpdate()
+                ->findOrFail($po->id);
+            if ($locked->status !== PurchaseOrderStatus::Draft) {
+                throw new BusinessRuleException('Only draft POs can be edited.');
+            }
+
+            $isVatable = (bool) ($data['is_vatable'] ?? $locked->is_vatable);
+            $sourcePr = $locked->purchase_request_id === null ? null : PurchaseRequest::query()
+                ->with('items')
+                ->find($locked->purchase_request_id);
+            $lineData = is_array($data['items'] ?? null)
+                ? $data['items']
+                : $locked->items()->get()->map(static fn (PurchaseOrderItem $line): array => [
+                    'item_id'                  => $line->item_id,
+                    'purchase_request_item_id' => $line->purchase_request_item_id,
+                    'description'              => $line->description,
+                    'quantity'                 => (string) $line->quantity,
+                    'unit'                     => $line->unit,
+                    'unit_price'               => (string) $line->unit_price,
+                ])->all();
+            [$lines, $subtotal] = $this->normalizeLines($lineData, $sourcePr);
             $vat = $isVatable ? Money::mul($subtotal, $this->taxPolicy->requiredVatRate()) : Money::zero();
             $total = Money::add($subtotal, $vat);
             $threshold = $this->businessPolicy->purchaseOrderVpThreshold();
 
-            $po->update([
-                'date'                 => $data['date'] ?? $po->date,
-                'expected_delivery_date' => $data['expected_delivery_date'] ?? $po->expected_delivery_date,
+            $locked->update([
+                'date'                 => $data['date'] ?? $locked->date,
+                'expected_delivery_date' => $data['expected_delivery_date'] ?? $locked->expected_delivery_date,
                 'subtotal'             => $subtotal,
                 'vat_amount'           => $vat,
                 'total_amount'         => $total,
                 'is_vatable'           => $isVatable,
                 'requires_vp_approval' => (float) $total >= $threshold,
-                'remarks'              => $data['remarks'] ?? $po->remarks,
+                'remarks'              => $data['remarks'] ?? $locked->remarks,
+                'incoterm'             => array_key_exists('incoterm', $data)
+                    ? $data['incoterm']
+                    : $locked->incoterm?->value,
             ]);
 
-            $po->items()->forceDelete();
+            $locked->items()->forceDelete();
             foreach ($lines as $row) {
-                PurchaseOrderItem::create(array_merge($row, ['purchase_order_id' => $po->id]));
+                PurchaseOrderItem::create(array_merge($row, ['purchase_order_id' => $locked->id]));
             }
-            return $this->show($po->fresh());
+
+            if ($sourcePr?->department_id !== null) {
+                // Recalculate under the same locked draft transaction. The
+                // service clears prior acknowledgment fields itself.
+                $this->budget->assess($locked, (int) $sourcePr->department_id, (string) $total);
+            } else {
+                // A changed draft must never retain a warning or finance
+                // acknowledgment calculated for a prior amount.
+                $locked->forceFill([
+                    'budget_warning_level' => null,
+                    'budget_warning_message' => null,
+                    'budget_acknowledged_by' => null,
+                    'budget_acknowledged_at' => null,
+                ])->save();
+            }
+
+            return $this->show($locked->fresh());
         });
     }
 
     public function submit(PurchaseOrder $po): PurchaseOrder
     {
-        if ($po->status !== PurchaseOrderStatus::Draft) {
-            throw new BusinessRuleException('Only draft POs can be submitted.');
-        }
         return DB::transaction(function () use ($po) {
-            $this->approvals->submit($po, 'purchase_order', (string) $po->total_amount);
-            $po->forceFill(['status' => PurchaseOrderStatus::PendingApproval])->save();
-            return $po->fresh();
+            // Lock and re-read before creating approval records so an update
+            // cannot change the lines/amount between the state check and
+            // submission.
+            $locked = PurchaseOrder::query()
+                ->lockForUpdate()
+                ->findOrFail($po->id);
+            if ($locked->status !== PurchaseOrderStatus::Draft) {
+                throw new BusinessRuleException('Only draft POs can be submitted.');
+            }
+
+            $this->approvals->submit($locked, 'purchase_order', (string) $locked->total_amount);
+            $locked->forceFill(['status' => PurchaseOrderStatus::PendingApproval])->save();
+            return $locked->fresh();
         });
     }
 
@@ -340,7 +389,7 @@ class PurchaseOrderService
     {
         // Fast-path guard (authoritative re-check happens under the row lock
         // inside the transaction).
-        if (! in_array($po->status, [PurchaseOrderStatus::PendingApproval, PurchaseOrderStatus::Draft], true)) {
+        if ($po->status !== PurchaseOrderStatus::PendingApproval) {
             throw new BusinessRuleException('PO is not in an approvable state.');
         }
         $this->budget->assertAcknowledged($po);
@@ -376,7 +425,7 @@ class PurchaseOrderService
             // approver holding a stale draft/pending instance cannot double-
             // evaluate isFullyApproved and duplicate the approval outbox event.
             $locked = PurchaseOrder::query()->lockForUpdate()->findOrFail($po->getKey());
-            if (! in_array($locked->status, [PurchaseOrderStatus::PendingApproval, PurchaseOrderStatus::Draft], true)) {
+            if ($locked->status !== PurchaseOrderStatus::PendingApproval) {
                 throw new BusinessRuleException('PO is not in an approvable state.');
             }
 
@@ -461,7 +510,7 @@ class PurchaseOrderService
             // Lock-then-guard: re-read so a stale instance cannot reject an
             // approval that concurrently committed.
             $locked = PurchaseOrder::query()->lockForUpdate()->findOrFail($po->getKey());
-            if (! in_array($locked->status, [PurchaseOrderStatus::PendingApproval, PurchaseOrderStatus::Draft], true)) {
+            if ($locked->status !== PurchaseOrderStatus::PendingApproval) {
                 throw new BusinessRuleException('PO is not in an approvable state.');
             }
 
@@ -590,15 +639,37 @@ class PurchaseOrderService
 
     public function delete(PurchaseOrder $po): void
     {
-        if ($po->status !== PurchaseOrderStatus::Draft) {
-            throw new BusinessRuleException('Only draft POs can be deleted.');
-        }
         DB::transaction(function () use ($po) {
-            $prId = $po->purchase_request_id;
-            $po->delete();
+            // Lock the authoritative row before the draft guard. This keeps a
+            // stale delete from removing a PO after submit/approval won the
+            // lifecycle race.
+            $locked = PurchaseOrder::query()
+                ->lockForUpdate()
+                ->findOrFail($po->id);
+            if ($locked->status !== PurchaseOrderStatus::Draft) {
+                throw new BusinessRuleException('Only draft POs can be deleted.');
+            }
+
+            $prId = $locked->purchase_request_id;
+            $locked->delete();
             if ($prId !== null) {
                 $this->reopenSourcePrIfLastLinkFor($prId);
             }
+        });
+    }
+
+    public function restore(PurchaseOrder $po): PurchaseOrder
+    {
+        return DB::transaction(function () use ($po): PurchaseOrder {
+            $locked = PurchaseOrder::withTrashed()
+                ->lockForUpdate()
+                ->findOrFail($po->id);
+            if (! $locked->trashed()) {
+                throw new BusinessRuleException('Only deleted purchase orders can be restored.');
+            }
+
+            $locked->restore();
+            return $locked->fresh();
         });
     }
 
@@ -666,7 +737,7 @@ class PurchaseOrderService
      * @param array<int, array> $rows
      * @return array{0: array<int, array>, 1: string}
      */
-    private function normalizeLines(array $rows): array
+    private function normalizeLines(array $rows, ?PurchaseRequest $sourcePr = null): array
     {
         $lines = [];
         $subtotal = '0';
@@ -686,10 +757,25 @@ class PurchaseOrderService
             if (Money::lte($qty, '0') || Money::lt($price, '0')) {
                 throw new BusinessRuleException('Quantity must be > 0, unit price must be ≥ 0.');
             }
+
+            $sourceLineId = $r['purchase_request_item_id'] ?? null;
+            $sourceLineId = $sourceLineId === null || $sourceLineId === ''
+                ? null
+                : (HashIdFilter::decode($sourceLineId, PurchaseRequestItem::class) ?? (int) $sourceLineId);
+            if ($sourcePr?->items->isNotEmpty() && $sourceLineId === null) {
+                throw new BusinessRuleException('Each line on a purchase order linked to a purchase request must identify its source PR line.');
+            }
+            if ($sourceLineId !== null) {
+                $sourceLine = $sourcePr?->items->firstWhere('id', $sourceLineId);
+                if (! $sourceLine || (int) $sourceLine->item_id !== $itemId) {
+                    throw new BusinessRuleException('Each purchase-request source line must belong to the linked PR and selected item.');
+                }
+            }
+
             $total = Money::mul($qty, $price);
             $lines[] = [
                 'item_id'                  => $itemId,
-                'purchase_request_item_id' => $r['purchase_request_item_id'] ?? null,
+                'purchase_request_item_id' => $sourceLineId,
                 'description'              => $r['description'],
                 'quantity'                 => $qty,
                 'unit'                     => $r['unit'] ?? null,

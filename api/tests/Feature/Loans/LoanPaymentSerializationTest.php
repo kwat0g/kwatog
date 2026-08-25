@@ -57,7 +57,10 @@ class LoanPaymentSerializationTest extends TestCase
         $this->assertSame('100.00', (string) $payment->amount);
         $this->assertSame('350.00', (string) $loan->total_paid);
         $this->assertSame('650.00', (string) $loan->balance);
-        $this->assertSame(1, $loan->pay_periods_remaining);
+        // Remaining periods are derived from the schedule covered by the
+        // ledger, not from the number of payment rows. Two partial payments
+        // have covered only 350 of the first 500-period installment.
+        $this->assertSame(2, $loan->pay_periods_remaining);
         $this->assertSame(LoanStatus::Active, $loan->status);
         $this->assertDatabaseCount('loan_payments', 2);
     }

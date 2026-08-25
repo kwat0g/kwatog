@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Modules\B2B\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Models\AuditLog;
 use App\Common\Support\HashIdFilter;
+use App\Common\Support\Money;
 use App\Common\Services\SettingsService;
 use App\Common\Services\TaxPolicyService;
 use App\Modules\Accounting\Models\Account;
@@ -15,6 +17,8 @@ use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Accounting\Services\BillService;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\DeliverySchedule;
+use App\Modules\B2B\Models\SupplierShipment;
+use App\Modules\B2B\Models\SupplierShipmentUpdate;
 use App\Modules\B2B\Events\SupplierInvoiceSubmitted;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\B2B\Enums\SupplierAgingBucket;
@@ -23,6 +27,7 @@ use App\Common\Services\SystemUserResolver;
 use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\Purchasing\Services\PurchaseOrderService;
 use App\Modules\Quality\Models\PpapSubmission;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -41,6 +46,44 @@ use Illuminate\Support\Facades\Storage;
  */
 class SupplierPortalService
 {
+    /** Supplier-visible history starts at approval and excludes internal drafts. */
+    private const SUPPLIER_VISIBLE_PO_STATUSES = [
+        PurchaseOrderStatus::Approved,
+        PurchaseOrderStatus::Sent,
+        PurchaseOrderStatus::PartiallyReceived,
+        PurchaseOrderStatus::Received,
+        PurchaseOrderStatus::Closed,
+    ];
+
+    /** Supplier actions are only available after the internal lifecycle gate. */
+    private const SUPPLIER_SHIPMENT_STATUSES = [
+        PurchaseOrderStatus::Sent,
+        PurchaseOrderStatus::PartiallyReceived,
+    ];
+
+    private const SUPPLIER_DOCUMENT_STATUSES = [
+        PurchaseOrderStatus::Sent,
+        PurchaseOrderStatus::PartiallyReceived,
+    ];
+
+    private const SUPPLIER_INVOICE_STATUSES = [
+        PurchaseOrderStatus::Sent,
+        PurchaseOrderStatus::PartiallyReceived,
+        PurchaseOrderStatus::Received,
+    ];
+
+    private const SUPPLIER_SCHEDULE_STATUSES = [
+        PurchaseOrderStatus::Sent,
+        PurchaseOrderStatus::PartiallyReceived,
+    ];
+
+    /** Draft/cancelled AP workflow rows are not supplier-facing invoices. */
+    private const SUPPLIER_VISIBLE_BILL_STATUSES = [
+        BillStatus::Unpaid,
+        BillStatus::Partial,
+        BillStatus::Paid,
+    ];
+
     public function __construct(
         private readonly BillService $bills,
         private readonly PurchaseOrderService $purchaseOrders,
@@ -53,6 +96,7 @@ class SupplierPortalService
 
     public function dashboard(int $vendorId): array
     {
+        $visiblePoStatuses = $this->supplierVisiblePoStatusValues();
         $openPoCount = PurchaseOrder::where('vendor_id', $vendorId)
             ->whereIn('status', [PurchaseOrderStatus::Approved->value, PurchaseOrderStatus::Sent->value])->count();
 
@@ -62,13 +106,19 @@ class SupplierPortalService
         $unpaidInvoiceCount = Bill::where('vendor_id', $vendorId)
             ->whereIn('status', [BillStatus::Unpaid->value, BillStatus::Partial->value])->count();
 
-        $totalUnpaid = Bill::where('vendor_id', $vendorId)
-            ->whereIn('status', [BillStatus::Unpaid->value, BillStatus::Partial->value])->sum('balance');
+        $totalUnpaid = Money::add(...Bill::where('vendor_id', $vendorId)
+            ->whereIn('status', [BillStatus::Unpaid->value, BillStatus::Partial->value])
+            ->pluck('balance')
+            ->map(static fn (mixed $balance): string => (string) $balance)
+            ->all());
 
         $recentPos = PurchaseOrder::where('vendor_id', $vendorId)
+            ->whereIn('status', $visiblePoStatuses)
+            ->with(['items.item:id,code,name,unit_of_measure'])
             ->orderByDesc('created_at')->limit(5)->get();
 
         $recentInvoices = Bill::where('vendor_id', $vendorId)
+            ->whereIn('status', $this->supplierVisibleBillStatusValues())
             ->with('purchaseOrder:id,po_number')
             ->orderByDesc('created_at')->limit(5)->get();
 
@@ -76,7 +126,7 @@ class SupplierPortalService
             'open_po_count' => $openPoCount,
             'pending_delivery_count' => $pendingDeliveryCount,
             'unpaid_invoice_count' => $unpaidInvoiceCount,
-            'total_unpaid_amount' => number_format((float) $totalUnpaid, 2),
+            'total_unpaid_amount' => $totalUnpaid,
             'recent_pos' => $recentPos,
             'recent_invoices' => $recentInvoices,
         ];
@@ -88,10 +138,16 @@ class SupplierPortalService
     {
         $query = PurchaseOrder::where('vendor_id', $vendorId)
             ->with(['vendor:id,name', 'items.item:id,code,name,unit_of_measure'])
-            ->withCount('goodsReceiptNotes');
+            ->withCount('goodsReceiptNotes')
+            ->whereIn('status', $this->supplierVisiblePoStatusValues());
 
         if (! empty($filters['status'])) {
-            $query->where('status', $filters['status']);
+            $status = PurchaseOrderStatus::tryFrom((string) $filters['status']);
+            if ($status === null || ! in_array($status, self::SUPPLIER_VISIBLE_PO_STATUSES, true)) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->where('status', $status->value);
+            }
         }
         if (! empty($filters['search'])) {
             $query->where('po_number', 'like', "%{$filters['search']}%");
@@ -104,7 +160,7 @@ class SupplierPortalService
             $query->orderBy($sortField, $sortDir === 'asc' ? 'asc' : 'desc');
         }
 
-        $perPage = min((int) ($filters['per_page'] ?? 25), 100);
+        $perPage = max(1, min((int) ($filters['per_page'] ?? 25), 100));
 
         return $query->paginate($perPage);
     }
@@ -112,13 +168,15 @@ class SupplierPortalService
     public function purchaseOrderDetail(int $vendorId, PurchaseOrder $purchaseOrder): PurchaseOrder
     {
         abort_if($purchaseOrder->vendor_id !== $vendorId, 403);
+        abort_if(! in_array($purchaseOrder->status, self::SUPPLIER_VISIBLE_PO_STATUSES, true), 404);
 
         $purchaseOrder->load([
             'vendor:id,name,contact_person,email,phone,address',
             'items.item:id,code,name,unit_of_measure',
             'goodsReceiptNotes:id,grn_number,received_date,status',
-            'bills:id,bill_number,total_amount,balance,status',
+            'bills:id,bill_number,total_amount,amount_paid,balance,status,due_date',
             'purchaseRequest:id,pr_number',
+            'supplierShipment',
         ]);
 
         $purchaseOrder->bills->each(function ($bill): void {
@@ -131,11 +189,11 @@ class SupplierPortalService
         return $purchaseOrder;
     }
 
-    public function acknowledgePo(int $vendorId, PurchaseOrder $purchaseOrder, array $data): PurchaseOrder
+    public function acknowledgePo(int $vendorId, int $portalUserId, PurchaseOrder $purchaseOrder, array $data): PurchaseOrder
     {
         abort_if($purchaseOrder->vendor_id !== $vendorId, 403);
 
-        return $this->systemUser->impersonate(function () use ($purchaseOrder, $data) {
+        $result = $this->systemUser->impersonate(function () use ($purchaseOrder, $data) {
             return DB::transaction(function () use ($purchaseOrder, $data): PurchaseOrder {
                 // Route-bound models can be stale when purchasing cancels or
                 // sends the PO concurrently. Re-read and lock before allowing
@@ -153,14 +211,18 @@ class SupplierPortalService
                 return $this->purchaseOrders->markAsSent($row, 'supplier_portal_acknowledgement');
             });
         });
+
+        $this->recordPortalAudit('supplier_po.ack', $result, $portalUserId, $vendorId);
+
+        return $result;
     }
 
-    public function updateShipment(int $vendorId, PurchaseOrder $purchaseOrder, array $data): PurchaseOrder
+    public function updateShipment(int $vendorId, int $portalUserId, PurchaseOrder $purchaseOrder, array $data): PurchaseOrder
     {
         abort_if($purchaseOrder->vendor_id !== $vendorId, 403);
 
-        return $this->systemUser->impersonate(function () use ($purchaseOrder, $data, $vendorId) {
-            return DB::transaction(function () use ($purchaseOrder, $data, $vendorId): PurchaseOrder {
+        $result = $this->systemUser->impersonate(function () use ($purchaseOrder, $data, $vendorId, $portalUserId) {
+            return DB::transaction(function () use ($purchaseOrder, $data, $vendorId, $portalUserId): PurchaseOrder {
                 // Shipment updates share the PO row with acknowledgement,
                 // cancellation, and receiving. Re-read and lock the
                 // authoritative row so a stale portal page cannot overwrite a
@@ -168,38 +230,57 @@ class SupplierPortalService
                 $row = PurchaseOrder::query()->lockForUpdate()->findOrFail($purchaseOrder->id);
                 abort_if((int) $row->vendor_id !== $vendorId, 403);
 
-                if (in_array($row->status, [
-                    PurchaseOrderStatus::Cancelled,
-                    PurchaseOrderStatus::Received,
-                    PurchaseOrderStatus::Closed,
-                ], true)) {
-                    throw new BusinessRuleException('Shipment updates are not allowed for a cancelled, received, or closed purchase order.');
+                if (! in_array($row->status, self::SUPPLIER_SHIPMENT_STATUSES, true)) {
+                    throw new BusinessRuleException('Shipment updates are only allowed after the purchase order has been sent and before it is fully received or closed.');
                 }
 
-                $estimatedArrival = $data['estimated_arrival'] ?? $row->expected_delivery_date;
-                $shippedDate = $data['shipped_date'] ?? null;
-                $carrier = trim((string) ($data['carrier'] ?? ''));
-                $tracking = trim((string) ($data['tracking_number'] ?? ''));
-                $notes = trim((string) ($data['notes'] ?? ''));
-
-                $shipmentDetails = array_values(array_filter([
-                    $shippedDate !== null && $shippedDate !== '' ? 'Shipped: '.$shippedDate : null,
-                    $carrier !== '' ? 'Carrier: '.$carrier : null,
-                    $tracking !== '' ? 'Tracking: '.$tracking : null,
-                    $notes !== '' ? 'Notes: '.$notes : null,
-                ]));
-
-                $row->expected_delivery_date = $estimatedArrival;
-                if ($shipmentDetails !== []) {
-                    $previousRemarks = trim((string) $row->remarks);
-                    $prefix = $previousRemarks !== '' ? $previousRemarks."\n" : '';
-                    $row->remarks = $prefix.'Shipment update: '.implode(' / ', $shipmentDetails);
+                $shipment = SupplierShipment::query()
+                    ->where('purchase_order_id', $row->id)
+                    ->lockForUpdate()
+                    ->first();
+                if (! $shipment) {
+                    $shipment = new SupplierShipment(['purchase_order_id' => $row->id]);
                 }
-                $row->save();
 
-                return $row->fresh();
+                $values = [
+                    'shipped_date' => array_key_exists('shipped_date', $data)
+                        ? $data['shipped_date']
+                        : optional($shipment->shipped_date)->toDateString(),
+                    'carrier' => array_key_exists('carrier', $data)
+                        ? trim((string) $data['carrier'])
+                        : $shipment->carrier,
+                    'tracking_number' => array_key_exists('tracking_number', $data)
+                        ? trim((string) $data['tracking_number'])
+                        : $shipment->tracking_number,
+                    'estimated_arrival' => array_key_exists('estimated_arrival', $data)
+                        ? $data['estimated_arrival']
+                        : optional($shipment->estimated_arrival)->toDateString(),
+                    'notes' => array_key_exists('notes', $data)
+                        ? trim((string) $data['notes'])
+                        : $shipment->notes,
+                    'portal_user_id' => $portalUserId,
+                ];
+
+                $shipment->forceFill($values)->save();
+                SupplierShipmentUpdate::create([
+                    'supplier_shipment_id' => $shipment->id,
+                    'portal_user_id' => $portalUserId,
+                    'payload' => $values,
+                    'created_at' => now(),
+                ]);
+
+                if (array_key_exists('estimated_arrival', $data)) {
+                    $row->expected_delivery_date = $data['estimated_arrival'];
+                    $row->save();
+                }
+
+                return $row->fresh()->load('supplierShipment');
             });
         });
+
+        $this->recordPortalAudit('supplier_ship.update', $result, $portalUserId, $vendorId);
+
+        return $result;
     }
 
     /* ─── Shipping Documents ─────────────────────────────────────── */
@@ -214,6 +295,11 @@ class SupplierPortalService
         abort_if($purchaseOrder->vendor_id !== $vendorId, 403);
 
         $folder = "portal/shipping-docs/{$purchaseOrder->id}";
+        $contentHash = hash_file('sha256', (string) $file->getRealPath());
+        if (! is_string($contentHash) || $contentHash === '') {
+            throw new \RuntimeException('Unable to calculate the shipping document fingerprint.');
+        }
+
         $path = $file->store($folder, 'local');
         if ($path === false) {
             // Storage fault. The supplier already passed validation and the
@@ -223,21 +309,22 @@ class SupplierPortalService
 
         try {
             // Idempotent — a double-click or retried request that re-uploads
-            // the same file (same PO + type + filename + size) must not stack
+            // the same bytes (same PO + type + content digest) must not stack
             // a second document row or orphan a second stored file. Lock the
             // PO row to serialize concurrent uploads, then return the existing
-            // row and delete the just-stored duplicate. The unique index
-            // `portal_shipping_documents_dedup_unique` backs this guard at the
-            // DB level.
-            return DB::transaction(function () use ($vendorId, $purchaseOrder, $portalUserId, $path, $file, $data): PortalShippingDocument {
+            // row and delete the just-stored duplicate. The content-digest
+            // unique index backs this guard at the DB level.
+            $document = DB::transaction(function () use ($vendorId, $purchaseOrder, $portalUserId, $path, $file, $data, $contentHash): PortalShippingDocument {
                 $po = PurchaseOrder::query()->lockForUpdate()->findOrFail($purchaseOrder->id);
                 abort_if((int) $po->vendor_id !== $vendorId, 403);
+                if (! in_array($po->status, self::SUPPLIER_DOCUMENT_STATUSES, true)) {
+                    throw new BusinessRuleException('Shipping documents are only accepted for sent or partially received purchase orders.');
+                }
 
                 $existing = PortalShippingDocument::query()
                     ->where('purchase_order_id', $po->id)
                     ->where('document_type', $data['document_type'])
-                    ->where('original_filename', $file->getClientOriginalName())
-                    ->where('file_size_bytes', $file->getSize())
+                    ->where('content_sha256', $contentHash)
                     ->first();
 
                 if ($existing) {
@@ -252,12 +339,18 @@ class SupplierPortalService
                     'file_path' => $path,
                     'original_filename' => $file->getClientOriginalName(),
                     'file_size_bytes' => $file->getSize(),
+                    'content_sha256' => $contentHash,
                     'mime_type' => $file->getMimeType(),
                     'notes' => $data['notes'] ?? null,
                     'uploaded_by' => $portalUserId,
                     'uploaded_at' => now(),
                 ]);
             });
+
+            $document->load(['purchaseOrder', 'uploader']);
+            $this->recordPortalAudit('supplier_doc.upload', $document, $portalUserId, $vendorId);
+
+            return $document;
         } catch (\Throwable $e) {
             Storage::disk('local')->delete($path);
             throw $e;
@@ -269,6 +362,7 @@ class SupplierPortalService
         abort_if($purchaseOrder->vendor_id !== $vendorId, 403);
 
         return PortalShippingDocument::where('purchase_order_id', $purchaseOrder->id)
+            ->with(['purchaseOrder', 'uploader'])
             ->orderByDesc('uploaded_at')
             ->get();
     }
@@ -339,6 +433,10 @@ class SupplierPortalService
                     ];
                 }
 
+                if (! in_array($lockedPurchaseOrder->status, self::SUPPLIER_INVOICE_STATUSES, true)) {
+                    throw new BusinessRuleException('Supplier invoices are only accepted for sent or receiving-stage purchase orders.');
+                }
+
                 $defaultAccountHashId = $this->defaultExpenseAccountHashId();
                 $items = $lockedPurchaseOrder->items->map(fn ($poItem) => [
                     'expense_account_id' => $defaultAccountHashId,
@@ -389,6 +487,11 @@ class SupplierPortalService
                         throw new \RuntimeException('Unable to store the supplier invoice.');
                     }
 
+                    $contentHash = hash_file('sha256', (string) $file->getRealPath());
+                    if (! is_string($contentHash) || $contentHash === '') {
+                        throw new \RuntimeException('Unable to calculate the supplier invoice fingerprint.');
+                    }
+
                     PortalShippingDocument::create([
                         'purchase_order_id' => $lockedPurchaseOrder->id,
                         'bill_id' => $bill->id,
@@ -396,6 +499,7 @@ class SupplierPortalService
                         'file_path' => $storedPath,
                         'original_filename' => $file->getClientOriginalName(),
                         'file_size_bytes' => $file->getSize(),
+                        'content_sha256' => $contentHash,
                         'mime_type' => $file->getMimeType(),
                         'notes' => 'Supplier-submitted invoice for bill '.$bill->bill_number,
                         'uploaded_by' => $portalUserId,
@@ -411,6 +515,7 @@ class SupplierPortalService
 
             if (str_starts_with((string) $result['message'], 'Invoice submitted successfully')) {
                 event(new SupplierInvoiceSubmitted($result['bill']));
+                $this->recordPortalAudit('supplier_inv.submit', $result['bill'], $portalUserId, $vendorId);
             }
 
             return $result;
@@ -446,10 +551,20 @@ class SupplierPortalService
     public function invoices(int $vendorId, array $filters): LengthAwarePaginator
     {
         $query = Bill::where('vendor_id', $vendorId)
+            ->whereIn('status', $this->supplierVisibleBillStatusValues())
             ->with(['purchaseOrder:id,po_number', 'vendor:id,name'])
             ->orderByDesc('created_at');
 
-        $perPage = min((int) ($filters['per_page'] ?? 25), 100);
+        if (! empty($filters['status'])) {
+            $status = BillStatus::tryFrom((string) $filters['status']);
+            if ($status === null) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->where('status', $status->value);
+            }
+        }
+
+        $perPage = max(1, min((int) ($filters['per_page'] ?? 25), 100));
 
         return $query->paginate($perPage);
     }
@@ -457,6 +572,7 @@ class SupplierPortalService
     public function invoiceDetail(int $vendorId, Bill $invoice): Bill
     {
         abort_if($invoice->vendor_id !== $vendorId, 403, 'You do not have access to this invoice.');
+        abort_if(! in_array($invoice->status, self::SUPPLIER_VISIBLE_BILL_STATUSES, true), 404);
 
         $invoice->load([
             'purchaseOrder:id,po_number,date,total_amount,status',
@@ -470,7 +586,7 @@ class SupplierPortalService
 
     /* ─── Deliveries / GRN ───────────────────────────────────────── */
 
-    public function deliveries(int $vendorId, array $filters): Collection
+    public function deliveries(int $vendorId, array $filters): LengthAwarePaginator
     {
         $query = GoodsReceiptNote::where('vendor_id', $vendorId)
             ->with(['purchaseOrder:id,po_number'])
@@ -480,7 +596,9 @@ class SupplierPortalService
             $query->where('status', $filters['status']);
         }
 
-        return $query->get();
+        $perPage = max(1, min((int) ($filters['per_page'] ?? 25), 100));
+
+        return $query->paginate($perPage);
     }
 
     /* ─── Statement of Account ───────────────────────────────────── */
@@ -493,29 +611,29 @@ class SupplierPortalService
             ->orderBy('due_date')
             ->get();
 
-        $aging = ['current' => 0, 'd1_30' => 0, 'd31_60' => 0, 'd61_90' => 0, 'd91_plus' => 0];
-        $totalOutstanding = 0;
+        $aging = array_fill_keys(['current', 'd1_30', 'd31_60', 'd61_90', 'd91_plus'], Money::zero());
+        $totalOutstanding = Money::zero();
 
         foreach ($openBills as $bill) {
             $bucket = $bill->agingBucket();
-            $balance = (float) $bill->balance;
+            $balance = (string) $bill->balance;
             if (isset($aging[$bucket])) {
-                $aging[$bucket] += $balance;
+                $aging[$bucket] = Money::add($aging[$bucket], $balance);
             }
-            $totalOutstanding += $balance;
+            $totalOutstanding = Money::add($totalOutstanding, $balance);
         }
 
         $vendor = Vendor::find($vendorId);
 
         return [
             'vendor_name' => $vendor?->name,
-            'total_outstanding' => number_format($totalOutstanding, 2),
+            'total_outstanding' => $totalOutstanding,
             'aging_buckets' => [
-                'current' => number_format($aging['current'], 2),
-                'd1_30' => number_format($aging['d1_30'], 2),
-                'd31_60' => number_format($aging['d31_60'], 2),
-                'd61_90' => number_format($aging['d61_90'], 2),
-                'd91_plus' => number_format($aging['d91_plus'], 2),
+                'current' => $aging['current'],
+                'd1_30' => $aging['d1_30'],
+                'd31_60' => $aging['d31_60'],
+                'd61_90' => $aging['d61_90'],
+                'd91_plus' => $aging['d91_plus'],
             ],
             'aging_bucket_options' => array_map(
                 static fn (SupplierAgingBucket $bucket): array => ['value' => $bucket->value, 'label' => $bucket->label()],
@@ -528,30 +646,33 @@ class SupplierPortalService
 
     /* ─── Delivery Schedules ─────────────────────────────────────── */
 
-    public function deliverySchedules(int $vendorId): Collection
+    public function deliverySchedules(int $vendorId, array $filters = []): LengthAwarePaginator
     {
         return DeliverySchedule::where('vendor_id', $vendorId)
-            ->with('purchaseOrder:id,po_number')
+            ->with([
+                'purchaseOrder:id,po_number',
+                'purchaseOrder.items:id,purchase_order_id,description',
+            ])
             ->orderByDesc('month')
             ->orderByDesc('created_at')
-            ->get();
+            ->paginate(max(1, min((int) ($filters['per_page'] ?? 25), 100)));
     }
 
-    public function storeDeliverySchedule(int $vendorId, array $data): DeliverySchedule
+    public function storeDeliverySchedule(int $vendorId, int $portalUserId, array $data): DeliverySchedule
     {
         $decodedPoId = HashIdFilter::decode($data['purchase_order_id'], PurchaseOrder::class);
-        $po = PurchaseOrder::query()
-            ->whereKey($decodedPoId)
-            ->where('vendor_id', $vendorId)
-            ->firstOrFail();
 
-        // Idempotent — a portal double-click or a retried request must not
-        // stack a second schedule for the same PO + month. Lock the existing
-        // submission first and return it, mirroring submitInvoice's
-        // already-submitted path. The partial unique index
-        // `delivery_schedules_vendor_po_month_unique` backs this guard at the
-        // DB level.
-        $schedule = DB::transaction(function () use ($vendorId, $po, $data): DeliverySchedule {
+        $schedule = DB::transaction(function () use ($vendorId, $portalUserId, $decodedPoId, $data): DeliverySchedule {
+            $po = PurchaseOrder::query()
+                ->whereKey($decodedPoId)
+                ->where('vendor_id', $vendorId)
+                ->lockForUpdate()
+                ->firstOrFail();
+            if (! in_array($po->status, self::SUPPLIER_SCHEDULE_STATUSES, true)) {
+                throw new BusinessRuleException('Delivery schedules are only accepted for sent or partially received purchase orders.');
+            }
+
+            $normalizedLines = $this->normalizeScheduleLines($po, $data['lines']);
             $existing = DeliverySchedule::query()
                 ->where('vendor_id', $vendorId)
                 ->where('purchase_order_id', $po->id)
@@ -560,15 +681,29 @@ class SupplierPortalService
                 ->first();
 
             if ($existing) {
-                return $existing;
+                if ($existing->lines !== $normalizedLines) {
+                    throw new BusinessRuleException('A delivery schedule already exists for this purchase order and month with a different payload.');
+                }
+
+                return $existing->load([
+                    'purchaseOrder:id,po_number',
+                    'purchaseOrder.items:id,purchase_order_id,description',
+                ]);
             }
 
-            return DeliverySchedule::create([
+            $schedule = DeliverySchedule::create([
                 'vendor_id' => $vendorId,
                 'purchase_order_id' => $po->id,
                 'month' => $data['month'],
                 'status' => 'submitted',
-                'lines' => $data['lines'],
+                'lines' => $normalizedLines,
+            ]);
+
+            $this->recordPortalAudit('supplier_sched.sub', $schedule, $portalUserId, $vendorId);
+
+            return $schedule->load([
+                'purchaseOrder:id,po_number',
+                'purchaseOrder.items:id,purchase_order_id,description',
             ]);
         });
 
@@ -588,8 +723,73 @@ class SupplierPortalService
             $query->where('status', $filters['status']);
         }
 
-        $perPage = min((int) ($filters['per_page'] ?? 25), 100);
+        $perPage = max(1, min((int) ($filters['per_page'] ?? 25), 100));
 
         return $query->paginate($perPage);
+    }
+
+    /** @return array<int, string> */
+    private function supplierVisiblePoStatusValues(): array
+    {
+        return array_map(static fn (PurchaseOrderStatus $status): string => $status->value, self::SUPPLIER_VISIBLE_PO_STATUSES);
+    }
+
+    /** @return array<int, string> */
+    private function supplierVisibleBillStatusValues(): array
+    {
+        return array_map(static fn (BillStatus $status): string => $status->value, self::SUPPLIER_VISIBLE_BILL_STATUSES);
+    }
+
+    /** @param array<int, array<string, mixed>> $lines */
+    private function normalizeScheduleLines(PurchaseOrder $purchaseOrder, array $lines): array
+    {
+        $items = $purchaseOrder->items()->lockForUpdate()->get()->keyBy('id');
+        $seen = [];
+        $normalized = [];
+
+        foreach ($lines as $line) {
+            $itemId = HashIdFilter::decode((string) ($line['purchase_order_item_id'] ?? ''), PurchaseOrderItem::class);
+            $item = $itemId === null ? null : $items->get($itemId);
+            if (! $item || isset($seen[$item->id])) {
+                throw new BusinessRuleException('Each delivery schedule line must identify a unique item on the purchase order.');
+            }
+
+            $quantity = (string) $line['quantity'];
+            $remaining = Money::sub((string) $item->quantity, (string) $item->quantity_received);
+            if (Money::lte($quantity, '0') || Money::gt($quantity, $remaining)) {
+                throw new BusinessRuleException("Scheduled quantity for {$item->description} exceeds the remaining purchase-order quantity.");
+            }
+
+            $seen[$item->id] = true;
+            $normalized[] = [
+                'purchase_order_item_id' => $item->hash_id,
+                'product_name' => $item->item?->name ?? $item->description,
+                'quantity' => Money::round2($quantity),
+                'notes' => $line['notes'] ?? null,
+            ];
+        }
+
+        return $normalized;
+    }
+
+    private function recordPortalAudit(string $action, object $model, int $portalUserId, int $vendorId): void
+    {
+        AuditLog::create([
+            'user_id' => null,
+            'actor_type' => 'supplier_portal',
+            'action' => $action,
+            'model_type' => $model::class,
+            'model_id' => $model->getKey(),
+            'old_values' => null,
+            'new_values' => [
+                'portal_user_id' => $portalUserId,
+                'vendor_id' => $vendorId,
+            ],
+            'ip_address' => request()?->ip(),
+            'user_agent' => request()?->userAgent(),
+            'source_command' => request()?->route()?->getName() ?? 'supplier_portal',
+            'correlation_id' => request()?->attributes->get('request_id') ?? request()?->header('X-Request-ID'),
+            'created_at' => now(),
+        ]);
     }
 }

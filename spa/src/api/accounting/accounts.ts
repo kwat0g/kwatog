@@ -19,5 +19,7 @@ export const accountsApi = {
  update: (id: string, data: UpdateAccountData) =>
  client.put<ApiSuccess<Account>>(`/accounts/${id}`, data).then((r) => r.data.data),
  deactivate: (id: string) =>
- client.delete(`/accounts/${id}`),
+ client.delete<ApiSuccess<Account>>(`/accounts/${id}`).then((r) => r.data.data),
+ activate: (id: string) =>
+ client.patch<ApiSuccess<Account>>(`/accounts/${id}/activate`).then((r) => r.data.data),
 };

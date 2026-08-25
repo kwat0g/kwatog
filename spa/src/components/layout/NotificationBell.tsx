@@ -12,7 +12,7 @@
  * useNotificationRealtime() (private user.{id} channel, notification.created) —
  * the websocket pops a toast + invalidates the query; the poll is the fallback.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { LuBell } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -35,9 +35,13 @@ export function NotificationBell() {
  const [open, setOpen] = useState(false);
  const navigate = useNavigate();
  const containerRef = useRef<HTMLDivElement | null>(null);
+ const triggerRef = useRef<HTMLButtonElement | null>(null);
+ const panelRef = useRef<HTMLDivElement | null>(null);
+ const panelId = useId();
+ const titleId = useId();
  const qc = useQueryClient();
 
- const { data } = useQuery({
+ const { data, isError, refetch } = useQuery({
  queryKey: ['notifications', 'peek'],
  queryFn: () => notificationsApi.list({ per_page: PEEK_COUNT }),
  refetchInterval: POLL_MS,
@@ -83,6 +87,23 @@ export function NotificationBell() {
  return () => document.removeEventListener('keydown', onKey);
  }, [open]);
 
+ // Move focus into the non-modal dialog when it opens and return focus to the
+ // trigger when it closes. Native buttons/links then provide the tab order.
+ useEffect(() => {
+ if (!open) return;
+ const trigger = triggerRef.current;
+ const frame = window.requestAnimationFrame(() => {
+ const firstFocusable = panelRef.current?.querySelector<HTMLElement>(
+ 'button:not([disabled]), a[href]',
+ );
+ (firstFocusable ?? panelRef.current)?.focus();
+ });
+ return () => {
+ window.cancelAnimationFrame(frame);
+ trigger?.focus();
+ };
+ }, [open]);
+
  const handleClick = (n: NotificationRow) => {
  setOpen(false);
  if (!n.read_at) {
@@ -96,10 +117,13 @@ export function NotificationBell() {
  <div className="relative" ref={containerRef}>
  <Tooltip content="Notifications">
  <Button
+ ref={triggerRef}
  variant="ghost"
  size="sm"
  iconOnly
  aria-label={`Notifications${unread > 0 ? `, ${unread} unread` : ''}`}
+ aria-haspopup="dialog"
+ aria-controls={panelId}
  aria-expanded={open}
  onClick={() => setOpen((v) => !v)}
  className="relative text-muted hover:text-primary"
@@ -118,11 +142,16 @@ export function NotificationBell() {
 
  {open && (
  <div
+ ref={panelRef}
+ id={panelId}
  className="absolute right-0 top-9 w-80 bg-canvas border border-default rounded-md z-50 animate-fade-in overflow-hidden"
- role="menu"
+ role="dialog"
+ aria-modal="false"
+ aria-labelledby={titleId}
+ tabIndex={-1}
  >
  <div className="px-3 py-2 border-b border-default flex items-center justify-between">
- <span className="text-sm font-medium">Notifications</span>
+ <h2 id={titleId} className="text-sm font-medium">Notifications</h2>
  <div className="flex items-center gap-2">
  <span className="text-xs text-muted font-mono tabular-nums">{unread} unread</span>
  {unread > 0 && (
@@ -133,7 +162,14 @@ export function NotificationBell() {
  </div>
  </div>
 
- {items.length === 0 ? (
+ {isError ? (
+ <EmptyState
+ size="compact"
+ icon="alert-circle"
+ title="Could not load notifications"
+ action={<Button size="sm" variant="secondary" onClick={() => void refetch()}>Retry</Button>}
+ />
+ ) : items.length === 0 ? (
  <EmptyState size="compact" icon="bell-off" title="No notifications yet" />
  ) : (
  <ul className="max-h-96 overflow-y-auto divide-y divide-subtle">

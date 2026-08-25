@@ -57,4 +57,10 @@ class JobApplication extends Model
     {
         return $this->hasMany(ApplicationNote::class);
     }
+
+    public function events(): HasMany
+    {
+        return $this->hasMany(RecruitmentApplicationEvent::class, 'job_application_id')
+            ->orderBy('created_at');
+    }
 }

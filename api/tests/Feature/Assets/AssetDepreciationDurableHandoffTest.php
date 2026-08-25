@@ -109,7 +109,7 @@ class AssetDepreciationDurableHandoffTest extends TestCase
             'asset_code' => 'AST-DURABLE-001',
             'name' => 'Durable listener asset',
             'category' => 'equipment',
-            'acquisition_date' => '2025-01-01',
+            'acquisition_date' => '2025-12-01',
             'acquisition_cost' => '12000.00',
             'useful_life_years' => 5,
             'salvage_value' => '0.00',

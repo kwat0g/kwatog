@@ -90,14 +90,11 @@ class SpcServiceTest extends TestCase
         $this->assertSame(5, $result['sample_count']);
     }
 
-    public function test_cpk_equals_cp_for_perfectly_centered_process(): void
+    public function test_returns_null_for_zero_variance_process(): void
     {
-        // 5 identical values at exactly the midpoint — mean = centre = 10.0
+        // Capability is undefined when the sample has no measurable variation;
+        // flooring sigma would report artificial, effectively infinite indices.
         $measurements = [10.0, 10.0, 10.0, 10.0, 10.0];
-        // sigma → near-zero, both cp and cpk → huge, but Cpu ≈ Cpl so cpk ≈ cp
-        $result = $this->svc->compute($measurements, 10.5, 9.5);
-        $this->assertNotNull($result);
-        // When process is perfectly centred, Cpu == Cpl so Cpk == Cp
-        $this->assertEqualsWithDelta($result['cp'], $result['cpk'], 0.001);
+        $this->assertNull($this->svc->compute($measurements, 10.5, 9.5));
     }
 }

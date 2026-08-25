@@ -119,6 +119,44 @@ class ActionCenterControllerTest extends TestCase
         $this->assertDatabaseCount('action_center_tasks', 0);
     }
 
+    public function test_quality_task_permissions_are_source_specific(): void
+    {
+        $ncrOnly = $this->userWithPermissions(['quality.ncr.view']);
+        $inspectionOnly = $this->userWithPermissions(['quality.inspections.view']);
+
+        $this->actingAs($ncrOnly, 'sanctum')
+            ->patchJson('/api/v1/dashboards/action-center/tasks', [
+                'item_ids' => ['quality:inspection:stale-key'], 'action' => 'claim',
+            ])
+            ->assertForbidden();
+
+        $this->actingAs($inspectionOnly, 'sanctum')
+            ->patchJson('/api/v1/dashboards/action-center/tasks', [
+                'item_ids' => ['quality:ncr:guessed-key'], 'action' => 'claim',
+            ])
+            ->assertForbidden();
+
+        $broad = $this->userWithPermissions(['quality.view']);
+        $this->actingAs($broad, 'sanctum')
+            ->patchJson('/api/v1/dashboards/action-center/tasks', [
+                'item_ids' => ['quality:inspection:known-key', 'quality:ncr:known-key'], 'action' => 'claim',
+            ])
+            ->assertOk()
+            ->assertJsonCount(2, 'data');
+    }
+
+    public function test_unknown_quality_item_kind_is_rejected_as_malformed(): void
+    {
+        $user = $this->userWithPermissions(['quality.view']);
+
+        $this->actingAs($user, 'sanctum')
+            ->patchJson('/api/v1/dashboards/action-center/tasks', [
+                'item_ids' => ['quality:certificate:unknown'], 'action' => 'claim',
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Unknown action-center item.');
+    }
+
     /**
      * An unrecognised key prefix stays a 422 — it is the same class of failure as
      * 'Unsupported action-center task action.', which was already a

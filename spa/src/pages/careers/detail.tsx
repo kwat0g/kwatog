@@ -33,7 +33,7 @@ export default function JobPostingDetailPage() {
  const [menuOpen, setMenuOpen] = useState(false);
  const fileRef = useRef<HTMLInputElement>(null);
 
- const { data, isLoading, isError } = useQuery({
+ const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['public-posting', id],
  queryFn: () => publicRecruitmentApi.showPosting(id!).then((r) => r.data.data),
  enabled: !!id,
@@ -101,7 +101,12 @@ export default function JobPostingDetailPage() {
  </div>
  )}
 
- {isError && <p className="text-muted">Failed to load job posting.</p>}
+ {isError && (
+ <div className="space-y-3">
+  <p className="text-muted">Failed to load job posting.</p>
+  <Button variant="secondary" onClick={() => refetch()}>Retry</Button>
+ </div>
+ )}
 
  {posting && (
  <>
@@ -172,55 +177,64 @@ export default function JobPostingDetailPage() {
  <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-4">
  <div className="grid gap-4 sm:grid-cols-2">
  <div>
- <label className="mb-1 block text-sm font-medium text-secondary">First Name *</label>
- <Input {...register('first_name')} />
+ <label htmlFor="first-name" className="mb-1 block text-sm font-medium text-secondary">First Name *</label>
+ <Input id="first-name" {...register('first_name')} />
  {errors.first_name && <p className="mt-1 text-xs text-danger-fg">{errors.first_name.message}</p>}
  </div>
  <div>
- <label className="mb-1 block text-sm font-medium text-secondary">Last Name *</label>
- <Input {...register('last_name')} />
+ <label htmlFor="last-name" className="mb-1 block text-sm font-medium text-secondary">Last Name *</label>
+ <Input id="last-name" {...register('last_name')} />
  {errors.last_name && <p className="mt-1 text-xs text-danger-fg">{errors.last_name.message}</p>}
  </div>
  </div>
 
  <div className="grid gap-4 sm:grid-cols-2">
  <div>
- <label className="mb-1 block text-sm font-medium text-secondary">Email *</label>
- <Input type="email" {...register('email')} />
+ <label htmlFor="application-email" className="mb-1 block text-sm font-medium text-secondary">Email *</label>
+ <Input id="application-email" type="email" {...register('email')} />
  {errors.email && <p className="mt-1 text-xs text-danger-fg">{errors.email.message}</p>}
  </div>
  <div>
- <label className="mb-1 block text-sm font-medium text-secondary">Phone *</label>
- <Input {...register('phone')} placeholder="09XX-XXX-XXXX" />
+ <label htmlFor="application-phone" className="mb-1 block text-sm font-medium text-secondary">Phone *</label>
+ <Input id="application-phone" {...register('phone')} placeholder="09XX-XXX-XXXX" />
  {errors.phone && <p className="mt-1 text-xs text-danger-fg">{errors.phone.message}</p>}
  </div>
  </div>
 
  <div>
  <label className="mb-1 block text-sm font-medium text-secondary">Resume *</label>
- <div
- onClick={() => fileRef.current?.click()}
- className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-default px-4 py-3 text-sm text-secondary hover:border-strong"
+ <label
+ htmlFor="resume-upload"
+ className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-default px-4 py-3 text-sm text-secondary hover:border-strong focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/20"
  >
  <LuUpload size={16} />
  {resume ? resume.name : 'Click to upload (PDF, DOC, DOCX — max 5MB)'}
- </div>
+ </label>
  <input
+ id="resume-upload"
  ref={fileRef}
  type="file"
  accept=".pdf,.doc,.docx"
- className="hidden"
+ className="sr-only"
+ aria-describedby={resumeError ? 'resume-error' : undefined}
  onChange={(e) => {
- setResume(e.target.files?.[0] ?? null);
+ const selected = e.target.files?.[0] ?? null;
+ if (selected && selected.size > 5 * 1024 * 1024) {
+  e.currentTarget.value = '';
+  setResume(null);
+  setResumeError('Resume must be 5MB or smaller.');
+  return;
+ }
+ setResume(selected);
  setResumeError(null);
  }}
  />
- {resumeError && <p className="mt-1 text-xs text-danger-fg">{resumeError}</p>}
+ {resumeError && <p id="resume-error" role="alert" className="mt-1 text-xs text-danger-fg">{resumeError}</p>}
  </div>
 
  <div>
- <label className="mb-1 block text-sm font-medium text-secondary">Cover Letter</label>
- <Textarea {...register('cover_letter')} rows={4} placeholder="Tell us why you're a great fit..." />
+ <label htmlFor="cover-letter" className="mb-1 block text-sm font-medium text-secondary">Cover Letter</label>
+ <Textarea id="cover-letter" {...register('cover_letter')} rows={4} placeholder="Tell us why you're a great fit..." />
  </div>
 
  <Button type="submit" disabled={mutation.isPending} className="w-full">

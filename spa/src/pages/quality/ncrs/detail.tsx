@@ -20,6 +20,7 @@ import { Panel } from '@/components/ui/Panel';
 import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { Select } from '@/components/ui/Select';
+import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { LinkedRecords } from '@/components/chain/LinkedRecords';
@@ -32,6 +33,8 @@ import type {
  NcrDisposition,
  NcrSeverity,
  NcrStatus,
+ NcrAction,
+ EffectivenessStatus,
 } from '@/types/quality';
 
 const STATUS_CHIP: Record<NcrStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
@@ -54,6 +57,8 @@ export default function NcrDetailPage() {
  const { can } = usePermission();
  const [actionType, setActionType] = useState<NcrActionType>('containment');
  const [actionDesc, setActionDesc] = useState('');
+ const [ownerId, setOwnerId] = useState('');
+ const [dueDate, setDueDate] = useState('');
  const [disposition, setDisposition] = useState<NcrDisposition | ''>('');
  const [rootCause, setRootCause] = useState('');
  const [correctiveAction, setCorrectiveAction] = useState('');
@@ -70,15 +75,28 @@ export default function NcrDetailPage() {
  queryKey: ['quality', 'ncrs', 'options'],
  queryFn: () => ncrsApi.options(),
  });
+ const { data: assignees = [] } = useQuery({
+ queryKey: ['quality', 'ncr-assignees'],
+ queryFn: ncrsApi.assignees,
+ enabled: can('quality.ncr.manage'),
+ staleTime: 5 * 60 * 1000,
+ });
  const labelFor = (items: Array<{ value: string; label: string }> | undefined, value: string | null | undefined) =>
  (value && items?.find((item) => item.value === value)?.label) ?? value?.replace('_', ' ') ?? '—';
 
  const addAction = useMutation({
  mutationFn: () =>
- ncrsApi.addAction(id, { action_type: actionType, description: actionDesc }),
+ ncrsApi.addAction(id, {
+ action_type: actionType,
+ description: actionDesc,
+ ...(ownerId ? { owner_id: ownerId } : {}),
+ ...(dueDate ? { due_date: dueDate } : {}),
+ }),
  onSuccess: () => {
  toast.success('Action added');
  setActionDesc('');
+ setOwnerId('');
+ setDueDate('');
  qc.invalidateQueries({ queryKey: ['quality', 'ncrs', id] });
  },
  onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed'),
@@ -185,6 +203,9 @@ export default function NcrDetailPage() {
  ),
  time: a.performed_at?.slice(0, 16).replace('T', ' ') ?? '',
  }));
+ const capaActions = (data.actions ?? []).filter((action) =>
+ action.action_type === 'corrective' || action.action_type === 'preventive',
+ );
 
  return (
  <div>
@@ -314,6 +335,13 @@ export default function NcrDetailPage() {
  value={actionDesc}
  onChange={(e) => setActionDesc(e.target.value)}
  />
+ <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+ <Select label="CAPA owner (optional)" value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
+ <option value="">Actor (default)</option>
+ {assignees.map((assignee) => <option key={assignee.id} value={assignee.id}>{assignee.name}</option>)}
+ </Select>
+ <Input label="Due date (optional)" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+ </div>
  <div className="flex justify-end mt-3">
  <Button
  variant="secondary"
@@ -328,6 +356,9 @@ export default function NcrDetailPage() {
  </div>
  </Panel>
  )}
+ {data.status === 'closed' && capaActions.map((action) => (
+ <ActionEffectivenessPanel key={`${action.id}-${action.effectiveness_status ?? 'unscheduled'}`} ncrId={id} action={action} canManage={can('quality.ncr.manage')} />
+ ))}
  </div>
 
  <div className="space-y-4">
@@ -344,6 +375,9 @@ export default function NcrDetailPage() {
  <Panel title="Navigation">
  <Link to="/quality/ncrs" className="text-xs text-accent hover:underline">
  ← Back to NCRs
+ </Link>
+ <Link to="/quality/ncrs/effectiveness" className="block text-xs text-accent hover:underline mt-2">
+ CAPA due queue →
  </Link>
  </Panel>
  </div>
@@ -374,5 +408,63 @@ export default function NcrDetailPage() {
  pending={cancel.isPending}
  />
  </div>
+ );
+}
+
+function ActionEffectivenessPanel({
+ ncrId,
+ action,
+ canManage,
+}: {
+ ncrId: string;
+ action: NcrAction;
+ canManage: boolean;
+}) {
+ const qc = useQueryClient();
+ const [status, setStatus] = useState<Exclude<EffectivenessStatus, 'pending_verification'>>('effective');
+ const [notes, setNotes] = useState(action.effectiveness_notes ?? '');
+ const terminal = action.effectiveness_status === 'effective' || action.effectiveness_status === 'not_applicable';
+ const canVerify = canManage && !terminal && (
+ action.effectiveness_status === 'pending_verification' || action.effectiveness_status === 'ineffective'
+ );
+ const verify = useMutation({
+ mutationFn: () => ncrsApi.verifyAction(ncrId, action.id, { effectiveness_status: status, notes }),
+ onSuccess: () => {
+ toast.success('CAPA effectiveness recorded');
+ qc.invalidateQueries({ queryKey: ['quality', 'ncrs', ncrId] });
+ },
+ onError: (error: AxiosError<{ message?: string }>) => {
+ toast.error(error.response?.data?.message ?? 'This CAPA changed before it could be verified. Reload and try again.');
+ },
+ });
+
+ return (
+ <Panel title={`${action.action_type_label ?? action.action_type} effectiveness`}>
+ <div className="flex flex-wrap items-center gap-2 text-sm">
+ <Chip variant={terminal ? 'success' : action.effectiveness_status === 'ineffective' ? 'danger' : 'warning'}>
+ {action.effectiveness_status_label ?? action.effectiveness_status ?? 'Not scheduled'}
+ </Chip>
+ {action.owner && <span className="text-muted">Owner: {action.owner.name}</span>}
+ {action.next_effectiveness_check_at && <span className="text-muted">Due: <span className="font-mono">{action.next_effectiveness_check_at}</span></span>}
+ </div>
+ {action.effectiveness_notes && (
+ <p className="mt-2 text-sm whitespace-pre-line">{action.effectiveness_notes}</p>
+ )}
+ {canVerify && (
+ <div className="mt-3 space-y-3">
+ <Select label="Verdict" value={status} onChange={(event) => setStatus(event.target.value as typeof status)}>
+ <option value="effective">Effective</option>
+ <option value="ineffective">Ineffective — schedule follow-up</option>
+ <option value="not_applicable">Not applicable</option>
+ </Select>
+ <Textarea label="Verification notes" required rows={3} maxLength={2000} value={notes} onChange={(event) => setNotes(event.target.value)} />
+ <div className="flex justify-end">
+ <Button variant="secondary" size="sm" loading={verify.isPending} disabled={!notes.trim()} onClick={() => verify.mutate()}>
+ Record verdict
+ </Button>
+ </div>
+ </div>
+ )}
+ </Panel>
  );
 }

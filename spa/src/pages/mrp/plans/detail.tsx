@@ -36,6 +36,7 @@ export default function MrpPlanDetailPage() {
  qc.setQueryData(['mrp', 'plans', 'detail', id], plan);
  toast.success(`Re-ran MRP — new version v${plan.version}.`);
  },
+ onError: () => toast.error('Failed to re-run MRP. Review the run history for recovery details.'),
  });
 
  const summary = useMemo(() => {
@@ -92,19 +93,19 @@ export default function MrpPlanDetailPage() {
  <div className="text-lg font-mono tabular-nums font-medium">{summary.totalDemand.toFixed(0)}</div>
  <div className="text-2xs text-muted mt-0.5">units gross</div>
  </div>
- <div className={`rounded-md border p-3 ${summary.shortageCount > 0 ? 'border-danger/30 bg-danger-bg/5' : 'border-default bg-canvas'}`}>
+ <div className={`rounded-md border p-3 ${summary.shortageCount > 0 ? 'border-danger bg-danger-bg' : 'border-default bg-canvas'}`}>
  <div className="text-2xs uppercase tracking-wider text-muted mb-1">Shortages</div>
  <div className={`text-lg font-mono tabular-nums font-medium ${summary.shortageCount > 0 ? 'text-danger-fg' : ''}`}>
  {summary.shortageCount}
  </div>
  <div className="text-2xs text-muted mt-0.5">materials short</div>
  </div>
- <div className={`rounded-md border p-3 ${summary.autoPrCount > 0 ? 'border-info/30 bg-info-bg/5' : 'border-default bg-canvas'}`}>
+ <div className={`rounded-md border p-3 ${summary.autoPrCount > 0 ? 'border-info bg-info-bg' : 'border-default bg-canvas'}`}>
  <div className="text-2xs uppercase tracking-wider text-muted mb-1">Auto PRs</div>
  <div className="text-lg font-mono tabular-nums font-medium">{summary.autoPrCount}</div>
  <div className="text-2xs text-muted mt-0.5">generated</div>
  </div>
- <div className={`rounded-md border p-3 ${summary.plannedCost ? 'border-success/30 bg-success-bg/5' : 'border-default bg-canvas'}`}>
+ <div className={`rounded-md border p-3 ${summary.plannedCost ? 'border-success bg-success-bg' : 'border-default bg-canvas'}`}>
  <div className="text-2xs uppercase tracking-wider text-muted mb-1">Planned cost</div>
  <div className="text-lg font-mono tabular-nums font-medium">{formatPeso(summary.plannedCost)}</div>
  <div className="text-2xs text-muted mt-0.5">remaining production</div>
@@ -125,6 +126,7 @@ export default function MrpPlanDetailPage() {
  {data.diagnostics.length === 0 ? (
  <div className="p-4 text-sm text-muted">No materials evaluated (no active BOM).</div>
  ) : (
+ <div className="overflow-x-auto">
  <table className={tableCls}>
  <thead>
  <tr className={theadTrCls}>
@@ -143,7 +145,7 @@ export default function MrpPlanDetailPage() {
  {data.diagnostics.map((d, index) => (
  isWarningDiagnostic(d) ? (
  <tr key={`warning-${d.sales_order_line_id}-${index}`} className={trCls}>
- <Td colSpan={10}>
+ <Td colSpan={9}>
  <div className="text-warning-fg">{d.message}</div>
  </Td>
  </tr>
@@ -167,6 +169,7 @@ export default function MrpPlanDetailPage() {
  ))}
  </tbody>
  </table>
+ </div>
  )}
  </Panel>
  </div>

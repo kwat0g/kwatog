@@ -1,7 +1,9 @@
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
-import { LuPlus } from '@/lib/icons';
+import { LuArchiveRestore, LuPlus } from '@/lib/icons';
 import { journalEntriesApi, type JournalEntryListParams } from '@/api/accounting/journal-entries';
+import { ArchiveFilter } from '@/components/ui/ArchiveFilter';
 import { Button } from '@/components/ui/Button';
 import { Chip, type ChipVariant } from '@/components/ui/Chip';
 import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
@@ -13,6 +15,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
+import { archiveToTrashed, type ArchiveScope } from '@/lib/archiveScope';
 import type { JournalEntry } from '@/types/accounting';
 
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
@@ -27,15 +30,23 @@ const DEFAULT_FILTERS: JournalEntryListParams = {
 
 export default function JournalEntriesPage() {
  const navigate = useNavigate();
+ const qc = useQueryClient();
  const { can } = usePermission();
  // Bound to the URL so dashboard drill-downs (?status=draft) arrive
  // pre-filtered and the browser back button restores the previous view.
  const [filters, setFilters] = useUrlFilters<JournalEntryListParams>(DEFAULT_FILTERS);
+ const [scope, setScope] = useState<ArchiveScope>('active');
 
  const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['accounting', 'journal-entries', filters],
- queryFn: () => journalEntriesApi.list(filters),
+ queryKey: ['accounting', 'journal-entries', filters, { trashed: archiveToTrashed(scope) }],
+ queryFn: () => journalEntriesApi.list({ ...filters, trashed: archiveToTrashed(scope) }),
  placeholderData: (prev) => prev });
+ const restore = useMutation({
+  mutationFn: (id: string) => journalEntriesApi.restore(id),
+  onSuccess: () => {
+   qc.invalidateQueries({ queryKey: ['accounting', 'journal-entries'] });
+  },
+ });
  const { data: options } = useQuery({
  queryKey: ['accounting', 'journal-entry-options'],
  queryFn: journalEntriesApi.options,
@@ -49,6 +60,21 @@ export default function JournalEntriesPage() {
  { key: 'reference', header: 'Reference', cell: (r) => <span className="text-xs text-muted">{r.reference_label ?? '—'}</span> },
  { key: 'total_debit', header: 'Total', align: 'right', cell: (r) => <NumCell className="font-medium">{formatPeso(r.total_debit)}</NumCell> },
  { key: 'status', header: 'Status', cell: (r) => <Chip variant={STATUS_VARIANT[r.status] ?? 'neutral'}>{statusLabel.get(r.status) ?? r.status}</Chip> },
+ ...(can('accounting.journal.create') && scope === 'only' ? [{
+  key: 'actions', header: '', align: 'right' as const,
+  cell: (r: JournalEntry) => (
+   <Button
+    type="button"
+    variant="ghost"
+    size="sm"
+    iconOnly
+    icon={<LuArchiveRestore size={14} />}
+    aria-label={`Restore ${r.entry_number}`}
+    onClick={(event) => { event.stopPropagation(); restore.mutate(r.id); }}
+    loading={restore.isPending}
+   />
+  ),
+ }] : []),
  ];
 
  const filterConfig: FilterConfig[] = [
@@ -86,6 +112,7 @@ export default function JournalEntriesPage() {
  onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
  onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
  searchPlaceholder="Search entry no or description…"
+ actions={<ArchiveFilter value={scope} onChange={setScope} />}
  />
 
  {isLoading && !data && <SkeletonTable columns={6} rows={8} />}

@@ -28,11 +28,13 @@ import { formatPeso } from '@/lib/formatNumber';
 import { numberInputProps } from '@/lib/numberInput';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { cn } from '@/lib/cn';
+import type { Incoterm } from '@/types/supplyChain';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormActions } from '@/components/ui/FormActions';
 const lineSchema = z.object({
   item_id: z.string().min(1, 'Item is required.'),
+  purchase_request_item_id: z.string().optional(),
   description: z.string().trim().min(2, 'Description is required.').max(200),
   quantity: z
     .string()
@@ -51,6 +53,7 @@ const schema = z
     date: z.string().min(1, 'Date is required.'),
     expected_delivery_date: z.string().optional().or(z.literal('')),
     is_vatable: z.boolean(),
+    incoterm: z.string().optional().or(z.literal('')),
     remarks: z.string().max(1000).optional().or(z.literal('')),
     items: z.array(lineSchema).min(1, 'Add at least one line.'),
   })
@@ -59,6 +62,20 @@ const schema = z
     path: ['expected_delivery_date'],
   });
 type V = z.infer<typeof schema>;
+
+const incoterms: Array<{ value: Incoterm; label: string }> = [
+  { value: 'EXW', label: 'Ex Works' },
+  { value: 'FCA', label: 'Free Carrier' },
+  { value: 'FAS', label: 'Free Alongside Ship' },
+  { value: 'FOB', label: 'Free On Board' },
+  { value: 'CFR', label: 'Cost and Freight' },
+  { value: 'CIF', label: 'Cost, Insurance and Freight' },
+  { value: 'CPT', label: 'Carriage Paid To' },
+  { value: 'CIP', label: 'Carriage and Insurance Paid To' },
+  { value: 'DAP', label: 'Delivered at Place' },
+  { value: 'DPU', label: 'Delivered at Place Unloaded' },
+  { value: 'DDP', label: 'Delivered Duty Paid' },
+];
 
 export default function CreatePurchaseOrderPage() {
   const nav = useNavigate();
@@ -102,8 +119,9 @@ export default function CreatePurchaseOrderPage() {
       date: new Date().toISOString().slice(0, 10),
       expected_delivery_date: '',
       is_vatable: undefined as unknown as boolean,
+      incoterm: '',
       remarks: '',
-      items: [{ item_id: '', description: '', quantity: '', unit: '', unit_price: '' }],
+      items: [{ item_id: '', purchase_request_item_id: undefined, description: '', quantity: '', unit: '', unit_price: '' }],
     },
   });
   const {
@@ -129,9 +147,11 @@ export default function CreatePurchaseOrderPage() {
         date: new Date().toISOString().slice(0, 10),
         expected_delivery_date: '',
         is_vatable: vatConfigured,
+        incoterm: '',
         remarks: `Auto-generated from PR ${pr.pr_number}`,
         items: pr.items.map((i) => ({
           item_id: i.item?.id ?? '',
+          purchase_request_item_id: i.id,
           description: i.description,
           quantity: i.quantity,
           unit: i.unit ?? i.item?.unit_of_measure ?? '',
@@ -153,6 +173,9 @@ export default function CreatePurchaseOrderPage() {
     [items.data],
   );
   const onLineItemChange = (index: number, itemId: string) => {
+    if (watchedItems[index]?.item_id !== itemId) {
+      setValue(`items.${index}.purchase_request_item_id`, undefined);
+    }
     setValue(`items.${index}.item_id`, itemId);
     const item = itemById.get(itemId);
     setValue(`items.${index}.unit`, item?.unit_of_measure ?? '');
@@ -171,9 +194,11 @@ export default function CreatePurchaseOrderPage() {
         date: values.date,
         expected_delivery_date: values.expected_delivery_date || undefined,
         is_vatable: values.is_vatable,
+        incoterm: values.incoterm ? values.incoterm as Incoterm : undefined,
         remarks: values.remarks?.trim() || undefined,
         items: values.items.map((l) => ({
           item_id: l.item_id,
+          purchase_request_item_id: l.purchase_request_item_id,
           description: l.description.trim(),
           quantity: l.quantity,
           unit: l.unit || undefined,
@@ -289,6 +314,12 @@ export default function CreatePurchaseOrderPage() {
               error={errors.expected_delivery_date?.message}
             />
             <Switch label={`VAT-able (${vatRateLabel})`} disabled={!vatConfigured} {...register('is_vatable')} />
+            <Select label="Incoterm" {...register('incoterm')} error={errors.incoterm?.message}>
+              <option value="">— Select incoterm —</option>
+              {incoterms.map((term) => (
+                <option key={term.value} value={term.value}>{term.value} — {term.label}</option>
+              ))}
+            </Select>
             <Textarea
               label="Remarks"
               rows={2}
@@ -308,7 +339,7 @@ export default function CreatePurchaseOrderPage() {
               variant="secondary"
               icon={<LuPlus size={12} />}
               onClick={() =>
-                append({ item_id: '', description: '', quantity: '', unit: '', unit_price: '' })
+                append({ item_id: '', purchase_request_item_id: undefined, description: '', quantity: '', unit: '', unit_price: '' })
               }
             >
               Add line

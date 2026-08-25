@@ -31,7 +31,9 @@ class SalesOrder extends Model
     protected $fillable = [
         'so_number', 'customer_id', 'sales_rep_id', 'date', 'subtotal', 'vat_amount',
         'total_amount', 'status', 'payment_terms_days', 'delivery_terms',
-        'notes', 'mrp_plan_id', 'created_by', 'incoterm',
+        'notes', 'mrp_plan_id', 'created_by', 'incoterm', 'confirmed_at',
+        'in_production_at', 'partially_delivered_at', 'delivered_at',
+        'invoiced_at', 'cancelled_at',
     ];
 
     protected $casts = [
@@ -43,6 +45,12 @@ class SalesOrder extends Model
         'payment_terms_days' => 'integer',
         'mrp_plan_id'        => 'integer',
         'incoterm'           => Incoterm::class,
+        'confirmed_at'       => 'datetime',
+        'in_production_at'   => 'datetime',
+        'partially_delivered_at' => 'datetime',
+        'delivered_at'       => 'datetime',
+        'invoiced_at'        => 'datetime',
+        'cancelled_at'       => 'datetime',
     ];
 
     public function customer(): BelongsTo
@@ -99,10 +107,32 @@ class SalesOrder extends Model
 
     public function getIsCancellableAttribute(): bool
     {
-        return ! in_array($this->status, [
-            SalesOrderStatus::Delivered,
-            SalesOrderStatus::Invoiced,
-            SalesOrderStatus::Cancelled,
-        ], true);
+        if (! in_array($this->status, [SalesOrderStatus::Draft, SalesOrderStatus::Confirmed], true)) {
+            return false;
+        }
+
+        // show() eager-loads these relations, so the UI does not advertise a
+        // cancellation the service will reject because downstream work exists.
+        if ($this->relationLoaded('deliveries') && $this->deliveries->contains(
+            fn ($delivery): bool => (string) ($delivery->status?->value ?? $delivery->status) !== 'cancelled',
+        )) {
+            return false;
+        }
+        if ($this->relationLoaded('invoices') && $this->invoices->contains(
+            fn ($invoice): bool => (string) ($invoice->status?->value ?? $invoice->status) !== 'cancelled',
+        )) {
+            return false;
+        }
+        if ($this->relationLoaded('workOrders') && $this->workOrders->contains(
+            fn ($workOrder): bool => in_array(
+                (string) ($workOrder->status?->value ?? $workOrder->status),
+                ['in_progress', 'completed', 'closed'],
+                true,
+            ),
+        )) {
+            return false;
+        }
+
+        return true;
     }
 }

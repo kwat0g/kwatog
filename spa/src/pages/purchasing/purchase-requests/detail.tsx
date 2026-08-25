@@ -108,21 +108,21 @@ export default function PurchaseRequestDetailPage() {
  <Chip variant={statusVariant[data.status]}>{data.status_label ?? data.status}</Chip>
  {data.is_auto_generated && <Chip variant="warning">AUTO</Chip>}
  {data.is_urgent && <Chip variant="danger"><LuZap size={12} className="inline mr-0.5" />URGENT</Chip>}
- {data.status === 'draft' && can('purchasing.pr.create') && (
+ {data.status === 'draft' && data.actions?.can_submit && (
  <Button size="sm" variant="primary" icon={<LuSend size={14} />} onClick={() => setConfirm('submit')} loading={submit.isPending}>Submit</Button>
  )}
- {data.status === 'pending' && can('purchasing.pr.approve') && (
+ {data.status === 'pending' && (data.actions?.can_approve || data.actions?.can_reject) && (
  <>
- <Button size="xs" variant="secondary" icon={<LuThumbsDown size={14} />} onClick={() => setRejectOpen(true)} loading={reject.isPending}>Reject</Button>
- <Button size="xs" variant="primary" icon={<LuThumbsUp size={14} />} onClick={() => setConfirm('approve')} loading={approve.isPending}>Approve</Button>
+ {data.actions?.can_reject && <Button size="xs" variant="secondary" icon={<LuThumbsDown size={14} />} onClick={() => setRejectOpen(true)} loading={reject.isPending}>Reject</Button>}
+ {data.actions?.can_approve && <Button size="xs" variant="primary" icon={<LuThumbsUp size={14} />} onClick={() => setConfirm('approve')} loading={approve.isPending}>Approve</Button>}
  </>
  )}
- {data.status === 'approved' && can('purchasing.po.create') && (
+ {data.status === 'approved' && data.actions?.can_convert && (
  <Button size="sm" variant="primary" icon={<LuShoppingCart size={14} />} onClick={() => nav(`/purchasing/purchase-orders/create?pr_id=${data.id}`)}>Convert to PO</Button>
  )}
- <Button size="sm" variant="secondary" icon={<LuFileText size={14} />}
- onClick={() => void downloadAuthenticatedFile(purchaseRequestsApi.pdfUrl(data.id), { openInNewTab: true, errorMessage: 'Failed to generate purchase request PDF.' })}>PDF</Button>
- {(data.status === 'draft' || data.status === 'pending') && (
+ {data.actions?.can_print && <Button size="sm" variant="secondary" icon={<LuFileText size={14} />}
+ onClick={() => void downloadAuthenticatedFile(purchaseRequestsApi.pdfUrl(data.id), { openInNewTab: true, errorMessage: 'Failed to generate purchase request PDF.' })}>PDF</Button>}
+ {(data.status === 'draft' || data.status === 'pending') && data.actions?.can_cancel && (
  <Button size="sm" variant="secondary" icon={<LuX size={14} />} onClick={() => setConfirm('cancel')} loading={cancel.isPending}>Cancel</Button>
  )}
  </div>
@@ -217,7 +217,7 @@ export default function PurchaseRequestDetailPage() {
  <div className="font-medium">Budget {data.budget_warning_level}</div>
  <div className="text-muted">{data.budget_warning_message}</div>
  </div>
- {['exhausted', 'overdrawn'].includes(data.budget_warning_level) && !data.budget_acknowledged_at && can('budgeting.approve') && (
+ {['exhausted', 'overdrawn'].includes(data.budget_warning_level) && !data.budget_acknowledged_at && data.actions?.can_acknowledge_budget && (
  <Button size="sm" variant="secondary" onClick={() => acknowledgeBudget.mutate()} loading={acknowledgeBudget.isPending}>Finance acknowledge</Button>
  )}
  {data.budget_acknowledged_at && <Chip variant="success">Finance acknowledged</Chip>}
@@ -241,6 +241,7 @@ export default function PurchaseRequestDetailPage() {
  </dl>
  </Panel>
  <Panel title="Line items">
+ <div className="overflow-x-auto">
  <table className={tableCls}>
  <thead><tr className={theadTrCls}>
  <Th>Item</Th>
@@ -266,6 +267,7 @@ export default function PurchaseRequestDetailPage() {
  ))}
  </tbody>
  </table>
+ </div>
  </Panel>
  </div>
  <div className="space-y-4">

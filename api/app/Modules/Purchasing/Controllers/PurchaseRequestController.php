@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Purchasing\Controllers;
 
 use App\Common\Support\HashIdFilter;
+use App\Common\Models\ApprovalRecord;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestPriority;
 use App\Modules\Purchasing\Models\PurchaseRequest;
@@ -17,6 +18,7 @@ use App\Modules\Purchasing\Resources\PurchaseRequestResource;
 use App\Modules\Purchasing\Services\PurchaseOrderService;
 use App\Modules\Purchasing\Services\PurchaseRequestPdfService;
 use App\Modules\Purchasing\Services\PurchaseRequestService;
+use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -32,11 +34,13 @@ class PurchaseRequestController
         private readonly PurchaseOrderService $poService,
         private readonly PurchaseRequestPdfService $pdf,
         private readonly SettingsService $settings,
+        private readonly PurchaseRequestAccessPolicy $access,
     ) {}
 
     /** Sprint P9 — printable PR with 4-tier approval signature block. */
-    public function printPdf(PurchaseRequest $purchaseRequest): Response
+    public function printPdf(Request $request, PurchaseRequest $purchaseRequest): Response
     {
+        abort_unless($this->access->canView($request->user(), $purchaseRequest), 403, 'You do not have permission to view this purchase request.');
         return $this->pdf->render($purchaseRequest);
     }
 
@@ -64,8 +68,9 @@ class PurchaseRequestController
         ]]);
     }
 
-    public function show(PurchaseRequest $purchaseRequest): PurchaseRequestResource
+    public function show(Request $request, PurchaseRequest $purchaseRequest): PurchaseRequestResource
     {
+        abort_unless($this->access->canView($request->user(), $purchaseRequest), 403, 'You do not have permission to view this purchase request.');
         return new PurchaseRequestResource($this->service->show($purchaseRequest));
     }
 
@@ -78,7 +83,7 @@ class PurchaseRequestController
     public function update(UpdatePurchaseRequestRequest $request, PurchaseRequest $purchaseRequest): PurchaseRequestResource
     {
         try {
-            $pr = $this->service->update($purchaseRequest, $request->validated());
+            $pr = $this->service->update($purchaseRequest, $request->validated(), $request->user());
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
@@ -87,20 +92,21 @@ class PurchaseRequestController
 
     public function destroy(PurchaseRequest $purchaseRequest): JsonResponse
     {
-        try { $this->service->delete($purchaseRequest); }
+        try { $this->service->delete($purchaseRequest, request()->user()); }
         catch (BusinessRuleException $e) { return response()->json(['message' => $e->getMessage()], 422); }
         return response()->json(null, 204);
     }
 
-    public function restore(PurchaseRequest $purchaseRequest): JsonResponse
+    public function restore(Request $request, PurchaseRequest $purchaseRequest): JsonResponse
     {
+        abort_unless($this->access->canManageDraft($request->user(), $purchaseRequest), 403, 'You do not have permission to restore this purchase request.');
         $purchaseRequest->restore();
         return response()->json(['message' => 'Purchase request restored.']);
     }
 
-    public function submit(PurchaseRequest $purchaseRequest): PurchaseRequestResource
+    public function submit(Request $request, PurchaseRequest $purchaseRequest): PurchaseRequestResource
     {
-        try { $pr = $this->service->submit($purchaseRequest); }
+        try { $pr = $this->service->submit($purchaseRequest, $request->user()); }
         catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
         return new PurchaseRequestResource($this->service->show($pr));
     }
@@ -126,9 +132,9 @@ class PurchaseRequestController
         return new PurchaseRequestResource($this->service->show($pr));
     }
 
-    public function cancel(PurchaseRequest $purchaseRequest): PurchaseRequestResource
+    public function cancel(Request $request, PurchaseRequest $purchaseRequest): PurchaseRequestResource
     {
-        try { $pr = $this->service->cancel($purchaseRequest); }
+        try { $pr = $this->service->cancel($purchaseRequest, $request->user()); }
         catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
         return new PurchaseRequestResource($this->service->show($pr));
     }
@@ -170,13 +176,21 @@ class PurchaseRequestController
     public function pendingCount(Request $request): JsonResponse
     {
         $user = $request->user();
-        $roleSlug = $user->role?->slug;
+        $roleSlugs = $this->access->approvalRoleSlugs($user);
 
-        // Count pending PRs where the current approval step matches the user's role.
-        $count = \App\Common\Models\ApprovalRecord::where('approvable_type', (new PurchaseRequest)->getMorphClass())
+        // Count only current approval rows the user can actually act on. The
+        // scope also enforces department visibility and excludes self-created
+        // requests, matching ApprovalService's server-side guard.
+        $count = ApprovalRecord::query()
+            ->where('approvable_type', (new PurchaseRequest)->getMorphClass())
             ->where('action', 'pending')
-            ->where('role_slug', $roleSlug)
-            ->whereHas('approvable', fn ($q) => $q->where('status', PurchaseRequestStatus::Pending->value))
+            ->where('is_current', true)
+            ->whereIn('role_slug', $roleSlugs)
+            ->whereHasMorph('approvable', [PurchaseRequest::class], function ($q) use ($user): void {
+                $this->access->visibleTo($q, $user);
+                $q->where('status', PurchaseRequestStatus::Pending->value)
+                    ->where('requested_by', '<>', $user->id);
+            })
             ->count();
 
         return response()->json(['data' => ['count' => $count]]);
@@ -184,6 +198,7 @@ class PurchaseRequestController
 
     public function convert(ConvertPrToPoRequest $request, PurchaseRequest $purchaseRequest): JsonResponse
     {
+        abort_unless($this->access->canConvert($request->user(), $purchaseRequest), 403, 'You do not have permission to convert this purchase request.');
         try {
             $pos = $this->poService->convertFromPr($purchaseRequest, $request->validated()['vendor_map'], $request->user());
         } catch (BusinessRuleException $e) {

@@ -94,6 +94,20 @@ class NotificationValidationTest extends TestCase
             ->assertJsonPath('meta.total', 5);
     }
 
+    public function test_page_parameter_can_fetch_a_later_bounded_page(): void
+    {
+        foreach (range(1, 3) as $i) {
+            $this->createNotification();
+        }
+
+        $this->actingAs($this->user)
+            ->getJson('/api/v1/notifications?per_page=2&page=2')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('meta.current_page', 2)
+            ->assertJsonPath('meta.per_page', 2);
+    }
+
     public function test_omitted_per_page_defaults_without_error(): void
     {
         $this->createNotification();

@@ -67,7 +67,7 @@ class AlertOnSupplierDeterioration implements ShouldQueue
                     $period,
                 ),
                 'link_to'     => $current->vendor
-                    ? "/purchasing/vendors/{$current->vendor->hash_id}/performance"
+                    ? "/purchasing/suppliers/{$current->vendor->hash_id}/performance"
                     : null,
                 'entity_type' => 'supplier_performance_snapshot',
                 'entity_id'   => $current->hash_id,

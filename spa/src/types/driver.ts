@@ -18,7 +18,8 @@ export interface DriverDelivery {
  customer?: { id: string; name: string };
  } | null;
  vehicle: { id: string; plate_number: string; name?: string } | null;
- proofs?: Array<{ id: string; proof_type: string; file_name: string; view_url: string }>;
+ proofs?: Array<{ id: string; proof_type: string; file_name: string; uploaded_at: string | null }>;
+ proof_count?: number;
 }
 
 export interface DriverPaginated<T> {

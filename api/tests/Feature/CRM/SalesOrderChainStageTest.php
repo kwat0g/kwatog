@@ -28,7 +28,7 @@ use Tests\TestCase;
  *   pending — no outgoing inspection yet
  *   active  — latest is in_progress (date = started_at)
  *   done    — latest is passed (date = completed_at)
- *   failed  — latest is failed (date = completed_at)
+ *   rejected — latest is failed (date = completed_at)
  *
  * The "latest" tie-breaker is the inspection's primary key; this matches the
  * service's `orderByDesc('i.id')` selection.
@@ -88,7 +88,7 @@ class SalesOrderChainStageTest extends TestCase
         $this->assertSame($completedAt->toDateString(), $step['date']);
     }
 
-    public function test_qc_outgoing_failed_when_latest_inspection_failed(): void
+    public function test_qc_outgoing_rejected_when_latest_inspection_failed(): void
     {
         [$so, $wo] = $this->makeSoWithWo();
 
@@ -101,7 +101,7 @@ class SalesOrderChainStageTest extends TestCase
 
         $step = $this->qcOutgoingStep($so);
 
-        $this->assertSame('failed', $step['state']);
+        $this->assertSame('rejected', $step['state']);
         $this->assertSame($completedAt->toDateString(), $step['date']);
     }
 

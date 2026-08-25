@@ -20,6 +20,7 @@ class InspectionMeasurementResource extends JsonResource
                 ? $this->parameter_type->value
                 : $this->parameter_type,
             'parameter_type_label' => InspectionParameterType::tryFrom((string) ($this->parameter_type instanceof \BackedEnum ? $this->parameter_type->value : $this->parameter_type))?->label(),
+            'evaluation_mode'  => $this->hasTolerance() ? 'numeric' : 'manual',
             'unit_of_measure' => $this->unit_of_measure,
             'nominal_value'   => $this->nominal_value !== null ? (float) $this->nominal_value : null,
             'tolerance_min'   => $this->tolerance_min !== null ? (float) $this->tolerance_min : null,

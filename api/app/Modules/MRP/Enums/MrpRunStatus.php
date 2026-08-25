@@ -8,6 +8,7 @@ enum MrpRunStatus: string
 {
     case Running   = 'running';
     case Completed = 'completed';
+    case Partial   = 'partial';
     case Failed    = 'failed';
 
     public static function values(): array

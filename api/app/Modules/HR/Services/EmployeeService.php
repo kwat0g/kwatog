@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\OutboxService;
 use App\Common\Support\DepartmentScope;
@@ -25,6 +26,7 @@ class EmployeeService
     public function __construct(
         private readonly DocumentSequenceService $sequences,
         private readonly OnboardingService $onboarding,
+        private readonly UserProvisioningService $provisioning,
     ) {}
 
     /**
@@ -172,7 +174,11 @@ class EmployeeService
     public function create(array $data): Employee
     {
         return DB::transaction(function () use ($data) {
-            $data['employee_no'] = $this->sequences->generate('employee');
+            if (empty($data['employee_no'])) {
+                $data['employee_no'] = $this->sequences->generate('employee');
+            } elseif (Employee::withTrashed()->where('employee_no', $data['employee_no'])->exists()) {
+                throw new BusinessRuleException("Employee number [{$data['employee_no']}] is already in use.");
+            }
 
             $shiftId = ! empty($data['shift_id']) ? (int) $data['shift_id'] : null;
             unset($data['shift_id']);
@@ -257,13 +263,25 @@ class EmployeeService
     public function update(Employee $employee, array $data): Employee
     {
         return DB::transaction(function () use ($employee, $data) {
-            // REC-03 — pay can ONLY change through the maker-checker SalaryAdjustment
-            // gate (SalaryAdjustmentService). Strip salary fields here so a direct
-            // employee edit can never bypass approval, even if a caller supplies them.
-            unset($data['basic_monthly_salary'], $data['semi_monthly_rate']);
+            if (array_key_exists('status', $data)) {
+                throw new BusinessRuleException(
+                    'Employee status changes must go through the separation or lifecycle workflow.',
+                );
+            }
+
+            // REC-03 — pay and pay type can ONLY change through the maker-checker
+            // SalaryAdjustment gate. Reject rather than silently dropping a
+            // caller's requested financial change.
+            if (array_key_exists('pay_type', $data)
+                || array_key_exists('basic_monthly_salary', $data)
+                || array_key_exists('semi_monthly_rate', $data)) {
+                throw new BusinessRuleException(
+                    'Compensation changes must go through the salary adjustment workflow.',
+                );
+            }
 
             $original = $employee->only([
-                'department_id', 'position_id', 'basic_monthly_salary', 'semi_monthly_rate', 'employment_type', 'pay_type',
+                'department_id', 'position_id', 'employment_type', 'pay_type',
             ]);
 
             $employee->update($data);
@@ -282,22 +300,6 @@ class EmployeeService
                     'change_type' => EmploymentChangeType::Promoted->value,
                     'from_value' => ['position_id' => $original['position_id']],
                     'to_value' => ['position_id' => $employee->position_id],
-                ];
-            }
-            if (
-                (array_key_exists('basic_monthly_salary', $data) && (string) $original['basic_monthly_salary'] !== (string) $employee->basic_monthly_salary)
-                || (array_key_exists('semi_monthly_rate', $data) && (string) $original['semi_monthly_rate'] !== (string) $employee->semi_monthly_rate)
-            ) {
-                $changes[] = [
-                    'change_type' => EmploymentChangeType::SalaryAdjusted->value,
-                    'from_value' => [
-                        'basic_monthly_salary' => $original['basic_monthly_salary'],
-                        'semi_monthly_rate' => $original['semi_monthly_rate'],
-                    ],
-                    'to_value' => [
-                        'basic_monthly_salary' => $employee->basic_monthly_salary,
-                        'semi_monthly_rate' => $employee->semi_monthly_rate,
-                    ],
                 ];
             }
             if (array_key_exists('date_regularized', $data) && $employee->date_regularized) {
@@ -324,40 +326,23 @@ class EmployeeService
         });
     }
 
-    public function separate(Employee $employee, array $data): Employee
-    {
-        return DB::transaction(function () use ($employee, $data) {
-            $reason = $data['separation_reason'];
-            $statusMap = [
-                'resigned' => EmployeeStatus::Resigned,
-                'terminated' => EmployeeStatus::Terminated,
-                'retired' => EmployeeStatus::Retired,
-                'end_of_contract' => EmployeeStatus::Resigned,
-            ];
-            $status = $statusMap[$reason] ?? EmployeeStatus::Resigned;
-
-            $employee->update(['status' => $status->value]);
-
-            EmploymentHistory::create([
-                'employee_id' => $employee->id,
-                'change_type' => EmploymentChangeType::Separated->value,
-                'to_value' => [
-                    'separation_reason' => $reason,
-                    'separation_date' => $data['separation_date'],
-                    'remarks' => $data['remarks'] ?? null,
-                ],
-                'effective_date' => $data['separation_date'],
-                'remarks' => $data['remarks'] ?? null,
-                'approved_by' => optional(request()->user())->id,
-                'created_at' => now(),
-            ]);
-
-            return $employee->fresh(['department', 'position']);
-        });
-    }
-
     public function delete(Employee $employee): void
     {
-        $employee->delete();
+        DB::transaction(function () use ($employee): void {
+            $lockedEmployee = Employee::query()
+                ->lockForUpdate()
+                ->find($employee->id);
+
+            if (! $lockedEmployee || $lockedEmployee->trashed()) {
+                return;
+            }
+
+            // Archive is an access transition, not only a directory change.
+            // Revoke the linked account before soft-deleting the employee so
+            // the user cannot retain a login to a record that self-service no
+            // longer resolves.
+            $this->provisioning->deactivateForEmployee($lockedEmployee);
+            $lockedEmployee->delete();
+        });
     }
 }

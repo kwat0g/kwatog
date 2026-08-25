@@ -37,12 +37,16 @@ const schema = z.object({
  // M-18 — half-day support, mirroring the HR-side form. 'none' = full day.
  half_day_period: z.string().min(1).default('none'),
  reason: z.string().max(2000).optional().or(z.literal('')),
+ document: z.any().optional(),
 }).refine((d) => d.end_date >= d.start_date, {
  message: 'End date must be on or after start date',
  path: ['end_date'],
 }).refine((d) => d.half_day_period === 'none' || d.start_date === d.end_date, {
  message: 'Half-day leave must start and end on the same date.',
  path: ['half_day_period'],
+}).refine((d) => !d.start_date || !d.end_date || d.start_date.slice(0, 4) === d.end_date.slice(0, 4), {
+ message: 'Submit separate leave requests for dates in different calendar years.',
+ path: ['end_date'],
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -111,7 +115,7 @@ export default function SelfServiceLeavePage() {
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['self-service', 'leave'],
- queryFn: () => leaveRequestsApi.list({ per_page: 50 }),
+ queryFn: () => selfServiceApi.leaveRequests({ per_page: 50 }),
  placeholderData: (prev) => prev,
  });
 
@@ -171,6 +175,7 @@ export default function SelfServiceLeavePage() {
  end_date: v.end_date,
  half_day_period: v.half_day_period === 'none' ? undefined : v.half_day_period as 'am' | 'pm',
  reason: v.reason || undefined,
+ document: v.document?.[0],
  }),
  onSuccess: () => {
  toast.success('Leave request submitted for approval.');
@@ -284,12 +289,6 @@ export default function SelfServiceLeavePage() {
  </div>
  )}
 
- {selectedType?.requires_document && (
- <div className="rounded-md border border-warning bg-warning-bg px-3 py-2 text-xs text-warning-fg">
- This leave type requires a supporting document. Submit it to HR separately after filing.
- </div>
- )}
-
  <div className="grid grid-cols-2 gap-3">
  <Input
  label="Start date"
@@ -306,6 +305,15 @@ export default function SelfServiceLeavePage() {
  required
  />
  </div>
+ <Input
+ label="Supporting document"
+ type="file"
+ accept=".pdf,.jpg,.jpeg,.png"
+ required={!!selectedType?.requires_document}
+ helper={selectedType?.requires_document ? 'Required for this leave type. PDF or image, up to 10 MB.' : 'Optional. PDF or image, up to 10 MB.'}
+ error={errors.document?.message as string | undefined}
+ {...register('document')}
+ />
  <Select
  label="Half day"
  {...register('half_day_period')}

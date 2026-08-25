@@ -594,6 +594,7 @@ class SupplierPortalServiceTest extends TestCase
         $vendor = Vendor::factory()->create();
         $user = $this->makePortalUser($vendor);
         $po = PurchaseOrder::factory()->create(['vendor_id' => $vendor->id]);
+        $po->forceFill(['status' => 'sent'])->save();
         $this->actAs($user);
         Storage::fake('local');
 
@@ -620,6 +621,7 @@ class SupplierPortalServiceTest extends TestCase
         $vendor = Vendor::factory()->create();
         $user = $this->makePortalUser($vendor);
         $po = PurchaseOrder::factory()->create(['vendor_id' => $vendor->id]);
+        $po->forceFill(['status' => 'sent'])->save();
         // Create fixtures before acting as the portal user: HasAuditLog reads
         // Auth::id() (the portal guard after Sanctum::actingAs) and would hit
         // the audit_logs.users FK for portal-user ids.

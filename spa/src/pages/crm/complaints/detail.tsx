@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
-import { LuTriangleAlert, LuCheck, LuBan, LuFileDown, LuLock, LuRefreshCw, LuSearch } from '@/lib/icons';
+import { LuTriangleAlert, LuCheck, LuFileDown, LuLock, LuRefreshCw, LuSearch } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import type { AxiosError } from 'axios';
 import { complaintsApi, type EightDPatch } from '@/api/crm/complaints';
@@ -148,6 +148,7 @@ export default function ComplaintDetailPage() {
 
  const report = data.eight_d_report;
  const isFinalized = Boolean(report?.finalized_at);
+ const qualityCompletionReady = isFinalized && data.ncr?.status === 'closed';
  const isTerminal = data.status === 'closed' || data.status === 'cancelled';
 
  const complaintChain: ChainStep[] = [
@@ -219,18 +220,13 @@ export default function ComplaintDetailPage() {
  Download 8D PDF
  </Button>
  )}
- {canManage && data.status === 'investigating' && (
+ {canManage && !isTerminal && ['open', 'investigating'].includes(data.status) && qualityCompletionReady && (
  <Button variant="secondary" size="sm" onClick={() => setConfirmResolve(true)}>
  Resolve
  </Button>
  )}
- {canManage && !isTerminal && data.status === 'resolved' && (
+ {canManage && data.status === 'resolved' && qualityCompletionReady && (
  <Button variant="primary" size="sm" icon={<LuCheck size={14} />} onClick={() => setConfirmClose(true)}>
- Close
- </Button>
- )}
- {canManage && !isTerminal && (
- <Button variant="secondary" size="sm" icon={<LuBan size={14} />} onClick={() => setConfirmClose(true)}>
  Close
  </Button>
  )}
@@ -325,7 +321,9 @@ export default function ComplaintDetailPage() {
  <p className="text-sm text-muted">
  {isTerminal
  ? `Complaint ${data.status_label ?? data.status} on ${data.closed_at?.slice(0, 10) ?? '—'}.`
- : 'Use the 8D Report tab to drive the corrective action workflow. Resolve once D5 is verified.'}
+ : qualityCompletionReady
+  ? 'The finalized 8D report and closed NCR are ready for the next complaint lifecycle step.'
+  : 'Finalize all eight 8D disciplines and close the linked NCR with a disposition before resolving or closing this complaint.'}
  </p>
  </Panel>
  </div>
@@ -399,7 +397,7 @@ export default function ComplaintDetailPage() {
  <ConfirmDialog
  isOpen={confirmResolve}
  title="Mark complaint resolved?"
- description="Resolved complaints are still open until closed. The linked NCR remains in its current state."
+ description="The finalized 8D report and closed linked NCR are the authoritative quality completion gate for this complaint."
  confirmLabel="Resolve"
  onConfirm={() => resolveMut.mutate()}
  onClose={() => setConfirmResolve(false)}
@@ -408,7 +406,7 @@ export default function ComplaintDetailPage() {
  <ConfirmDialog
  isOpen={confirmClose}
  title="Close complaint?"
- description="Closing the complaint locks it. Linked NCR closure is independent — handle that on the NCR detail page."
+ description="Closing the complaint records the completed quality investigation and locks the commercial lifecycle."
  confirmLabel="Close"
  onConfirm={() => closeMut.mutate()}
  onClose={() => setConfirmClose(false)}

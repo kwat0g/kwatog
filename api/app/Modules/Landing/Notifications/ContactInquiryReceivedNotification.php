@@ -31,9 +31,9 @@ class ContactInquiryReceivedNotification extends Notification
             ->line("**Email:** {$i->email}")
             ->line('**Phone:** ' . ($i->phone ?? 'Not specified'))
             ->line("**Message:** {$i->message}")
-            // This line used to be a lie — the old quote-request notification
-            // said the same thing while no such screen existed. It does now.
+            // The CRM inbox is the follow-up surface; sales orders use their
+            // normal workflow rather than converting this row into a lead.
             ->action('Open in ERP', url("/crm/inquiries/{$i->hash_id}"))
-            ->line('Reply directly to the sender, or convert the inquiry to a lead to track it in the CRM pipeline.');
+            ->line('Reply directly to the sender, or open the inquiry in the CRM inbox to update its status.');
     }
 }

@@ -13,7 +13,7 @@ class PortalShippingDocumentResource extends JsonResource
     {
         return [
             'id'                => $this->hash_id,
-            'purchase_order_id' => $this->purchase_order_id,
+            'purchase_order_id' => $this->purchaseOrder?->hash_id,
             'document_type'     => $this->document_type,
             'document_type_label' => match ($this->document_type) {
                 'commercial_invoice' => 'Commercial Invoice',
@@ -29,7 +29,10 @@ class PortalShippingDocumentResource extends JsonResource
                 : round($this->file_size_bytes / 1024, 1) . ' KB',
             'mime_type'         => $this->mime_type,
             'notes'             => $this->notes,
-            'uploaded_by'       => $this->uploaded_by,
+            'uploaded_by'       => $this->uploader ? [
+                'id' => $this->uploader->hash_id,
+                'name' => $this->uploader->name,
+            ] : null,
             'uploaded_at'       => optional($this->uploaded_at)->toIso8601String(),
             'download_url'      => url("/api/v1/b2b/supplier/shipping-documents/{$this->hash_id}/download"),
         ];

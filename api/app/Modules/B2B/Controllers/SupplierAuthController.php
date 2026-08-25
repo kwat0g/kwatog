@@ -19,7 +19,7 @@ class SupplierAuthController
     public function forgotPassword(Request $request, PortalPasswordResetService $resets): JsonResponse
     {
         $data = $request->validate(['email' => ['required', 'email']]);
-        $resets->requestReset('supplier', $data['email']);
+        $resets->requestReset('supplier', $data['email'], $request);
 
         return response()->json(['message' => 'If an active portal account exists for that email, a reset link will be sent shortly.']);
     }
@@ -30,7 +30,7 @@ class SupplierAuthController
             'token' => ['required', 'string'],
             'password' => ['required', 'string', 'confirmed', new StrongPassword()],
         ]);
-        $resets->reset('supplier', $data['token'], $data['password']);
+        $resets->reset('supplier', $data['token'], $data['password'], $request);
 
         return response()->json(['message' => 'Portal password updated. You can now sign in.']);
     }

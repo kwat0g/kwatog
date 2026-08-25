@@ -34,6 +34,8 @@ class StockMovementResource extends JsonResource
             'quantity'       => (string) $this->quantity,
             'unit_cost'      => (string) $this->unit_cost,
             'total_cost'     => (string) $this->total_cost,
+            'lot_number'     => $this->lot_number,
+            'expiry_date'    => optional($this->expiry_date)->toDateString(),
             'gl_handoff'     => [
                 'status' => $this->gl_handoff_status instanceof MovementGlHandoffStatus
                     ? $this->gl_handoff_status->value

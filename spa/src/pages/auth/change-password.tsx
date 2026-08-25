@@ -101,7 +101,6 @@ export default function ChangePasswordPage() {
  }) => (
  <button
  type="button"
- tabIndex={-1}
  onClick={onToggle}
  aria-label={shown ? `Hide ${label}` : `Show ${label}`}
  className="flex h-full items-center justify-center px-2 text-muted transition-colors hover:text-primary"

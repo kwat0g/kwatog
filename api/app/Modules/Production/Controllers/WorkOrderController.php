@@ -11,6 +11,7 @@ use App\Modules\Production\Enums\MachineDowntimeCategory;
 use App\Modules\Production\Exceptions\ProductionReceiptHandoffException;
 use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Production\Enums\WoOperationStatus;
+use App\Modules\Production\Exceptions\IllegalLifecycleTransitionException;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderOutput;
 use App\Modules\Production\Requests\CancelWorkOrderRequest;
@@ -27,17 +28,10 @@ class WorkOrderController
 {
     /**
      * confirm(), start() and cancel() no longer swallow
-     * IllegalLifecycleTransitionException, and that is the point of narrowing
-     * them rather than an accident of it.
-     *
-     * That class extends HttpResponseException, which extends RuntimeException,
-     * so the old `catch (RuntimeException)` caught it — and
-     * HttpResponseException::getMessage() is empty when it is built from a
-     * response, which these are. An illegal transition therefore answered
-     * `422 {"message":""}`: a silent failure, with the 409 and the sentence
-     * "Illegal work-order lifecycle transition: draft → in_progress." thrown
-     * away. Uncaught, it renders its own response, which is what it was written
-     * to do.
+     * IllegalLifecycleTransitionException is a domain exception, not an HTTP
+     * response. The explicit 409 arms below keep transport mapping at the
+     * controller boundary while service and job callers receive the same
+     * machine-readable rule.
      *
      * recordOutput() keeps a wider union — see the note on its own arm for why it
      * carries one class more than retryProductionReceipt() below.
@@ -134,10 +128,18 @@ class WorkOrderController
         return response()->json(null, 204);
     }
 
-    public function restore(WorkOrder $workOrder): JsonResponse
+    public function restore(Request $request, WorkOrder $workOrder): JsonResponse
     {
-        $workOrder->restore();
-        return response()->json(['message' => 'Work order restored.']);
+        try {
+            $restored = $this->service->restore($workOrder, (int) $request->user()->id);
+        } catch (BusinessRuleException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'message' => 'Work order restored.',
+            'data' => (new WorkOrderResource($restored))->resolve($request),
+        ]);
     }
 
     /**
@@ -165,6 +167,8 @@ class WorkOrderController
                 $request->input('machine_id'),
                 $request->input('mold_id'),
             );
+        } catch (IllegalLifecycleTransitionException $e) {
+            return response()->json(['message' => $e->getMessage(), 'code' => $e->errorCode()], 409);
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
@@ -189,20 +193,28 @@ class WorkOrderController
             return response()->json(['message' => 'Forbidden'], 403);
         }
         try {
-            $wo = $this->service->start($workOrder);
+            $wo = $this->service->start($workOrder, (int) request()->user()->id);
+        } catch (IllegalLifecycleTransitionException $e) {
+            return response()->json(['message' => $e->getMessage(), 'code' => $e->errorCode()], 409);
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return new WorkOrderResource($wo);
     }
 
-    public function pause(PauseWorkOrderRequest $request, WorkOrder $workOrder): WorkOrderResource
+    public function pause(PauseWorkOrderRequest $request, WorkOrder $workOrder): WorkOrderResource|JsonResponse
     {
-        $wo = $this->service->pause(
-            $workOrder,
-            $request->input('reason'),
-            MachineDowntimeCategory::from($request->input('category')),
-        );
+        try {
+            $wo = $this->service->pause(
+                $workOrder,
+                $request->input('reason'),
+                MachineDowntimeCategory::from($request->input('category')),
+            );
+        } catch (IllegalLifecycleTransitionException $e) {
+            return response()->json(['message' => $e->getMessage(), 'code' => $e->errorCode()], 409);
+        } catch (BusinessRuleException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
         return new WorkOrderResource($wo);
     }
 
@@ -211,7 +223,14 @@ class WorkOrderController
         if (! request()->user()->hasPermission('production.work_orders.lifecycle')) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
-        return new WorkOrderResource($this->service->resume($workOrder));
+        try {
+            $wo = $this->service->resume($workOrder);
+        } catch (IllegalLifecycleTransitionException $e) {
+            return response()->json(['message' => $e->getMessage(), 'code' => $e->errorCode()], 409);
+        } catch (BusinessRuleException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+        return new WorkOrderResource($wo);
     }
 
     public function complete(WorkOrder $workOrder): WorkOrderResource|JsonResponse
@@ -219,7 +238,14 @@ class WorkOrderController
         if (! request()->user()->hasPermission('production.work_orders.lifecycle')) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
-        return new WorkOrderResource($this->service->complete($workOrder));
+        try {
+            $wo = $this->service->complete($workOrder);
+        } catch (IllegalLifecycleTransitionException $e) {
+            return response()->json(['message' => $e->getMessage(), 'code' => $e->errorCode()], 409);
+        } catch (BusinessRuleException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+        return new WorkOrderResource($wo);
     }
 
     public function close(WorkOrder $workOrder): WorkOrderResource|JsonResponse
@@ -227,13 +253,22 @@ class WorkOrderController
         if (! request()->user()->hasPermission('production.work_orders.lifecycle')) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
-        return new WorkOrderResource($this->service->close($workOrder));
+        try {
+            $wo = $this->service->close($workOrder);
+        } catch (IllegalLifecycleTransitionException $e) {
+            return response()->json(['message' => $e->getMessage(), 'code' => $e->errorCode()], 409);
+        } catch (BusinessRuleException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+        return new WorkOrderResource($wo);
     }
 
     public function cancel(CancelWorkOrderRequest $request, WorkOrder $workOrder): WorkOrderResource|JsonResponse
     {
         try {
             $wo = $this->service->cancel($workOrder, $request->input('reason'));
+        } catch (IllegalLifecycleTransitionException $e) {
+            return response()->json(['message' => $e->getMessage(), 'code' => $e->errorCode()], 409);
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }

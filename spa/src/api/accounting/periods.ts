@@ -21,6 +21,7 @@ export interface AccountingPeriod {
 export interface PeriodListParams {
  status?: AccountingPeriodStatus;
  year?: number | string;
+ page?: number;
  per_page?: number;
 }
 

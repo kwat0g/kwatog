@@ -25,5 +25,7 @@ final class StockMovementInput
         public readonly bool $bypassCountFreeze = false,
         public readonly ?int $expectedFromVersion = null,
         public readonly ?int $expectedToVersion = null,
+        public readonly ?string $lotNumber = null,
+        public readonly ?string $expiryDate = null,
     ) {}
 }

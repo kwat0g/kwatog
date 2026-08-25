@@ -7,6 +7,7 @@ namespace App\Modules\Payroll\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\AuditLog;
 use App\Common\Services\OutboxService;
+use App\Common\Support\Money;
 use App\Modules\Accounting\Enums\JournalEntryStatus;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Services\JournalEntryService;
@@ -24,11 +25,11 @@ use App\Modules\Payroll\Events\PayrollComputationRequested;
 use App\Modules\Payroll\Events\PayrollGlPostingRequested;
 use App\Modules\Payroll\Events\PayrollPeriodVoided;
 use App\Modules\Payroll\Jobs\ProcessPayrollJob;
-use App\Modules\Payroll\Models\DisbursementProof;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -38,6 +39,7 @@ class PayrollPeriodService
     public function __construct(
         private readonly \App\Common\Services\SettingsService $settings,
         private readonly PayrollProgressTracker $progress,
+        private readonly DisbursementEvidenceService $disbursementEvidence,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -91,9 +93,9 @@ class PayrollPeriodService
                 $p->summary = $r ? [
                     'employee_count'   => (int) $r->employee_count,
                     'failed_count'     => (int) $r->failed_count,
-                    'total_gross'      => number_format((float) $r->total_gross, 2, '.', ''),
-                    'total_deductions' => number_format((float) $r->total_deductions, 2, '.', ''),
-                    'total_net'        => number_format((float) $r->total_net, 2, '.', ''),
+                    'total_gross'      => Money::round2((string) $r->total_gross),
+                    'total_deductions' => Money::round2((string) $r->total_deductions),
+                    'total_net'        => Money::round2((string) $r->total_net),
                 ] : null;
             });
         }
@@ -139,9 +141,9 @@ class PayrollPeriodService
         return [
             'employee_count'   => (int) ($row->employee_count ?? 0),
             'failed_count'     => (int) ($row->failed_count ?? 0),
-            'total_gross'      => number_format((float) ($row->total_gross ?? 0), 2, '.', ''),
-            'total_deductions' => number_format((float) ($row->total_deductions ?? 0), 2, '.', ''),
-            'total_net'        => number_format((float) ($row->total_net ?? 0), 2, '.', ''),
+            'total_gross'      => Money::round2((string) ($row->total_gross ?? '0.00')),
+            'total_deductions' => Money::round2((string) ($row->total_deductions ?? '0.00')),
+            'total_net'        => Money::round2((string) ($row->total_net ?? '0.00')),
         ];
     }
 
@@ -153,10 +155,15 @@ class PayrollPeriodService
         $curr = $this->summary($current);
         $prev = $this->summary($previous);
 
-        $delta = fn (string $key) => round((float) $curr[$key] - (float) $prev[$key], 2);
-        $pct   = fn (string $key) => (float) $prev[$key] > 0
-            ? round(((float) $curr[$key] - (float) $prev[$key]) / (float) $prev[$key] * 100, 2)
-            : null;
+        $delta = fn (string $key): string => Money::sub((string) $curr[$key], (string) $prev[$key]);
+        $pct   = function (string $key) use ($curr, $prev): ?float {
+            if (! Money::gt((string) $prev[$key], '0')) {
+                return null;
+            }
+
+            $change = Money::sub((string) $curr[$key], (string) $prev[$key]);
+            return round((float) bcdiv(bcmul($change, '100', 4), (string) $prev[$key], 4), 2);
+        };
 
         return [
             'current'    => array_merge($curr, ['period_label' => $current->period_start . ' – ' . $current->period_end]),
@@ -626,17 +633,28 @@ class PayrollPeriodService
      * Honours the period's scope filters. An unscoped period returns every
      * active employee, exactly as before scoping existed.
      *
-     * @return Collection<int, Employee>
+     * @return Builder
      */
-    public function availableEmployees(PayrollPeriod $period): Collection
+    public function availableEmployeeQuery(PayrollPeriod $period): Builder
     {
         return $this->scopedEmployeeQuery([
             'employment_types' => $period->scope_employment_types,
             'department_ids'   => $period->scope_department_ids,
             'pay_types'        => $period->scope_pay_types,
         ], CarbonImmutable::parse($period->period_end))
-            ->orderBy('employee_no')
-            ->get();
+            ->orderBy('id');
+    }
+
+    /**
+     * Materialized compatibility helper for previews and callers that need a
+     * collection. Batch processing uses availableEmployeeQuery()->lazyById()
+     * so a large workforce is not held in worker memory.
+     *
+     * @return Collection<int, Employee>
+     */
+    public function availableEmployees(PayrollPeriod $period): Collection
+    {
+        return $this->availableEmployeeQuery($period)->reorder('employee_no')->get();
     }
 
     /**
@@ -835,7 +853,7 @@ class PayrollPeriodService
         // at all" is a legitimate state (fresh install, everyone separated) and
         // blocking it would change long-standing compute/claim behaviour that has
         // nothing to do with scoping.
-        if (! $period->isCompanyWide() && $this->availableEmployees($period)->isEmpty()) {
+        if (! $period->isCompanyWide() && ! $this->availableEmployeeQuery($period)->exists()) {
             throw new BusinessRuleException(sprintf(
                 'This period\'s scope (%s) matches no active employee hired on or before %s. Widen the scope, or create the period unscoped to pay everyone.',
                 $period->scopeLabel() ?? 'custom',
@@ -1009,10 +1027,7 @@ class PayrollPeriodService
                 ));
             }
 
-            $proofCount = $locked->disbursementProofs()->count();
-            if ($proofCount === 0) {
-                throw new BusinessRuleException('At least one disbursement proof must be uploaded before marking the period as disbursed.');
-            }
+            $this->disbursementEvidence->assertComplete($locked);
 
             $locked->status = PayrollPeriodStatus::Disbursed;
             $locked->disbursement_status = 'disbursed';
@@ -1059,8 +1074,8 @@ class PayrollPeriodService
             foreach ($rows as $pid => $r) {
                 $summaries[$pid] = [
                     'employee_count' => (int) $r->employee_count,
-                    'total_gross'    => number_format((float) $r->total_gross, 2, '.', ''),
-                    'total_net'      => number_format((float) $r->total_net, 2, '.', ''),
+                    'total_gross'    => Money::round2((string) $r->total_gross),
+                    'total_net'      => Money::round2((string) $r->total_net),
                 ];
             }
         }

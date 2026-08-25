@@ -1,5 +1,5 @@
 /** Sprint 8 — Task 69. Maintenance work-orders list. */
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
 import { LuPlus, LuSmartphone } from '@/lib/icons';
 import { workOrdersApi, type WorkOrderListParams } from '@/api/maintenance/workOrders';
@@ -12,6 +12,7 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { StatCard } from '@/components/ui/StatCard';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
+import { useEcho } from '@/hooks/useEcho';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import {
  maintenancePriorityVariant as PRIORITY_CHIP,
@@ -27,6 +28,7 @@ const DEFAULT_FILTERS: WorkOrderListParams = {
 export default function MaintenanceWorkOrdersListPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
+ const qc = useQueryClient();
  // Bound to the URL so dashboard drill-downs (?status=in_progress) arrive
  // pre-filtered and the browser back button restores the previous view.
  const [filters, setFilters] = useUrlFilters<WorkOrderListParams>(DEFAULT_FILTERS);
@@ -34,7 +36,12 @@ export default function MaintenanceWorkOrdersListPage() {
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['maintenance', 'work-orders', filters],
  queryFn: () => workOrdersApi.list(filters),
+ refetchInterval: 60_000,
  placeholderData: (prev) => prev });
+
+ useEcho('maintenance.dashboard', '.maintenance.wo_created', () => {
+  qc.invalidateQueries({ queryKey: ['maintenance', 'work-orders'] });
+ });
  const { data: options } = useQuery({
  queryKey: ['maintenance', 'work-order-options'],
  queryFn: () => workOrdersApi.options() });

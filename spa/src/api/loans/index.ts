@@ -32,7 +32,7 @@ export const loansApi = {
  limits: (employeeId: string, loanType: string) =>
  client.get<{ data: LoanLimits }>(`/loans/limits/${employeeId}`, { params: { loan_type: loanType } })
  .then((r) => r.data.data),
- previewAmortization: (loan_type: LoanType, principal: number, pay_periods: number) =>
+ previewAmortization: (loan_type: LoanType, principal: string | number, pay_periods: number) =>
  client.post<{ data: AmortizationItem[] }>('/loans/preview-amortization', { loan_type, principal, pay_periods })
  .then((r) => r.data.data),
 };

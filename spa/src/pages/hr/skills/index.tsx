@@ -80,7 +80,7 @@ export default function SkillsListPage() {
  {
  key: 'actions', header: '',
  cell: (row: Skill) => row.is_active && can('hr.trainings.manage') ? (
- <Button variant="ghost" size="xs" icon={<LuTrash2 size={12} />}
+ <Button variant="ghost" size="xs" iconOnly aria-label={`Deactivate ${row.name}`} title="Deactivate skill" icon={<LuTrash2 size={12} />}
  onClick={(e) => { e.stopPropagation(); deactivateMutation.mutate(row.id); }} />
  ) : null,
  },

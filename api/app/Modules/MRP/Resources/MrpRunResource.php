@@ -12,6 +12,11 @@ class MrpRunResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $errorMessage = $this->error_message;
+        if ($errorMessage !== null && $this->error_code === null) {
+            $errorMessage = 'MRP run failed before the safe error contract was available. Review the run logs for recovery details.';
+        }
+
         return [
             'id'                     => $this->hash_id,
             'run_at'                 => optional($this->run_at)->toIso8601String(),
@@ -26,11 +31,14 @@ class MrpRunResource extends JsonResource
             'prs_created'            => (int) $this->prs_created,
             'prs_updated'            => (int) $this->prs_updated,
             'plans_generated'        => (int) $this->plans_generated,
+            'failed_sales_orders'    => (int) ($this->failed_sales_orders ?? 0),
             'duration_ms'            => $this->duration_ms !== null ? (int) $this->duration_ms : null,
             'status'                 => $this->status instanceof \BackedEnum ? $this->status->value : (string) $this->status,
             'status_label'           => Str::headline((string) ($this->status instanceof \BackedEnum ? $this->status->value : $this->status)),
-            'error_message'          => $this->error_message,
-            'summary'                => $this->summary ?? [],
+            'error_message'          => $errorMessage,
+            'error_code'             => $this->error_code,
+            'recovery_action'        => $this->recovery_action,
+            'summary'                => MrpPlanningResponseSerializer::summary($this->summary ?? []),
             'created_at'             => optional($this->created_at)->toIso8601String(),
         ];
     }

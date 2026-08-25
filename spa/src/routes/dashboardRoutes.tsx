@@ -39,8 +39,6 @@ const ActionCenterPage = lazy(() => import('@/pages/action-center'));
 // this branch read the dead file and chased the wrong string.
 const OperationsHealthPage = lazy(() => import('@/pages/admin/operations-health'));
 
-const AdminUsersRolesHubPage = lazy(() => import('@/pages/admin/users-roles'));
-
 const AdminActivityFeedPage = lazy(() => import('@/pages/admin/activity'));
 
 
@@ -106,8 +104,10 @@ export const dashboardRoutes = (
  element={<PermissionGuard permission="admin.activity.view"><Suspense fallback={<SkeletonTable columns={5} rows={10} />}><AdminActivityFeedPage /></Suspense></PermissionGuard>}
  />
 
- <Route path="/admin/users-roles"
- element={<PermissionGuard permission="admin.users.manage"><Suspense fallback={<SkeletonTable columns={5} rows={8} />}><AdminUsersRolesHubPage /></Suspense></PermissionGuard>} />
+ {/* The former Users & Roles hub duplicated the canonical permission-aware
+ user, role, and audit pages. Preserve old bookmarks by consolidating them on
+ the user-management entry point; its own guard remains authoritative. */}
+ <Route path="/admin/users-roles" element={<Navigate to="/admin/users" replace />} />
 
  {/* Notifications page (Sprint 8 — Task 77) */}
  <Route path="/notifications" element={<PermissionGuard permission="notifications.view"><Suspense fallback={<SkeletonTable columns={4} rows={8} />}><NotificationsListPage /></Suspense></PermissionGuard>} />

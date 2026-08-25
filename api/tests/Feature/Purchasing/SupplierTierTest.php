@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Purchasing;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Purchasing\Models\SupplierPerformanceSnapshot;
 use App\Modules\Purchasing\Services\SupplierPerformanceService;
@@ -83,6 +84,32 @@ class SupplierTierTest extends TestCase
         $this->assertNull($snapshot->tier);
     }
 
+    public function test_compute_rejects_periods_outside_the_supported_range(): void
+    {
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('month must be between 1 and 12');
+
+        app(SupplierPerformanceService::class)->compute(new Vendor(), 2026, 13);
+    }
+
+    public function test_repeated_compute_keeps_one_snapshot_for_a_vendor_period(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $service = app(SupplierPerformanceService::class);
+
+        $service->compute($vendor, 2026, 5);
+        $service->compute($vendor, 2026, 5);
+
+        $this->assertSame(
+            1,
+            SupplierPerformanceSnapshot::query()
+                ->where('vendor_id', $vendor->id)
+                ->where('period_year', 2026)
+                ->where('period_month', 5)
+                ->count(),
+        );
+    }
+
     public function test_compute_persists_tier_alongside_overall_score(): void
     {
         $vendor = Vendor::factory()->create();
@@ -93,7 +120,7 @@ class SupplierTierTest extends TestCase
         $snapshot = $svc->compute($vendor, 2026, 5);
         $snapshot->forceFill(['overall_score' => 92.5])->save();
 
-        // Recompute over the same period — updateOrCreate path. Composite score
+        // Recompute over the same period — upsert path. Composite score
         // recomputes from data (likely null). What we assert is: when overall is
         // not null, tier matches the boundaries.
         // We instead assert the helper directly via reflection.

@@ -21,9 +21,19 @@ class UpdateProductRequest extends FormRequest
             'part_number'     => ['sometimes', 'required', 'string', 'regex:/^[A-Z0-9-]{2,30}$/', Rule::unique('products', 'part_number')->ignore($productId)],
             'name'            => ['sometimes', 'required', 'string', 'max:200'],
             'description'     => ['nullable', 'string', 'max:1000'],
-            'unit_of_measure' => ['sometimes', 'required', 'string', 'max:20'],
+            'unit_of_measure' => [
+                'sometimes', 'required', 'string', 'max:20',
+                Rule::exists('uoms', 'code')->whereNull('deleted_at'),
+            ],
             'standard_cost'   => ['sometimes', 'required', 'decimal:0,2', 'min:0'],
             'is_active'       => ['nullable', 'boolean'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('unit_of_measure')) {
+            $this->merge(['unit_of_measure' => strtoupper(trim((string) $this->input('unit_of_measure')))]);
+        }
     }
 }

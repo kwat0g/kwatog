@@ -4,26 +4,28 @@ declare(strict_types=1);
 
 namespace App\Modules\CRM\Controllers;
 
-use App\Common\Concerns\ResolvesHashIds;
-use App\Common\Services\SettingsService;
-use App\Modules\Auth\Models\User;
+use App\Common\Enums\DocumentType;
+use App\Common\Services\DocumentVaultService;
+use App\Common\Services\Pdf\PdfRenderService;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\CRM\Models\CustomerComplaint;
 use App\Modules\CRM\Enums\ComplaintStatus;
-use App\Modules\CRM\Models\Product;
-use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\CRM\Requests\StoreComplaintRequest;
 use App\Modules\CRM\Resources\CustomerComplaintResource;
 use App\Modules\CRM\Services\ComplaintService;
 use App\Modules\Quality\Enums\NcrSeverity;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Illuminate\Validation\Rule;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ComplaintController
 {
-    public function __construct(private readonly ComplaintService $service) {}
+    public function __construct(
+        private readonly ComplaintService $service,
+        private readonly PdfRenderService $renderer,
+        private readonly DocumentVaultService $vault,
+    ) {}
 
     public function index(Request $request): AnonymousResourceCollection
     {
@@ -53,32 +55,9 @@ class ComplaintController
         return new CustomerComplaintResource($this->service->show($complaint));
     }
 
-    public function store(Request $request): CustomerComplaintResource
+    public function store(StoreComplaintRequest $request): CustomerComplaintResource
     {
-        $data = $request->validate([
-            'customer_id'       => ['required', 'string'],
-            'product_id'        => ['nullable', 'string'],
-            'sales_order_id'    => ['nullable', 'string'],
-            'received_date'     => ['required', 'date'],
-            'severity'          => ['required', Rule::enum(NcrSeverity::class)],
-            'description'       => ['required', 'string', 'max:5000'],
-            'affected_quantity' => ['nullable', 'integer', 'min:0'],
-            'assigned_to'       => ['nullable', 'string'],
-        ]);
-
-        // Decode hash IDs
-        $payload = [
-            'customer_id'       => Customer::decodeHash($data['customer_id']),
-            'product_id'        => ! empty($data['product_id']) ? Product::tryDecodeHash($data['product_id']) : null,
-            'sales_order_id'    => ! empty($data['sales_order_id']) ? SalesOrder::tryDecodeHash($data['sales_order_id']) : null,
-            'received_date'     => $data['received_date'],
-            'severity'          => $data['severity'],
-            'description'       => $data['description'],
-            'affected_quantity' => (int) ($data['affected_quantity'] ?? 0),
-            'assigned_to'       => ! empty($data['assigned_to']) ? User::tryDecodeHash($data['assigned_to']) : null,
-        ];
-
-        return new CustomerComplaintResource($this->service->create($payload, $request->user()));
+        return new CustomerComplaintResource($this->service->create($request->validated(), $request->user()));
     }
 
     /** Retry a failed complaint → Quality NCR handoff. */
@@ -91,7 +70,7 @@ class ComplaintController
 
     public function update8D(Request $request, CustomerComplaint $complaint): CustomerComplaintResource
     {
-        $request->validate([
+        $validated = $request->validate([
             'd1_team'              => ['nullable', 'string', 'max:5000'],
             'd2_problem'           => ['nullable', 'string', 'max:5000'],
             'd3_containment'       => ['nullable', 'string', 'max:5000'],
@@ -101,7 +80,7 @@ class ComplaintController
             'd7_prevention'        => ['nullable', 'string', 'max:5000'],
             'd8_recognition'       => ['nullable', 'string', 'max:5000'],
         ]);
-        $this->service->update8DReport($complaint, $request->all());
+        $this->service->update8DReport($complaint, $validated);
         return new CustomerComplaintResource($this->service->show($complaint));
     }
 
@@ -124,23 +103,26 @@ class ComplaintController
     /**
      * Render the 8D report as PDF using the standard pdf._layout.
      */
-    public function pdf(CustomerComplaint $complaint, SettingsService $settings)
+    public function pdf(CustomerComplaint $complaint): StreamedResponse
     {
         $complaint->load(['customer', 'product', 'eightDReport.finalizer']);
-        if (! $complaint->eightDReport) abort(404);
+        abort_unless(
+            $complaint->eightDReport && $complaint->eightDReport->finalized_at,
+            404,
+            'The 8D report must be finalised before it can be downloaded.',
+        );
 
         $payload = [
-            'company'   => [
-                'name'    => $settings->requiredString('company.legal_name'),
-                'address' => $settings->requiredString('company.address'),
-                'tin'     => $settings->requiredString('company.tin'),
-            ],
-            'user'      => optional(request()->user())->name,
             'complaint' => $complaint,
             'report'    => $complaint->eightDReport,
         ];
-        return Pdf::loadView('pdf.complaint-8d', $payload)
-            ->setPaper('a4')
-            ->stream("8D-{$complaint->complaint_number}.pdf");
+        $bytes = $this->renderer->render('pdf.complaint-8d', $payload, [
+            'title' => DocumentType::Complaint8D->label(),
+        ]);
+        $actor = auth()->user();
+        $user = $actor instanceof \App\Modules\Auth\Models\User ? $actor : null;
+        $document = $this->vault->store($bytes, DocumentType::Complaint8D, $complaint, $user);
+
+        return $this->vault->streamInline($document);
     }
 }

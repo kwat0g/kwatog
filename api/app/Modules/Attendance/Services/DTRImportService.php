@@ -6,8 +6,6 @@ namespace App\Modules\Attendance\Services;
 
 use App\Modules\Attendance\Models\Attendance;
 use App\Modules\HR\Models\Employee;
-use App\Modules\Payroll\Enums\PayrollPeriodStatus;
-use App\Modules\Payroll\Models\PayrollPeriod;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -18,6 +16,7 @@ class DTRImportService
     public function __construct(
         private readonly DTRComputationService $dtr,
         private readonly OvertimeService $overtime,
+        private readonly AttendanceDateMutabilityGuard $mutability,
         private readonly PunchSessionizer $sessionizer = new PunchSessionizer(),
     ) {}
 
@@ -98,10 +97,13 @@ class DTRImportService
                 }
 
                 DB::transaction(function () use ($employeeId, $date, $tIn, $tOut) {
-                    $a = Attendance::firstOrNew([
-                        'employee_id' => $employeeId,
-                        'date'        => $date,
-                    ]);
+                    $this->mutability->assertMutable($employeeId, $date);
+                    $a = Attendance::query()
+                        ->where('employee_id', $employeeId)
+                        ->where('date', $date)
+                        ->lockForUpdate()
+                        ->first()
+                        ?? new Attendance(['employee_id' => $employeeId, 'date' => $date]);
                     $a->time_in = $tIn;
                     $a->time_out = $tOut;
                     $a->is_manual_entry = false;
@@ -129,10 +131,11 @@ class DTRImportService
      * cross-midnight aware) and written exactly like import() does — same
      * DTR compute + OT auto-detect — so downstream behaviour is identical.
      *
-     * Days that fall inside a FINALIZED payroll period are blocked (skipped
-     * with an error) so we never mutate attendance the payroll already paid.
+     * Days that fall inside a locked payroll period (finalized, disbursed, or
+     * voided) are blocked (skipped with an error) so we never mutate attendance
+     * after the payroll run is closed.
      *
-     * The legacy paired-CSV import() is untouched.
+     * The paired-CSV path uses the same mutability guard and transaction fence.
      *
      * @return array{total:int, imported:int, skipped:int, deduped:int, flagged:int, errors:array<int, array{row:int, message:string}>}
      */
@@ -198,13 +201,11 @@ class DTRImportService
         // ── Persist each day record ──
         // The two \RuntimeExceptions in this loop are row-level control flow as
         // well — caught below and reported per day in $errors. Do NOT convert
-        // them. The finalized-payroll-period one in particular IS a business
+        // them. The payroll-lock one in particular IS a business
         // rule, and that is exactly why it must stay a per-row entry: as a
         // BusinessRuleException it would abort the whole upload on the first
         // affected day instead of importing the other days and naming that one.
         $cache = []; // employee_no => employee_id
-        // Read ONCE per import, not once per day record. See the accessor below.
-        $finalizedRanges = $this->finalizedPeriodRanges();
         $imported = 0;
         $skipped  = 0;
         $flagged  = 0;
@@ -221,19 +222,18 @@ class DTRImportService
                 $employeeId = $cache[$empNo];
                 $date = $day['date'];
 
-                if ($this->isDateInFinalizedPeriod($date, $finalizedRanges)) {
-                    throw new \RuntimeException("Date {$date} falls in a finalized payroll period — import blocked.");
-                }
-
                 if ($day['flag'] !== null) {
                     $flagged++;
                 }
 
                 DB::transaction(function () use ($employeeId, $date, $day) {
-                    $a = Attendance::firstOrNew([
-                        'employee_id' => $employeeId,
-                        'date'        => $date,
-                    ]);
+                    $this->mutability->assertMutable($employeeId, $date);
+                    $a = Attendance::query()
+                        ->where('employee_id', $employeeId)
+                        ->where('date', $date)
+                        ->lockForUpdate()
+                        ->first()
+                        ?? new Attendance(['employee_id' => $employeeId, 'date' => $date]);
                     $a->time_in  = $day['time_in'];
                     $a->time_out = $day['time_out'];
                     $a->is_manual_entry = false;
@@ -261,53 +261,4 @@ class DTRImportService
         ];
     }
 
-    /**
-     * True when the given date sits inside a FINALIZED (or disbursed) payroll
-     * period. Used to block raw-punch edits to already-paid attendance.
-     */
-    /**
-     * The finalized/disbursed payroll ranges, read once per import.
-     *
-     * This was previously an EXISTS query issued from inside the day loop, so a
-     * realistic monthly import (~200 employees x ~30 days) asked the database
-     * the same question ~6,000 times. It also used whereDate(), which wraps the
-     * column in a function and so cannot use an index on period_start /
-     * period_end even when one exists.
-     *
-     * The set is small — finalized periods accumulate a couple of dozen rows a
-     * year — so it is cheaper to hold it in memory and answer in PHP.
-     *
-     * Snapshot semantics, deliberate: the ranges are read once at the start of
-     * an import rather than re-read per row, so one import makes ONE consistent
-     * decision about what is finalized. A period finalized by someone else
-     * midway through no longer changes the verdict partway down the file.
-     *
-     * @return array<int, array{start: string, end: string}>
-     */
-    private function finalizedPeriodRanges(): array
-    {
-        return PayrollPeriod::query()
-            ->whereIn('status', [PayrollPeriodStatus::Finalized->value, PayrollPeriodStatus::Disbursed->value])
-            ->get(['period_start', 'period_end'])
-            ->map(fn (PayrollPeriod $period): array => [
-                'start' => Carbon::parse($period->period_start)->toDateString(),
-                'end' => Carbon::parse($period->period_end)->toDateString(),
-            ])
-            ->all();
-    }
-
-    /**
-     * @param  array<int, array{start: string, end: string}>  $ranges
-     */
-    private function isDateInFinalizedPeriod(string $date, array $ranges): bool
-    {
-        foreach ($ranges as $range) {
-            // Y-m-d strings compare lexicographically in date order.
-            if ($date >= $range['start'] && $date <= $range['end']) {
-                return true;
-            }
-        }
-
-        return false;
-    }
 }

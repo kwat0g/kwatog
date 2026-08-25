@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Purchasing;
 
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Accounting\Services\BillService;
 use App\Modules\Auth\Models\Role;
@@ -199,14 +200,14 @@ class ThreeWayMatchGrnCoverageTest extends TestCase
             $this->assertStringContainsString('blocked', strtolower($e->getMessage()));
         }
 
-        // With override — must succeed and persist the override snapshot.
-        $bill = $svc->create([
+        // A blocking variance is staged first; a separate finance checker
+        // approves it at the draft-post boundary.
+        $bill = $svc->createDraft([
             'bill_number'       => 'INV-GRN-OVR',
             'vendor_id'         => $this->vendor->hash_id,
             'purchase_order_id' => $po->hash_id,
             'date'              => '2026-04-10',
             'is_vatable'        => false,
-            'allow_override'    => true,
             'provenance_type'   => 'stock',
             'goods_receipt_note_id' => GoodsReceiptNote::query()
                 ->where('purchase_order_id', $po->id)
@@ -221,8 +222,21 @@ class ThreeWayMatchGrnCoverageTest extends TestCase
             ]],
         ], $this->user);
 
-        $this->assertNotNull($bill->id, 'Bill must be created when allow_override=true even on GRN-block.');
-        $this->assertTrue((bool) $bill->has_variances, 'has_variances must be true on overridden bill.');
+        $this->assertNotNull($bill->id, 'Bill must be created as a draft for finance review.');
+        $this->assertSame(BillStatus::Draft, $bill->status);
+        $this->assertTrue((bool) $bill->has_variances, 'has_variances must be true on the review draft.');
         $this->assertNotNull($bill->three_way_match_snapshot, 'Match snapshot must be persisted for audit.');
+
+        $checker = User::factory()->create([
+            'role_id' => Role::where('slug', 'finance_officer')->value('id'),
+        ]);
+        $posted = $svc->postDraft(
+            $bill->fresh(),
+            $checker,
+            allowOverride: true,
+            overrideReason: 'Finance approved the documented partial receipt exception.',
+        );
+        $this->assertSame(BillStatus::Unpaid, $posted->status);
+        $this->assertTrue((bool) $posted->three_way_overridden);
     }
 }

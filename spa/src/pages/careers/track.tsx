@@ -44,8 +44,9 @@ export default function ApplicationTrackPage() {
             step.label === info.status ||
             (info.status === 'Interview Scheduled' && step.value === 'interview'),
         )
-    : -1;
+  : -1;
   const isRejected = info?.status === 'Not Selected';
+  const isHired = info?.status === 'Hired';
 
   return (
     <div
@@ -69,6 +70,8 @@ export default function ApplicationTrackPage() {
 
         <form onSubmit={handleTrack} className="mt-6 flex gap-3">
           <Input
+            id="tracking-code"
+            label="Tracking code"
             value={code}
             onChange={(e) => setCode(e.target.value)}
             placeholder="RCT-XXXXXX"
@@ -102,6 +105,7 @@ export default function ApplicationTrackPage() {
                 </p>
               </div>
             ) : (
+              <>
               <div className="space-y-0">
                 {info.stage_steps.map((step, idx) => {
                   const isActive = idx === currentStep;
@@ -146,6 +150,13 @@ export default function ApplicationTrackPage() {
                   );
                 })}
               </div>
+              {isHired && (
+                <div className="mt-5 rounded-md bg-success-bg p-4 text-center">
+                  <p className="font-medium text-success-fg">Congratulations — your application has been hired.</p>
+                  <p className="mt-1 text-sm text-success-fg">Our HR team will contact you with the next steps.</p>
+                </div>
+              )}
+              </>
             )}
 
             {info.interview && (

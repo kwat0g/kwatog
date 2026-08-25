@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Modules\Purchasing\Services;
 
-use App\Common\Services\SettingsService;
+use App\Common\Enums\DocumentType;
+use App\Common\Services\DocumentVaultService;
+use App\Common\Services\Pdf\PdfRenderService;
 use App\Common\Support\ApprovalSignatureBuilder;
+use App\Modules\Auth\Models\User;
 use App\Modules\Purchasing\Models\PurchaseRequest;
-use Barryvdh\DomPDF\Facade\Pdf;
-use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Sprint P9 — render a Purchase Request as a single-page A4 PDF with the
@@ -19,34 +21,30 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class PurchaseRequestPdfService
 {
-    public function __construct(private readonly SettingsService $settings) {}
+    public function __construct(
+        private readonly PdfRenderService $renderer,
+        private readonly DocumentVaultService $vault,
+    ) {}
 
-    public function render(PurchaseRequest $pr): Response
+    public function render(PurchaseRequest $pr): StreamedResponse
     {
         $pr->loadMissing([
             'requester:id,name',
             'department:id,name,code',
             'items.item:id,code,name,unit_of_measure',
+            'items.suggestedVendor:id,name',
             'approvalRecords.approver:id,name',
         ]);
 
-        $company = [
-            'name'    => $this->settings->requiredString('company.legal_name'),
-            'address' => $this->settings->requiredString('company.address'),
-            'tin'     => $this->settings->requiredString('company.tin'),
-        ];
-
-        $pdf = Pdf::loadView('pdf.purchase-request', [
+        $bytes = $this->renderer->render('pdf.purchase-request', [
             'pr'        => $pr,
-            'company'   => $company,
             'now'       => now(),
             'approvals' => ApprovalSignatureBuilder::for($pr, $pr->requester),
-        ])->setPaper('a4', 'portrait');
+        ], ['orientation' => 'portrait', 'title' => DocumentType::PurchaseRequest->label()]);
+        $actor = auth()->user();
+        $user = $actor instanceof User ? $actor : null;
+        $document = $this->vault->store($bytes, DocumentType::PurchaseRequest, $pr, $user);
 
-        $filename = $pr->pr_number.'.pdf';
-        return response($pdf->output(), 200, [
-            'Content-Type'        => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="'.$filename.'"',
-        ]);
+        return $this->vault->streamInline($document);
     }
 }

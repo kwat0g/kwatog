@@ -26,7 +26,8 @@ class ReceiveReturnRequest extends FormRequest
     use ResolvesHashIds;
     public function authorize(): bool
     {
-        return $this->user()?->can('return_management.manage') === true;
+        return $this->user()?->can('return_management.receive') === true
+            || $this->user()?->can('return_management.manage') === true;
     }
 
     public function rules(): array

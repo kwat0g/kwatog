@@ -81,18 +81,31 @@ class UserNotificationService
 
     /**
      * @param array<int, array{notification_type:string, channel:string, enabled:bool}> $preferences
+     *
+     * Duplicate keys in one request are collapsed with last-row-wins
+     * semantics before the single upsert. The database unique key keeps
+     * concurrent requests atomic; the last committed request wins.
      */
     public function updatePreferences(User $user, array $preferences): void
     {
         DB::transaction(function () use ($user, $preferences): void {
+            $rows = [];
+
             foreach ($preferences as $row) {
-                NotificationPreference::updateOrCreate(
-                    [
-                        'user_id'           => $user->id,
-                        'notification_type' => $row['notification_type'],
-                        'channel'           => $row['channel'],
-                    ],
-                    ['enabled' => (bool) $row['enabled']],
+                $key = serialize([$row['notification_type'], $row['channel']]);
+                $rows[$key] = [
+                    'user_id'           => $user->id,
+                    'notification_type' => $row['notification_type'],
+                    'channel'           => $row['channel'],
+                    'enabled'           => (bool) $row['enabled'],
+                ];
+            }
+
+            if ($rows !== []) {
+                NotificationPreference::upsert(
+                    array_values($rows),
+                    ['user_id', 'notification_type', 'channel'],
+                    ['enabled'],
                 );
             }
         });

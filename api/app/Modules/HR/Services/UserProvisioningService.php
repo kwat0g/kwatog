@@ -4,20 +4,18 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Services;
 
-use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Common\Services\SettingsService;
 use App\Common\Services\TemporaryPasswordGenerator;
 use App\Modules\Auth\Models\PasswordHistory;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
-use App\Modules\Auth\Notifications\PasswordResetNotification;
-use App\Modules\Auth\Notifications\WelcomeNotification;
 use App\Modules\HR\Exceptions\AccountAlreadyProvisionedException;
 use App\Modules\HR\Exceptions\EmployeeNoLongerExistsException;
 use App\Modules\HR\Models\Employee;
+use App\Modules\HR\Notifications\EmployeePasswordResetNotification;
+use App\Modules\HR\Notifications\EmployeeWelcomeNotification;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Log;
 
 /**
  * U1 — provisions, deactivates, and resets system accounts linked to an
@@ -25,12 +23,15 @@ use Illuminate\Support\Facades\Log;
  */
 class UserProvisioningService
 {
+    /** Roles that may be assigned by the employee-account HR workflow. */
+    private const ASSIGNABLE_ROLE_SLUGS = ['employee'];
+
     public function __construct(
         private readonly SettingsService $settings,
         private readonly TemporaryPasswordGenerator $temporaryPasswords,
     ) {}
     /**
-     * @param  array{email?: string, role_id?: int, send_welcome?: bool}  $options
+     * @param  array{send_welcome?: bool}  $options
      *
      * @throws AccountAlreadyProvisionedException when the employee already has an account
      * @throws EmployeeNoLongerExistsException when the employee was removed before the operation ran
@@ -48,7 +49,7 @@ class UserProvisioningService
                 throw new AccountAlreadyProvisionedException('Employee already has a system account.');
             }
 
-            $email = $options['email'] ?? $this->generateEmail($lockedEmployee);
+            $email = $this->resolveEmail($lockedEmployee);
             $tempPassword = $this->generateTempPassword();
 
             /** @var User $user */
@@ -56,7 +57,7 @@ class UserProvisioningService
                 'name'                  => $lockedEmployee->full_name,
                 'email'                 => $email,
                 'password'              => Hash::make($tempPassword),
-                'role_id'               => $options['role_id'] ?? $this->defaultRoleIdForEmployee(),
+                'role_id'               => $this->defaultRoleIdForEmployee(),
                 'employee_id'           => $lockedEmployee->id,
                 'is_active'             => true,
                 'must_change_password'  => true,
@@ -71,20 +72,7 @@ class UserProvisioningService
             ]);
 
             if (($options['send_welcome'] ?? true) === true) {
-                try {
-                    $user->notify(new WelcomeNotification($tempPassword));
-                } catch (\Throwable $e) {
-                    app(EmailDeliveryFailureNotifier::class)->notifyPermission(
-                        'hr.employees.view',
-                        'Employee welcome email',
-                        "The welcome email for {$user->name} ({$user->email}) could not be delivered. Provide the temporary credentials through an approved channel.",
-                        ['reason' => 'The email provider rejected or could not deliver the welcome message.'],
-                    );
-                    Log::warning('Employee welcome email delivery failed', [
-                        'user_id' => $user->id,
-                        'error' => $e->getMessage(),
-                    ]);
-                }
+                DB::afterCommit(fn () => $user->notify(new EmployeeWelcomeNotification($tempPassword)));
             }
 
             return $user->fresh(['role']);
@@ -110,12 +98,7 @@ class UserProvisioningService
             }
 
             $user->update(['is_active' => false]);
-            // Revoke any sanctum tokens (no-op if none).
-            if (method_exists($user, 'tokens')) {
-                $user->tokens()->delete();
-            }
-            // Delete active web sessions belonging to this user.
-            DB::table('sessions')->where('user_id', $user->id)->delete();
+            $this->revokeSessionsAndTokens($user);
             $user->flushPermissionsCache();
         });
     }
@@ -152,20 +135,11 @@ class UserProvisioningService
                 'password_changed_at'   => now(),
             ])->save();
 
-            try {
-                $user->notify(new PasswordResetNotification($temp));
-            } catch (\Throwable $e) {
-                app(EmailDeliveryFailureNotifier::class)->notifyPermission(
-                    'hr.employees.view',
-                    'Employee password reset email',
-                    "The password reset email for {$user->name} ({$user->email}) could not be delivered. Provide the temporary password through an approved channel.",
-                    ['reason' => 'The email provider rejected or could not deliver the password reset message.'],
-                );
-                Log::warning('Employee password reset email delivery failed', [
-                    'user_id' => $user->id,
-                    'error' => $e->getMessage(),
-                ]);
-            }
+            // Resetting credentials must terminate every prior session before
+            // the new temporary password can be used. Delivery is queued only
+            // after this transaction commits.
+            $this->revokeSessionsAndTokens($user);
+            DB::afterCommit(fn () => $user->notify(new EmployeePasswordResetNotification($temp)));
 
             return $temp;
         });
@@ -271,6 +245,20 @@ class UserProvisioningService
         return $email;
     }
 
+    private function resolveEmail(Employee $employee): string
+    {
+        $employeeEmail = trim((string) $employee->email);
+        if ($employeeEmail !== '' && filter_var($employeeEmail, FILTER_VALIDATE_EMAIL) !== false) {
+            if (User::query()->where('email', $employeeEmail)->exists()) {
+                throw new \DomainException('The employee email is already linked to another system account.');
+            }
+
+            return strtolower($employeeEmail);
+        }
+
+        return $this->generateEmail($employee);
+    }
+
     /**
      * Generate a policy-compliant temporary password.
      */
@@ -282,8 +270,20 @@ class UserProvisioningService
     private function defaultRoleIdForEmployee(): int
     {
         $slug = $this->settings->requiredString('hr.default_user_role_slug');
+        if (! in_array($slug, self::ASSIGNABLE_ROLE_SLUGS, true)) {
+            throw new \DomainException("Configured employee provisioning role [{$slug}] is not assignable by HR.");
+        }
         $role = Role::query()->where('slug', $slug)->first();
         abort_if(! $role, 500, "Configured default role [{$slug}] does not exist.");
         return (int) $role->id;
+    }
+
+    private function revokeSessionsAndTokens(User $user): void
+    {
+        if (method_exists($user, 'tokens')) {
+            $user->tokens()->delete();
+        }
+
+        DB::table('sessions')->where('user_id', $user->id)->delete();
     }
 }

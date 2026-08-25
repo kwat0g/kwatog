@@ -36,6 +36,7 @@ export interface WoOperation {
  sequence: number;
  operation_name: string;
  status: WoOperationStatus;
+ status_label?: string;
  machine: { id: string; machine_code: string; name: string } | null;
  mold: { id: string; mold_code: string; name: string } | null;
  operator: { id: string; first_name: string; last_name: string } | null;

@@ -12,6 +12,7 @@ use App\Modules\HR\Enums\JobPostingStatus;
 use App\Modules\HR\Models\ApplicationInterview;
 use App\Modules\HR\Models\JobApplication;
 use App\Modules\HR\Models\JobPosting;
+use App\Modules\HR\Support\RecruitmentNotificationRecipients;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -81,7 +82,13 @@ class CheckRecruitmentBottlenecks extends Command
 
         JobApplication::query()
             ->with(['jobPosting:id,title', 'interviews:id,job_application_id,scheduled_at,outcome'])
-            ->whereIn('stage', $stages)
+            ->where(function ($query) use ($stages): void {
+                $query->whereIn('stage', array_values(array_diff($stages, [ApplicationStage::Hired->value])))
+                    ->orWhere(function ($hired) use ($stages): void {
+                        $hired->where('stage', ApplicationStage::Hired->value)
+                            ->whereNull('converted_employee_id');
+                    });
+            })
             ->orderBy('id')
             ->chunkById(100, function (Collection $applications) use (&$count, $recipients, $notifications, $thresholds, $dedupHours): void {
                 foreach ($applications as $application) {
@@ -196,19 +203,7 @@ class CheckRecruitmentBottlenecks extends Command
     /** @return Collection<int, User> */
     private function hrUsers(SettingsService $settings): Collection
     {
-        $roles = array_values(array_filter(
-            (array) $settings->get('hr.recruitment.notification_roles', ['hr_officer', 'system_admin']),
-            static fn ($role): bool => is_string($role) && $role !== '',
-        ));
-
-        if ($roles === []) {
-            $roles = ['hr_officer', 'system_admin'];
-        }
-
-        return User::query()
-            ->whereHas('role', fn ($query) => $query->whereIn('slug', $roles))
-            ->where('is_active', true)
-            ->get();
+        return RecruitmentNotificationRecipients::resolve($settings);
     }
 
     private function daysOption(string $name): int

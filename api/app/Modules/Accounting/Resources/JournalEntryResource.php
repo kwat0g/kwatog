@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Resources;
 
-use App\Modules\Accounting\Models\JournalEntry;
+use App\Common\Support\HashId;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -18,15 +18,22 @@ class JournalEntryResource extends JsonResource
             'date'                 => optional($this->date)->toDateString(),
             'description'          => $this->description,
             'reference_type'       => $this->reference_type,
-            'reference_id'         => $this->reference_id,
+            'reference_id'         => $this->reference_id === null
+                ? null
+                : HashId::encode((int) $this->reference_id),
             'reference_label'      => $this->referenceLabel(),
             'total_debit'          => (string) $this->total_debit,
             'total_credit'         => (string) $this->total_credit,
             'status'               => $this->status?->value,
             'status_label'         => $this->status?->label(),
-            'reversed_by_entry_id' => $this->reversed_by_entry_id
-                ? JournalEntry::find($this->reversed_by_entry_id)?->hash_id
-                : null,
+            // list()/show() eager-load reversedBy; the fallback encodes the
+            // known FK without issuing one query per reversed row.
+            'reversed_by_entry_id' => $this->reversed_by_entry_id === null
+                ? null
+                : ($this->relationLoaded('reversedBy')
+                    ? $this->reversedBy?->hash_id
+                    : HashId::encode((int) $this->reversed_by_entry_id)),
+            'reversal_reason'      => $this->reversal_reason,
             'reversed_by_number'   => $this->whenLoaded('reversedBy', fn () => $this->reversedBy?->entry_number),
             'created_by'           => $this->whenLoaded('creator', fn () => $this->creator ? [
                 'id'   => $this->creator->hash_id ?? null,

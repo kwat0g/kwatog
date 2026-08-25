@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate} from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { LuPlus } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import {
@@ -17,7 +17,6 @@ import { DataTable, type Column } from '@/components/ui/DataTable';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { adminUsersApi } from '@/api/admin/users';
-import { client } from '@/api/client';
 import { formatDateTime } from '@/lib/formatDate';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
@@ -30,8 +29,6 @@ const statusVariant: Record<AdminUserStatus, 'success' | 'warning' | 'neutral'> 
  active: 'success',
  locked: 'warning',
  inactive: 'neutral' };
-
-interface RoleOption { id: string; name: string }
 
 /** U2 — Admin > Users list page. */
 export default function AdminUsersIndexPage() {
@@ -53,11 +50,7 @@ export default function AdminUsersIndexPage() {
  queryFn: () => adminUsersApi.list(filters),
  placeholderData: (previousData) => previousData });
 
- const rolesQuery = useQuery<{ data: RoleOption[] }>({
- queryKey: ['admin-roles-list'],
- queryFn: () => client.get('/admin/roles').then((r) => r.data),
- staleTime: 60_000 });
- const { data: userOptions } = useQuery({
+ const optionsQuery = useQuery({
  queryKey: ['admin-user-options'],
  queryFn: adminUsersApi.options,
  staleTime: 5 * 60 * 1000 });
@@ -66,7 +59,7 @@ export default function AdminUsersIndexPage() {
  mutationFn: ({ userIds, roleId, reason, expectedRoleIds }: { userIds: string[]; roleId: string; reason: string; expectedRoleIds: Record<string, string> }) =>
  adminUsersApi.bulkChangeRole(userIds, roleId, reason, expectedRoleIds),
  onSuccess: (r) => {
- toast.success(`${r.updated} user(s) updated${r.conflicts.length ? `; ${r.conflicts.length} stale conflict(s) skipped.` : '.'}`);
+ toast.success(`${r.updated} user(s) updated${r.conflicts.length ? `; ${r.conflicts.length} stale conflict(s) skipped` : ''}${r.missing.length ? `; ${r.missing.length} missing` : '.'}`);
  setBulkRoleModalOpen(false);
  setBulkReason('');
  setSelectedRoleId('');
@@ -80,13 +73,18 @@ export default function AdminUsersIndexPage() {
  key: 'role_id',
  label: 'Role',
  type: 'select',
- options: (rolesQuery.data?.data ?? []).map((r) => ({ value: r.id, label: r.name })) },
+ options: (optionsQuery.data?.roles ?? []).map((r) => ({ value: r.id, label: r.name })) },
+ {
+ key: 'department_id',
+ label: 'Department',
+ type: 'select',
+ options: (optionsQuery.data?.departments ?? []).map((d) => ({ value: d.id, label: d.name })) },
  {
  key: 'status',
  label: 'Status',
  type: 'select',
  options: [
- ...(userOptions?.statuses ?? []),
+ ...(optionsQuery.data?.statuses ?? []),
  ] },
  ];
 
@@ -161,7 +159,7 @@ export default function AdminUsersIndexPage() {
  return (
  <div>
  <PageHeader
- title="LuUser Management"
+ title="User Management"
  subtitle={data ? `${data.meta.total} users` : undefined}
  actions={
  can('admin.users.manage') && (
@@ -171,7 +169,7 @@ export default function AdminUsersIndexPage() {
  icon={<LuPlus size={14} />}
  onClick={() => navigate('/admin/users/create')}
  >
- Create LuUser
+ Create User
  </Button>
  )
  }
@@ -184,6 +182,15 @@ export default function AdminUsersIndexPage() {
  onSearch={(s) => setFilter('search', s)}
  searchPlaceholder="Search name or email…"
  />
+
+ {optionsQuery.isError && (
+ <div className="flex items-center justify-between border-b border-default bg-warning/10 px-5 py-2 text-sm text-warning-fg" role="alert">
+ <span>Role and department filters are unavailable.</span>
+ <Button variant="secondary" size="sm" onClick={() => optionsQuery.refetch()}>
+ Retry options
+ </Button>
+ </div>
+ )}
 
  <div className="p-5 space-y-4">
  {usersQuery.isLoading && !data && <SkeletonTable columns={6} rows={10} />}
@@ -255,7 +262,7 @@ export default function AdminUsersIndexPage() {
  disabled={bulkChangeRole.isPending}
  >
  <option value="">— Select role —</option>
- {(rolesQuery.data?.data ?? []).map((r) => (
+ {(optionsQuery.data?.roles ?? []).map((r) => (
  <option key={r.id} value={r.id}>
  {r.name}
  </option>

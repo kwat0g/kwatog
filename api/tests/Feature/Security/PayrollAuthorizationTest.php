@@ -7,7 +7,10 @@ namespace Tests\Feature\Security;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\HR\Models\Employee;
+use App\Modules\Payroll\Models\PayrollAdjustment;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class PayrollAuthorizationTest extends TestCase
@@ -39,6 +42,54 @@ class PayrollAuthorizationTest extends TestCase
         $this->actingAs($user)
             ->getJson('/api/v1/de-minimis')
             ->assertForbidden();
+    }
+
+    public function test_adjustment_viewer_can_read_but_cannot_approve_or_reject(): void
+    {
+        $user = $this->userWithPermissions(['payroll.adjustments.view']);
+        $adjustmentId = $this->pendingAdjustmentId();
+
+        $this->actingAs($user)
+            ->getJson('/api/v1/payroll-adjustments/options')
+            ->assertOk();
+
+        $this->actingAs($user)
+            ->patchJson("/api/v1/payroll-adjustments/{$adjustmentId}/approve")
+            ->assertForbidden();
+
+        $this->actingAs($user)
+            ->patchJson("/api/v1/payroll-adjustments/{$adjustmentId}/reject", ['remarks' => 'No'])
+            ->assertForbidden();
+    }
+
+    public function test_adjustment_creator_cannot_read_or_approve_without_checker_permissions(): void
+    {
+        $user = $this->userWithPermissions(['payroll.adjustments.create']);
+        $adjustmentId = $this->pendingAdjustmentId();
+
+        $this->actingAs($user)
+            ->getJson('/api/v1/payroll-adjustments')
+            ->assertForbidden();
+
+        $this->actingAs($user)
+            ->patchJson("/api/v1/payroll-adjustments/{$adjustmentId}/approve")
+            ->assertForbidden();
+    }
+
+    private function pendingAdjustmentId(): string
+    {
+        $employee = Employee::factory()->create();
+        $id = DB::table('payroll_adjustments')->insertGetId([
+            'employee_id' => $employee->id,
+            'type' => 'underpayment',
+            'amount' => '1.00',
+            'reason' => 'Authorization test',
+            'status' => 'pending',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return PayrollAdjustment::query()->findOrFail($id)->hash_id;
     }
 
     /** @param array<int, string> $slugs */

@@ -51,8 +51,10 @@ class LeaveTypeController
 
     public function restore(LeaveType $leaveType): JsonResponse
     {
-        $leaveType->restore();
-        return response()->json(['message' => 'Leave type restored.']);
+        return response()->json([
+            'message' => 'Leave type restored.',
+            'data' => new LeaveTypeResource($this->service->restore($leaveType)),
+        ]);
     }
 
     /** OGAMI-104 — Manually trigger year-end leave forfeiture/conversion. */

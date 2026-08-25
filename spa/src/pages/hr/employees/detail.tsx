@@ -39,6 +39,7 @@ import type { ApiValidationError } from '@/types';
 import { onFormInvalid } from '@/lib/formErrors';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { Tabs } from '@/components/ui/Tabs';
+import { DocumentList } from '@/components/documents/DocumentList';
 
 const TABS = [
   'Overview',
@@ -123,7 +124,7 @@ export default function EmployeeDetailPage() {
                 Edit
               </Button>
             )}
-            {can('hr.employees.separate') && employee.status === 'active' && (
+            {can('hr.separation.initiate') && employee.status === 'active' && (
               <Button
                 variant="danger"
                 size="sm"
@@ -188,7 +189,7 @@ export default function EmployeeDetailPage() {
               </div>
               <div>
                 <dt className="text-2xs uppercase tracking-wider text-muted font-medium">
-                  {employee.pay_type === 'monthly' ? 'Monthly salary' : 'Daily rate'}
+                  {employee.pay_type === 'monthly' ? 'Monthly salary' : 'Semi-monthly rate'}
                 </dt>
                 <dd className="font-mono tabular-nums">
                   {formatPeso(
@@ -223,7 +224,6 @@ export default function EmployeeDetailPage() {
  and is gated by hr.employees.account_status. */}
           <SystemAccountSection
             employeeId={id}
-            suggestedEmail={employee.contact?.email ?? undefined}
           />
         </div>
       </div>
@@ -543,22 +543,23 @@ function DocumentsTab({ employee }: { employee: any }) {
   if (isError) return <EmptyState icon="alert-circle" title="Failed to load documents" />;
 
   return (
-    <Panel
-      title={`Documents (${docs.length})`}
-      noPadding
-      actions={
-        can('hr.employees.documents.view') ? (
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={<LuPlus size={12} />}
-            onClick={() => setShowUpload(true)}
-          >
-            Upload
-          </Button>
-        ) : null
-      }
-    >
+    <div className="space-y-4">
+      <Panel
+        title={`Documents (${docs.length})`}
+        noPadding
+        actions={
+          can('hr.employees.documents.upload') ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<LuPlus size={12} />}
+              onClick={() => setShowUpload(true)}
+            >
+              Upload
+            </Button>
+          ) : null
+        }
+      >
       {docs.length === 0 ? (
         <div className="p-4">
           <EmptyState icon="file-question" title="No documents" />
@@ -589,7 +590,7 @@ function DocumentsTab({ employee }: { employee: any }) {
                 </Td>
                 <Td mono>{formatDateTime(d.uploaded_at)}</Td>
                 <Td>
-                  {can('hr.employees.edit') && (
+                  {can('hr.employees.documents.delete') && (
                     <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(d)}>
                       Delete
                     </Button>
@@ -671,7 +672,11 @@ function DocumentsTab({ employee }: { employee: any }) {
           deleteMutation.mutate(deleteTarget.id, { onSuccess: () => setDeleteTarget(null) });
         }}
       />
-    </Panel>
+      </Panel>
+      <Panel title="Generated documents" noPadding>
+        <DocumentList entityType="employees" entityId={employee.id} />
+      </Panel>
+    </div>
   );
 }
 
@@ -865,6 +870,7 @@ function TrainingsTab({ employeeId }: { employeeId: string }) {
   const { can } = usePermission();
   const qc = useQueryClient();
   const [showAssign, setShowAssign] = useState(false);
+  const [completeTarget, setCompleteTarget] = useState<any | null>(null);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['employee-trainings', employeeId],
@@ -873,13 +879,15 @@ function TrainingsTab({ employeeId }: { employeeId: string }) {
   const rows = data?.data ?? [];
 
   const completeMutation = useMutation({
-    mutationFn: (recordId: string) =>
-      employeeTrainingsApi.complete(recordId, {
+    mutationFn: (data: { recordId: string; certificate?: File | null }) =>
+      employeeTrainingsApi.complete(data.recordId, {
         completed_at: new Date().toISOString().slice(0, 10),
+        certificate: data.certificate,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['employee-trainings', employeeId] });
       toast.success('Training completed.');
+      setCompleteTarget(null);
     },
     onError: () => toast.error('Failed to complete training.'),
   });
@@ -946,8 +954,11 @@ function TrainingsTab({ employeeId }: { employeeId: string }) {
                         <Button
                           variant="ghost"
                           size="sm"
+                          iconOnly
+                          aria-label={`Mark ${r.training?.name ?? 'training'} complete`}
+                          title="Mark training complete"
                           icon={<LuCheck size={12} />}
-                          onClick={() => completeMutation.mutate(r.id)}
+                          onClick={() => setCompleteTarget(r)}
                         />
                         <Button
                           variant="ghost"
@@ -968,7 +979,59 @@ function TrainingsTab({ employeeId }: { employeeId: string }) {
       {showAssign && (
         <AssignTrainingModal employeeId={employeeId} onClose={() => setShowAssign(false)} />
       )}
+      {completeTarget && (
+        <CompleteTrainingModal
+          record={completeTarget}
+          pending={completeMutation.isPending}
+          onClose={() => setCompleteTarget(null)}
+          onComplete={(certificate) => completeMutation.mutate({ recordId: completeTarget.id, certificate })}
+        />
+      )}
     </>
+  );
+}
+
+function CompleteTrainingModal({
+  record,
+  pending,
+  onClose,
+  onComplete,
+}: {
+  record: any;
+  pending: boolean;
+  onClose: () => void;
+  onComplete: (certificate: File | null) => void;
+}) {
+  const [certificate, setCertificate] = useState<File | null>(null);
+
+  return (
+    <Modal isOpen onClose={onClose} title={`Complete ${record.training?.name ?? 'training'}`}>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          onComplete(certificate);
+        }}
+        className="space-y-3 py-2"
+      >
+        <p className="text-sm text-muted">
+          Record the completion date today. Attach the certification evidence when it is available.
+        </p>
+        <Input
+          label="Certificate (optional)"
+          type="file"
+          accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
+          onChange={(event) => setCertificate(event.target.files?.[0] ?? null)}
+        />
+        <ModalFooter>
+          <Button variant="secondary" type="button" onClick={onClose} disabled={pending}>
+            Cancel
+          </Button>
+          <Button type="submit" variant="primary" disabled={pending} loading={pending}>
+            Complete training
+          </Button>
+        </ModalFooter>
+      </form>
+    </Modal>
   );
 }
 
@@ -1041,6 +1104,7 @@ function SkillsTab({ employeeId }: { employeeId: string }) {
   const { can } = usePermission();
   const qc = useQueryClient();
   const [showAssign, setShowAssign] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState<any | null>(null);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['employee-skills', employeeId],
@@ -1104,7 +1168,7 @@ function SkillsTab({ employeeId }: { employeeId: string }) {
                   <Td mono>{r.expires_at ?? '—'}</Td>
                   <Td>
                     {can('hr.employees.trainings.manage') && (
-                      <Button variant="ghost" size="sm" onClick={() => removeMutation.mutate(r.id)}>
+                      <Button variant="ghost" size="sm" onClick={() => setRemoveTarget(r)}>
                         Remove
                       </Button>
                     )}
@@ -1118,6 +1182,25 @@ function SkillsTab({ employeeId }: { employeeId: string }) {
       {showAssign && (
         <AssignSkillModal employeeId={employeeId} onClose={() => setShowAssign(false)} />
       )}
+      <ConfirmDialog
+        isOpen={removeTarget !== null}
+        onClose={() => setRemoveTarget(null)}
+        title="Remove skill?"
+        description={removeTarget && (
+          <>
+            <span className="font-medium">{removeTarget.skill?.name ?? 'This skill'}</span> will be
+            revoked from the employee and can be restored by an administrator.
+          </>
+        )}
+        confirmLabel="Remove skill"
+        variant="danger"
+        pending={removeMutation.isPending}
+        onConfirm={() => {
+          if (removeTarget) {
+            removeMutation.mutate(removeTarget.id, { onSettled: () => setRemoveTarget(null) });
+          }
+        }}
+      />
     </>
   );
 }
@@ -1137,17 +1220,44 @@ function AssignSkillModal({ employeeId, onClose }: { employeeId: string; onClose
   const {
     register,
     handleSubmit,
+    setError,
     formState: { errors },
-  } = useForm<{ skill_id: string; proficiency_level: string }>();
+  } = useForm<{
+    skill_id: string;
+    proficiency_level: string;
+    acquired_date: string;
+    expires_at?: string;
+    certificate?: FileList;
+  }>();
   const mutation = useMutation({
-    mutationFn: (d: { skill_id: string; proficiency_level: string }) =>
-      employeeSkillsApi.assign(employeeId, d),
+    mutationFn: (d: {
+      skill_id: string;
+      proficiency_level: string;
+      acquired_date: string;
+      expires_at?: string;
+      certificate?: FileList;
+    }) => employeeSkillsApi.assign(employeeId, {
+      skill_id: d.skill_id,
+      proficiency_level: d.proficiency_level,
+      acquired_date: d.acquired_date,
+      expires_at: d.expires_at || null,
+      certificate: d.certificate?.[0] ?? null,
+    }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['employee-skills', employeeId] });
       toast.success('Skill assigned.');
       onClose();
     },
-    onError: () => toast.error('Failed to assign skill.'),
+    onError: (e: AxiosError<ApiValidationError>) => {
+      if (e.response?.status === 422 && e.response.data.errors) {
+        Object.entries(e.response.data.errors).forEach(([field, messages]) => {
+          setError(field as 'skill_id' | 'proficiency_level' | 'acquired_date' | 'expires_at', {
+            type: 'server',
+            message: messages[0],
+          });
+        });
+      } else toast.error('Failed to assign skill.');
+    },
   });
   return (
     <Modal isOpen onClose={onClose} title="Assign skill">
@@ -1174,7 +1284,7 @@ function AssignSkillModal({ employeeId, onClose }: { employeeId: string; onClose
         <div>
           <label className="text-xs text-muted font-medium mb-1 block">Proficiency</label>
           <select
-            {...register('proficiency_level')}
+            {...register('proficiency_level', { required: 'Required' })}
             className="w-full h-9 px-3 rounded-md border border-default bg-canvas text-sm"
           >
             <option value="">— Select —</option>
@@ -1184,7 +1294,19 @@ function AssignSkillModal({ employeeId, onClose }: { employeeId: string; onClose
               </option>
             ))}
           </select>
+          {errors.proficiency_level && (
+            <p className="text-xs text-danger-fg mt-1">{errors.proficiency_level.message}</p>
+          )}
         </div>
+        <Input label="Acquired date" type="date" required {...register('acquired_date', { required: 'Required' })} error={errors.acquired_date?.message} />
+        <Input label="Expiry date" type="date" {...register('expires_at')} error={errors.expires_at?.message} />
+        <Input
+          label="Certificate (optional)"
+          type="file"
+          accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
+          {...register('certificate')}
+          error={errors.certificate?.message}
+        />
         <ModalFooter>
           <Button variant="secondary" onClick={onClose} disabled={mutation.isPending}>
             Cancel
@@ -1323,7 +1445,7 @@ function SeparateModal({
   const mutation = useMutation({
     mutationFn: (d: SeparateFormValues) => employeesApi.separate(employeeId, d as SeparateData),
     onSuccess: () => {
-      toast.success('Employee separated.');
+          toast.success('Separation initiated. Complete clearance and final pay before the employee status changes.');
       onSeparated();
     },
     onError: (e: AxiosError<ApiValidationError>) => {
@@ -1342,8 +1464,9 @@ function SeparateModal({
         className="space-y-3 py-2"
       >
         <p className="text-sm text-muted">
-          Marking <span className="font-medium text-primary">{fullName}</span> as separated. This is
-          recorded in their employment history.
+          Starting the separation workflow for{' '}
+          <span className="font-medium text-primary">{fullName}</span>. Clearance and final pay must
+          be completed before the employee is moved to a terminal status.
         </p>
         <Select
           label="Reason"
@@ -1386,7 +1509,7 @@ function SeparateModal({
             disabled={isSubmitting || mutation.isPending}
             loading={mutation.isPending}
           >
-            {mutation.isPending ? 'Separating…' : 'Separate'}
+            {mutation.isPending ? 'Starting…' : 'Start separation'}
           </Button>
         </ModalFooter>
       </form>

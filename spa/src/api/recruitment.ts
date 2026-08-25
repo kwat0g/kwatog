@@ -5,6 +5,7 @@ import type {
  JobApplication,
  ApplicationInterview,
  ApplicationNote,
+ RecruitmentApplicationEvent,
  CreateJobPostingData,
 } from '@/types/recruitment';
 
@@ -20,8 +21,8 @@ export const recruitmentApi = {
  options: () => client.get<{ data: RecruitmentOptions }>(`${BASE}/postings/options`),
  listPostings: (params?: Record<string, unknown>) =>
  client.get<PaginatedResponse<JobPosting>>(`${BASE}/postings`, { params }),
- showPosting: (id: string) =>
- client.get<{ data: JobPosting }>(`${BASE}/postings/${id}`),
+ showPosting: (id: string, params?: Record<string, unknown>) =>
+ client.get<{ data: JobPosting }>(`${BASE}/postings/${id}`, { params }),
  createPosting: (data: CreateJobPostingData) =>
  client.post<{ data: JobPosting }>(`${BASE}/postings`, data),
  updatePosting: (id: string, data: CreateJobPostingData) =>
@@ -45,7 +46,10 @@ export const recruitmentApi = {
  client.patch<{ data: JobApplication }>(`${BASE}/applications/${id}/stage`, data),
  scheduleInterview: (id: string, data: { scheduled_at: string; location?: string; interviewer_name: string }) =>
  client.post<{ data: ApplicationInterview }>(`${BASE}/applications/${id}/interviews`, data),
- updateInterview: (id: string, data: { notes?: string; outcome?: string }) =>
+ updateInterview: (
+  id: string,
+  data: { scheduled_at?: string; location?: string | null; interviewer_name?: string; notes?: string; outcome?: string | null },
+ ) =>
  client.patch<{ data: ApplicationInterview }>(`${BASE}/interviews/${id}`, data),
  addNote: (id: string, body: string) =>
  client.post<{ data: ApplicationNote }>(`${BASE}/applications/${id}/notes`, { body }),
@@ -53,4 +57,6 @@ export const recruitmentApi = {
  client.get(`${BASE}/applications/${id}/resume`, { responseType: 'blob' }),
  getConversionData: (id: string) =>
  client.get<{ data: Record<string, string | null> }>(`${BASE}/applications/${id}/convert`),
+ history: (id: string) =>
+ client.get<{ data: RecruitmentApplicationEvent[] }>(`${BASE}/applications/${id}/history`),
 };

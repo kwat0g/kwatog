@@ -26,6 +26,7 @@ use App\Modules\Quality\Models\InspectionMeasurement;
 use App\Modules\Quality\Models\InspectionSpec;
 use App\Modules\Quality\Models\InspectionSpecItem;
 use App\Modules\Quality\Models\ItemQualityPlan;
+use App\Modules\Quality\Support\InspectionStateMachine;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\SupplyChain\Models\Delivery;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -50,6 +51,7 @@ class InspectionService
 {
     public function __construct(
         private readonly DocumentSequenceService $sequences,
+        private readonly InspectionStateMachine $states,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -60,6 +62,7 @@ class InspectionService
                 'item:id,code,name',
                 'inspector:id,name,role_id',
                 'spec:id,product_id,version',
+                'specRevision:id,inspection_spec_id,version,created_by,notes',
                 'qualityPlan:id,item_id,vendor_id,version,sampling_method',
                 'workOrderOutput.workOrder:id,wo_number,product_id',
             ]);
@@ -124,15 +127,22 @@ class InspectionService
 
     public function show(Inspection $inspection): Inspection
     {
-        return $inspection->load([
+        $inspection = $inspection->load([
             'product:id,part_number,name',
             'item:id,code,name',
             'inspector:id,name,role_id',
             'spec:id,product_id,version,is_active',
+            'specRevision:id,inspection_spec_id,version,created_by,notes',
+            'specRevision.creator:id,name,role_id',
+            'specRevision.items',
+            'grnItem:id,goods_receipt_note_id,item_id,quantity_received,quantity_accepted',
+            'grnItem.grn:id,grn_number,status',
             'qualityPlan:id,item_id,vendor_id,version,sampling_method',
             'workOrderOutput.workOrder:id,wo_number,product_id',
             'measurements' => fn ($q) => $q->orderBy('sample_index')->orderBy('id'),
         ]);
+
+        return $this->attachEntityContext($inspection);
     }
 
     /** Create a lightweight, auditable incoming inspection for a raw item. */
@@ -227,12 +237,13 @@ class InspectionService
                 'notes' => "Quality plan v{$qualityPlan->version}; GRN {$grn->grn_number}.",
             ]);
 
-            $rows = [];
-            $now = now();
-            foreach (range(1, $sampleSize) as $sampleIndex) {
-                foreach ($qualityPlan->parameters as $parameter) {
-                    $rows[] = [
-                        'inspection_id' => $inspection->id,
+            $this->insertScaffoldRows(
+                $inspection->id,
+                $sampleSize,
+                $qualityPlan->parameters,
+                static function (int $sampleIndex, array $parameter, int $inspectionId, string $timestamp): array {
+                    return [
+                        'inspection_id' => $inspectionId,
                         'inspection_spec_item_id' => null,
                         'sample_index' => $sampleIndex,
                         'parameter_name' => $parameter['parameter_name'],
@@ -245,14 +256,11 @@ class InspectionService
                         'is_critical' => (bool) ($parameter['is_critical'] ?? false),
                         'is_pass' => null,
                         'notes' => $parameter['notes'] ?? null,
-                        'created_at' => $now,
-                        'updated_at' => $now,
+                        'created_at' => $timestamp,
+                        'updated_at' => $timestamp,
                     ];
-                }
-            }
-            foreach (array_chunk($rows, 500) as $chunk) {
-                InspectionMeasurement::query()->insert($chunk);
-            }
+                },
+            );
 
             GoodsReceiptNote::query()->whereKey($grn->id)->whereNull('qc_inspection_id')
                 ->update(['qc_inspection_id' => $inspection->id, 'updated_at' => now()]);
@@ -308,7 +316,7 @@ class InspectionService
         $spec = InspectionSpec::query()
             ->where('product_id', $product->id)
             ->where('is_active', true)
-            ->with('items')
+            ->with(['items', 'currentRevision'])
             ->first();
 
         if (! $spec) {
@@ -316,6 +324,9 @@ class InspectionService
         }
         if ($spec->items->isEmpty()) {
             throw new BusinessRuleException("Inspection spec for {$product->part_number} has no parameters.");
+        }
+        if (! $spec->currentRevision) {
+            throw new BusinessRuleException("Inspection spec for {$product->part_number} has no immutable revision.");
         }
 
         // AQL plan only applies to outgoing. Incoming + in-process default to
@@ -343,6 +354,7 @@ class InspectionService
                 'status' => InspectionStatus::Draft->value,
                 'product_id' => $product->id,
                 'inspection_spec_id' => $spec->id,
+                'inspection_spec_revision_id' => $spec->currentRevision?->id,
                 'entity_type' => isset($data['entity_type']) ? InspectionEntityType::from((string) $data['entity_type'])->value : null,
                 'entity_id' => isset($data['entity_id']) ? (int) $data['entity_id'] : null,
                 'work_order_output_id' => $output?->id,
@@ -358,14 +370,15 @@ class InspectionService
                 'notes' => $data['notes'] ?? null,
             ]);
 
-            // Seed one measurement row per (sample × spec_item).
-            $rows = [];
-            $now = now();
-            foreach (range(1, $sample) as $sampleIndex) {
-                /** @var InspectionSpecItem $item */
-                foreach ($spec->items as $item) {
-                    $rows[] = [
-                        'inspection_id' => $insp->id,
+            // Seed one measurement row per (sample × spec_item) without
+            // retaining the complete matrix in memory for a large lot.
+            $this->insertScaffoldRows(
+                $insp->id,
+                $sample,
+                $spec->items,
+                static function (int $sampleIndex, InspectionSpecItem $item, int $inspectionId, string $timestamp): array {
+                    return [
+                        'inspection_id' => $inspectionId,
                         'inspection_spec_item_id' => $item->id,
                         'sample_index' => $sampleIndex,
                         'parameter_name' => $item->parameter_name,
@@ -378,15 +391,11 @@ class InspectionService
                         'is_critical' => $item->is_critical,
                         'is_pass' => null,
                         'notes' => null,
-                        'created_at' => $now,
-                        'updated_at' => $now,
+                        'created_at' => $timestamp,
+                        'updated_at' => $timestamp,
                     ];
-                }
-            }
-            // Bulk insert in chunks to keep memory bounded for large samples.
-            foreach (array_chunk($rows, 500) as $chunk) {
-                InspectionMeasurement::query()->insert($chunk);
-            }
+                },
+            );
 
             // Back-link the inspection onto the gated entity so that
             // downstream services (GRN accept gate, delivery release gate)
@@ -439,11 +448,29 @@ class InspectionService
                 ->get()
                 ->keyBy('id');
 
+            if ($rows === []) {
+                throw new BusinessRuleException('At least one inspection measurement is required.');
+            }
+
+            $submittedIds = array_map(static fn ($id): int => (int) $id, array_keys($rows));
+            $knownIds = $measurements->keys()->map(static fn ($id): int => (int) $id)->all();
+            $unknownIds = array_values(array_diff($submittedIds, $knownIds));
+            if ($unknownIds !== []) {
+                throw new BusinessRuleException(
+                    'The measurement payload contains rows that do not belong to this inspection.',
+                );
+            }
+
             foreach ($rows as $id => $patch) {
                 /** @var InspectionMeasurement|null $m */
                 $m = $measurements->get((int) $id);
                 if (! $m) {
-                    continue;
+                    throw new BusinessRuleException(
+                        'The measurement payload contains rows that do not belong to this inspection.',
+                    );
+                }
+                if (! is_array($patch)) {
+                    throw new BusinessRuleException('Each inspection measurement patch must be an object.');
                 }
 
                 if (array_key_exists('measured_value', $patch)) {
@@ -455,11 +482,22 @@ class InspectionService
                     $m->notes = $patch['notes'] !== '' ? $patch['notes'] : null;
                 }
 
-                // Numeric parameter with a tolerance window → auto-evaluate.
-                $auto = $m->evaluate();
-                if ($auto !== null) {
+                if ($m->hasTolerance()) {
+                    // A tolerance-backed parameter is evidence-bearing: it
+                    // cannot be marked pass/fail without a reading, and an
+                    // explicit result may not contradict the calculated one.
+                    $auto = $m->evaluate();
+                    if (array_key_exists('is_pass', $patch)
+                        && $patch['is_pass'] !== null
+                        && ($auto === null || (bool) $patch['is_pass'] !== $auto)) {
+                        throw new BusinessRuleException(
+                            "Measurement {$m->parameter_name} requires a result derived from its measured value.",
+                        );
+                    }
                     $m->is_pass = $auto;
                 } elseif (array_key_exists('is_pass', $patch)) {
+                    // Manual visual/functional parameters use an explicit
+                    // verdict because they have no tolerance window.
                     $m->is_pass = $patch['is_pass'] === null ? null : (bool) $patch['is_pass'];
                 }
 
@@ -472,6 +510,7 @@ class InspectionService
                 ->where('is_pass', false)
                 ->count();
 
+            $this->states->assertAllowed($lockedInspection, InspectionStatus::InProgress);
             $lockedInspection->forceFill([
                 'defect_count' => $defects,
                 'status' => InspectionStatus::InProgress->value,
@@ -525,9 +564,18 @@ class InspectionService
             $accept = (int) $lockedInspection->accept_count;
 
             $passed = ! $criticalFail && $defects <= $accept;
+            $targetStatus = $passed ? InspectionStatus::Passed : InspectionStatus::Failed;
+
+            // A direct completion of a fully resolved draft is kept
+            // compatible with existing callers, but still passes through the
+            // same explicit draft → in_progress → terminal transition map.
+            if ($lockedInspection->status === InspectionStatus::Draft) {
+                $lockedInspection->setAttribute('status', InspectionStatus::InProgress);
+            }
+            $this->states->assertAllowed($lockedInspection, $targetStatus);
 
             $lockedInspection->forceFill([
-                'status' => $passed ? InspectionStatus::Passed->value : InspectionStatus::Failed->value,
+                'status' => $targetStatus->value,
                 'defect_count' => $defects,
                 'accepted_quantity' => $passed && $lockedInspection->stage === InspectionStage::Outgoing
                     ? (int) $lockedInspection->batch_quantity
@@ -581,6 +629,8 @@ class InspectionService
                 throw new BusinessRuleException('Inspection is already finalised.');
             }
 
+            $this->states->assertAllowed($lockedInspection, InspectionStatus::Cancelled);
+
             $lockedInspection->forceFill([
                 'status' => InspectionStatus::Cancelled->value,
                 'accepted_quantity' => 0,
@@ -590,5 +640,64 @@ class InspectionService
 
             return $this->show($lockedInspection->fresh());
         });
+    }
+
+    /**
+     * Insert a sample × parameter scaffold in bounded batches.
+     *
+     * @param iterable<mixed> $parameters
+     * @param callable(int, mixed, int, string): array<string, mixed> $rowFactory
+     */
+    private function insertScaffoldRows(
+        int $inspectionId,
+        int $sampleSize,
+        iterable $parameters,
+        callable $rowFactory,
+    ): void {
+        $rows = [];
+        $timestamp = now()->toDateTimeString();
+
+        for ($sampleIndex = 1; $sampleIndex <= $sampleSize; $sampleIndex++) {
+            foreach ($parameters as $parameter) {
+                $rows[] = $rowFactory($sampleIndex, $parameter, $inspectionId, $timestamp);
+                if (count($rows) >= 500) {
+                    InspectionMeasurement::query()->insert($rows);
+                    $rows = [];
+                }
+            }
+        }
+
+        if ($rows !== []) {
+            InspectionMeasurement::query()->insert($rows);
+        }
+    }
+
+    private function attachEntityContext(Inspection $inspection): Inspection
+    {
+        $type = $inspection->entity_type instanceof InspectionEntityType
+            ? $inspection->entity_type->value
+            : (string) $inspection->entity_type;
+
+        if (! $inspection->entity_id) {
+            return $inspection->setRelation('entityRecord', null);
+        }
+
+        $record = match ($type) {
+            InspectionEntityType::Grn->value => GoodsReceiptNote::query()
+                ->select(['id', 'grn_number', 'status'])
+                ->find($inspection->entity_id),
+            InspectionEntityType::WorkOrder->value => WorkOrder::query()
+                ->select(['id', 'wo_number', 'status'])
+                ->find($inspection->entity_id),
+            InspectionEntityType::Delivery->value => Delivery::query()
+                ->select(['id', 'delivery_number', 'status'])
+                ->find($inspection->entity_id),
+            InspectionEntityType::ReturnRequest->value => ReturnRequest::query()
+                ->select(['id', 'rma_number', 'status'])
+                ->find($inspection->entity_id),
+            default => null,
+        };
+
+        return $inspection->setRelation('entityRecord', $record);
     }
 }

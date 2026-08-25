@@ -11,12 +11,17 @@ import { SkeletonForm } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import type { ApiValidationError } from '@/types';
+import { usePermission } from '@/hooks/usePermission';
 
 const cleanup = (d: EmployeeFormValues): UpdateEmployeeData => {
  const out: Record<string, unknown> = { ...d };
  Object.keys(out).forEach((k) => {
  if (out[k] === '') out[k] = undefined;
  });
+ delete out.__edit;
+ delete out.basic_monthly_salary;
+ delete out.semi_monthly_rate;
+ delete out.pay_type;
  return out as UpdateEmployeeData;
 };
 
@@ -25,6 +30,7 @@ export default function EditEmployeePage() {
  const navigate = useNavigate();
  const qc = useQueryClient();
  const setErrorRef = useRef<((field: keyof EmployeeFormValues, msg: string) => void) | null>(null);
+ const { can } = usePermission();
 
  const { data: employee, isLoading, isError, refetch } = useQuery({
  queryKey: ['hr', 'employee', id],
@@ -98,6 +104,7 @@ export default function EditEmployeePage() {
  onSubmit={(d) => mutation.mutate(d)}
  onCancel={() => navigate(`/hr/employees/${employee.id}`)}
  isPending={mutation.isPending}
+ canEditSensitive={can('hr.employees.view_sensitive')}
  registerSetError={(fn) => { setErrorRef.current = fn; }}
  submitLabel="Save changes"
  />

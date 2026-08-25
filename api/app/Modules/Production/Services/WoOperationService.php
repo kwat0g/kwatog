@@ -7,6 +7,7 @@ namespace App\Modules\Production\Services;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Production\Enums\ProductionLogEvent;
 use App\Modules\Production\Enums\WoOperationStatus;
+use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Production\Models\ProductionLog;
 use App\Modules\Production\Models\ProductRouting;
 use App\Modules\Production\Models\WoOperation;
@@ -41,33 +42,32 @@ class WoOperationService
      */
     public function generateFromRouting(WorkOrder $wo): void
     {
-        $routing = ProductRouting::query()
-            ->where('product_id', $wo->product_id)
-            ->where('is_active', true)
-            ->first();
+        DB::transaction(function () use ($wo) {
+            $routing = ProductRouting::query()
+                ->where('product_id', $wo->product_id)
+                ->where('is_active', true)
+                ->with('operations')
+                ->first();
 
-        if (! $routing) {
-            return;
-        }
+            if (! $routing || $routing->operations->isEmpty()) {
+                return;
+            }
 
-        $routing->load('operations');
-
-        if ($routing->operations->isEmpty()) {
-            return;
-        }
-
-        DB::transaction(function () use ($wo, $routing) {
             foreach ($routing->operations as $routingOp) {
-                WoOperation::create([
-                    'work_order_id'        => $wo->id,
-                    'routing_operation_id' => $routingOp->id,
-                    'sequence'             => $routingOp->sequence,
-                    'operation_name'       => $routingOp->operation_name,
-                    'machine_id'           => $routingOp->machine_id,
-                    'mold_id'              => $routingOp->mold_id,
-                    'qty_planned'          => $wo->quantity_target,
-                    'status'               => WoOperationStatus::Pending,
-                ]);
+                WoOperation::query()->firstOrCreate(
+                    [
+                        'work_order_id'        => $wo->id,
+                        'routing_operation_id' => $routingOp->id,
+                    ],
+                    [
+                        'sequence'      => $routingOp->sequence,
+                        'operation_name'=> $routingOp->operation_name,
+                        'machine_id'    => $routingOp->machine_id,
+                        'mold_id'       => $routingOp->mold_id,
+                        'qty_planned'   => $wo->quantity_target,
+                        'status'        => WoOperationStatus::Pending,
+                    ],
+                );
             }
         });
     }
@@ -86,6 +86,7 @@ class WoOperationService
             // transition holding a stale model cannot double-advance it.
             $locked = WoOperation::query()->lockForUpdate()->findOrFail($op->getKey());
             $this->assertStatus($locked, [WoOperationStatus::Pending], 'start setup');
+            $this->assertParentInProgress($locked);
 
             $locked->update([
                 'status'      => WoOperationStatus::Setup,
@@ -109,6 +110,7 @@ class WoOperationService
         DB::transaction(function () use ($op) {
             $locked = WoOperation::query()->lockForUpdate()->findOrFail($op->getKey());
             $this->assertStatus($locked, [WoOperationStatus::Setup], 'end setup');
+            $this->assertParentInProgress($locked);
 
             $locked->update([
                 'setup_end' => Carbon::now(),
@@ -134,6 +136,7 @@ class WoOperationService
         DB::transaction(function () use ($op, $operator) {
             $locked = WoOperation::query()->lockForUpdate()->findOrFail($op->getKey());
             $this->assertStatus($locked, [WoOperationStatus::Pending, WoOperationStatus::Setup], 'start');
+            $this->assertParentInProgress($locked);
             $this->assertPreviousCompleted($locked);
 
             $locked->update([
@@ -158,6 +161,7 @@ class WoOperationService
         DB::transaction(function () use ($op) {
             $locked = WoOperation::query()->lockForUpdate()->findOrFail($op->getKey());
             $this->assertStatus($locked, [WoOperationStatus::InProgress], 'pause');
+            $this->assertParentInProgress($locked);
 
             $locked->update([
                 'status' => WoOperationStatus::Paused,
@@ -179,6 +183,7 @@ class WoOperationService
         DB::transaction(function () use ($op, $operator) {
             $locked = WoOperation::query()->lockForUpdate()->findOrFail($op->getKey());
             $this->assertStatus($locked, [WoOperationStatus::Paused], 'resume');
+            $this->assertParentInProgress($locked);
 
             $locked->update([
                 'status'      => WoOperationStatus::InProgress,
@@ -204,6 +209,7 @@ class WoOperationService
             // and one record's output is lost (P32/P33).
             $locked = WoOperation::query()->lockForUpdate()->findOrFail($op->getKey());
             $this->assertStatus($locked, [WoOperationStatus::InProgress], 'record output');
+            $this->assertParentInProgress($locked);
 
             $updates = [
                 'qty_completed' => bcadd((string) $locked->qty_completed, (string) $qty, 4),
@@ -239,6 +245,7 @@ class WoOperationService
         DB::transaction(function () use ($op) {
             $locked = WoOperation::query()->lockForUpdate()->findOrFail($op->getKey());
             $this->assertStatus($locked, [WoOperationStatus::InProgress], 'complete');
+            $this->assertParentInProgress($locked);
 
             $locked->update([
                 'status'     => WoOperationStatus::Completed,
@@ -263,14 +270,17 @@ class WoOperationService
      *
      * Can be called from any status.
      */
-    public function skipOperation(WoOperation $op, string $reason): void
+    public function skipOperation(WoOperation $op, string $reason, Employee $operator): void
     {
-        DB::transaction(function () use ($op, $reason) {
+        DB::transaction(function () use ($op, $reason, $operator) {
             $locked = WoOperation::query()->lockForUpdate()->findOrFail($op->getKey());
+            $this->assertParentInProgress($locked);
             $locked->update([
                 'status' => WoOperationStatus::Skipped,
                 'notes'  => $reason,
             ]);
+
+            $this->log($locked, $operator, ProductionLogEvent::Skip, notes: $reason);
         });
     }
 
@@ -336,6 +346,23 @@ class WoOperationService
         }
     }
 
+    private function assertParentInProgress(WoOperation $op): void
+    {
+        $workOrder = WorkOrder::query()
+            ->lockForUpdate()
+            ->find($op->work_order_id);
+
+        if (! $workOrder) {
+            throw new BusinessRuleException('Cannot execute an operation without its parent work order.');
+        }
+
+        if ($workOrder->status !== WorkOrderStatus::InProgress) {
+            throw new BusinessRuleException(
+                "Cannot execute an operation while the parent work order is '{$workOrder->status?->value}'."
+            );
+        }
+    }
+
     /**
      * Create a production log entry.
      */
@@ -345,6 +372,7 @@ class WoOperationService
         ProductionLogEvent $event,
         ?float $qtyValue = null,
         ?string $downtimeReason = null,
+        ?string $notes = null,
     ): void {
         ProductionLog::create([
             'wo_operation_id' => $op->id,
@@ -352,6 +380,7 @@ class WoOperationService
             'event_type'      => $event,
             'qty_value'       => $qtyValue,
             'downtime_reason' => $downtimeReason,
+            'notes'           => $notes,
             'recorded_at'     => Carbon::now(),
         ]);
     }

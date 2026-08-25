@@ -27,6 +27,24 @@ class GoodsReceiptNoteResource extends JsonResource
                 'message' => $this->incoming_qc_handoff_message,
                 'at' => optional($this->incoming_qc_handoff_at)->toIso8601String(),
             ],
+            'qc_inspection' => $this->whenLoaded('qcInspection', fn () => $this->qcInspection ? [
+                'id' => $this->qcInspection->hash_id,
+                'inspection_number' => $this->qcInspection->inspection_number,
+                'stage' => $this->qcInspection->stage?->value,
+                'stage_label' => $this->qcInspection->stage?->label(),
+                'status' => $this->qcInspection->status?->value,
+                'status_label' => $this->qcInspection->status?->label(),
+            ] : null),
+            'journal_entry' => $this->when(
+                $request->user()?->hasPermission('accounting.journal.view')
+                    && $this->relationLoaded('journalEntry'),
+                fn () => $this->journalEntry ? [
+                    'id' => $this->journalEntry->hash_id,
+                    'entry_number' => $this->journalEntry->entry_number,
+                    'status' => $this->journalEntry->status?->value,
+                    'status_label' => $this->journalEntry->status?->label(),
+                ] : null,
+            ),
             'vendor'          => $this->whenLoaded('vendor', fn () => [
                 'id'   => $this->vendor->hash_id,
                 'name' => $this->vendor->name,

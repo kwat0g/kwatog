@@ -17,11 +17,10 @@ use Tests\TestCase;
  * OGAMI audit DEFECT-3 — a B2B portal bearer token must not bleed into the
  * internal SPA stack (auth:sanctum + session.timeout).
  *
- * Because the portal guards use the sanctum driver, a portal token's principal
- * can satisfy auth:sanctum on internal routes. The SessionTimeout middleware
- * then tried to write `last_activity` on a SupplierPortalUser (no such column)
- * and threw a SQL 500. The guard must instead reject any non-User principal
- * with a clean 401 — and never leak internal data.
+ * Supplier portal bearer tokens must not satisfy auth:sanctum on internal
+ * routes. Customer portal sessions must likewise remain isolated from the
+ * internal SPA guard. The guard must reject any non-User principal with a
+ * clean 401 — and never leak internal data.
  */
 class PortalTokenCrossGuardTest extends TestCase
 {
@@ -80,7 +79,7 @@ class PortalTokenCrossGuardTest extends TestCase
         $this->assertSame(0, $portal->tokens()->count());
     }
 
-    public function test_existing_customer_token_is_rejected_after_account_deactivation(): void
+    public function test_customer_session_is_rejected_after_account_deactivation(): void
     {
         $customer = Customer::factory()->create();
         $portal = CustomerPortalUser::create([
@@ -90,10 +89,9 @@ class PortalTokenCrossGuardTest extends TestCase
             'password' => Hash::make('CustomerPass-1!'),
             'is_active' => true,
         ]);
-        $portal->createToken('customer-portal');
         $portal->update(['is_active' => false]);
 
-        Sanctum::actingAs($portal, ['*'], 'customer_portal');
+        $this->actingAs($portal, 'customer_portal');
 
         $this->getJson('/api/v1/b2b/customer/me')
             ->assertStatus(401)

@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Production;
 
+use App\Modules\HR\Models\Employee;
+use App\Modules\Production\Enums\ProductionLogEvent;
 use App\Modules\Production\Enums\WoOperationStatus;
+use App\Modules\Production\Enums\WorkOrderStatus;
+use App\Modules\Production\Models\ProductionLog;
 use App\Modules\Production\Models\WoOperation;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Services\WoOperationService;
@@ -34,7 +38,9 @@ class WoOperationOutputRaceTest extends TestCase
 
     private function inProgressOperation(): WoOperation
     {
-        $workOrder = WorkOrder::factory()->create();
+        $workOrder = WorkOrder::factory()->create([
+            'status' => WorkOrderStatus::InProgress->value,
+        ]);
 
         return WoOperation::create([
             'work_order_id'   => $workOrder->id,
@@ -83,5 +89,38 @@ class WoOperationOutputRaceTest extends TestCase
         $this->expectException(\RuntimeException::class);
 
         $this->svc->completeOperation($operatorB);
+    }
+
+    public function test_operation_commands_require_an_in_progress_parent(): void
+    {
+        $workOrder = WorkOrder::factory()->create([
+            'status' => WorkOrderStatus::Confirmed->value,
+        ]);
+        $op = WoOperation::create([
+            'work_order_id' => $workOrder->id,
+            'sequence' => 1,
+            'operation_name' => 'Injection',
+            'status' => WoOperationStatus::Pending->value,
+            'qty_planned' => '100.0000',
+        ]);
+
+        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->expectExceptionMessage('parent work order');
+
+        $this->svc->startSetup($op, Employee::factory()->create());
+    }
+
+    public function test_skipping_an_operation_records_the_operator_and_reason(): void
+    {
+        $op = $this->inProgressOperation();
+        $operator = Employee::factory()->create();
+
+        $this->svc->skipOperation($op, 'Routing step not required for this batch.', $operator);
+
+        $this->assertSame(WoOperationStatus::Skipped, $op->fresh()->status);
+        $log = ProductionLog::query()->where('wo_operation_id', $op->id)->firstOrFail();
+        $this->assertSame(ProductionLogEvent::Skip, $log->event_type);
+        $this->assertSame($operator->id, $log->operator_id);
+        $this->assertSame('Routing step not required for this batch.', $log->notes);
     }
 }

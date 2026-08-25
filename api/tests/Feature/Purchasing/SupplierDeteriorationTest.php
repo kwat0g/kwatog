@@ -93,6 +93,10 @@ class SupplierDeteriorationTest extends TestCase
         $this->assertNotNull($captured, 'NotificationService::send must be called');
         $this->assertSame('purchasing.supplier_deterioration', $captured['type']);
         $this->assertStringContainsString('DropCo', $captured['data']['title'].$captured['data']['message']);
+        $this->assertSame(
+            "/purchasing/suppliers/{$vendor->hash_id}/performance",
+            $captured['data']['link_to'],
+        );
 
         // Recipient set must include our purchasing officer.
         $ids = collect($captured['recipients'])->pluck('id')->all();

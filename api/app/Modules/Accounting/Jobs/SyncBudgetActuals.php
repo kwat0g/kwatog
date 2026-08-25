@@ -4,28 +4,23 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Jobs;
 
+use App\Common\Support\Money;
+use App\Modules\Accounting\Models\BudgetActualsSyncRun;
 use App\Modules\Accounting\Models\BudgetLineItem;
 use App\Modules\Accounting\Models\FiscalYear;
-use App\Modules\Accounting\Models\JournalEntryLine;
+use App\Modules\Accounting\Services\BudgetConsumptionService;
+use App\Modules\Accounting\Services\BudgetFiscalYearResolver;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
-/**
- * Sync GL actuals from posted JournalEntryLine records into BudgetLineItem.
- *
- * For each BudgetLineItem in the given fiscal year, queries all posted journal
- * entry lines for the same GL account within the fiscal year's date range and
- * computes net movement (debit - credit). Updates BudgetLineItem.actual_total
- * with the computed sum.
- *
- * Scheduled monthly on the 1st at 03:00. Idempotent: re-running overwrites
- * actual_total with the current GL balance each time.
- */
+/** Rebuild live budget line actuals from the posted GL in bounded chunks. */
 class SyncBudgetActuals implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
@@ -37,68 +32,111 @@ class SyncBudgetActuals implements ShouldQueue
 
     public function __construct(
         private readonly ?int $fiscalYearId = null,
+        private readonly ?string $requestId = null,
     ) {}
 
-    public function handle(): void
+    public function handle(
+        ?BudgetConsumptionService $consumption = null,
+        ?BudgetFiscalYearResolver $fiscalYears = null,
+    ): void {
+        $consumption ??= app(BudgetConsumptionService::class);
+        $fiscalYears ??= app(BudgetFiscalYearResolver::class);
+        $fiscalYear = $fiscalYears->resolve($this->fiscalYearId);
+        $run = $this->markRunning($fiscalYear);
+
+        try {
+            $lineQuery = BudgetLineItem::query()
+                ->whereHas('budget', fn ($query) => $query
+                    ->where('fiscal_year_id', $fiscalYear->id)
+                    ->whereIn('status', ['approved', 'active']));
+            $totalLines = (clone $lineQuery)->count();
+            $actuals = $consumption->lineActualsForFiscalYear((int) $fiscalYear->id);
+            $processed = 0;
+
+            if ($run) {
+                $run->forceFill(['total_lines' => $totalLines])->save();
+            }
+
+            $lineQuery->orderBy('id')->chunkById(500, function (Collection $lines) use ($actuals, $run, &$processed): void {
+                DB::transaction(function () use ($lines, $actuals, $run, &$processed): void {
+                    foreach ($lines as $line) {
+                        $actual = $actuals[(int) $line->getKey()] ?? Money::zero();
+                        $line->forceFill([
+                            'actual_total' => $actual,
+                            'variance' => Money::sub((string) $line->annual_total, $actual),
+                        ])->save();
+                        $processed++;
+                    }
+
+                    if ($run) {
+                        $run->forceFill(['processed_lines' => $processed])->save();
+                    }
+                });
+            });
+
+            $consumption->refreshHeadersForFiscalYear((int) $fiscalYear->id);
+            if ($run) {
+                $run->forceFill([
+                    'status' => BudgetActualsSyncRun::STATUS_COMPLETED,
+                    'processed_lines' => $processed,
+                    'completed_at' => now(),
+                    'last_error' => null,
+                ])->save();
+            }
+
+            Log::info('[SyncBudgetActuals] Budget actuals sync completed.', [
+                'fiscal_year_id' => $fiscalYear->id,
+                'processed_lines' => $processed,
+                'request_id' => $this->requestId,
+            ]);
+        } catch (Throwable $exception) {
+            $this->markFailed($exception);
+            throw $exception;
+        }
+    }
+
+    public function failed(Throwable $exception): void
     {
-        $fiscalYear = $this->resolveFiscalYear();
-        if (! $fiscalYear) {
-            throw new \RuntimeException('[SyncBudgetActuals] No fiscal year found for the requested sync.');
+        $this->markFailed($exception);
+        Log::error('[SyncBudgetActuals] job failed permanently.', [
+            'fiscal_year_id' => $this->fiscalYearId,
+            'request_id' => $this->requestId,
+            'error' => $exception->getMessage(),
+        ]);
+    }
+
+    private function markRunning(FiscalYear $fiscalYear): ?BudgetActualsSyncRun
+    {
+        if (! $this->requestId) {
+            return null;
         }
 
-        $lineItems = BudgetLineItem::query()
-            ->whereHas('budget', fn ($q) => $q->where('fiscal_year_id', $fiscalYear->id))
-            ->with('budget.department')
-            ->get();
+        return DB::transaction(function () use ($fiscalYear): BudgetActualsSyncRun {
+            $run = BudgetActualsSyncRun::query()->lockForUpdate()->where('request_id', $this->requestId)->firstOrFail();
+            $run->forceFill([
+                'fiscal_year_id' => $fiscalYear->id,
+                'status' => BudgetActualsSyncRun::STATUS_RUNNING,
+                'started_at' => $run->started_at ?? now(),
+                'last_error' => null,
+            ])->save();
 
-        if ($lineItems->isEmpty()) {
-            Log::info("[SyncBudgetActuals] No budget line items for fiscal year {$fiscalYear->id}.");
+            return $run;
+        });
+    }
 
+    private function markFailed(Throwable $exception): void
+    {
+        if (! $this->requestId) {
             return;
         }
 
-        $processed = 0;
-
-        DB::transaction(function () use ($lineItems, $fiscalYear, &$processed): void {
-            foreach ($lineItems as $lineItem) {
-                $netMovement = (float) JournalEntryLine::query()
-                    ->where('account_id', $lineItem->account_id)
-                    ->whereHas('journalEntry', function ($q) use ($fiscalYear) {
-                        $q->where('status', 'posted')
-                            ->whereBetween('date', [$fiscalYear->start_date, $fiscalYear->end_date]);
-                    })
-                    ->selectRaw('COALESCE(SUM(debit), 0) - COALESCE(SUM(credit), 0) as net_movement')
-                    ->value('net_movement');
-
-                $lineItem->actual_total = $netMovement;
-                $lineItem->save();
-                $processed++;
-            }
-        });
-
-        $fiscalYearLabel = $fiscalYear->name ?? (string) $fiscalYear->id;
-        Log::info("[SyncBudgetActuals] Synced {$processed} budget line item(s) for fiscal year {$fiscalYear->id} ({$fiscalYearLabel}).");
-    }
-
-    private function resolveFiscalYear(): ?FiscalYear
-    {
-        if ($this->fiscalYearId !== null) {
-            return FiscalYear::find($this->fiscalYearId);
-        }
-
-        return FiscalYear::query()
-            ->where('status', 'active')
-            ->whereDate('start_date', '<=', now())
-            ->whereDate('end_date', '>=', now())
-            ->orderByDesc('year')
-            ->first();
-    }
-
-    public function failed(\Throwable $exception): void
-    {
-        Log::error('[SyncBudgetActuals] job failed permanently.', [
-            'fiscal_year_id' => $this->fiscalYearId,
-            'error' => $exception->getMessage(),
-        ]);
+        BudgetActualsSyncRun::query()
+            ->where('request_id', $this->requestId)
+            ->update([
+                'status' => BudgetActualsSyncRun::STATUS_FAILED,
+                'last_error' => mb_substr($exception->getMessage(), 0, 10000),
+                'failed_at' => now(),
+                'updated_at' => now(),
+            ]);
     }
 }

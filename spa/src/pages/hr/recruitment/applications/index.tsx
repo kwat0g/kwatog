@@ -1,6 +1,5 @@
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { recruitmentApi } from '@/api/recruitment';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -30,21 +29,21 @@ interface AppFilters {
  search?: string;
  sort?: string;
  direction?: 'asc' | 'desc';
+ stage?: string;
 }
 
 export default function ApplicationsListPage() {
  const navigate = useNavigate();
- const [searchParams] = useSearchParams();
- const [stageFilter, setStageFilter] = useState(searchParams.get('stage') ?? '');
  const [filters, setFilters] = useUrlFilters<AppFilters>({
- page: 1, per_page: 25, sort: 'applied_at', direction: 'desc',
+ page: 1, per_page: 25, sort: 'applied_at', direction: 'desc', stage: '',
  });
+ const stageFilter = filters.stage ?? '';
 
  const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['recruitment-applications', stageFilter, filters],
+ queryKey: ['recruitment-applications', filters],
  queryFn: () =>
  recruitmentApi
- .listApplications({ stage: stageFilter || undefined, ...filters })
+ .listApplications({ ...filters, stage: stageFilter || undefined })
  .then((r) => r.data),
  placeholderData: (prev) => prev,
  });
@@ -98,7 +97,7 @@ export default function ApplicationsListPage() {
  className="px-5"
  label="Application stage"
  value={stageFilter}
- onChange={(value) => { setStageFilter(value); setFilters((f) => ({ ...f, page: 1 })); }}
+ onChange={(value) => { setFilters((f) => ({ ...f, stage: value, page: 1 })); }}
  items={stageTabs.map((tab) => ({ key: tab.value, label: tab.label }))}
  />
 

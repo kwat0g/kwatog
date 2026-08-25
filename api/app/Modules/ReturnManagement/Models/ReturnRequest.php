@@ -15,6 +15,7 @@ use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Quality\Models\Inspection;
+use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\ReturnManagement\Enums\ReturnInspectionHandoffStatus;
 use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
@@ -23,6 +24,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class ReturnRequest extends Model
@@ -69,6 +71,7 @@ class ReturnRequest extends Model
         'created_by',
         'approved_by',
         'completed_by',
+        'rejected_by',
     ];
 
     protected $casts = [
@@ -90,6 +93,18 @@ class ReturnRequest extends Model
     public function items(): HasMany
     {
         return $this->hasMany(ReturnRequestItem::class);
+    }
+
+    public function sourceAllocations(): HasManyThrough
+    {
+        return $this->hasManyThrough(
+            ReturnRequestSourceAllocation::class,
+            ReturnRequestItem::class,
+            'return_request_id',
+            'return_request_item_id',
+            'id',
+            'id',
+        );
     }
 
     public function salesOrder(): BelongsTo
@@ -148,6 +163,14 @@ class ReturnRequest extends Model
         return $this->belongsTo(Inspection::class);
     }
 
+    /** All product inspections staged for this RMA, not only the legacy first link. */
+    public function inspections(): HasMany
+    {
+        return $this->hasMany(Inspection::class, 'entity_id')
+            ->where('entity_type', InspectionEntityType::ReturnRequest->value)
+            ->orderBy('id');
+    }
+
     public function ncr(): BelongsTo
     {
         return $this->belongsTo(NonConformanceReport::class);
@@ -166,6 +189,11 @@ class ReturnRequest extends Model
     public function completer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'completed_by');
+    }
+
+    public function rejecter(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'rejected_by');
     }
 
     public function getIsEditableAttribute(): bool

@@ -15,6 +15,7 @@ use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Payroll\Requests\CreatePayrollPeriodRequest;
 use App\Modules\Payroll\Requests\RunThirteenthMonthRequest;
 use App\Modules\Payroll\Requests\VoidPayrollPeriodRequest;
+use App\Modules\Payroll\Resources\BankFileRecordResource;
 use App\Modules\Payroll\Resources\PayrollPeriodResource;
 use App\Modules\Payroll\Services\BankFileService;
 use App\Modules\Payroll\Enums\BankFileFormat;
@@ -294,7 +295,32 @@ class PayrollPeriodController
         /** @var BankFileService $svc */
         $svc = app(BankFileService::class);
 
-        return $svc->stream($period, $request->user(), $validated['format'] ?? null);
+        return $svc->stream($period, $validated['format'] ?? null);
+    }
+
+    /**
+     * Generate or explicitly regenerate the durable bank artifact. Download
+     * remains a separate read-only GET so refreshes cannot mutate payroll
+     * evidence or create another audit record.
+     */
+    public function generateBankFile(PayrollPeriod $period, Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'format' => ['sometimes', Rule::enum(BankFileFormat::class)],
+        ]);
+
+        try {
+            /** @var BankFileService $svc */
+            $svc = app(BankFileService::class);
+            $record = $svc->generate($period, $request->user(), $validated['format'] ?? null, true);
+        } catch (BusinessRuleException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'data' => (new BankFileRecordResource($record->load('generator')))->resolve(),
+            'message' => 'Bank file generated. Review the artifact, then download it.',
+        ], 201);
     }
 
     public function bankFileOptions(): JsonResponse

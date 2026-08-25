@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { LuLock, LuLockOpen } from '@/lib/icons';
 import toast from 'react-hot-toast';
@@ -9,6 +9,9 @@ import {
  type AccountingPeriodStatus,
 } from '@/api/accounting/periods';
 import { Button } from '@/components/ui/Button';
+import { DataTablePagination } from '@/components/ui/DataTablePagination';
+import { FilterBar } from '@/components/ui/FilterBar';
+import { Input } from '@/components/ui/Input';
 import { Panel } from '@/components/ui/Panel';
 import { Chip, type ChipVariant } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -21,8 +24,16 @@ import { formatDate } from '@/lib/formatDate';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { Textarea } from '@/components/ui/Textarea';
 import { implicitOpenCurrentPeriod } from './implicitOpenCurrentPeriod';
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 
 const MONTHS = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+type PeriodPageFilters = {
+ page: number;
+ per_page: number;
+ year: string;
+ status: AccountingPeriodStatus | '';
+};
 
 const statusVariant = (s: AccountingPeriodStatus): ChipVariant =>
  s === 'closed' ? 'info' : s === 'reopened' ? 'warning' : 'neutral';
@@ -31,13 +42,19 @@ export default function AccountingPeriodsPage() {
  const qc = useQueryClient();
  const { can } = usePermission();
  const canManage = can('accounting.periods.manage');
+ const [filters, setFilters] = useUrlFilters<PeriodPageFilters>({ page: 1, per_page: 24, year: '', status: '' });
 
  const [closeTarget, setCloseTarget] = useState<AccountingPeriod | null>(null);
  const [reopenTarget, setReopenTarget] = useState<AccountingPeriod | null>(null);
 
  const periodsQ = useQuery({
- queryKey: ['accounting', 'periods'],
- queryFn: () => accountingPeriodsApi.list({ per_page: 36 }),
+ queryKey: ['accounting', 'periods', filters],
+ queryFn: () => accountingPeriodsApi.list({
+ page: filters.page,
+ per_page: filters.per_page,
+ year: filters.year || undefined,
+ status: filters.status || undefined,
+ }),
  placeholderData: (prev) => prev,
  });
 
@@ -53,13 +70,48 @@ export default function AccountingPeriodsPage() {
  onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed to reopen period.'),
  });
 
- const periods = periodsQ.data?.data ?? [];
+ const periodsResponse = periodsQ.data;
+ const periods = periodsResponse?.data ?? [];
+ const periodsMeta = periodsResponse?.meta;
 
  return (
  <div>
  <PageHeader
  title="Accounting Periods"
  subtitle="Close a month to lock its entries; reopening requires a reason and is recorded."
+ />
+
+ <FilterBar
+ searchable={false}
+ filters={[{
+ key: 'status',
+ label: 'Status',
+ type: 'select',
+ options: [
+ { value: '', label: 'All' },
+ { value: 'open', label: 'Open' },
+ { value: 'closed', label: 'Closed' },
+ { value: 'reopened', label: 'Reopened' },
+ ],
+ }]}
+ values={filters}
+ onFilter={(key, value) => setFilters((current) => ({
+ ...current,
+ [key]: value ?? '',
+ page: 1,
+ }))}
+ actions={(
+ <Input
+ label="Year"
+ type="number"
+ min={2000}
+ max={2100}
+ value={filters.year}
+ onChange={(event) => setFilters((current) => ({ ...current, year: event.target.value, page: 1 }))}
+ fieldSize="sm"
+ containerClassName="w-28"
+ />
+ )}
  />
 
  <div className="px-5 py-4">
@@ -84,6 +136,7 @@ export default function AccountingPeriodsPage() {
  />
  )}
  {periods.length > 0 && (
+ <>
  <div className="border border-default rounded-md overflow-hidden">
  <table className={tableCls}>
  <thead>
@@ -125,6 +178,13 @@ export default function AccountingPeriodsPage() {
  </tbody>
  </table>
  </div>
+ {periodsMeta && <DataTablePagination
+ meta={periodsMeta}
+ onPageChange={(page) => setFilters((current) => ({ ...current, page }))}
+ onPageSizeChange={(per_page) => setFilters((current) => ({ ...current, per_page, page: 1 }))}
+ perPage={filters.per_page}
+ />}
+ </>
  )}
  </Panel>
  </div>
@@ -159,6 +219,9 @@ function ReopenModal({
  pending: boolean;
 }) {
  const [reason, setReason] = useState('');
+ useEffect(() => {
+ setReason('');
+ }, [period?.id]);
  const tooShort = reason.trim().length < 3;
 
  return (

@@ -17,6 +17,7 @@ class ReverseJournalEntryRequest extends FormRequest
     {
         return [
             'reverse_date' => ['nullable', 'date'],
+            'reason'       => ['required', 'string', 'min:1', 'max:500'],
         ];
     }
 }

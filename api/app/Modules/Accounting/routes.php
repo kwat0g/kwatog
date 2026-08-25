@@ -28,6 +28,7 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
         Route::post('/', [AccountController::class, 'store'])->middleware('permission:accounting.coa.manage');
         Route::put('/{account}', [AccountController::class, 'update'])->middleware('permission:accounting.coa.manage');
         Route::delete('/{account}', [AccountController::class, 'deactivate'])->middleware('permission:accounting.coa.deactivate');
+        Route::patch('/{account}/activate', [AccountController::class, 'activate'])->middleware('permission:accounting.coa.deactivate');
     });
 
     /* ─── Fiscal periods ─────────────────────────────── */
@@ -41,11 +42,15 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
     Route::prefix('journal-entries')->group(function () {
         Route::get('/', [JournalEntryController::class, 'index'])->middleware('permission:accounting.journal.view');
         Route::get('/options', [JournalEntryController::class, 'options'])->middleware('permission:accounting.journal.view');
-        Route::get('/{journalEntry}', [JournalEntryController::class, 'show'])->middleware('permission:accounting.journal.view');
+        Route::get('/{journalEntry}', [JournalEntryController::class, 'show'])
+            ->middleware('permission:accounting.journal.view')
+            ->withTrashed();
         Route::post('/', [JournalEntryController::class, 'store'])->middleware('permission:accounting.journal.create');
         Route::put('/{journalEntry}', [JournalEntryController::class, 'update'])->middleware('permission:accounting.journal.create');
         Route::delete('/{journalEntry}', [JournalEntryController::class, 'destroy'])->middleware('permission:accounting.journal.create');
-        Route::patch('/{journalEntry}/restore', [JournalEntryController::class, 'restore'])->middleware('permission:accounting.journal.create');
+        Route::patch('/{journalEntry}/restore', [JournalEntryController::class, 'restore'])
+            ->middleware('permission:accounting.journal.create')
+            ->withTrashed();
         Route::patch('/{journalEntry}/post', [JournalEntryController::class, 'post'])->middleware('permission:accounting.journal.post');
         Route::post('/{journalEntry}/reverse', [JournalEntryController::class, 'reverse'])->middleware('permission:accounting.journal.reverse');
         Route::get('/{journalEntry}/pdf', [PdfController::class, 'journalEntry'])->middleware('permission:accounting.journal.view');
@@ -69,7 +74,9 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
         Route::post('/', [VendorController::class, 'store'])->middleware('permission:accounting.vendors.manage');
         Route::put('/{vendor}', [VendorController::class, 'update'])->middleware('permission:accounting.vendors.manage');
         Route::delete('/{vendor}', [VendorController::class, 'destroy'])->middleware('permission:accounting.vendors.manage');
-        Route::patch('/{vendor}/restore', [VendorController::class, 'restore'])->middleware('permission:accounting.vendors.manage');
+        Route::patch('/{vendor}/restore', [VendorController::class, 'restore'])
+            ->middleware('permission:accounting.vendors.manage')
+            ->withTrashed();
     });
     Route::prefix('bills')->group(function () {
         Route::get('/options', [BillController::class, 'options'])->middleware('permission:accounting.bills.view');
@@ -80,6 +87,8 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
         // 2026-08-08 — post an auto-created draft bill (AP + GL).
         Route::post('/{bill}/post', [BillController::class, 'postDraft'])->middleware('permission:accounting.bills.create');
         Route::post('/{bill}/payments', [BillController::class, 'recordPayment'])->middleware('permission:accounting.bills.pay');
+        Route::post('/{bill}/payments/{payment}/void', [BillController::class, 'voidPayment'])
+            ->middleware('permission:accounting.bills.void_payment');
         Route::get('/{bill}/pdf', [PdfController::class,  'bill'])->middleware('permission:accounting.bills.view');
     });
 
@@ -90,7 +99,9 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
         Route::post('/', [CustomerController::class, 'store'])->middleware('permission:accounting.customers.manage');
         Route::put('/{customer}', [CustomerController::class, 'update'])->middleware('permission:accounting.customers.manage');
         Route::delete('/{customer}', [CustomerController::class, 'destroy'])->middleware('permission:accounting.customers.manage');
-        Route::patch('/{customer}/restore', [CustomerController::class, 'restore'])->middleware('permission:accounting.customers.manage');
+        Route::patch('/{customer}/restore', [CustomerController::class, 'restore'])
+            ->middleware('permission:accounting.customers.manage')
+            ->withTrashed();
         Route::get('/{customer}/statement-of-account', [CustomerController::class, 'statementOfAccount'])
             ->middleware('permission:accounting.invoices.view');
     });
@@ -118,6 +129,7 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
         // gated with the statements permission (CFO monthly deliverable).
         Route::get('/ar-aging', [FinancialStatementController::class, 'arAging'])->middleware('permission:accounting.statements.view');
         Route::get('/ap-aging', [FinancialStatementController::class, 'apAging'])->middleware('permission:accounting.statements.view');
+        Route::get('/ap-aging/export', [FinancialStatementController::class, 'apAgingExport'])->middleware('permission:accounting.statements.export');
     });
 
     Route::get('/dashboard/finance', [FinanceDashboardController::class, 'summary'])
@@ -132,6 +144,7 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
             Route::get('/overview', [BudgetController::class, 'overview'])->middleware('permission:budgeting.view');
             Route::get('/budget-vs-actual', [BudgetController::class, 'budgetVsActual'])->middleware('permission:budgeting.view');
             Route::post('/sync-actuals', [BudgetController::class, 'syncActuals'])->middleware('permission:budgeting.manage');
+            Route::get('/sync-actuals/status', [BudgetController::class, 'syncStatus'])->middleware('permission:budgeting.view');
             Route::get('/check-availability', [BudgetController::class, 'checkAvailability'])->middleware('permission:budgeting.view');
             Route::get('/{budget}', [BudgetController::class, 'show'])->middleware('permission:budgeting.view');
             Route::post('/', [BudgetController::class, 'store'])->middleware('permission:budgeting.manage');

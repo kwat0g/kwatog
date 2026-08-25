@@ -11,6 +11,7 @@ use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Enums\ApplicationStage;
+use App\Modules\HR\Enums\InterviewOutcome;
 use App\Modules\HR\Enums\JobPostingStatus;
 use App\Modules\HR\Mail\ApplicationReceivedMail;
 use App\Modules\HR\Mail\ApplicationStatusUpdatedMail;
@@ -21,6 +22,11 @@ use App\Modules\HR\Models\ApplicationNote;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\JobApplication;
 use App\Modules\HR\Models\JobPosting;
+use App\Modules\HR\Models\RecruitmentApplicationEvent;
+use App\Modules\HR\Support\RecruitmentApplicationStateMachine;
+use App\Modules\HR\Support\RecruitmentNotificationRecipients;
+use App\Modules\HR\Support\RecruitmentPostingStateMachine;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -54,22 +60,63 @@ class RecruitmentService
 
     public function updatePosting(JobPosting $posting, array $data): JobPosting
     {
-        $posting->update($data);
+        return DB::transaction(function () use ($posting, $data): JobPosting {
+            $locked = JobPosting::query()->lockForUpdate()->findOrFail($posting->id);
+            $locked->update($data);
 
-        return $posting->fresh();
+            return $locked->fresh();
+        });
     }
 
-    public function changePostingStatus(JobPosting $posting, JobPostingStatus $newStatus): void
-    {
-        if (! $posting->status->canTransitionTo($newStatus)) {
-            throw new BusinessRuleException("Cannot transition posting from {$posting->status->value} to {$newStatus->value}.");
-        }
+    public function changePostingStatus(
+        JobPosting $posting,
+        JobPostingStatus $newStatus,
+    ): void {
+        DB::transaction(function () use ($posting, $newStatus): void {
+            // The bound model may be stale by the time an HR action arrives.
+            // The transition decision must be made from the row locked in this
+            // transaction, not from a request-time snapshot.
+            $locked = JobPosting::withTrashed()->lockForUpdate()->findOrFail($posting->id);
 
-        if ($newStatus === JobPostingStatus::Open && ! $posting->posted_at) {
-            $posting->posted_at = now();
-        }
-        $posting->status = $newStatus;
-        $posting->save();
+            RecruitmentPostingStateMachine::assertCanTransition($locked->status, $newStatus);
+
+            if ($newStatus === JobPostingStatus::Open && ! $locked->posted_at) {
+                $locked->posted_at = now();
+            }
+            $locked->status = $newStatus;
+            $locked->save();
+        });
+    }
+
+    public function restorePosting(JobPosting $posting): void
+    {
+        DB::transaction(function () use ($posting): void {
+            $locked = JobPosting::withTrashed()->lockForUpdate()->findOrFail($posting->id);
+            if (! $locked->trashed()) {
+                throw new BusinessRuleException('Job posting is already active.');
+            }
+
+            $locked->restore();
+        });
+    }
+
+    public function archivePosting(JobPosting $posting): void
+    {
+        DB::transaction(function () use ($posting): void {
+            // Locking the parent row serializes this check with inserts that
+            // satisfy the job_applications foreign key on PostgreSQL.
+            $locked = JobPosting::query()->lockForUpdate()->findOrFail($posting->id);
+
+            if ($locked->status !== JobPostingStatus::Draft) {
+                throw new BusinessRuleException('Only draft postings can be deleted.');
+            }
+
+            if ($locked->applications()->exists()) {
+                throw new BusinessRuleException('Cannot delete a posting that has applications.');
+            }
+
+            $locked->delete();
+        });
     }
 
     public function submitApplication(JobPosting $posting, array $data, UploadedFile $resume): JobApplication
@@ -82,11 +129,26 @@ class RecruitmentService
         }
 
         try {
-            $application = DB::transaction(function () use ($posting, $data, $resume, $path) {
+            $application = DB::transaction(function () use ($posting, $data, $resume, $path): JobApplication {
+                // The controller's read is only an early user-facing guard.
+                // Re-lock and re-check the authoritative posting here so a
+                // close/archive racing this write cannot accept a late CV.
+                $lockedPosting = JobPosting::query()
+                    ->lockForUpdate()
+                    ->findOrFail($posting->id);
+
+                if ($lockedPosting->status !== JobPostingStatus::Open) {
+                    throw new BusinessRuleException('This position is no longer accepting applications.');
+                }
+
+                if ($lockedPosting->closes_at && $lockedPosting->closes_at->isPast()) {
+                    throw new BusinessRuleException('The application deadline has passed.');
+                }
+
                 $application = new JobApplication;
                 $application->fill([
                     'application_number' => $this->sequences->generate('job_application'),
-                    'job_posting_id' => $posting->id,
+                    'job_posting_id' => $lockedPosting->id,
                     'tracking_code' => $this->generateTrackingCode(),
                     'first_name' => $data['first_name'],
                     'last_name' => $data['last_name'],
@@ -119,6 +181,8 @@ class RecruitmentService
             Storage::disk('local')->delete($path);
             throw $e;
         }
+
+        $posting = $application->jobPosting()->withTrashed()->firstOrFail();
 
         try {
             Mail::to($application->email)->queue(
@@ -157,148 +221,229 @@ class RecruitmentService
         return $application;
     }
 
-    public function advanceStage(JobApplication $application, ?array $interviewData = null): void
-    {
-        $previousStage = $application->stage;
-        $next = $application->stage->next();
-        if (! $next) {
-            throw new BusinessRuleException("Cannot advance from terminal stage: {$application->stage->value}");
-        }
+    public function advanceStage(
+        JobApplication $application,
+        ?array $interviewData = null,
+        ?User $actor = null,
+    ): void {
+        $actor ??= app()->bound('request') && request()->user() instanceof User
+            ? request()->user()
+            : null;
 
-        if ($application->stage === ApplicationStage::Screening && ! $interviewData) {
-            throw new BusinessRuleException('Interview data required when advancing to interview stage.');
-        }
-
-        DB::transaction(function () use ($application, $next, $interviewData) {
-            $application->stage = $next;
-            $application->save();
-
-            if ($interviewData && $next === ApplicationStage::Interview) {
-                $this->scheduleInterview($application, $interviewData);
+        $transition = DB::transaction(function () use ($application, $interviewData, $actor): array {
+            $locked = JobApplication::query()->lockForUpdate()->findOrFail($application->id);
+            $previousStage = $locked->stage;
+            $next = $previousStage->next();
+            if (! $next) {
+                throw new BusinessRuleException("Cannot advance from terminal stage: {$previousStage->value}");
             }
+
+            RecruitmentApplicationStateMachine::assertCanTransition($previousStage, $next);
+
+            if ($next === ApplicationStage::Hired
+                && (! $actor || ! $actor->hasPermission('hr.recruitment.hire'))) {
+                throw new AuthorizationException('You do not have permission to mark an application hired.');
+            }
+
+            if ($previousStage === ApplicationStage::Screening && ! $interviewData) {
+                throw new BusinessRuleException('Interview data required when advancing to interview stage.');
+            }
+
+            // A pending interview is not a decision. A passed outcome is the
+            // explicit gate for moving from interview to offer.
+            if ($previousStage === ApplicationStage::Interview
+                && ! $locked->interviews()->where('outcome', InterviewOutcome::Passed->value)->exists()) {
+                throw new BusinessRuleException('At least one interview must be marked passed before advancing to offer.');
+            }
+
+            $locked->stage = $next;
+            $locked->save();
+
+            $interview = null;
+            if ($interviewData && $next === ApplicationStage::Interview) {
+                $interview = $this->createInterviewRecord($locked, $interviewData, $actor);
+            }
+
+            $this->recordApplicationEvent(
+                $locked,
+                'stage.advanced',
+                $actor,
+                ['stage' => $previousStage->value],
+                ['stage' => $next->value],
+                $previousStage,
+                $next,
+            );
+
+            return [
+                'previous' => $previousStage,
+                'next' => $next,
+                'interview' => $interview,
+            ];
         });
 
-        // Interview scheduling has its own candidate-facing message. All
-        // other stage changes need an explicit status update so a candidate
-        // does not have to keep polling the tracking page to discover a
-        // screening, offer, or hiring decision.
-        if ($next !== ApplicationStage::Interview) {
-            $this->queueApplicationStatusEmail($application->fresh(), $previousStage, $next);
-        }
-    }
+        $application->refresh();
 
-    public function rejectApplication(JobApplication $application, ?string $reason = null): void
-    {
-        $previousStage = $application->stage;
-        if ($application->stage->isTerminal()) {
-            throw new BusinessRuleException("Cannot reject from terminal stage: {$application->stage->value}");
-        }
-        $application->rejected_at_stage = $application->stage->value;
-        $application->rejection_reason = $reason;
-        $application->stage = ApplicationStage::Rejected;
-        $application->save();
-
-        $this->queueApplicationStatusEmail($application->fresh(), $previousStage, ApplicationStage::Rejected);
-    }
-
-    public function scheduleInterview(JobApplication $application, array $data): ApplicationInterview
-    {
-        if ($application->stage !== ApplicationStage::Interview) {
-            throw new BusinessRuleException("Interviews can only be scheduled at the interview stage, current: {$application->stage->value}");
-        }
-
-        $interview = ApplicationInterview::create($data + [
-            'job_application_id' => $application->id,
-        ]);
-
-        $application->load('jobPosting');
-
-        try {
-            Mail::to($application->email)->queue(
-                new InterviewScheduledMail($application, $interview, $this->hrUserIds())
+        if ($transition['interview'] instanceof ApplicationInterview) {
+            $this->queueInterviewScheduledMail(
+                $application->load('jobPosting'),
+                $transition['interview'],
             );
-        } catch (\Throwable $e) {
-            Log::warning('Interview was saved but its candidate email failed.', [
-                'application_id' => $application->id,
-                'interview_id' => $interview->id,
-                'error' => $e->getMessage(),
-            ]);
+        } else {
+            $this->queueApplicationStatusEmail(
+                $application,
+                $transition['previous'],
+                $transition['next'],
+            );
+        }
+    }
 
-            app(EmailDeliveryFailureNotifier::class)->notify(
-                $this->hrUsers(),
-                'Recruitment interview notification',
-                "The interview email for {$application->full_name} could not be delivered. Review the interview and contact the candidate through an approved channel.",
+    public function rejectApplication(
+        JobApplication $application,
+        ?string $reason = null,
+        ?User $actor = null,
+    ): void {
+        $previousStage = DB::transaction(function () use ($application, $reason, $actor): ApplicationStage {
+            $locked = JobApplication::query()->lockForUpdate()->findOrFail($application->id);
+            $previousStage = $locked->stage;
+            if ($previousStage->isTerminal()) {
+                throw new BusinessRuleException("Cannot reject from terminal stage: {$previousStage->value}");
+            }
+
+            RecruitmentApplicationStateMachine::assertCanTransition($previousStage, ApplicationStage::Rejected);
+
+            $locked->rejected_at_stage = $previousStage->value;
+            $locked->rejection_reason = $reason;
+            $locked->stage = ApplicationStage::Rejected;
+            $locked->save();
+
+            $this->recordApplicationEvent(
+                $locked,
+                'application.rejected',
+                $actor,
+                ['stage' => $previousStage->value],
                 [
-                    'link_to' => "/hr/recruitment/applications/{$application->hash_id}",
-                    'entity_type' => 'job_application',
-                    'entity_id' => $application->hash_id,
-                    'reason' => 'The candidate email address was unreachable or the email provider rejected the message.',
+                    'stage' => ApplicationStage::Rejected->value,
+                    'has_reason' => $reason !== null && trim($reason) !== '',
                 ],
+                $previousStage,
+                ApplicationStage::Rejected,
             );
-        }
+
+            return $previousStage;
+        });
+
+        $application->refresh();
+        $this->queueApplicationStatusEmail($application, $previousStage, ApplicationStage::Rejected);
+    }
+
+    public function scheduleInterview(
+        JobApplication $application,
+        array $data,
+        ?User $actor = null,
+    ): ApplicationInterview {
+        $interview = DB::transaction(function () use ($application, $data, $actor): ApplicationInterview {
+            $locked = JobApplication::query()->lockForUpdate()->findOrFail($application->id);
+            if ($locked->stage !== ApplicationStage::Interview) {
+                throw new BusinessRuleException("Interviews can only be scheduled at the interview stage, current: {$locked->stage->value}");
+            }
+
+            return $this->createInterviewRecord($locked, $data, $actor);
+        });
+
+        $application->refresh();
+        $this->queueInterviewScheduledMail($application->load('jobPosting'), $interview);
 
         return $interview;
     }
 
-    public function updateInterview(ApplicationInterview $interview, array $data): void
-    {
-        $interview->loadMissing('application.jobPosting');
-        $outcomeProvided = array_key_exists('outcome', $data);
-        $outcome = $data['outcome'] ?? null;
-        unset($data['outcome']);
-        $interview->fill($data);
-        if ($outcomeProvided) {
-            // `outcome` is intentionally guarded on the model; only this
-            // workflow service may record an interview decision.
-            $interview->forceFill(['outcome' => $outcome]);
-        }
+    public function updateInterview(
+        ApplicationInterview $interview,
+        array $data,
+        ?User $actor = null,
+    ): void {
+        $result = DB::transaction(function () use ($interview, $data, $actor): array {
+            $locked = ApplicationInterview::query()
+                ->lockForUpdate()
+                ->findOrFail($interview->id);
+            $locked->loadMissing('application.jobPosting');
 
-        $candidateVisibleChange = collect([
-            'scheduled_at',
-            'location',
-            'interviewer_name',
-            'outcome',
-        ])->contains(fn (string $field): bool => $interview->isDirty($field));
-        $interview->save();
+            $before = [
+                'interview_id' => $locked->hash_id,
+                'outcome' => $locked->outcome?->value,
+                'scheduled_at' => $locked->scheduled_at?->toIso8601String(),
+            ];
 
-        if ($candidateVisibleChange) {
-            try {
-                Mail::to($interview->application->email)->queue(
-                    new InterviewDetailsUpdatedMail(
-                        $interview->application,
-                        $interview,
-                        $this->hrUserIds(),
-                    )
-                );
-            } catch (\Throwable $e) {
-                Log::warning('Interview was updated but its candidate email could not be queued.', [
-                    'application_id' => $interview->application_id,
-                    'interview_id' => $interview->id,
-                    'error' => $e->getMessage(),
-                ]);
+            $outcomeProvided = array_key_exists('outcome', $data);
+            $outcome = $data['outcome'] ?? null;
+            unset($data['outcome']);
+            $locked->fill($data);
+            if ($outcomeProvided) {
+                // The outcome is intentionally guarded on the model; only this
+                // workflow service may record an interview decision.
+                $locked->forceFill(['outcome' => $outcome]);
+            }
 
-                app(EmailDeliveryFailureNotifier::class)->notify(
-                    $this->hrUsers(),
-                    'Recruitment interview update',
-                    "The interview update email for {$interview->application->full_name} could not be queued. Review the interview and contact the candidate through an approved channel.",
+            $candidateVisibleChange = collect([
+                'scheduled_at',
+                'location',
+                'interviewer_name',
+                'outcome',
+            ])->contains(fn (string $field): bool => $locked->isDirty($field));
+
+            if ($locked->isDirty()) {
+                $locked->save();
+                $this->recordApplicationEvent(
+                    $locked->application,
+                    'interview.updated',
+                    $actor,
+                    $before,
                     [
-                        'link_to' => "/hr/recruitment/applications/{$interview->application->hash_id}",
-                        'entity_type' => 'job_application',
-                        'entity_id' => $interview->application->hash_id,
-                        'reason' => 'The candidate email address was unreachable or the email provider rejected the message.',
+                        'interview_id' => $locked->hash_id,
+                        'outcome' => $locked->outcome?->value,
+                        'scheduled_at' => $locked->scheduled_at?->toIso8601String(),
                     ],
+                    $locked->application->stage,
+                    $locked->application->stage,
+                    ['candidate_visible' => $candidateVisibleChange],
                 );
             }
+
+            return [
+                'interview' => $locked->fresh()->load('application.jobPosting'),
+                'candidate_visible_change' => $candidateVisibleChange,
+            ];
+        });
+
+        if ($result['candidate_visible_change']) {
+            $this->queueInterviewUpdatedMail(
+                $result['interview']->application,
+                $result['interview'],
+            );
         }
     }
 
     public function addNote(JobApplication $application, string $body, User $user): ApplicationNote
     {
-        return ApplicationNote::create([
-            'job_application_id' => $application->id,
-            'user_id' => $user->id,
-            'body' => $body,
-        ]);
+        return DB::transaction(function () use ($application, $body, $user): ApplicationNote {
+            $locked = JobApplication::query()->lockForUpdate()->findOrFail($application->id);
+            $note = ApplicationNote::create([
+                'job_application_id' => $locked->id,
+                'user_id' => $user->id,
+                'body' => $body,
+            ]);
+
+            $this->recordApplicationEvent(
+                $locked,
+                'note.added',
+                $user,
+                null,
+                ['note_id' => $note->hash_id],
+                $locked->stage,
+                $locked->stage,
+            );
+
+            return $note;
+        });
     }
 
     public function getTrackingInfo(string $trackingCode): ?array
@@ -324,7 +469,10 @@ class RecruitmentService
             'status' => $statusLabel,
             'stage_steps' => array_values(array_map(
                 static fn (ApplicationStage $stage): array => ['value' => $stage->value, 'label' => $stage->publicLabel()],
-                array_filter(ApplicationStage::cases(), static fn (ApplicationStage $stage): bool => ! $stage->isTerminal()),
+                array_filter(
+                    ApplicationStage::cases(),
+                    static fn (ApplicationStage $stage): bool => $stage !== ApplicationStage::Rejected,
+                ),
             )),
             'interview' => $interview ? [
                 'scheduled_at' => $interview->scheduled_at->toIso8601String(),
@@ -348,20 +496,183 @@ class RecruitmentService
         ];
     }
 
-    public function markConverted(JobApplication $application, Employee $employee): void
-    {
-        $application->converted_employee_id = $employee->id;
-        $application->save();
+    public function markConverted(
+        JobApplication $application,
+        Employee $employee,
+        ?User $actor = null,
+    ): void {
+        DB::transaction(function () use ($application, $employee, $actor): void {
+            $lockedApplication = JobApplication::query()->lockForUpdate()->findOrFail($application->id);
+            if ($lockedApplication->stage !== ApplicationStage::Hired) {
+                throw new BusinessRuleException('Only hired applications can be converted.');
+            }
 
-        $posting = $application->jobPosting;
-        $hiredCount = $posting->applications()
-            ->where('stage', ApplicationStage::Hired->value)
-            ->whereNotNull('converted_employee_id')
-            ->count();
+            if ($lockedApplication->converted_employee_id) {
+                if ((int) $lockedApplication->converted_employee_id !== (int) $employee->id) {
+                    throw new BusinessRuleException('This application is already linked to another employee.');
+                }
 
-        if ($hiredCount >= $posting->slots) {
-            $this->changePostingStatus($posting, JobPostingStatus::Filled);
+                return;
+            }
+
+            $posting = JobPosting::withTrashed()
+                ->lockForUpdate()
+                ->findOrFail($lockedApplication->job_posting_id);
+
+            $lockedApplication->converted_employee_id = $employee->id;
+            $lockedApplication->save();
+
+            $hiredCount = JobApplication::query()
+                ->where('job_posting_id', $posting->id)
+                ->where('stage', ApplicationStage::Hired->value)
+                ->whereNotNull('converted_employee_id')
+                ->count();
+
+            if ($hiredCount >= $posting->slots && $posting->status !== JobPostingStatus::Filled) {
+                if (! $posting->status->canTransitionTo(JobPostingStatus::Filled)) {
+                    throw new BusinessRuleException("Cannot mark posting as filled from {$posting->status->value}.");
+                }
+
+                $posting->status = JobPostingStatus::Filled;
+                $posting->save();
+            }
+
+            $this->recordApplicationEvent(
+                $lockedApplication,
+                'application.converted',
+                $actor,
+                ['converted_employee_id' => null],
+                ['converted_employee_id' => $employee->hash_id],
+                ApplicationStage::Hired,
+                ApplicationStage::Hired,
+                ['employee_id' => $employee->hash_id],
+            );
+        });
+    }
+
+    private function createInterviewRecord(
+        JobApplication $application,
+        array $data,
+        ?User $actor = null,
+    ): ApplicationInterview {
+        $interview = ApplicationInterview::create($data + [
+            'job_application_id' => $application->id,
+        ]);
+
+        $this->recordApplicationEvent(
+            $application,
+            'interview.scheduled',
+            $actor,
+            null,
+            [
+                'interview_id' => $interview->hash_id,
+                'scheduled_at' => $interview->scheduled_at?->toIso8601String(),
+                'location' => $interview->location,
+            ],
+            $application->stage,
+            $application->stage,
+        );
+
+        return $interview;
+    }
+
+    private function queueInterviewScheduledMail(
+        JobApplication $application,
+        ApplicationInterview $interview,
+    ): void {
+        try {
+            Mail::to($application->email)->queue(
+                new InterviewScheduledMail($application, $interview, $this->hrUserIds())
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Interview was saved but its candidate email failed.', [
+                'application_id' => $application->id,
+                'interview_id' => $interview->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            app(EmailDeliveryFailureNotifier::class)->notify(
+                $this->hrUsers(),
+                'Recruitment interview notification',
+                "The interview email for {$application->full_name} could not be delivered. Review the interview and contact the candidate through an approved channel.",
+                [
+                    'link_to' => "/hr/recruitment/applications/{$application->hash_id}",
+                    'entity_type' => 'job_application',
+                    'entity_id' => $application->hash_id,
+                    'reason' => 'The candidate email address was unreachable or the email provider rejected the message.',
+                ],
+            );
         }
+    }
+
+    private function queueInterviewUpdatedMail(
+        JobApplication $application,
+        ApplicationInterview $interview,
+    ): void {
+        try {
+            Mail::to($application->email)->queue(
+                new InterviewDetailsUpdatedMail(
+                    $application,
+                    $interview,
+                    $this->hrUserIds(),
+                )
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Interview was updated but its candidate email could not be queued.', [
+                'application_id' => $application->id,
+                'interview_id' => $interview->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            app(EmailDeliveryFailureNotifier::class)->notify(
+                $this->hrUsers(),
+                'Recruitment interview update',
+                "The interview update email for {$application->full_name} could not be queued. Review the interview and contact the candidate through an approved channel.",
+                [
+                    'link_to' => "/hr/recruitment/applications/{$application->hash_id}",
+                    'entity_type' => 'job_application',
+                    'entity_id' => $application->hash_id,
+                    'reason' => 'The candidate email address was unreachable or the email provider rejected the message.',
+                ],
+            );
+        }
+    }
+
+    /**
+     * Store only workflow evidence. Candidate PII and note bodies stay in their
+     * source tables and are governed by those tables' retention controls.
+     *
+     * @param array<string, mixed>|null $before
+     * @param array<string, mixed>|null $after
+     * @param array<string, mixed> $metadata
+     */
+    private function recordApplicationEvent(
+        JobApplication $application,
+        string $eventType,
+        ?User $actor,
+        ?array $before,
+        ?array $after,
+        ?ApplicationStage $fromStage,
+        ?ApplicationStage $toStage,
+        array $metadata = [],
+    ): void {
+        $request = app()->bound('request') ? request() : null;
+        $actor ??= $request?->user();
+
+        RecruitmentApplicationEvent::create([
+            'job_application_id' => $application->id,
+            'actor_user_id' => $actor?->id,
+            'actor_type' => $actor ? 'user' : 'system',
+            'event_type' => $eventType,
+            'from_stage' => $fromStage?->value,
+            'to_stage' => $toStage?->value,
+            'before_values' => $before,
+            'after_values' => $after,
+            'metadata' => $metadata !== [] ? $metadata : null,
+            'correlation_id' => $request?->attributes->get('request_id')
+                ?? $request?->header('X-Request-ID'),
+            'created_at' => now(),
+        ]);
     }
 
     private function generateTrackingCode(): string
@@ -401,21 +712,7 @@ class RecruitmentService
     /** @return \Illuminate\Support\Collection<int, User> */
     private function hrUsers(): \Illuminate\Support\Collection
     {
-        $roles = array_values(array_filter(
-            (array) $this->settings->get('hr.recruitment.notification_roles', ['hr_officer', 'system_admin']),
-            static fn ($role): bool => is_string($role) && $role !== '',
-        ));
-
-        // An explicitly empty setting must not disable the only fallback for
-        // recruitment alerts. Administrators can still narrow this list by
-        // configuring one or more concrete roles.
-        if ($roles === []) {
-            $roles = ['hr_officer', 'system_admin'];
-        }
-
-        return User::whereHas('role', function ($q) use ($roles): void {
-            $q->whereIn('slug', $roles);
-        })->where('is_active', true)->get();
+        return RecruitmentNotificationRecipients::resolve($this->settings);
     }
 
     /** @return list<int> */

@@ -11,6 +11,7 @@ interface Props {
 const statusVariant: Record<MrpRun['status'], ChipVariant> = {
  running: 'warning',
  completed: 'success',
+ partial: 'warning',
  failed: 'danger',
 };
 
@@ -61,12 +62,16 @@ export function MrpRunStatusPanel({ latest, recent = [] }: Props) {
  {latest.error_message}
  </p>
  )}
+ {latest?.recovery_action && latest.status !== 'completed' && (
+ <p className="mt-1 text-2xs text-muted">Recovery: <span className="text-primary">{latest.recovery_action}</span></p>
+ )}
  </div>
  </div>
  {latest && (
  <div className="flex flex-wrap items-center gap-3 font-mono tabular-nums text-2xs text-muted">
  <span><span className="text-primary">{latest.sales_orders_evaluated}</span> SOs</span>
  <span><span className="text-primary">{latest.plans_generated}</span> plans</span>
+ <span><span className="text-primary">{latest.failed_sales_orders ?? 0}</span> failed</span>
  <span><span className="text-primary">{latest.shortages_found}</span> shortages</span>
  <span><span className="text-primary">{latest.prs_created}</span> PRs</span>
  {conflicts > 0 ? (

@@ -7,12 +7,15 @@ namespace Tests\Feature\CRM;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Common\Services\SettingsService;
+use App\Modules\CRM\Controllers\ComplaintController;
 use App\Modules\CRM\Models\Complaint8DReport;
 use App\Modules\CRM\Models\CustomerComplaint;
 use App\Modules\CRM\Services\ComplaintService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use RuntimeException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Tests\TestCase;
 
 class Complaint8dFinalizeGuardTest extends TestCase
@@ -117,5 +120,30 @@ class Complaint8dFinalizeGuardTest extends TestCase
         $second = app(ComplaintService::class)->finalize8D($c->fresh(), $by);
 
         $this->assertEquals($stamp->timestamp, $second->finalized_at->timestamp);
+    }
+
+    public function test_update_after_finalize_is_rejected_against_authoritative_report(): void
+    {
+        $by = $this->user();
+        $c = $this->complaint();
+        $this->fillAllEight($c->eightDReport);
+
+        app(ComplaintService::class)->finalize8D($c->fresh(), $by);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('finalised');
+
+        app(ComplaintService::class)->update8DReport($c->fresh(), [
+            'd1_team' => 'Late stale writer',
+        ]);
+    }
+
+    public function test_pdf_rejects_an_unfinalized_report(): void
+    {
+        $c = $this->complaint();
+
+        $this->expectException(NotFoundHttpException::class);
+
+        app(ComplaintController::class)->pdf($c->fresh(), app(SettingsService::class));
     }
 }

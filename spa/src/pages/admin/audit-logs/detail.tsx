@@ -30,8 +30,12 @@ interface AuditLogDetail {
  id: string;
  action: 'created' | 'updated' | 'deleted';
  model_type: string;
- model_id: number | null;
- user: { id: string; name: string; email: string } | null;
+ model_id: string | null;
+ actor_type: 'user' | 'system' | string | null;
+ source_command: string | null;
+ correlation_id: string | null;
+ reason: string | null;
+ user: { id: string; name: string; email: string; role: { name: string; slug: string } | null } | null;
  ip_address: string | null;
  user_agent: string | null;
  created_at: string;
@@ -174,10 +178,20 @@ export default function AuditLogDetailPage() {
  <span className="text-muted">system</span>
  )}
  </Row>
+ <Row label="Actor type">{data.actor_type ?? (data.user ? 'user' : 'system')}</Row>
+ <Row label="Source">
+ <span className="font-mono text-xs break-all">{data.source_command ?? '—'}</span>
+ </Row>
+ <Row label="Correlation">
+ <span className="font-mono text-xs break-all">{data.correlation_id ?? '—'}</span>
+ </Row>
+ <Row label="Reason">
+ <span className="text-xs break-words">{data.reason ?? '—'}</span>
+ </Row>
  <Row label="IP">
  <span className="font-mono text-xs">{data.ip_address ?? '—'}</span>
  </Row>
- <Row label="LuUser agent">
+ <Row label="User agent">
  <span className="font-mono text-xs break-all">{data.user_agent ?? '—'}</span>
  </Row>
  </dl>

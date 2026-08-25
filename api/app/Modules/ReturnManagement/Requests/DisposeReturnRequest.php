@@ -21,7 +21,8 @@ class DisposeReturnRequest extends FormRequest
 
     public function authorize(): bool
     {
-        return $this->user()->can('return_management.manage');
+        return $this->user()->can('return_management.dispose')
+            || $this->user()->can('return_management.manage');
     }
 
     protected function hashIdFields(): array
@@ -31,10 +32,18 @@ class DisposeReturnRequest extends FormRequest
 
     public function rules(): array
     {
+        $rma = $this->route('returnRequest');
+        $allowedDispositions = $rma instanceof ReturnRequest
+            ? array_map(
+                static fn (DispositionType $disposition): string => $disposition->value,
+                DispositionType::allowedFor($rma->type, (bool) $rma->finance_only),
+            )
+            : array_map(static fn (DispositionType $disposition): string => $disposition->value, DispositionType::cases());
+
         return [
             'dispositions'               => ['required', 'array', 'min:1'],
             'dispositions.*.item_id'     => ['required', 'string'],
-            'dispositions.*.disposition' => ['required', Rule::enum(DispositionType::class)],
+            'dispositions.*.disposition' => ['required', Rule::in($allowedDispositions)],
             'dispositions.*.notes'       => ['nullable', 'string', 'max:500'],
             'create_replacement_po'      => ['sometimes', 'boolean'],
             'location_id'                => ['sometimes', 'integer', 'exists:warehouse_locations,id'],

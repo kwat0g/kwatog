@@ -4,13 +4,27 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Requests;
 
+use App\Modules\HR\Enums\ApplicationStage;
+use App\Modules\HR\Models\JobApplication;
 use Illuminate\Foundation\Http\FormRequest;
 
 class AdvanceApplicationRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()->can('hr.recruitment.applications');
+        $user = $this->user();
+        if (! $user) {
+            return false;
+        }
+
+        $application = $this->route('jobApplication');
+        if ($this->input('action') === 'advance'
+            && $application instanceof JobApplication
+            && $application->stage === ApplicationStage::Offer) {
+            return $user->hasPermission('hr.recruitment.hire');
+        }
+
+        return $user->hasPermission('hr.recruitment.applications');
     }
 
     public function rules(): array

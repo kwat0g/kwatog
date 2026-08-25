@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Inventory;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\MrbStatus;
@@ -14,6 +15,9 @@ use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Models\WarehouseZone;
+use App\Modules\CRM\Models\Product;
+use App\Modules\Quality\Models\Inspection;
+use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\Inventory\Services\MaterialIssueService;
 use App\Modules\Inventory\Services\PickingListService;
 use App\Modules\Inventory\Services\QuarantineService;
@@ -257,6 +261,142 @@ class QuarantineMrbTest extends TestCase
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('is not held');
         $this->svc->release($mrb->fresh(), 'scrap', $by, null, null);
+    }
+
+    public function test_hold_rejects_inactive_quarantine_locations(): void
+    {
+        $this->stock($this->sourceLoc->id, '100');
+        $by = $this->userWith('warehouse_staff');
+
+        $this->quarantineLoc->update(['is_active' => false]);
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('must be active');
+        $this->svc->hold([
+            'item_id' => $this->item->id,
+            'quantity' => '10',
+            'source_location_id' => $this->sourceLoc->id,
+            'quarantine_location_id' => $this->quarantineLoc->id,
+        ], $by);
+    }
+
+    public function test_hold_rejects_quarantine_location_from_another_warehouse(): void
+    {
+        $this->stock($this->sourceLoc->id, '100');
+        $by = $this->userWith('warehouse_staff');
+        $otherWarehouse = Warehouse::factory()->create();
+        $otherZone = WarehouseZone::factory()->create([
+            'warehouse_id' => $otherWarehouse->id,
+            'zone_type' => 'quarantine',
+        ]);
+        $otherQuarantine = WarehouseLocation::factory()->create(['zone_id' => $otherZone->id, 'is_active' => true]);
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('same warehouse');
+        $this->svc->hold([
+            'item_id' => $this->item->id,
+            'quantity' => '10',
+            'source_location_id' => $this->sourceLoc->id,
+            'quarantine_location_id' => $otherQuarantine->id,
+        ], $by);
+    }
+
+    public function test_release_rejects_good_location_from_another_warehouse(): void
+    {
+        $this->stock($this->sourceLoc->id, '100');
+        $by = $this->userWith('warehouse_staff');
+        $mrb = $this->svc->hold([
+            'item_id' => $this->item->id,
+            'quantity' => '10',
+            'source_location_id' => $this->sourceLoc->id,
+            'quarantine_location_id' => $this->quarantineLoc->id,
+        ], $by);
+
+        $otherWarehouse = Warehouse::factory()->create();
+        $otherZone = WarehouseZone::factory()->create([
+            'warehouse_id' => $otherWarehouse->id,
+            'zone_type' => 'finished_goods',
+        ]);
+        $otherTarget = WarehouseLocation::factory()->create(['zone_id' => $otherZone->id, 'is_active' => true]);
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('same warehouse');
+        $this->svc->release($mrb, 'rework', $by, $otherTarget->id);
+    }
+
+    public function test_replaying_an_mrb_hold_idempotency_key_returns_original_without_moving_again(): void
+    {
+        $this->stock($this->sourceLoc->id, '100');
+        $by = $this->userWith('warehouse_staff');
+        $data = [
+            'item_id' => $this->item->id,
+            'quantity' => '30',
+            'source_location_id' => $this->sourceLoc->id,
+            'quarantine_location_id' => $this->quarantineLoc->id,
+        ];
+
+        $first = $this->svc->hold($data, $by, 'mrb-retry-001');
+        $replay = $this->svc->hold($data, $by, 'mrb-retry-001');
+
+        $this->assertSame($first->id, $replay->id);
+        $this->assertSame(1, MaterialReviewRecord::query()->count());
+        $this->assertSame('70.000', (string) StockLevel::query()
+            ->where('item_id', $this->item->id)
+            ->where('location_id', $this->sourceLoc->id)
+            ->value('quantity'));
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('different MRB hold');
+        $this->svc->hold([...$data, 'quantity' => '20'], $by, 'mrb-retry-001');
+    }
+
+    public function test_quality_links_must_be_failed_and_match_item_and_quantity(): void
+    {
+        $this->stock($this->sourceLoc->id, '100');
+        $by = $this->userWith('warehouse_staff');
+        $product = Product::factory()->create();
+        $inspection = Inspection::create([
+            'inspection_number' => 'QC-MRB-'.uniqid(),
+            'stage' => 'incoming',
+            'status' => 'failed',
+            'product_id' => $product->id,
+            'item_id' => $this->item->id,
+            'batch_quantity' => 20,
+            'sample_size' => 20,
+            'aql_code' => null,
+            'accept_count' => 0,
+            'reject_count' => 1,
+            'defect_count' => 1,
+            'inspector_id' => $by->id,
+            'completed_at' => now(),
+        ]);
+        $ncr = NonConformanceReport::factory()->create([
+            'product_id' => $product->id,
+            'inspection_id' => $inspection->id,
+            'affected_quantity' => 20,
+            'created_by' => $by->id,
+        ]);
+
+        $mrb = $this->svc->hold([
+            'item_id' => $this->item->id,
+            'quantity' => '10',
+            'source_location_id' => $this->sourceLoc->id,
+            'quarantine_location_id' => $this->quarantineLoc->id,
+            'inspection_id' => $inspection->id,
+            'ncr_id' => $ncr->id,
+        ], $by);
+
+        $this->assertSame($inspection->id, $mrb->inspection_id);
+        $this->assertSame($ncr->id, $mrb->ncr_id);
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('smaller than the MRB quantity');
+        $this->svc->hold([
+            'item_id' => $this->item->id,
+            'quantity' => '21',
+            'source_location_id' => $this->sourceLoc->id,
+            'quarantine_location_id' => $this->quarantineLoc->id,
+            'inspection_id' => $inspection->id,
+        ], $by);
     }
 
     // ── 7. permission gate ──────────────────────────────────────────────────────

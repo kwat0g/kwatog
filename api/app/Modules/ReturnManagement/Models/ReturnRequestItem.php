@@ -23,6 +23,7 @@ class ReturnRequestItem extends Model
         'item_id',
         'quantity',
         'returned_quantity',
+        'receipt_recorded',
         'unit_price',
         'original_unit_price',
         'total',
@@ -53,6 +54,7 @@ class ReturnRequestItem extends Model
         'original_unit_price'    => 'decimal:2',
         'total'                  => 'decimal:2',
         'stock_movement_quantity' => 'decimal:3',
+        'receipt_recorded'       => 'boolean',
     ];
 
     public function returnRequest(): BelongsTo
@@ -98,5 +100,10 @@ class ReturnRequestItem extends Model
     public function quarantineReleaseMovement(): BelongsTo
     {
         return $this->belongsTo(\App\Modules\Inventory\Models\StockMovement::class, 'quarantine_release_movement_id');
+    }
+
+    public function sourceAllocations(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(ReturnRequestSourceAllocation::class);
     }
 }

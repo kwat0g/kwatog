@@ -7,6 +7,7 @@ namespace Tests\Feature\Leave;
 use App\Common\Services\ApprovalService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Leave\Enums\LeaveRequestStatus;
 use App\Modules\Leave\Models\LeaveRequest;
@@ -35,14 +36,17 @@ class LeaveRequestBulkApproveTest extends TestCase
         ]);
 
         $deptHeadRole = Role::query()->where('slug', 'department_head')->firstOrFail();
+        $department = Department::query()->firstOrFail();
+        $approverEmployee = Employee::factory()->create(['department_id' => $department->id]);
         $approver = User::factory()->create([
             'role_id'   => $deptHeadRole->id,
+            'employee_id' => $approverEmployee->id,
             'is_active' => true,
         ]);
 
         $svc = app(LeaveRequestService::class);
 
-        $emp  = Employee::factory()->create();
+        $emp  = Employee::factory()->create(['department_id' => $department->id]);
         $type = LeaveType::query()->first();
         $date = now()->addWeek()->toDateString();
 
@@ -96,7 +100,8 @@ class LeaveRequestBulkApproveTest extends TestCase
         ]);
 
         $svc  = app(LeaveRequestService::class);
-        $emp  = Employee::factory()->create();
+        $department = Department::query()->firstOrFail();
+        $emp  = Employee::factory()->create(['department_id' => $department->id]);
         $type = LeaveType::query()->first();
         $date = now()->addWeek()->toDateString();
 
@@ -144,7 +149,8 @@ class LeaveRequestBulkApproveTest extends TestCase
             WorkflowSeeder::class,
         ]);
 
-        $emp  = Employee::factory()->create();
+        $department = Department::query()->firstOrFail();
+        $emp  = Employee::factory()->create(['department_id' => $department->id]);
         $type = LeaveType::query()->first();
         $date = now()->addWeek()->toDateString();
 
@@ -155,8 +161,10 @@ class LeaveRequestBulkApproveTest extends TestCase
             'leave_type_id' => $type->id,
         ]);
 
+        $approverEmployee = Employee::factory()->create(['department_id' => $department->id]);
         $approver = User::factory()->create([
             'role_id'   => Role::query()->where('slug', 'department_head')->value('id'),
+            'employee_id' => $approverEmployee->id,
             'is_active' => true,
         ]);
 

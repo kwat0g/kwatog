@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace App\Modules\Quality\Controllers;
 
 use App\Modules\Quality\Models\CalibrationRecord;
+use App\Modules\Quality\Enums\CalibrationStatus;
+use App\Modules\Quality\Requests\RecordCalibrationRequest;
 use App\Modules\Quality\Requests\StoreCalibrationRecordRequest;
 use App\Modules\Quality\Resources\CalibrationRecordResource;
 use App\Modules\Quality\Services\CalibrationService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Validation\Rule;
 
 class CalibrationController
 {
@@ -17,13 +20,17 @@ class CalibrationController
 
     public function index(Request $request): AnonymousResourceCollection
     {
+        $validated = $request->validate([
+            'status' => ['nullable', Rule::enum(CalibrationStatus::class)],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
         $query = CalibrationRecord::query()->orderBy('next_calibration_date');
 
-        if ($status = $request->query('status')) {
+        if ($status = $validated['status'] ?? null) {
             $query->where('status', $status);
         }
 
-        return CalibrationRecordResource::collection($query->paginate((int) $request->query('per_page', 25)));
+        return CalibrationRecordResource::collection($query->paginate((int) ($validated['per_page'] ?? 25)));
     }
 
     public function store(StoreCalibrationRecordRequest $request): CalibrationRecordResource
@@ -41,10 +48,8 @@ class CalibrationController
         return new CalibrationRecordResource($this->service->update($calibrationRecord, $request->validated()));
     }
 
-    public function recordCalibration(Request $request, CalibrationRecord $calibrationRecord): CalibrationRecordResource
+    public function recordCalibration(RecordCalibrationRequest $request, CalibrationRecord $calibrationRecord): CalibrationRecordResource
     {
-        $date = $request->validate(['date' => ['required', 'date']])['date'];
-
-        return new CalibrationRecordResource($this->service->recordCalibration($calibrationRecord, $date));
+        return new CalibrationRecordResource($this->service->recordCalibration($calibrationRecord, $request->validated('date')));
     }
 }

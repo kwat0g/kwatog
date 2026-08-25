@@ -135,6 +135,11 @@ class PlantManagerDashboardService
     {
         if (! Schema::hasTable('invoices')) return '0.00';
         $sum = (float) DB::table('invoices')
+            ->whereIn('status', [
+                InvoiceStatus::Finalized->value,
+                InvoiceStatus::Partial->value,
+                InvoiceStatus::Paid->value,
+            ])
             ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
             ->sum('total_amount');
         return number_format($sum, 2, '.', '');

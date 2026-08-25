@@ -50,6 +50,8 @@ class RecordOutputRequest extends FormRequest
                 if (! is_array($defects) || empty($defects)) {
                     $v->errors()->add('defects', 'You must specify the defect types when the Reject count is greater than zero.');
                 }
+            } elseif (is_array($this->input('defects')) && ! empty($this->input('defects'))) {
+                $v->errors()->add('defects', 'Defect rows require a positive Reject count.');
             }
         });
     }

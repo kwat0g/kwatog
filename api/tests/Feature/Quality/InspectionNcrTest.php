@@ -588,15 +588,9 @@ class InspectionNcrTest extends TestCase
      * replacement_work_order_id.
      *
      * WorkOrderService depends on Production module fixtures (machine, mold,
-     * BOM) that are expensive to set up here. We verify the linkage by
-     * checking that replacement_work_order_id is populated, OR we note that
-     * WorkOrderService::createDraft() fails gracefully (it's guarded by the
-     * lazy workOrderService() resolver).
-     *
-     * Actual behavior (locked): if WorkOrderService resolves and createDraft()
-     * succeeds, replacement_work_order_id is non-null. If the ProductionModule
-     * is absent (null resolver), replacement_work_order_id stays null and the
-     * NCR is still closed correctly.
+     * BOM) that are expensive to set up here. When that required dependency is
+     * unavailable, close() must fail visibly and roll the NCR status back to
+     * non-terminal rather than silently losing the production trace.
      */
     public function test_scrap_disposition_on_outgoing_ncr_auto_creates_replacement_wo(): void
     {
@@ -621,8 +615,17 @@ class InspectionNcrTest extends TestCase
             'performed_at' => now(),
         ]);
 
+        // A missing/invalid Production dependency is a visible close failure;
+        // the transaction must leave the NCR non-terminal.
         $ncr->refresh();
-        $closed = $this->ncrSvc->close($ncr, $this->user);
+        try {
+            $closed = $this->ncrSvc->close($ncr, $this->user);
+        } catch (\App\Common\Exceptions\BusinessRuleException $exception) {
+            $this->assertStringContainsString('work order', strtolower($exception->getMessage()));
+            $this->assertNotSame(NcrStatus::Closed, $ncr->fresh()->status);
+            $this->assertNull($ncr->fresh()->replacement_work_order_id);
+            return;
+        }
 
         // NCR must always close cleanly.
         $this->assertSame(
@@ -631,41 +634,23 @@ class InspectionNcrTest extends TestCase
             'Scrap disposition must still close the NCR cleanly',
         );
 
-        // Resolve the Production module WO service to know if WO auto-creation
-        // is expected in this test environment.
-        $wos = null;
-        try {
-            $wos = app(\App\Modules\Production\Services\WorkOrderService::class);
-        } catch (\Throwable) {}
+        $this->assertNotNull(
+            $closed->replacement_work_order_id,
+            'A successful scrap close must have a replacement WorkOrder link',
+        );
 
-        if ($wos !== null) {
-            // WorkOrderService available → replacement WO must be created.
-            $this->assertNotNull(
-                $closed->replacement_work_order_id,
-                'Scrap on outgoing NCR must auto-create a replacement WO when Production module is available',
-            );
-
-            // Verify WO links back to NCR via parent_ncr_id.
-            $wo = \App\Modules\Production\Models\WorkOrder::find($closed->replacement_work_order_id);
-            $this->assertNotNull($wo, 'Replacement WorkOrder row must exist in DB');
-            $this->assertSame(
-                $ncr->id,
-                $wo->parent_ncr_id,
-                'Replacement WO.parent_ncr_id must point back to the NCR',
-            );
-            $this->assertSame(
-                (int) $insp->batch_quantity,
-                (int) $wo->quantity_target,
-                'Replacement WO quantity_target must equal NCR.affected_quantity (= batch_quantity)',
-            );
-        } else {
-            // WorkOrderService not resolvable → replacement_work_order_id stays null.
-            // This is the expected graceful fallback.
-            $this->assertNull(
-                $closed->replacement_work_order_id,
-                'When Production module WO service is absent, replacement_work_order_id must stay null',
-            );
-        }
+        $wo = \App\Modules\Production\Models\WorkOrder::find($closed->replacement_work_order_id);
+        $this->assertNotNull($wo, 'Replacement WorkOrder row must exist in DB');
+        $this->assertSame(
+            $ncr->id,
+            $wo->parent_ncr_id,
+            'Replacement WO.parent_ncr_id must point back to the NCR',
+        );
+        $this->assertSame(
+            (int) $insp->batch_quantity,
+            (int) $wo->quantity_target,
+            'Replacement WO quantity_target must equal NCR.affected_quantity (= batch_quantity)',
+        );
     }
 
     // ──────────────────────────────────────────────────────────────────────────

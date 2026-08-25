@@ -25,6 +25,7 @@ const schema = z.object({
  item_id: z.string().min(1, 'Item is required.'),
  location_id: z.string().min(1, 'Location is required.'),
  direction: z.string().min(1, 'Direction is required.'),
+ reason_code: z.string().min(1, 'Reason code is required.'),
  quantity: z.string().regex(/^\d+(\.\d{1,3})?$/, 'Up to 3 decimals.').refine(v => Number(v) > 0, 'Must be greater than zero.'),
  unit_cost: z.string().regex(/^(\d+(\.\d{1,4})?)?$/, 'Up to 4 decimals.').optional().or(z.literal('')),
  reason: z.string().trim().min(10, 'Reason must be at least 10 characters (audit trail).').max(500),
@@ -40,9 +41,10 @@ export default function CreateStockAdjustmentPage() {
  queryKey: ['inventory', 'items', { per_page: 200, is_active: 'true' }],
  queryFn: () => itemsApi.list({ per_page: 200, is_active: 'true' }),
  });
- const itemOptions = useQuery({
- queryKey: ['inventory', 'items', 'options'],
- queryFn: () => itemsApi.options(),
+ const adjustmentOptions = useQuery({
+ queryKey: ['inventory', 'stock-adjustments', 'options'],
+ queryFn: stockAdjustmentsApi.options,
+ staleTime: 300_000,
  });
  const warehouses = useQuery({
  queryKey: ['inventory', 'warehouse', 'tree'],
@@ -51,7 +53,7 @@ export default function CreateStockAdjustmentPage() {
 
   const form = useForm<V>({
  resolver: zodResolver(schema),
- defaultValues: { direction: '', quantity: '', unit_cost: '' },
+ defaultValues: { direction: '', reason_code: '', quantity: '', unit_cost: '' },
  });
  const { register, handleSubmit, setError, watch, formState: { errors, isSubmitting } } = form;
  const direction = watch('direction');
@@ -61,8 +63,9 @@ export default function CreateStockAdjustmentPage() {
  item_id: d.item_id,
  location_id: d.location_id,
  direction: d.direction as Parameters<typeof stockAdjustmentsApi.create>[0]['direction'],
- quantity: d.quantity,
- reason: d.reason.trim(),
+  quantity: d.quantity,
+  reason_code: d.reason_code,
+  reason: d.reason.trim(),
  unit_cost: d.unit_cost || undefined,
  }),
  onSuccess: () => {
@@ -108,7 +111,7 @@ export default function CreateStockAdjustmentPage() {
  </Select>
  <Select label="Direction" required {...register('direction')}>
  <option value="">— Select —</option>
- {(itemOptions.data?.adjustment_directions ?? []).map((direction) => <option key={direction.value} value={direction.value}>{direction.label}</option>)}
+ {(adjustmentOptions.data?.directions ?? []).map((direction) => <option key={direction.value} value={direction.value}>{direction.label}</option>)}
  </Select>
  <Input
  label="Quantity"
@@ -118,6 +121,9 @@ export default function CreateStockAdjustmentPage() {
  className="font-mono tabular-nums text-right"
  error={errors.quantity?.message}
  />
+ <Select label="Reason code" required {...register('reason_code')} error={errors.reason_code?.message}>
+ {(adjustmentOptions.data?.reasons ?? []).map((reason) => <option key={reason.value} value={reason.value}>{reason.label}</option>)}
+ </Select>
  {direction === 'in' && (
  <Input
  label="Unit cost"

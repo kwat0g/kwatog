@@ -58,7 +58,11 @@ class VendorController
 
     public function restore(Vendor $vendor): JsonResponse
     {
-        $vendor->restore();
+        try {
+            $this->service->restore($vendor);
+        } catch (BusinessRuleException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
         return response()->json(['message' => 'Vendor restored.']);
     }
 }

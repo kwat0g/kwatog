@@ -74,9 +74,9 @@ export default function AssetsListPage() {
  title="Assets"
  subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'asset' : 'assets'}` : undefined}
  actions={
- can('assets.depreciation.view') || can('assets.create') ? (
+ can('assets.depreciation.run') || can('assets.create') ? (
  <div className="flex items-center gap-2">
- {can('assets.depreciation.view') && (
+ {can('assets.depreciation.run') && (
  <Button variant="secondary" size="sm" icon={<LuCalendarClock size={14} />} onClick={() => setShowDepreciation(true)}>
  Run depreciation
  </Button>

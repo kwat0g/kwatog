@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\B2B;
 
+use App\Common\Models\AuditLog;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\B2B\Mail\PortalPasswordResetMail;
@@ -41,6 +42,11 @@ class PortalPasswordResetTest extends TestCase
             return $queued->portalType === 'customer';
         });
         self::assertNotNull($mail);
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'portal.password.reset_requested',
+            'model_type' => CustomerPortalUser::class,
+            'model_id' => $user->id,
+        ]);
 
         $this->postJson('/api/v1/b2b/customer/reset-password', [
             'token' => $mail->token,
@@ -52,6 +58,11 @@ class PortalPasswordResetTest extends TestCase
         $this->assertDatabaseHas('portal_password_reset_tokens', [
             'portal_type' => 'customer',
             'email' => $user->email,
+        ]);
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'portal.password.reset',
+            'model_type' => CustomerPortalUser::class,
+            'model_id' => $user->id,
         ]);
     }
 

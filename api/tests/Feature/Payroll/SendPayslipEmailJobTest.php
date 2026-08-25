@@ -10,8 +10,8 @@ use App\Modules\Payroll\Mail\PayslipMail;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Payroll\Services\PayslipPdfService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class SendPayslipEmailJobTest extends TestCase
@@ -27,6 +27,7 @@ class SendPayslipEmailJobTest extends TestCase
         $pdf->shouldReceive('filename')->once()->andReturn('payslip.pdf');
 
         $period = PayrollPeriod::factory()->create();
+        $period->forceFill(['status' => 'finalized'])->saveQuietly();
         $employee = Employee::factory()->create(['email' => 'a@example.test']);
         $payroll = Payroll::factory()->create([
             'payroll_period_id' => $period->id,
@@ -48,6 +49,7 @@ class SendPayslipEmailJobTest extends TestCase
     public function test_terminal_job_failure_leaves_a_retryable_failed_state(): void
     {
         $period = PayrollPeriod::factory()->create();
+        $period->forceFill(['status' => 'finalized'])->saveQuietly();
         $employee = Employee::factory()->create(['email' => 'a@example.test']);
         $payroll = Payroll::factory()->create([
             'payroll_period_id' => $period->id,
@@ -63,5 +65,32 @@ class SendPayslipEmailJobTest extends TestCase
         $this->assertSame(Payroll::EMAIL_FAILED, $failed->payslip_email_status);
         $this->assertNull($failed->payslip_email_queued_at);
         $this->assertSame('SMTP unavailable', $failed->payslip_email_last_error);
+    }
+
+    public function test_job_cancels_a_queued_payslip_when_the_period_is_voided(): void
+    {
+        Mail::fake();
+        $pdf = \Mockery::mock(PayslipPdfService::class);
+        $pdf->shouldNotReceive('generate');
+
+        $period = PayrollPeriod::factory()->create();
+        $period->forceFill(['status' => 'voided'])->saveQuietly();
+        $employee = Employee::factory()->create(['email' => 'a@example.test']);
+        $payroll = Payroll::factory()->create([
+            'payroll_period_id' => $period->id,
+            'employee_id' => $employee->id,
+            'payslip_email_status' => Payroll::EMAIL_QUEUED,
+            'payslip_email_queued_at' => now(),
+        ]);
+
+        (new SendPayslipEmailJob($payroll->id))->handle($pdf);
+
+        Mail::assertNothingSent();
+        $cancelled = $payroll->fresh();
+        $this->assertSame(Payroll::EMAIL_FAILED, $cancelled->payslip_email_status);
+        $this->assertSame(
+            'Payroll period is no longer publishable; delivery cancelled.',
+            $cancelled->payslip_email_last_error,
+        );
     }
 }

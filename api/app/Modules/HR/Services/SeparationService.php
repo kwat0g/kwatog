@@ -18,6 +18,7 @@ use App\Modules\HR\Events\SeparationInitiated;
 use App\Modules\HR\Models\Clearance;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\EmploymentHistory;
+use App\Modules\HR\Support\EmployeeStateMachine;
 use App\Modules\Loans\Models\EmployeeLoan;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -39,6 +40,7 @@ class SeparationService
     public function __construct(
         private readonly DocumentSequenceService $sequences,
         private readonly SettingsService $settings,
+        private readonly EmployeeStateMachine $stateMachine,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -119,19 +121,23 @@ class SeparationService
                 'initiated_by'      => $by->id,
             ]);
 
-            $lockedEmployee->forceFill(['status' => EmployeeStatus::OnLeave->value])->save();
+            $fromStatus = $lockedEmployee->status instanceof EmployeeStatus
+                ? $lockedEmployee->status->value
+                : (string) $lockedEmployee->getRawOriginal('status');
+            $this->stateMachine->transition($lockedEmployee, EmployeeStatus::OnLeave);
 
             EmploymentHistory::create([
                 'employee_id'    => $lockedEmployee->id,
                 'change_type'    => EmploymentChangeType::Separated->value,
-                'from_value'     => null,
+                'from_value'     => ['status' => $fromStatus],
                 'to_value'       => json_encode([
                     'separation_date'   => (string) $data['separation_date'],
                     'separation_reason' => $reason->value,
                     'status'            => 'in_progress',
                 ]),
                 'effective_date' => $data['separation_date'],
-                'remarks'        => 'Separation initiated. Clearance '.$clearance->clearance_no.'.',
+                'remarks'        => ($data['remarks'] ?? null)
+                    ?: 'Separation initiated. Clearance '.$clearance->clearance_no.'.',
                 'approved_by'    => $by->id,
             ]);
 
@@ -319,11 +325,16 @@ class SeparationService
             $journalEntry = $finalPay->postJournalEntry($lockedClearance, $by);
             $lockedClearance->journal_entry_id = $journalEntry->id;
 
-            // Flip employee status
+            // Flip employee status through the same transition map used by
+            // initiation so terminal states cannot be reopened by replay.
             $reason = $lockedClearance->separation_reason instanceof SeparationReason
                 ? $lockedClearance->separation_reason
                 : SeparationReason::from((string) $lockedClearance->separation_reason);
-            $employee->forceFill(['status' => $reason->toEmployeeStatus()])->save();
+            $fromStatus = $employee->status instanceof EmployeeStatus
+                ? $employee->status->value
+                : (string) $employee->getRawOriginal('status');
+            $targetStatus = EmployeeStatus::from($reason->toEmployeeStatus());
+            $this->stateMachine->transition($employee, $targetStatus);
 
             $lockedClearance->status       = ClearanceStatus::Finalized->value;
             $lockedClearance->finalized_at = now();
@@ -333,7 +344,7 @@ class SeparationService
             EmploymentHistory::create([
                 'employee_id'    => $employee->id,
                 'change_type'    => EmploymentChangeType::Separated->value,
-                'from_value'     => null,
+                'from_value'     => ['status' => $fromStatus],
                 'to_value'       => json_encode([
                     'separation_date'   => optional($lockedClearance->separation_date)?->toDateString(),
                     'separation_reason' => $reason->value,

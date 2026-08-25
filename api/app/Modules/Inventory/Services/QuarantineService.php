@@ -7,6 +7,7 @@ namespace App\Modules\Inventory\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Support\HashIdFilter;
+use App\Common\Support\SearchOperator;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\MrbStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
@@ -16,10 +17,14 @@ use App\Modules\Inventory\Models\MaterialReviewRecord;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Support\StockMovementInput;
+use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Enums\NcrDisposition;
+use App\Modules\Quality\Enums\NcrStatus;
+use App\Modules\Quality\Models\Inspection;
+use App\Modules\Quality\Models\NonConformanceReport;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
+use Illuminate\Support\Str;
 
 /**
  * REC-08 — Material Review Board (MRB) hold/release workflow.
@@ -42,14 +47,17 @@ class QuarantineService
         private readonly StockMovementService $movements,
     ) {}
 
-    /** @param array{status?:string, item_id?:int|string, per_page?:int} $filters */
+    /** @param array{status?:string, item_id?:int|string, search?:string, per_page?:int} $filters */
     public function list(array $filters): LengthAwarePaginator
     {
         $q = MaterialReviewRecord::query()
             ->with([
                 'item:id,code,name,unit_of_measure',
-                'sourceLocation.zone', 'quarantineLocation.zone', 'releaseLocation.zone',
-                'ncr:id,ncr_number', 'holder:id,name', 'releaser:id,name',
+                'sourceLocation.zone.warehouse', 'quarantineLocation.zone.warehouse', 'releaseLocation.zone.warehouse',
+                'ncr:id,ncr_number,status,affected_quantity,inspection_id',
+                'ncr.inspection:id,inspection_number,stage,status,item_id,batch_quantity',
+                'inspection:id,inspection_number,stage,status,item_id,batch_quantity',
+                'holder:id,name', 'releaser:id,name',
             ]);
 
         if (! empty($filters['status'])) {
@@ -60,6 +68,22 @@ class QuarantineService
             // string would hit a bigint column (Postgres 22P02 → 500).
             $q->where('item_id', HashIdFilter::decode($filters['item_id'], Item::class) ?? 0);
         }
+        if (($search = trim((string) ($filters['search'] ?? ''))) !== '') {
+            $like = '%'.$search.'%';
+            $q->where(function ($query) use ($like) {
+                $query->where('mrb_number', SearchOperator::like(), $like)
+                    ->orWhereHas('item', fn ($item) => $item
+                        ->where('code', SearchOperator::like(), $like)
+                        ->orWhere('name', SearchOperator::like(), $like))
+                    ->orWhereHas('ncr', fn ($ncr) => $ncr->where('ncr_number', SearchOperator::like(), $like))
+                    ->orWhereHas('sourceLocation', fn ($location) => $location
+                        ->where('code', SearchOperator::like(), $like)
+                        ->orWhereHas('zone', fn ($zone) => $zone->where('code', SearchOperator::like(), $like)))
+                    ->orWhereHas('quarantineLocation', fn ($location) => $location
+                        ->where('code', SearchOperator::like(), $like)
+                        ->orWhereHas('zone', fn ($zone) => $zone->where('code', SearchOperator::like(), $like)));
+            });
+        }
 
         return $q->orderByDesc('held_at')->orderByDesc('id')
             ->paginate(min((int) ($filters['per_page'] ?? 25), 100));
@@ -69,11 +93,74 @@ class QuarantineService
     {
         return $mrb->load([
             'item:id,code,name,unit_of_measure',
-            'sourceLocation.zone', 'quarantineLocation.zone', 'releaseLocation.zone',
-            'ncr:id,ncr_number', 'inspection:id',
+            'sourceLocation.zone.warehouse', 'quarantineLocation.zone.warehouse', 'releaseLocation.zone.warehouse',
+            'ncr:id,ncr_number,status,affected_quantity,inspection_id',
+            'ncr.inspection:id,inspection_number,stage,status,item_id,batch_quantity',
+            'inspection:id,inspection_number,stage,status,item_id,batch_quantity',
             'holder:id,name', 'releaser:id,name',
             'holdMovement', 'releaseMovement',
         ]);
+    }
+
+    /**
+     * Return only quality records that can be linked to the selected inventory
+     * item. This keeps the hold form from presenting unrelated first-page rows.
+     *
+     * @return array{inspections:list<array<string,mixed>>,ncrs:list<array<string,mixed>>}
+     */
+    public function qualityOptions(string|int $itemHashId, ?string $search = null, int $perPage = 50): array
+    {
+        $itemId = HashIdFilter::decode($itemHashId, Item::class);
+        if (! $itemId) {
+            throw new BusinessRuleException('Select a valid inventory item before choosing quality records.');
+        }
+
+        $item = Item::query()->findOrFail($itemId);
+        $like = trim((string) $search);
+        $pattern = $like === '' ? null : '%'.$like.'%';
+        $limit = min(max($perPage, 1), 100);
+
+        $inspections = Inspection::query()
+            ->where('item_id', $item->id)
+            ->where('status', InspectionStatus::Failed->value)
+            ->when($pattern, fn ($query) => $query->where('inspection_number', SearchOperator::like(), $pattern))
+            ->orderByDesc('completed_at')->orderByDesc('id')
+            ->limit($limit)->get();
+
+        $ncrs = NonConformanceReport::query()
+            ->with('inspection:id,inspection_number,stage,status,item_id,batch_quantity')
+            ->whereIn('status', [NcrStatus::Open->value, NcrStatus::InProgress->value])
+            ->where('affected_quantity', '>', 0)
+            ->whereHas('inspection', fn ($inspection) => $inspection
+                ->where('item_id', $item->id)
+                ->where('status', InspectionStatus::Failed->value))
+            ->when($pattern, fn ($query) => $query->where('ncr_number', SearchOperator::like(), $pattern))
+            ->orderByDesc('id')->limit($limit)->get();
+
+        return [
+            'inspections' => $inspections->map(fn (Inspection $inspection): array => [
+                'id' => $inspection->hash_id,
+                'inspection_number' => $inspection->inspection_number,
+                'stage' => $inspection->stage?->value ?? (string) $inspection->stage,
+                'stage_label' => $inspection->stage?->label(),
+                'status' => $inspection->status?->value ?? (string) $inspection->status,
+                'status_label' => $inspection->status?->label(),
+                'batch_quantity' => (int) $inspection->batch_quantity,
+            ])->values()->all(),
+            'ncrs' => $ncrs->map(fn (NonConformanceReport $ncr): array => [
+                'id' => $ncr->hash_id,
+                'ncr_number' => $ncr->ncr_number,
+                'status' => $ncr->status?->value ?? (string) $ncr->status,
+                'status_label' => Str::headline((string) ($ncr->status?->value ?? $ncr->status)),
+                'affected_quantity' => (int) $ncr->affected_quantity,
+                'inspection' => $ncr->inspection ? [
+                    'id' => $ncr->inspection->hash_id,
+                    'inspection_number' => $ncr->inspection->inspection_number,
+                    'stage' => $ncr->inspection->stage?->value ?? (string) $ncr->inspection->stage,
+                    'status' => $ncr->inspection->status?->value ?? (string) $ncr->inspection->status,
+                ] : null,
+            ])->values()->all(),
+        ];
     }
 
     /**
@@ -86,22 +173,61 @@ class QuarantineService
      *   inspection_id?:int|null, notes?:string|null
      * } $data
      */
-    public function hold(array $data, User $by): MaterialReviewRecord
+    public function hold(array $data, User $by, ?string $idempotencyKey = null): MaterialReviewRecord
     {
-        return DB::transaction(function () use ($data, $by) {
+        $idempotencyKey = $idempotencyKey !== null ? trim($idempotencyKey) : null;
+        if ($idempotencyKey !== null && $idempotencyKey === '') {
+            $idempotencyKey = null;
+        }
+        if ($idempotencyKey !== null && mb_strlen($idempotencyKey) > 128) {
+            throw new BusinessRuleException('Idempotency-Key must be 128 characters or fewer.');
+        }
+
+        return DB::transaction(function () use ($data, $by, $idempotencyKey) {
             $itemId   = (int) $data['item_id'];
-            $qty      = (string) $data['quantity'];
+            $qty      = bcadd((string) $data['quantity'], '0', 3);
             $sourceId = (int) $data['source_location_id'];
 
-            $source = WarehouseLocation::query()->with('zone')->findOrFail($sourceId);
+            $source = WarehouseLocation::query()
+                ->with('zone.warehouse')
+                ->lockForUpdate()
+                ->findOrFail($sourceId);
+            $warehouseId = $this->assertLocation($source, 'Source location', rejectSpecialZones: true);
 
-            $quarantineId = ! empty($data['quarantine_location_id'])
-                ? (int) $data['quarantine_location_id']
-                : $this->resolveZoneLocation($source, WarehouseZoneType::Quarantine)->id;
+            $quarantine = ! empty($data['quarantine_location_id'])
+                ? WarehouseLocation::query()->with('zone.warehouse')->findOrFail((int) $data['quarantine_location_id'])
+                : $this->resolveZoneLocation($source, WarehouseZoneType::Quarantine);
+            $this->assertLocation($quarantine, 'Quarantine location', WarehouseZoneType::Quarantine, $warehouseId);
+            $quarantineId = (int) $quarantine->id;
 
             if ($quarantineId === $sourceId) {
                 throw new BusinessRuleException('Source and quarantine locations must differ.');
             }
+
+            $fingerprint = $idempotencyKey !== null
+                ? $this->idempotencyFingerprint($data, $by, $itemId, $qty, $sourceId, $quarantineId)
+                : null;
+            if ($idempotencyKey !== null) {
+                $existing = MaterialReviewRecord::query()
+                    ->where('held_by', $by->id)
+                    ->where('idempotency_key', $idempotencyKey)
+                    ->lockForUpdate()
+                    ->first();
+                if ($existing) {
+                    if ($existing->idempotency_fingerprint !== $fingerprint) {
+                        throw new BusinessRuleException('This Idempotency-Key was already used for a different MRB hold.');
+                    }
+
+                    return $existing;
+                }
+            }
+
+            $this->assertQualityLinks(
+                $itemId,
+                $qty,
+                isset($data['ncr_id']) ? (int) $data['ncr_id'] : null,
+                isset($data['inspection_id']) ? (int) $data['inspection_id'] : null,
+            );
 
             // Validate available stock at the source before moving.
             $level = StockLevel::query()
@@ -133,6 +259,8 @@ class QuarantineService
                 'held_by'                => $by->id,
                 'held_at'                => now(),
                 'notes'                  => $data['notes'] ?? null,
+                'idempotency_key'        => $idempotencyKey,
+                'idempotency_fingerprint'=> $fingerprint,
             ]);
             $mrb->status = MrbStatus::Held;
             $mrb->save();
@@ -189,7 +317,12 @@ class QuarantineService
 
             $qty       = (string) $locked->quantity;
             $fromId    = $locked->quarantine_location_id;
-            $quarantine = WarehouseLocation::query()->with('zone')->findOrFail($fromId);
+            $quarantine = WarehouseLocation::query()->with('zone.warehouse')->findOrFail($fromId);
+            $warehouseId = $this->assertLocation(
+                $quarantine,
+                'Quarantine location',
+                WarehouseZoneType::Quarantine,
+            );
 
             $releaseLocationId = null;
             $newStatus         = MrbStatus::Released;
@@ -200,11 +333,13 @@ class QuarantineService
                     if (! $targetLocationId) {
                         throw new BusinessRuleException('A target good location is required for rework/use-as-is release.');
                     }
-                    $target = WarehouseLocation::query()->with('zone')->findOrFail($targetLocationId);
-                    $type = $this->zoneType($target);
-                    if (in_array($type, [WarehouseZoneType::Quarantine, WarehouseZoneType::Scrap], true)) {
-                        throw new BusinessRuleException('Release target must be a good location, not a quarantine/scrap zone.');
-                    }
+                    $target = WarehouseLocation::query()->with('zone.warehouse')->findOrFail($targetLocationId);
+                    $this->assertLocation(
+                        $target,
+                        'Release target',
+                        sameWarehouseId: $warehouseId,
+                        rejectSpecialZones: true,
+                    );
                     $movement = $this->movements->move(new StockMovementInput(
                         type: StockMovementType::Transfer,
                         itemId: $locked->item_id,
@@ -271,6 +406,126 @@ class QuarantineService
     }
 
     /**
+     * Validate the lifecycle/ownership invariants that the stock movement
+     * ledger cannot infer from a location id alone.
+     */
+    private function assertLocation(
+        WarehouseLocation $location,
+        string $label,
+        ?WarehouseZoneType $requiredZone = null,
+        ?int $sameWarehouseId = null,
+        bool $rejectSpecialZones = false,
+    ): int {
+        if (! $location->is_active) {
+            throw new BusinessRuleException("{$label} must be active.");
+        }
+
+        $zone = $location->relationLoaded('zone') ? $location->zone : $location->zone()->first();
+        $warehouse = $zone
+            ? ($zone->relationLoaded('warehouse') ? $zone->warehouse : $zone->warehouse()->first())
+            : null;
+        if (! $zone || ! $warehouse) {
+            throw new BusinessRuleException("{$label} must belong to a configured warehouse zone.");
+        }
+        if (! $warehouse->is_active) {
+            throw new BusinessRuleException("{$label} belongs to an inactive warehouse.");
+        }
+
+        $type = $this->zoneType($location);
+        if ($type === null) {
+            throw new BusinessRuleException("{$label} must belong to a typed warehouse zone.");
+        }
+        if ($requiredZone !== null && $type !== $requiredZone) {
+            throw new BusinessRuleException("{$label} must be in a {$requiredZone->label()} zone.");
+        }
+        if ($rejectSpecialZones && in_array($type, [WarehouseZoneType::Quarantine, WarehouseZoneType::Scrap], true)) {
+            throw new BusinessRuleException('Stock can only be held from a good, non-quarantine/non-scrap source location.');
+        }
+        if ($sameWarehouseId !== null && (int) $warehouse->id !== $sameWarehouseId) {
+            throw new BusinessRuleException("{$label} must be in the same warehouse as the MRB quarantine location.");
+        }
+
+        return (int) $warehouse->id;
+    }
+
+    /** @param array<string,mixed> $data */
+    private function idempotencyFingerprint(
+        array $data,
+        User $by,
+        int $itemId,
+        string $quantity,
+        int $sourceLocationId,
+        int $quarantineLocationId,
+    ): string {
+        return hash('sha256', json_encode([
+            'actor_id' => (int) $by->id,
+            'item_id' => $itemId,
+            'quantity' => $quantity,
+            'source_location_id' => $sourceLocationId,
+            'quarantine_location_id' => $quarantineLocationId,
+            'ncr_id' => isset($data['ncr_id']) ? (int) $data['ncr_id'] : null,
+            'inspection_id' => isset($data['inspection_id']) ? (int) $data['inspection_id'] : null,
+            'notes' => trim((string) ($data['notes'] ?? '')),
+        ], JSON_THROW_ON_ERROR));
+    }
+
+    private function assertQualityLinks(
+        int $itemId,
+        string $quantity,
+        ?int $ncrId,
+        ?int $inspectionId,
+    ): void {
+        $inspection = null;
+        if ($inspectionId !== null) {
+            $inspection = Inspection::query()->findOrFail($inspectionId);
+            $status = $inspection->status instanceof InspectionStatus
+                ? $inspection->status
+                : InspectionStatus::tryFrom((string) $inspection->status);
+            if ($status !== InspectionStatus::Failed) {
+                throw new BusinessRuleException('An MRB hold can only link to a failed inspection.');
+            }
+            if ((int) $inspection->item_id !== $itemId) {
+                throw new BusinessRuleException('The linked inspection belongs to a different inventory item.');
+            }
+            if (bccomp((string) ((int) $inspection->batch_quantity), $quantity, 3) < 0) {
+                throw new BusinessRuleException('The linked inspection batch is smaller than the MRB quantity.');
+            }
+        }
+
+        if ($ncrId === null) {
+            return;
+        }
+
+        $ncr = NonConformanceReport::query()->with('inspection')->findOrFail($ncrId);
+        $ncrStatus = $ncr->status instanceof NcrStatus
+            ? $ncr->status
+            : NcrStatus::tryFrom((string) $ncr->status);
+        if (! in_array($ncrStatus, [NcrStatus::Open, NcrStatus::InProgress], true)) {
+            throw new BusinessRuleException('Only open or in-progress NCRs can be linked to a new MRB hold.');
+        }
+        if ((int) $ncr->affected_quantity <= 0 || bccomp((string) ((int) $ncr->affected_quantity), $quantity, 3) < 0) {
+            throw new BusinessRuleException('The NCR affected quantity is smaller than the MRB quantity.');
+        }
+        if (! $ncr->inspection_id || ! $ncr->inspection) {
+            throw new BusinessRuleException('The NCR must be linked to a failed inspection for this MRB item.');
+        }
+        if ($inspectionId !== null && (int) $ncr->inspection_id !== $inspectionId) {
+            throw new BusinessRuleException('The selected NCR and inspection do not refer to the same quality event.');
+        }
+
+        $linked = $ncr->inspection;
+        $linkedStatus = $linked->status instanceof InspectionStatus
+            ? $linked->status
+            : InspectionStatus::tryFrom((string) $linked->status);
+        if ($linkedStatus !== InspectionStatus::Failed || (int) $linked->item_id !== $itemId) {
+            throw new BusinessRuleException('The NCR inspection must be failed and belong to the MRB item.');
+        }
+        if (bccomp((string) ((int) $linked->batch_quantity), $quantity, 3) < 0) {
+            throw new BusinessRuleException('The NCR inspection batch is smaller than the MRB quantity.');
+        }
+    }
+
+    /**
      * Resolve the zone type of a location (works whether the cast is present or
      * the column is a raw string).
      */
@@ -296,15 +551,17 @@ class QuarantineService
             // violates an invariant the warehouse setup is supposed to hold; the
             // message names an internal row id and offers no remedy, so calling
             // it a validation error would only misattribute the fault.
-            throw new RuntimeException("Source location {$reference->id} has no zone/warehouse.");
+            throw new BusinessRuleException("Source location {$reference->id} has no zone/warehouse.");
         }
         $warehouseId = $refZone->warehouse_id;
 
         $location = WarehouseLocation::query()
+            ->with('zone.warehouse')
             ->where('is_active', true)
             ->whereHas('zone', function ($q) use ($warehouseId, $type) {
                 $q->where('warehouse_id', $warehouseId)
-                    ->where('zone_type', $type->value);
+                    ->where('zone_type', $type->value)
+                    ->whereHas('warehouse', fn ($warehouse) => $warehouse->where('is_active', true));
             })
             ->orderBy('id')
             ->first();

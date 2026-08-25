@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Observers;
 
+use App\Common\Exceptions\BusinessRuleException;
+use App\Modules\Accounting\Enums\JournalEntryStatus;
 use App\Modules\Accounting\Models\JournalEntry;
 use Illuminate\Support\Facades\Cache;
 
@@ -14,6 +16,17 @@ use Illuminate\Support\Facades\Cache;
  */
 class JournalEntryObserver
 {
+    public function deleting(JournalEntry $je): void
+    {
+        $status = $je->status instanceof JournalEntryStatus
+            ? $je->status
+            : JournalEntryStatus::tryFrom((string) $je->getRawOriginal('status'));
+
+        if ($status !== null && $status !== JournalEntryStatus::Draft) {
+            throw new BusinessRuleException('Posted and reversed journal entries cannot be archived.');
+        }
+    }
+
     public function saved(JournalEntry $je): void
     {
         $this->flush();

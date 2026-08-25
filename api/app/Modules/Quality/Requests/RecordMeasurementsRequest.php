@@ -32,9 +32,15 @@ class RecordMeasurementsRequest extends FormRequest
 
         $decoded = [];
         foreach ($rows as $row) {
-            if (! is_array($row) || ! isset($row['id'])) continue;
-            $id = is_string($row['id']) ? InspectionMeasurement::tryDecodeHash($row['id']) : (int) $row['id'];
-            if ($id === null) continue;
+            if (! is_array($row)) {
+                $decoded[] = ['_id' => null];
+                continue;
+            }
+
+            $rawId = array_key_exists('id', $row) ? $row['id'] : null;
+            $id = is_string($rawId)
+                ? InspectionMeasurement::tryDecodeHash($rawId)
+                : (is_int($rawId) ? $rawId : null);
             $row['_id'] = $id;
             $decoded[] = $row;
         }
@@ -45,7 +51,7 @@ class RecordMeasurementsRequest extends FormRequest
     {
         return [
             'measurements'                    => ['required', 'array', 'min:1'],
-            'measurements.*._id'              => ['required', 'integer', 'min:1'],
+            'measurements.*._id'              => ['required', 'integer', 'min:1', 'distinct:strict'],
             'measurements.*.measured_value'   => ['nullable', 'numeric'],
             'measurements.*.is_pass'          => ['nullable', 'boolean'],
             'measurements.*.notes'            => ['nullable', 'string', 'max:500'],

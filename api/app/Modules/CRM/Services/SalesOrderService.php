@@ -9,9 +9,11 @@ use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\OutboxService;
 use App\Common\Services\TaxPolicyService;
 use App\Common\Support\HashIdFilter;
+use App\Common\Support\Money;
 use App\Common\Support\SearchOperator;
 use App\Common\Support\TrashedFilter;
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\Invoice;
 use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Events\SalesOrderConfirmed;
 use App\Modules\CRM\Models\Product;
@@ -19,8 +21,10 @@ use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\CRM\Models\SalesOrderTransitionRejection;
 use App\Modules\CRM\Support\SalesOrderTransitionResult;
+use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionStage;
+use App\Modules\SupplyChain\Models\Delivery;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -32,15 +36,15 @@ class SalesOrderService
     /**
      * C-2 — Allowed SalesOrder status transitions. Each key is a current
      * status; the array is the list of statuses we permit moving INTO.
-     * Backwards or terminal transitions are absent so transitionTo() can
-     * silently no-op rather than failing upstream operations.
+     * Terminal and backwards transitions are absent. Cancellation is an
+     * explicit operation because it has downstream reconciliation rules.
      *
      * @var array<string, list<string>>
      */
     private const ALLOWED_TRANSITIONS = [
-        'confirmed'           => ['in_production', 'partially_delivered', 'delivered', 'invoiced', 'cancelled'],
-        'in_production'       => ['partially_delivered', 'delivered', 'invoiced', 'cancelled'],
-        'partially_delivered' => ['delivered', 'invoiced'],
+        'confirmed'           => ['in_production'],
+        'in_production'       => ['partially_delivered', 'delivered'],
+        'partially_delivered' => ['delivered'],
         'delivered'           => ['invoiced'],
         'invoiced'            => [],
         'cancelled'           => [],
@@ -112,6 +116,125 @@ class SalesOrderService
         }
     }
 
+    private function assertActiveCustomer(int $customerId): void
+    {
+        if (! Customer::query()->active()->whereKey($customerId)->exists()) {
+            throw ValidationException::withMessages([
+                'customer_id' => ['The selected customer is not active or no longer exists.'],
+            ]);
+        }
+    }
+
+    private function assertActiveProduct(int $productId, string $errorKey): void
+    {
+        if (! Product::query()->active()->whereKey($productId)->exists()) {
+            throw ValidationException::withMessages([
+                $errorKey => ['The selected product is not active or no longer exists.'],
+            ]);
+        }
+    }
+
+    /**
+     * Validate references again inside the write transaction. FormRequest
+     * validation happens before the transaction and cannot protect against a
+     * product/customer being deactivated between validation and persistence.
+     *
+     * @param  array<int, array<string, mixed>>  $items
+     */
+    private function assertActiveOrderReferences(int $customerId, array $items): void
+    {
+        $this->assertActiveCustomer($customerId);
+        foreach ($items as $idx => $item) {
+            $this->assertActiveProduct((int) $item['product_id'], "items.{$idx}.product_id");
+        }
+    }
+
+    /**
+     * Serialize sales-order writes with product archival and pricing writes.
+     * Product archive policy depends on the absence of order lines, so the
+     * reference rows must be locked before the active checks and line inserts.
+     *
+     * @param  array<int, array<string, mixed>>  $items
+     */
+    private function lockOrderReferences(int $customerId, array $items): void
+    {
+        $productIds = array_values(array_unique(array_map(
+            static fn (array $item): int => (int) $item['product_id'],
+            $items,
+        )));
+        sort($productIds);
+
+        if ($productIds !== []) {
+            Product::query()
+                ->whereIn('id', $productIds)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+        }
+
+        Customer::query()
+            ->whereKey($customerId)
+            ->lockForUpdate()
+            ->first();
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $items
+     */
+    private function assertDeliveryDatesNotBeforeOrder(Carbon $orderDate, array $items): void
+    {
+        foreach ($items as $idx => $item) {
+            $deliveryDate = Carbon::parse((string) $item['delivery_date']);
+            if ($deliveryDate->lt($orderDate)) {
+                throw ValidationException::withMessages([
+                    "items.{$idx}.delivery_date" => ['The delivery date must be on or after the sales order date.'],
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Cancellation is intentionally narrower than a status transition. Once
+     * deliveries, invoices, or active production work exist, their own
+     * reconciliation flows must decide how those records are closed.
+     */
+    private function assertCancellableDownstreamState(SalesOrder $so): void
+    {
+        if (Delivery::query()
+            ->where('sales_order_id', $so->id)
+            ->where('status', '!=', 'cancelled')
+            ->exists()) {
+            throw new BusinessRuleException('This sales order cannot be cancelled while a delivery is active.');
+        }
+
+        if (Invoice::query()
+            ->where('sales_order_id', $so->id)
+            ->where('status', '!=', 'cancelled')
+            ->exists()) {
+            throw new BusinessRuleException('This sales order cannot be cancelled while an invoice is active.');
+        }
+
+        if (WorkOrder::query()
+            ->where('sales_order_id', $so->id)
+            ->whereIn('status', ['in_progress', 'completed', 'closed'])
+            ->exists()) {
+            throw new BusinessRuleException('This sales order cannot be cancelled while production work is in progress or complete.');
+        }
+    }
+
+    private function transitionTimestamp(SalesOrderStatus $target): array
+    {
+        return match ($target) {
+            SalesOrderStatus::Confirmed => ['confirmed_at' => now()],
+            SalesOrderStatus::InProduction => ['in_production_at' => now()],
+            SalesOrderStatus::PartiallyDelivered => ['partially_delivered_at' => now()],
+            SalesOrderStatus::Delivered => ['delivered_at' => now()],
+            SalesOrderStatus::Invoiced => ['invoiced_at' => now()],
+            SalesOrderStatus::Cancelled => ['cancelled_at' => now()],
+            default => [],
+        };
+    }
+
     public function list(array $filters): LengthAwarePaginator
     {
         $q = SalesOrder::query()
@@ -176,14 +299,21 @@ class SalesOrderService
         return DB::transaction(function () use ($data, $userId) {
             $customerId = (int) $data['customer_id'];
             $orderDate  = Carbon::parse($data['date']);
+            $items      = $data['items'];
 
-            // Resolve every line's unit_price from the active agreement.
+            $this->lockOrderReferences($customerId, $items);
+            $this->assertActiveOrderReferences($customerId, $items);
+            $this->assertDeliveryDatesNotBeforeOrder($orderDate, $items);
+
+            // Resolve every line's unit_price from the active agreement. Keep
+            // quantities and monetary values as decimal strings throughout so
+            // PHP floating-point arithmetic cannot change persisted totals.
             $lines = [];
-            $subtotal = 0.0;
-            foreach ($data['items'] as $idx => $item) {
+            $subtotal = Money::zero();
+            foreach ($items as $idx => $item) {
                 $productId    = (int) $item['product_id'];
                 $deliveryDate = Carbon::parse($item['delivery_date']);
-                $qty          = (float) $item['quantity'];
+                $qty          = (string) $item['quantity'];
 
                 // Resolve at delivery_date — that's the date the price applies to.
                 try {
@@ -193,8 +323,8 @@ class SalesOrderService
                 }
                 // Volume tier resolution: tiered agreements pick the unit price
                 // for this line's quantity; flat agreements return $agreement->price.
-                $unitPrice = $this->prices->resolveUnitPrice($agreement, (int) $qty);
-                $lineTotal = round($qty * $unitPrice, 2);
+                $unitPrice = (string) $this->prices->resolveUnitPrice($agreement, $qty);
+                $lineTotal = Money::mul($qty, $unitPrice);
 
                 $lines[] = [
                     'product_id'         => $productId,
@@ -204,12 +334,12 @@ class SalesOrderService
                     'quantity_delivered' => 0,
                     'delivery_date'      => $deliveryDate->toDateString(),
                 ];
-                $subtotal += $lineTotal;
+                $subtotal = Money::add($subtotal, $lineTotal);
             }
 
             $isVatable = $this->taxPolicy->isVatRegistered();
-            $vat   = $isVatable ? round($subtotal * (float) $this->taxPolicy->requiredVatRate(), 2) : 0.0;
-            $total = round($subtotal + $vat, 2);
+            $vat   = $isVatable ? Money::mul($subtotal, $this->taxPolicy->requiredVatRate()) : Money::zero();
+            $total = Money::add($subtotal, $vat);
 
             $so = SalesOrder::create([
                 'so_number'          => $this->sequences->generate('sales_order'),
@@ -223,6 +353,7 @@ class SalesOrderService
                     ?? (int) Customer::query()->whereKey($customerId)->value('payment_terms_days'),
                 'delivery_terms'     => $data['delivery_terms'] ?? null,
                 'notes'              => $data['notes'] ?? null,
+                'incoterm'           => $data['incoterm'] ?? null,
                 'created_by'         => $userId,
             ]);
 
@@ -240,27 +371,39 @@ class SalesOrderService
      */
     public function update(SalesOrder $so, array $data): SalesOrder
     {
-        if ($so->status !== SalesOrderStatus::Draft) {
-            throw new BusinessRuleException('Only draft sales orders can be updated.');
-        }
-
         return DB::transaction(function () use ($so, $data) {
-            $customerId = (int) ($data['customer_id'] ?? $so->customer_id);
-            $subtotal = 0.0;
+            // Never trust the route-bound snapshot for the state guard. A
+            // concurrent confirm/delete may have changed it after binding.
+            $lockedSo = SalesOrder::query()
+                ->lockForUpdate()
+                ->findOrFail($so->id);
+            if ($lockedSo->status !== SalesOrderStatus::Draft) {
+                throw new BusinessRuleException('Only draft sales orders can be updated.');
+            }
+
+            $customerId = (int) ($data['customer_id'] ?? $lockedSo->customer_id);
+            $orderDate  = Carbon::parse($data['date'] ?? $lockedSo->date->toDateString());
+            $items      = $data['items'];
+
+            $this->lockOrderReferences($customerId, $items);
+            $this->assertActiveOrderReferences($customerId, $items);
+            $this->assertDeliveryDatesNotBeforeOrder($orderDate, $items);
+
+            $subtotal = Money::zero();
             $newLines = [];
 
-            foreach ($data['items'] as $idx => $item) {
+            foreach ($items as $idx => $item) {
                 $productId    = (int) $item['product_id'];
                 $deliveryDate = Carbon::parse($item['delivery_date']);
-                $qty          = (float) $item['quantity'];
+                $qty          = (string) $item['quantity'];
                 try {
                     $agreement = $this->prices->resolve($customerId, $productId, $deliveryDate);
                 } catch (\App\Modules\CRM\Exceptions\NoPriceAgreementException $e) {
                     throw new \App\Modules\CRM\Exceptions\NoPriceAgreementException("items.{$idx}.product_id");
                 }
                 // Volume tier resolution (see create()).
-                $unitPrice = $this->prices->resolveUnitPrice($agreement, (int) $qty);
-                $lineTotal = round($qty * $unitPrice, 2);
+                $unitPrice = (string) $this->prices->resolveUnitPrice($agreement, $qty);
+                $lineTotal = Money::mul($qty, $unitPrice);
                 $newLines[] = [
                     'product_id'         => $productId,
                     'quantity'           => $qty,
@@ -269,30 +412,33 @@ class SalesOrderService
                     'quantity_delivered' => 0,
                     'delivery_date'      => $deliveryDate->toDateString(),
                 ];
-                $subtotal += $lineTotal;
+                $subtotal = Money::add($subtotal, $lineTotal);
             }
             $isVatable = $this->taxPolicy->isVatRegistered();
-            $vat   = $isVatable ? round($subtotal * (float) $this->taxPolicy->requiredVatRate(), 2) : 0.0;
-            $total = round($subtotal + $vat, 2);
+            $vat   = $isVatable ? Money::mul($subtotal, $this->taxPolicy->requiredVatRate()) : Money::zero();
+            $total = Money::add($subtotal, $vat);
 
-            $so->update([
+            $lockedSo->update([
                 'customer_id'        => $customerId,
-                'date'               => $data['date'] ?? $so->date->toDateString(),
+                'date'               => $orderDate->toDateString(),
                 'subtotal'           => $subtotal,
                 'vat_amount'         => $vat,
                 'total_amount'       => $total,
-                'payment_terms_days' => $data['payment_terms_days'] ?? $so->payment_terms_days,
-                'delivery_terms'     => $data['delivery_terms'] ?? $so->delivery_terms,
-                'notes'              => $data['notes'] ?? $so->notes,
+                'payment_terms_days' => $data['payment_terms_days'] ?? $lockedSo->payment_terms_days,
+                'delivery_terms'     => $data['delivery_terms'] ?? $lockedSo->delivery_terms,
+                'incoterm'           => array_key_exists('incoterm', $data)
+                    ? $data['incoterm']
+                    : $lockedSo->incoterm?->value,
+                'notes'              => $data['notes'] ?? $lockedSo->notes,
             ]);
 
             // Replace items wholesale (draft state — no FK ramifications yet).
-            $so->items()->forceDelete();
+            $lockedSo->items()->forceDelete();
             foreach ($newLines as $line) {
-                $so->items()->create($line);
+                $lockedSo->items()->create($line);
             }
 
-            return $this->show($so->fresh());
+            return $this->show($lockedSo->fresh());
         });
     }
 
@@ -316,15 +462,27 @@ class SalesOrderService
                 throw new BusinessRuleException('Cannot confirm a sales order with no items.');
             }
 
+            $items = $lockedSo->items()
+                ->get(['product_id'])
+                ->map(static fn (SalesOrderItem $item): array => [
+                    'product_id' => (int) $item->product_id,
+                ])
+                ->all();
+            $this->lockOrderReferences((int) $lockedSo->customer_id, $items);
+
             // Serialize same-customer confirmations so two draft SOs cannot
             // both pass the credit check against the same open exposure.
-            $customer = Customer::query()
+            $customer = Customer::withTrashed()
                 ->lockForUpdate()
                 ->findOrFail($lockedSo->customer_id);
+            $this->assertActiveOrderReferences((int) $customer->id, $items);
             $lockedSo->setRelation('customer', $customer);
             $this->checkCreditLimit($lockedSo);
 
-            $lockedSo->update(['status' => SalesOrderStatus::Confirmed->value]);
+            $lockedSo->update([
+                'status' => SalesOrderStatus::Confirmed->value,
+                ...$this->transitionTimestamp(SalesOrderStatus::Confirmed),
+            ]);
 
             $fresh = $lockedSo->fresh();
 
@@ -470,9 +628,11 @@ class SalesOrderService
             if (! $lockedSo->is_cancellable) {
                 throw new BusinessRuleException('This sales order cannot be cancelled at its current status.');
             }
+            $this->assertCancellableDownstreamState($lockedSo);
 
             $lockedSo->update([
                 'status' => SalesOrderStatus::Cancelled->value,
+                ...$this->transitionTimestamp(SalesOrderStatus::Cancelled),
                 'notes'  => trim(($lockedSo->notes ?? '') . "\n\n[Cancelled" . ($reason ? ': ' . $reason : '') . ']'),
             ]);
 
@@ -532,45 +692,77 @@ class SalesOrderService
 
     public function delete(SalesOrder $so): void
     {
-        if ($so->status !== SalesOrderStatus::Draft) {
-            throw new BusinessRuleException('Only draft sales orders can be deleted.');
-        }
-        $so->delete();
+        DB::transaction(function () use ($so): void {
+            $lockedSo = SalesOrder::query()
+                ->lockForUpdate()
+                ->findOrFail($so->id);
+            if ($lockedSo->status !== SalesOrderStatus::Draft) {
+                throw new BusinessRuleException('Only draft sales orders can be deleted.');
+            }
+            $lockedSo->delete();
+        });
+    }
+
+    public function restore(SalesOrder $so): SalesOrder
+    {
+        return DB::transaction(function () use ($so): SalesOrder {
+            $lockedSo = SalesOrder::withTrashed()
+                ->lockForUpdate()
+                ->findOrFail($so->id);
+            if ($lockedSo->trashed()) {
+                $lockedSo->restore();
+            }
+
+            return $lockedSo->fresh();
+        });
     }
 
     // ─── C-2: Lifecycle transitions wired from WO / Delivery / Invoice ──────
     //
     // These helpers are called from listeners and sibling services that do
-    // NOT own SO state. They must be idempotent, lock-aware, and gated so an
-    // upstream operation never blows up because of a stale/invalid transition.
+    // NOT own SO state. They are idempotent and lock-aware, but an invalid
+    // transition is an error: the owning operation must roll back rather than
+    // succeeding while the SO silently remains stale.
 
     public function markInProduction(?int $salesOrderId): SalesOrderTransitionResult
     {
-        return $this->transitionTo($salesOrderId, SalesOrderStatus::InProduction);
+        return $this->transitionOrFail($salesOrderId, SalesOrderStatus::InProduction);
     }
 
     public function markPartiallyDelivered(?int $salesOrderId): SalesOrderTransitionResult
     {
-        return $this->transitionTo($salesOrderId, SalesOrderStatus::PartiallyDelivered);
+        return $this->transitionOrFail($salesOrderId, SalesOrderStatus::PartiallyDelivered);
     }
 
     public function markDelivered(?int $salesOrderId): SalesOrderTransitionResult
     {
-        return $this->transitionTo($salesOrderId, SalesOrderStatus::Delivered);
+        return $this->transitionOrFail($salesOrderId, SalesOrderStatus::Delivered);
     }
 
     public function markInvoiced(?int $salesOrderId): SalesOrderTransitionResult
     {
-        return $this->transitionTo($salesOrderId, SalesOrderStatus::Invoiced);
+        return $this->transitionOrFail($salesOrderId, SalesOrderStatus::Invoiced);
     }
 
-    public function transitionTo(?int $salesOrderId, SalesOrderStatus $target, ?int $requestedBy = null): SalesOrderTransitionResult
+    private function transitionOrFail(?int $salesOrderId, SalesOrderStatus $target): SalesOrderTransitionResult
+    {
+        $result = $this->transitionTo($salesOrderId, $target);
+        if (! $result->isSuccess() && $salesOrderId !== null) {
+            throw new BusinessRuleException(
+                $result->reason ?? "Sales order could not transition to {$target->value}.",
+            );
+        }
+
+        return $result;
+    }
+
+    private function transitionTo(?int $salesOrderId, SalesOrderStatus $target): SalesOrderTransitionResult
     {
         if ($salesOrderId === null) {
             return new SalesOrderTransitionResult('skipped', 422, null, $target->value, 'sales_order_missing');
         }
 
-        return DB::transaction(function () use ($salesOrderId, $target, $requestedBy): SalesOrderTransitionResult {
+        return DB::transaction(function () use ($salesOrderId, $target): SalesOrderTransitionResult {
             $so = SalesOrder::lockForUpdate()->find($salesOrderId);
             if (! $so) {
                 return new SalesOrderTransitionResult('skipped', 422, null, $target->value, 'sales_order_missing');
@@ -589,7 +781,7 @@ class SalesOrderService
                 SalesOrderTransitionRejection::create([
                     'sales_order_id' => $so->id, 'from_status' => $currentValue,
                     'to_status' => $target->value, 'reason_code' => 'illegal_transition',
-                    'reason' => $reason, 'requested_by' => $requestedBy,
+                    'reason' => $reason, 'requested_by' => null,
                 ]);
                 Log::debug('SalesOrder transition skipped', [
                     'sales_order_id' => $so->id,
@@ -599,7 +791,10 @@ class SalesOrderService
                 return new SalesOrderTransitionResult('skipped', 409, $currentValue, $target->value, $reason);
             }
 
-            $so->update(['status' => $target->value]);
+            $so->update([
+                'status' => $target->value,
+                ...$this->transitionTimestamp($target),
+            ]);
             $fresh = $so->fresh();
             app(\App\Common\Services\ChainBroadcaster::class)->broadcastFor($fresh, $target->value);
             return new SalesOrderTransitionResult('succeeded', 200, $currentValue, $target->value);
@@ -612,24 +807,53 @@ class SalesOrderService
      */
     public function chain(SalesOrder $so): array
     {
-        $confirmedDate = $so->status !== SalesOrderStatus::Draft ? $so->updated_at?->toDateString() : null;
-        $qc = $this->deriveOutgoingQcStage($so);
+        $status = $so->status;
+        $isCancelled = $status === SalesOrderStatus::Cancelled;
+        $qc = $isCancelled
+            ? ['state' => 'skipped', 'date' => null]
+            : $this->deriveOutgoingQcStage($so);
+        if ($qc['state'] === 'failed') {
+            $qc['state'] = 'rejected';
+        }
+
+        $mrpState = match (true) {
+            $isCancelled => 'skipped',
+            $status === SalesOrderStatus::Draft => 'pending',
+            (bool) $so->mrp_plan_id => 'done',
+            $status === SalesOrderStatus::Confirmed => 'active',
+            default => 'done',
+        };
+        $productionState = match (true) {
+            $isCancelled => 'skipped',
+            $status === SalesOrderStatus::Draft, $status === SalesOrderStatus::Confirmed => 'pending',
+            $status === SalesOrderStatus::InProduction => 'active',
+            default => 'done',
+        };
+        $deliveryState = match (true) {
+            $isCancelled => 'skipped',
+            $status === SalesOrderStatus::Draft, $status === SalesOrderStatus::Confirmed,
+            $status === SalesOrderStatus::InProduction => 'pending',
+            $status === SalesOrderStatus::PartiallyDelivered => 'active',
+            default => 'done',
+        };
 
         return [
             ['key' => 'order_entered', 'label' => 'Order Entered',
              'date' => $so->created_at?->toDateString(),
              'state' => 'done'],
             ['key' => 'mrp_planned', 'label' => 'MRP Planned',
-             'date' => $confirmedDate,
-             'state' => $so->mrp_plan_id ? 'done' : ($so->status === SalesOrderStatus::Confirmed ? 'active' : 'pending')],
+             'date' => $so->confirmed_at?->toDateString(),
+             'state' => $mrpState],
             ['key' => 'in_production', 'label' => 'In Production',
-             'date' => null,
-             'state' => $so->status === SalesOrderStatus::InProduction ? 'active' : 'pending'],
+             'date' => $so->in_production_at?->toDateString(),
+             'state' => $productionState],
             ['key' => 'qc_outgoing', 'label' => 'QC Outgoing', 'date' => $qc['date'], 'state' => $qc['state']],
-            ['key' => 'delivered', 'label' => 'Delivered', 'date' => null,
-             'state' => in_array($so->status, [SalesOrderStatus::Delivered, SalesOrderStatus::Invoiced], true) ? 'done' : 'pending'],
-            ['key' => 'invoiced', 'label' => 'Invoiced', 'date' => null,
-             'state' => $so->status === SalesOrderStatus::Invoiced ? 'done' : 'pending'],
+            ['key' => 'delivered', 'label' => 'Delivered',
+             'date' => ($so->delivered_at ?? $so->partially_delivered_at)?->toDateString(),
+             'state' => $deliveryState],
+            ['key' => 'invoiced', 'label' => 'Invoiced',
+             'date' => $so->invoiced_at?->toDateString(),
+             'state' => $isCancelled ? 'skipped' : ($status === SalesOrderStatus::Invoiced ? 'done' : 'pending')],
         ];
     }
 

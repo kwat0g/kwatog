@@ -93,6 +93,10 @@ export const inventoryRoutes = (
  element={<PermissionGuard permission="inventory.grn.create"><CreateGrnPage /></PermissionGuard>} />
  <Route path="/inventory/grn/:id"
  element={<PermissionGuard permission="inventory.view"><GrnDetailPage /></PermissionGuard>} />
+ {/* Incoming-QC notifications historically used the plural /grns path. Keep
+     it as a live alias so an existing notification remains actionable. */}
+ <Route path="/inventory/grns/:id"
+ element={<PermissionGuard permission="inventory.view"><GrnDetailPage /></PermissionGuard>} />
 
  <Route path="/inventory/material-issues"
  element={<PermissionGuard permission="inventory.view"><MaterialIssuesListPage /></PermissionGuard>} />

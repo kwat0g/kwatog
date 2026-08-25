@@ -21,7 +21,7 @@ use Tests\TestCase;
  *     &tier=A&limit=50
  *
  * Defaults to the previous calendar month. Permission gate:
- * `purchasing.suppliers.performance.view`. Limit is clamped server-side at 100.
+ * `purchasing.suppliers.performance.view`. Limit is validated between 1 and 100.
  */
 class SupplierRankingTest extends TestCase
 {
@@ -75,8 +75,11 @@ class SupplierRankingTest extends TestCase
         $this->assertSame('95.00',     (string) $rows[0]['overall_score']);
         $this->assertSame('BravoCo',   $rows[1]['vendor']['name']);
         $this->assertSame('CharlieCo', $rows[2]['vendor']['name']);
+        $this->assertSame(2026,        $rows[0]['period_year']);
+        $this->assertSame(5,           $rows[0]['period_month']);
         $this->assertSame(2026,        $response->json('meta.period_year'));
         $this->assertSame(5,           $response->json('meta.period_month'));
+        $this->assertSame(3,           $response->json('meta.count'));
     }
 
     public function test_ranking_filters_by_tier(): void
@@ -94,15 +97,12 @@ class SupplierRankingTest extends TestCase
         $this->assertSame('AlphaCo', $response->json('data.0.vendor.name'));
     }
 
-    public function test_ranking_caps_limit_at_100(): void
+    public function test_ranking_rejects_limit_above_100(): void
     {
         $this->actingAs($this->purchasingOfficer)
             ->getJson('/api/v1/purchasing/vendors/ranking?limit=999')
-            ->assertOk()
-            ->assertJsonStructure(['data', 'meta']);
-
-        // Hard cap is enforced server-side; we don't need 999 rows to verify
-        // — only that the controller does not 500 with an oversize limit.
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['limit']);
     }
 
     public function test_ranking_defaults_to_previous_calendar_month(): void
@@ -138,7 +138,45 @@ class SupplierRankingTest extends TestCase
         $this->assertSame($vendor->hash_id, $vendorId);
     }
 
-    private function makeSnapshot(Vendor $vendor, int $year, int $month, float $score, string $tier): void
+    public function test_ranking_places_null_scores_last_and_breaks_ties_by_vendor_name(): void
+    {
+        $beta = Vendor::factory()->create(['name' => 'BetaCo']);
+        $alpha = Vendor::factory()->create(['name' => 'AlphaCo']);
+        $noScore = Vendor::factory()->create(['name' => 'AardvarkCo']);
+
+        $this->makeSnapshot($beta, 2026, 5, 90.0, 'A');
+        $this->makeSnapshot($alpha, 2026, 5, 90.0, 'A');
+        $this->makeSnapshot($noScore, 2026, 5, null, null);
+
+        $response = $this->actingAs($this->purchasingOfficer)
+            ->getJson('/api/v1/purchasing/vendors/ranking?period_year=2026&period_month=5')
+            ->assertOk();
+
+        $this->assertSame('AlphaCo', $response->json('data.0.vendor.name'));
+        $this->assertSame('BetaCo', $response->json('data.1.vendor.name'));
+        $this->assertSame('AardvarkCo', $response->json('data.2.vendor.name'));
+        $this->assertNull($response->json('data.2.overall_score'));
+    }
+
+    public function test_ranking_rejects_invalid_period_and_tier_inputs(): void
+    {
+        $this->actingAs($this->purchasingOfficer)
+            ->getJson('/api/v1/purchasing/vendors/ranking?period_month=13')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['period_month']);
+
+        $this->actingAs($this->purchasingOfficer)
+            ->getJson('/api/v1/purchasing/vendors/ranking?period_year=1999')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['period_year']);
+
+        $this->actingAs($this->purchasingOfficer)
+            ->getJson('/api/v1/purchasing/vendors/ranking?tier=Z')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['tier']);
+    }
+
+    private function makeSnapshot(Vendor $vendor, int $year, int $month, ?float $score, ?string $tier): void
     {
         SupplierPerformanceSnapshot::create([
             'vendor_id'              => $vendor->id,

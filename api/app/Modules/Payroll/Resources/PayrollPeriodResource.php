@@ -128,6 +128,7 @@ class PayrollPeriodResource extends JsonResource
             'bank_files'          => $this->whenLoaded('bankFileRecords', fn () =>
                 $this->bankFileRecords->map(fn ($r) => [
                     'id'           => $r->hash_id,
+                    'format'       => $r->format,
                     'record_count' => (int) $r->record_count,
                     'total_amount' => $r->total_amount,
                     'generated_at' => optional($r->generated_at)->toIso8601String(),

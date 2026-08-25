@@ -9,6 +9,7 @@ use App\Common\Services\BusinessPolicyService;
 use App\Common\Support\SearchOperator;
 use App\Common\Support\TrashedFilter;
 
+use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Accounting\Models\Vendor;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
@@ -20,7 +21,13 @@ class VendorService
 
     public function list(array $filters): LengthAwarePaginator
     {
-        $q = Vendor::query();
+        $q = Vendor::query()
+            ->withSum([
+                'bills as open_balance' => fn ($bills) => $bills->whereIn('status', [
+                    BillStatus::Unpaid->value,
+                    BillStatus::Partial->value,
+                ]),
+            ], 'balance');
 
         TrashedFilter::apply($q, $filters);
 
@@ -41,7 +48,14 @@ class VendorService
 
     public function show(Vendor $vendor): Vendor
     {
-        return $vendor->loadCount(['bills']);
+        return $vendor
+            ->loadCount(['bills'])
+            ->loadSum([
+                'bills as open_balance' => fn ($bills) => $bills->whereIn('status', [
+                    BillStatus::Unpaid->value,
+                    BillStatus::Partial->value,
+                ]),
+            ], 'balance');
     }
 
     public function create(array $data): Vendor
@@ -73,5 +87,21 @@ class VendorService
             throw new BusinessRuleException('Cannot delete a vendor with bills. Deactivate instead.');
         }
         $vendor->delete();
+    }
+
+    public function restore(Vendor $vendor): Vendor
+    {
+        return DB::transaction(function () use ($vendor): Vendor {
+            $lockedVendor = Vendor::withTrashed()
+                ->lockForUpdate()
+                ->findOrFail($vendor->getKey());
+            if (! $lockedVendor->trashed()) {
+                throw new BusinessRuleException('Only archived vendors can be restored.');
+            }
+
+            $lockedVendor->restore();
+
+            return $lockedVendor->fresh();
+        });
     }
 }

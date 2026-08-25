@@ -18,7 +18,7 @@ use App\Modules\Auth\Models\User;
  *
  * Deliberately delegates to ApprovalBoardService rather than re-querying
  * `approval_records`: that service already resolves the document number through
- * the polymorphic TYPE_MAP, and already widens the role match to cover active
+ * the shared approval type registry, and already widens the role match to cover active
  * approval DELEGATIONS (::roleSlugsFor). A hand-rolled `where('role_slug', $slug)`
  * here — which is what the scalar path does — would hide a delegate's queue
  * from the delegate while /approvals showed it. Read-only either way.

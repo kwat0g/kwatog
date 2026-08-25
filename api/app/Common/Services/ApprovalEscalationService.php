@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Common\Services;
 
 use App\Common\Models\ApprovalRecord;
+use App\Common\Models\WorkflowDefinition;
+use App\Common\Support\ApprovalTypeRegistry;
 use App\Modules\Auth\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -20,33 +22,35 @@ class ApprovalEscalationService
     {
         $reminderHours = $this->positiveIntSetting('approvals.reminder_hours');
         $count = 0;
-        $stale = ApprovalRecord::query()
+        $query = ApprovalRecord::query()
             ->where('action', 'pending')
+            ->where('is_current', true)
             ->whereNull('reminder_sent_at')
-            ->where('created_at', '<', now()->subHours($reminderHours))
-            ->get();
+            ->where('created_at', '<', now()->subHours($reminderHours));
 
-        foreach ($stale as $rec) {
-            try {
-                $approver = $this->resolveCurrentApprover($rec);
-                if ($approver) {
-                    $hours = (int) abs(now()->diffInHours($rec->created_at));
-                    $this->notifications->send($approver, 'approval_reminder', [
-                        'title'   => 'Approval Reminder',
-                        'message' => "Approval pending for {$hours}h on "
-                                     .class_basename((string) $rec->approvable_type).".",
-                        'link_to' => $this->linkFor($rec),
+        $query->chunkById(100, function ($stale) use (&$count): void {
+            foreach ($stale as $rec) {
+                try {
+                    $approver = $this->resolveCurrentApprover($rec);
+                    if ($approver) {
+                        $hours = (int) abs(now()->diffInHours($rec->created_at));
+                        $this->notifications->send($approver, 'approval_reminder', [
+                            'title'   => 'Approval Reminder',
+                            'message' => "Approval pending for {$hours}h on "
+                                         .class_basename((string) $rec->approvable_type).".",
+                            'link_to' => $this->linkFor($rec),
+                        ]);
+                    }
+                    $rec->update(['reminder_sent_at' => now()]);
+                    $count++;
+                } catch (\Throwable $e) {
+                    Log::warning('ApprovalEscalationService::reminder failed', [
+                        'record_id' => $rec->id,
+                        'error'     => $e->getMessage(),
                     ]);
                 }
-                $rec->update(['reminder_sent_at' => now()]);
-                $count++;
-            } catch (\Throwable $e) {
-                Log::warning('ApprovalEscalationService::reminder failed', [
-                    'record_id' => $rec->id,
-                    'error'     => $e->getMessage(),
-                ]);
             }
-        }
+        });
         return $count;
     }
 
@@ -54,40 +58,42 @@ class ApprovalEscalationService
     {
         $escalationHours = $this->positiveIntSetting('approvals.escalation_hours');
         $count = 0;
-        $stale = ApprovalRecord::query()
+        $query = ApprovalRecord::query()
             ->where('action', 'pending')
+            ->where('is_current', true)
             ->whereNull('escalated_at')
-            ->where('created_at', '<', now()->subHours($escalationHours))
-            ->get();
+            ->where('created_at', '<', now()->subHours($escalationHours));
 
-        foreach ($stale as $rec) {
-            try {
-                $approver = $this->resolveCurrentApprover($rec);
-                $superior = $this->resolveSuperior($rec);
-                $hours = (int) abs(now()->diffInHours($rec->created_at));
+        $query->chunkById(100, function ($stale) use (&$count): void {
+            foreach ($stale as $rec) {
+                try {
+                    $approver = $this->resolveCurrentApprover($rec);
+                    $superior = $this->resolveSuperior($rec);
+                    $hours = (int) abs(now()->diffInHours($rec->created_at));
 
-                $data = [
-                    'title'   => 'Approval Escalation',
-                    'message' => "Escalation: approval pending {$hours}h on "
-                                 .class_basename((string) $rec->approvable_type).".",
-                    'link_to' => $this->linkFor($rec),
-                ];
+                    $data = [
+                        'title'   => 'Approval Escalation',
+                        'message' => "Escalation: approval pending {$hours}h on "
+                                     .class_basename((string) $rec->approvable_type).".",
+                        'link_to' => $this->linkFor($rec),
+                    ];
 
-                $recipients = collect([$approver, $superior])->filter()->unique('id');
-                $this->notifications->send($recipients, 'approval_escalation', $data);
+                    $recipients = collect([$approver, $superior])->filter()->unique('id');
+                    $this->notifications->send($recipients, 'approval_escalation', $data);
 
-                $rec->update([
-                    'escalated_at'         => now(),
-                    'escalated_to_user_id' => $superior?->id,
-                ]);
-                $count++;
-            } catch (\Throwable $e) {
-                Log::warning('ApprovalEscalationService::escalate failed', [
-                    'record_id' => $rec->id,
-                    'error'     => $e->getMessage(),
-                ]);
+                    $rec->update([
+                        'escalated_at'         => now(),
+                        'escalated_to_user_id' => $superior?->id,
+                    ]);
+                    $count++;
+                } catch (\Throwable $e) {
+                    Log::warning('ApprovalEscalationService::escalate failed', [
+                        'record_id' => $rec->id,
+                        'error'     => $e->getMessage(),
+                    ]);
+                }
             }
-        }
+        });
         return $count;
     }
 
@@ -112,31 +118,33 @@ class ApprovalEscalationService
         }
 
         $count = 0;
-        $stale = ApprovalRecord::query()
+        $query = ApprovalRecord::query()
             ->where('action', 'pending')
+            ->where('is_current', true)
             ->whereNotNull('escalated_at')
-            ->whereNull('auto_resolved_at')
-            ->get();
+            ->whereNull('auto_resolved_at');
 
-        foreach ($stale as $rec) {
-            try {
-                [$hours, $action] = $this->resolvePolicyForRecord($rec, $defaultHours, $defaultAction);
-                if ($hours <= 0) continue;
-                // Carbon 2: parsing the past instant and diffing to now() returns
-                // a positive hour count when escalated_at is in the past.
-                $elapsed = \Carbon\Carbon::parse($rec->escalated_at)->diffInHours(now(), true);
-                if ($elapsed < $hours) {
-                    continue;
+        $query->chunkById(100, function ($stale) use (&$count, $defaultHours, $defaultAction): void {
+            foreach ($stale as $rec) {
+                try {
+                    [$hours, $action] = $this->resolvePolicyForRecord($rec, $defaultHours, $defaultAction);
+                    if ($hours <= 0) continue;
+                    // Carbon 2: parsing the past instant and diffing to now() returns
+                    // a positive hour count when escalated_at is in the past.
+                    $elapsed = \Carbon\Carbon::parse($rec->escalated_at)->diffInHours(now(), true);
+                    if ($elapsed < $hours) {
+                        continue;
+                    }
+                    $this->autoResolveRecord($rec, $action);
+                    $count++;
+                } catch (\Throwable $e) {
+                    Log::warning('ApprovalEscalationService::autoResolve failed', [
+                        'record_id' => $rec->id,
+                        'error'     => $e->getMessage(),
+                    ]);
                 }
-                $this->autoResolveRecord($rec, $action);
-                $count++;
-            } catch (\Throwable $e) {
-                Log::warning('ApprovalEscalationService::autoResolve failed', [
-                    'record_id' => $rec->id,
-                    'error'     => $e->getMessage(),
-                ]);
             }
-        }
+        });
         return $count;
     }
 
@@ -162,27 +170,57 @@ class ApprovalEscalationService
         $hours  = $defaultHours;
         $action = $defaultAction;
 
-        // Resolve the workflow_type by walking back to ApprovalService::submit's
-        // contract: each approval_records row carries (approvable_type, role_slug,
-        // step_order). We re-derive the workflow definition by matching role_slug
-        // + step_order against any WorkflowDefinition. This is best-effort —
-        // multiple workflow_types may share a role slug; in that case the first
-        // matching workflow's policy wins. Acceptable for thesis scope; future
-        // schema can stamp workflow_definition_id on the record.
-        $defs = \App\Common\Models\WorkflowDefinition::query()->get();
-        foreach ($defs as $def) {
-            foreach (($def->steps ?? []) as $step) {
-                if ((int) ($step['order'] ?? 0) === (int) $rec->step_order
-                    && (string) ($step['role'] ?? '') === (string) $rec->role_slug
-                ) {
-                    if (isset($step['auto_resolve_after_hours'])) {
-                        $hours = (int) $step['auto_resolve_after_hours'];
+        $steps = is_array($rec->workflow_snapshot)
+            ? ($rec->workflow_snapshot['steps'] ?? null)
+            : null;
+
+        if (! is_array($steps) && $rec->workflow_definition_id !== null) {
+            $steps = WorkflowDefinition::query()
+                ->whereKey($rec->workflow_definition_id)
+                ->value('steps');
+            if (is_string($steps)) {
+                $steps = json_decode($steps, true);
+            }
+        }
+
+        if (! is_array($steps)) {
+            // Legacy rows have no workflow identity. A unique match is safe;
+            // ambiguous matches must use the global policy rather than an
+            // arbitrary definition.
+            $matches = [];
+            foreach (WorkflowDefinition::query()->where('is_active', true)->get() as $def) {
+                foreach (($def->steps ?? []) as $step) {
+                    if ((int) ($step['order'] ?? 0) === (int) $rec->step_order
+                        && (string) ($step['role'] ?? '') === (string) $rec->role_slug
+                    ) {
+                        $matches[] = $step;
+                        break;
                     }
-                    if (isset($step['auto_resolve_action'])) {
-                        $action = (string) $step['auto_resolve_action'];
-                    }
-                    break 2;
                 }
+            }
+            if (count($matches) === 1) {
+                $steps = [$matches[0]];
+            } elseif (count($matches) > 1) {
+                Log::warning('ApprovalEscalationService: ambiguous legacy workflow policy', [
+                    'record_id' => $rec->id,
+                    'step_order' => $rec->step_order,
+                    'role_slug' => $rec->role_slug,
+                    'match_count' => count($matches),
+                ]);
+            }
+        }
+
+        foreach ($steps ?? [] as $step) {
+            if ((int) ($step['order'] ?? 0) === (int) $rec->step_order
+                && (string) ($step['role'] ?? '') === (string) $rec->role_slug
+            ) {
+                if (isset($step['auto_resolve_after_hours'])) {
+                    $hours = (int) $step['auto_resolve_after_hours'];
+                }
+                if (isset($step['auto_resolve_action'])) {
+                    $action = (string) $step['auto_resolve_action'];
+                }
+                break;
             }
         }
 
@@ -227,9 +265,15 @@ class ApprovalEscalationService
             ->orderBy('id')
             ->first();
 
+        if ($systemUser === null) {
+            throw new \App\Common\Exceptions\BusinessRuleException(
+                'Approval auto-resolution requires an active automation actor.',
+            );
+        }
+
         DB::transaction(function () use ($rec, $action, $systemUser) {
             $rec->update([
-                'approver_id'      => $systemUser?->id,
+                'approver_id'      => $systemUser->id,
                 'action'           => $action === 'approve' ? 'approved' : 'rejected',
                 'remarks'          => 'Auto-resolved by SLA policy.',
                 'acted_at'         => now(),
@@ -240,6 +284,7 @@ class ApprovalEscalationService
                 ApprovalRecord::query()
                     ->where('approvable_type', $rec->approvable_type)
                     ->where('approvable_id', $rec->approvable_id)
+                    ->where('is_current', true)
                     ->where('step_order', '>', $rec->step_order)
                     ->where('action', 'pending')
                     ->update(['action' => 'skipped', 'acted_at' => now()]);
@@ -249,18 +294,9 @@ class ApprovalEscalationService
 
     private function linkFor(ApprovalRecord $rec): string
     {
-        $typeMap = [
-            'PurchaseRequest' => '/purchasing/purchase-requests/',
-            'PurchaseOrder'   => '/purchasing/purchase-orders/',
-            'LeaveRequest'    => '/hr/leaves/',
-            'LoanApplication' => '/hr/loans/',
-        ];
+        $hashId = app('hashids')->encode((int) $rec->approvable_id);
 
-        $basename = class_basename((string) $rec->approvable_type);
-        $prefix = $typeMap[$basename] ?? '/admin/audit-logs';
-        $hashId = $rec->approvable?->hash_id ?? '';
-
-        return $prefix . $hashId;
+        return ApprovalTypeRegistry::linkFor((string) $rec->approvable_type, $hashId);
     }
 
     private function resolveCurrentApprover(ApprovalRecord $rec): ?User

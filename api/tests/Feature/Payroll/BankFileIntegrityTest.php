@@ -105,6 +105,18 @@ class BankFileIntegrityTest extends TestCase
         $this->assertSame('22000.00', (string) $record->total_amount);
     }
 
+    public function test_repeating_generation_reuses_the_current_artifact_record(): void
+    {
+        $this->payrollFor('10000.00');
+
+        $first = $this->svc->generate($this->period, $this->actor(), 'generic');
+        $second = $this->svc->generate($this->period, $this->actor(), 'generic');
+
+        $this->assertSame($first->id, $second->id);
+        $this->assertSame(1, $this->period->fresh()->bankFileRecords()->count());
+        $this->assertSame($first->file_path, $second->file_path);
+    }
+
     public function test_generation_is_refused_when_an_employee_has_no_bank_account(): void
     {
         $this->payrollFor('10000.00');

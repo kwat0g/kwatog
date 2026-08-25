@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Controllers;
 
+use App\Common\Support\HashIdFilter;
+use App\Modules\CRM\Models\Product;
+use App\Modules\Production\Models\WorkOrderOutput;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
@@ -18,7 +21,7 @@ use App\Common\Services\SettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Illuminate\Http\Response;
+use Symfony\Component\HttpFoundation\Response;
 
 class InspectionController
 {
@@ -32,10 +35,10 @@ class InspectionController
      *     path="/quality/inspections",
      *     tags={"Inspections"},
      *     summary="List inspections",
-     *     description="Returns a paginated list of quality inspections. Filterable by type (incoming, in_process, outgoing), status, and date range.",
+     *     description="Returns a paginated list of quality inspections. Filterable by stage, status, and date range.",
      *     security={{"sanctum":{}}},
-     *     @OA\Parameter(name="type", in="query", required=false, @OA\Schema(type="string", enum={"incoming","in_process","outgoing"})),
-     *     @OA\Parameter(name="status", in="query", required=false, @OA\Schema(type="string", enum={"pending","in_progress","passed","failed","cancelled"})),
+     *     @OA\Parameter(name="stage", in="query", required=false, @OA\Schema(type="string", enum={"incoming","in_process","outgoing","supplier_return","customer_return"})),
+     *     @OA\Parameter(name="status", in="query", required=false, @OA\Schema(type="string", enum={"draft","in_progress","passed","failed","cancelled"})),
      *     @OA\Parameter(name="page", in="query", required=false, @OA\Schema(type="integer")),
      *     @OA\Response(response=200, description="Paginated inspection list"),
      *     @OA\Response(response=401, description="Unauthenticated"),
@@ -75,6 +78,34 @@ class InspectionController
                 ['stage' => InspectionStage::Outgoing->value, 'value' => QualityPlanSamplingMethod::Aql->value, 'label' => $aqlLabel],
             ],
         ]]);
+    }
+
+    public function workOrderOutputs(Request $request): JsonResponse
+    {
+        $productId = HashIdFilter::decode($request->query('product_id'), Product::class);
+        if ($productId === null) {
+            return response()->json(['data' => []]);
+        }
+
+        $outputs = WorkOrderOutput::query()
+            ->with('workOrder:id,wo_number,product_id')
+            ->where('good_count', '>', 0)
+            ->whereHas('workOrder', fn ($q) => $q->where('product_id', $productId))
+            ->orderByDesc('recorded_at')
+            ->orderByDesc('id')
+            ->limit(100)
+            ->get();
+
+        return response()->json(['data' => $outputs->map(static fn (WorkOrderOutput $output): array => [
+            'id' => $output->hash_id,
+            'batch_code' => $output->batch_code,
+            'good_count' => (int) $output->good_count,
+            'recorded_at' => optional($output->recorded_at)?->toISOString(),
+            'work_order' => $output->workOrder ? [
+                'id' => $output->workOrder->hash_id,
+                'wo_number' => $output->workOrder->wo_number,
+            ] : null,
+        ])->values()]);
     }
 
     /**
@@ -119,12 +150,14 @@ class InspectionController
      *     description="Creates an inspection record with auto-generated number (QC-YYYYMM-NNNN). Links to inspection spec for tolerance evaluation.",
      *     security={{"sanctum":{}}},
      *     @OA\RequestBody(required=true, @OA\JsonContent(
-     *         required={"type", "inspection_spec_id", "batch_quantity"},
-     *         @OA\Property(property="type", type="string", enum={"incoming","in_process","outgoing"}),
-     *         @OA\Property(property="inspection_spec_id", type="string", description="Inspection spec hash ID"),
+     *         required={"stage", "product_id", "batch_quantity"},
+     *         @OA\Property(property="stage", type="string", enum={"incoming","in_process","outgoing","supplier_return","customer_return"}),
+     *         @OA\Property(property="product_id", type="string", description="Product hash ID"),
      *         @OA\Property(property="batch_quantity", type="integer", minimum=1),
-     *         @OA\Property(property="work_order_id", type="string", description="Work order hash ID (for in-process/outgoing)"),
-     *         @OA\Property(property="grn_id", type="string", description="GRN hash ID (for incoming)")
+     *         @OA\Property(property="entity_type", type="string", enum={"grn","work_order","delivery","return_request"}),
+     *         @OA\Property(property="entity_id", type="string", description="Source entity hash ID"),
+     *         @OA\Property(property="work_order_output_id", type="string", description="Required for outgoing inspections"),
+     *         @OA\Property(property="notes", type="string")
      *     )),
      *     @OA\Response(response=200, description="Inspection created"),
      *     @OA\Response(response=422, description="Validation error")
@@ -137,7 +170,7 @@ class InspectionController
     }
 
     /**
-     * @OA\Post(
+     * @OA\Patch(
      *     path="/quality/inspections/{id}/measurements",
      *     tags={"Inspections"},
      *     summary="Record inspection measurements",
@@ -145,11 +178,13 @@ class InspectionController
      *     security={{"sanctum":{}}},
      *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="string")),
      *     @OA\RequestBody(required=true, @OA\JsonContent(
-     *         required={"rows"},
-     *         @OA\Property(property="rows", type="array", @OA\Items(type="object",
-     *             @OA\Property(property="parameter_id", type="string"),
-     *             @OA\Property(property="actual_value", type="number"),
-     *             @OA\Property(property="result", type="string", enum={"pass","fail"})
+     *         required={"measurements"},
+     *         @OA\Property(property="measurements", type="array", @OA\Items(type="object",
+     *             required={"id"},
+     *             @OA\Property(property="id", type="string", description="Measurement hash ID"),
+     *             @OA\Property(property="measured_value", type="number", nullable=true),
+     *             @OA\Property(property="is_pass", type="boolean", nullable=true),
+     *             @OA\Property(property="notes", type="string", nullable=true)
      *         ))
      *     )),
      *     @OA\Response(response=200, description="Measurements recorded"),

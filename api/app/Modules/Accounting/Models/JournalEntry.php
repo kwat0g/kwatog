@@ -7,6 +7,7 @@ namespace App\Modules\Accounting\Models;
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Accounting\Enums\JournalEntryStatus;
+use App\Modules\Accounting\Support\JournalEntryAuditContext;
 use App\Modules\Auth\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -24,6 +25,7 @@ class JournalEntry extends Model
         'reference_type', 'reference_id',
         'total_debit', 'total_credit',
         'status',
+        'reversal_reason',
         'reversed_by_entry_id',
         'posted_at', 'posted_by',
         'created_by',
@@ -75,6 +77,12 @@ class JournalEntry extends Model
     public function isDraft(): bool    { return $this->status === JournalEntryStatus::Draft; }
     public function isPosted(): bool   { return $this->status === JournalEntryStatus::Posted; }
     public function isReversed(): bool { return $this->status === JournalEntryStatus::Reversed; }
+
+    /** @return array{user_id:?int, actor_type:string, reason:?string}|null */
+    public function auditContextOverride(): ?array
+    {
+        return JournalEntryAuditContext::current();
+    }
 
     /**
      * Best-effort human label for the linked source record (used by the API resource).

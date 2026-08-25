@@ -10,6 +10,7 @@ use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreGrnRequest extends FormRequest
 {
@@ -39,9 +40,24 @@ class StoreGrnRequest extends FormRequest
             'items'                          => ['required', 'array', 'min:1'],
             'items.*.purchase_order_item_id' => ['required', 'integer', 'exists:purchase_order_items,id'],
             'items.*.item_id'                => ['required', 'integer', 'exists:items,id'],
-            'items.*.location_id'            => ['required', 'integer', 'exists:warehouse_locations,id'],
+            'items.*.location_id'            => [
+                'required',
+                'integer',
+                Rule::exists('warehouse_locations', 'id')
+                    ->whereNull('deleted_at')
+                    ->where('is_active', true)
+                    ->where('is_blocked', false),
+            ],
             'items.*.quantity_received'      => ['required', 'decimal:0,3', 'min:0.001'],
             'items.*.unit_cost'              => ['nullable', 'decimal:0,4', 'min:0'],
+            'items.*.received_uom_code'      => ['nullable', 'string', 'max:20'],
+            'items.*.lot_number'             => ['nullable', 'string', 'max:50'],
+            'items.*.material_lot_number'    => ['nullable', 'string', 'max:50'],
+            'items.*.supplier_lot_reference' => ['nullable', 'string', 'max:100'],
+            'items.*.expiry_date'            => ['nullable', 'date'],
+            'items.*.moisture_percentage'   => ['nullable', 'decimal:0,3', 'min:0', 'max:100'],
+            'items.*.coa_document_path'     => ['nullable', 'string', 'max:500'],
+            'items.*.coa_verified'          => ['prohibited'],
             'items.*.remarks'                => ['nullable', 'string', 'max:200'],
         ];
     }

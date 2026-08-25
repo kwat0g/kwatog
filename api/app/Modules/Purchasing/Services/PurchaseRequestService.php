@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Purchasing\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Services\ApprovalService;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\OutboxService;
@@ -22,6 +23,7 @@ use App\Modules\Purchasing\Events\PurchaseRequestApproved;
 use App\Modules\Purchasing\Models\ApprovedSupplier;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\PurchaseRequestItem;
+use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -33,6 +35,7 @@ class PurchaseRequestService
         private readonly ApprovalService $approvals,
         private readonly BudgetEnforcementService $budget,
         private readonly SettingsService $settings,
+        private readonly PurchaseRequestAccessPolicy $access,
     ) {}
 
     public function list(array $filters, ?User $user = null): LengthAwarePaginator
@@ -41,6 +44,7 @@ class PurchaseRequestService
             'requester:id,name,role_id',
             'department:id,name,code',
             'items.item:id,code,name,unit_of_measure',
+            'items.suggestedVendor:id,name',
             'approvalRecords',
         ]);
 
@@ -60,17 +64,7 @@ class PurchaseRequestService
             $q->where('pr_number', 'ilike', '%'.$filters['search'].'%');
         }
 
-        // Row-level filtering. Admin and any user with purchasing.pr.approve
-        // (e.g. department_head, purchasing_officer) see all PRs so their
-        // approval queue is complete. Everyone else sees only their own.
-        if ($user) {
-            $roleSlug = $user->role?->slug;
-            $isAdmin = $roleSlug === 'system_admin';
-            $canApprove = $user->hasPermission('purchasing.pr.approve');
-            if (! $isAdmin && ! $canApprove) {
-                $q->where('requested_by', $user->id);
-            }
-        }
+        $this->access->visibleTo($q, $user);
 
         return $q->orderByDesc('date')->orderByDesc('id')
             ->paginate(min((int) ($filters['per_page'] ?? 25), 100));
@@ -82,6 +76,7 @@ class PurchaseRequestService
             'requester:id,name,role_id',
             'department',
             'items.item',
+            'items.suggestedVendor:id,name',
             'approvalRecords.approver:id,name',
             'purchaseOrders:id,po_number,status,vendor_id,total_amount,purchase_request_id,is_auto_generated',
             'purchaseOrders.vendor:id,name',
@@ -98,6 +93,9 @@ class PurchaseRequestService
     {
         return DB::transaction(function () use ($data, $by) {
             $isAuto = (bool) ($data['is_auto_generated'] ?? false);
+            $priority = $this->priorityValue(
+                $data['priority'] ?? $this->settings->get('purchasing.purchase_request.default_priority', ''),
+            );
 
             $pr = PurchaseRequest::create([
                 'pr_number'            => $this->sequences->generate('pr'),
@@ -106,10 +104,14 @@ class PurchaseRequestService
                 'template_id'          => $data['template_id'] ?? null,
                 'date'                 => $data['date'] ?? now()->toDateString(),
                 'reason'               => $data['reason'] ?? null,
-                'priority'             => $data['priority'] ?? (string) $this->settings->get('purchasing.purchase_request.default_priority', ''),
+                'priority'             => $priority,
                 'is_auto_generated'    => $isAuto,
                 'auto_generated_reason'=> $data['auto_generated_reason'] ?? null,
-                'is_urgent'            => (bool) ($data['is_urgent'] ?? false),
+                // Priority is the public and automation-facing urgency
+                // contract. Keep the legacy flag in sync for existing UI and
+                // filters while retaining support for internal callers that
+                // explicitly set is_urgent.
+                'is_urgent'            => (bool) ($data['is_urgent'] ?? $this->isUrgentPriority($priority)),
                 'urgency_reason'       => $data['urgency_reason'] ?? null,
             ]);
             // status is non-fillable; service-only.
@@ -159,16 +161,31 @@ class PurchaseRequestService
         });
     }
 
-    public function update(PurchaseRequest $pr, array $data): PurchaseRequest
+    public function update(PurchaseRequest $pr, array $data, ?User $by = null): PurchaseRequest
     {
+        if ($by !== null && ! $this->access->canManageDraft($by, $pr)) {
+            throw new ForbiddenActionException('You do not have permission to edit this purchase request.');
+        }
+        if ($by !== null && array_key_exists('department_id', $data)
+            && ! $this->access->canAssignDepartment($by, $pr, $data['department_id'] !== null ? (int) $data['department_id'] : null)) {
+            throw new ForbiddenActionException('You cannot assign this purchase request to that department.');
+        }
         if ($pr->status !== PurchaseRequestStatus::Draft) {
             throw new BusinessRuleException('Only draft PRs can be edited.');
         }
         return DB::transaction(function () use ($pr, $data) {
             $pr->update([
                 'reason'    => $data['reason']   ?? $pr->reason,
-                'priority'  => $data['priority'] ?? $pr->priority,
+                'priority'  => array_key_exists('priority', $data)
+                    ? $this->priorityValue($data['priority'])
+                    : $pr->priority,
+                ...array_key_exists('priority', $data)
+                    ? ['is_urgent' => $this->isUrgentPriority($this->priorityValue($data['priority']))]
+                    : [],
                 'date'      => $data['date']     ?? $pr->date,
+                ...array_key_exists('department_id', $data)
+                    ? ['department_id' => $data['department_id']]
+                    : [],
             ]);
             if (isset($data['items'])) {
                 $pr->items()->forceDelete();
@@ -207,46 +224,78 @@ class PurchaseRequestService
      * - Urgent PRs skip the Department Head step.
      * - Pre-fill preferred supplier from approved_suppliers during submit.
      */
-    public function submit(PurchaseRequest $pr): PurchaseRequest
+    public function submit(PurchaseRequest $pr, ?User $by = null): PurchaseRequest
     {
-        if ($pr->status !== PurchaseRequestStatus::Draft) {
-            throw new BusinessRuleException('Only draft PRs can be submitted.');
+        if ($by !== null && ! $this->access->canManageDraft($by, $pr)) {
+            throw new ForbiddenActionException('You do not have permission to submit this purchase request.');
         }
-        return DB::transaction(function () use ($pr) {
-            $total = (string) $pr->totalEstimatedAmount();
 
-            if ($pr->department_id) {
-                $this->budget->assess($pr, (int) $pr->department_id, $total);
+        return DB::transaction(function () use ($pr, $by) {
+            // The status check must use the locked row. Otherwise two retries
+            // can both pass a stale draft check and recreate approval records.
+            $locked = PurchaseRequest::query()->lockForUpdate()->findOrFail($pr->getKey());
+            if ($locked->status !== PurchaseRequestStatus::Draft) {
+                throw new BusinessRuleException('Only draft PRs can be submitted.');
+            }
+            if ($by !== null && ! $this->access->canManageDraft($by, $locked)) {
+                throw new ForbiddenActionException('You do not have permission to submit this purchase request.');
+            }
+
+            $locked->loadMissing(['requester.employee']);
+            $departmentId = $locked->department_id ?? $locked->requester?->employee?->department_id;
+
+            // Generated PRs must have an accountable department before the
+            // budget gate. Keeping them as drafts makes the missing ownership
+            // visible to an operator instead of silently bypassing enforcement.
+            if ($locked->is_auto_generated && $departmentId === null) {
+                throw new BusinessRuleException(
+                    'This automatically generated purchase request needs an owning department before submission.',
+                );
+            }
+            if ($locked->department_id === null && $departmentId !== null) {
+                $locked->forceFill(['department_id' => (int) $departmentId])->save();
+            }
+
+            $total = $locked->totalEstimatedAmount();
+
+            if ($departmentId !== null) {
+                $this->budget->assess($locked, (int) $departmentId, $total);
             }
 
             // ADV6 — Pre-fill preferred suppliers on items before submission.
-            $this->prefillSupplierOnItems($pr);
+            $this->prefillSupplierOnItems($locked);
 
-            // ADV6 — Urgency escalation: urgent PRs may skip the Dept Head step,
-            // which submitUrgent() does by rewriting that step's record after
-            // submission, and only under the purchasing.urgent_skip_limit cap.
-            // That cap is unrelated to ApprovalService's own amount gating,
-            // which reads the per-step `threshold` key in the `steps` JSON and
-            // reads no setting at all.
-            if ($pr->is_urgent) {
-                $this->submitUrgent($pr, $total);
-            } else {
-                $this->approvals->submit($pr, 'purchase_request', $total);
+            // Priority is the public/automation-facing urgency contract. The
+            // legacy flag remains supported for internal callers and is
+            // normalised before the workflow records are created.
+            $isUrgent = (bool) $locked->is_urgent || $this->isUrgentPriority($this->priorityValue($locked->priority));
+            if ($isUrgent && ! $locked->is_urgent) {
+                $locked->forceFill(['is_urgent' => true])->save();
             }
 
-            $pr->forceFill([
+            // Urgent PRs may skip the Department Head step only under the
+            // configured value cap. The ApprovalService threshold remains an
+            // independent exact-decimal gate for the later VP step.
+            if ($isUrgent) {
+                $this->submitUrgent($locked, $total);
+            } else {
+                $this->approvals->submit($locked, 'purchase_request', $total);
+            }
+
+            $locked->forceFill([
                 'status'       => PurchaseRequestStatus::Pending,
                 'submitted_at' => now(),
             ])->save();
 
-            $fresh = $pr->fresh();
+            $fresh = $locked->fresh();
 
-            // ADV6 — Auto-approve small PRs (< ₱5,000) when requestor is a dept head.
+            // ADV6 — Auto-approve small PRs (< configured threshold) when
+            // requestor is a department head.
             $requester = $fresh->requester;
             $isDeptHead = $requester && $requester->employee &&
                 $requester->employee->is_department_head;
-            $autoApproveThreshold = $this->settings->requiredFloat('approval.pr.dept_head_auto_approve_threshold', 0);
-            if ($total < $autoApproveThreshold && $isDeptHead) {
+            $autoApproveThreshold = $this->moneySetting('approval.pr.dept_head_auto_approve_threshold');
+            if (Money::lt($total, $autoApproveThreshold) && $isDeptHead) {
                 // Auto-approve all pending steps in order.
                 while ($this->approvals->nextStep($fresh)) {
                     $this->approvals->approve($fresh, $requester, 'Auto-approved: amount below configured department-head threshold.');
@@ -291,8 +340,8 @@ class PurchaseRequestService
 
         // Resolve the cap. '0' disables skipping; any positive value is the
         // inclusive ceiling under which the Dept Head step may be skipped.
-        $limit = $this->settings->requiredFloat('purchasing.urgent_skip_limit', 0);
-        $maySkip = $limit > 0 && Money::lte($total, $limit);
+        $limit = $this->moneySetting('purchasing.urgent_skip_limit');
+        $maySkip = Money::gt($limit, '0') && Money::lte($total, $limit);
 
         if (! $maySkip) {
             // Over the cap (or skipping disabled): keep the full chain. The PR
@@ -301,7 +350,7 @@ class PurchaseRequestService
         }
 
         // Find the first pending step and skip it (Dept Head role).
-        $first = $this->approvals->records($pr)
+        $first = $this->approvals->currentRecords($pr)
             ->where('action', 'pending')
             ->orderBy('step_order')
             ->first();
@@ -340,6 +389,10 @@ class PurchaseRequestService
 
     public function acknowledgeBudget(PurchaseRequest $pr, User $by): PurchaseRequest
     {
+        if (! $this->access->canAcknowledgeBudget($by, $pr)) {
+            throw new ForbiddenActionException('You do not have permission to acknowledge this purchase request budget warning.');
+        }
+
         return $this->budget->acknowledge($pr, $by);
     }
 
@@ -353,6 +406,9 @@ class PurchaseRequestService
             $locked = PurchaseRequest::query()->lockForUpdate()->findOrFail($pr->getKey());
             if ($locked->status !== PurchaseRequestStatus::Pending) {
                 throw new BusinessRuleException('Only pending PRs can be approved.');
+            }
+            if (! $this->access->canApprove($by, $locked)) {
+                throw new ForbiddenActionException('You are not authorized to approve this purchase request.');
             }
             $this->budget->assertAcknowledged($locked);
 
@@ -418,31 +474,74 @@ class PurchaseRequestService
             if ($locked->status !== PurchaseRequestStatus::Pending) {
                 throw new BusinessRuleException('Only pending PRs can be rejected.');
             }
+            if (! $this->access->canReject($by, $locked)) {
+                throw new ForbiddenActionException('You are not authorized to reject this purchase request.');
+            }
             $this->approvals->reject($locked, $by, $reason);
             $locked->forceFill(['status' => PurchaseRequestStatus::Rejected])->save();
             return $locked->fresh();
         });
     }
 
-    public function cancel(PurchaseRequest $pr): PurchaseRequest
+    public function cancel(PurchaseRequest $pr, ?User $by = null): PurchaseRequest
     {
-        return DB::transaction(function () use ($pr) {
+        if ($by !== null && ! $this->access->canCancel($by, $pr)) {
+            throw new ForbiddenActionException('You do not have permission to cancel this purchase request.');
+        }
+
+        return DB::transaction(function () use ($pr, $by) {
             // Lock-then-guard: without it, cancel could race a concurrent
             // approval and cancel an already-approved PR.
             $locked = PurchaseRequest::query()->lockForUpdate()->findOrFail($pr->getKey());
             if (! in_array($locked->status, [PurchaseRequestStatus::Draft, PurchaseRequestStatus::Pending], true)) {
                 throw new BusinessRuleException('Cannot cancel a PR in this status.');
             }
+            if ($by !== null && ! $this->access->canCancel($by, $locked)) {
+                throw new ForbiddenActionException('You do not have permission to cancel this purchase request.');
+            }
             $locked->forceFill(['status' => PurchaseRequestStatus::Cancelled])->save();
             return $locked->fresh();
         });
     }
 
-    public function delete(PurchaseRequest $pr): void
+    public function delete(PurchaseRequest $pr, ?User $by = null): void
     {
+        if ($by !== null && ! $this->access->canManageDraft($by, $pr)) {
+            throw new ForbiddenActionException('You do not have permission to delete this purchase request.');
+        }
         if ($pr->status !== PurchaseRequestStatus::Draft) {
             throw new BusinessRuleException('Only draft PRs can be deleted.');
         }
         $pr->delete();
+    }
+
+    private function priorityValue(mixed $priority): string
+    {
+        return $priority instanceof PurchaseRequestPriority
+            ? $priority->value
+            : (string) $priority;
+    }
+
+    private function isUrgentPriority(string $priority): bool
+    {
+        return in_array($priority, [
+            PurchaseRequestPriority::Urgent->value,
+            PurchaseRequestPriority::Critical->value,
+        ], true);
+    }
+
+    private function moneySetting(string $key): string
+    {
+        $value = $this->settings->get($key);
+        if (! is_int($value) && ! is_string($value) && ! is_float($value)) {
+            throw new BusinessRuleException("Required setting {$key} is missing or invalid.");
+        }
+
+        $value = trim((string) $value);
+        if ($value === '' || ! preg_match('/^\d+(?:\.\d+)?$/', $value)) {
+            throw new BusinessRuleException("Required setting {$key} is missing or invalid.");
+        }
+
+        return Money::round2($value);
     }
 }

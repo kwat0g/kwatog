@@ -79,7 +79,9 @@ export default function SelfServiceHomePage() {
 
   const isLoading =
     (homeQuery.isLoading && hasEmployeeLink) || (dashboardQuery.isLoading && !dashboard);
-  const isError = dashboardQuery.isError && !dashboard;
+  // Both requests are required for a complete home view. A successful
+  // dashboard response must not disguise a failed self-service summary.
+  const isError = homeQuery.isError || (dashboardQuery.isError && !dashboard);
 
   /* ─── LOADING ─── */
   if (isLoading) {
@@ -112,7 +114,13 @@ export default function SelfServiceHomePage() {
             title="Couldn't load your dashboard"
             description="Something went wrong while loading your data. Please try again."
             action={
-              <Button variant="secondary" onClick={() => dashboardQuery.refetch()}>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  void homeQuery.refetch();
+                  void dashboardQuery.refetch();
+                }}
+              >
                 Retry
               </Button>
             }

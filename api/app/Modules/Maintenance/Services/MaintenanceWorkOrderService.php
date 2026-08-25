@@ -21,6 +21,7 @@ use App\Modules\Maintenance\Models\MaintenanceLog;
 use App\Modules\Maintenance\Models\MaintenanceSchedule;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\Maintenance\Models\SparePartUsage;
+use App\Modules\Maintenance\Support\MaintenanceWorkOrderStateMachine;
 use App\Modules\MRP\Enums\MoldEventType;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
@@ -38,6 +39,7 @@ class MaintenanceWorkOrderService
         private readonly MaintenanceScheduleService $schedules,
         private readonly NotificationService $notifications,
         private readonly SettingsService $settings,
+        private readonly MaintenanceWorkOrderStateMachine $stateMachine,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -157,30 +159,35 @@ class MaintenanceWorkOrderService
 
     public function assign(MaintenanceWorkOrder $wo, int $employeeId, User $by): MaintenanceWorkOrder
     {
-        $this->assertNotTerminal($wo);
         return DB::transaction(function () use ($wo, $employeeId, $by) {
-            $wo->forceFill([
+            $locked = MaintenanceWorkOrder::query()->lockForUpdate()->findOrFail($wo->getKey());
+            $employee = Employee::query()->whereKey($employeeId)->where('status', 'active')->first();
+            if (! $employee) {
+                throw ValidationException::withMessages([
+                    'employee_id' => ['The selected assignee is not an active employee.'],
+                ]);
+            }
+
+            $this->stateMachine->transition($locked, MaintenanceWorkOrderStatus::Assigned);
+            $locked->forceFill([
                 'assigned_to' => $employeeId,
-                'status'      => MaintenanceWorkOrderStatus::Assigned->value,
             ])->save();
-            $this->log($wo, 'Assigned to employee #'.$employeeId, $by);
-            return $this->show($wo);
+            $this->recordLifecycleLog($locked, 'Assigned to employee #'.$employeeId, $by);
+            return $this->show($locked);
         });
     }
 
     public function start(MaintenanceWorkOrder $wo, User $by): MaintenanceWorkOrder
     {
-        if ($wo->status === MaintenanceWorkOrderStatus::InProgress) return $this->show($wo);
-        $this->assertNotTerminal($wo);
         return DB::transaction(function () use ($wo, $by) {
-            // Lock-then-guard: re-read the authoritative row so a concurrent
-            // start/complete/cancel holding a stale instance cannot double-act.
             $locked = MaintenanceWorkOrder::query()->lockForUpdate()->findOrFail($wo->getKey());
-            $this->assertNotTerminal($locked);
-            if ($locked->status === MaintenanceWorkOrderStatus::InProgress) return $this->show($locked);
+            if ($locked->status === MaintenanceWorkOrderStatus::InProgress) {
+                return $this->show($locked);
+            }
+
+            $this->stateMachine->transition($locked, MaintenanceWorkOrderStatus::InProgress);
 
             $locked->forceFill([
-                'status'     => MaintenanceWorkOrderStatus::InProgress->value,
                 'started_at' => now(),
             ])->save();
 
@@ -205,7 +212,7 @@ class MaintenanceWorkOrderService
                 }
             }
 
-            $this->log($locked, 'Maintenance started.', $by);
+            $this->recordLifecycleLog($locked, 'Maintenance started.', $by);
             return $this->show($locked);
         });
     }
@@ -215,18 +222,13 @@ class MaintenanceWorkOrderService
      */
     public function complete(MaintenanceWorkOrder $wo, array $data, User $by): MaintenanceWorkOrder
     {
-        $this->assertNotTerminal($wo);
         return DB::transaction(function () use ($wo, $data, $by) {
-            // Lock-then-guard: without the lock, two concurrent completes both
-            // pass the terminal guard and double-bump the mold lifecycle
-            // counters / maintenance cost from stale reads (P61).
             $locked = MaintenanceWorkOrder::query()->lockForUpdate()->findOrFail($wo->getKey());
-            $this->assertNotTerminal($locked);
+            $this->stateMachine->transition($locked, MaintenanceWorkOrderStatus::Completed);
 
             $cost = (string) SparePartUsage::query()->where('work_order_id', $locked->id)->sum('total_cost');
 
             $locked->forceFill([
-                'status'           => MaintenanceWorkOrderStatus::Completed->value,
                 'completed_at'     => now(),
                 'downtime_minutes' => (int) ($data['downtime_minutes'] ?? 0),
                 'cost'             => $cost,
@@ -243,7 +245,11 @@ class MaintenanceWorkOrderService
                         // Lifecycle manager: stamp + accumulate maintenance cost/count.
                         'last_maintenance_at'    => now()->toDateString(),
                         'maintenance_count'      => (int) $mold->maintenance_count + 1,
-                        'total_maintenance_cost' => number_format((float) $mold->total_maintenance_cost + (float) $cost, 2, '.', ''),
+                        'total_maintenance_cost' => bcadd(
+                            (string) $mold->total_maintenance_cost,
+                            (string) $cost,
+                            2,
+                        ),
                     ])->save();
                     MoldHistory::create([
                         'mold_id'             => $mold->id,
@@ -270,22 +276,18 @@ class MaintenanceWorkOrderService
                 if ($schedule) $this->schedules->recomputeNextDueAt($schedule, now());
             }
 
-            $this->log($locked, 'Maintenance completed.'.($cost > 0 ? ' Spare parts cost '.app(\App\Common\Services\CurrencyDisplayService::class)->format($cost).'.' : ''), $by);
+            $this->recordLifecycleLog($locked, 'Maintenance completed.'.($cost > 0 ? ' Spare parts cost '.app(\App\Common\Services\CurrencyDisplayService::class)->format($cost).'.' : ''), $by);
             return $this->show($locked);
         });
     }
 
     public function cancel(MaintenanceWorkOrder $wo, ?string $reason, User $by): MaintenanceWorkOrder
     {
-        $this->assertNotTerminal($wo);
         return DB::transaction(function () use ($wo, $reason, $by) {
-            // Lock-then-guard: re-read so a concurrent complete cannot race a
-            // cancel past the terminal guard.
             $locked = MaintenanceWorkOrder::query()->lockForUpdate()->findOrFail($wo->getKey());
-            $this->assertNotTerminal($locked);
+            $this->stateMachine->transition($locked, MaintenanceWorkOrderStatus::Cancelled);
 
             $locked->forceFill([
-                'status'  => MaintenanceWorkOrderStatus::Cancelled->value,
                 'remarks' => $reason ?: $locked->remarks,
             ])->save();
             // Restore machine to idle if it was set to maintenance by us
@@ -295,18 +297,23 @@ class MaintenanceWorkOrderService
                     $machine->forceFill(['status' => 'idle'])->save();
                 }
             }
-            // Recompute schedule next_due_at on cancel so running-hours-based
-            // schedules don't re-trigger immediately on the next cron run.
-            if ($locked->schedule_id) {
-                $schedule = MaintenanceSchedule::find($locked->schedule_id);
-                if ($schedule) $this->schedules->recomputeNextDueAt($schedule, now());
-            }
-            $this->log($locked, 'Cancelled'.($reason ? ': '.$reason : '.'), $by);
+            // Cancellation does not count as maintenance performed. Leave the
+            // schedule due so the next sweep can create a replacement WO.
+            $this->recordLifecycleLog($locked, 'Cancelled'.($reason ? ': '.$reason : '.'), $by);
             return $this->show($locked);
         });
     }
 
     public function log(MaintenanceWorkOrder $wo, string $description, User $by): MaintenanceLog
+    {
+        return DB::transaction(function () use ($wo, $description, $by): MaintenanceLog {
+            $locked = MaintenanceWorkOrder::query()->lockForUpdate()->findOrFail($wo->getKey());
+            $this->stateMachine->assertInProgress($locked, 'add a log entry');
+            return $this->recordLifecycleLog($locked, $description, $by);
+        });
+    }
+
+    private function recordLifecycleLog(MaintenanceWorkOrder $wo, string $description, User $by): MaintenanceLog
     {
         return MaintenanceLog::create([
             'work_order_id' => $wo->id,
@@ -314,19 +321,5 @@ class MaintenanceWorkOrderService
             'logged_by'     => $by->id,
             'created_at'    => now(),
         ]);
-    }
-
-    /**
-     * Guard the assign/start/complete/cancel transitions. Every one is reachable
-     * from a live SPA button, so a double-click on an already-closed WO must
-     * surface as a 422 naming the field — not an unhandled 500.
-     */
-    private function assertNotTerminal(MaintenanceWorkOrder $wo): void
-    {
-        if ($wo->status->isTerminal()) {
-            throw ValidationException::withMessages([
-                'status' => ["This work order is already {$wo->status->value} and can no longer be modified."],
-            ]);
-        }
     }
 }

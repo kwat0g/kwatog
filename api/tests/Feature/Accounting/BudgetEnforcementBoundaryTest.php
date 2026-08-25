@@ -25,17 +25,17 @@ class BudgetEnforcementBoundaryTest extends TestCase
     use RefreshDatabase;
 
     /**
-     * The factories carry the statuses this path requires: FiscalYearFactory
-     * yields status=active (which BudgetService::getCurrentFiscalYear() needs,
-     * or checkAvailability() short-circuits to 'ok') and BudgetFactory yields
-     * status=approved (which Budget::scopeActive() needs). The factory's random
-     * year need not be the current one — getCurrentFiscalYear() falls back to
-     * the newest active year.
+     * The fiscal year is date-aligned because current-year resolution is now
+     * deliberately date-window based; a future active year must not become the
+     * enforcement target by fallback.
      */
     private function budgetFor(string $allocated, string $spent, string $committed): Department
     {
         $department = Department::factory()->create();
-        $fiscalYear = FiscalYear::factory()->create();
+        $fiscalYear = FiscalYear::factory()->create([
+            'start_date' => today()->startOfYear()->toDateString(),
+            'end_date' => today()->endOfYear()->toDateString(),
+        ]);
 
         Budget::factory()->create([
             'fiscal_year_id'   => $fiscalYear->id,

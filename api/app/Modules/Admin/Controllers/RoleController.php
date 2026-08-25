@@ -48,7 +48,7 @@ class RoleController
 
     public function restore(Role $role): JsonResponse
     {
-        $role->restore();
+        $this->service->restore($role);
         return response()->json(['message' => 'Role restored.']);
     }
 

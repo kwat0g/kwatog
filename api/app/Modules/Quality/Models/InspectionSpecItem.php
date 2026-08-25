@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Models;
 
+use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Quality\Enums\InspectionParameterType;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
  * Sprint 7 — Task 59. Single inspection parameter row.
@@ -20,10 +22,24 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class InspectionSpecItem extends Model
 {
-    use HasFactory, HasHashId;
+    use HasFactory, HasHashId, HasAuditLog, SoftDeletes;
+
+    protected static function booted(): void
+    {
+        static::creating(function (self $item): void {
+            if ($item->inspection_spec_revision_id || ! $item->inspection_spec_id) {
+                return;
+            }
+
+            $spec = InspectionSpec::withTrashed()->find((int) $item->inspection_spec_id);
+            if ($spec) {
+                $item->inspection_spec_revision_id = $spec->ensureCurrentRevision()->id;
+            }
+        });
+    }
 
     protected $fillable = [
-        'inspection_spec_id', 'parameter_name', 'parameter_type',
+        'inspection_spec_id', 'inspection_spec_revision_id', 'parameter_name', 'parameter_type',
         'unit_of_measure', 'nominal_value', 'tolerance_min', 'tolerance_max',
         'is_critical', 'sort_order', 'notes',
     ];
@@ -39,7 +55,12 @@ class InspectionSpecItem extends Model
 
     public function spec(): BelongsTo
     {
-        return $this->belongsTo(InspectionSpec::class, 'inspection_spec_id');
+        return $this->belongsTo(InspectionSpec::class, 'inspection_spec_id')->withTrashed();
+    }
+
+    public function revision(): BelongsTo
+    {
+        return $this->belongsTo(InspectionSpecRevision::class, 'inspection_spec_revision_id');
     }
 
     /**

@@ -10,7 +10,7 @@ class RejectPayrollAdjustmentRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->hasPermission('payroll.adjustments.create') ?? false;
+        return $this->user()?->hasPermission('payroll.adjustments.reject') ?? false;
     }
 
     public function rules(): array

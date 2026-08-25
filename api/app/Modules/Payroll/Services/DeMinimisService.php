@@ -118,9 +118,13 @@ class DeMinimisService
             ->where('benefit_type', $benefitType->value)
             ->where('is_taxable_portion', false)
             ->where('period_year', $year)
-            ->sum('amount');
+            ->get(['amount'])
+            ->reduce(
+                static fn (string $carry, DeMinimisBenefit $entry): string => Money::add($carry, (string) $entry->amount),
+                Money::zero(),
+            );
 
-        return number_format((float) $total, 2, '.', '');
+        return Money::round2($total);
     }
 
     /**
@@ -165,10 +169,13 @@ class DeMinimisService
             ->where('is_taxable_portion', false)
             ->where('period_year', $year)
             ->where('period_month', $month)
-            ->sum('amount');
+            ->get(['amount'])
+            ->reduce(
+                static fn (string $carry, DeMinimisBenefit $entry): string => Money::add($carry, (string) $entry->amount),
+                Money::zero(),
+            );
 
-        $monthTotalFormatted = number_format((float) $monthTotal, 2, '.', '');
-        $projected = Money::add($monthTotalFormatted, $amount);
+        $projected = Money::add($monthTotal, $amount);
         $monthlyLimit = $this->monthlyLimit($benefitType);
 
         if (Money::gt($projected, $monthlyLimit)) {
@@ -180,13 +187,16 @@ class DeMinimisService
 
     private function monthlyLimit(DeMinimisBenefitType $benefitType): string
     {
-        return number_format($this->settings->requiredFloat('payroll.de_minimis.'.$benefitType->value.'.monthly_limit', 0), 2, '.', '');
+        return Money::round2((string) $this->settings->requiredFloat(
+            'payroll.de_minimis.'.$benefitType->value.'.monthly_limit',
+            0,
+        ));
     }
 
     private function annualLimit(DeMinimisBenefitType $benefitType): ?string
     {
         $value = $this->settings->get('payroll.de_minimis.'.$benefitType->value.'.annual_limit');
-        return $value === null || $value === '' ? null : number_format((float) $value, 2, '.', '');
+        return $value === null || $value === '' ? null : Money::round2((string) $value);
     }
 
     /**
@@ -270,9 +280,13 @@ class DeMinimisService
             ->where('period_year', $year)
             ->where('period_month', $month)
             ->where('is_taxable_portion', false)
-            ->sum('amount');
+            ->get(['amount'])
+            ->reduce(
+                static fn (string $carry, DeMinimisBenefit $entry): string => Money::add($carry, (string) $entry->amount),
+                Money::zero(),
+            );
 
-        return number_format((float) $total, 2, '.', '');
+        return Money::round2($total);
     }
 
     /**
@@ -287,9 +301,13 @@ class DeMinimisService
             ->where('period_year', $year)
             ->where('period_month', $month)
             ->where('is_taxable_portion', true)
-            ->sum('amount');
+            ->get(['amount'])
+            ->reduce(
+                static fn (string $carry, DeMinimisBenefit $entry): string => Money::add($carry, (string) $entry->amount),
+                Money::zero(),
+            );
 
-        return number_format((float) $total, 2, '.', '');
+        return Money::round2($total);
     }
 
     /**

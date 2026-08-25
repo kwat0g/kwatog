@@ -43,11 +43,12 @@ class SettingsController
     public function update(UpdateSettingRequest $request, string $key): JsonResponse
     {
         DB::transaction(function () use ($request, $key) {
-            $this->settings->set($key, $request->input('value'));
-
-            DB::table('settings')->where('key', $key)->update([
-                'updated_by' => $request->user()->id,
-            ]);
+            $this->settings->updateFromAdmin(
+                $key,
+                $request->input('value'),
+                $request->user(),
+                $request->input('reason'),
+            );
         });
 
         return response()->json([

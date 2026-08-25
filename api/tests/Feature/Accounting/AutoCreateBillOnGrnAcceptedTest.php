@@ -297,9 +297,13 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
         $this->assertSame('manual_review', $reviewed->threeWayReviewStatus());
         $this->assertNull($reviewed->journal_entry_id);
 
+        $checker = User::factory()->create([
+            'role_id' => Role::where('slug', 'finance_officer')->value('id'),
+            'is_active' => true,
+        ]);
         $posted = $this->billSvc->postDraft(
             $reviewed,
-            $this->user,
+            $checker,
             allowOverride: true,
             overrideReason: 'Purchasing confirmed the approved price change against the supplier invoice.',
         );

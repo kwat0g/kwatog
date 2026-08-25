@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Maintenance\Services;
 
+use App\Common\Support\TrashedFilter;
 use App\Common\Support\SearchOperator;
 use App\Modules\Maintenance\Enums\MaintainableType;
 use App\Modules\Maintenance\Enums\MaintenanceScheduleInterval;
@@ -29,7 +30,7 @@ class MaintenanceScheduleService
 {
     public function list(array $filters): LengthAwarePaginator
     {
-        $q = MaintenanceSchedule::query();
+        $q = TrashedFilter::apply(MaintenanceSchedule::query(), $filters);
 
         foreach (['maintainable_type', 'interval_type'] as $f) {
             if (! empty($filters[$f])) $q->where($f, $filters[$f]);
@@ -70,6 +71,10 @@ class MaintenanceScheduleService
             }
             $this->assertIntervalMatchesTarget($interval, $type);
 
+            $machine = $type === MaintainableType::Machine
+                ? Machine::query()->lockForUpdate()->findOrFail((int) $data['maintainable_id'])
+                : null;
+
             $schedule = MaintenanceSchedule::create([
                 'maintainable_type' => $type->value,
                 'maintainable_id'   => (int) $data['maintainable_id'],
@@ -79,6 +84,10 @@ class MaintenanceScheduleService
                 'description'       => $data['description'],
                 'interval_type'     => $interval->value,
                 'interval_value'    => (int) $data['interval_value'],
+                'running_hours_baseline' => $type === MaintainableType::Machine
+                    && $interval === MaintenanceScheduleInterval::Hours
+                    ? (string) $machine?->running_hours_total
+                    : null,
                 'last_performed_at' => $data['last_performed_at'] ?? null,
                 'is_active'         => filter_var($data['is_active'] ?? true, FILTER_VALIDATE_BOOL),
             ]);
@@ -100,6 +109,14 @@ class MaintenanceScheduleService
             // machine schedule can be PATCHed onto the mold-only shots path and
             // next_due_at silently becomes null, stranding it from every cron.
             $this->assertIntervalMatchesTarget($schedule->interval_type, $schedule->maintainable_type);
+            if ($schedule->maintainable_type === MaintainableType::Machine
+                && $schedule->interval_type === MaintenanceScheduleInterval::Hours
+                && ($schedule->running_hours_baseline === null || $schedule->isDirty(['interval_type', 'interval_value']))) {
+                $machine = Machine::query()->lockForUpdate()->find($schedule->maintainable_id);
+                if ($machine) {
+                    $schedule->running_hours_baseline = (string) $machine->running_hours_total;
+                }
+            }
             $schedule->next_due_at = $this->computeNextDueAt($schedule);
             $schedule->save();
             return $schedule;
@@ -108,7 +125,20 @@ class MaintenanceScheduleService
 
     public function delete(MaintenanceSchedule $schedule): void
     {
-        $schedule->delete();
+        DB::transaction(function () use ($schedule): void {
+            $locked = MaintenanceSchedule::query()->lockForUpdate()->findOrFail($schedule->getKey());
+            $locked->delete();
+        });
+    }
+
+    public function restore(MaintenanceSchedule $schedule): void
+    {
+        DB::transaction(function () use ($schedule): void {
+            $locked = MaintenanceSchedule::withTrashed()->lockForUpdate()->findOrFail($schedule->getKey());
+            if ($locked->trashed()) {
+                $locked->restore();
+            }
+        });
     }
 
     /**
@@ -142,6 +172,13 @@ class MaintenanceScheduleService
             }
 
             $locked->last_performed_at = $completedAt;
+            if ($locked->maintainable_type === MaintainableType::Machine
+                && $locked->interval_type === MaintenanceScheduleInterval::Hours) {
+                $machine = Machine::query()->lockForUpdate()->find($locked->maintainable_id);
+                if ($machine) {
+                    $locked->running_hours_baseline = (string) $machine->running_hours_total;
+                }
+            }
             $locked->next_due_at = $this->computeNextDueAt($locked);
             $locked->save();
             return $locked;
@@ -156,22 +193,22 @@ class MaintenanceScheduleService
     {
         return MaintenanceSchedule::query()
             ->active()
-            ->whereIn('interval_type', [
-                MaintenanceScheduleInterval::Hours->value,
-                MaintenanceScheduleInterval::Days->value,
-            ])
+            ->where(function (Builder $q): void {
+                $q->where('interval_type', MaintenanceScheduleInterval::Days->value)
+                    ->orWhere(function (Builder $q): void {
+                        $q->where('interval_type', MaintenanceScheduleInterval::Hours->value)
+                            ->where('maintainable_type', '!=', MaintainableType::Machine->value);
+                    });
+            })
             ->due()
             ->whereDoesntHave('workOrders', fn (Builder $q) => $q->whereNotIn('status', ['completed', 'cancelled']))
             ->get();
     }
 
     /**
-     * Machine schedules whose running_hours_total exceeds the interval_value.
-     * Only applies to machine-type schedules with interval_type='hours' where
-     * the schedule tracks cumulative running hours rather than wall-clock time.
-     *
-     * Also respects next_due_at so a completed PM isn't immediately re-triggered
-     * on the next cron run (running_hours_total stays >= interval_value).
+     * Machine schedules whose runtime since the last maintenance baseline
+     * reaches interval_value. These schedules do not use next_due_at as a gate;
+     * runtime is the authoritative due signal.
      */
     public function machineHourSchedulesAtOrAboveThreshold(): iterable
     {
@@ -179,16 +216,15 @@ class MaintenanceScheduleService
             ->active()
             ->where('maintainable_type', MaintainableType::Machine->value)
             ->where('interval_type', MaintenanceScheduleInterval::Hours->value)
-            ->where(function (Builder $q) {
-                $q->whereNull('next_due_at')->orWhere('next_due_at', '<=', now());
-            })
             ->whereDoesntHave('workOrders', fn (Builder $q) => $q->whereNotIn('status', ['completed', 'cancelled']))
             ->get()
             ->filter(function (MaintenanceSchedule $s) {
                 $machine = Machine::find($s->maintainable_id);
                 if (! $machine) return false;
-                $elapsed = (float) $machine->running_hours_total;
-                return $elapsed >= (float) $s->interval_value;
+                $baseline = $s->running_hours_baseline;
+                if ($baseline === null) return false;
+                $dueAt = bcadd((string) $baseline, (string) $s->interval_value, 2);
+                return bccomp((string) $machine->running_hours_total, $dueAt, 2) >= 0;
             })
             ->values();
     }
@@ -215,8 +251,11 @@ class MaintenanceScheduleService
 
     private function computeNextDueAt(MaintenanceSchedule $schedule): ?Carbon
     {
-        if ($schedule->interval_type === MaintenanceScheduleInterval::Shots) {
-            // Shot-based: not date-driven; surface a "next due" hint as null.
+        if ($schedule->interval_type === MaintenanceScheduleInterval::Shots
+            || ($schedule->maintainable_type === MaintainableType::Machine
+                && $schedule->interval_type === MaintenanceScheduleInterval::Hours)) {
+            // Shot-based and machine-runtime schedules are not date-driven;
+            // their due signals are the live shot/runtime thresholds.
             return null;
         }
         $base = $schedule->last_performed_at ?: now();

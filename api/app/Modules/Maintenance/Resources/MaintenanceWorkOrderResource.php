@@ -49,7 +49,7 @@ class MaintenanceWorkOrderResource extends JsonResource
             'description'       => $this->description,
             'status'            => $status?->value ?? $this->status,
             'status_label'      => $status?->label() ?? (string) $this->status,
-            'available_actions' => $this->availableActions($status),
+            'available_actions' => $this->availableActions($status, $request),
             'started_at'        => optional($this->started_at)?->toISOString(),
             'completed_at'      => optional($this->completed_at)?->toISOString(),
             'downtime_minutes'  => (int) $this->downtime_minutes,
@@ -89,13 +89,19 @@ class MaintenanceWorkOrderResource extends JsonResource
     }
 
     /** @return list<string> */
-    private function availableActions(?MaintenanceWorkOrderStatus $status): array
+    private function availableActions(?MaintenanceWorkOrderStatus $status, Request $request): array
     {
-        return match ($status) {
+        $actions = match ($status) {
             MaintenanceWorkOrderStatus::Open,
             MaintenanceWorkOrderStatus::Assigned => ['start', 'cancel'],
             MaintenanceWorkOrderStatus::InProgress => ['complete', 'cancel'],
             default => [],
         };
+
+        if ($status === MaintenanceWorkOrderStatus::Open && $request->user()?->can('maintenance.wo.assign')) {
+            array_unshift($actions, 'assign');
+        }
+
+        return $actions;
     }
 }

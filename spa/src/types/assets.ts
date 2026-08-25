@@ -1,5 +1,6 @@
 export type AssetCategory = 'machine' | 'mold' | 'vehicle' | 'equipment' | 'furniture' | 'other';
 export type AssetStatus = 'active' | 'under_maintenance' | 'disposed';
+export type DepreciationMethod = 'straight_line' | 'declining_balance';
 
 export interface Asset {
  id: string;
@@ -12,6 +13,8 @@ export interface Asset {
  acquisition_date: string;
  acquisition_cost: string;
  useful_life_years: number;
+ depreciation_method: DepreciationMethod;
+ depreciation_method_label?: string | null;
  salvage_value: string;
  accumulated_depreciation: string;
  monthly_depreciation: string;
@@ -20,7 +23,12 @@ export interface Asset {
  status_label?: string;
  disposed_date: string | null;
  disposal_amount: string | null;
+ disposal_reason: string | null;
  location: string | null;
+ insurance_policy_no: string | null;
+ insurance_provider: string | null;
+ insurance_expiry: string | null;
+ insured_value: string | null;
  depreciations?: Array<{
  id: string;
  period_year: number;
@@ -38,10 +46,24 @@ export interface CreateAssetData {
  name: string;
  description?: string;
  category: AssetCategory;
- department_id?: number | null;
+ department_id?: string | null;
  acquisition_date: string;
  acquisition_cost: string;
  useful_life_years: number;
+ depreciation_method?: DepreciationMethod;
+ salvage_value?: string;
+ location?: string;
+ insurance_policy_no?: string;
+ insurance_provider?: string;
+ insurance_expiry?: string;
+ insured_value?: string;
+}
+
+export interface UpdateAssetData {
+ name?: string;
+ description?: string;
+ department_id?: string | null;
+ useful_life_years?: number;
  salvage_value?: string;
  location?: string;
 }

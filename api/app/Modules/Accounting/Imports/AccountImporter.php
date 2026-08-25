@@ -7,6 +7,7 @@ namespace App\Modules\Accounting\Imports;
 use App\Common\Services\Import\EntityImporter;
 use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Services\AccountService;
 use Illuminate\Database\Eloquent\Model;
 use RuntimeException;
 
@@ -16,6 +17,8 @@ use RuntimeException;
  */
 class AccountImporter implements EntityImporter
 {
+    public function __construct(private readonly AccountService $accounts) {}
+
     public function key(): string
     {
         return 'coa';
@@ -35,6 +38,9 @@ class AccountImporter implements EntityImporter
 
         if ($code === '' || $name === '') {
             throw new RuntimeException('code and name are required.');
+        }
+        if (! preg_match('/^[0-9]{3,6}$/', $code)) {
+            throw new RuntimeException('code must contain 3 to 6 digits.');
         }
         if (! in_array($type, AccountType::values(), true)) {
             throw new RuntimeException("Invalid account type '{$type}'. Expected one of: ".implode(', ', AccountType::values()));
@@ -69,6 +75,6 @@ class AccountImporter implements EntityImporter
             if ($payload['is_active'] === null) throw new RuntimeException('is_active must be true or false.');
         }
 
-        return Account::create($payload);
+        return $this->accounts->create($payload);
     }
 }

@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Textarea } from '@/components/ui/Textarea';
 import { LinkedRecords } from '@/components/chain/LinkedRecords';
 import { ActivityStream } from '@/components/chain/ActivityStream';
 import { Panel } from '@/components/ui/Panel';
@@ -42,6 +43,7 @@ export default function SalesOrderDetailPage() {
  const { can } = usePermission();
  const [confirmOpen, setConfirmOpen] = useState(false);
  const [cancelOpen, setCancelOpen] = useState(false);
+ const [cancelReason, setCancelReason] = useState('');
  const [chainResult, setChainResult] = useState<SoChainResult | null>(null);
  const [confirmError, setConfirmError] = useState<{ message: string; errors?: Record<string, string[]> } | null>(null);
  const [finalizeInvoiceId, setFinalizeInvoiceId] = useState<string | null>(null);
@@ -58,7 +60,12 @@ export default function SalesOrderDetailPage() {
  });
 
  // Series C — Task C4. Real-time chain progress.
- useChainProgress('sales_order', id, ['crm', 'sales-orders', 'detail', id]);
+ useChainProgress(
+  'sales_order',
+  id,
+  ['crm', 'sales-orders', 'detail', id],
+  [['crm', 'sales-orders', 'chain', id]],
+ );
 
  const confirm = useMutation({
  mutationFn: () => salesOrdersApi.confirm(id!),
@@ -87,6 +94,7 @@ export default function SalesOrderDetailPage() {
  qc.invalidateQueries({ queryKey: ['crm', 'sales-orders', 'chain', id] });
  toast.success(`Sales order ${so.so_number} cancelled.`);
  setCancelOpen(false);
+ setCancelReason('');
  },
  onError: (e: AxiosError<{ message?: string }>) => {
  toast.error(e.response?.data?.message ?? 'Failed to cancel sales order.');
@@ -175,7 +183,8 @@ export default function SalesOrderDetailPage() {
  The MRP chain above stays; this shows the downstream O2C completion. */}
  <Panel title="Order-to-cash chain">
  <ChainHeader steps={buildO2cChain({
-  so: { id: data.id, number: data.so_number },
+ so: { id: data.id, number: data.so_number },
+  soStatus: data.status,
   delivery: data.deliveries?.[0]
   ? { id: data.deliveries[0].id, number: data.deliveries[0].delivery_number }
   : null,
@@ -229,6 +238,8 @@ export default function SalesOrderDetailPage() {
  <dd className="col-span-2 font-mono">Net {data.payment_terms_days}</dd>
  <dt className="text-muted">Delivery terms</dt>
  <dd className="col-span-2">{data.delivery_terms ?? '—'}</dd>
+ <dt className="text-muted">Incoterm</dt>
+ <dd className="col-span-2">{data.incoterm ?? '—'}</dd>
  <dt className="text-muted">Created by</dt>
  <dd className="col-span-2">{data.creator?.name ?? '—'}</dd>
  <dt className="text-muted">Notes</dt>
@@ -386,14 +397,23 @@ export default function SalesOrderDetailPage() {
 
  <ConfirmDialog
  isOpen={cancelOpen}
- onClose={() => setCancelOpen(false)}
- onConfirm={() => cancel.mutate(undefined)}
+ onClose={() => { setCancelOpen(false); setCancelReason(''); }}
+ onConfirm={() => cancel.mutate(cancelReason.trim() || undefined)}
  title="Cancel sales order?"
  description={
- <>
+ <div className="space-y-3">
+ <p>
  <span className="font-mono font-medium text-primary">{data.so_number}</span> will be marked as cancelled.
  This cannot be undone.
- </>
+ </p>
+ <Textarea
+  label="Cancellation reason (optional)"
+  value={cancelReason}
+  onChange={(event) => setCancelReason(event.target.value)}
+  maxLength={500}
+  placeholder="Record why this order is being cancelled"
+ />
+ </div>
  }
  confirmLabel="Cancel order"
  variant="danger"

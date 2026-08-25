@@ -34,28 +34,20 @@ class PurchasingDashboardService
     public function purchasing(User $user): array
     {
         return Cache::remember("dashboard:purchasing:{$user->id}", self::CACHE_TTL, function () use ($user) {
-            $prsPending   = $this->safeCount('purchase_requests', fn ($q) => $q->where('status', 'pending'));
-            $openPos      = $this->safeCount('purchase_orders', fn ($q) => $q->whereIn('status', [
-                PurchaseOrderStatus::Draft->value,
-                PurchaseOrderStatus::Approved->value,
-                PurchaseOrderStatus::Sent->value,
-            ]));
-            $overdue      = $this->safeCount('purchase_orders', fn ($q) => $q
-                ->whereIn('status', [PurchaseOrderStatus::Approved->value, PurchaseOrderStatus::Sent->value])
-                ->where('expected_delivery_date', '<', today()));
-            $supplierReviewThreshold = $this->settings->requiredFloat('purchasing.supplier_score.tier_c_min', 0, 100);
-            $suppliersDue = $this->safeCount('supplier_performance_snapshots', function ($q) use ($supplierReviewThreshold) {
-                return $q->where('overall_score', '<', $supplierReviewThreshold);
-            });
-
             return [
                 'kpis' => $this->gate->kpis($user, [
-                    ['purchasing.view',                       fn () => $this->kpi('PRs Pending Action',   (string) $prsPending,   'count')],
-                    ['purchasing.view',                       fn () => $this->kpi('Open POs',              (string) $openPos,      'count')],
+                    ['purchasing.view', fn () => $this->kpi('PRs Pending Action', (string) $this->safeCount('purchase_requests', fn ($q) => $q->where('status', 'pending')), 'count')],
+                    ['purchasing.view', fn () => $this->kpi('Open POs', (string) $this->safeCount('purchase_orders', fn ($q) => $q->whereIn('status', [
+                        PurchaseOrderStatus::Draft->value,
+                        PurchaseOrderStatus::Approved->value,
+                        PurchaseOrderStatus::Sent->value,
+                    ])), 'count')],
                     // Overdue against po.expected_delivery_date — a purchasing
                     // reading, not a supply-chain one.
-                    ['purchasing.view',                       fn () => $this->kpi('Overdue Deliveries',    (string) $overdue,      'count')],
-                    ['purchasing.suppliers.performance.view', fn () => $this->kpi('Suppliers Due Review',  (string) $suppliersDue, 'count')],
+                    ['purchasing.view', fn () => $this->kpi('Overdue Deliveries', (string) $this->safeCount('purchase_orders', fn ($q) => $q
+                        ->whereIn('status', [PurchaseOrderStatus::Approved->value, PurchaseOrderStatus::Sent->value])
+                        ->where('expected_delivery_date', '<', today())), 'count')],
+                    ['purchasing.suppliers.performance.view', fn () => $this->kpi('Suppliers Due Review', (string) $this->suppliersDueReview(), 'count')],
                 ]),
                 'panels' => $this->gate->panels($user, [
                     // A configured horizon, not data.
@@ -145,9 +137,7 @@ class PurchasingDashboardService
     private function purchasingTopSuppliers(): array
     {
         if (! Schema::hasTable('supplier_performance_snapshots') || ! Schema::hasTable('vendors')) return [];
-        $latestPeriod = DB::table('supplier_performance_snapshots')
-            ->orderByDesc('period_year')->orderByDesc('period_month')
-            ->select('period_year', 'period_month')->first();
+        $latestPeriod = $this->latestSupplierSnapshotPeriod();
         if (! $latestPeriod) return [];
         return DB::table('supplier_performance_snapshots as sps')
             ->join('vendors as v', 'v.id', '=', 'sps.vendor_id')
@@ -163,6 +153,34 @@ class PurchasingDashboardService
                 'tier'          => $r->tier,
             ])
             ->all();
+    }
+
+    private function suppliersDueReview(): int
+    {
+        if (! Schema::hasTable('supplier_performance_snapshots')) return 0;
+        $latestPeriod = $this->latestSupplierSnapshotPeriod();
+        if (! $latestPeriod) return 0;
+
+        $threshold = $this->settings->requiredFloat('purchasing.supplier_score.tier_c_min', 0, 100);
+
+        return (int) DB::table('supplier_performance_snapshots')
+            ->where('period_year', $latestPeriod->period_year)
+            ->where('period_month', $latestPeriod->period_month)
+            ->whereNotNull('overall_score')
+            ->where('overall_score', '<', $threshold)
+            ->distinct()
+            ->count('vendor_id');
+    }
+
+    private function latestSupplierSnapshotPeriod(): ?object
+    {
+        if (! Schema::hasTable('supplier_performance_snapshots')) return null;
+
+        return DB::table('supplier_performance_snapshots')
+            ->orderByDesc('period_year')
+            ->orderByDesc('period_month')
+            ->select('period_year', 'period_month')
+            ->first();
     }
 
     /**

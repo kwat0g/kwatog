@@ -10,7 +10,10 @@ use App\Modules\Quality\Enums\NcrSeverity;
 use App\Modules\Quality\Enums\NcrSource;
 use App\Modules\Quality\Enums\NcrStatus;
 use App\Modules\Quality\Models\NonConformanceReport;
+use App\Modules\Auth\Models\User;
+use App\Modules\Quality\Requests\AddNcrActionRequest;
 use App\Modules\Quality\Requests\CreateNcrRequest;
+use App\Modules\Quality\Requests\ListNcrRequest;
 use App\Modules\Quality\Resources\NcrActionResource;
 use App\Modules\Quality\Resources\NcrResource;
 use App\Modules\Quality\Services\NcrService;
@@ -50,9 +53,9 @@ class NcrController
         ]]);
     }
 
-    public function index(Request $request): AnonymousResourceCollection
+    public function index(ListNcrRequest $request): AnonymousResourceCollection
     {
-        return NcrResource::collection($this->service->list($request->query()));
+        return NcrResource::collection($this->service->list($request->validated()));
     }
 
     public function show(NonConformanceReport $ncr): NcrResource
@@ -65,14 +68,24 @@ class NcrController
         return new NcrResource($this->service->create($request->validated(), $request->user()));
     }
 
-    public function addAction(Request $request, NonConformanceReport $ncr): NcrActionResource
+    public function assignees(): JsonResponse
     {
-        $request->validate([
-            'action_type'  => ['required', Rule::in(NcrActionType::values())],
-            'description'  => ['required', 'string', 'max:5000'],
-            'performed_at' => ['nullable', 'date'],
+        return response()->json([
+            'data' => User::query()
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(static fn (User $user): array => [
+                    'id'   => $user->hash_id,
+                    'name' => $user->name,
+                ])
+                ->values(),
         ]);
-        $action = $this->service->addAction($ncr, $request->only(['action_type', 'description', 'performed_at']), $request->user());
+    }
+
+    public function addAction(AddNcrActionRequest $request, NonConformanceReport $ncr): NcrActionResource
+    {
+        $action = $this->service->addAction($ncr, $request->validated(), $request->user());
         return new NcrActionResource($action);
     }
 

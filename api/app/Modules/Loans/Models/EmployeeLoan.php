@@ -32,7 +32,7 @@ class EmployeeLoan extends Model
 
     protected $casts = [
         'principal'              => 'decimal:2',
-        'interest_rate'          => 'decimal:2',
+        'interest_rate'          => 'decimal:6',
         'monthly_amortization'   => 'decimal:2',
         'total_paid'             => 'decimal:2',
         'balance'                => 'decimal:2',

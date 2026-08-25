@@ -202,4 +202,57 @@ class TrainingMatrixTest extends TestCase
         $this->assertEquals(2, $summary['gap_count']);
         $this->assertEquals(1, $summary['expired_count']);
     }
+
+    public function test_expiry_today_is_still_trained_and_expired_skill_is_a_gap(): void
+    {
+        $dept = Department::firstOrCreate(['code' => 'PRD'], ['name' => 'Production']);
+        $employee = Employee::factory()->create(['department_id' => $dept->id]);
+        $expiredEmployee = Employee::factory()->create(['department_id' => $dept->id]);
+        $skill = Skill::create(['name' => 'First aid', 'is_active' => true]);
+        EmployeeSkill::create([
+            'employee_id' => $employee->id,
+            'skill_id' => $skill->id,
+            'proficiency_level' => 'competent',
+            'acquired_date' => Carbon::today()->subYear()->toDateString(),
+            'expires_at' => Carbon::today()->toDateString(),
+        ]);
+        EmployeeSkill::create([
+            'employee_id' => $expiredEmployee->id,
+            'skill_id' => $skill->id,
+            'proficiency_level' => 'competent',
+            'acquired_date' => Carbon::today()->subYear()->toDateString(),
+            'expires_at' => Carbon::yesterday()->toDateString(),
+        ]);
+
+        $matrix = $this->actingAs($this->admin())
+            ->getJson('/api/v1/hr/training/matrix')
+            ->assertOk();
+        $row = collect($matrix->json('data.rows'))->firstWhere('employee_id', $employee->hash_id);
+        $this->assertSame('trained', $row['cells'][0]['status']);
+
+        $gaps = $this->actingAs($this->admin())
+            ->getJson("/api/v1/hr/skills/gap-analysis?skill_id={$skill->hash_id}")
+            ->assertOk();
+        $gapIds = collect($gaps->json('data'))->pluck('employee.id')->all();
+        $this->assertNotContains($employee->hash_id, $gapIds);
+        $this->assertContains($expiredEmployee->hash_id, $gapIds);
+    }
+
+    public function test_matrix_reports_a_safe_dimension_cap(): void
+    {
+        $dept = Department::firstOrCreate(['code' => 'PRD'], ['name' => 'Production']);
+        Employee::factory()->count(2)->create(['department_id' => $dept->id]);
+        Skill::create(['name' => 'Forklift', 'is_active' => true]);
+        Skill::create(['name' => 'Welding', 'is_active' => true]);
+
+        $response = $this->actingAs($this->admin())
+            ->getJson('/api/v1/hr/training/matrix?employee_limit=1&skill_limit=1')
+            ->assertOk();
+
+        $response->assertJsonPath('data.meta.truncated', true)
+            ->assertJsonPath('data.meta.total_employees', 2)
+            ->assertJsonPath('data.meta.total_skills', 2);
+        $this->assertCount(1, $response->json('data.rows'));
+        $this->assertCount(1, $response->json('data.skills'));
+    }
 }

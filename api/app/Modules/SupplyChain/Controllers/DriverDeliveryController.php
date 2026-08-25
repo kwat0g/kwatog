@@ -7,7 +7,7 @@ namespace App\Modules\SupplyChain\Controllers;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Requests\DriverUpdateStatusRequest;
 use App\Modules\SupplyChain\Requests\DriverUploadReceiptRequest;
-use App\Modules\SupplyChain\Resources\DeliveryResource;
+use App\Modules\SupplyChain\Resources\DriverDeliveryResource;
 use App\Modules\SupplyChain\Services\DriverDeliveryService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -18,21 +18,21 @@ class DriverDeliveryController
 
     public function index(Request $request): AnonymousResourceCollection
     {
-        return DeliveryResource::collection(
+        return DriverDeliveryResource::collection(
             $this->service->list($request->user(), $request->all()),
         );
     }
 
-    public function show(Request $request, Delivery $delivery): DeliveryResource
+    public function show(Request $request, Delivery $delivery): DriverDeliveryResource
     {
-        return new DeliveryResource(
+        return new DriverDeliveryResource(
             $this->service->show($request->user(), $delivery),
         );
     }
 
-    public function updateStatus(DriverUpdateStatusRequest $request, Delivery $delivery): DeliveryResource
+    public function updateStatus(DriverUpdateStatusRequest $request, Delivery $delivery): DriverDeliveryResource
     {
-        return new DeliveryResource(
+        return new DriverDeliveryResource(
             $this->service->updateStatus(
                 $request->user(),
                 $delivery,
@@ -41,9 +41,9 @@ class DriverDeliveryController
         );
     }
 
-    public function uploadReceipt(DriverUploadReceiptRequest $request, Delivery $delivery): DeliveryResource
+    public function uploadReceipt(DriverUploadReceiptRequest $request, Delivery $delivery): DriverDeliveryResource
     {
-        return new DeliveryResource(
+        return new DriverDeliveryResource(
             $this->service->uploadReceipt(
                 $request->user(),
                 $delivery,

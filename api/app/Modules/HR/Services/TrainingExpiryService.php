@@ -11,40 +11,25 @@ use App\Modules\Auth\Models\User;
 use App\Modules\HR\Enums\EmployeeTrainingStatus;
 use App\Modules\HR\Enums\TrainingAlertLevel;
 use App\Modules\HR\Models\EmployeeTraining;
+use App\Modules\HR\Models\TrainingExpiryAlertDelivery;
+use App\Modules\HR\Support\EmployeeTrainingStateMachine;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
-/**
- * T3.4.C — Tiered training-expiry alerts.
- *
- * Fires at most one alert per record per tier. Tier ordering:
- *   t30 < t14 < t7 < expired   (severity ascending)
- *
- * The tier table is walked ascending and the most-severe match is kept,
- * so a row 1 day from expiry maps to `t7`, not `t30`. A row past expiry
- * (days_until <= 0) maps to `expired` and the record's status is flipped
- * to `expired` for downstream reporting.
- */
+/** Tiered training-expiry alerts with durable, retryable delivery claims. */
 class TrainingExpiryService
 {
-    /**
-     * Threshold table — ordered ascending by severity. The check loop walks
-     * the table and keeps the most-severe tier whose threshold is met.
-     *
-     * @var list<array{days:int, level:TrainingAlertLevel}>
-     */
+    /** @var list<array{days:int, level:TrainingAlertLevel}> */
+    private array $tierCache = [];
+
     public function __construct(
         private readonly NotificationService $notifications,
         private readonly SettingsService $settings,
+        private readonly EmployeeTrainingStateMachine $stateMachine,
     ) {}
 
-    /**
-     * Scan completed training records whose expiry is within the configured
-     * first-reminder horizon (or past),
-     * and fire any tier alert that has not yet been fired for that record.
-     *
-     * @return array{evaluated:int, alerts_sent:int, expired_marked:int}
-     */
+    /** @return array{evaluated:int, alerts_sent:int, expired_marked:int} */
     public function check(): array
     {
         $today = now()->startOfDay();
@@ -52,120 +37,219 @@ class TrainingExpiryService
         $horizon = $today->copy()->addDays(max(array_column($tiers, 'days')))->toDateString();
 
         $rows = EmployeeTraining::query()
-            ->with(['employee.department', 'training'])
             ->where('status', EmployeeTrainingStatus::Completed->value)
             ->whereNotNull('expires_at')
             ->where('expires_at', '<=', $horizon)
-            ->get();
+            ->get(['id']);
 
-        $alertsSent    = 0;
+        $alertsSent = 0;
         $expiredMarked = 0;
 
-        foreach ($rows as $r) {
-            // Carbon::diffInDays(other, false) returns SIGNED integer days
-            // from $today to $expiresAt. Past-due → negative.
-            $expires   = Carbon::parse($r->expires_at)->startOfDay();
-            $daysUntil = (int) $today->diffInDays($expires, false);
-
-            $tier = null;
-            foreach ($tiers as $candidate) {
-                if ($daysUntil <= $candidate['days']) {
-                    $tier = $candidate;
-                }
+        foreach ($rows as $row) {
+            $result = DB::transaction(fn (): array => $this->processRow($row->id, $today, $tiers));
+            if ($result['alert_sent']) {
+                $alertsSent++;
             }
-            if ($tier === null) {
-                continue;
-            }
-
-            if ($this->alreadyFired($r, $tier['level'])) {
-                continue;
-            }
-
-            $this->notify($r, $tier['level'], $tier['days']);
-
-            $update = [
-                'last_alert_level' => $tier['level']->value,
-                'last_alert_at'    => now(),
-            ];
-            if ($tier['level'] === TrainingAlertLevel::Expired) {
-                $update['status'] = EmployeeTrainingStatus::Expired->value;
+            if ($result['expired_marked']) {
                 $expiredMarked++;
             }
-            $r->forceFill($update)->save();
-            $alertsSent++;
         }
 
         return [
-            'evaluated'      => $rows->count(),
-            'alerts_sent'    => $alertsSent,
+            'evaluated' => $rows->count(),
+            'alerts_sent' => $alertsSent,
             'expired_marked' => $expiredMarked,
         ];
     }
 
-    /**
-     * Tier ordinals: t30=1, t14=2, t7=3, expired=4. A row already at-or-above
-     * the candidate tier should NOT re-fire — same-day re-runs and no-change
-     * scenarios are idempotent.
-     */
-    private function alreadyFired(EmployeeTraining $r, TrainingAlertLevel $candidate): bool
+    /** @param list<array{days:int, level:TrainingAlertLevel}> $tiers */
+    private function processRow(int $recordId, Carbon $today, array $tiers): array
     {
-        $current = $r->last_alert_level;
-        if ($current === null) {
-            return false;
+        $record = EmployeeTraining::query()
+            ->with(['employee', 'employee.department', 'training'])
+            ->lockForUpdate()
+            ->find($recordId);
+
+        if ($record === null || $record->status !== EmployeeTrainingStatus::Completed || $record->expires_at === null) {
+            return ['alert_sent' => false, 'expired_marked' => false];
         }
-        return $current->ordinal() >= $candidate->ordinal();
+
+        $expires = Carbon::parse($record->expires_at)->startOfDay();
+        $daysUntil = (int) $today->diffInDays($expires, false);
+        $tier = null;
+        foreach ($tiers as $candidate) {
+            if ($daysUntil <= $candidate['days']) {
+                $tier = $candidate;
+            }
+        }
+        if ($tier === null || $this->alreadyFired($record, $tier['level'])) {
+            return ['alert_sent' => false, 'expired_marked' => false];
+        }
+
+        $delivery = $this->deliveryTargets($record);
+        if ($delivery['targets'] === []) {
+            // There is no durable channel to claim. Leave the marker alone so
+            // a later run can retry after a recipient or preference changes.
+            return ['alert_sent' => false, 'expired_marked' => false];
+        }
+
+        $this->claimDelivery($record, $tier['level'], $delivery['targets']);
+        $this->notify($record, $tier['level'], $tier['days'], $delivery['users']);
+        $this->completeDelivery($record, $tier['level'], $delivery['targets']);
+
+        $expiredMarked = false;
+        $update = [
+            'last_alert_level' => $tier['level'],
+            'last_alert_at' => now(),
+        ];
+        if ($tier['level'] === TrainingAlertLevel::Expired) {
+            $this->stateMachine->transition($record, EmployeeTrainingStatus::Expired);
+            $update['status'] = EmployeeTrainingStatus::Expired;
+            $expiredMarked = true;
+        }
+        $record->forceFill($update)->save();
+
+        return ['alert_sent' => true, 'expired_marked' => $expiredMarked];
     }
 
-    private function notify(EmployeeTraining $r, TrainingAlertLevel $level, int $thresholdDays): void
+    private function alreadyFired(EmployeeTraining $record, TrainingAlertLevel $candidate): bool
     {
-        $recipients = $this->resolveRecipients($r);
-        if ($recipients->isEmpty()) {
-            return;
-        }
+        $current = $record->last_alert_level;
+        return $current !== null && $current->ordinal() >= $candidate->ordinal();
+    }
 
-        $training   = $r->training;
-        $employee   = $r->employee;
-        $expiresStr = Carbon::parse($r->expires_at)->toDateString();
-        $name       = $training?->name ?? 'Training';
+    /** @param Collection<int, User> $recipients */
+    private function notify(EmployeeTraining $record, TrainingAlertLevel $level, int $thresholdDays, Collection $recipients): void
+    {
+        $training = $record->training;
+        $employee = $record->employee;
+        $expires = Carbon::parse($record->expires_at)->toDateString();
+        $name = $training?->name ?? 'Training';
 
         [$title, $message] = match ($level) {
             TrainingAlertLevel::T30 => [
                 "Training expiry reminder: {$name}",
-                "{$employee?->full_name} — {$name} expires on {$expiresStr} ({$thresholdDays} days).",
+                "{$employee?->full_name} — {$name} expires on {$expires} ({$thresholdDays} days).",
             ],
             TrainingAlertLevel::T14 => [
                 "Training expiring soon: {$name}",
-                "{$employee?->full_name} — {$name} expires on {$expiresStr} ({$thresholdDays} days).",
+                "{$employee?->full_name} — {$name} expires on {$expires} ({$thresholdDays} days).",
             ],
             TrainingAlertLevel::T7 => [
                 "Training expiring urgently: {$name}",
-                "{$employee?->full_name} — {$name} expires on {$expiresStr} ({$thresholdDays} days).",
+                "{$employee?->full_name} — {$name} expires on {$expires} ({$thresholdDays} days).",
             ],
             TrainingAlertLevel::Expired => [
                 "Training overdue: {$name}",
-                "{$employee?->full_name} — {$name} expired on {$expiresStr}.",
+                "{$employee?->full_name} — {$name} expired on {$expires}.",
             ],
         };
 
         $this->notifications->send($recipients, 'training.expiry', [
-            'title'       => $title,
-            'message'     => $message,
+            'title' => $title,
+            'message' => $message,
             'entity_type' => 'employee_training',
-            'entity_id'   => $r->hash_id,
-            'link_to'     => $employee ? "/hr/employees/{$employee->hash_id}" : null,
+            'entity_id' => $record->hash_id,
+            'link_to' => $employee ? "/hr/employees/{$employee->hash_id}" : null,
         ]);
     }
 
-    /** @return list<array{days:int,level:TrainingAlertLevel}> */
+    /**
+     * @param list<array{user_id:int, channel:string}> $targets
+     */
+    private function claimDelivery(EmployeeTraining $record, TrainingAlertLevel $level, array $targets): void
+    {
+        foreach ($targets as $target) {
+            $delivery = TrainingExpiryAlertDelivery::query()->firstOrCreate(
+                [
+                    'employee_training_id' => $record->id,
+                    'alert_level' => $level->value,
+                    'recipient_user_id' => $target['user_id'],
+                    'channel' => $target['channel'],
+                ],
+                ['status' => 'pending'],
+            );
+            $delivery->forceFill([
+                'status' => 'pending',
+                'attempted_at' => now(),
+                'error' => null,
+            ])->save();
+        }
+    }
+
+    /** @param list<array{user_id:int, channel:string}> $targets */
+    private function completeDelivery(EmployeeTraining $record, TrainingAlertLevel $level, array $targets): void
+    {
+        foreach ($targets as $target) {
+            TrainingExpiryAlertDelivery::query()
+                ->where('employee_training_id', $record->id)
+                ->where('alert_level', $level->value)
+                ->where('recipient_user_id', $target['user_id'])
+                ->where('channel', $target['channel'])
+                ->update([
+                    'status' => 'delivered',
+                    'delivered_at' => now(),
+                    'updated_at' => now(),
+                ]);
+        }
+    }
+
+    /**
+     * @return array{users:Collection<int, User>, targets:list<array{user_id:int,channel:string}>}
+     */
+    private function deliveryTargets(EmployeeTraining $record): array
+    {
+        $recipients = $this->resolveRecipients($record);
+        if ($recipients->isEmpty()) {
+            return ['users' => collect(), 'targets' => []];
+        }
+
+        $preferences = DB::table('notification_preferences')
+            ->whereIn('user_id', $recipients->pluck('id')->all())
+            ->where('notification_type', 'training.expiry')
+            ->whereIn('channel', ['in_app', 'email'])
+            ->get(['user_id', 'channel', 'enabled'])
+            ->keyBy(fn (object $row): string => "{$row->user_id}:{$row->channel}");
+
+        $targets = [];
+        $users = collect();
+        foreach ($recipients as $user) {
+            $inApp = $preferences->get("{$user->id}:in_app")?->enabled;
+            $email = $preferences->get("{$user->id}:email")?->enabled;
+            $hasInApp = $inApp === null || (bool) $inApp;
+            $hasEmail = (bool) $email && is_string($user->email) && $user->email !== '';
+
+            if (! $hasInApp && ! $hasEmail) {
+                continue;
+            }
+
+            $users->push($user);
+            if ($hasInApp) {
+                $targets[] = ['user_id' => (int) $user->id, 'channel' => 'in_app'];
+            }
+            if ($hasEmail) {
+                $targets[] = ['user_id' => (int) $user->id, 'channel' => 'email'];
+            }
+        }
+
+        return ['users' => $users->unique('id')->values(), 'targets' => $targets];
+    }
+
+    /** @return list<array{days:int, level:TrainingAlertLevel}> */
     private function tiers(): array
     {
+        if ($this->tierCache !== []) {
+            return $this->tierCache;
+        }
+
         $t30 = $this->settings->requiredInt('hr.training_expiry.t30_days', 1);
         $t14 = $this->settings->requiredInt('hr.training_expiry.t14_days', 1);
         $t7 = $this->settings->requiredInt('hr.training_expiry.t7_days', 1);
         if (! ($t30 > $t14 && $t14 > $t7)) {
             throw new \App\Common\Exceptions\BusinessRuleException('Training expiry reminder thresholds must be strictly descending.');
         }
-        return [
+
+        return $this->tierCache = [
             ['days' => $t30, 'level' => TrainingAlertLevel::T30],
             ['days' => $t14, 'level' => TrainingAlertLevel::T14],
             ['days' => $t7, 'level' => TrainingAlertLevel::T7],
@@ -173,51 +257,39 @@ class TrainingExpiryService
         ];
     }
 
-    /**
-     * Recipients (union, deduped by user id):
-     *   (a) The User row whose users.employee_id = employee.id (if any).
-     *   (b) All active users with role `department_head` whose employee's
-     *       department_id matches the record's employee.department_id.
-     *   (c) All active users with role `hr_officer`.
-     *
-     * @return Collection<int, User>
-     */
-    private function resolveRecipients(EmployeeTraining $r): Collection
+    /** @return Collection<int, User> */
+    private function resolveRecipients(EmployeeTraining $record): Collection
     {
         $users = collect();
-
-        // (a) The employee's own user, if provisioned.
-        $empUser = User::query()
-            ->where('employee_id', $r->employee_id)
+        $employeeUser = User::query()
+            ->where('employee_id', $record->employee_id)
             ->where('is_active', true)
             ->first();
-        if ($empUser) {
-            $users->push($empUser);
+        if ($employeeUser) {
+            $users->push($employeeUser);
         }
 
-        $roles = array_values(array_filter((array) $this->settings->get('hr.training_expiry.notification_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
+        $roles = array_values(array_filter(
+            (array) $this->settings->get('hr.training_expiry.notification_roles', []),
+            static fn ($role): bool => is_string($role) && $role !== '',
+        ));
         $roleIds = Role::query()->whereIn('slug', $roles)->pluck('id', 'slug');
-        $deptHeadRoleId  = $roleIds->get('department_head');
+        $departmentHeadRoleId = $roleIds->get('department_head');
         $hrOfficerRoleId = $roleIds->get('hr_officer');
-        $deptId          = $r->employee?->department_id;
+        $departmentId = $record->employee?->department_id;
 
-        // (b) Department heads of the employee's department.
-        if ($deptHeadRoleId && $deptId) {
-            $heads = User::query()
-                ->where('role_id', $deptHeadRoleId)
+        if ($departmentHeadRoleId && $departmentId) {
+            $users = $users->concat(User::query()
+                ->where('role_id', $departmentHeadRoleId)
                 ->where('is_active', true)
-                ->whereHas('employee', fn($q) => $q->where('department_id', $deptId))
-                ->get();
-            $users = $users->concat($heads);
+                ->whereHas('employee', fn ($query) => $query->where('department_id', $departmentId))
+                ->get());
         }
-
-        // (c) All HR officers (org-wide).
         if ($hrOfficerRoleId) {
-            $hrs = User::query()
+            $users = $users->concat(User::query()
                 ->where('role_id', $hrOfficerRoleId)
                 ->where('is_active', true)
-                ->get();
-            $users = $users->concat($hrs);
+                ->get());
         }
 
         return $users->unique('id')->values();

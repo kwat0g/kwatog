@@ -37,7 +37,7 @@
     @forelse ($rows as $row)
       <tr>
         <td>{{ $row['period'] }}</td>
-        <td class="r">₱ {{ number_format((float) $row['amount'], 2) }}</td>
+        <td class="r">₱ {{ $row['amount'] }}</td>
       </tr>
     @empty
       <tr><td colspan="2" style="color:#999;">No contributions recorded for this year.</td></tr>
@@ -48,7 +48,7 @@
 <table class="totals">
   <tr class="grand">
     <td class="label">Total Employee Share</td>
-    <td class="v">₱ {{ number_format((float) $total, 2) }}</td>
+    <td class="v">₱ {{ $total }}</td>
   </tr>
 </table>
 

@@ -6,7 +6,7 @@
  * On submit, the backend seeds (sample × spec_item) measurement rows and
  * the user is redirected to the detail page to record values.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -32,7 +32,12 @@ const schema = z.object({
  stage: z.string().min(1, 'Stage is required'),
  product_id: z.string().min(1, 'Product is required'),
  batch_quantity: z.coerce.number().int().min(1, 'Must be at least 1'),
+ work_order_output_id: z.string().optional(),
  notes: z.string().max(2000).optional(),
+}).superRefine((values, ctx) => {
+ if (values.stage === 'outgoing' && !values.work_order_output_id) {
+ ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['work_order_output_id'], message: 'Output batch is required for outgoing inspection' });
+ }
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -49,15 +54,30 @@ export default function CreateInspectionPage() {
   const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  // Batch size is transactional input, not a catalog default.
- defaultValues: { stage: '', product_id: '', notes: '' },
+ defaultValues: { stage: '', product_id: '', work_order_output_id: '', notes: '' },
  });
  const {
- register, handleSubmit, watch, formState: { errors },
+ register, handleSubmit, watch, setValue, formState: { errors },
  } = form;
 
  const stage = watch('stage');
+ const productId = watch('product_id');
  const batchQty = watch('batch_quantity');
  const samplingMethod = inspectionOptions.data?.sampling_methods?.find((method) => method.stage === stage);
+
+ const workOrderOutputs = useQuery({
+ queryKey: ['quality', 'inspection-output-options', productId],
+ queryFn: () => inspectionsApi.workOrderOutputs(productId),
+ enabled: stage === 'outgoing' && Boolean(productId),
+ });
+ const outputId = watch('work_order_output_id');
+ const selectedOutput = workOrderOutputs.data?.find((output) => output.id === outputId);
+
+ useEffect(() => {
+  if (stage === 'outgoing' && selectedOutput) {
+   setValue('batch_quantity', selectedOutput.good_count, { shouldValidate: true, shouldDirty: true });
+  }
+ }, [selectedOutput?.good_count, setValue, stage]);
 
  // Live preview AQL sample plan only for outgoing.
  useQuery({
@@ -101,6 +121,7 @@ export default function CreateInspectionPage() {
  stage: v.stage as InspectionStage,
  product_id: v.product_id,
  batch_quantity: Number(v.batch_quantity),
+ work_order_output_id: v.stage === 'outgoing' ? v.work_order_output_id : undefined,
  notes: v.notes,
  })
  , onFormInvalid<FormValues>())}
@@ -126,9 +147,29 @@ export default function CreateInspectionPage() {
  type="number"
  min={1}
  required
+ readOnly={stage === 'outgoing'}
+ helper={stage === 'outgoing' ? 'Taken from the selected output batch.' : undefined}
  {...register('batch_quantity')}
  error={errors.batch_quantity?.message}
  />
+ {stage === 'outgoing' && (
+ <Select
+ label="Output batch"
+ required
+ {...register('work_order_output_id')}
+ error={errors.work_order_output_id?.message}
+ disabled={!productId || workOrderOutputs.isLoading}
+ >
+ <option value="">
+ {!productId ? 'Select a product first…' : workOrderOutputs.isLoading ? 'Loading output batches…' : 'Select…'}
+ </option>
+ {workOrderOutputs.data?.map((output) => (
+ <option key={output.id} value={output.id}>
+ {output.batch_code ?? 'Unlabelled batch'} — {output.work_order?.wo_number ?? 'WO'} — good {output.good_count}
+ </option>
+ ))}
+ </Select>
+ )}
  </div>
  <Textarea label="Notes" rows={3} {...register('notes')} error={errors.notes?.message} />
  </Panel>

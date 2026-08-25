@@ -13,8 +13,10 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Chip } from '@/components/ui/Chip';
+import { DataTablePagination } from '@/components/ui/DataTablePagination';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatDateTime } from '@/lib/formatDate';
+import { useDebounce } from '@/hooks/useDebounce';
 import type { EightDReportData } from '@/types/b2b';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { LinkButton } from '@/components/ui/LinkButton';
@@ -26,18 +28,33 @@ export default function CustomerComplaintsPage() {
  const [severity, setSeverity] = useState('');
  const [description, setDescription] = useState('');
  const [affectedQty, setAffectedQty] = useState('');
+ const [page, setPage] = useState(1);
+ const [perPage, setPerPage] = useState(25);
+ const [statusFilter, setStatusFilter] = useState('');
+ const [search, setSearch] = useState('');
+ const [dateFrom, setDateFrom] = useState('');
+ const [dateTo, setDateTo] = useState('');
  const [viewing8d, setViewing8d] = useState<EightDReportData | null>(null);
+ const debouncedSearch = useDebounce(search, 300);
 
  const { data: complaintOptions } = useQuery({
  queryKey: ['portal', 'customer', 'complaint-options'],
  queryFn: () => customerPortalApi.complaintOptions(),
  });
 
- const { data: complaints, isLoading, isError, refetch } = useQuery({
- queryKey: ['portal', 'customer', 'complaints'],
- queryFn: () => customerPortalApi.listComplaints(),
+ const { data: complaintsPage, isLoading, isError, refetch } = useQuery({
+ queryKey: ['portal', 'customer', 'complaints', { page, perPage, status: statusFilter, search: debouncedSearch, dateFrom, dateTo }],
+ queryFn: () => customerPortalApi.listComplaints({
+ page,
+ per_page: perPage,
+ status: statusFilter || undefined,
+ search: debouncedSearch || undefined,
+ date_from: dateFrom || undefined,
+ date_to: dateTo || undefined,
+ }),
  placeholderData: (prev) => prev,
  });
+ const complaints = complaintsPage?.data ?? [];
 
  const createMut = useMutation({
  mutationFn: () => customerPortalApi.createComplaint({
@@ -124,7 +141,54 @@ export default function CustomerComplaintsPage() {
  {/* Complaints list */}
  {!isLoading && !isError && (
  <Panel noPadding>
+ <div className="flex flex-wrap items-end gap-3 border-b border-default px-4 py-3">
+ <Input
+ label="Search"
+ value={search}
+ onChange={(e) => {
+ setSearch(e.target.value);
+ setPage(1);
+ }}
+ placeholder="Complaint number or description…"
+ containerClassName="min-w-64 flex-1"
+ />
+ <Select
+ label="Status"
+ value={statusFilter}
+ onChange={(e) => {
+ setStatusFilter(e.target.value);
+ setPage(1);
+ }}
+ containerClassName="w-52"
+ >
+ <option value="">All statuses</option>
+ {(complaintOptions?.statuses ?? []).map((option) => (
+ <option key={option.value} value={option.value}>{option.label}</option>
+ ))}
+ </Select>
+ <Input
+ label="From"
+ type="date"
+ value={dateFrom}
+ onChange={(e) => {
+ setDateFrom(e.target.value);
+ setPage(1);
+ }}
+ containerClassName="w-40"
+ />
+ <Input
+ label="To"
+ type="date"
+ value={dateTo}
+ onChange={(e) => {
+ setDateTo(e.target.value);
+ setPage(1);
+ }}
+ containerClassName="w-40"
+ />
+ </div>
  {complaints && complaints.length > 0 ? (
+ <>
  <PortalTable>
 <table className={tableCls}>
  <thead>
@@ -172,8 +236,26 @@ export default function CustomerComplaintsPage() {
  </tbody>
  </table>
 </PortalTable>
+ {complaintsPage?.meta && (
+ <div className="px-4 pb-4">
+ <DataTablePagination
+ meta={complaintsPage.meta}
+ onPageChange={setPage}
+ onPageSizeChange={(nextPerPage) => {
+ setPerPage(nextPerPage);
+ setPage(1);
+ }}
+ perPage={perPage}
+ />
+ </div>
+ )}
+ </>
  ) : (
- <EmptyState icon="message-square" title="No complaints" description="Any reported issues will appear here." />
+ <EmptyState
+ icon="message-square"
+ title="No complaints"
+ description={search || statusFilter || dateFrom || dateTo ? 'No complaints match the selected filters.' : 'Any reported issues will appear here.'}
+ />
  )}
  </Panel>
  )}

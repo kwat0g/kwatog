@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { LuPlus } from '@/lib/icons';
@@ -10,12 +9,14 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { Tabs } from '@/components/ui/Tabs';
+import { ArchiveFilter } from '@/components/ui/ArchiveFilter';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
 import type { JobPosting, JobPostingStatus } from '@/types/recruitment';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { archiveToTrashed, type ArchiveScope } from '@/lib/archiveScope';
 const STATUS_CHIP: Record<JobPostingStatus, 'neutral' | 'success' | 'warning' | 'info'> = {
  draft: 'neutral',
  open: 'success',
@@ -31,21 +32,25 @@ interface PostingFilters {
  search?: string;
  sort?: string;
  direction?: 'asc' | 'desc';
+ trashed?: ArchiveScope;
 }
 
 export default function PostingsListPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
- const [statusFilter, setStatusFilter] = useState('');
  const [filters, setFilters] = useUrlFilters<PostingFilters>({
- page: 1, per_page: 25, sort: 'created_at', direction: 'desc',
+ page: 1, per_page: 25, sort: 'created_at', direction: 'desc', status: '', trashed: 'active',
  });
+ const statusFilter = filters.status ?? '';
+ const scope: ArchiveScope = filters.trashed === 'with' || filters.trashed === 'only'
+  ? filters.trashed
+  : 'active';
 
  const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['recruitment-postings', statusFilter, filters],
+ queryKey: ['recruitment-postings', filters],
  queryFn: () =>
  recruitmentApi
- .listPostings({ status: statusFilter || undefined, ...filters })
+ .listPostings({ ...filters, status: statusFilter || undefined, trashed: archiveToTrashed(scope) })
  .then((r) => r.data),
  placeholderData: (prev) => prev,
  });
@@ -121,7 +126,7 @@ export default function PostingsListPage() {
  className="px-5"
  label="Posting status"
  value={statusFilter}
- onChange={(value) => { setStatusFilter(value); setFilters((f) => ({ ...f, page: 1 })); }}
+ onChange={(value) => { setFilters((f) => ({ ...f, status: value, page: 1 })); }}
  items={statusTabs.map((tab) => ({ key: tab.value, label: tab.label }))}
  />
 
@@ -131,6 +136,7 @@ export default function PostingsListPage() {
  onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
  onFilter={() => {}}
  searchPlaceholder="Search title or posting number…"
+ actions={<ArchiveFilter value={scope} onChange={(next) => { setFilters((f) => ({ ...f, trashed: next, page: 1 })); }} />}
  />
 
  {isLoading && !data && <SkeletonTable columns={7} rows={10} />}

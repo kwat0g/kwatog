@@ -6,9 +6,11 @@ namespace App\Modules\HR\Services;
 
 use App\Common\Services\Pdf\PdfRenderService;
 use App\Common\Services\SettingsService;
+use App\Common\Support\Money;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Payroll\Models\Payroll;
+use App\Modules\Payroll\Services\PayrollPublicationPolicy;
 use Illuminate\Support\Facades\Schema;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -27,6 +29,7 @@ class SelfServiceDocumentService
     public function __construct(
         private readonly PdfRenderService $renderer,
         private readonly SettingsService $settings,
+        private readonly PayrollPublicationPolicy $publication,
     ) {}
 
     /* ─── Employment certificate ─────────────────────────────────────── */
@@ -90,7 +93,8 @@ class SelfServiceDocumentService
             default      => abort(404, 'Unknown contribution type.'),
         };
 
-        [$rows, $total] = $this->yearlyContributions($employee, $column, $year);
+        [$rows, $total, $hasPayroll] = $this->yearlyContributions($employee, $column, $year);
+        abort_unless($hasPayroll, 404, 'No finalized payroll is available for this year.');
 
         $bytes = $this->renderer->render('pdf.contribution-certificate', [
             'cert_title'         => $title,
@@ -145,64 +149,70 @@ class SelfServiceDocumentService
     /**
      * Per-period employee-share rows for one contribution column in a year.
      *
-     * @return array{0: array<int, array{period:string, amount:float}>, 1: float}
+     * @return array{0: array<int, array{period:string, amount:string}>, 1: string, 2: bool}
      */
     private function yearlyContributions(Employee $employee, string $column, int $year): array
     {
-        if (! Schema::hasTable('payrolls')) {
-            return [[], 0.0];
+        if (! Schema::hasTable('payrolls') || ! Schema::hasTable('payroll_periods')) {
+            abort(404, 'Payroll outputs are not available.');
         }
 
-        $payrolls = Payroll::query()
+        $query = Payroll::query();
+        $this->publication->scopePublishable($query);
+        $payrolls = $query
             ->where('employee_id', $employee->id)
             ->whereHas('period', fn ($q) => $q->whereYear('period_start', $year))
             ->with('period:id,period_start,period_end')
-            ->whereNull('error_message')
             ->get();
 
         $rows = [];
-        $total = 0.0;
+        $total = Money::zero();
         foreach ($payrolls->sortBy(fn ($p) => $p->period?->period_start) as $p) {
-            $amount = (float) ($p->{$column} ?? 0);
-            if ($amount <= 0) {
+            $amount = Money::round2((string) ($p->{$column} ?? Money::zero()));
+            if (Money::lte($amount, Money::zero())) {
                 continue;
             }
-            $total += $amount;
+            $total = Money::add($total, $amount);
             $rows[] = [
                 'period' => $p->period?->period_start?->format('M j').' – '.$p->period?->period_end?->format('M j, Y') ?? '—',
                 'amount' => $amount,
             ];
         }
 
-        return [$rows, $total];
+        return [$rows, $total, $payrolls->isNotEmpty()];
     }
 
     /**
      * Year-to-date compensation + tax totals for BIR 2316.
      *
-     * @return array<string, float>
+     * @return array<string, string>
      */
     private function yearlyTaxSummary(Employee $employee, int $year): array
     {
-        $sss = $philhealth = $pagibig = $gross = $tax = 0.0;
+        $sss = $philhealth = $pagibig = $gross = $tax = Money::zero();
 
-        if (Schema::hasTable('payrolls')) {
-            $payrolls = Payroll::query()
-                ->where('employee_id', $employee->id)
-                ->whereHas('period', fn ($q) => $q->whereYear('period_start', $year))
-                ->whereNull('error_message')
-                ->get();
-
-            foreach ($payrolls as $p) {
-                $gross      += (float) $p->gross_pay;
-                $sss        += (float) $p->sss_ee;
-                $philhealth += (float) $p->philhealth_ee;
-                $pagibig    += (float) $p->pagibig_ee;
-                $tax        += (float) $p->withholding_tax;
-            }
+        if (! Schema::hasTable('payrolls') || ! Schema::hasTable('payroll_periods')) {
+            abort(404, 'Payroll outputs are not available.');
         }
 
-        $mandatory = $sss + $philhealth + $pagibig;
+        $query = Payroll::query();
+        $this->publication->scopePublishable($query);
+        $payrolls = $query
+            ->where('employee_id', $employee->id)
+            ->whereHas('period', fn ($q) => $q->whereYear('period_start', $year))
+            ->get();
+
+        abort_if($payrolls->isEmpty(), 404, 'No finalized payroll is available for this year.');
+
+        foreach ($payrolls as $p) {
+            $gross      = Money::add($gross, (string) $p->gross_pay);
+            $sss        = Money::add($sss, (string) $p->sss_ee);
+            $philhealth = Money::add($philhealth, (string) $p->philhealth_ee);
+            $pagibig    = Money::add($pagibig, (string) $p->pagibig_ee);
+            $tax        = Money::add($tax, (string) $p->withholding_tax);
+        }
+
+        $mandatory = Money::add($sss, $philhealth, $pagibig);
 
         return [
             'gross'        => $gross,
@@ -210,7 +220,7 @@ class SelfServiceDocumentService
             'philhealth'   => $philhealth,
             'pagibig'      => $pagibig,
             'mandatory'    => $mandatory,
-            'taxable'      => max(0.0, $gross - $mandatory),
+            'taxable'      => Money::clampMin(Money::sub($gross, $mandatory), Money::zero()),
             'tax_withheld' => $tax,
         ];
     }

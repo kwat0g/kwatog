@@ -90,6 +90,7 @@ Route::prefix('dashboard')
  */
 Route::middleware('auth:sanctum')->prefix('dashboard/kpi')->group(function () {
     Route::get('/scorecard', [KpiController::class, 'scorecard']);
+    Route::get('/trends', [KpiController::class, 'trends']);
     Route::get('/trend/{code}', [KpiController::class, 'trend']);
     Route::post('/compute', [KpiController::class, 'compute'])
         ->middleware('permission:dashboard.admin.view');

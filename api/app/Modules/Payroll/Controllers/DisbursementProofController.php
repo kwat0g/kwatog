@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\Modules\Payroll\Controllers;
 
 use App\Common\Exceptions\BusinessRuleException;
-use App\Modules\Payroll\Models\DisbursementProof;
 use App\Modules\Payroll\Enums\DisbursementProofType;
+use App\Modules\Payroll\Enums\PayrollPeriodStatus;
+use App\Modules\Payroll\Models\DisbursementProof;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Payroll\Resources\DisbursementProofResource;
+use App\Modules\Payroll\Services\DisbursementEvidenceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -20,6 +22,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class DisbursementProofController extends Controller
 {
+    public function __construct(private readonly DisbursementEvidenceService $evidence) {}
+
     public function options(PayrollPeriod $period): JsonResponse
     {
         return response()->json(['data' => [
@@ -51,7 +55,7 @@ class DisbursementProofController extends Controller
             'file' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
             'bank_name' => ['nullable', 'string', 'max:100'],
             'transaction_reference' => ['nullable', 'string', 'max:100'],
-            'disbursed_amount' => ['nullable', 'numeric', 'min:0'],
+            'disbursed_amount' => ['required', 'decimal:0,2', 'gt:0'],
             'disbursement_date' => ['required', 'date'],
             'notes' => ['nullable', 'string', 'max:500'],
         ]);
@@ -76,18 +80,31 @@ class DisbursementProofController extends Controller
         }
 
         try {
-            $proof = DisbursementProof::create([
-                'payroll_period_id' => $period->id,
-                'proof_type' => $validated['proof_type'],
-                'file_name' => $file->getClientOriginalName(),
-                'file_path' => $relative,
-                'bank_name' => $validated['bank_name'] ?? null,
-                'transaction_reference' => $validated['transaction_reference'] ?? null,
-                'disbursed_amount' => $validated['disbursed_amount'] ?? null,
-                'disbursement_date' => $validated['disbursement_date'],
-                'uploaded_by' => $request->user()->id,
-                'notes' => $validated['notes'] ?? null,
-            ]);
+            $proof = DB::transaction(function () use ($period, $validated, $request, $relative): DisbursementProof {
+                $lockedPeriod = PayrollPeriod::query()->lockForUpdate()->find($period->id);
+                if (! $lockedPeriod) {
+                    throw new BusinessRuleException('Payroll period not found.');
+                }
+
+                $this->evidence->assertCanUpload($lockedPeriod, (string) $validated['disbursed_amount']);
+
+                $proof = DisbursementProof::create([
+                    'payroll_period_id' => $lockedPeriod->id,
+                    'proof_type' => $validated['proof_type'],
+                    'file_name' => $request->file('file')->getClientOriginalName(),
+                    'file_path' => $relative,
+                    'bank_name' => $validated['bank_name'] ?? null,
+                    'transaction_reference' => $validated['transaction_reference'] ?? null,
+                    'disbursed_amount' => $validated['disbursed_amount'],
+                    'disbursement_date' => $validated['disbursement_date'],
+                    'uploaded_by' => $request->user()->id,
+                    'notes' => $validated['notes'] ?? null,
+                ]);
+
+                $this->evidence->syncStatus($lockedPeriod->fresh());
+
+                return $proof;
+            });
         } catch (\Throwable $e) {
             $disk->delete($relative);
             throw $e;
@@ -141,8 +158,8 @@ class DisbursementProofController extends Controller
     }
 
     /**
-     * Delete a proof file (Finance only).
-     * Cannot delete proofs once the period has been marked as disbursed.
+     * Archive a proof row (Finance only) while retaining its private artifact.
+     * Cannot archive proofs once the period has been marked as disbursed.
      */
     public function destroy(PayrollPeriod $period, DisbursementProof $proof, Request $request): JsonResponse
     {
@@ -152,22 +169,46 @@ class DisbursementProofController extends Controller
             abort(404, 'Proof does not belong to this period.');
         }
 
-        if ($period->status === 'disbursed') {
-            return response()->json(['message' => 'Cannot delete proof after the period has been marked as disbursed.'], 422);
-        }
+        DB::transaction(function () use ($period, $proof): void {
+            $lockedPeriod = PayrollPeriod::query()->lockForUpdate()->findOrFail($period->id);
+            if (in_array($lockedPeriod->status, [PayrollPeriodStatus::Disbursed, PayrollPeriodStatus::Voided], true)) {
+                throw new BusinessRuleException('Disbursement evidence cannot be archived after the period is closed.');
+            }
 
-        $path = $proof->file_path;
-        DB::transaction(function () use ($proof, $path): void {
-            $proof->delete();
-            DB::afterCommit(fn () => Storage::disk('local')->delete($path));
+            $lockedProof = DisbursementProof::query()->lockForUpdate()->findOrFail($proof->id);
+            $lockedProof->delete();
+            // Keep the private object when soft-deleting the row. Restore is an
+            // advertised evidence-recovery action, so physical deletion here
+            // would make the restored row point at a non-existent artifact.
+            $this->evidence->syncStatus($lockedPeriod->fresh());
         });
 
         return response()->json(['message' => 'Proof deleted.']);
     }
 
-    public function restore(DisbursementProof $proof): JsonResponse
+    public function restore(PayrollPeriod $period, DisbursementProof $proof, Request $request): JsonResponse
     {
-        $proof->restore();
+        $this->authorizeFinance($request);
+
+        if ($proof->payroll_period_id !== $period->id) {
+            abort(404, 'Proof does not belong to this period.');
+        }
+        if (! Storage::disk('local')->exists((string) $proof->file_path)) {
+            throw new BusinessRuleException('The archived proof file is missing from private storage and cannot be restored.');
+        }
+
+        DB::transaction(function () use ($period, $proof): void {
+            $lockedPeriod = PayrollPeriod::query()->lockForUpdate()->findOrFail($period->id);
+            if (in_array($lockedPeriod->status, [PayrollPeriodStatus::Disbursed, PayrollPeriodStatus::Voided], true)) {
+                throw new BusinessRuleException('Disbursement evidence cannot be restored after the period is closed.');
+            }
+
+            $lockedProof = DisbursementProof::withTrashed()->lockForUpdate()->findOrFail($proof->id);
+            $this->evidence->assertCanUpload($lockedPeriod, (string) $lockedProof->disbursed_amount);
+            $lockedProof->restore();
+            $this->evidence->syncStatus($lockedPeriod->fresh());
+        });
+
         return response()->json(['message' => 'Proof restored.']);
     }
 

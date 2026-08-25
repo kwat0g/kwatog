@@ -15,7 +15,7 @@ class AssetDepreciationController
 
     public function index(Request $request): JsonResponse
     {
-        $q = AssetDepreciation::query()->with('asset:id,asset_code,name');
+        $q = AssetDepreciation::query()->with(['asset:id,asset_code,name', 'journalEntry:id']);
         if ($request->filled('asset_id')) {
             $q->where('asset_id', (int) $request->input('asset_id'));
         }
@@ -40,6 +40,7 @@ class AssetDepreciationController
                 'period_month'        => (int) $d->period_month,
                 'depreciation_amount' => (string) $d->depreciation_amount,
                 'accumulated_after'   => (string) $d->accumulated_after,
+                'journal_entry_id'    => $d->journalEntry?->hash_id,
                 'created_at'          => optional($d->created_at)?->toISOString(),
             ]),
             'meta' => [
@@ -57,12 +58,11 @@ class AssetDepreciationController
         $data = $request->validate([
             'year'  => ['required', 'integer', 'min:2020', 'max:2100'],
             'month' => ['required', 'integer', 'min:1', 'max:12'],
+            'backfill' => ['sometimes', 'boolean'],
         ]);
-        $result = $this->depreciation->runForMonth(
-            (int) $data['year'],
-            (int) $data['month'],
-            $request->user(),
-        );
+        $result = filter_var($data['backfill'] ?? false, FILTER_VALIDATE_BOOLEAN)
+            ? $this->depreciation->runBackfillTo((int) $data['year'], (int) $data['month'], $request->user())
+            : $this->depreciation->runForMonth((int) $data['year'], (int) $data['month'], $request->user());
         return response()->json(['data' => $result]);
     }
 }

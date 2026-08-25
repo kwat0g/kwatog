@@ -33,7 +33,7 @@ import { formatDate } from '@/lib/formatDate';
 import { numberInputProps } from '@/lib/numberInput';
 import { Td, Th, tableCls, theadTrCls, totalsTrCls, trCls } from '@/components/ui/table-cells';
 import { cn } from '@/lib/cn';
-import type { PaymentMethod } from '@/types/accounting';
+import type { BillPayment, PaymentMethod } from '@/types/accounting';
 
 const paymentSchema = z.object({
  cash_account_id: z.string().min(1, 'Required'),
@@ -58,6 +58,7 @@ export default function BillDetailPage() {
  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
  const [showPostConfirm, setShowPostConfirm] = useState(false);
  const [showPostOverride, setShowPostOverride] = useState(false);
+ const [paymentToVoid, setPaymentToVoid] = useState<BillPayment | null>(null);
  const { data: bill, isLoading, isError, refetch } = useQuery({
   queryKey: ['accounting', 'bills', id],
   queryFn: () => billsApi.show(id),
@@ -121,6 +122,15 @@ export default function BillDetailPage() {
  },
  onError: (e: Error & { response?: { data?: { message?: string } } }) => toast.error(e.response?.data?.message ?? 'Failed to record payment.'),
  });
+ const voidPaymentMut = useMutation({
+  mutationFn: (reason: string) => billsApi.voidPayment(id, paymentToVoid!.id, { reason }),
+  onSuccess: () => {
+   toast.success('Payment voided and the bill balance was recalculated.');
+   qc.invalidateQueries({ queryKey: ['accounting', 'bills'] });
+   setPaymentToVoid(null);
+  },
+  onError: (e: Error & { response?: { data?: { message?: string } } }) => toast.error(e.response?.data?.message ?? 'Failed to void payment.'),
+ });
 
  if (isLoading || (!bill && !isError)) return <SkeletonDetail />;
  if (isError) return <EmptyState icon="alert-circle" title="Failed to load bill" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />;
@@ -155,9 +165,10 @@ export default function BillDetailPage() {
      variant="primary"
      size="sm"
      icon={<LuSend size={14} />}
-     onClick={() => {
+      onClick={() => {
       if (bill.three_way_review_status === 'manual_review' || match?.overall_status === 'blocked') {
-       setShowPostOverride(true);
+       if (can('accounting.bills.three_way_override')) setShowPostOverride(true);
+       else toast.error('A finance checker with 3-way-match override permission must approve this variance.');
       } else {
        setShowPostConfirm(true);
       }
@@ -215,6 +226,9 @@ export default function BillDetailPage() {
  {bill.three_way_overridden && bill.three_way_override_reason && (
  <div className="col-span-3"><dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">Override reason</dt><dd className="text-warning-fg">{bill.three_way_override_reason}</dd></div>
  )}
+ {bill.three_way_overridden && bill.three_way_overridden_by && (
+ <div><dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">Override approved by</dt><dd>{bill.three_way_overridden_by.name}</dd></div>
+ )}
  {bill.journal_entry && (
  <div className="col-span-2"><dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">Journal entry</dt>
  <dd><a className="text-accent hover:underline font-mono" href={`/accounting/journal-entries/${bill.journal_entry.id}`}>{bill.journal_entry.entry_number}</a> · {bill.journal_entry.status_label ?? bill.journal_entry.status}</dd>
@@ -269,7 +283,12 @@ export default function BillDetailPage() {
  <span>{formatDate(p.payment_date)}</span>
  <span className="font-medium">{formatPeso(p.amount)}</span>
  </div>
- <div className="text-muted">{p.payment_method_label ?? p.payment_method}{p.reference_number ? ` · ${p.reference_number}` : ''}</div>
+ <div className="flex items-center justify-between gap-2 text-muted">
+  <span>{p.payment_method_label ?? p.payment_method}{p.reference_number ? ` · ${p.reference_number}` : ''} · {p.status_label ?? p.status}</span>
+  {p.status === 'posted' && can('accounting.bills.void_payment') && bill.status !== 'cancelled' && (
+   <Button type="button" variant="ghost" size="sm" onClick={() => setPaymentToVoid(p)}>Void</Button>
+  )}
+ </div>
  </li>
  ))}
  </ul>
@@ -369,11 +388,25 @@ export default function BillDetailPage() {
  />
 
  <ReasonDialog
+  isOpen={paymentToVoid !== null}
+  onClose={() => { if (!voidPaymentMut.isPending) setPaymentToVoid(null); }}
+  onConfirm={(reason) => voidPaymentMut.mutate(reason)}
+  title={paymentToVoid ? `Void payment of ${formatPeso(paymentToVoid.amount)}?` : 'Void payment?'}
+  description="This reverses the payment journal, preserves the original payment in the audit trail, and recalculates the bill balance."
+  reasonLabel="Void reason"
+  reasonPlaceholder="e.g. Bank transfer was rejected and will be reissued."
+  minLength={3}
+  confirmLabel="Void payment"
+  variant="danger"
+  pending={voidPaymentMut.isPending}
+ />
+
+ <ReasonDialog
  isOpen={showPostOverride}
  onClose={() => setShowPostOverride(false)}
  onConfirm={(reason) => postMut.mutate({ allow_override: true, override_reason: reason })}
  title={`Override 3-way match for ${bill.bill_number}?`}
- description="This posts the payable despite a blocking PO, GRN, or supplier-price variance. The reason and your account will be recorded in the bill audit trail."
+ description="This posts the payable despite a blocking PO, GRN, or supplier-price variance. A separate authorized checker and the reason will be recorded in the audit trail."
  reasonLabel="Override reason"
  reasonPlaceholder="e.g. Purchasing approved the documented supplier price change."
  minLength={10}

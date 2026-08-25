@@ -7,6 +7,7 @@ namespace App\Modules\Assets\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Support\HashIdFilter;
+use App\Modules\Assets\Enums\AssetStatus;
 use App\Modules\Assets\Enums\TransferStatus;
 use App\Modules\Assets\Models\Asset;
 use App\Modules\Assets\Models\AssetTransfer;
@@ -17,6 +18,14 @@ use Illuminate\Support\Facades\DB;
 
 class AssetTransferService
 {
+    /** @var array<string, array<int, string>> */
+    private const TRANSITIONS = [
+        'pending' => ['approved', 'rejected'],
+        'approved' => ['completed'],
+        'rejected' => [],
+        'completed' => [],
+    ];
+
     public function __construct(private readonly DocumentSequenceService $sequences) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -38,10 +47,24 @@ class AssetTransferService
     public function create(array $data): AssetTransfer
     {
         return DB::transaction(function () use ($data) {
-            $asset = Asset::findOrFail($data['asset_id']);
+            // The asset row is the custody aggregate. Lock it before checking
+            // source department and pending requests so two callers cannot
+            // create overlapping transfers from the same stale location.
+            $asset = Asset::query()->lockForUpdate()->findOrFail($data['asset_id']);
+
+            if ($asset->status !== AssetStatus::Active) {
+                throw new BusinessRuleException('Only active assets can be transferred.');
+            }
 
             if ((int) $asset->department_id !== (int) $data['from_department_id']) {
                 throw new BusinessRuleException('Asset is not currently in the specified source department.');
+            }
+
+            if (AssetTransfer::query()
+                ->where('asset_id', $asset->getKey())
+                ->where('status', TransferStatus::Pending->value)
+                ->exists()) {
+                throw new BusinessRuleException('Asset already has a pending transfer.');
             }
 
             $transfer = new AssetTransfer();
@@ -69,15 +92,30 @@ class AssetTransferService
                 throw new BusinessRuleException('Cannot approve a transfer you requested.');
             }
 
-            $locked->forceFill([
-                'status'      => TransferStatus::Approved->value,
-                'approved_by' => $by->id,
-                'approved_at' => now(),
-            ])->save();
+            // Lock the asset after the transfer row, then re-check both the
+            // lifecycle and recorded source department against authoritative
+            // state. A stale pending request must never move a disposed or
+            // already-relocated asset.
+            $asset = Asset::query()->lockForUpdate()->findOrFail($locked->asset_id);
+            if ($asset->status !== AssetStatus::Active) {
+                throw new BusinessRuleException('Only active assets can complete a transfer.');
+            }
+            if ((int) $asset->department_id !== (int) $locked->from_department_id) {
+                throw new BusinessRuleException('Asset no longer belongs to the transfer source department.');
+            }
+            if (AssetTransfer::query()
+                ->where('asset_id', $asset->getKey())
+                ->where('status', TransferStatus::Pending->value)
+                ->where('id', '<>', $locked->getKey())
+                ->exists()) {
+                throw new BusinessRuleException('Asset has another pending transfer; resolve it before approval.');
+            }
 
-            $locked->asset->update(['department_id' => $locked->to_department_id]);
+            $this->transition($locked, TransferStatus::Approved);
 
-            $locked->forceFill(['status' => TransferStatus::Completed->value])->save();
+            $asset->forceFill(['department_id' => $locked->to_department_id])->save();
+
+            $this->transition($locked, TransferStatus::Completed);
 
             return $locked->fresh(['asset:id,asset_code,name', 'fromDepartment:id,name', 'toDepartment:id,name']);
         });
@@ -94,14 +132,26 @@ class AssetTransferService
             }
 
             $locked->forceFill([
-                'status'      => TransferStatus::Rejected->value,
                 'approved_by' => $by->id,
                 'approved_at' => now(),
             ])->save();
+            $this->transition($locked, TransferStatus::Rejected);
 
             // Match create()/approve(): fresh() with no arguments drops eager loads,
             // so the resource would omit asset / departments.
             return $locked->fresh(['asset:id,asset_code,name', 'fromDepartment:id,name', 'toDepartment:id,name']);
         });
+    }
+
+    private function transition(AssetTransfer $transfer, TransferStatus $next): void
+    {
+        $current = $transfer->status instanceof TransferStatus
+            ? $transfer->status->value
+            : (string) $transfer->status;
+        if (! in_array($next->value, self::TRANSITIONS[$current] ?? [], true)) {
+            throw new BusinessRuleException(sprintf('Cannot transition transfer from %s to %s.', $current, $next->value));
+        }
+
+        $transfer->forceFill(['status' => $next->value])->save();
     }
 }

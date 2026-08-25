@@ -17,6 +17,7 @@ use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Models\Inspection;
+use App\Modules\SupplyChain\Services\DeliveryService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -68,6 +69,50 @@ class CreateDeliveryDriverGateTest extends TestCase
             'id'        => $this->deliveryId($response),
             'driver_id' => $driver->id,
         ]);
+    }
+
+    public function test_manual_delivery_requires_an_inspection_on_every_line(): void
+    {
+        $officer = $this->officer();
+        $soItem = $this->soItem();
+        $payload = $this->payload($soItem, $this->driver());
+        unset($payload['items'][0]['inspection_id']);
+
+        $this->actingAs($officer)
+            ->postJson('/api/v1/supply-chain/deliveries', $payload)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('items.0.inspection_id');
+
+        $this->assertDatabaseCount('deliveries', 0);
+    }
+
+    public function test_inspection_options_are_sales_order_scoped_and_show_remaining_capacity(): void
+    {
+        $officer = $this->officer();
+        $soItem = $this->soItem();
+        $inspection = Inspection::query()
+            ->where('entity_type', InspectionEntityType::WorkOrder->value)
+            ->where('entity_id', WorkOrder::query()->where('sales_order_item_id', $soItem->id)->value('id'))
+            ->firstOrFail();
+
+        app(DeliveryService::class)->create([
+            'sales_order_id' => $soItem->sales_order_id,
+            'scheduled_date' => now()->toDateString(),
+            'items' => [[
+                'sales_order_item_id' => $soItem->id,
+                'quantity' => '4',
+                'inspection_id' => $inspection->id,
+            ]],
+        ], $officer);
+
+        $response = $this->actingAs($officer)
+            ->getJson('/api/v1/supply-chain/deliveries/inspection-options?sales_order_id='.$soItem->salesOrder->hash_id)
+            ->assertOk();
+
+        $this->assertCount(1, $response->json('data'));
+        $this->assertSame($inspection->hash_id, $response->json('data.0.id'));
+        $this->assertSame($soItem->hash_id, $response->json('data.0.sales_order_item_id'));
+        $this->assertSame('6.00', $response->json('data.0.remaining_quantity'));
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────

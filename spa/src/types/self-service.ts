@@ -56,7 +56,7 @@ export interface SelfServiceLoan {
 export interface SelfServiceLoansResponse {
  active: SelfServiceLoan[];
  history: SelfServiceLoan[];
- loan_types: Array<{ value: string; label: string; interest_rate: string; approval_steps: number }>;
+ loan_types: Array<{ value: string; label: string; interest_rate: string; interest_rate_percent?: string; approval_steps: number }>;
  max_pay_periods: number;
 }
 
@@ -194,16 +194,16 @@ export interface FileLeavePayload {
  /** M-18 — 'am' | 'pm' for half-day; omit for full-day. */
  half_day_period?: 'am' | 'pm';
  reason?: string;
+ document?: File;
 }
 
 // ─── Loan amortization preview (Task SS-LP) ───────────────────────
 export interface LoanAmortizationRow {
  period: number;
  amount: string;
- running_balance: string;
+ principal: string;
+ interest: string;
+ remaining_after: string;
 }
 
-export interface LoanAmortizationPreview {
- monthly_amortization: string;
- schedule: LoanAmortizationRow[];
-}
+export type LoanAmortizationPreview = LoanAmortizationRow[];

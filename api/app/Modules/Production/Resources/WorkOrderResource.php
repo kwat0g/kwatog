@@ -19,7 +19,7 @@ class WorkOrderResource extends JsonResource
             'wo_number'           => $this->wo_number,
             'work_order_class'    => $this->work_order_class ?: 'standard',
             'exception_reason'    => $this->exception_reason,
-            'exception_authorized_by' => $this->exception_authorized_by,
+            'exception_authorized_by' => $this->hashId($this->exception_authorized_by),
             'material_plan_source' => $this->material_plan_source,
             // ADV3 — IATF 16949 traceability fields.
             'batch_number'            => $this->batch_number,
@@ -50,7 +50,7 @@ class WorkOrderResource extends JsonResource
             'children'            => $this->whenLoaded('children', fn () => $this->children->map(fn ($child) => [
                 'id' => $child->hash_id,
                 'wo_number' => $child->wo_number,
-                'product_id' => (int) $child->product_id,
+                'product_id' => $this->hashId($child->product_id),
                 'quantity_target' => (int) $child->quantity_target,
                 'quantity_good' => (int) $child->quantity_good,
                 'status' => (string) $child->status?->value,
@@ -121,7 +121,7 @@ class WorkOrderResource extends JsonResource
                     'shift' => $o->shift,
                     'batch_code' => $o->batch_code,
                     'remarks' => $o->remarks,
-                    'material_lineage' => $o->material_lineage,
+                    'material_lineage' => $this->normalizeMaterialLineage($o->material_lineage),
                     'production_receipt_handoff' => [
                         'status' => $o->production_receipt_handoff_status instanceof ProductionReceiptHandoffStatus
                             ? $o->production_receipt_handoff_status->value
@@ -159,5 +159,41 @@ class WorkOrderResource extends JsonResource
             'updated_at'          => optional($this->updated_at)->toIso8601String(),
             'deleted_at'          => optional($this->deleted_at)?->toIso8601String(),
         ];
+    }
+
+    private function normalizeMaterialLineage(mixed $lineage): mixed
+    {
+        if (! is_array($lineage)) {
+            return $lineage;
+        }
+
+        if (array_key_exists('authorized_by', $lineage)) {
+            $lineage['authorized_by'] = $this->hashId($lineage['authorized_by']);
+        }
+
+        if (is_array($lineage['materials'] ?? null)) {
+            $lineage['materials'] = array_map(function (array $material): array {
+                if (array_key_exists('item_id', $material)) {
+                    $material['item_id'] = $this->hashId($material['item_id']);
+                }
+
+                return $material;
+            }, $lineage['materials']);
+        }
+
+        return $lineage;
+    }
+
+    private function hashId(mixed $id): ?string
+    {
+        if ($id === null || $id === '') {
+            return null;
+        }
+
+        if (is_string($id) && ! ctype_digit($id)) {
+            return $id;
+        }
+
+        return app('hashids')->encode((int) $id);
     }
 }

@@ -13,6 +13,7 @@ use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Models\JournalEntryLine;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class SyncBudgetActualsJobTest extends TestCase
@@ -44,6 +45,7 @@ class SyncBudgetActualsJobTest extends TestCase
         (new SyncBudgetActuals($fiscalYear->id))->handle();
 
         $this->assertSame('130.00', $lineItem->fresh()->actual_total);
+        $this->assertSame('-130.00', $lineItem->fresh()->variance);
     }
 
     private function journalLine(Account $account, string $date, string $status, float $debit, float $credit): void
@@ -54,7 +56,9 @@ class SyncBudgetActualsJobTest extends TestCase
             'description' => 'Budget actual sync test',
             'total_debit' => $debit,
             'total_credit' => $credit,
-            'status' => $status,
+            // Lines must be assembled before the aggregate enters a terminal
+            // state; posted line facts are immutable after that transition.
+            'status' => 'draft',
         ]);
 
         JournalEntryLine::create([
@@ -64,5 +68,9 @@ class SyncBudgetActualsJobTest extends TestCase
             'debit' => $debit,
             'credit' => $credit,
         ]);
+
+        if ($status !== 'draft') {
+            DB::table('journal_entries')->where('id', $entry->id)->update(['status' => $status]);
+        }
     }
 }

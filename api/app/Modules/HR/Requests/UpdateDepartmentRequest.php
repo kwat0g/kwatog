@@ -50,10 +50,14 @@ class UpdateDepartmentRequest extends FormRequest
     {
         $data = $this->validated();
         if (array_key_exists('parent_id', $data)) {
-            $data['parent_id'] = $data['parent_id'] ? Department::tryDecodeHash($data['parent_id']) : null;
+            $parentId = $data['parent_id'] ? Department::tryDecodeHash($data['parent_id']) : null;
+            abort_if($data['parent_id'] && $parentId === null, 422, 'Invalid parent department.');
+            $data['parent_id'] = $parentId;
         }
         if (array_key_exists('head_employee_id', $data)) {
-            $data['head_employee_id'] = $data['head_employee_id'] ? Employee::tryDecodeHash($data['head_employee_id']) : null;
+            $headId = $data['head_employee_id'] ? Employee::tryDecodeHash($data['head_employee_id']) : null;
+            abort_if($data['head_employee_id'] && $headId === null, 422, 'Invalid department head.');
+            $data['head_employee_id'] = $headId;
         }
         return $data;
     }

@@ -43,8 +43,8 @@ class SalesOrderResource extends JsonResource
             'is_cancellable'     => (bool) $this->is_cancellable,
             'item_count'         => (int) ($this->items_count ?? $this->items?->count() ?? 0),
             'customer'           => $this->whenLoaded('customer', fn () => [
-                'id'   => $this->customer->hash_id,
-                'name' => $this->customer->name,
+                'id'   => $this->customer?->hash_id,
+                'name' => $this->customer?->name,
             ]),
             'creator'            => $this->whenLoaded('creator', fn () => $this->creator ? [
                 'id'   => $this->creator->hash_id,

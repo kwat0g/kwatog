@@ -40,6 +40,7 @@ class FinanceDashboardService
      * make two different payloads share one cache entry.
      */
     private const GATES = [
+        'accounting.dashboard.view',
         'accounting.invoices.view',
         'accounting.bills.view',
         'accounting.journal.view',
@@ -59,88 +60,99 @@ class FinanceDashboardService
 
         return Cache::tags(['financial_statements', 'finance_dashboard'])
             ->remember("finance_dashboard:summary:v2:{$signature}", now()->addSeconds(30), function () use ($user) {
-                $cashCodes = array_values(array_filter([
-                    $this->settings->get('accounting.accounts.cash_code'),
-                    $this->settings->get('accounting.accounts.payroll_cash_code'),
-                    $this->settings->get('accounting.accounts.asset_cash_code'),
-                ], static fn ($code) => is_string($code) && $code !== ''));
-                // Cash balance is derived from the configured cash accounts.
-                $cashBalance = (string) DB::table('journal_entry_lines as jel')
-                    ->join('journal_entries as je', 'je.id', '=', 'jel.journal_entry_id')
-                    ->join('accounts as a',         'a.id',  '=', 'jel.account_id')
-                    ->where('je.status', 'posted')
-                    ->whereIn('a.code', $cashCodes)
-                    ->selectRaw('COALESCE(SUM(jel.debit) - SUM(jel.credit), 0) as bal')
-                    ->value('bal');
-
-                $arOutstanding = (string) Invoice::query()
-                    ->whereIn('status', [InvoiceStatus::Finalized, InvoiceStatus::Partial])
-                    ->sum('balance');
-                $apOutstanding = (string) Bill::query()
-                    ->whereIn('status', [BillStatus::Unpaid, BillStatus::Partial])
-                    ->sum('balance');
-
-                $monthStart = now()->startOfMonth()->toDateString();
-                $monthEnd   = now()->endOfMonth()->toDateString();
-                $revenueMtd = (string) DB::table('journal_entry_lines as jel')
-                    ->join('journal_entries as je', 'je.id', '=', 'jel.journal_entry_id')
-                    ->join('accounts as a',         'a.id',  '=', 'jel.account_id')
-                    ->where('je.status', 'posted')
-                    ->where('a.type', 'revenue')
-                    ->whereBetween('je.date', [$monthStart, $monthEnd])
-                    ->selectRaw('COALESCE(SUM(jel.credit) - SUM(jel.debit), 0) as rev')
-                    ->value('rev');
-
-                $arAging = $this->invoiceService->aging();
-                $apAging = $this->billService->aging();
-
-                $recentJournalEntries = JournalEntry::query()
-                    ->posted()
-                    ->orderByDesc('date')->orderByDesc('id')
-                    ->limit(10)
-                    ->get(['id', 'entry_number', 'date', 'description', 'total_debit', 'reference_type', 'reference_id'])
-                    ->map(fn ($je) => [
-                        'id'           => $je->hash_id,
-                        'entry_number' => $je->entry_number,
-                        'date'         => $je->date->toDateString(),
-                        'description'  => $je->description,
-                        'total_debit'  => (string) $je->total_debit,
-                        'reference'    => $je->referenceLabel(),
-                    ]);
-
-                $topOverdue = collect($arAging['by_customer'])
-                    ->sortByDesc(fn ($r) => Money::cmp($r['total'], '0'))
-                    ->sortByDesc(fn ($r) => (float) $r['total'])
-                    ->take(5)
-                    ->values()
-                    ->all();
+                // Lazy loading is intentional: a refused panel must not read
+                // its accounting source before PanelGate evaluates the grant.
+                $arAging = null;
+                $resolveArAging = function () use (&$arAging): array {
+                    return $arAging ??= $this->invoiceService->aging();
+                };
 
                 return $this->gate->panels($user, [
-                    // Cash and revenue ride the page grant
-                    // (`accounting.dashboard.view`): reaching this endpoint at
-                    // all already required it.
-                    'cash_balance'           => [null,                        fn () => Money::round2($cashBalance)],
-                    'revenue_mtd'            => [null,                        fn () => Money::round2($revenueMtd)],
-                    'ar_outstanding'         => ['accounting.invoices.view',  fn () => Money::round2($arOutstanding)],
-                    'ar_aging_summary'       => ['accounting.invoices.view',  fn () => $arAging['buckets']],
+                    'cash_balance'           => ['accounting.dashboard.view', fn () => Money::round2($this->cashBalance())],
+                    'revenue_mtd'            => ['accounting.dashboard.view', fn () => Money::round2($this->revenueMtd())],
+                    'ar_outstanding'         => ['accounting.invoices.view',  fn () => Money::round2((string) Invoice::query()
+                        ->whereIn('status', [InvoiceStatus::Finalized, InvoiceStatus::Partial])
+                        ->sum('balance'))],
+                    'ar_aging_summary'       => ['accounting.invoices.view',  fn () => $resolveArAging()['buckets']],
                     // Named customers and what they owe.
-                    'top_overdue_customers'  => ['accounting.invoices.view',  fn () => $topOverdue],
-                    'ap_outstanding'         => ['accounting.bills.view',     fn () => Money::round2($apOutstanding)],
-                    'ap_aging_summary'       => ['accounting.bills.view',     fn () => $apAging['buckets']],
+                    'top_overdue_customers'  => ['accounting.invoices.view',  fn () => $this->topOverdueCustomers($resolveArAging())],
+                    'ap_outstanding'         => ['accounting.bills.view',     fn () => Money::round2((string) Bill::query()
+                        ->whereIn('status', [BillStatus::Unpaid, BillStatus::Partial])
+                        ->sum('balance'))],
+                    'ap_aging_summary'       => ['accounting.bills.view',     fn () => $this->billService->aging()['buckets']],
                     'ap_due_this_week'       => ['accounting.bills.view',     fn () => $this->apDueThisWeek()],
-                    'recent_journal_entries' => ['accounting.journal.view',   fn () => $recentJournalEntries],
+                    'recent_journal_entries' => ['accounting.journal.view',   fn () => $this->recentJournalEntries()],
                     'unposted_jes'           => ['accounting.journal.view',   fn () => $this->unpostedJes()],
                     // Payroll run counts are payroll's, not accounting's — the
                     // one panel here whose data comes from another module.
                     'payroll_pipeline'       => ['payroll.periods.view',      fn () => $this->payrollPipeline()],
                     'budget_vs_actual_top'   => ['budgeting.view',            fn () => $this->budgetVsActualTop()],
                     // A projection of revenue, gated like revenue.
-                    'revenue_forecast'       => [null,                        fn () => $this->forecastingService->revenueForecast()],
+                    'revenue_forecast'       => ['accounting.dashboard.view', fn () => $this->forecastingService->revenueForecast()],
                     // Configured windows, not data.
                     'payroll_pipeline_history_days' => [null,                 fn () => $this->settings->requiredInt('dashboard.finance.payroll_pipeline_history_days', 1)],
                     'ap_due_horizon_days'    => [null,                        fn () => $this->settings->requiredInt('dashboard.widgets.ap_due_horizon_days', 0)],
                 ]);
             });
+    }
+
+    private function cashBalance(): string
+    {
+        $cashCodes = array_values(array_filter([
+            $this->settings->get('accounting.accounts.cash_code'),
+            $this->settings->get('accounting.accounts.payroll_cash_code'),
+            $this->settings->get('accounting.accounts.asset_cash_code'),
+        ], static fn ($code) => is_string($code) && $code !== ''));
+
+        return (string) DB::table('journal_entry_lines as jel')
+            ->join('journal_entries as je', 'je.id', '=', 'jel.journal_entry_id')
+            ->join('accounts as a', 'a.id', '=', 'jel.account_id')
+            ->where('je.status', 'posted')
+            ->whereIn('a.code', $cashCodes)
+            ->selectRaw('COALESCE(SUM(jel.debit) - SUM(jel.credit), 0) as bal')
+            ->value('bal');
+    }
+
+    private function revenueMtd(): string
+    {
+        return (string) DB::table('journal_entry_lines as jel')
+            ->join('journal_entries as je', 'je.id', '=', 'jel.journal_entry_id')
+            ->join('accounts as a', 'a.id', '=', 'jel.account_id')
+            ->where('je.status', 'posted')
+            ->where('a.type', 'revenue')
+            ->whereBetween('je.date', [now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString()])
+            ->selectRaw('COALESCE(SUM(jel.credit) - SUM(jel.debit), 0) as rev')
+            ->value('rev');
+    }
+
+    /** @param array{by_customer: array<int, array<string, mixed>>} $arAging */
+    private function topOverdueCustomers(array $arAging): array
+    {
+        return collect($arAging['by_customer'])
+            ->sortByDesc(fn ($r) => Money::cmp($r['total'], '0'))
+            ->sortByDesc(fn ($r) => (float) $r['total'])
+            ->take(5)
+            ->values()
+            ->all();
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function recentJournalEntries(): array
+    {
+        return JournalEntry::query()
+            ->posted()
+            ->orderByDesc('date')->orderByDesc('id')
+            ->limit(10)
+            ->get(['id', 'entry_number', 'date', 'description', 'total_debit', 'reference_type', 'reference_id'])
+            ->map(fn ($je) => [
+                'id'           => $je->hash_id,
+                'entry_number' => $je->entry_number,
+                'date'         => $je->date->toDateString(),
+                'description'  => $je->description,
+                'total_debit'  => (string) $je->total_debit,
+                'reference'    => $je->referenceLabel(),
+            ])
+            ->all();
     }
 
     /**

@@ -24,7 +24,7 @@ class EmployeeDocumentController
     public function index(Request $request, Employee $employee): AnonymousResourceCollection
     {
         return EmployeeDocumentResource::collection(
-            $this->service->list($employee, $request->query()),
+            $this->service->list($employee, $request->query(), $request->user()),
         );
     }
 
@@ -52,25 +52,25 @@ class EmployeeDocumentController
     public function store(StoreEmployeeDocumentRequest $request, Employee $employee): JsonResponse
     {
         $data = $request->safe()->except('file');
-        $document = $this->service->upload($employee, $data, $request->file('file'));
+        $document = $this->service->upload($employee, $data, $request->file('file'), $request->user());
         return (new EmployeeDocumentResource($document))->response()->setStatusCode(201);
     }
 
-    public function destroy(EmployeeDocument $employeeDocument): JsonResponse
+    public function destroy(Request $request, Employee $employee, EmployeeDocument $employeeDocument): JsonResponse
     {
-        $this->service->delete($employeeDocument);
+        $this->service->delete($employee, $employeeDocument, $request->user());
         return response()->json(null, 204);
     }
 
-    public function restore(EmployeeDocument $employeeDocument): JsonResponse
+    public function restore(Request $request, Employee $employee, EmployeeDocument $employeeDocument): JsonResponse
     {
-        $employeeDocument->restore();
+        $this->service->restore($employee, $employeeDocument, $request->user());
         return response()->json(['message' => 'Employee document restored.']);
     }
 
-    public function download(EmployeeDocument $employeeDocument): JsonResponse|BinaryFileResponse
+    public function download(Request $request, EmployeeDocument $employeeDocument): JsonResponse|BinaryFileResponse
     {
-        $path = $this->service->download($employeeDocument);
+        $path = $this->service->download($employeeDocument, $request->user());
         if (! $path) {
             return response()->json(['message' => 'File not found.'], 404);
         }

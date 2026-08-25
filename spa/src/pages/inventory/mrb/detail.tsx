@@ -126,6 +126,20 @@ export default function MrbDetailPage() {
  )
  }
  />
+ <Field label="NCR status" value={data.ncr?.status_label ?? data.ncr?.status} />
+ <Field
+ label="Linked inspection"
+ value={
+ data.inspection ? (
+ <Link to={`/quality/inspections/${data.inspection.id}`} className="font-mono text-accent">
+ {data.inspection.inspection_number ?? data.inspection.id}
+ </Link>
+ ) : (
+ '—'
+ )
+ }
+ />
+ <Field label="Inspection status" value={data.inspection?.status_label ?? data.inspection?.status} />
  </dl>
  </Panel>
 
@@ -223,20 +237,24 @@ function ReleaseModal({
  queryFn: () => warehouseApi.tree(),
  enabled: isOpen,
  });
- // Target must be a good (non-quarantine) location.
+ const quarantineWarehouseId = record.quarantine_location?.warehouse_id;
+ // Target must be active, in an active warehouse, and in the same warehouse
+ // as the held stock. The API enforces the same constraints.
  const goodLocations = useMemo(
- () =>
- (warehouses ?? []).flatMap((w) =>
- (w.zones ?? [])
- .filter((z) => z.zone_type !== 'quarantine')
- .flatMap((z) =>
- (z.locations ?? []).map((l) => ({
- id: l.id,
- label: `${w.code}-${z.code}-${l.code}`,
+   () =>
+   (warehouses ?? []).flatMap((w) =>
+   (w.zones ?? [])
+ .filter((z) => z.zone_type !== 'quarantine' && z.zone_type !== 'scrap')
+   .flatMap((z) =>
+   (w.is_active && (!quarantineWarehouseId || w.id === quarantineWarehouseId) ? z.locations ?? [] : [])
+   .filter((l) => l.is_active)
+   .map((l) => ({
+   id: l.id,
+   label: `${w.code}-${z.code}-${l.code}`,
  })),
  ),
  ),
- [warehouses],
+ [warehouses, quarantineWarehouseId],
  );
 
  const mutation = useMutation({

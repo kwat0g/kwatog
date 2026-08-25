@@ -4,17 +4,22 @@ declare(strict_types=1);
 
 namespace App\Modules\Purchasing\Services;
 
-use App\Common\Services\SettingsService;
+use App\Common\Enums\DocumentType;
+use App\Common\Services\DocumentVaultService;
+use App\Common\Services\Pdf\PdfRenderService;
 use App\Common\Support\ApprovalSignatureBuilder;
+use App\Modules\Auth\Models\User;
 use App\Modules\Purchasing\Models\PurchaseOrder;
-use Barryvdh\DomPDF\Facade\Pdf;
-use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class PurchaseOrderPdfService
 {
-    public function __construct(private readonly SettingsService $settings) {}
+    public function __construct(
+        private readonly PdfRenderService $renderer,
+        private readonly DocumentVaultService $vault,
+    ) {}
 
-    public function render(PurchaseOrder $po): Response
+    public function render(PurchaseOrder $po): StreamedResponse
     {
         $po->loadMissing([
             'vendor',
@@ -24,32 +29,16 @@ class PurchaseOrderPdfService
             // Sprint P9 — for the 4-tier signature block.
             'approvalRecords.approver:id,name',
         ]);
-        $company = [
-            'name'    => $this->setting('company.legal_name'),
-            'address' => $this->setting('company.address'),
-            'tin'     => $this->setting('company.tin'),
-        ];
-        $pdf = Pdf::loadView('pdf.purchase-order', [
+        $bytes = $this->renderer->render('pdf.purchase-order', [
             'po'        => $po,
-            'company'   => $company,
             'now'       => now(),
             // Sprint P9 — drives the new signature-block partial.
             'approvals' => ApprovalSignatureBuilder::for($po, $po->creator),
-        ])->setPaper('a4', 'portrait');
-        $filename = $po->po_number.'.pdf';
-        return response($pdf->output(), 200, [
-            'Content-Type'        => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="'.$filename.'"',
-        ]);
-    }
+        ], ['orientation' => 'portrait', 'title' => DocumentType::PurchaseOrder->label()]);
+        $actor = auth()->user();
+        $user = $actor instanceof User ? $actor : null;
+        $document = $this->vault->store($bytes, DocumentType::PurchaseOrder, $po, $user);
 
-    private function setting(string $key): string
-    {
-        try {
-            $val = $this->settings->get($key);
-            return is_string($val) && trim($val) !== '' ? $val : '';
-        } catch (\Throwable) {
-            return '';
-        }
+        return $this->vault->streamInline($document);
     }
 }

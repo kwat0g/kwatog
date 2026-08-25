@@ -34,10 +34,10 @@
     </tr>
   </thead>
   <tbody>
-    <tr><td>Gross Compensation Income</td><td class="r">₱ {{ number_format((float) $gross, 2) }}</td></tr>
-    <tr><td>Less: Mandatory Contributions (SSS, PhilHealth, Pag-IBIG)</td><td class="r">₱ {{ number_format((float) $mandatory, 2) }}</td></tr>
-    <tr><td><strong>Taxable Compensation Income</strong></td><td class="r"><strong>₱ {{ number_format((float) $taxable, 2) }}</strong></td></tr>
-    <tr><td>Tax Withheld</td><td class="r">₱ {{ number_format((float) $tax_withheld, 2) }}</td></tr>
+    <tr><td>Gross Compensation Income</td><td class="r">₱ {{ $gross }}</td></tr>
+    <tr><td>Less: Mandatory Contributions (SSS, PhilHealth, Pag-IBIG)</td><td class="r">₱ {{ $mandatory }}</td></tr>
+    <tr><td><strong>Taxable Compensation Income</strong></td><td class="r"><strong>₱ {{ $taxable }}</strong></td></tr>
+    <tr><td>Tax Withheld</td><td class="r">₱ {{ $tax_withheld }}</td></tr>
   </tbody>
 </table>
 
@@ -47,9 +47,9 @@
     <tr><th>Contribution</th><th class="r">Employee Share</th></tr>
   </thead>
   <tbody>
-    <tr><td>SSS</td><td class="r">₱ {{ number_format((float) $sss, 2) }}</td></tr>
-    <tr><td>PhilHealth</td><td class="r">₱ {{ number_format((float) $philhealth, 2) }}</td></tr>
-    <tr><td>Pag-IBIG</td><td class="r">₱ {{ number_format((float) $pagibig, 2) }}</td></tr>
+    <tr><td>SSS</td><td class="r">₱ {{ $sss }}</td></tr>
+    <tr><td>PhilHealth</td><td class="r">₱ {{ $philhealth }}</td></tr>
+    <tr><td>Pag-IBIG</td><td class="r">₱ {{ $pagibig }}</td></tr>
   </tbody>
 </table>
 

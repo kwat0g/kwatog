@@ -46,7 +46,10 @@ export default function SupplierPurchaseOrderDetailPage() {
  const [showUploadForm, setShowUploadForm] = useState(false);
  const [showInvoiceForm, setShowInvoiceForm] = useState(false);
  const [trackingNumber, setTrackingNumber] = useState('');
+ const [shippedDate, setShippedDate] = useState('');
+ const [carrier, setCarrier] = useState('');
  const [estimatedArrival, setEstimatedArrival] = useState('');
+ const [shipmentNotes, setShipmentNotes] = useState('');
 
  // Shipping doc upload state
  const [uploadDocType, setUploadDocType] = useState('');
@@ -86,7 +89,13 @@ export default function SupplierPurchaseOrderDetailPage() {
  });
 
  const shipmentMut = useMutation({
- mutationFn: () => supplierPortalApi.updateShipment(id!, { tracking_number: trackingNumber, estimated_arrival: estimatedArrival || undefined }),
+ mutationFn: () => supplierPortalApi.updateShipment(id!, {
+  shipped_date: shippedDate || undefined,
+  carrier: carrier.trim() || undefined,
+  tracking_number: trackingNumber.trim() || undefined,
+  estimated_arrival: estimatedArrival || undefined,
+  notes: shipmentNotes.trim() || undefined,
+ }),
  onSuccess: () => {
  toast.success('Shipment details updated.');
  setShowShipmentForm(false);
@@ -147,7 +156,21 @@ export default function SupplierPurchaseOrderDetailPage() {
  }
  };
 
- const canAcknowledge = !!po && !po.sent_to_supplier_at;
+ // The API owns the lifecycle policy and publishes capabilities with the PO.
+ // Keep the client as a renderer of that contract, not a second state machine.
+ const canAcknowledge = po?.capabilities.can_acknowledge ?? false;
+ const canUpdateShipment = po?.capabilities.can_update_shipment ?? false;
+ const canUploadDocument = po?.capabilities.can_upload_document ?? false;
+ const canSubmitInvoice = po?.capabilities.can_submit_invoice ?? false;
+
+ const openShipmentForm = () => {
+  setShippedDate(po?.shipment?.shipped_date ?? '');
+  setCarrier(po?.shipment?.carrier ?? '');
+  setTrackingNumber(po?.shipment?.tracking_number ?? '');
+  setEstimatedArrival(po?.shipment?.estimated_arrival ?? '');
+  setShipmentNotes(po?.shipment?.notes ?? '');
+  setShowShipmentForm((open) => !open);
+ };
 
  return (
  <div>
@@ -166,15 +189,15 @@ export default function SupplierPurchaseOrderDetailPage() {
  Acknowledge PO
  </Button>
  )}
- <Button variant="secondary" size="sm" icon={<LuTruck size={14} />} onClick={() => setShowShipmentForm(!showShipmentForm)}>
+ {canUpdateShipment && <Button variant="secondary" size="sm" icon={<LuTruck size={14} />} onClick={openShipmentForm}>
  Update shipment
- </Button>
- <Button variant="secondary" size="sm" icon={<LuUpload size={14} />} onClick={() => setShowUploadForm(!showUploadForm)}>
+ </Button>}
+ {canUploadDocument && <Button variant="secondary" size="sm" icon={<LuUpload size={14} />} onClick={() => setShowUploadForm(!showUploadForm)}>
  Upload doc
- </Button>
- <Button variant="secondary" size="sm" icon={<LuSend size={14} />} onClick={() => setShowInvoiceForm(!showInvoiceForm)}>
+ </Button>}
+ {canSubmitInvoice && <Button variant="secondary" size="sm" icon={<LuSend size={14} />} onClick={() => setShowInvoiceForm(!showInvoiceForm)}>
  Submit invoice
- </Button>
+ </Button>}
  </div>
  ) : undefined}
  />
@@ -197,10 +220,32 @@ export default function SupplierPurchaseOrderDetailPage() {
 
  {!isLoading && !isError && po && (
  <>
+ <Panel title="Order summary">
+ <dl className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+ <div><dt className="text-2xs uppercase tracking-wider text-muted">Date</dt><dd className="font-mono">{po.date ?? '—'}</dd></div>
+ <div><dt className="text-2xs uppercase tracking-wider text-muted">Expected delivery</dt><dd className="font-mono">{po.expected_delivery_date ?? '—'}</dd></div>
+ <div><dt className="text-2xs uppercase tracking-wider text-muted">Incoterm</dt><dd className="font-mono">{po.incoterm ?? '—'}</dd></div>
+ <div><dt className="text-2xs uppercase tracking-wider text-muted">Total</dt><dd className="font-mono tabular-nums">{formatPeso(po.total_amount)}</dd></div>
+ </dl>
+ </Panel>
  {/* Shipment form */}
- {showShipmentForm && (
+ {showShipmentForm && canUpdateShipment && (
  <Panel title="Update shipment information">
  <form onSubmit={(e) => { e.preventDefault(); shipmentMut.mutate(); }} className="flex flex-col gap-3">
+ <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+ <Input
+ label="Shipped date"
+ type="date"
+ value={shippedDate}
+ onChange={(e) => setShippedDate(e.target.value)}
+ />
+ <Input
+ label="Carrier"
+ type="text"
+ value={carrier}
+ onChange={(e) => setCarrier(e.target.value)}
+ maxLength={100}
+ />
  <Input
  label="Tracking number"
  type="text"
@@ -213,6 +258,14 @@ export default function SupplierPurchaseOrderDetailPage() {
  value={estimatedArrival}
  onChange={(e) => setEstimatedArrival(e.target.value)}
  />
+ </div>
+ <Textarea
+ label="Notes (optional)"
+ value={shipmentNotes}
+ onChange={(e) => setShipmentNotes(e.target.value)}
+ rows={2}
+ maxLength={500}
+ />
  <Button type="submit" variant="primary" size="sm" loading={shipmentMut.isPending} className="self-start">
  Save
  </Button>
@@ -221,7 +274,7 @@ export default function SupplierPurchaseOrderDetailPage() {
  )}
 
  {/* Upload Shipping Document form */}
- {showUploadForm && (
+ {showUploadForm && canUploadDocument && (
  <Panel title="Upload shipping document">
  <form onSubmit={(e) => { e.preventDefault(); if (uploadFile) uploadDocMut.mutate(); }} className="flex flex-col gap-3">
  <Select label="Document type" value={uploadDocType} onChange={(e) => setUploadDocType(e.target.value)}>
@@ -248,7 +301,7 @@ export default function SupplierPurchaseOrderDetailPage() {
  )}
 
  {/* Submit Invoice form */}
- {showInvoiceForm && (
+ {showInvoiceForm && canSubmitInvoice && (
  <Panel title="Submit invoice (creates a draft bill)">
  <form onSubmit={(e) => { e.preventDefault(); submitInvoiceMut.mutate(); }} className="flex flex-col gap-3">
  <div className="grid grid-cols-2 gap-3">

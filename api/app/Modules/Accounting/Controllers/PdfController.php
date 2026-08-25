@@ -7,8 +7,9 @@ namespace App\Modules\Accounting\Controllers;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\JournalEntry;
+use App\Modules\Accounting\Requests\StatementAsOfRequest;
+use App\Modules\Accounting\Requests\StatementDateRangeRequest;
 use App\Modules\Accounting\Services\PdfService;
-use Carbon\Carbon;
 use Illuminate\Http\Request;
 
 class PdfController
@@ -19,23 +20,29 @@ class PdfController
     public function invoice(Invoice $invoice){ return $this->pdf->invoice($invoice); }
     public function journalEntry(JournalEntry $journalEntry) { return $this->pdf->journalEntry($journalEntry); }
 
-    public function trialBalance(Request $request)
+    public function trialBalance(StatementDateRangeRequest $request)
     {
-        $from = $request->filled('from') ? Carbon::parse((string) $request->query('from')) : now()->startOfMonth();
-        $to   = $request->filled('to')   ? Carbon::parse((string) $request->query('to'))   : now()->endOfMonth();
+        $this->authorizeExport($request);
+        [$from, $to] = $request->range();
         return $this->pdf->trialBalance($from, $to);
     }
 
-    public function incomeStatement(Request $request)
+    public function incomeStatement(StatementDateRangeRequest $request)
     {
-        $from = $request->filled('from') ? Carbon::parse((string) $request->query('from')) : now()->startOfMonth();
-        $to   = $request->filled('to')   ? Carbon::parse((string) $request->query('to'))   : now()->endOfMonth();
+        $this->authorizeExport($request);
+        [$from, $to] = $request->range();
         return $this->pdf->incomeStatement($from, $to);
     }
 
-    public function balanceSheet(Request $request)
+    public function balanceSheet(StatementAsOfRequest $request)
     {
-        $asOf = $request->filled('as_of') ? Carbon::parse((string) $request->query('as_of')) : now();
+        $this->authorizeExport($request);
+        $asOf = $request->asOfDate();
         return $this->pdf->balanceSheet($asOf);
+    }
+
+    private function authorizeExport(Request $request): void
+    {
+        abort_unless($request->user()?->hasPermission('accounting.statements.export'), 403, 'You do not have permission to export statements.');
     }
 }

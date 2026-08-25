@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Dashboard\Services;
 
 use App\Common\Services\SettingsService;
+use App\Common\Models\ApprovalDelegation;
 use App\Common\Models\ApprovalRecord;
 use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Accounting\Enums\InvoiceStatus;
@@ -172,11 +173,18 @@ class BadgeService
                 'permissions' => ['approvals.board.view'],
                 'label'       => 'Approvals',
                 'description' => 'Pending approvals waiting on your role',
-                'counter'     => fn (): int => $roleSlug === null ? 0
-                    : ApprovalRecord::query()
+                'counter'     => function () use ($user): int {
+                    $slugs = array_values(array_unique(array_filter([
+                        $user->role?->slug,
+                        ...ApprovalDelegation::actsForRoles($user->id, now()),
+                    ])));
+
+                    return $slugs === [] ? 0 : ApprovalRecord::query()
                         ->where('action', 'pending')
-                        ->where('role_slug', $roleSlug)
-                        ->count(),
+                        ->where('is_current', true)
+                        ->whereIn('role_slug', $slugs)
+                        ->count();
+                },
             ],
 
             'action_center' => [
@@ -195,6 +203,7 @@ class BadgeService
                     : ApprovalRecord::query()
                         ->where('approvable_type', (new PurchaseRequest)->getMorphClass())
                         ->where('action', 'pending')
+                        ->where('is_current', true)
                         ->where('role_slug', $roleSlug)
                         ->whereHas('approvable', fn ($q) => $q->where('status', PurchaseRequestStatus::Pending->value))
                         ->count(),

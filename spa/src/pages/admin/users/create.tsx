@@ -8,14 +8,10 @@ import toast from 'react-hot-toast';
 import { Button, Input, Modal, ModalFooter, Panel, Select, Switch } from '@/components/ui';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { adminUsersApi } from '@/api/admin/users';
-import { client } from '@/api/client';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { applyServerValidationErrors } from '@/lib/formErrors';
-interface RoleOption { id: string; name: string }
-interface RolesResponse { data: RoleOption[] }
-
 const schema = z.object({
  name: z.string().min(1, 'Name is required').max(120),
  email: z.string().email('Invalid email').max(255),
@@ -25,15 +21,15 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
-/** U2 — Admin > Create LuUser (standalone, no employee link). */
+/** U2 — Admin > Create User (standalone, no employee link). */
 export default function AdminCreateUserPage() {
  const navigate = useNavigate();
  const queryClient = useQueryClient();
  const [tempPasswordModal, setTempPasswordModal] = useState<string | null>(null);
 
- const rolesQuery = useQuery<RolesResponse>({
- queryKey: ['admin-roles-list'],
- queryFn: () => client.get('/admin/roles').then((r) => r.data),
+ const rolesQuery = useQuery({
+ queryKey: ['admin-user-options'],
+ queryFn: adminUsersApi.options,
  staleTime: 60_000,
  });
 
@@ -52,7 +48,7 @@ export default function AdminCreateUserPage() {
  mutationFn: (v: FormValues) => adminUsersApi.create(v),
  onSuccess: (r) => {
  queryClient.invalidateQueries({ queryKey: ['admin-users'] });
- toast.success(r.message ?? 'LuUser created.');
+ toast.success(r.message ?? 'User created.');
  if (r.data.temp_password) {
  setTempPasswordModal(r.data.temp_password);
  } else {
@@ -67,7 +63,7 @@ export default function AdminCreateUserPage() {
 
  return (
  <div>
- <PageHeader title="Create LuUser" backTo="/admin/users" backLabel="Users" />
+ <PageHeader title="Create User" backTo="/admin/users" backLabel="Users" />
       <FormDraftBanner safety={safety} />
 
  <form
@@ -92,16 +88,23 @@ export default function AdminCreateUserPage() {
  <Select
  label="Role"
  {...register('role_id')}
- error={errors.role_id?.message}
+ error={errors.role_id?.message ?? (rolesQuery.isError ? 'Could not load roles. Retry before submitting.' : undefined)}
+ helper={rolesQuery.isLoading ? 'Loading available roles…' : undefined}
+ disabled={rolesQuery.isLoading || rolesQuery.isError || mutation.isPending}
  required
  >
  <option value="">Select a role</option>
- {(rolesQuery.data?.data ?? []).map((r) => (
+ {(rolesQuery.data?.roles ?? []).map((r) => (
  <option key={r.id} value={r.id}>
  {r.name}
  </option>
  ))}
  </Select>
+ {rolesQuery.isError && (
+ <Button type="button" variant="ghost" size="xs" onClick={() => rolesQuery.refetch()}>
+ Retry role list
+ </Button>
+ )}
  <div className="flex items-center justify-between text-sm">
  <span className="text-secondary">Send welcome email with temporary password</span>
  <Switch {...register('send_welcome')} />
@@ -123,7 +126,7 @@ export default function AdminCreateUserPage() {
  disabled={isSubmitting || mutation.isPending}
  loading={mutation.isPending}
  >
- {mutation.isPending ? 'Creating…' : 'Create LuUser'}
+ {mutation.isPending ? 'Creating…' : 'Create User'}
  </Button>
  </ModalFooter>
  </form>

@@ -26,6 +26,7 @@ import { inspectionSpecsApi } from '@/api/quality/inspectionSpecs';
 import { productsApi } from '@/api/crm/products';
 import { Button } from '@/components/ui/Button';
 import { Chip, type ChipVariant } from '@/components/ui/Chip';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { Select } from '@/components/ui/Select';
 import { StatCard } from '@/components/ui/StatCard';
@@ -90,6 +91,7 @@ export default function CapabilityStudyPage() {
  const [selectedProductId, setSelectedProductId] = useState('');
  const [selectedSpecItemId, setSelectedSpecItemId] = useState('');
  const [result, setResult] = useState<SpcCapabilityResult | null>(null);
+ const [noDataMessage, setNoDataMessage] = useState<string | null>(null);
  const { data: spcOptions } = useQuery({ queryKey: ['quality', 'spc', 'options'], queryFn: capabilityApi.options, staleTime: 300_000 });
  const thresholds = spcOptions?.capability_thresholds;
 
@@ -102,11 +104,12 @@ export default function CapabilityStudyPage() {
  });
 
  // Fetch the spec for the selected product to populate spec items dropdown
- const { data: spec } = useQuery({
+ const specQuery = useQuery({
  queryKey: ['quality', 'spec-for-product', selectedProductId],
  queryFn: () => inspectionSpecsApi.forProduct(selectedProductId),
  enabled: Boolean(selectedProductId),
  });
+ const spec = specQuery.data;
 
  // Filter to only bilateral (dimensional) spec items
  const specItems = useMemo(() => {
@@ -121,11 +124,18 @@ export default function CapabilityStudyPage() {
  const study = useMutation({
  mutationFn: (data: RunCapabilityData) => capabilityApi.runCapability(data),
  onSuccess: (data) => {
- setResult(data);
- toast.success('Capability study completed');
+  setResult(data);
+  setNoDataMessage(null);
+  toast.success('Capability study completed');
  },
- onError: (e: AxiosError<{ message?: string }>) => {
- toast.error(e.response?.data?.message ?? 'Study failed — check data availability.');
+ onError: (e: AxiosError<{ message?: string; code?: string }>) => {
+  setResult(null);
+  if (e.response?.data?.code === 'quality_capability_insufficient_samples') {
+   setNoDataMessage(e.response.data.message ?? 'There are not enough completed inspection measurements yet.');
+   return;
+  }
+  setNoDataMessage(null);
+  toast.error(e.response?.data?.message ?? 'Study failed — check data availability.');
  },
  });
 
@@ -166,9 +176,10 @@ export default function CapabilityStudyPage() {
  label="Product"
  value={selectedProductId}
  onChange={(e) => {
- setSelectedProductId(e.target.value);
- setSelectedSpecItemId('');
- setResult(null);
+   setSelectedProductId(e.target.value);
+   setSelectedSpecItemId('');
+   setResult(null);
+   setNoDataMessage(null);
  }}
  >
  <option value="">Select product</option>
@@ -183,8 +194,9 @@ export default function CapabilityStudyPage() {
  label="Dimension (spec item)"
  value={selectedSpecItemId}
  onChange={(e) => {
- setSelectedSpecItemId(e.target.value);
- setResult(null);
+   setSelectedSpecItemId(e.target.value);
+   setResult(null);
+   setNoDataMessage(null);
  }}
  disabled={specItems.length === 0}
  >
@@ -214,6 +226,19 @@ export default function CapabilityStudyPage() {
  </Button>
  </div>
  </Panel>
+
+ {specQuery.isError && (
+ <QueryErrorState subject="the inspection specification" onRetry={() => void specQuery.refetch()} />
+ )}
+
+ {noDataMessage && (
+ <EmptyState
+  size="compact"
+  icon="bar-chart"
+  title="Not enough completed data"
+  description={noDataMessage}
+ />
+ )}
 
  {/* ─── Results ─── */}
  {result && thresholds && (

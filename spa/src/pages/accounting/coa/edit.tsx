@@ -7,7 +7,6 @@ import toast from 'react-hot-toast';
 import { accountsApi } from '@/api/accounting/accounts';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -19,7 +18,6 @@ import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
  name: z.string().min(1, 'Name required').max(100),
  description: z.string().max(500).optional().or(z.literal('')),
- is_active: z.coerce.boolean(),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -39,17 +37,17 @@ export default function EditAccountPage() {
  values: account ? {
  name: account.name,
  description: account.description ?? '',
- is_active: account.is_active,
  } : undefined,
  });
  const { register, handleSubmit, setError, formState: { errors } } = form;
 
  const mutation = useMutation({
- mutationFn: (data: FormValues) => accountsApi.update(id, {
+ mutationFn: async (data: FormValues) => {
+ return accountsApi.update(id, {
  name: data.name,
  description: data.description || undefined,
- is_active: data.is_active,
- }),
+ });
+ },
  onSuccess: (account) => {
  qc.invalidateQueries({ queryKey: ['accounting', 'accounts'] });
  toast.success(`Account ${account.code} updated.`);
@@ -87,10 +85,11 @@ export default function EditAccountPage() {
  <Textarea label="Description (optional)" {...register('description')} rows={2}
  error={errors.description?.message} />
 
- <Select label="Status" {...register('is_active')} error={errors.is_active?.message}>
- <option value="true">Active</option>
- <option value="false">Inactive</option>
- </Select>
+ <div>
+ <p className="text-xs uppercase tracking-wider text-muted font-medium mb-1">Status</p>
+ <p className="text-sm">{account.is_active ? 'Active' : 'Inactive'}</p>
+ <p className="text-xs text-muted mt-1">Use the dedicated status action on the Chart of Accounts.</p>
+ </div>
 
  <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/accounting/coa')}>Cancel</Button>

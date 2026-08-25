@@ -8,10 +8,12 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 import { Td, Th, tableCls, theadTrCls, totalsTrCls, trCls } from '@/components/ui/table-cells';
 
 export default function ArAgingPage() {
+ const { can } = usePermission();
  const [asOf, setAsOf] = useState(new Date().toISOString().slice(0, 10));
 
  const { data, isLoading, isError, refetch } = useQuery({
@@ -24,14 +26,15 @@ export default function ArAgingPage() {
  <div>
  <PageHeader
  title="AR Aging"
- subtitle="Accounts Receivable"
+ subtitle={data ? `Accounts Receivable · Currency: ${data.currency}` : 'Accounts Receivable'}
+ crumbLabel="AR Aging"
  backTo="/accounting/journal-entries"
  backLabel="Journal Entries"
- actions={
+ actions={can('accounting.statements.export') && (
  <div className="flex gap-1.5">
  <Button variant="secondary" size="sm" icon={<LuDownload size={14} />} onClick={() => void downloadAuthenticatedFile(statementsApi.csvUrl('ar-aging', { as_of: asOf }), { errorMessage: 'Failed to export AR aging.' })}>CSV</Button>
  </div>
- }
+ )}
  />
 
  <div className="px-5 py-3 border-b border-default flex items-end gap-3">
@@ -44,7 +47,8 @@ export default function ArAgingPage() {
  {data && data.by_customer.length > 0 && (
  <div className="px-5 py-4">
  <div className="border border-default rounded-md overflow-hidden">
- <table className={tableCls}>
+ <div className="overflow-x-auto">
+ <table className={`${tableCls} min-w-[760px]`}>
  <thead>
  <tr className={theadTrCls}>
  <Th>Customer</Th>
@@ -79,6 +83,7 @@ export default function ArAgingPage() {
  </tr>
  </tbody>
  </table>
+ </div>
  </div>
  </div>
  )}

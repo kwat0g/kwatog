@@ -167,18 +167,25 @@ export function LandingFooter() {
               {(content?.section_copy?.newsletter_description ?? '—').replace('{{company}}', contact?.legal_name ?? '—')}
             </p>
             {newsletterStatus === 'success' ? (
-              <div className="mt-4 flex items-center gap-2 text-[13px] text-success">
+              <div role="status" aria-live="polite" className="mt-4 flex items-center gap-2 text-[13px] text-success">
                 <LuCircleCheck size={16} />
                 <span>You&apos;re subscribed.</span>
               </div>
             ) : (
               <form onSubmit={subscribe} className="mt-4 flex flex-col gap-2">
                 <div className="flex items-center gap-2">
+                  <label htmlFor="newsletter-email" className="sr-only">
+                    Email address
+                  </label>
                   <input
+                    id="newsletter-email"
+                    name="email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="your@email.com"
+                    autoComplete="email"
+                    maxLength={150}
                     required
                     className="h-9 flex-1 rounded-md border border-default bg-surface px-3 text-[13px] text-primary outline-none transition-colors placeholder:text-text-subtle focus:border-accent"
                   />
@@ -192,7 +199,7 @@ export function LandingFooter() {
                   </button>
                 </div>
                 {newsletterStatus === 'error' && (
-                  <p className="text-[11px] text-danger">Could not subscribe. Please try again.</p>
+                  <p role="alert" className="text-[11px] text-danger">Could not subscribe. Please try again.</p>
                 )}
               </form>
             )}
@@ -210,7 +217,13 @@ export function LandingFooter() {
                 </a>
               </li>
               <li className="font-sans text-[13px] text-secondary">
-                {phone || '—'}
+                {phone ? (
+                  <a href={`tel:${phone}`} className={cn(footerLinkCls, 'text-[13px]')}>
+                    {phone}
+                  </a>
+                ) : (
+                  '—'
+                )}
               </li>
               <li className="pt-2">
                 <Link

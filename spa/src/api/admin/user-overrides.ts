@@ -17,9 +17,11 @@ import type { ApiSuccess } from '@/types';
  * doesn't need to filter again.
  */
 export const userOverridesApi = {
- list: (userId: string) =>
+ list: (userId: string, includeDeleted = false) =>
  client
- .get<ApiSuccess<UserPermissionOverride[]>>(`/admin/users/${userId}/overrides`)
+ .get<ApiSuccess<UserPermissionOverride[]>>(`/admin/users/${userId}/overrides`, {
+ params: includeDeleted ? { include_deleted: 1 } : undefined,
+ })
  .then((r) => r.data.data),
 
  create: (userId: string, data: CreateUserPermissionOverrideData) =>

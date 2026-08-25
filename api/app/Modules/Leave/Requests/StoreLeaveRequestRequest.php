@@ -37,7 +37,10 @@ class StoreLeaveRequestRequest extends FormRequest
             // M-18 half-day leave: nullable enum 'am'|'pm'.
             'half_day_period' => ['nullable', 'in:am,pm'],
             'reason'          => ['nullable', 'string', 'max:2000'],
-            'document_path'   => ['nullable', 'string', 'max:500'],
+            // Only an uploaded file is accepted. The service stores it on the
+            // private local disk and never trusts a client-supplied filesystem
+            // path.
+            'document'        => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
         ];
     }
 

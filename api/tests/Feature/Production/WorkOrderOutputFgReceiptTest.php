@@ -155,6 +155,20 @@ class WorkOrderOutputFgReceiptTest extends TestCase
         $this->assertSame(0, $count, 'No stock movement for reject-only output');
     }
 
+    public function test_defect_rows_require_a_positive_reject_count(): void
+    {
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('positive Reject count');
+
+        $this->service->record($this->wo, [
+            'good_count' => 5,
+            'reject_count' => 0,
+            'defects' => [
+                ['defect_type_id' => $this->defectType->id, 'count' => 1],
+            ],
+        ], $this->user->id);
+    }
+
     public function test_missing_fg_item_commits_output_and_creates_durable_manual_handoff(): void
     {
         // Item codes are globally unique even across soft-deleted rows; this
@@ -325,16 +339,15 @@ class WorkOrderOutputFgReceiptTest extends TestCase
         });
 
         // The request succeeds — that is the user-visible half of "physical
-        // output is a fact". (The response body's handoff status is stale here:
-        // markProductionReceiptManual() writes through a separately loaded row,
-        // so the returned instance still reads not_started until a refetch. The
-        // database is authoritative and is asserted below.)
+        // output is a fact" — and the response carries the durable recovery
+        // state written by markProductionReceiptManual().
         $this->actingAs($this->recorder())
             ->postJson("/api/v1/production/work-orders/{$this->wo->hash_id}/outputs", [
                 'good_count' => 6,
                 'reject_count' => 0,
             ])
-            ->assertCreated();
+            ->assertCreated()
+            ->assertJsonPath('data.production_receipt_handoff.status', 'manual_required');
 
         $output = $this->wo->outputs()->firstOrFail();
         $this->assertSame(6, (int) $output->good_count);

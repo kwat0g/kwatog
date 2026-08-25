@@ -51,7 +51,7 @@ class ProductController
 
     public function restore(Product $product): JsonResponse
     {
-        $product->restore();
+        $this->service->restore($product);
         return response()->json(['message' => 'Product restored.']);
     }
 }

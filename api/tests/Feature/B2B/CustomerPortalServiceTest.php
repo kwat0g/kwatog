@@ -9,16 +9,18 @@ use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\B2B\Models\DeliverySchedule;
+use App\Modules\CRM\Models\Complaint8DReport;
 use App\Modules\CRM\Models\CustomerComplaint;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Enums\ComplaintNcrHandoffStatus;
+use App\Modules\Quality\Models\NonConformanceReport;
+use App\Modules\Production\Models\WorkOrder;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\DeliveryProof;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
-use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 /**
@@ -53,7 +55,7 @@ class CustomerPortalServiceTest extends TestCase
 
     private function actAs(CustomerPortalUser $user): self
     {
-        Sanctum::actingAs($user, ['*'], 'customer_portal');
+        $this->actingAs($user, 'customer_portal');
 
         return $this;
     }
@@ -78,6 +80,32 @@ class CustomerPortalServiceTest extends TestCase
 
         $response->assertOk();
         $this->assertSame(2, $response->json('data.open_so_count'));
+    }
+
+    public function test_dashboard_outstanding_balance_keeps_decimal_precision(): void
+    {
+        $customer = Customer::factory()->create();
+        $user = $this->makePortalUser($customer);
+
+        Invoice::factory()->create([
+            'customer_id' => $customer->id,
+            'status' => 'finalized',
+            'total_amount' => '999999999999.99',
+            'amount_paid' => '0.00',
+            'balance' => '999999999999.99',
+        ]);
+        Invoice::factory()->create([
+            'customer_id' => $customer->id,
+            'status' => 'partial',
+            'total_amount' => '0.02',
+            'amount_paid' => '0.00',
+            'balance' => '0.02',
+        ]);
+
+        $this->actAs($user)
+            ->getJson('/api/v1/b2b/customer/dashboard')
+            ->assertOk()
+            ->assertJsonPath('data.total_outstanding', '1000000000000.01');
     }
 
     /* ─── Sales Orders ───────────────────────────────────────────── */
@@ -145,6 +173,34 @@ class CustomerPortalServiceTest extends TestCase
         $response->assertOk();
     }
 
+    public function test_sales_order_detail_matches_loaded_child_relations(): void
+    {
+        $customer = Customer::factory()->create();
+        $user = $this->makePortalUser($customer);
+        $order = SalesOrder::factory()->create(['customer_id' => $customer->id]);
+        $creator = User::factory()->create();
+        $delivery = Delivery::query()->create([
+            'delivery_number' => 'DLV-PORTAL-DETAIL',
+            'sales_order_id' => $order->id,
+            'status' => 'scheduled',
+            'scheduled_date' => today()->addDay(),
+            'created_by' => $creator->id,
+        ]);
+        $invoice = Invoice::factory()->create([
+            'customer_id' => $customer->id,
+            'sales_order_id' => $order->id,
+            'status' => 'finalized',
+        ]);
+        $workOrder = WorkOrder::factory()->create(['sales_order_id' => $order->id]);
+
+        $this->actAs($user)
+            ->getJson("/api/v1/b2b/customer/orders/{$order->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.deliveries.0.id', $delivery->hash_id)
+            ->assertJsonPath('data.invoices.0.id', $invoice->hash_id)
+            ->assertJsonPath('data.work_orders.0.id', $workOrder->hash_id);
+    }
+
     /* ─── Invoices ───────────────────────────────────────────────── */
 
     public function test_invoices_scoped_to_own_customer(): void
@@ -152,10 +208,13 @@ class CustomerPortalServiceTest extends TestCase
         $customer = Customer::factory()->create();
         $user = $this->makePortalUser($customer);
 
-        Invoice::factory()->count(2)->create(['customer_id' => $customer->id]);
+        Invoice::factory()->count(2)->create([
+            'customer_id' => $customer->id,
+            'status' => 'finalized',
+        ]);
 
         $other = Customer::factory()->create();
-        Invoice::factory()->create(['customer_id' => $other->id]);
+        Invoice::factory()->create(['customer_id' => $other->id, 'status' => 'finalized']);
 
         $this->actAs($user);
 
@@ -184,13 +243,49 @@ class CustomerPortalServiceTest extends TestCase
     {
         $customer = Customer::factory()->create();
         $user = $this->makePortalUser($customer);
-        $invoice = Invoice::factory()->create(['customer_id' => $customer->id]);
+        $invoice = Invoice::factory()->create([
+            'customer_id' => $customer->id,
+            'status' => 'finalized',
+            'buyer_tin' => '123-456-789',
+            'atp_number' => 'ATP-INTERNAL',
+            'serial_range' => 'SERIAL-INTERNAL',
+            'remarks' => 'Internal collection note',
+        ]);
 
         $this->actAs($user)
             ->getJson("/api/v1/b2b/customer/invoices/{$invoice->hash_id}")
             ->assertOk()
             ->assertJsonPath('data.id', $invoice->hash_id)
-            ->assertJsonPath('data.collections', []);
+            ->assertJsonPath('data.collections', [])
+            ->assertJsonMissingPath('data.buyer_tin')
+            ->assertJsonMissingPath('data.atp_number')
+            ->assertJsonMissingPath('data.serial_range')
+            ->assertJsonMissingPath('data.remarks');
+    }
+
+    public function test_invoice_views_exclude_draft_and_cancelled_documents(): void
+    {
+        $customer = Customer::factory()->create();
+        $user = $this->makePortalUser($customer);
+        $visible = Invoice::factory()->create([
+            'customer_id' => $customer->id,
+            'status' => 'finalized',
+        ]);
+        Invoice::factory()->create([
+            'customer_id' => $customer->id,
+            'status' => 'draft',
+        ]);
+        Invoice::factory()->create([
+            'customer_id' => $customer->id,
+            'status' => 'cancelled',
+        ]);
+
+        $this->actAs($user);
+
+        $this->getJson('/api/v1/b2b/customer/invoices')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $visible->hash_id);
     }
 
     public function test_delivery_list_detail_and_proof_use_portal_safe_hash_ids(): void
@@ -213,7 +308,7 @@ class CustomerPortalServiceTest extends TestCase
         $proof = DeliveryProof::query()->create([
             'delivery_id' => $delivery->id,
             'proof_type' => 'signed_dr',
-            'file_name' => 'signed.gif',
+            'file_name' => "../../signed\"; filename=evil.txt\r\nX-Portal-Evil: yes.gif",
             'file_path' => $path,
             'file_size' => 6,
             'mime_type' => 'image/gif',
@@ -228,9 +323,13 @@ class CustomerPortalServiceTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.id', $delivery->hash_id)
             ->assertJsonPath('data.proofs.0.id', $proof->hash_id);
-        $this->get("/api/v1/b2b/customer/deliveries/{$delivery->hash_id}/proofs/{$proof->hash_id}/view")
+        $proofResponse = $this->get("/api/v1/b2b/customer/deliveries/{$delivery->hash_id}/proofs/{$proof->hash_id}/view")
             ->assertOk()
             ->assertHeader('content-type', 'image/gif');
+        $contentDisposition = (string) $proofResponse->headers->get('content-disposition');
+        $this->assertStringNotContainsString("\r", $contentDisposition);
+        $this->assertStringNotContainsString("\n", $contentDisposition);
+        $this->assertStringContainsString('filename="signed__filename_evil.txtX-Portal-Evil__yes.gif"', $contentDisposition);
     }
 
     /* ─── Complaints ─────────────────────────────────────────────── */
@@ -289,9 +388,11 @@ class CustomerPortalServiceTest extends TestCase
         ]);
 
         $response->assertStatus(201);
-        $response->assertJsonPath('data.sales_order.id', $order->hash_id);
-        $response->assertJsonPath('data.ncr_handoff.status', ComplaintNcrHandoffStatus::Generated->value);
-        $this->assertIsString($response->json('data.ncr.id'));
+        $response
+            ->assertJsonMissingPath('data.sales_order')
+            ->assertJsonMissingPath('data.ncr_handoff')
+            ->assertJsonMissingPath('data.ncr');
+        $this->assertIsString($response->json('data.complaint_number'));
 
         $complaint = CustomerComplaint::where('customer_id', $customer->id)->first();
         $this->assertNotNull($complaint);
@@ -302,6 +403,125 @@ class CustomerPortalServiceTest extends TestCase
         $this->assertNotNull($complaint->ncr_id);
         $this->assertNotNull($complaint->eightDReport);
         $this->assertNotNull($complaint->created_by);
+        $this->assertDatabaseHas('audit_logs', [
+            'actor_type' => 'customer_portal',
+            'action' => 'customer.complaint.submitted',
+            'model_type' => CustomerComplaint::class,
+            'model_id' => $complaint->id,
+        ]);
+    }
+
+    public function test_create_complaint_rejects_cancelled_source_order(): void
+    {
+        $customer = Customer::factory()->create();
+        $user = $this->makePortalUser($customer);
+        $order = SalesOrder::factory()->create([
+            'customer_id' => $customer->id,
+            'status' => 'cancelled',
+        ]);
+
+        $this->actAs($user)
+            ->postJson('/api/v1/b2b/customer/complaints', [
+                'order_id' => $order->hash_id,
+                'severity' => 'critical',
+                'description' => 'Parts arrived damaged',
+                'affected_quantity' => 1,
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['order_id']);
+
+        $this->assertDatabaseMissing('customer_complaints', [
+            'customer_id' => $customer->id,
+            'sales_order_id' => $order->id,
+        ]);
+    }
+
+    public function test_portal_8d_report_requires_finalized_report_and_terminal_status(): void
+    {
+        $customer = Customer::factory()->create();
+        $user = $this->makePortalUser($customer);
+        $internalUser = User::factory()->create();
+        $complaint = CustomerComplaint::create([
+            'complaint_number' => 'CC-T-'.substr(uniqid(), -5),
+            'customer_id' => $customer->id,
+            'severity' => 'medium',
+            'description' => 'Finalization boundary test',
+            'affected_quantity' => 1,
+            'status' => 'resolved',
+            'received_date' => now(),
+            'created_by' => $internalUser->id,
+        ]);
+        $report = Complaint8DReport::create([
+            'complaint_id' => $complaint->id,
+            'd2_problem' => 'Draft-only detail',
+        ]);
+
+        $this->actAs($user);
+
+        $this->getJson("/api/v1/b2b/customer/complaints/{$complaint->hash_id}/8d-report")
+            ->assertNotFound();
+
+        $report->update([
+            'd1_team' => 'Quality',
+            'finalized_by' => $internalUser->id,
+            'finalized_at' => now(),
+        ]);
+
+        NonConformanceReport::create([
+            'ncr_number' => 'NCR-PORTAL-'.substr(uniqid(), -6),
+            'source' => 'customer_complaint',
+            'severity' => 'medium',
+            'status' => 'closed',
+            'complaint_id' => $complaint->id,
+            'defect_description' => 'Portal completion boundary test',
+            'affected_quantity' => 1,
+            'disposition' => 'use_as_is',
+            'created_by' => $internalUser->id,
+        ]);
+
+        $this->getJson("/api/v1/b2b/customer/complaints/{$complaint->hash_id}/8d-report")
+            ->assertOk()
+            ->assertJsonPath('data.report.d2_problem', 'Draft-only detail')
+            ->assertJsonMissingPath('data.ncr_handoff')
+            ->assertJsonMissingPath('data.assignee');
+    }
+
+    public function test_portal_complaint_history_is_bounded_and_filterable(): void
+    {
+        $customer = Customer::factory()->create();
+        $user = $this->makePortalUser($customer);
+        $internalUser = User::factory()->create();
+
+        foreach (['needle one', 'needle two'] as $description) {
+            CustomerComplaint::create([
+                'complaint_number' => 'CC-T-'.substr(uniqid(), -5),
+                'customer_id' => $customer->id,
+                'severity' => 'low',
+                'description' => $description,
+                'affected_quantity' => 1,
+                'status' => 'open',
+                'received_date' => now(),
+                'created_by' => $internalUser->id,
+            ]);
+        }
+        CustomerComplaint::create([
+            'complaint_number' => 'CC-T-'.substr(uniqid(), -5),
+            'customer_id' => $customer->id,
+            'severity' => 'low',
+            'description' => 'resolved unrelated issue',
+            'affected_quantity' => 1,
+            'status' => 'resolved',
+            'received_date' => now(),
+            'created_by' => $internalUser->id,
+        ]);
+
+        $this->actAs($user);
+
+        $this->getJson('/api/v1/b2b/customer/complaints?status=open&search=needle&per_page=1')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('meta.total', 2)
+            ->assertJsonPath('meta.per_page', 1);
     }
 
     /* ─── Delivery Schedules ─────────────────────────────────────── */
@@ -375,6 +595,29 @@ class CustomerPortalServiceTest extends TestCase
 
         $this->assertDatabaseCount('delivery_schedules', 1);
         $this->assertSame($first->json('data.id'), $second->json('data.id'));
+    }
+
+    public function test_store_delivery_schedule_rejects_a_different_payload_for_same_month(): void
+    {
+        $customer = Customer::factory()->create();
+        $user = $this->makePortalUser($customer);
+
+        $this->actAs($user);
+
+        $payload = [
+            'month' => '2026-08',
+            'lines' => [['product_name' => 'Relay Cover', 'quantity' => 500]],
+        ];
+
+        $this->postJson('/api/v1/b2b/customer/delivery-schedules', $payload)
+            ->assertCreated();
+
+        $this->postJson('/api/v1/b2b/customer/delivery-schedules', [
+            ...$payload,
+            'lines' => [['product_name' => 'Relay Cover', 'quantity' => 700]],
+        ])
+            ->assertStatus(422)
+            ->assertJsonPath('errors.error.0', 'A delivery schedule already exists for this customer and month with a different payload.');
     }
 
     /* ─── Auth guard ─────────────────────────────────────────────── */

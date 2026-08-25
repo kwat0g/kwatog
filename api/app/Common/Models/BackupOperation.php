@@ -22,6 +22,11 @@ class BackupOperation extends Model
         'artifacts',
         'metadata',
         'error_message',
+        'active_lock',
+        'lease_token',
+        'attempts',
+        'heartbeat_at',
+        'lease_expires_at',
         'started_at',
         'completed_at',
     ];
@@ -29,6 +34,9 @@ class BackupOperation extends Model
     protected $casts = [
         'artifacts' => 'array',
         'metadata' => 'array',
+        'attempts' => 'integer',
+        'heartbeat_at' => 'datetime',
+        'lease_expires_at' => 'datetime',
         'started_at' => 'datetime',
         'completed_at' => 'datetime',
     ];

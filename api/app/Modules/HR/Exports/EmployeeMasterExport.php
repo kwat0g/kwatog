@@ -6,6 +6,11 @@ namespace App\Modules\HR\Exports;
 
 use App\Common\Exports\BaseModuleExport;
 use App\Common\Services\Export\ExportColumnRegistry;
+use App\Common\Support\DepartmentScope;
+use App\Common\Support\HashIdFilter;
+use App\Common\Support\Money;
+use App\Modules\Auth\Models\User;
+use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use Illuminate\Support\Collection;
 
@@ -20,6 +25,23 @@ class EmployeeMasterExport extends BaseModuleExport
 {
     public const MODULE = 'hr.employees';
 
+    /**
+     * Sanitize caller-selected columns at the module boundary. The generic
+     * export controller accepts user-supplied column names, so relying on the
+     * selector UI would leave a direct download URL able to request arbitrary
+     * model attributes.
+     *
+     * @param array<int, string> $columns
+     * @param array<string, mixed> $filters
+     */
+    public function __construct(array $columns, array $filters = [], ?User $actor = null)
+    {
+        $actor ??= auth()->user();
+        $this->actor = $actor instanceof User ? $actor : null;
+
+        parent::__construct($columns, $filters, $this->actor);
+    }
+
     public function module(): string
     {
         return self::MODULE;
@@ -29,11 +51,28 @@ class EmployeeMasterExport extends BaseModuleExport
     {
         $query = Employee::query()->with(['department', 'position']);
 
+        if ($this->actor) {
+            DepartmentScope::apply(
+                $query,
+                $this->actor,
+                viewAllPermission: 'hr.employees.view_sensitive',
+                departmentPermission: 'hr.employees.view',
+                deptColumn: 'department_id',
+                selfColumn: 'id',
+                selfId: $this->actor->employee_id,
+            );
+        }
+
         if (! empty($this->filters['status'])) {
             $query->where('status', $this->filters['status']);
         }
         if (! empty($this->filters['department_id'])) {
-            $query->where('department_id', $this->filters['department_id']);
+            $departmentId = HashIdFilter::decode($this->filters['department_id'], Department::class);
+            if ($departmentId === null) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->where('department_id', $departmentId);
+            }
         }
         if (! empty($this->filters['pay_type'])) {
             $query->where('pay_type', $this->filters['pay_type']);
@@ -48,7 +87,7 @@ class EmployeeMasterExport extends BaseModuleExport
      */
     public static function registerColumns(): void
     {
-        ExportColumnRegistry::register(self::MODULE, [
+        ExportColumnRegistry::registerModule(self::MODULE, self::class, 'hr.employees.export', [
             'employee_no' => [
                 'label'   => 'Employee No.',
                 'default' => true,
@@ -83,16 +122,18 @@ class EmployeeMasterExport extends BaseModuleExport
                 'label'   => 'Monthly Salary',
                 'default' => false,
                 'format'  => 'money',
+                'permission' => 'hr.employees.view_sensitive',
                 'resolver' => fn (Employee $e) => $e->basic_monthly_salary !== null
-                    ? (float) $e->basic_monthly_salary
+                    ? Money::round2((string) $e->basic_monthly_salary)
                     : null,
             ],
             'semi_monthly_rate' => [
                 'label'   => 'Semi-monthly Rate',
                 'default' => false,
                 'format'  => 'money',
+                'permission' => 'hr.employees.view_sensitive',
                 'resolver' => fn (Employee $e) => $e->semi_monthly_rate !== null
-                    ? (float) $e->semi_monthly_rate
+                    ? Money::round2((string) $e->semi_monthly_rate)
                     : null,
             ],
             'date_hired' => [
@@ -117,6 +158,6 @@ class EmployeeMasterExport extends BaseModuleExport
                 'default' => false,
                 'resolver' => fn (Employee $e) => $e->mobile_number,
             ],
-        ]);
+        ], ['status', 'department_id', 'pay_type']);
     }
 }

@@ -125,6 +125,17 @@ class StockCountCancelRegressionTest extends TestCase
         $this->svc->completeSession($this->session->id, $this->user);
     }
 
+    public function test_record_count_after_cancel_is_blocked(): void
+    {
+        $item = $this->session->items()->first();
+        $this->svc->cancelSession($this->session->id);
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('not in progress');
+
+        $this->svc->recordCount($item->id, ['counted_quantity' => '12.000'], $this->user);
+    }
+
     public function test_completion_posts_adjustment_for_recorded_variance(): void
     {
         $this->countedItem('12.000'); // +2 overage

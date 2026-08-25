@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { budgetingApi } from '@/api/accounting/budgeting';
 import { usePermission } from '@/hooks/usePermission';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -15,7 +15,7 @@ import { formatDate } from '@/lib/formatDate';
 import { formatCompactCurrency } from '@/lib/formatNumber';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/cn';
-import { LuArrowLeft, LuSend, LuCircleX, LuCircleCheck } from '@/lib/icons';
+import { LuArrowLeft, LuSend, LuCircleX, LuCircleCheck, LuPencil } from '@/lib/icons';
 import type { Budget } from '@/types/budgeting';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
@@ -45,6 +45,7 @@ const STATUS_VARIANT: Record<string, ChipVariant> = {
 
 export default function BudgetDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { can } = usePermission();
   const canManage = can('budgeting.manage');
@@ -144,6 +145,11 @@ export default function BudgetDetailPage() {
             >
               <LuArrowLeft size={14} /> Back
             </Link>
+            {budget.status === 'draft' && canManage && (
+              <Button size="sm" variant="secondary" onClick={() => navigate(`/budgeting/${budget.id}/edit`)}>
+                <LuPencil size={14} /> Edit
+              </Button>
+            )}
             {canSubmit && (
               <Button
                 size="sm"
@@ -192,7 +198,7 @@ export default function BudgetDetailPage() {
         <StatCard
           label="Available"
           value={formatCompactCurrency(budget.available, 1_000_000, 'M')}
-          className={budget.available < 0 ? 'text-danger-fg' : 'text-success-fg'}
+          className={Number(budget.available) < 0 ? 'text-danger-fg' : 'text-success-fg'}
         />
       </div>
 
@@ -258,7 +264,7 @@ export default function BudgetDetailPage() {
                       <span className="ml-1.5 text-muted text-xs">{li.account?.name}</span>
                     </Td>
                     {MONTHS.map((m) => {
-                      const val = li[m.toLowerCase() as keyof typeof li] as number;
+                      const val = Number(li[m.toLowerCase() as keyof typeof li]);
                       return (
                         <Td align="right" mono className="text-xs" key={m}>
                           {val > 0 ? formatCompactCurrency(val, 1_000, 'K') : '-'}
@@ -274,10 +280,10 @@ export default function BudgetDetailPage() {
                     <Td
                       align="right"
                       mono
-                      className={cn(li.variance < 0 ? 'text-danger-fg' : 'text-success-fg')}
+                      className={cn(Number(li.variance) < 0 ? 'text-danger-fg' : 'text-success-fg')}
                     >
-                      {li.variance >= 0 ? '+' : '-'}
-                      {formatCompactCurrency(Math.abs(li.variance), 1_000, 'K')}
+                      {Number(li.variance) >= 0 ? '+' : '-'}
+                      {formatCompactCurrency(Math.abs(Number(li.variance)), 1_000, 'K')}
                     </Td>
                   </tr>
                 ))}

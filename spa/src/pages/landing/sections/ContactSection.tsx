@@ -8,7 +8,7 @@
  * heard nothing back.
  *
  * Submissions land in `contact_inquiries` and surface at /crm/inquiries, where a
- * genuine sales enquiry can be promoted to a CRM lead. A contact form also
+ * genuine sales enquiry can be followed up from the CRM inbox. A contact form also
  * catches job seekers and supplier pitches, which is exactly why it does not
  * write straight into `leads`.
  */
@@ -35,10 +35,10 @@ import { useMagnetic } from '../hooks/useMagnetic';
  * neither, and rejecting them would be the same mistake in a smaller form.
  */
 const inquirySchema = z.object({
-  full_name: z.string().min(1, 'Full name is required'),
-  company: z.string().optional(),
-  email: z.string().min(1, 'Email is required').email('Invalid email'),
-  phone: z.string().optional(),
+  full_name: z.string().min(1, 'Full name is required').max(150, 'Full name is too long (150 characters max)'),
+  company: z.string().max(150, 'Company is too long (150 characters max)').optional(),
+  email: z.string().min(1, 'Email is required').email('Invalid email').max(150, 'Email is too long (150 characters max)'),
+  phone: z.string().max(40, 'Phone is too long (40 characters max)').optional(),
   message: z
     .string()
     .min(1, 'Message is required')
@@ -168,10 +168,20 @@ export function ContactSection() {
                   <LuMail size={15} className="text-accent" />
                   {salesEmail || '—'}
                 </a>
-                <span className="flex items-center gap-2.5 font-mono text-sm text-secondary">
-                  <LuPhone size={15} className="text-accent" />
-                  {phone || '—'}
-                </span>
+                {phone ? (
+                  <a
+                    href={`tel:${phone}`}
+                    className="flex items-center gap-2.5 font-mono text-sm text-secondary transition-colors hover:text-accent"
+                  >
+                    <LuPhone size={15} className="text-accent" />
+                    {phone}
+                  </a>
+                ) : (
+                  <span className="flex items-center gap-2.5 font-mono text-sm text-secondary">
+                    <LuPhone size={15} className="text-accent" />
+                    —
+                  </span>
+                )}
                 <span className="font-mono text-sm text-text-subtle">{address}</span>
               </div>
             </div>
@@ -207,12 +217,14 @@ export function ContactSection() {
                     <Input
                       label="Full name"
                       autoComplete="name"
+                      maxLength={150}
                       {...register('full_name')}
                       error={errors.full_name?.message}
                     />
                     <Input
                       label="Company (optional)"
                       autoComplete="organization"
+                      maxLength={150}
                       {...register('company')}
                       error={errors.company?.message}
                     />
@@ -222,6 +234,7 @@ export function ContactSection() {
                       type="email"
                       label="Email"
                       autoComplete="email"
+                      maxLength={150}
                       {...register('email')}
                       error={errors.email?.message}
                     />
@@ -229,6 +242,7 @@ export function ContactSection() {
                       type="tel"
                       label="Phone (optional)"
                       autoComplete="tel"
+                      maxLength={40}
                       {...register('phone')}
                       error={errors.phone?.message}
                     />
@@ -237,6 +251,7 @@ export function ContactSection() {
                     label="Message"
                     rows={6}
                     placeholder="How can we help?"
+                    maxLength={2000}
                     {...register('message')}
                     error={errors.message?.message}
                   />

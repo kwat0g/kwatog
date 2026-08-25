@@ -134,7 +134,7 @@ export function SalaryAdjustmentsTab() {
  </div>
  {(row.from_semi_monthly_rate || row.to_semi_monthly_rate) && (
  <div className="flex">
- <span className="text-muted w-40 shrink-0">Daily rate:</span>
+ <span className="text-muted w-40 shrink-0">Semi-monthly rate:</span>
  <span className="font-mono tabular-nums">
  {formatPeso(row.from_semi_monthly_rate)} → {formatPeso(row.to_semi_monthly_rate)}
  </span>

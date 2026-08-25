@@ -20,7 +20,7 @@ import { LuTriangleAlert, LuFileText, LuPackageCheck, LuRefreshCw, LuCheck } fro
 import { warehouseApi } from '@/api/inventory/warehouse';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
-import { formatPeso, formatInt } from '@/lib/formatNumber';
+import { formatPeso, formatQuantity } from '@/lib/formatNumber';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { cn } from '@/lib/cn';
 
@@ -81,8 +81,8 @@ export default function ReturnRequestDetailPage() {
     staleTime: 5 * 60 * 1000,
   });
   const locations = (warehouses ?? []).flatMap((w) =>
-    (w.zones ?? []).flatMap((z) =>
-      (z.locations ?? []).map((l) => ({
+    (w.is_active ? (w.zones ?? []).filter((z) => z.zone_type !== 'quarantine' && z.zone_type !== 'scrap') : []).flatMap((z) =>
+      (z.locations ?? []).filter((l) => l.is_active).map((l) => ({
         id: l.id,
         label: `${w.code}-${z.code}-${l.code}`,
         sub: `${w.name} / ${z.name}`,
@@ -91,7 +91,7 @@ export default function ReturnRequestDetailPage() {
   );
   const { data: options } = useQuery({
     queryKey: ['return-management', 'options'],
-    queryFn: returnManagementApi.options,
+    queryFn: () => returnManagementApi.options(),
     staleTime: 5 * 60 * 1000,
   });
   const reasonLabel = new Map(
@@ -121,9 +121,9 @@ export default function ReturnRequestDetailPage() {
 
   const approveMut = useMutation({
     mutationFn: () => returnManagementApi.approve(id!),
-    onSuccess: () => {
+    onSuccess: (updated) => {
       invalidate();
-      toast.success('RMA approved.');
+      toast.success(updated.status === 'pending_approval' ? 'Approval recorded; another approval step remains.' : 'RMA approved.');
       setConfirm(null);
     },
     onError: (e) => toast.error(errMsg(e, 'Failed to approve RMA.')),
@@ -238,12 +238,10 @@ export default function ReturnRequestDetailPage() {
       case 'approved':
         return [
           { key: 'receive', label: 'Record Receipt', variant: 'primary' },
-          { key: 'reject', label: 'Reject', variant: 'danger' },
         ];
       case 'received':
         return [
-          { key: 'inspect', label: 'Complete Inspection', variant: 'primary' },
-          { key: 'reject', label: 'Reject', variant: 'danger' },
+          { key: 'inspect', label: 'Stage Quality Handoff', variant: 'primary' },
         ];
       case 'inspected': {
         const disposed = rma?.disposition_status === 'disposed';
@@ -256,9 +254,6 @@ export default function ReturnRequestDetailPage() {
           ...(disposed
             ? [{ key: 'complete', label: 'Complete RMA', variant: 'primary' as const }]
             : []),
-          // Once disposed the credit / debit memo is live — rejection is no
-          // longer a clean unwind, so the backend refuses it.
-          ...(disposed ? [] : [{ key: 'reject', label: 'Reject', variant: 'danger' as const }]),
         ];
       }
       default:
@@ -336,10 +331,10 @@ export default function ReturnRequestDetailPage() {
       variant: 'primary',
     },
     inspect: {
-      title: 'Complete inspection?',
+      title: 'Stage Quality inspection handoff?',
       description:
-        'Marks the inspection as done. Items can then be disposed and the RMA completed.',
-      label: 'Complete Inspection',
+        'Creates the product-level Quality inspection records. Disposition remains blocked until Quality records a pass.',
+      label: 'Stage Handoff',
       variant: 'primary',
     },
     cancel: {
@@ -370,9 +365,23 @@ export default function ReturnRequestDetailPage() {
   // routes them to department heads and managers, who deliberately do not
   // hold `manage`. Gating every action on `manage` hid the approve button // from the only people allowed to press it.
   const canManage = can('return_management.manage');
+  const canReceive = canManage || can('return_management.receive');
+  const canInspect = canManage || can('return_management.inspect');
+  const canDispose = canManage || can('return_management.dispose');
+  const canComplete = canManage || can('return_management.complete');
   const canApprove = can('return_management.approve');
   const actions = availableActions(rma.status).filter((action) =>
-    action.key === 'approve' || action.key === 'reject' ? canApprove : canManage,
+    action.key === 'approve' || action.key === 'reject'
+      ? canApprove
+      : action.key === 'receive'
+        ? canReceive
+        : action.key === 'inspect'
+          ? canInspect
+          : action.key === 'dispose'
+            ? canDispose
+            : action.key === 'complete'
+              ? canComplete
+              : canManage,
   );
 
   // 2026-08-08 — a supplier line still needs a location at completion only when
@@ -394,9 +403,9 @@ export default function ReturnRequestDetailPage() {
     { key: 'created', label: 'Created', at: rma.created_at, by: rma.creator },
     { key: 'approved', label: 'Approved', at: rma.approved_at, by: rma.approved_by },
     { key: 'received', label: 'Received', at: rma.received_at },
-    { key: 'inspected', label: 'Inspected', at: rma.inspected_at },
-    { key: 'completed', label: 'Completed', at: rma.completed_at, by: rma.approved_by },
-    { key: 'rejected', label: 'Rejected', at: rma.rejected_at },
+    { key: 'inspected', label: 'Quality handoff staged', at: rma.inspected_at },
+    { key: 'completed', label: 'Completed', at: rma.completed_at, by: rma.completed_by },
+    { key: 'rejected', label: 'Rejected', at: rma.rejected_at, by: rma.rejected_by },
     { key: 'cancelled', label: 'Cancelled', at: rma.cancelled_at },
   ];
 
@@ -414,7 +423,12 @@ export default function ReturnRequestDetailPage() {
         backLabel="Return Management"
         actions={
           <div className="flex gap-1.5">
-            {rma.inspection_handoff?.status === 'manual_required' && canManage && (
+            {rma.is_editable && canManage && (
+              <Link to={`/return-management/${rma.id}/edit`}>
+                <Button size="sm" variant="secondary">Edit Draft</Button>
+              </Link>
+            )}
+            {rma.inspection_handoff?.status === 'manual_required' && canInspect && (
               <Button
                 size="sm"
                 variant="secondary"
@@ -607,10 +621,10 @@ export default function ReturnRequestDetailPage() {
                               : '—'}
                         </Td>
                         <Td align="right" mono>
-                          {formatInt(item.quantity)}
+                          {formatQuantity(item.quantity)}
                         </Td>
                         <Td align="right" mono>
-                          {formatInt(item.returned_quantity)}
+                          {formatQuantity(item.receipt_recorded ? item.returned_quantity : item.quantity)}
                         </Td>
                         <Td align="right" mono>
                           {formatPeso(item.unit_price)}
@@ -639,7 +653,7 @@ export default function ReturnRequestDetailPage() {
                         <Td>
                           {item.moved_quantity && Number(item.moved_quantity) > 0 ? (
                             rma.type === 'supplier_return' ? (
-                              <Chip variant="danger">{formatInt(item.moved_quantity)} out</Chip>
+                              <Chip variant="danger">{formatQuantity(item.moved_quantity)} out</Chip>
                             ) : (
                               <Chip variant="success">
                                 <LuCheck
@@ -647,7 +661,7 @@ export default function ReturnRequestDetailPage() {
                                   className="inline mr-0.5 align-[-1px]"
                                   aria-hidden="true"
                                 />
-                                {formatInt(item.moved_quantity)}
+                                {formatQuantity(item.moved_quantity)}
                               </Chip>
                             )
                           ) : (
@@ -686,6 +700,7 @@ export default function ReturnRequestDetailPage() {
             {(rma.credit_note ||
               rma.replacement_purchase_order ||
               rma.inspection ||
+              (rma.inspections && rma.inspections.length > 0) ||
               rma.disposition_status ||
               rma.inspection_handoff) && (
               <>
@@ -737,8 +752,8 @@ export default function ReturnRequestDetailPage() {
                       </div>
                       <div className="text-muted">
                         {rma.type === 'supplier_return'
-                          ? `${formatInt(rma.moved_quantity)} units left stock${rma.stock_movement?.from_location ? ` at ${rma.stock_movement.from_location.code}` : ''} when the disposition was recorded.`
-                          : `${formatInt(rma.moved_quantity)} units received back into stock${rma.stock_movement?.to_location ? ` at ${rma.stock_movement.to_location.code}` : ''} when the disposition was recorded.`}{' '}
+                          ? `${formatQuantity(rma.moved_quantity)} units left stock${rma.stock_movement?.from_location ? ` at ${rma.stock_movement.from_location.code}` : ''} when the disposition was recorded.`
+                          : `${formatQuantity(rma.moved_quantity)} units received back into stock${rma.stock_movement?.to_location ? ` at ${rma.stock_movement.to_location.code}` : ''} when the disposition was recorded.`}{' '}
                         <Link
                           to="/inventory/stock-levels?view=movements"
                           className="text-accent hover:underline"
@@ -796,15 +811,23 @@ export default function ReturnRequestDetailPage() {
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-2xs uppercase tracking-wider text-muted">Inspection</dt>
+                      <dt className="text-2xs uppercase tracking-wider text-muted">Quality inspections</dt>
                       <dd>
-                        {rma.inspection ? (
-                          <Link
-                            to={`/quality/inspections/${rma.inspection.id}`}
-                            className="text-accent hover:underline font-mono"
-                          >
-                            {rma.inspection.inspection_number}
-                          </Link>
+                        {rma.inspections && rma.inspections.length > 0 ? (
+                          <div className="space-y-1">
+                            {rma.inspections.map((inspection) => (
+                              <div key={inspection.id} className="flex items-center gap-2">
+                                <Link to={`/quality/inspections/${inspection.id}`} className="text-accent hover:underline font-mono">
+                                  {inspection.inspection_number}
+                                </Link>
+                                <Chip variant={inspection.status === 'passed' ? 'success' : inspection.status === 'failed' ? 'danger' : 'warning'}>
+                                  {inspection.status}
+                                </Chip>
+                              </div>
+                            ))}
+                          </div>
+                        ) : rma.inspection ? (
+                          <Link to={`/quality/inspections/${rma.inspection.id}`} className="text-accent hover:underline font-mono">{rma.inspection.inspection_number}</Link>
                         ) : (
                           <span className="text-muted">—</span>
                         )}
@@ -875,6 +898,7 @@ export default function ReturnRequestDetailPage() {
         description="The RMA is returned to the requester with your reason. Please be specific."
         reasonLabel="Rejection reason"
         reasonPlaceholder="e.g. Items were not received within the return window"
+        minLength={10}
         minLength={10}
         confirmLabel="Reject"
         variant="danger"
@@ -955,7 +979,7 @@ export default function ReturnRequestDetailPage() {
                         : '—'}
                   </Td>
                   <Td align="right" mono>
-                    {formatInt(item.quantity)}
+                    {formatQuantity(item.quantity)}
                   </Td>
                   <Td align="right">
                     <Input

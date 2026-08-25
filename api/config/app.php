@@ -22,7 +22,10 @@ return [
     'previous_keys' => array_filter(explode(',', (string) env('APP_PREVIOUS_KEYS', ''))),
 
     'maintenance' => [
-        'driver' => env('APP_MAINTENANCE_DRIVER', 'file'),
-        'store' => env('APP_MAINTENANCE_STORE', 'database'),
+        // Restore workers and API containers must observe one shared gate. The
+        // file driver is container-local in production; Redis is shared by the
+        // API, queue, and scheduler containers and survives image replacement.
+        'driver' => env('APP_MAINTENANCE_DRIVER', 'cache'),
+        'store' => env('APP_MAINTENANCE_STORE', 'redis'),
     ],
 ];

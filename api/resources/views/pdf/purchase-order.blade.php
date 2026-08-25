@@ -27,6 +27,7 @@
         <div class="info-row"><span class="lbl">PO Number:</span> <span class="val mono" style="font-weight:700;">{{ $po->po_number }}</span></div>
         <div class="info-row"><span class="lbl">Order Date:</span> <span class="val mono">{{ optional($po->date)->format('M d, Y') ?? '—' }}</span></div>
         <div class="info-row"><span class="lbl">Expected Date:</span> <span class="val mono">{{ optional($po->expected_delivery_date)->format('M d, Y') ?? '—' }}</span></div>
+        <div class="info-row"><span class="lbl">Incoterm:</span> <span class="val mono">{{ $po->incoterm?->value ?? '—' }}</span></div>
         <div class="info-row">
           <span class="lbl">Status:</span>
           <span class="chip chip-info">{{ str_replace('_', ' ', strtoupper((string) ($po->status?->value ?? $po->status))) }}</span>

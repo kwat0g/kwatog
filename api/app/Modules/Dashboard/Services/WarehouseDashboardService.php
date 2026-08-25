@@ -8,6 +8,9 @@ use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Services\Concerns\DashboardQueries;
 use App\Modules\Dashboard\Support\PanelGate;
+use App\Modules\Inventory\Enums\GrnStatus;
+use App\Modules\Inventory\Enums\StockMovementType;
+use App\Modules\Inventory\Enums\TransferOrderStatus;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -32,17 +35,15 @@ class WarehouseDashboardService
     public function warehouse(User $user): array
     {
         return Cache::remember("dashboard:warehouse:{$user->id}", self::CACHE_TTL, function () use ($user) {
-            $pendingGrns = $this->safeCount('goods_receipt_notes', fn ($q) => $q->where('status', 'pending'));
-            $issuesToday = $this->safeCount('stock_movements', fn ($q) => $q->where('movement_type', 'issue')->whereDate('created_at', today()));
-            $lowStock = $this->lowStockItemCount();
-            $pendingTransfers = $this->safeCount('stock_movements', fn ($q) => $q->where('movement_type', 'transfer')->whereNull('to_location_id'));
-
             return [
                 'kpis' => $this->gate->kpis($user, [
-                    ['inventory.view', fn () => $this->kpi('Pending GRNs', (string) $pendingGrns, 'count')],
-                    ['inventory.view', fn () => $this->kpi('Issues Today', (string) $issuesToday, 'count')],
-                    ['inventory.view', fn () => $this->kpi('Low Stock Items', (string) $lowStock, 'count')],
-                    ['inventory.view', fn () => $this->kpi('Pending Transfers', (string) $pendingTransfers, 'count')],
+                    ['inventory.view', fn () => $this->kpi('Pending GRNs', (string) $this->safeCount('goods_receipt_notes', fn ($q) => $q
+                        ->whereNotIn('status', [GrnStatus::Accepted->value, GrnStatus::Rejected->value])), 'count')],
+                    ['inventory.view', fn () => $this->kpi('Issues Today', (string) $this->safeCount('stock_movements', fn ($q) => $q
+                        ->where('movement_type', StockMovementType::MaterialIssue->value)->whereDate('created_at', today())), 'count')],
+                    ['inventory.view', fn () => $this->kpi('Low Stock Items', (string) $this->lowStockItemCount(), 'count')],
+                    ['inventory.view', fn () => $this->kpi('Pending Transfers', (string) $this->safeCount('transfer_orders', fn ($q) => $q
+                        ->where('status', TransferOrderStatus::Pending->value)), 'count')],
                 ]),
                 'panels' => $this->gate->panels($user, [
                     // Configured thresholds, not data.

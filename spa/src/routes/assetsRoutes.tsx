@@ -23,9 +23,8 @@ export const assetsRoutes = (
  <Route path="/assets/:id"
  element={<PermissionGuard permission="assets.view"><AssetDetailPage /></PermissionGuard>} />
  <Route path="/assets/:id/edit"
- element={<PermissionGuard permission="assets.create"><EditAssetPage /></PermissionGuard>} />
- {/* /admin/depreciation removed 2026-08-08 (scope cut — now a button/modal
- on the Fixed Assets page, gated on assets.depreciation.view). */}
+ element={<PermissionGuard permission="assets.update"><EditAssetPage /></PermissionGuard>} />
+ {/* /assets/transfers and /admin/depreciation removed 2026-08-08 (scope cuts). */}
  </Route>
  </>
 );

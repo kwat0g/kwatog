@@ -9,6 +9,7 @@ use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Vendor;
+use App\Modules\B2B\Models\SupplierShipment;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
@@ -85,6 +86,11 @@ class PurchaseOrder extends Model
     public function supplierDispatch(): \Illuminate\Database\Eloquent\Relations\HasOne
     {
         return $this->hasOne(SupplierOrderDispatch::class);
+    }
+
+    public function supplierShipment(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(SupplierShipment::class);
     }
 
     public function approver(): BelongsTo

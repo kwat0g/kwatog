@@ -10,6 +10,7 @@ use App\Modules\Accounting\Enums\PaymentMethod;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Collection extends Model
 {
@@ -17,7 +18,7 @@ class Collection extends Model
 
     protected $fillable = [
         'invoice_id', 'cash_account_id', 'collection_date',
-        'amount', 'payment_method', 'reference_number',
+        'amount', 'payment_method', 'reference_number', 'idempotency_key',
         'journal_entry_id', 'created_by',
     ];
 
@@ -40,5 +41,10 @@ class Collection extends Model
     public function journalEntry(): BelongsTo
     {
         return $this->belongsTo(JournalEntry::class);
+    }
+
+    public function officialReceipt(): HasOne
+    {
+        return $this->hasOne(OfficialReceipt::class);
     }
 }

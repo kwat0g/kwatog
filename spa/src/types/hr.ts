@@ -107,8 +107,6 @@ export interface EmployeeAccountStatus {
 }
 
 export interface ProvisionAccountPayload {
- email?: string;
- role_id?: string;
  send_welcome?: boolean;
 }
 
@@ -203,6 +201,13 @@ export interface TrainingMatrixData {
  rows: TrainingMatrixRow[];
  summary: TrainingMatrixSummary;
  status_options: Array<{ value: TrainingMatrixCellStatus; label: string }>;
+ meta?: {
+  total_employees: number;
+  total_skills: number;
+  employee_limit: number;
+  skill_limit: number;
+  truncated: boolean;
+ };
 }
 
 // ─── Employee Property ────────────────────────────────────────────
@@ -239,6 +244,7 @@ export interface Training {
  department: { id: string; name: string } | null;
  created_at: string;
  updated_at: string;
+ deleted_at?: string | null;
 }
 
 export interface CreateTrainingData {
@@ -283,16 +289,25 @@ export interface EmployeeTraining {
  expires_at: string | null;
  status: string;
  status_label: string;
- certificate_path: string | null;
+ certificate: TrainingEvidence | null;
  notes: string | null;
  last_alert_level: string | null;
  last_alert_at: string | null;
  created_at: string;
 }
 
+export interface TrainingEvidence {
+ name: string;
+ mime_type: string | null;
+ size: number | null;
+ uploaded_at: string | null;
+ download_url: string;
+}
+
 export interface AssignTrainingData {
  training_id: string;
  scheduled_for?: string;
+ notes?: string;
 }
 
 // ─── Employee Skill ───────────────────────────────────────────────
@@ -304,7 +319,7 @@ export interface EmployeeSkill {
  acquired_date: string | null;
  expires_at: string | null;
  certified_by: { id: string; name: string } | null;
- certification_document_path: string | null;
+ certificate: TrainingEvidence | null;
  notes: string | null;
  created_at: string;
  updated_at: string;
@@ -312,8 +327,8 @@ export interface EmployeeSkill {
 
 export interface AssignSkillData {
  skill_id: string;
- proficiency_level?: string;
- acquired_date?: string;
- expires_at?: string;
+ proficiency_level: string;
+ acquired_date: string;
+ expires_at?: string | null;
  notes?: string;
 }

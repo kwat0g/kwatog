@@ -48,7 +48,7 @@ class BudgetEnforcementWiringTest extends TestCase
         app(SettingsService::class)->set('budgeting.enforcement_mode', 'warn');
 
         $dept = Department::factory()->create();
-        $fy   = FiscalYear::factory()->create(['status' => 'active']);
+        $fy   = FiscalYear::factory()->create(['status' => 'active', 'start_date' => today()->startOfYear()->toDateString(), 'end_date' => today()->endOfYear()->toDateString()]);
         Budget::factory()->create([
             'department_id'   => $dept->id,
             'fiscal_year_id'  => $fy->id,
@@ -85,7 +85,7 @@ class BudgetEnforcementWiringTest extends TestCase
         app(SettingsService::class)->set('budgeting.enforcement_mode', 'block');
 
         $dept = Department::factory()->create();
-        $fy   = FiscalYear::factory()->create(['status' => 'active']);
+        $fy   = FiscalYear::factory()->create(['status' => 'active', 'start_date' => today()->startOfYear()->toDateString(), 'end_date' => today()->endOfYear()->toDateString()]);
         Budget::factory()->create([
             'department_id'   => $dept->id,
             'fiscal_year_id'  => $fy->id,
@@ -113,7 +113,7 @@ class BudgetEnforcementWiringTest extends TestCase
     public function test_po_creation_succeeds_within_budget(): void
     {
         $dept = Department::factory()->create();
-        $fy   = FiscalYear::factory()->create(['status' => 'active']);
+        $fy   = FiscalYear::factory()->create(['status' => 'active', 'start_date' => today()->startOfYear()->toDateString(), 'end_date' => today()->endOfYear()->toDateString()]);
         Budget::factory()->create([
             'department_id'   => $dept->id,
             'fiscal_year_id'  => $fy->id,
@@ -141,7 +141,7 @@ class BudgetEnforcementWiringTest extends TestCase
     public function test_bill_creation_blocked_when_budget_exhausted(): void
     {
         $dept = Department::factory()->create();
-        $fy   = FiscalYear::factory()->create(['status' => 'active']);
+        $fy   = FiscalYear::factory()->create(['status' => 'active', 'start_date' => today()->startOfYear()->toDateString(), 'end_date' => today()->endOfYear()->toDateString()]);
         Budget::factory()->create([
             'department_id'   => $dept->id,
             'fiscal_year_id'  => $fy->id,

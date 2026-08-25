@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace App\Common\Controllers;
 
+use App\Common\Enums\AlertSeverity;
+use App\Common\Enums\AlertType;
 use App\Common\Models\Alert;
 use App\Common\Requests\ListAlertsRequest;
 use App\Common\Resources\AlertResource;
 use App\Common\Services\AlertEngineService;
-use App\Common\Enums\AlertSeverity;
-use App\Common\Enums\AlertType;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -33,11 +33,18 @@ class AlertController
             $query->where('entity_type', 'like', '%'.$filters['entity_type'].'%');
         }
         if (array_key_exists('is_dismissed', $filters)) {
-            $val = filter_var($filters['is_dismissed'], FILTER_VALIDATE_BOOLEAN);
+            $val = filter_var($filters['is_dismissed'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            // The FormRequest boolean rule rejects invalid input; keep the
+            // controller explicit so a future rule change cannot silently
+            // turn malformed values into the unresolved view.
+            abort_if($val === null, 422, 'The is_dismissed filter must be boolean.');
             $query->where('is_dismissed', $val);
+            if (! $val) {
+                $query->whereNull('resolved_at');
+            }
         } else {
             // Default: unresolved only
-            $query->where('is_dismissed', false);
+            $query->whereNull('resolved_at')->where('is_dismissed', false);
         }
         if (! empty($filters['search'])) {
             $s = $filters['search'];
@@ -51,7 +58,7 @@ class AlertController
 
         // Severity ordering: critical first, then warning, then info.
         $query->orderByRaw("CASE severity WHEN 'critical' THEN 1 WHEN 'warning' THEN 2 WHEN 'info' THEN 3 ELSE 4 END")
-              ->orderByDesc('created_at');
+            ->orderByDesc('created_at');
 
         return AlertResource::collection($query->paginate($perPage));
     }
@@ -68,6 +75,7 @@ class AlertController
     {
         abort_unless(auth()->user()?->can('alerts.dismiss'), 403);
         $alert = $this->engine->dismiss($alert, auth()->user());
+
         return new AlertResource($alert);
     }
 
@@ -75,15 +83,18 @@ class AlertController
     {
         abort_unless(auth()->user()?->can('alerts.view'), 403);
         $alert = $this->engine->markRead($alert);
+
         return new AlertResource($alert);
     }
 
     public function unreadCount(): JsonResponse
     {
         abort_unless(auth()->user()?->can('alerts.view'), 403);
-        $count = Alert::where('is_dismissed', false)
-            ->whereIn('severity', ['critical', 'warning'])
+        $count = Alert::whereNull('resolved_at')
+            ->where('is_dismissed', false)
+            ->where('is_read', false)
             ->count();
+
         return response()->json(['data' => ['count' => $count]]);
     }
 }

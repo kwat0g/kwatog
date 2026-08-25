@@ -15,9 +15,7 @@ Your {{ $returnRequest->type?->label() ?? 'return request' }} **{{ $returnReques
 | Refund / credit amount | {{ number_format((float) $returnRequest->refund_amount, 2) }} |
 @endif
 
-We will keep the return record updated as inspection, disposition, credit, replacement, or completion steps progress.
-
-<x-mail::button :url="$portalUrl">Open portal</x-mail::button>
+We will keep the return record updated as inspection, disposition, credit, replacement, or completion steps progress. Please contact your Ogami customer or supplier operations representative for the current record and any required action.
 
 Regards,<br>
 Ogami Philippines Customer and Supplier Operations

@@ -19,7 +19,17 @@ class StoreEmployeeRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->hasPermission('hr.employees.create') ?? false;
+        $user = $this->user();
+
+        if (! $user || ! $user->hasPermission('hr.employees.create')) {
+            return false;
+        }
+
+        // Linking a hired application changes recruitment state as well as
+        // creating an employee. Employee-create alone must not be enough to
+        // perform that cross-workflow mutation.
+        return ! $this->filled('from_application')
+            || $user->hasPermission('hr.recruitment.hire');
     }
 
     /**

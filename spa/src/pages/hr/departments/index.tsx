@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
 import { LuChevronRight, LuChevronDown, LuPlus, LuPencil, LuTrash2, LuBuilding2, LuArchiveRestore } from '@/lib/icons';
 import { departmentsApi } from '@/api/hr/departments';
+import { employeesApi } from '@/api/hr/employees';
 import { ArchiveFilter } from '@/components/ui/ArchiveFilter';
 import { archiveToTrashed, type ArchiveScope } from '@/lib/archiveScope';
 import { Button } from '@/components/ui/Button';
@@ -35,6 +36,7 @@ const schema = z.object({
  code: z.string().trim().min(2, 'At least 2 characters').max(20)
  .regex(/^[A-Z0-9_-]+$/, 'Uppercase letters, digits, _ or -').transform((s) => s.toUpperCase()),
  parent_id: z.string().optional(),
+ head_employee_id: z.string().optional(),
  is_active: z.boolean(),
 });
 type FormValues = z.infer<typeof schema>;
@@ -349,13 +351,25 @@ function DepartmentFormModal({
  name: editing?.name ?? '',
  code: editing?.code ?? '',
  parent_id: editing?.parent_id ?? '',
+ head_employee_id: editing?.head_employee_id ?? '',
  is_active: editing?.is_active ?? true,
  },
  });
 
+ const { data: employeeResp } = useQuery({
+  queryKey: ['hr', 'employees', 'department-head-candidates', editing?.id],
+  queryFn: () => employeesApi.list({ department_id: editing!.id, status: 'active', per_page: 100 }),
+  enabled: isEdit,
+ });
+ const headCandidates = employeeResp?.data ?? [];
+
  const mutation = useMutation({
  mutationFn: (data: FormValues) => {
- const payload = { ...data, parent_id: data.parent_id || null };
+ const payload = {
+  ...data,
+  parent_id: data.parent_id || null,
+  head_employee_id: data.head_employee_id || null,
+ };
  return isEdit
  ? departmentsApi.update(editing!.id, payload)
  : departmentsApi.create(payload);
@@ -390,6 +404,18 @@ function DepartmentFormModal({
  >
  <option value="">— None (root) —</option>
  {parents.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+ </Select>
+ <Select
+  label="Department head"
+  helper={isEdit ? 'Only active employees in this department are eligible.' : 'Assign a head after employees are added to the department.'}
+  {...register('head_employee_id')}
+  error={errors.head_employee_id?.message}
+  disabled={!isEdit}
+ >
+  <option value="">— None —</option>
+  {headCandidates.map((employee) => (
+   <option key={employee.id} value={employee.id}>{employee.full_name}</option>
+  ))}
  </Select>
  <div className="pt-1">
  <Switch label="Active" {...register('is_active')} />

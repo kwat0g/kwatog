@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Inventory\Controllers;
 
 use App\Modules\Inventory\Models\MaterialReviewRecord;
+use App\Modules\Inventory\Requests\MrbIndexRequest;
+use App\Modules\Inventory\Requests\MrbQualityOptionsRequest;
 use App\Modules\Inventory\Requests\ReleaseMrbRequest;
 use App\Modules\Inventory\Requests\StoreMrbRequest;
 use App\Modules\Inventory\Resources\MaterialReviewRecordResource;
@@ -12,7 +14,6 @@ use App\Modules\Inventory\Services\QuarantineService;
 use App\Modules\Quality\Enums\NcrDisposition;
 use App\Modules\Inventory\Enums\MrbStatus;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Accounting\Exceptions\ClosedPeriodException;
@@ -34,11 +35,22 @@ class MrbController
         ]]);
     }
 
-    public function index(Request $request): AnonymousResourceCollection
+    public function index(MrbIndexRequest $request): AnonymousResourceCollection
     {
         return MaterialReviewRecordResource::collection(
-            $this->service->list($request->only(['status', 'item_id', 'per_page']))
+            $this->service->list($request->validated())
         );
+    }
+
+    public function qualityOptions(MrbQualityOptionsRequest $request): JsonResponse
+    {
+        $data = $request->validated();
+
+        return response()->json(['data' => $this->service->qualityOptions(
+            (int) $data['item_id'],
+            $data['search'] ?? null,
+            (int) ($data['per_page'] ?? 50),
+        )]);
     }
 
     public function show(MaterialReviewRecord $mrb): MaterialReviewRecordResource
@@ -50,7 +62,7 @@ class MrbController
     public function store(StoreMrbRequest $request): JsonResponse
     {
         try {
-            $mrb = $this->service->hold($request->validated(), $request->user());
+            $mrb = $this->service->hold($request->validated(), $request->user(), $request->idempotencyKey());
         } catch (BusinessRuleException|ClosedPeriodException|InsufficientStockException|InvalidMovementException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }

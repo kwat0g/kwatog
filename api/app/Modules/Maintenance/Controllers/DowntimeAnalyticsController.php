@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Modules\Maintenance\Controllers;
 
+use App\Common\Support\HashIdFilter;
 use App\Common\Services\SettingsService;
 use App\Modules\Maintenance\Services\DowntimeAnalyticsService;
+use App\Modules\MRP\Models\Machine;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -22,9 +24,11 @@ class DowntimeAnalyticsController
 
     public function summary(Request $request): JsonResponse
     {
+        $machineId = $this->prepareMachineFilter($request);
         $request->validate([
             'machine_id' => ['nullable', 'integer', 'exists:machines,id'],
             'days'       => ['nullable', 'integer', 'min:1', 'max:3650'],
+            'search'     => ['nullable', 'string', 'max:120'],
         ]);
 
         $defaultDays = $this->settings->requiredInt('maintenance.downtime.default_history_days', 1, 3650);
@@ -33,9 +37,10 @@ class DowntimeAnalyticsController
         $to   = now();
 
         $data = $this->analytics->summary(
-            $request->filled('machine_id') ? (int) $request->input('machine_id') : null,
+            $machineId,
             $from,
             $to,
+            $request->input('search'),
         );
 
         return response()->json(['data' => $data, 'meta' => ['days' => $days, 'default_days' => $defaultDays]]);
@@ -59,16 +64,19 @@ class DowntimeAnalyticsController
 
     public function dailyTrend(Request $request): JsonResponse
     {
+        $machineId = $this->prepareMachineFilter($request);
         $request->validate([
             'machine_id' => ['nullable', 'integer', 'exists:machines,id'],
             'days'       => ['nullable', 'integer', 'min:1', 'max:3650'],
+            'search'     => ['nullable', 'string', 'max:120'],
         ]);
 
         $defaultDays = $this->settings->requiredInt('maintenance.downtime.default_history_days', 1, 3650);
         $days = (int) $request->input('days', $defaultDays);
         $data = $this->analytics->dailyTrend(
-            $request->filled('machine_id') ? (int) $request->input('machine_id') : null,
-            $days
+            $machineId,
+            $days,
+            $request->input('search'),
         );
 
         return response()->json(['data' => $data]);
@@ -79,13 +87,15 @@ class DowntimeAnalyticsController
         $request->validate([
             'days'  => ['nullable', 'integer', 'min:1', 'max:3650'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:50'],
+            'search' => ['nullable', 'string', 'max:120'],
         ]);
 
         $defaultDays = $this->settings->requiredInt('maintenance.downtime.default_history_days', 1, 3650);
         $days = (int) $request->input('days', $defaultDays);
         $data = $this->analytics->topMachines(
             (int) $request->input('limit', 10),
-            $days
+            $days,
+            $request->input('search'),
         );
 
         return response()->json(['data' => $data]);
@@ -95,10 +105,14 @@ class DowntimeAnalyticsController
     {
         $request->validate([
             'days' => ['nullable', 'integer', 'min:1', 'max:3650'],
+            'search' => ['nullable', 'string', 'max:120'],
         ]);
 
         $defaultDays = $this->settings->requiredInt('maintenance.downtime.default_history_days', 1, 3650);
-        $data = $this->analytics->allMachinesSummary((int) $request->input('days', $defaultDays));
+        $data = $this->analytics->allMachinesSummary(
+            (int) $request->input('days', $defaultDays),
+            $request->input('search'),
+        );
 
         return response()->json(['data' => $data]);
     }
@@ -108,17 +122,32 @@ class DowntimeAnalyticsController
      */
     public function pareto(Request $request): JsonResponse
     {
+        $machineId = $this->prepareMachineFilter($request);
         $request->validate([
             'machine_id' => ['nullable', 'integer', 'exists:machines,id'],
             'days'       => ['nullable', 'integer', 'min:1', 'max:3650'],
+            'search'     => ['nullable', 'string', 'max:120'],
         ]);
 
         $defaultDays = $this->settings->requiredInt('maintenance.downtime.default_history_days', 1, 3650);
         $data = $this->analytics->categoryPareto(
-            $request->filled('machine_id') ? (int) $request->input('machine_id') : null,
+            $machineId,
             (int) $request->input('days', $defaultDays),
+            $request->input('search'),
         );
 
         return response()->json(['data' => $data]);
+    }
+
+    private function prepareMachineFilter(Request $request): ?int
+    {
+        if (! $request->filled('machine_id')) {
+            return null;
+        }
+
+        $machineId = HashIdFilter::decode($request->input('machine_id'), Machine::class);
+        $request->merge(['machine_id' => $machineId ?? 0]);
+
+        return $machineId;
     }
 }

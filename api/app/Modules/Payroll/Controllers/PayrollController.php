@@ -7,13 +7,17 @@ namespace App\Modules\Payroll\Controllers;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Resources\PayrollResource;
 use App\Modules\Payroll\Services\PayrollCalculatorService;
+use App\Modules\Payroll\Services\PayrollPublicationPolicy;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class PayrollController
 {
-    public function __construct(private readonly PayrollCalculatorService $calculator) {}
+    public function __construct(
+        private readonly PayrollCalculatorService $calculator,
+        private readonly PayrollPublicationPolicy $publication,
+    ) {}
 
     /**
      * Lists payrolls. Server-scoped:
@@ -25,6 +29,7 @@ class PayrollController
     {
         $user = $request->user();
         $query = Payroll::query()->with(['employee.department', 'employee.position', 'period']);
+        $this->publication->scopePublishable($query);
 
         $hasViewAll = $user?->hasPermission('payroll.payslip.view_all') ?? false;
         $isAdmin    = $user?->role?->slug === 'system_admin';
@@ -74,6 +79,7 @@ class PayrollController
     public function show(Payroll $payroll, Request $request): PayrollResource
     {
         $this->authorizePayroll($payroll, $request);
+        $this->publication->assertPayrollPublishable($payroll);
         return new PayrollResource($payroll->load(['employee.department', 'employee.position', 'period', 'deductionDetails']));
     }
 
@@ -89,6 +95,7 @@ class PayrollController
     public function payslip(Payroll $payroll, Request $request)
     {
         $this->authorizePayroll($payroll, $request);
+        $this->publication->assertPayrollPublishable($payroll);
         /** @var \App\Modules\Payroll\Services\PayslipPdfService $svc */
         $svc = app(\App\Modules\Payroll\Services\PayslipPdfService::class);
         return $svc->stream($payroll, $request->user());

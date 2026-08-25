@@ -4,14 +4,16 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Models;
 
+use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
+use App\Modules\Accounting\Support\JournalEntryAuditContext;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class JournalEntryLine extends Model
 {
-    use HasFactory, HasHashId;
+    use HasFactory, HasHashId, HasAuditLog;
 
     public $timestamps = false;
 
@@ -34,5 +36,11 @@ class JournalEntryLine extends Model
     public function account(): BelongsTo
     {
         return $this->belongsTo(Account::class);
+    }
+
+    /** @return array{user_id:?int, actor_type:string, reason:?string}|null */
+    public function auditContextOverride(): ?array
+    {
+        return JournalEntryAuditContext::current();
     }
 }

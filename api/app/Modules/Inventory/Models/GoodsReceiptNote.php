@@ -6,11 +6,13 @@ namespace App\Modules\Inventory\Models;
 
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
+use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Enums\IncomingQcHandoffStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Quality\Models\Inspection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -66,6 +68,16 @@ class GoodsReceiptNote extends Model
     public function acceptor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'accepted_by');
+    }
+
+    public function qcInspection(): BelongsTo
+    {
+        return $this->belongsTo(Inspection::class, 'qc_inspection_id');
+    }
+
+    public function journalEntry(): BelongsTo
+    {
+        return $this->belongsTo(JournalEntry::class, 'journal_entry_id');
     }
 
     /** 2026-08-08 — bills auto-created from this receipt (one per accepted GRN). */

@@ -6,7 +6,9 @@ namespace App\Modules\Assets\Models;
 
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
+use App\Common\Support\Money;
 use App\Modules\Assets\Enums\AssetCategory;
+use App\Modules\Assets\Enums\DepreciationMethod;
 use App\Modules\Assets\Enums\AssetStatus;
 use App\Modules\HR\Models\Department;
 use Illuminate\Database\Eloquent\Builder;
@@ -38,6 +40,7 @@ class Asset extends Model
         'status',
         'disposed_date',
         'disposal_amount',
+        'disposal_reason',
         'location',
         'insurance_policy_no',
         'insurance_provider',
@@ -73,34 +76,38 @@ class Asset extends Model
     public function getMonthlyDepreciationAttribute(): string
     {
         $life = max(1, (int) $this->useful_life_years);
-        $cost = (float) $this->acquisition_cost;
-        $salvage = (float) $this->salvage_value;
-        $depreciable = max(0.0, $cost - $salvage);
+        $cost = Money::round2((string) ($this->acquisition_cost ?? Money::zero()));
+        $salvage = Money::round2((string) ($this->salvage_value ?? Money::zero()));
+        $depreciable = Money::clampMin(Money::sub($cost, $salvage), Money::zero());
 
-        $method = $this->depreciation_method instanceof \App\Modules\Assets\Enums\DepreciationMethod
+        $method = $this->depreciation_method instanceof DepreciationMethod
             ? $this->depreciation_method
-            : \App\Modules\Assets\Enums\DepreciationMethod::StraightLine;
+            : DepreciationMethod::StraightLine;
 
-        if ($method === \App\Modules\Assets\Enums\DepreciationMethod::DecliningBalance) {
+        if ($method === DepreciationMethod::DecliningBalance) {
             // 200% declining balance: annual rate = 2/life applied to the current
             // book value (cost - accumulated), floored at salvage. Monthly = /12.
-            $bookValue = max(0.0, $cost - (float) $this->accumulated_depreciation);
-            $annualRate = 2.0 / $life;
-            $annual = max(0.0, ($bookValue - $salvage) > 0 ? $bookValue * $annualRate : 0.0);
+            $bookValue = $this->book_value;
+            $base = Money::clampMin(Money::sub($bookValue, $salvage), Money::zero());
+            $annualRate = Money::div('2.00', (string) $life, Money::INNER);
+            $annual = Money::mul($base, $annualRate);
             // Never depreciate below salvage in a single year.
-            $annual = min($annual, max(0.0, $bookValue - $salvage));
-            return number_format($annual / 12, 2, '.', '');
+            if (Money::gt($annual, $base)) {
+                $annual = $base;
+            }
+            return Money::round2(Money::div($annual, '12.00', Money::INNER));
         }
 
         // Straight line (default).
-        return number_format($depreciable / ($life * 12), 2, '.', '');
+        return Money::round2(Money::div($depreciable, (string) ($life * 12), Money::INNER));
     }
 
     public function getBookValueAttribute(): string
     {
-        $cost = (float) $this->acquisition_cost;
-        $accum = (float) $this->accumulated_depreciation;
-        return number_format(max(0.0, $cost - $accum), 2, '.', '');
+        $cost = Money::round2((string) ($this->acquisition_cost ?? Money::zero()));
+        $accumulated = Money::round2((string) ($this->accumulated_depreciation ?? Money::zero()));
+
+        return Money::clampMin(Money::sub($cost, $accumulated), Money::zero());
     }
 
     public function scopeActive(Builder $q): Builder

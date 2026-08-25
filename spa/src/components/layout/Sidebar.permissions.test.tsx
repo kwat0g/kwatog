@@ -41,6 +41,22 @@ describe('role-aligned sidebar permissions', () => {
  expect(isNavItemVisible(item('/payroll/statutory'), hr)).toBe(true);
  });
 
+ it('shows Calendar only to users who can open its guarded route', () => {
+ const employee = {
+ permissions: new Set(['calendar.view']),
+ features: allFeatures,
+ roleSlug: 'employee',
+ };
+ const noCalendar = {
+ permissions: new Set<string>(),
+ features: allFeatures,
+ roleSlug: 'employee',
+ };
+
+ expect(isNavItemVisible(item('/calendar'), employee)).toBe(true);
+ expect(isNavItemVisible(item('/calendar'), noCalendar)).toBe(false);
+ });
+
  it('shows department approval pages without granting HR or payroll administration', () => {
  const departmentHead = {
  permissions: new Set(['attendance.ot.approve', 'leave.approve_dept', 'payroll.view']),

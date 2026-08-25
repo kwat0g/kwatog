@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Purchasing\Models;
 
+use App\Common\Support\Money;
 use App\Common\Traits\HasHashId;
 use App\Modules\Inventory\Models\Item;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -42,8 +43,9 @@ class PurchaseRequestItem extends Model
 
     public function getEstimatedTotalAttribute(): string
     {
-        $qty   = (float) $this->quantity;
-        $price = (float) ($this->estimated_unit_price ?? 0);
-        return number_format($qty * $price, 2, '.', '');
+        return Money::mul(
+            (string) $this->quantity,
+            (string) ($this->estimated_unit_price ?? '0'),
+        );
     }
 }

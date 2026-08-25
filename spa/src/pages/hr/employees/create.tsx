@@ -17,6 +17,7 @@ const cleanup = (d: EmployeeFormValues): CreateEmployeeData => {
  Object.keys(out).forEach((k) => {
  if (out[k] === '') out[k] = undefined;
  });
+ delete out.__edit;
  return out as unknown as CreateEmployeeData;
 };
 

@@ -81,7 +81,8 @@ Route::middleware(['auth:sanctum', 'feature:supply_chain'])->prefix('supply-chai
     Route::delete('/vehicles/{vehicle}',                    [VehicleController::class, 'destroy'])
         ->middleware('permission:supply_chain.fleet.manage');
     Route::patch('/vehicles/{vehicle}/restore',             [VehicleController::class, 'restore'])
-        ->middleware('permission:supply_chain.fleet.manage');
+        ->middleware('permission:supply_chain.fleet.manage')
+        ->withTrashed();
 
     /* ─── Deliveries (Task 66) ─── */
     /*
@@ -93,11 +94,17 @@ Route::middleware(['auth:sanctum', 'feature:supply_chain'])->prefix('supply-chai
      */
     Route::get('/deliveries/options',                       [DeliveryController::class, 'options'])
         ->middleware('permission_any:supply_chain.view,supply_chain.deliveries.view');
+    Route::get('/deliveries/inspection-options',             [DeliveryController::class, 'inspectionOptions'])
+        ->middleware('permission:supply_chain.deliveries.create');
+    Route::get('/deliveries/driver-options',                 [DeliveryController::class, 'driverOptions'])
+        ->middleware('permission:supply_chain.deliveries.create');
     Route::get('/deliveries',                               [DeliveryController::class, 'index'])
         ->middleware('permission_any:supply_chain.view,supply_chain.deliveries.view');
     Route::get('/deliveries/{delivery}',                    [DeliveryController::class, 'show'])
         ->middleware('permission_any:supply_chain.view,supply_chain.deliveries.view');
     Route::post('/deliveries',                              [DeliveryController::class, 'store'])
+        ->middleware('permission:supply_chain.deliveries.create');
+    Route::patch('/deliveries/{delivery}/assignment',        [DeliveryController::class, 'assign'])
         ->middleware('permission:supply_chain.deliveries.create');
     Route::patch('/deliveries/{delivery}/status',           [DeliveryController::class, 'updateStatus'])
         ->middleware('permission:supply_chain.deliveries.create');
@@ -129,7 +136,7 @@ Route::middleware(['auth:sanctum', 'feature:supply_chain'])->prefix('supply-chai
 
 /* ─── Driver self-service surface (T2.5) ──────────────────────── */
 Route::prefix('driver')
-    ->middleware(['auth:sanctum', 'session.timeout', 'permission:supply_chain.driver.access'])
+    ->middleware(['auth:sanctum', 'session.timeout', 'feature:supply_chain', 'permission:supply_chain.driver.access'])
     ->group(function (): void {
         Route::get('/deliveries',                       [DriverDeliveryController::class, 'index']);
         Route::get('/deliveries/{delivery}',            [DriverDeliveryController::class, 'show']);

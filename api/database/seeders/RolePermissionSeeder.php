@@ -7,6 +7,7 @@ namespace Database\Seeders;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 class RolePermissionSeeder extends Seeder
 {
@@ -15,7 +16,7 @@ class RolePermissionSeeder extends Seeder
      *
      * @return array<string, array<int, array{slug: string, name: string, description?: string}>>
      */
-    private function permissionCatalog(): array
+    protected function permissionCatalog(): array
     {
         return [
             // Admin / system
@@ -61,6 +62,8 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'hr.employees.export',         'name' => 'Export Employees'],
                 // Series E (E1/E3) — view generated documents on an employee detail page.
                 ['slug' => 'hr.employees.documents.view', 'name' => 'View Employee Documents'],
+                ['slug' => 'hr.employees.documents.upload', 'name' => 'Upload Employee Documents'],
+                ['slug' => 'hr.employees.documents.delete', 'name' => 'Delete Employee Documents'],
                 ['slug' => 'hr.employees.view_sensitive', 'name' => 'View Sensitive Employee Data (SSS, TIN, Bank)'],
                 ['slug' => 'hr.employees.separate',       'name' => 'Initiate Employee Separation'],
                 // U1 — system account lifecycle.
@@ -127,7 +130,10 @@ class RolePermissionSeeder extends Seeder
                 // H-8 — admin escape hatch for periods stuck at Processing because
                 // the payroll job worker crashed before its finally block ran.
                 ['slug' => 'payroll.periods.force_unlock', 'name' => 'Force-unlock Payroll Period'],
+                ['slug' => 'payroll.adjustments.view',    'name' => 'View Payroll Adjustments'],
                 ['slug' => 'payroll.adjustments.create',  'name' => 'Create Payroll Adjustment'],
+                ['slug' => 'payroll.adjustments.approve', 'name' => 'Approve Payroll Adjustment'],
+                ['slug' => 'payroll.adjustments.reject',  'name' => 'Reject Payroll Adjustment'],
                 ['slug' => 'payroll.payslip.view_all',    'name' => 'View Any Payslip'],
                 ['slug' => 'payroll.thirteenth_month.run', 'name' => 'Run 13th Month Pay'],
                 // REC-06 follow-up — statutory/alphalist exports carry
@@ -167,8 +173,10 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'accounting.bills.view',           'name' => 'View Bills'],
                 ['slug' => 'accounting.bills.create',         'name' => 'Create Bills'],
                 ['slug' => 'accounting.bills.exception_approve', 'name' => 'Approve Service Bill Exceptions'],
+                ['slug' => 'accounting.bills.three_way_override', 'name' => 'Approve 3-Way-Match Overrides'],
                 ['slug' => 'accounting.bills.update',         'name' => 'Update / Cancel Bills'],
                 ['slug' => 'accounting.bills.pay',            'name' => 'Pay Bills'],
+                ['slug' => 'accounting.bills.void_payment',   'name' => 'Void Bill Payments'],
                 // Customers & Invoices (AR)
                 ['slug' => 'accounting.customers.view',       'name' => 'View Customers'],
                 ['slug' => 'accounting.customers.manage',     'name' => 'Manage Customers'],
@@ -190,6 +198,15 @@ class RolePermissionSeeder extends Seeder
                 // retains wildcard access.
                 ['slug' => 'accounting.periods.view',        'name' => 'View Accounting Periods'],
                 ['slug' => 'accounting.periods.manage',      'name' => 'Close / Reopen Accounting Periods'],
+            ],
+
+            // B2B portal access administration is deliberately separate from
+            // vendor master-data permissions. A user who can edit a vendor
+            // record must not automatically be able to issue or revoke an
+            // external login.
+            'b2b' => [
+                ['slug' => 'b2b.portal_access.view',   'name' => 'View Supplier Portal Access'],
+                ['slug' => 'b2b.portal_access.manage', 'name' => 'Manage Supplier Portal Access'],
             ],
 
             // Inventory
@@ -421,7 +438,11 @@ class RolePermissionSeeder extends Seeder
             // ADV12 — Return Management (RMA)
             'return_management' => [
                 ['slug' => 'return_management.view',   'name' => 'View Return Requests (RMA)'],
-                ['slug' => 'return_management.manage', 'name' => 'Create / Receive / Dispose / Complete Return Requests'],
+                ['slug' => 'return_management.manage', 'name' => 'Create / Submit / Edit / Cancel Return Requests'],
+                ['slug' => 'return_management.receive', 'name' => 'Receive / Quarantine Returned Goods'],
+                ['slug' => 'return_management.inspect', 'name' => 'Stage Quality Inspection for Returns'],
+                ['slug' => 'return_management.dispose', 'name' => 'Record Return Disposition'],
+                ['slug' => 'return_management.complete', 'name' => 'Complete Return Requests'],
                 // L-37 — the seeded return_request workflow routes approval to
                 // department_head then production_manager, but neither role holds
                 // `manage`, so the approve route rejected the only users the chain
@@ -443,7 +464,7 @@ class RolePermissionSeeder extends Seeder
      *
      * @return array<string, array{name: string, description: string, permissions: array<int, string>|string}>
      */
-    private function roleCatalog(): array
+    protected function roleCatalog(): array
     {
         return [
             'system_admin' => [
@@ -480,6 +501,7 @@ class RolePermissionSeeder extends Seeder
                         // sign off — approval is finance_officer's (checker) job.
                         'payroll.periods.create',
                         'payroll.periods.compute',
+                        'payroll.adjustments.view',
                         'payroll.adjustments.create',
                         'payroll.thirteenth_month.run',
                         'payroll.anomalies.review',
@@ -500,8 +522,14 @@ class RolePermissionSeeder extends Seeder
                     // except self_approve_override so even Finance cannot
                     // approve a run it personally computed. Only system_admin
                     // (wildcard) may bypass.
-                    $this->module('payroll', except: ['payroll.periods.self_approve_override']),
+                    $this->module('payroll', except: [
+                        'payroll.periods.self_approve_override',
+                        // HR is the maker; Finance is the checker for
+                        // payroll adjustments.
+                        'payroll.adjustments.create',
+                    ]),
                     $this->module('accounting', except: ['accounting.journal.self_post_override']),
+                    $this->module('b2b'),
                     // REC-02 — finance_officer approves transfers but cannot self-approve
                     // one they requested (override withheld → system_admin only).
                     $this->module('budgeting'),
@@ -531,10 +559,19 @@ class RolePermissionSeeder extends Seeder
                 'name' => 'Production Manager',
                 'description' => 'Oversees work orders, output, OEE.',
                 'permissions' => array_merge(
-                    $this->module('production'),
+                    // M052 H-08 — routings (process plans) are ppc_head's to
+                    // author; the documented boundary for this role is
+                    // planning master data VIEW-only. `module('production')`
+                    // handed it `production.routings.manage` too, so a
+                    // production manager could publish a routing version that
+                    // silently re-costs a BOM and re-generates work
+                    // instructions. View is retained: they must be able to
+                    // read the process plan they are running.
+                    $this->module('production', except: ['production.routings.manage']),
                     $this->selfService(),
                     [
                         'mrp.view', 'mrp.schedule', 'mrp.boms.view', 'mrp.machines.view',
+                        'mrp.plans.view', 'mrp.runs.view',
                         'inventory.view',
                         // Quality: view + read sub-resources for quality dashboard / NCR/inspection pages
                         'quality.view', 'quality.inspections.view', 'quality.ncr.view',
@@ -580,6 +617,8 @@ class RolePermissionSeeder extends Seeder
                         'dashboard.view_bottlenecks',
                         'dashboard.chain_recovery.view', 'dashboard.chain_recovery.manage',
                         'return_management.view', 'return_management.manage',
+                        'return_management.receive', 'return_management.inspect',
+                        'return_management.dispose', 'return_management.complete',
                     ],
                 ),
             ],
@@ -595,6 +634,8 @@ class RolePermissionSeeder extends Seeder
                         'accounting.vendors.view', 'accounting.bills.view',
                         'forecasting.view',
                         'return_management.view', 'return_management.manage',
+                        'return_management.receive', 'return_management.inspect',
+                        'return_management.dispose', 'return_management.complete',
                         'dashboard.purchasing.view',
                         'dashboard.view_bottlenecks',
                         'dashboard.chain_recovery.view', 'dashboard.chain_recovery.manage',
@@ -621,6 +662,7 @@ class RolePermissionSeeder extends Seeder
                         'inventory.mrb.manage',
                         'forecasting.view',
                         'return_management.view',
+                        'return_management.receive',
                         'dashboard.warehouse.view',
                         // Outbound staging: which deliveries leave today, and
                         // for whom. Deliberately NOT supply_chain.view, which
@@ -637,6 +679,7 @@ class RolePermissionSeeder extends Seeder
                     $this->selfService(),
                     [
                         'return_management.view',
+                        'return_management.inspect',
                         'dashboard.quality.view',
                         // REC-08 — QC can quarantine/release nonconforming stock via MRB.
                         'inventory.view',
@@ -710,7 +753,7 @@ class RolePermissionSeeder extends Seeder
     /**
      * @return array<int, string>
      */
-    private function module(string $module, array $except = []): array
+    protected function module(string $module, array $except = []): array
     {
         return array_values(array_filter(
             array_map(
@@ -728,7 +771,7 @@ class RolePermissionSeeder extends Seeder
      *
      * @return array<int, string>
      */
-    private function selfService(): array
+    protected function selfService(): array
     {
         return [
             'attendance.view',      // DTR page → /attendance/attendances (scoped to self)
@@ -740,67 +783,122 @@ class RolePermissionSeeder extends Seeder
 
     public function run(): void
     {
-        // 1. Insert/update permissions.
-        $allPermissions = [];
-        foreach ($this->permissionCatalog() as $module => $perms) {
-            foreach ($perms as $p) {
-                $allPermissions[] = Permission::updateOrCreate(
-                    ['slug' => $p['slug']],
+        $catalog = $this->permissionCatalog();
+        $roles = $this->roleCatalog();
+
+        // Validate the complete graph before the first write. A bad role
+        // reference must fail before any permission or role row is changed.
+        $this->validateCatalog($catalog, $roles);
+
+        DB::transaction(function () use ($catalog, $roles): void {
+            $permissionIds = [];
+            foreach ($catalog as $module => $perms) {
+                foreach ($perms as $p) {
+                    $permission = Permission::updateOrCreate(
+                        ['slug' => $p['slug']],
+                        [
+                            'name' => $p['name'],
+                            'module' => $module,
+                            'description' => $p['description'] ?? null,
+                        ],
+                    );
+                    $permissionIds[$p['slug']] = (int) $permission->id;
+                }
+            }
+
+            // Series R — Task R1: every seeded role is a system role and
+            // cannot be edited or deleted through the admin UI.
+            foreach ($roles as $slug => $def) {
+                $role = Role::updateOrCreate(
+                    ['slug' => $slug],
                     [
-                        'name' => $p['name'],
-                        'module' => $module,
-                        'description' => $p['description'] ?? null,
+                        'name' => $def['name'],
+                        'description' => $def['description'],
+                        'is_system' => true,
                     ],
+                );
+
+                $permissions = $def['permissions'] === '*'
+                    ? '*'
+                    : array_values(array_unique(array_merge(
+                        (array) $def['permissions'],
+                        [
+                            'notifications.view',
+                            // Series F — Tasks F1, F2, F5: cross-cutting reads
+                            // available to every authenticated role.
+                            'calendar.view',
+                            'approvals.board.view',
+                            'hr.directory.view',
+                            'dashboard.action_center.view',
+                            'dashboard.exceptions.view',
+                            // Self-scoped layout reset — every role (see
+                            // catalog comment under 'dashboards').
+                            'dashboard.layout.reset',
+                        ],
+                    )));
+
+                $ids = $permissions === '*'
+                    ? array_values($permissionIds)
+                    : array_map(static fn (string $permissionSlug): int => $permissionIds[$permissionSlug], $permissions);
+
+                $this->syncRolePermissions($role, $ids);
+            }
+        });
+
+        $this->command?->info('Roles + permissions seeded.');
+    }
+
+    /**
+     * @param array<string, array<int, array{slug: string, name: string, description?: string}>> $catalog
+     * @param array<string, array{name: string, description: string, permissions: string|array<int, string>}> $roles
+     */
+    protected function validateCatalog(array $catalog, array $roles): void
+    {
+        $catalogSlugs = [];
+        foreach ($catalog as $module => $permissions) {
+            foreach ($permissions as $permission) {
+                $slug = $permission['slug'] ?? null;
+                if (! is_string($slug) || trim($slug) === '') {
+                    throw new \LogicException("Permission catalog entry in module {$module} has no valid slug.");
+                }
+                if (isset($catalogSlugs[$slug])) {
+                    throw new \LogicException("Permission slug {$slug} is defined more than once.");
+                }
+                $catalogSlugs[$slug] = true;
+            }
+        }
+
+        $crossCutting = [
+            'notifications.view',
+            'calendar.view',
+            'approvals.board.view',
+            'hr.directory.view',
+            'dashboard.action_center.view',
+            'dashboard.exceptions.view',
+            'dashboard.layout.reset',
+        ];
+
+        foreach ($roles as $slug => $definition) {
+            if (($definition['permissions'] ?? null) === '*') {
+                continue;
+            }
+
+            $required = array_values(array_unique(array_merge(
+                (array) ($definition['permissions'] ?? []),
+                $crossCutting,
+            )));
+            $missing = array_values(array_diff($required, array_keys($catalogSlugs)));
+            if ($missing !== []) {
+                throw new \LogicException(
+                    "Role {$slug} references undefined permission(s): ".implode(', ', $missing).'.',
                 );
             }
         }
-        $allSlugs = collect($allPermissions)->pluck('id', 'slug');
+    }
 
-        // 2. Insert/update roles + sync permissions.
-        // Series R — Task R1: every seeded role is a system role and cannot
-        // be edited or deleted through the admin UI.
-        foreach ($this->roleCatalog() as $slug => $def) {
-            $role = Role::updateOrCreate(
-                ['slug' => $slug],
-                [
-                    'name' => $def['name'],
-                    'description' => $def['description'],
-                    'is_system' => true,
-                ],
-            );
-
-            $permissions = $def['permissions'] === '*'
-                ? '*'
-                : array_values(array_unique(array_merge(
-                    (array) $def['permissions'],
-                    [
-                        'notifications.view',
-                        // Series F — Tasks F1, F2, F5: cross-cutting reads
-                        // available to every authenticated role.
-                        'calendar.view',
-                        'approvals.board.view',
-                        'hr.directory.view',
-                        'dashboard.action_center.view',
-                        'dashboard.exceptions.view',
-                        // Self-scoped layout reset — every role (see catalog
-                        // comment under 'dashboards').
-                        'dashboard.layout.reset',
-                    ],
-                )));
-
-            $ids = $permissions === '*'
-                ? $allSlugs->values()->all()
-                : array_map(function (string $slug) use ($allSlugs, $role): int {
-                    if (! isset($allSlugs[$slug])) {
-                        throw new \LogicException("Role {$role->slug} references undefined permission {$slug}.");
-                    }
-
-                    return (int) $allSlugs[$slug];
-                }, (array) $permissions);
-
-            $role->permissions()->sync($ids);
-        }
-
-        $this->command?->info('Roles + permissions seeded.');
+    /** @param array<int, int> $permissionIds */
+    protected function syncRolePermissions(Role $role, array $permissionIds): void
+    {
+        $role->permissions()->sync($permissionIds);
     }
 }

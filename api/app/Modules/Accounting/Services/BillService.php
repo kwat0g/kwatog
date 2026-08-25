@@ -11,11 +11,14 @@ use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
 use App\Common\Support\SearchOperator;
 use App\Modules\Accounting\Enums\BillStatus;
+use App\Modules\Accounting\Enums\BillPaymentStatus;
+use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Enums\JournalEntryStatus;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillItem;
 use App\Modules\Accounting\Models\BillPayment;
+use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
@@ -33,6 +36,9 @@ use RuntimeException;
 
 class BillService
 {
+    private const THREE_WAY_OVERRIDE_PERMISSION = 'accounting.bills.three_way_override';
+    private const PAYMENT_VOID_PERMISSION = 'accounting.bills.void_payment';
+
     /** AP control account code. */
     public function __construct(
         private readonly JournalEntryService $journals,
@@ -41,6 +47,7 @@ class BillService
         private readonly BudgetEnforcementService $budget,
         private readonly TaxPolicyService $taxPolicy,
         private readonly AccountingAccountPolicyService $accounts,
+        private readonly PostingAccountResolver $postingAccounts,
         private readonly \App\Common\Services\DocumentSequenceService $sequences,
         private readonly \App\Common\Services\SettingsService $settings,
     ) {}
@@ -86,9 +93,16 @@ class BillService
             'vendor',
             'items.expenseAccount:id,code,name',
             'payments.cashAccount:id,code,name',
+            'payments.journalEntry:id,entry_number,status',
+            'payments.voidReversalJournalEntry:id,entry_number,status',
+            'payments.voidedBy:id,name,role_id',
+            'payments.replacementPayment:id,bill_id,amount,status',
             'journalEntry:id,entry_number,date,status,total_debit,total_credit',
             // role_id required so User's $with=['role'] eager-load can resolve.
             'creator:id,name,role_id',
+            'exceptionOwner:id,name,role_id',
+            'exceptionApprover:id,name,role_id',
+            'threeWayOverrider:id,name,role_id',
             // REC-02 — surface the linked PO so the detail page can render the
             // 3-way-match link row (BillResource exposes purchase_order when loaded).
             // 2026-08-08 — compact P2P stepper: also pull the PR behind the PO.
@@ -196,8 +210,12 @@ class BillService
                     }
                     $result = $this->threeWayMatch->matchForPo($po, array_values($billLines));
                     $allowOverride = (bool) ($data['allow_override'] ?? false);
-                    $overrideReason = trim((string) ($data['override_reason'] ?? ''));
-                    if ($result->overallStatus === 'blocked' && $postToLedger && ! $allowOverride) {
+                    if ($result->overallStatus === 'blocked' && $allowOverride) {
+                        throw new BusinessRuleException(
+                            'A blocking 3-way-match override must be approved by a separate authorized checker while posting a draft bill.'
+                        );
+                    }
+                    if ($result->overallStatus === 'blocked' && $postToLedger) {
                         throw new ThreeWayMatchException('3-way match blocked by variance.', $result->toArray());
                     }
                     $hasVariances = $result->overallStatus !== 'matched';
@@ -226,12 +244,13 @@ class BillService
                 'balance' => $total,
                 'has_variances' => $hasVariances,
                 'three_way_match_snapshot' => $matchSnapshot,
-                'three_way_overridden' => $allowOverride && $matchSnapshot !== null,
-                'three_way_overridden_by' => $allowOverride && $matchSnapshot !== null ? $by->id : null,
-                'three_way_overridden_at' => $allowOverride && $matchSnapshot !== null ? now() : null,
-                'three_way_override_reason' => $allowOverride && $matchSnapshot !== null
-                    ? ($overrideReason !== '' ? $overrideReason : 'Manual override approved during bill creation.')
-                    : null,
+                // An override is never approved at bill creation. A blocking
+                // variance must cross the draft -> checker posting boundary so
+                // the maker and authorized checker are distinct actors.
+                'three_way_overridden' => false,
+                'three_way_overridden_by' => null,
+                'three_way_overridden_at' => null,
+                'three_way_override_reason' => null,
                 'status' => $postToLedger ? BillStatus::Unpaid : BillStatus::Draft,
                 'created_by' => $by->id,
                 'remarks' => $data['remarks'] ?? null,
@@ -292,6 +311,9 @@ class BillService
             $po = $lockedGrn->purchaseOrder;
             if (! $vendor || ! $po) {
                 return null;
+            }
+            if ((int) $vendor->id !== (int) $po->vendor_id) {
+                throw new BusinessRuleException('The accepted GRN vendor does not match its purchase order vendor.');
             }
             $billDate = $lockedGrn->accepted_at?->toDateString() ?? now()->toDateString();
 
@@ -419,12 +441,18 @@ class BillService
                     return null;
                 }
                 if ($allowOverride) {
+                    if (! $by->hasPermission(self::THREE_WAY_OVERRIDE_PERMISSION)) {
+                        throw new BusinessRuleException('You are not authorized to approve a blocking 3-way-match override.');
+                    }
+                    if ($lockedBill->created_by !== null && (int) $lockedBill->created_by === (int) $by->id) {
+                        throw new BusinessRuleException('The bill maker cannot also approve its 3-way-match override. A different checker must post it.');
+                    }
                     $reason = trim((string) $overrideReason);
                     if ($reason === '') {
                         throw new BusinessRuleException('A reason is required when overriding a 3-way match.');
                     }
                     $lockedBill->forceFill([
-                        'three_way_overridden' => $match->overallStatus !== 'matched',
+                        'three_way_overridden' => $isBlocked,
                         'three_way_overridden_by' => $by->id,
                         'three_way_overridden_at' => now(),
                         'three_way_override_reason' => $reason,
@@ -481,9 +509,9 @@ class BillService
         return $result;
     }
 
-    public function cancel(Bill $bill, User $by): Bill
+    public function cancel(Bill $bill, User $by, ?Carbon $reverseDate = null, ?string $reason = null): Bill
     {
-        return DB::transaction(function () use ($bill, $by) {
+        return DB::transaction(function () use ($bill, $by, $reverseDate, $reason) {
             // Lock the parent before locking its JE so cancellation uses the
             // authoritative AP state and shares the parent-first lock order
             // with recordPayment()/postDraft().
@@ -502,12 +530,14 @@ class BillService
                 $lockedBill->loadMissing('journalEntry');
                 $je = $lockedBill->journalEntry;
                 if ($je && $je->status === JournalEntryStatus::Posted) {
-                    $this->journals->reverse($je, $by);
+                    $this->journals->reverse($je, $by, $reverseDate, $reason ?? "Cancellation of bill {$lockedBill->bill_number}.");
                 }
             }
             $lockedBill->update([
                 'status' => BillStatus::Cancelled,
                 'balance' => Money::zero(),
+                'cancelled_at' => ($reverseDate ?? now()),
+                'cancelled_by' => $by->id,
             ]);
 
             return $lockedBill->fresh();
@@ -533,6 +563,22 @@ class BillService
             if ($lockedBill->status === BillStatus::Paid) {
                 throw new BusinessRuleException('Bill is already fully paid.');
             }
+            if (! in_array($lockedBill->status, [BillStatus::Unpaid, BillStatus::Partial], true)) {
+                throw new BusinessRuleException('Payments can only be recorded against an unpaid or partially paid bill.');
+            }
+            if (! $lockedBill->journal_entry_id) {
+                throw new BusinessRuleException('The bill must have a posted source journal before it can be paid.');
+            }
+            $sourceJournal = JournalEntry::query()
+                ->lockForUpdate()
+                ->find($lockedBill->journal_entry_id);
+            if (! $sourceJournal
+                || $sourceJournal->status !== JournalEntryStatus::Posted
+                || $sourceJournal->reference_type !== 'bill'
+                || (int) $sourceJournal->reference_id !== (int) $lockedBill->id
+            ) {
+                throw new BusinessRuleException('The bill source journal must be posted before payment.');
+            }
             if (Money::lte($amount, '0')) {
                 throw new BusinessRuleException('Payment amount must be greater than zero.');
             }
@@ -544,6 +590,13 @@ class BillService
             if (! $cashAccountId) {
                 throw new BusinessRuleException('Invalid cash account.');
             }
+            $cashAccount = Account::query()->lockForUpdate()->find($cashAccountId);
+            if (! $cashAccount || ! $cashAccount->is_active) {
+                throw new BusinessRuleException('The selected cash account is inactive or no longer exists.');
+            }
+            if ($cashAccount->type !== AccountType::Asset || ! str_starts_with($cashAccount->code, '10')) {
+                throw new BusinessRuleException('Payments must use an active cash or bank asset account.');
+            }
 
             $payment = BillPayment::create([
                 'bill_id' => $lockedBill->id,
@@ -553,6 +606,7 @@ class BillService
                 'payment_method' => $data['payment_method'],
                 'reference_number' => $data['reference_number'] ?? null,
                 'created_by' => $by->id,
+                'status' => BillPaymentStatus::Posted,
             ]);
 
             $apId = $this->accountId($this->accounts->ap());
@@ -590,7 +644,111 @@ class BillService
             app(ChainBroadcaster::class)
                 ->broadcastFor($fresh, (string) $fresh->status?->value, $by);
 
-            return $payment->fresh(['cashAccount']);
+            return $payment->fresh(['cashAccount', 'journalEntry']);
+        });
+    }
+
+    /**
+     * Void a posted payment by reversing its source journal. The original
+     * payment remains in the audit trail; the bill balance is rebuilt from
+     * the remaining posted payments under the bill lock.
+     */
+    public function voidPayment(Bill $bill, BillPayment $payment, array $data, User $by): BillPayment
+    {
+        if (! $by->hasPermission(self::PAYMENT_VOID_PERMISSION)) {
+            throw new BusinessRuleException('You are not authorized to void bill payments.');
+        }
+
+        return DB::transaction(function () use ($bill, $payment, $data, $by) {
+            $lockedBill = Bill::query()->lockForUpdate()->findOrFail($bill->getKey());
+            if ((int) $payment->bill_id !== (int) $lockedBill->id) {
+                throw new BusinessRuleException('The payment does not belong to this bill.');
+            }
+            if ($lockedBill->status === BillStatus::Cancelled) {
+                throw new BusinessRuleException('Cannot void a payment on a cancelled bill.');
+            }
+
+            $lockedPayment = BillPayment::query()
+                ->lockForUpdate()
+                ->findOrFail($payment->getKey());
+            if ($lockedPayment->status !== BillPaymentStatus::Posted) {
+                throw new BusinessRuleException('Only posted payments can be voided.');
+            }
+            if (! $lockedPayment->journal_entry_id) {
+                throw new BusinessRuleException('The payment has no posted source journal and cannot be voided safely.');
+            }
+
+            $sourceJournal = JournalEntry::query()
+                ->lockForUpdate()
+                ->find($lockedPayment->journal_entry_id);
+            if (! $sourceJournal
+                || $sourceJournal->status !== JournalEntryStatus::Posted
+                || $sourceJournal->reference_type !== 'bill_payment'
+                || (int) $sourceJournal->reference_id !== (int) $lockedPayment->id
+            ) {
+                throw new BusinessRuleException('The payment source journal must be posted before it can be voided.');
+            }
+
+            $voidDate = ! empty($data['void_date'])
+                ? Carbon::parse((string) $data['void_date'])
+                : now();
+            $reason = trim((string) ($data['reason'] ?? ''));
+            if ($reason === '') {
+                throw new BusinessRuleException('A reason is required when voiding a bill payment.');
+            }
+
+            $replacementId = null;
+            if (! empty($data['replacement_payment_id'])) {
+                $replacementId = HashIdFilter::decode($data['replacement_payment_id'], BillPayment::class)
+                    ?? (int) $data['replacement_payment_id'];
+                $replacement = BillPayment::query()->lockForUpdate()->find($replacementId);
+                if (! $replacement || (int) $replacement->bill_id !== (int) $lockedBill->id || $replacement->id === $lockedPayment->id || $replacement->status !== BillPaymentStatus::Posted) {
+                    throw new BusinessRuleException('The replacement payment must be another posted payment for the same bill.');
+                }
+            }
+
+            $reversal = $this->journals->reverse($sourceJournal, $by, $voidDate, $reason);
+
+            $lockedPayment->update([
+                'status' => BillPaymentStatus::Voided,
+                'voided_at' => $voidDate,
+                'voided_by' => $by->id,
+                'void_reason' => $reason,
+                'void_reversal_journal_entry_id' => $reversal->id,
+                'replacement_payment_id' => $replacementId,
+            ]);
+
+            $postedPayments = BillPayment::query()
+                ->where('bill_id', $lockedBill->id)
+                ->where('status', BillPaymentStatus::Posted)
+                ->lockForUpdate()
+                ->get(['amount']);
+            $newPaid = Money::zero();
+            foreach ($postedPayments as $postedPayment) {
+                $newPaid = Money::add($newPaid, (string) $postedPayment->amount);
+            }
+            $newBalance = Money::sub((string) $lockedBill->total_amount, $newPaid);
+            $newStatus = Money::isZero($newBalance)
+                ? BillStatus::Paid
+                : (Money::isZero($newPaid) ? BillStatus::Unpaid : BillStatus::Partial);
+
+            $lockedBill->update([
+                'amount_paid' => $newPaid,
+                'balance' => $newBalance,
+                'status' => $newStatus,
+            ]);
+
+            $fresh = $lockedBill->fresh();
+            app(ChainBroadcaster::class)
+                ->broadcastFor($fresh, (string) $fresh->status?->value, $by);
+
+            return $lockedPayment->fresh([
+                'cashAccount',
+                'journalEntry',
+                'voidReversalJournalEntry',
+                'voidedBy',
+                'replacementPayment',
+            ]);
         });
     }
 
@@ -605,10 +763,28 @@ class BillService
     public function aging(?Carbon $asOf = null): array
     {
         $asOf = $asOf ?? now();
+        $asOfDate = $asOf->toDateString();
 
         $rows = Bill::query()
-            ->with('vendor:id,name')
-            ->whereIn('status', [BillStatus::Unpaid, BillStatus::Partial])
+            ->with([
+                'vendor:id,name',
+                'payments' => fn ($q) => $q
+                    ->select(['id', 'bill_id', 'amount', 'payment_date', 'status'])
+                    ->whereDate('payment_date', '<=', $asOfDate)
+                    ->where('status', BillPaymentStatus::Posted->value),
+            ])
+            ->whereDate('date', '<=', $asOfDate)
+            ->where(function ($q) use ($asOf) {
+                $q->whereIn('status', [
+                    BillStatus::Unpaid->value,
+                    BillStatus::Partial->value,
+                    BillStatus::Paid->value,
+                ])->orWhere(function ($cancelled) use ($asOf) {
+                    $cancelled->where('status', BillStatus::Cancelled->value)
+                        ->whereNotNull('cancelled_at')
+                        ->where('cancelled_at', '>', $asOf);
+                });
+            })
             ->orderBy('vendor_id')
             ->get();
 
@@ -616,8 +792,16 @@ class BillService
         $byVendor = [];
 
         foreach ($rows as $bill) {
-            $bucket = $bill->agingBucket($asOf);
-            $balance = (string) $bill->balance;
+            $paid = Money::zero();
+            foreach ($bill->payments as $payment) {
+                $paid = Money::add($paid, (string) $payment->amount);
+            }
+            $balance = Money::sub((string) $bill->total_amount, $paid);
+            if (Money::lte($balance, '0')) {
+                continue;
+            }
+
+            $bucket = $this->agingBucketFor($bill, $asOf);
             $buckets[$bucket] = Money::add($buckets[$bucket], $balance);
             $buckets['total'] = Money::add($buckets['total'], $balance);
 
@@ -639,6 +823,22 @@ class BillService
         }
 
         return ['buckets' => $buckets, 'by_vendor' => array_values($byVendor)];
+    }
+
+    private function agingBucketFor(Bill $bill, Carbon $asOf): string
+    {
+        if (! $bill->due_date || $bill->due_date->gte($asOf)) {
+            return 'current';
+        }
+
+        $days = $bill->due_date->diffInDays($asOf, true);
+
+        return match (true) {
+            $days <= 30 => 'd1_30',
+            $days <= 60 => 'd31_60',
+            $days <= 90 => 'd61_90',
+            default => 'd91_plus',
+        };
     }
 
     public function openBalance(Vendor $vendor): string
@@ -667,14 +867,25 @@ class BillService
             throw new BusinessRuleException('Stock/item bills require PO and accepted GRN provenance.');
         }
         $id = HashIdFilter::decode($data['goods_receipt_note_id'], GoodsReceiptNote::class) ?? (int) $data['goods_receipt_note_id'];
-        $grn = GoodsReceiptNote::query()->find($id);
+        $poId = HashIdFilter::decode($data['purchase_order_id'], PurchaseOrder::class)
+            ?? (int) $data['purchase_order_id'];
+        $po = PurchaseOrder::query()->lockForUpdate()->find($poId);
+        if (! $po) {
+            throw new BusinessRuleException('The selected purchase order no longer exists.');
+        }
+        $grn = GoodsReceiptNote::query()->lockForUpdate()->find($id);
         if (! $grn || $grn->status !== \App\Modules\Inventory\Enums\GrnStatus::Accepted) {
             throw new BusinessRuleException('Stock/item bills require an accepted GRN.');
         }
-        $poId = HashIdFilter::decode($data['purchase_order_id'], PurchaseOrder::class)
-            ?? (int) $data['purchase_order_id'];
         if ((int) $grn->purchase_order_id !== (int) $poId) {
             throw new BusinessRuleException('The accepted GRN does not belong to the selected purchase order.');
+        }
+        $vendorId = HashIdFilter::decode($data['vendor_id'], Vendor::class) ?? (int) $data['vendor_id'];
+        if ((int) $vendorId !== (int) $po->vendor_id || (int) $po->vendor_id !== (int) $grn->vendor_id) {
+            throw new BusinessRuleException('The bill vendor must match the purchase order and accepted GRN vendor.');
+        }
+        if (Bill::query()->where('goods_receipt_note_id', $grn->id)->exists()) {
+            throw new BusinessRuleException('An AP bill already exists for this accepted goods receipt.');
         }
     }
 
@@ -684,9 +895,17 @@ class BillService
             if (! $bill->exception_evidence || ! $bill->exception_owner_id || ! $bill->exception_approved_by) throw new BusinessRuleException('Service/non-stock bill exception evidence is incomplete.');
             return;
         }
-        $grn = $bill->goods_receipt_note_id ? GoodsReceiptNote::query()->find($bill->goods_receipt_note_id) : null;
+        $po = $bill->purchase_order_id
+            ? PurchaseOrder::query()->lockForUpdate()->find($bill->purchase_order_id)
+            : null;
+        $grn = $bill->goods_receipt_note_id
+            ? GoodsReceiptNote::query()->lockForUpdate()->find($bill->goods_receipt_note_id)
+            : null;
         if (! $bill->purchase_order_id || ! $grn || $grn->status !== \App\Modules\Inventory\Enums\GrnStatus::Accepted) throw new BusinessRuleException('Stock/item bills require PO and accepted GRN provenance.');
         if ((int) $grn->purchase_order_id !== (int) $bill->purchase_order_id) throw new BusinessRuleException('The accepted GRN does not belong to the bill purchase order.');
+        if (! $po || (int) $po->vendor_id !== (int) $bill->vendor_id || (int) $po->vendor_id !== (int) $grn->vendor_id) {
+            throw new BusinessRuleException('The bill vendor must match the purchase order and accepted GRN vendor.');
+        }
     }
 
     /**
@@ -712,10 +931,7 @@ class BillService
         $rows = [];
         $subtotal = Money::zero();
         foreach ($rawItems as $raw) {
-            $accountId = HashIdFilter::decode($raw['expense_account_id'] ?? null, Account::class);
-            if (! $accountId) {
-                throw new BusinessRuleException('Invalid expense account selected on bill item.');
-            }
+            $accountId = $this->expenseAccountId($raw['expense_account_id'] ?? null);
 
             $itemId = HashIdFilter::decode($raw['item_id'] ?? null, Item::class);
 
@@ -800,22 +1016,35 @@ class BillService
         if ($code === '') {
             return null;
         }
-        $id = Account::query()->where('code', $code)->value('id');
+        $id = $this->postingAccounts->configuredIdByCode($code);
+        $account = Account::query()->lockForUpdate()->find($id);
+        if (! $account || $account->type !== AccountType::Expense) {
+            throw new BusinessRuleException("Configured default expense account {$code} must be an active expense account.");
+        }
 
-        return $id ? (int) $id : null;
+        return (int) $account->id;
     }
 
     private function accountId(string $code): int
     {
-        $id = Account::query()->where('code', $code)->value('id');
-        if (! $id) {
-            // Stays an unmapped RuntimeException on purpose. $code is a
-            // settings/seed value, so the remedy named in the message is a
-            // deployment step — there is no user input to correct, and a 422
-            // would file a broken chart of accounts under "your fault".
-            throw new RuntimeException("Required account {$code} not found in COA. Run ChartOfAccountsSeeder.");
+        return $this->postingAccounts->configuredIdByCode($code);
+    }
+
+    private function expenseAccountId(mixed $value): int
+    {
+        $accountId = HashIdFilter::decode($value, Account::class);
+        if (! $accountId) {
+            throw new BusinessRuleException('Invalid expense account selected on bill item.');
         }
 
-        return (int) $id;
+        $account = Account::query()->lockForUpdate()->find($accountId);
+        if (! $account || ! $account->is_active) {
+            throw new BusinessRuleException('The selected expense account is inactive or no longer exists.');
+        }
+        if ($account->type !== AccountType::Expense) {
+            throw new BusinessRuleException('Bill lines must use an active expense account.');
+        }
+
+        return (int) $account->id;
     }
 }

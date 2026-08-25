@@ -51,15 +51,21 @@ function useNow(): number {
 export default function ApprovalsBoardPage() {
   const navigate = useNavigate();
   const [kind, setKind] = useState<ApprovalKind | 'all'>('all');
+  const [pendingLimit, setPendingLimit] = useState(100);
+  const [historyLimit, setHistoryLimit] = useState(50);
   const now = useNow();
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['approvals', 'board', kind],
-    queryFn: () => approvalsApi.board(kind === 'all' ? undefined : { type: kind }),
+  const { data, isLoading, isError, isFetching, refetch } = useQuery({
+    queryKey: ['approvals', 'board', kind, pendingLimit, historyLimit],
+    queryFn: () => approvalsApi.board({
+      ...(kind === 'all' ? {} : { type: kind }),
+      pending_limit: pendingLimit,
+      history_limit: historyLimit,
+    }),
     placeholderData: (prev) => prev,
     refetchInterval: 30_000, // light polling — websocket upgrade is a future task
   });
-  const { data: options } = useQuery({
+  const { data: options, isError: optionsError, refetch: refetchOptions } = useQuery({
     queryKey: ['approvals', 'options'],
     queryFn: () => approvalsApi.options(),
     staleTime: 5 * 60 * 1000,
@@ -102,6 +108,15 @@ export default function ApprovalsBoardPage() {
         />
       </div>
 
+      {optionsError && (
+        <div className="px-5 py-2 border-b border-default bg-warning-bg text-xs text-secondary flex items-center gap-2">
+          Approval filters and SLA settings are unavailable.
+          <Button variant="ghost" size="sm" onClick={() => refetchOptions()}>
+            Retry
+          </Button>
+        </div>
+      )}
+
       {isLoading && !data && (
         <div className="px-5 py-4 grid grid-cols-1 md:grid-cols-4 gap-3">
           {[0, 1, 2, 3].map((i) => (
@@ -124,76 +139,108 @@ export default function ApprovalsBoardPage() {
       )}
 
       {data && (
-        <div className="px-5 py-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-          <Column
-            title="My action required"
-            count={data.summary.my_action}
-            tone={overdueCount > 0 ? 'danger' : 'warning'}
-          >
-            {myAction.length === 0 ? (
-              <EmptyColumn message="Nothing waiting on you. Nice." />
-            ) : (
-              myAction.map((c) => (
-                <ActiveCard
-                  key={`${c.type}-${c.id}`}
-                  card={c}
-                  now={now}
-                  slaHours={slaHours}
-                  showSla
-                  kindLabels={kindLabels}
-                  onOpen={() => navigate(c.link)}
-                />
-              ))
-            )}
-          </Column>
+        <>
+          {optionsError && (
+            <div className="px-5 pt-3 text-xs text-muted">
+              SLA countdowns are hidden until the configuration endpoint recovers.
+            </div>
+          )}
+          <div className="px-5 py-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+            <Column
+              title="My action required"
+              count={data.summary.my_action}
+              tone={overdueCount > 0 ? 'danger' : 'warning'}
+            >
+              {myAction.length === 0 ? (
+                <EmptyColumn message="Nothing waiting on you. Nice." />
+              ) : (
+                myAction.map((c) => (
+                  <ActiveCard
+                    key={`${c.type}-${c.id}`}
+                    card={c}
+                    now={now}
+                    slaHours={slaHours}
+                    showSla
+                    kindLabels={kindLabels}
+                    onOpen={() => navigate(c.link)}
+                  />
+                ))
+              )}
+            </Column>
 
-          <Column title="Awaiting others" count={data.summary.awaiting_others} tone="neutral">
-            {data.awaiting_others.length === 0 ? (
-              <EmptyColumn message="No pending approvals." />
-            ) : (
-              data.awaiting_others.map((c) => (
-                <ActiveCard
-                  key={`${c.type}-${c.id}`}
-                  card={c}
-                  now={now}
-                  slaHours={slaHours}
-                  kindLabels={kindLabels}
-                  onOpen={() => navigate(c.link)}
-                />
-              ))
-            )}
-          </Column>
+            <Column title="Awaiting others" count={data.summary.awaiting_others} tone="neutral">
+              {data.awaiting_others.length === 0 ? (
+                <EmptyColumn message="No pending approvals." />
+              ) : (
+                data.awaiting_others.map((c) => (
+                  <ActiveCard
+                    key={`${c.type}-${c.id}`}
+                    card={c}
+                    now={now}
+                    slaHours={slaHours}
+                    kindLabels={kindLabels}
+                    onOpen={() => navigate(c.link)}
+                  />
+                ))
+              )}
+            </Column>
 
-          <Column title="Approved" count={data.summary.approved} tone="success">
-            {data.approved.length === 0 ? (
-              <EmptyColumn message="No recent approvals." />
-            ) : (
-              data.approved.map((c) => (
-                <ActionedCard
-                  key={`${c.type}-${c.id}`}
-                  card={c}
-                  kindLabels={kindLabels}
-                  onOpen={() => navigate(c.link)}
-                />
-              ))
-            )}
-          </Column>
+            <Column title="Approved" count={data.summary.approved} tone="success">
+              {data.approved.length === 0 ? (
+                <EmptyColumn message="No recent approvals." />
+              ) : (
+                data.approved.map((c) => (
+                  <ActionedCard
+                    key={`${c.type}-${c.id}`}
+                    card={c}
+                    kindLabels={kindLabels}
+                    onOpen={() => navigate(c.link)}
+                  />
+                ))
+              )}
+            </Column>
 
-          <Column title="Rejected" count={data.summary.rejected} tone="danger">
-            {data.rejected.length === 0 ? (
-              <EmptyColumn message="No recent rejections." />
-            ) : (
-              data.rejected.map((c) => (
-                <ActionedCard
-                  key={`${c.type}-${c.id}`}
-                  card={c}
-                  kindLabels={kindLabels}
-                  onOpen={() => navigate(c.link)}
-                />
-              ))
-            )}
-          </Column>
-        </div>
+            <Column title="Rejected" count={data.summary.rejected} tone="danger">
+              {data.rejected.length === 0 ? (
+                <EmptyColumn message="No recent rejections." />
+              ) : (
+                data.rejected.map((c) => (
+                  <ActionedCard
+                    key={`${c.type}-${c.id}`}
+                    card={c}
+                    kindLabels={kindLabels}
+                    onOpen={() => navigate(c.link)}
+                  />
+                ))
+              )}
+            </Column>
+          </div>
+          {(data.meta.pending_truncated || data.meta.history_truncated) && (
+            <div className="px-5 pb-4 flex flex-wrap items-center gap-2 text-xs text-muted">
+              <span>Showing a bounded slice of the approval queue.</span>
+              {data.meta.pending_truncated && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={isFetching || pendingLimit >= 500}
+                  onClick={() => setPendingLimit((limit) => Math.min(500, limit + 100))}
+                >
+                  Load more pending
+                </Button>
+              )}
+              {data.meta.history_truncated && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={isFetching || historyLimit >= 500}
+                  onClick={() => setHistoryLimit((limit) => Math.min(500, limit + 50))}
+                >
+                  Load more history
+                </Button>
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -338,6 +385,10 @@ function ActionedCard({
           by <UserBadge name={card.actor.name} role={card.actor.role} />
         </div>
       )}
+      <div className="text-2xs text-muted mt-1.5 flex items-center gap-1">
+        <LuExternalLink size={10} />
+        Open record to view
+      </div>
     </button>
   );
 }

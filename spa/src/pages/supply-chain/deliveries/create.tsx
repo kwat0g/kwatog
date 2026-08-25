@@ -26,8 +26,9 @@ const itemSchema = z.object({
  sales_order_item_id: z.string().min(1, 'Select a line item'),
  quantity: z.coerce
  .number({ invalid_type_error: 'Must be a number' })
- .positive('Must be greater than zero'),
- inspection_id: z.string().optional(),
+ .positive('Must be greater than zero')
+ .refine((value) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-8, 'Use at most 2 decimal places'),
+ inspection_id: z.string().min(1, 'Select a passed outgoing inspection'),
 });
 
 const schema = z.object({
@@ -55,8 +56,8 @@ export default function CreateDeliveryPage() {
  const soList = soData?.data ?? [];
 
  const { data: vehiclesData, isLoading: vehiclesLoading } = useQuery({
- queryKey: ['supply-chain', 'vehicles', 'all'],
- queryFn: () => vehiclesApi.list({ per_page: 200 }),
+ queryKey: ['supply-chain', 'vehicles', 'available'],
+ queryFn: () => vehiclesApi.list({ status: 'available', per_page: 200 }),
  });
  const vehicleList = vehiclesData?.data ?? [];
 
@@ -94,6 +95,12 @@ export default function CreateDeliveryPage() {
 
  const soItems = selectedSo?.items ?? [];
 
+ const { data: inspectionOptions = [], isLoading: inspectionOptionsLoading } = useQuery({
+ queryKey: ['supply-chain', 'deliveries', 'inspection-options', selectedSoId],
+ queryFn: () => deliveriesApi.inspectionOptions(selectedSoId),
+ enabled: Boolean(selectedSoId),
+ });
+
  // ── Mutation ──
  const mutation = useMutation({
  mutationFn: (data: FormValues) =>
@@ -105,7 +112,7 @@ export default function CreateDeliveryPage() {
  items: data.items.map((i) => ({
  sales_order_item_id: i.sales_order_item_id,
  quantity: i.quantity,
- inspection_id: i.inspection_id || undefined,
+ inspection_id: i.inspection_id,
  })),
  }),
  onSuccess: (delivery) => {
@@ -195,7 +202,7 @@ export default function CreateDeliveryPage() {
  disabled={vehiclesLoading}
  >
  <option value="">
- {vehiclesLoading ? 'Loading vehicles…' : '— No vehicle assigned —'}
+ {vehiclesLoading ? 'Loading available vehicles…' : '— No vehicle assigned —'}
  </option>
  {vehicleList.map((v) => (
  <option key={v.id} value={v.id}>
@@ -225,7 +232,7 @@ export default function CreateDeliveryPage() {
  {fields.map((field, index) => (
  <div
  key={field.id}
- className="grid grid-cols-[1fr_120px_auto] gap-2 items-end p-3 bg-subtle rounded-md border border-default"
+ className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px_auto] gap-2 items-end p-3 bg-subtle rounded-md border border-default"
  >
  {/* SO Item select */}
  <Select
@@ -254,13 +261,40 @@ export default function CreateDeliveryPage() {
  ))}
  </Select>
 
+ {/* Passed outgoing inspection select */}
+ <Select
+ label="Passed outgoing inspection"
+ required
+ {...register(`items.${index}.inspection_id`)}
+ disabled={!selectedSoId || !watch(`items.${index}.sales_order_item_id`) || inspectionOptionsLoading}
+ error={errors.items?.[index]?.inspection_id?.message}
+ >
+ <option value="">
+ {inspectionOptionsLoading
+ ? 'Loading inspections…'
+ : !watch(`items.${index}.sales_order_item_id`)
+ ? 'Select item first'
+ : inspectionOptions.filter((inspection) => inspection.sales_order_item_id === watch(`items.${index}.sales_order_item_id`)).length === 0
+ ? 'No passed inspection available'
+ : '— Select inspection —'}
+ </option>
+ {inspectionOptions
+ .filter((inspection) => inspection.sales_order_item_id === watch(`items.${index}.sales_order_item_id`))
+ .map((inspection) => (
+ <option key={inspection.id} value={inspection.id}>
+ {inspection.inspection_number} · {inspection.remaining_quantity} remaining
+ </option>
+ ))}
+ </Select>
+
  {/* Quantity */}
  <Input
  label="Qty"
  required
  type="number"
- step="any"
- min="0.001"
+ step="0.01"
+ min="0.01"
+ max={inspectionOptions.find((inspection) => inspection.id === watch(`items.${index}.inspection_id`))?.remaining_quantity}
  {...register(`items.${index}.quantity`)}
  error={errors.items?.[index]?.quantity?.message}
  className="font-mono tabular-nums"

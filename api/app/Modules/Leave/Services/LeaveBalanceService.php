@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Leave\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Leave\Exceptions\InsufficientLeaveBalanceException;
 use App\Modules\Leave\Models\EmployeeLeaveBalance;
 use App\Modules\Leave\Models\LeaveType;
@@ -33,7 +34,12 @@ class LeaveBalanceService
                 ->where('leave_type_id', $leaveTypeId)
                 ->where('year', $year)
                 ->lockForUpdate()
-                ->firstOrFail();
+                ->first();
+            if (! $bal) {
+                throw new BusinessRuleException(
+                    'Leave balance is not initialized for this employee, leave type, and year. Contact HR before approving this request.',
+                );
+            }
             if ($days > (float) $bal->remaining) {
                 throw new InsufficientLeaveBalanceException(
                     "Insufficient leave balance ({$bal->remaining} remaining; {$days} requested)."
@@ -55,7 +61,11 @@ class LeaveBalanceService
                 ->where('year', $year)
                 ->lockForUpdate()
                 ->first();
-            if (! $bal) return;
+            if (! $bal) {
+                throw new BusinessRuleException(
+                    'Leave balance is not initialized for this employee, leave type, and year. The request was not cancelled.',
+                );
+            }
             $bal->used = max(0, (float) $bal->used - $days);
             $bal->remaining = (float) $bal->total_credits - (float) $bal->used;
             $bal->save();

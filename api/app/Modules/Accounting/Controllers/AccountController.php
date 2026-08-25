@@ -66,4 +66,14 @@ class AccountController
         }
         return new AccountResource($account);
     }
+
+    public function activate(Account $account): AccountResource|JsonResponse
+    {
+        try {
+            $account = $this->service->activate($account);
+        } catch (BusinessRuleException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+        return new AccountResource($account);
+    }
 }

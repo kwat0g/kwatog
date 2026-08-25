@@ -44,17 +44,7 @@ class HrDashboardService
          * page. `payroll.periods.view` is the payroll-run read (hr_officer,
          * finance_officer, admin) and is what the payroll.upcoming widget uses.
          */
-        $canPayroll = $user->hasPermission('payroll.periods.view');
-
-        return Cache::remember("dashboard:hr:{$user->id}:" . ($canPayroll ? 'p' : 'n'), self::CACHE_TTL, function () use ($user, $canPayroll) {
-            $headcount         = $this->safeCount('employees', fn ($q) => $q->where('status', 'active'));
-            $onLeaveToday      = $this->safeCount('leave_requests', fn ($q) => $q
-                ->where('status', 'approved')
-                ->where('start_date', '<=', today())
-                ->where('end_date', '>=', today()));
-            $pendingLeave      = $this->safeCount('leave_requests', fn ($q) => $q->whereIn('status', ['pending_dept', 'pending_hr', 'pending']));
-            $pendingSeparation = $this->safeCount('clearances',     fn ($q) => $q->whereIn('status', ['pending', 'in_progress', 'completed']));
-
+        return Cache::remember("dashboard:hr:{$user->id}", self::CACHE_TTL, function () use ($user) {
             $panels = $this->gate->panels($user, [
                 // Configured windows, not data.
                 'probation_horizon_days' => [null,                fn () => $this->settings->requiredInt('dashboard.widgets.probation_horizon_days', 0)],
@@ -75,20 +65,18 @@ class HrDashboardService
                 // forecast.headcount widget follows. hr_officer holds no
                 // forecasting grant and must still see its own forecast.
                 'headcount_forecast' => ['hr.employees.view',     fn () => $this->forecastingService->headcountForecast()],
+                'payroll_summary'    => ['payroll.periods.view',   fn () => $this->hrPayrollSummary()],
             ]);
-
-            // REC-05 — surface a payroll signal on the HR dashboard for HR users
-            // who can view payroll (the brief expected "HR sees payroll KPIs").
-            if ($canPayroll) {
-                $panels['payroll_summary'] = $this->hrPayrollSummary();
-            }
 
             return [
                 'kpis' => $this->gate->kpis($user, [
-                    ['hr.employees.view',   fn () => $this->kpi('Active Headcount', (string) $headcount,        'count')],
-                    ['leave.view',          fn () => $this->kpi('On Leave Today',   (string) $onLeaveToday,     'count')],
-                    ['leave.view',          fn () => $this->kpi('Pending Leave',    (string) $pendingLeave,     'count')],
-                    ['hr.separation.view',  fn () => $this->kpi('Open Clearances',  (string) $pendingSeparation, 'count')],
+                    ['hr.employees.view', fn () => $this->kpi('Active Headcount', (string) $this->safeCount('employees', fn ($q) => $q->where('status', 'active')), 'count')],
+                    ['leave.view', fn () => $this->kpi('On Leave Today', (string) $this->safeCount('leave_requests', fn ($q) => $q
+                        ->where('status', 'approved')->where('start_date', '<=', today())->where('end_date', '>=', today())), 'count')],
+                    ['leave.view', fn () => $this->kpi('Pending Leave', (string) $this->safeCount('leave_requests', fn ($q) => $q
+                        ->whereIn('status', ['pending_dept', 'pending_hr', 'pending'])), 'count')],
+                    ['hr.separation.view', fn () => $this->kpi('Open Clearances', (string) $this->safeCount('clearances', fn ($q) => $q
+                        ->whereIn('status', ['pending', 'in_progress', 'completed'])), 'count')],
                 ]),
                 'panels' => $panels,
             ];
@@ -246,7 +234,7 @@ class HrDashboardService
                 'employee_no'   => $e->employee_no,
                 'name'          => trim(($e->first_name ?? '').' '.($e->last_name ?? '')),
                 'date_hired'    => $e->date_hired,
-                'probation_end' => Carbon::parse((string) $e->date_hired)->addMonths(6)->toDateString(),
+                'probation_end' => Carbon::parse((string) $e->date_hired)->addMonths($probationMonths)->toDateString(),
                 'department'    => $e->department_name ?? '—',
             ])
             ->all();

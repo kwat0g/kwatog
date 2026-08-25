@@ -13,6 +13,7 @@ use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Services\MaterialIssueService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\Fluent\AssertableJson;
 use Tests\TestCase;
 
@@ -91,6 +92,33 @@ class MaterialIssueCancelTest extends TestCase
 
         $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
         $this->service->cancel($slip, $this->user);
+    }
+
+    public function test_stale_cancel_requests_cannot_reverse_stock_twice(): void
+    {
+        $slip = $this->issue('6');
+        $firstRequest = MaterialIssueSlip::query()->findOrFail($slip->id);
+        $staleRequest = MaterialIssueSlip::query()->findOrFail($slip->id);
+
+        $this->service->cancel($firstRequest, $this->user);
+
+        try {
+            $this->service->cancel($staleRequest, $this->user);
+            $this->fail('A stale cancellation request must be rejected.');
+        } catch (\App\Common\Exceptions\BusinessRuleException) {
+            // Expected: the locked row is already cancelled.
+        }
+
+        $this->assertSame('100.000', (string) StockLevel::query()
+            ->where('item_id', $this->item->id)
+            ->where('location_id', $this->location->id)
+            ->value('quantity'));
+        $this->assertSame(1,
+            DB::table('stock_movements')
+                ->where('reference_type', 'material_issue_slip')
+                ->where('reference_id', $slip->id)
+                ->where('movement_type', 'adjustment_in')
+                ->count());
     }
 
     public function test_cancel_route_reverses_stock(): void

@@ -37,7 +37,7 @@ class EmployeeAccountController
         }
 
         return response()->json([
-            'message' => 'Account created.',
+            'message' => ($request->boolean('send_welcome', true) ? 'Account created. Welcome notification queued.' : 'Account created.'),
             'data' => [
                 'id'    => $user->hash_id,
                 'email' => $user->email,
@@ -61,7 +61,8 @@ class EmployeeAccountController
     {
         $this->provisioning->resetPasswordForEmployee($employee);
         return response()->json([
-            'message' => 'Password reset. A new temporary password has been emailed to the user.',
+            'message' => 'Password reset. A notification was queued for the user.',
+            'delivery_status' => 'queued',
             'sent_to' => $employee->user?->email,
         ]);
     }

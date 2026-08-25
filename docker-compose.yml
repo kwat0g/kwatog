@@ -7,6 +7,7 @@ services:
     working_dir: /var/www
     volumes:
       - ./api:/var/www
+      - ./scripts:/var/www/scripts:ro
     environment:
       - APP_ENV=${APP_ENV:-local}
       # Fail closed by default. Set APP_DEBUG=true explicitly for local
@@ -101,6 +102,7 @@ services:
     working_dir: /var/www
     volumes:
       - ./api:/var/www
+      - ./scripts:/var/www/scripts:ro
     command: php artisan reverb:start --host=0.0.0.0 --port=8080
     ports:
       # Browser connects directly via ws://<host>:8080/app/<key>.
@@ -121,6 +123,7 @@ services:
     working_dir: /var/www
     volumes:
       - ./api:/var/www
+      - ./scripts:/var/www/scripts:ro
     # Keep the local worker aligned with the longest durable listener. A
     # shorter worker timeout would kill a healthy payroll run while the Redis
     # retry lease still considers it in flight.

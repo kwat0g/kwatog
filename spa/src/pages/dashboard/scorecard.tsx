@@ -80,6 +80,17 @@ export default function ScorecardPage() {
  placeholderData: (prev) => prev,
  });
 
+ const trendCodes = useMemo(
+ () => (scorecardQ.data ?? []).map((item) => item.definition.code),
+ [scorecardQ.data],
+ );
+ const trendsQ = useQuery({
+ queryKey: ['kpi', 'trends', trendCodes],
+ queryFn: () => kpiApi.trends(trendCodes, 6),
+ enabled: trendCodes.length > 0,
+ staleTime: 5 * 60 * 1000,
+ });
+
  const computeMut = useMutation({
  mutationFn: () => kpiApi.compute(year, month),
  onSuccess: (res) => {
@@ -147,7 +158,7 @@ export default function ScorecardPage() {
  ) : (
  <KpiGrid count={4}>
  {items.map((item) => (
- <KpiCard key={item.definition.code} item={item} />
+ <KpiCard key={item.definition.code} item={item} trendPoints={trendsQ.data?.[item.definition.code] ?? []} />
  ))}
  </KpiGrid>
  )
@@ -156,21 +167,13 @@ export default function ScorecardPage() {
  );
 }
 
-function KpiCard({ item }: { item: KpiScorecardItem }) {
+function KpiCard({ item, trendPoints }: { item: KpiScorecardItem; trendPoints: KpiTrendPoint[] }) {
  const { definition: def, snapshot } = item;
  const moduleLink = MODULE_LINKS[def.module];
 
- // Fetch trend data for the sparkline
- const trendQ = useQuery({
- queryKey: ['kpi', 'trend', def.code],
- queryFn: () => kpiApi.trend(def.code, 6),
- staleTime: 5 * 60 * 1000,
- });
-
  const sparkData = useMemo(() => {
- if (!trendQ.data) return [];
- return trendQ.data.map((p: KpiTrendPoint) => ({ v: parseFloat(p.value) }));
- }, [trendQ.data]);
+ return trendPoints.map((p) => ({ v: parseFloat(p.value) }));
+ }, [trendPoints]);
 
  const status = snapshot?.status ?? 'on_target';
  const trend = snapshot?.trend ?? 'flat';

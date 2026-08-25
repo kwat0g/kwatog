@@ -11,7 +11,7 @@ use App\Modules\Admin\Resources\UserPermissionOverrideResource;
 use App\Modules\Admin\Services\UserPermissionOverrideService;
 use App\Modules\Auth\Models\User;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\ResourceCollection;
 use Illuminate\Support\Carbon;
 
@@ -28,10 +28,10 @@ class UserPermissionOverrideController
         private readonly UserPermissionOverrideService $service,
     ) {}
 
-    public function index(User $user): ResourceCollection
+    public function index(Request $request, User $user): ResourceCollection
     {
         return UserPermissionOverrideResource::collection(
-            $this->service->listActive($user)
+            $this->service->listActive($user, $request->user(), $request->boolean('include_deleted'))
         );
     }
 
@@ -40,12 +40,12 @@ class UserPermissionOverrideController
         $data = $request->validated();
 
         $override = $this->service->set(
-            user:           $user,
-            actor:          $request->user(),
+            user: $user,
+            actor: $request->user(),
             permissionSlug: $data['permission_slug'],
-            type:           PermissionOverrideType::from($data['type']),
-            reason:         $data['reason'],
-            expiresAt:      isset($data['expires_at']) ? Carbon::parse($data['expires_at']) : null,
+            type: PermissionOverrideType::from($data['type']),
+            reason: $data['reason'],
+            expiresAt: isset($data['expires_at']) ? Carbon::parse($data['expires_at']) : null,
         );
 
         return (new UserPermissionOverrideResource($override))
@@ -53,19 +53,22 @@ class UserPermissionOverrideController
             ->setStatusCode(201);
     }
 
-    public function destroy(User $user, UserPermissionOverride $override): JsonResponse
+    public function destroy(Request $request, User $user, UserPermissionOverride $override): JsonResponse
     {
         // Defence: ensure the override actually belongs to the route's user.
         abort_unless($override->user_id === $user->id, 404);
 
-        $this->service->remove($override);
+        $this->service->remove($override, $request->user());
 
         return response()->json(null, 204);
     }
 
-    public function restore(UserPermissionOverride $override): JsonResponse
+    public function restore(Request $request, User $user, UserPermissionOverride $override): JsonResponse
     {
-        $override->restore();
+        // Restore must remain scoped to the user in the URL, just like delete.
+        abort_unless($override->user_id === $user->id, 404);
+        $this->service->restore($user, $override, $request->user());
+
         return response()->json(['message' => 'User permission override restored.']);
     }
 }

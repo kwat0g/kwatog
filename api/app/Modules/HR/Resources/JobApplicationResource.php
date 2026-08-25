@@ -34,6 +34,7 @@ class JobApplicationResource extends JsonResource
                 'user' => ['id' => $n->user->hash_id, 'name' => $n->user->name],
                 'created_at' => $n->created_at?->toIso8601String(),
             ])),
+            'history'            => RecruitmentApplicationEventResource::collection($this->whenLoaded('events')),
             'converted_employee' => $this->whenLoaded('convertedEmployee', fn () => [
                 'id'          => $this->convertedEmployee->hash_id,
                 'employee_no' => $this->convertedEmployee->employee_no,

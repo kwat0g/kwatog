@@ -22,4 +22,9 @@ export const onboardingApi = {
  client
  .post<Wrapped<EmployeeOnboarding>>(`/hr/employees/${employeeId}/onboarding/recompute`)
  .then((r) => unwrap<EmployeeOnboarding>(r.data)),
+
+ markDepartmentTeamNotified: (employeeId: string) =>
+ client
+ .post<Wrapped<EmployeeOnboarding>>(`/hr/employees/${employeeId}/onboarding/department-team-notified`)
+ .then((r) => unwrap<EmployeeOnboarding>(r.data)),
 };

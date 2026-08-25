@@ -22,8 +22,9 @@ class MrpPlan extends Model
 
     protected $fillable = [
         'mrp_plan_no', 'sales_order_id', 'version', 'status',
-        'generated_by', 'total_lines', 'shortages_found',
-        'auto_pr_count', 'draft_wo_count', 'diagnostics', 'cost_summary', 'generated_at',
+        'generated_by', 'mrp_run_id', 'total_lines', 'shortages_found',
+        'auto_pr_count', 'draft_wo_count', 'diagnostics', 'cost_summary',
+        'generation_context', 'generated_at',
     ];
 
     protected $casts = [
@@ -35,6 +36,7 @@ class MrpPlan extends Model
         'draft_wo_count'  => 'integer',
         'diagnostics'     => 'array',
         'cost_summary'    => 'array',
+        'generation_context' => 'array',
         'generated_at'    => 'datetime',
     ];
 
@@ -46,6 +48,11 @@ class MrpPlan extends Model
     public function generator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'generated_by');
+    }
+
+    public function mrpRun(): BelongsTo
+    {
+        return $this->belongsTo(MrpRun::class, 'mrp_run_id');
     }
 
     public function workOrders(): HasMany

@@ -17,10 +17,12 @@ export type AlertType =
  | 'ar_overdue_60'
  | 'ap_due_soon'
  | 'qc_fail_rate_high'
+ | 'chain_bottleneck'
  | 'mrp_shortage'
  | 'mrp_schedule_conflict'
  | 'mrp_run_failed'
- | 'mrp_data_error';
+ | 'mrp_data_error'
+ | 'scheduler_stale';
 
 export interface Alert {
  id: string; // hash_id
@@ -36,6 +38,10 @@ export interface Alert {
  is_read: boolean;
  is_dismissed: boolean;
  dismissed_at: string | null;
+ resolved_at: string | null;
+ email_status: 'pending' | 'sending' | 'sent' | 'failed' | 'terminal_failed' | null;
+ email_attempts: number;
+ email_failed_at: string | null;
  created_at: string;
 }
 

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
 import { useForm } from 'react-hook-form';
@@ -9,7 +9,6 @@ import { LuShieldAlert } from '@/lib/icons';
 import { mrbApi } from '@/api/inventory/mrb';
 import { itemsApi } from '@/api/inventory/items';
 import { warehouseApi } from '@/api/inventory/warehouse';
-import { ncrsApi } from '@/api/quality/ncrs';
 import { Button } from '@/components/ui/Button';
 import { Chip, type ChipVariant } from '@/components/ui/Chip';
 import { DataTable, type Column } from '@/components/ui/DataTable';
@@ -40,10 +39,11 @@ const holdSchema = z.object({
  source_location_id: z.string().min(1, 'Source location is required.'),
  quantity: z
  .string()
- .regex(/^\d+(\.\d{1,4})?$/, 'Up to 4 decimals.')
+ .regex(/^\d+(\.\d{1,3})?$/, 'Up to 3 decimals.')
  .refine((v) => Number(v) > 0, 'Must be greater than zero.'),
  quarantine_location_id: z.string().optional().or(z.literal('')),
  ncr_id: z.string().optional().or(z.literal('')),
+ inspection_id: z.string().optional().or(z.literal('')),
  notes: z.string().max(1000).optional().or(z.literal('')) });
 type HoldValues = z.infer<typeof holdSchema>;
 
@@ -142,7 +142,7 @@ export default function MrbListPage() {
  />
 
  <div className="px-5 pt-3 flex gap-3">
- <FilterBar onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))} searchPlaceholder="Search MRB ticket..." />
+ <FilterBar values={filters} onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))} searchPlaceholder="Search MRB ticket..." />
  <Select
  className="max-w-xs"
  value={filters.status ?? ''}
@@ -214,7 +214,7 @@ function HoldModal({
  onClose: () => void;
  onSuccess: () => void;
 }) {
- const { register, handleSubmit, reset, setError, formState: { errors, isSubmitting } } =
+ const { register, handleSubmit, reset, setError, watch, formState: { errors, isSubmitting } } =
  useForm<HoldValues>({
  resolver: zodResolver(holdSchema),
  defaultValues: {
@@ -223,11 +223,18 @@ function HoldModal({
  quantity: '',
  quarantine_location_id: '',
  ncr_id: '',
+ inspection_id: '',
  notes: '' } });
 
- const { data: itemsResp } = useQuery({
- queryKey: ['inventory', 'items', 'for-mrb'],
- queryFn: () => itemsApi.list({ per_page: 500, is_active: 'true' }),
+ const [itemSearch, setItemSearch] = useState('');
+ const [qualitySearch, setQualitySearch] = useState('');
+ const requestKeyRef = useRef<{ fingerprint: string; key: string } | null>(null);
+ const selectedItemId = watch('item_id');
+ const selectedSourceId = watch('source_location_id');
+
+ const { data: itemsResp, isError: itemsError, refetch: refetchItems } = useQuery({
+ queryKey: ['inventory', 'items', 'for-mrb', itemSearch],
+ queryFn: () => itemsApi.list({ per_page: 100, search: itemSearch || undefined, is_active: 'true' }),
  enabled: isOpen });
  const itemOpts = itemsResp?.data ?? [];
 
@@ -236,39 +243,62 @@ function HoldModal({
  queryFn: () => warehouseApi.tree(),
  enabled: isOpen });
 
- // All locations (source can be any location holding the stock).
+ // Only active locations in active warehouses are offered. The API repeats
+ // these checks because a stale tree cannot authorize a movement.
  const allLocations = useMemo(
- () =>
- (warehouses ?? []).flatMap((w) =>
- (w.zones ?? []).flatMap((z) =>
- (z.locations ?? []).map((l) => ({
- id: l.id,
- label: `${w.code}-${z.code}-${l.code}`,
- zoneType: z.zone_type })),
- ),
- ),
- [warehouses],
+   () =>
+   (warehouses ?? []).flatMap((w) =>
+   w.is_active ?
+   (w.zones ?? []).flatMap((z) =>
+   (z.locations ?? []).filter((l) => l.is_active).map((l) => ({
+   id: l.id,
+   label: `${w.code}-${z.code}-${l.code}`,
+   zoneType: z.zone_type,
+   warehouseId: w.id }))
+   )
+   : [],
+   ),
+   [warehouses],
  );
- // Only quarantine-zone locations are valid quarantine targets.
- const quarantineLocations = allLocations.filter((l) => l.zoneType === 'quarantine');
+ const sourceLocations = allLocations.filter((l) => !['quarantine', 'scrap'].includes(l.zoneType));
+ const sourceWarehouseId = allLocations.find((l) => l.id === selectedSourceId)?.warehouseId;
+ const quarantineLocations = allLocations.filter(
+   (l) => l.zoneType === 'quarantine' && (!sourceWarehouseId || l.warehouseId === sourceWarehouseId),
+ );
 
- const { data: ncrsResp } = useQuery({
- queryKey: ['quality', 'ncrs', 'for-mrb'],
- queryFn: () => ncrsApi.list({ per_page: 100 }),
- enabled: isOpen });
- const ncrOpts = ncrsResp?.data ?? [];
+ const {
+   data: qualityOptions,
+   isLoading: qualityLoading,
+   isError: qualityError,
+   refetch: refetchQuality,
+ } = useQuery({
+   queryKey: ['inventory', 'mrb', 'quality-options', selectedItemId, qualitySearch],
+   queryFn: () => mrbApi.qualityOptions(selectedItemId, qualitySearch || undefined),
+   enabled: isOpen && !!selectedItemId,
+ });
 
  const mutation = useMutation({
- mutationFn: (v: HoldValues) =>
- mrbApi.hold({
+ mutationFn: (v: HoldValues) => {
+ const payload = {
  item_id: v.item_id,
  quantity: v.quantity,
  source_location_id: v.source_location_id,
  quarantine_location_id: v.quarantine_location_id || undefined,
  ncr_id: v.ncr_id || undefined,
- notes: v.notes || undefined }),
+ inspection_id: v.inspection_id || undefined,
+ notes: v.notes || undefined,
+ };
+ const fingerprint = JSON.stringify(payload);
+ const existing = requestKeyRef.current;
+ const key = existing?.fingerprint === fingerprint
+ ? existing.key
+ : (globalThis.crypto?.randomUUID?.() ?? `mrb-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+ requestKeyRef.current = { fingerprint, key };
+ return mrbApi.hold(payload, key);
+ },
  onSuccess: (rec) => {
  toast.success(`MRB ${rec.mrb_number} raised — stock moved to quarantine.`);
+ requestKeyRef.current = null;
  reset();
  onSuccess();
  },
@@ -279,6 +309,7 @@ function HoldModal({
  isOpen={isOpen}
  onClose={() => {
  reset();
+ requestKeyRef.current = null;
  onClose();
  }}
  title="Raise MRB hold"
@@ -288,6 +319,18 @@ function HoldModal({
  onSubmit={handleSubmit((v) => mutation.mutate(v), onFormInvalid<HoldValues>())}
  className="py-4 space-y-3"
  >
+ <Input
+ label="Find item"
+ value={itemSearch}
+ onChange={(e) => setItemSearch(e.target.value)}
+ placeholder="Search by item code or name…"
+ />
+ {itemsError && (
+ <div className="flex items-center justify-between gap-2 text-sm text-danger-fg" role="alert">
+ <span>Could not load items.</span>
+ <Button type="button" variant="secondary" onClick={() => refetchItems()}>Retry</Button>
+ </div>
+ )}
  <Select label="Item" required {...register('item_id')} error={errors.item_id?.message}>
  <option value="">Select item…</option>
  {itemOpts.map((it) => (
@@ -305,7 +348,7 @@ function HoldModal({
  error={errors.source_location_id?.message}
  >
  <option value="">Select location…</option>
- {allLocations.map((l) => (
+ {sourceLocations.map((l) => (
  <option key={l.id} value={l.id}>
  {l.label}
  </option>
@@ -336,18 +379,42 @@ function HoldModal({
  ))}
  </Select>
 
- <Select
- label="Linked NCR (optional)"
- {...register('ncr_id')}
- error={errors.ncr_id?.message}
- >
+ {selectedItemId && (
+ <div className="space-y-2 rounded-md border border-default bg-elevated/40 p-3">
+ <Input
+ label="Find linked quality records"
+ value={qualitySearch}
+ onChange={(e) => setQualitySearch(e.target.value)}
+ placeholder="Search inspection or NCR number…"
+ helper="Only failed inspections and open/in-progress NCRs for this item are listed."
+ />
+ {qualityError && (
+ <div className="flex items-center justify-between gap-2 text-sm text-danger-fg" role="alert">
+ <span>Could not load quality records.</span>
+ <Button type="button" variant="secondary" onClick={() => refetchQuality()}>Retry</Button>
+ </div>
+ )}
+ <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+ <Select label="Linked inspection (optional)" {...register('inspection_id')} error={errors.inspection_id?.message}>
  <option value="">— None —</option>
- {ncrOpts.map((n) => (
- <option key={n.id} value={n.id}>
- {n.ncr_number}
+ {qualityLoading && <option disabled>Loading failed inspections…</option>}
+ {(qualityOptions?.inspections ?? []).map((inspection) => (
+ <option key={inspection.id} value={inspection.id}>
+ {inspection.inspection_number} — {inspection.stage_label ?? inspection.stage}
  </option>
  ))}
  </Select>
+ <Select label="Linked NCR (optional)" {...register('ncr_id')} error={errors.ncr_id?.message}>
+ <option value="">— None —</option>
+ {(qualityOptions?.ncrs ?? []).map((ncr) => (
+ <option key={ncr.id} value={ncr.id}>
+ {ncr.ncr_number} — {ncr.status_label ?? ncr.status}
+ </option>
+ ))}
+ </Select>
+ </div>
+ </div>
+ )}
 
  <Textarea
  label="Notes"
@@ -364,6 +431,7 @@ function HoldModal({
  variant="secondary"
  onClick={() => {
  reset();
+ requestKeyRef.current = null;
  onClose();
  }}
  disabled={mutation.isPending}

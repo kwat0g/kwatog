@@ -39,6 +39,8 @@ class StoreMaterialIssueRequest extends FormRequest
             'items.*.item_id'                 => ['required', 'integer', 'exists:items,id'],
             'items.*.location_id'             => ['required', 'integer', 'exists:warehouse_locations,id'],
             'items.*.quantity_issued'         => ['required', 'decimal:0,3', 'min:0.001'],
+            'items.*.issued_uom_code'         => ['nullable', 'string', 'max:20'],
+            'items.*.lot_number'              => ['nullable', 'string', 'max:50'],
             'items.*.material_reservation_id' => ['nullable', 'integer', 'exists:material_reservations,id'],
             'items.*.remarks'                 => ['nullable', 'string', 'max:200'],
         ];

@@ -5,19 +5,16 @@ declare(strict_types=1);
 namespace App\Common\Notifications;
 
 use App\Common\Models\Alert;
-use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
 /**
- * Task A2 — Email-only notification dispatched for severity=critical alerts.
- * In-app notifications still flow through NotificationService::notify() with
- * the database channel; this class is dispatched directly via mail.
+ * Task A2 — Email-only notification handed to the configured mail transport
+ * for severity=critical alerts. The alert row owns bounded retry state, so the
+ * handoff remains synchronous and its outcome is recorded before retrying.
  */
 class CriticalAlertEmail extends Notification
 {
-    use Queueable;
-
     public function __construct(public readonly Alert $alert) {}
 
     public function via(mixed $notifiable): array

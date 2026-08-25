@@ -37,17 +37,12 @@ class QualityDashboardService
     public function quality(User $user): array
     {
         return Cache::remember("dashboard:quality:{$user->id}", self::CACHE_TTL, function () use ($user) {
-            $pendingInspections = $this->safeCount('inspections', fn ($q) => $q->where('status', 'in_progress'));
-            $passRate           = $this->qualityPassRateToday();
-            $openNcrs           = $this->safeCount('non_conformance_reports', fn ($q) => $q->whereIn('status', ['open', 'in_progress']));
-            $cocsMtd            = $this->safeCount('non_conformance_reports', fn ($q) => $q->where('status', 'closed'));
-
             return [
                 'kpis' => $this->gate->kpis($user, [
-                    ['quality.inspections.view', fn () => $this->kpi('Pending Inspections', (string) $pendingInspections, 'count')],
-                    ['quality.view',             fn () => $this->kpi('Pass Rate Today',      $passRate,                   'pct')],
-                    ['quality.ncr.view',         fn () => $this->kpi('Open NCRs',            (string) $openNcrs,          'count')],
-                    ['quality.ncr.view',         fn () => $this->kpi('CoCs Gen. MTD',        (string) $cocsMtd,           'count')],
+                    ['quality.inspections.view', fn () => $this->kpi('Pending Inspections', (string) $this->safeCount('inspections', fn ($q) => $q->where('status', 'in_progress')), 'count')],
+                    ['quality.view', fn () => $this->kpi('Pass Rate Today', $this->qualityPassRateToday(), 'pct')],
+                    ['quality.ncr.view', fn () => $this->kpi('Open NCRs', (string) $this->safeCount('non_conformance_reports', fn ($q) => $q->whereIn('status', ['open', 'in_progress'])), 'count')],
+                    ['quality.inspections.view', fn () => $this->kpi('CoCs Gen. MTD', (string) $this->cocsGeneratedThisMonth(), 'count')],
                 ]),
                 'panels' => $this->gate->panels($user, [
                     'inspection_queue'  => ['quality.inspections.view', fn () => $this->qualityInspectionQueue()],
@@ -76,10 +71,24 @@ class QualityDashboardService
     private function qualityPassRateToday(): ?string
     {
         if (! Schema::hasTable('inspections')) return null;
-        $total = (int) DB::table('inspections')->whereDate('created_at', today())->count();
+        $base = DB::table('inspections')
+            ->whereDate('completed_at', today())
+            ->whereIn('status', ['passed', 'failed']);
+        $total = (int) (clone $base)->count();
         if ($total === 0) return null;
-        $passed = (int) DB::table('inspections')->whereDate('created_at', today())->where('status', 'passed')->count();
+        $passed = (int) (clone $base)->where('status', 'passed')->count();
         return number_format(($passed * 100.0) / $total, 1, '.', '');
+    }
+
+    private function cocsGeneratedThisMonth(): int
+    {
+        if (! Schema::hasTable('delivery_proofs')) return 0;
+
+        return (int) DB::table('delivery_proofs')
+            ->where('proof_type', 'coc')
+            ->whereNull('deleted_at')
+            ->whereBetween('created_at', [now()->startOfMonth(), now()->endOfMonth()])
+            ->count();
     }
 
     /**

@@ -24,5 +24,7 @@ export const billsApi = {
  client.patch<ApiSuccess<Bill>>(`/bills/${id}/cancel`).then((r) => r.data.data),
  recordPayment: (id: string, data: CreateBillPaymentData) =>
  client.post<ApiSuccess<BillPayment>>(`/bills/${id}/payments`, data).then((r) => r.data.data),
+ voidPayment: (billId: string, paymentId: string, data: { void_date?: string; reason: string; replacement_payment_id?: string }) =>
+ client.post<ApiSuccess<BillPayment>>(`/bills/${billId}/payments/${paymentId}/void`, data).then((r) => r.data.data),
  pdfUrl: (id: string) => `/api/v1/bills/${id}/pdf`,
 };

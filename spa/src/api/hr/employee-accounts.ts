@@ -33,7 +33,7 @@ export const employeeAccountsApi = {
 
  resetPassword: (employeeId: string) =>
  client
- .patch<{ message: string; sent_to: string | null }>(
+ .patch<{ message: string; delivery_status: 'queued'; sent_to: string | null }>(
  `/hr/employees/${employeeId}/reset-password`,
  )
  .then((r) => r.data),

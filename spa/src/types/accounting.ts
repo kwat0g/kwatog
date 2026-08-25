@@ -35,7 +35,7 @@ export interface CreateAccountData {
  description?: string;
 }
 
-export type UpdateAccountData = Partial<CreateAccountData> & { is_active?: boolean };
+export type UpdateAccountData = Partial<CreateAccountData>;
 
 export type JournalEntryStatus = 'draft' | 'posted' | 'reversed';
 
@@ -53,18 +53,20 @@ export interface JournalEntry {
  date: string;
  description: string;
  reference_type: string | null;
- reference_id: number | null;
+ reference_id: string | null;
  reference_label: string | null;
  total_debit: string;
  total_credit: string;
  status: JournalEntryStatus;
  status_label?: string;
+ reversal_reason?: string | null;
  reversed_by_entry_id: string | null;
  reversed_by_number?: string | null;
  posted_at: string | null;
  posted_by?: { id?: string; name?: string } | null;
  created_by?: { id?: string; name?: string } | null;
  lines?: JournalEntryLine[];
+ deleted_at?: string | null;
 }
 
 export interface CreateJournalEntryLineData {
@@ -78,7 +80,7 @@ export interface CreateJournalEntryData {
  date: string;
  description: string;
  reference_type?: string | null;
- reference_id?: number | null;
+ reference_id?: string | null;
  lines: CreateJournalEntryLineData[];
 }
 
@@ -128,8 +130,14 @@ export interface BillPayment {
  payment_method: PaymentMethod;
  payment_method_label?: string;
  reference_number: string | null;
+ status: 'posted' | 'voided';
+ status_label?: string;
  cash_account?: { id: string; code: string; name: string } | null;
  journal_entry_id: string | null;
+ voided_at?: string | null;
+ void_reason?: string | null;
+ void_reversal_journal_entry?: { id: string; entry_number: string; status: string } | null;
+ replacement_payment_id?: string | null;
  created_at?: string;
 }
 
@@ -170,6 +178,14 @@ export interface Bill {
  three_way_review_status?: 'not_applicable' | 'matched' | 'within_tolerance' | 'manual_review' | 'overridden';
  /** Endpoint to fetch the full match snapshot; only set when the bill has a PO. */
  three_way_match_url?: string | null;
+ provenance_type?: 'stock' | 'service';
+ exception_evidence?: string | null;
+ exception_owner?: { id: string; name: string } | null;
+ exception_approved_by?: { id: string; name: string } | null;
+ exception_approved_at?: string | null;
+ three_way_overridden_by?: { id: string; name: string } | null;
+ three_way_overridden_at?: string | null;
+ cancelled_at?: string | null;
 }
 
 export interface CreateBillItemData {
@@ -191,9 +207,6 @@ export interface CreateBillData {
  /** Service/non-stock exception evidence; approval is explicit in the UI. */
  exception_evidence?: string;
  exception_approved?: boolean;
- /** REC-02 — post despite blocking variances (audit-trailed). */
- allow_override?: boolean;
- override_reason?: string;
  date: string;
  due_date?: string;
  is_vatable?: boolean;
@@ -331,12 +344,14 @@ export interface TrialBalanceRow {
 export interface TrialBalance {
  from: string;
  to: string;
+ currency: string;
  accounts: TrialBalanceRow[];
  totals: { debit: string; credit: string };
 }
 export interface IncomeStatement {
  from: string;
  to: string;
+ currency: string;
  revenue: { accounts: { code: string; name: string; amount: string }[]; total: string };
  cogs: { accounts: { code: string; name: string; amount: string }[]; total: string };
  gross_profit: string;
@@ -346,6 +361,7 @@ export interface IncomeStatement {
 }
 export interface BalanceSheet {
  as_of: string;
+ currency: string;
  assets: { accounts: { code: string; name: string; amount: string }[]; total: string };
  liabilities: { accounts: { code: string; name: string; amount: string }[]; total: string };
  equity: { accounts: { code: string; name: string; amount: string }[]; total: string };
@@ -364,10 +380,12 @@ export interface ApAgingRow extends AgingBuckets {
  vendor_name: string;
 }
 export interface ArAging {
+ currency: string;
  buckets: AgingBuckets;
  by_customer: ArAgingRow[];
 }
 export interface ApAging {
+ currency: string;
  buckets: AgingBuckets;
  by_vendor: ApAgingRow[];
 }

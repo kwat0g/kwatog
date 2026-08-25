@@ -7,7 +7,7 @@ const surfaces = [
  { path: './inventory/grn/detail.tsx', wrappers: 1 },
  { path: './accounting/bills/detail.tsx', wrappers: 2 },
  { path: './accounting/invoices/detail.tsx', wrappers: 1 },
- { path: './production/work-orders/detail.tsx', wrappers: 3 },
+ { path: './production/work-orders/detail.tsx', wrappers: 4 },
 ] as const;
 
 describe('operational detail table responsiveness', () => {

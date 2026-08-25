@@ -18,8 +18,10 @@ class StoreJournalEntryRequest extends FormRequest
         return [
             'date'              => ['required', 'date'],
             'description'       => ['required', 'string', 'max:500'],
-            'reference_type'    => ['nullable', 'string', 'max:50'],
-            'reference_id'      => ['nullable', 'integer'],
+            // Source provenance belongs to trusted automated writers, never to
+            // the manual maker/checker form.
+            'reference_type'    => ['prohibited'],
+            'reference_id'      => ['prohibited'],
             'lines'             => ['required', 'array', 'min:2'],
             'lines.*.account_id' => ['required', 'string'],
             'lines.*.debit'     => ['nullable', 'numeric', 'min:0'],

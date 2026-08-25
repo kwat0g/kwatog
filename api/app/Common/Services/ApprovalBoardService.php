@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Common\Services;
 
+use App\Common\Models\ApprovalDelegation;
+use App\Common\Support\ApprovalTypeRegistry;
 use App\Modules\Auth\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -31,23 +33,10 @@ use Illuminate\Support\Facades\DB;
  */
 class ApprovalBoardService
 {
-    /** Approvable types we know how to display. */
-    private const TYPE_MAP = [
-        'App\\Modules\\Leave\\Models\\LeaveRequest'       => ['kind' => 'leave',    'table' => 'leave_requests',    'number' => 'leave_request_no', 'link' => '/hr/leaves/'],
-        'App\\Modules\\Purchasing\\Models\\PurchaseRequest' => ['kind' => 'pr',     'table' => 'purchase_requests', 'number' => 'pr_number',        'link' => '/purchasing/purchase-requests/'],
-        'App\\Modules\\Purchasing\\Models\\PurchaseOrder'   => ['kind' => 'po',     'table' => 'purchase_orders',   'number' => 'po_number',        'link' => '/purchasing/purchase-orders/'],
-        'App\\Modules\\Loans\\Models\\EmployeeLoan'         => ['kind' => 'loan',   'table' => 'employee_loans',    'number' => 'loan_no',          'link' => '/hr/loans/'],
-        'App\\Modules\\Payroll\\Models\\PayrollPeriod'      => ['kind' => 'payroll','table' => 'payroll_periods',   'number' => null,              'link' => '/payroll/periods/'],
-    ];
-
     /** @return array<int, array{value:string,label:string}> */
     public function kindOptions(): array
     {
-        $labels = ['leave' => 'Leave', 'pr' => 'Purchase requests', 'po' => 'Purchase orders', 'loan' => 'Loans', 'payroll' => 'Payroll'];
-        return array_values(array_map(
-            static fn (string $kind): array => ['value' => $kind, 'label' => $labels[$kind] ?? $kind],
-            array_unique(array_column(self::TYPE_MAP, 'kind')),
-        ));
+        return ApprovalTypeRegistry::kindOptions();
     }
 
     /**
@@ -57,31 +46,64 @@ class ApprovalBoardService
      *   approved: array<int, array<string, mixed>>,
      *   rejected: array<int, array<string, mixed>>,
      *   summary: array<string, int>,
+     *   meta: array<string, int|bool>,
      * }
      */
-    public function board(User $user, ?string $kindFilter = null): array
+    public function board(User $user, ?string $kindFilter = null, int $pendingLimit = 100, int $historyLimit = 50): array
     {
+        $pendingLimit = max(1, min($pendingLimit, 500));
+        $historyLimit = max(1, min($historyLimit, 500));
         $userRoleSlugs = $this->roleSlugsFor($user);
         $recentDays = app(SettingsService::class)->requiredInt('approvals.recent_history_days', 1, 3650);
         $historySince = Carbon::now()->subDays($recentDays);
 
         // Pull pending approvals (open columns).
-        $pending = DB::table('approval_records')
+        $pendingQuery = DB::table('approval_records')
             ->select(['id', 'approvable_type', 'approvable_id', 'step_order', 'role_slug', 'created_at'])
             ->where('action', 'pending')
+            ->where('is_current', true)
             ->orderBy('approvable_type')
             ->orderBy('approvable_id')
-            ->orderBy('step_order')
-            ->get();
+            ->orderBy('step_order');
+
+        if ($kindFilter !== null) {
+            $types = [];
+            foreach (ApprovalTypeRegistry::all() as $class => $meta) {
+                if ($meta['kind'] === $kindFilter) {
+                    $types[] = $class;
+                }
+            }
+            $pendingQuery->whereIn('approvable_type', $types);
+        }
+
+        $pendingRows = $pendingQuery->limit($pendingLimit + 1)->get();
+        $pendingTruncated = $pendingRows->count() > $pendingLimit;
+        $pending = $pendingRows->take($pendingLimit)->values();
 
         // Pull recently-actioned approvals (closed columns).
-        $actioned = DB::table('approval_records')
+        // A resubmission can leave more than one terminal step for an
+        // approvable. Fetch a bounded multiple before de-duplicating, then
+        // cap the visible cards below.
+        $actionedQuery = DB::table('approval_records')
             ->select(['id', 'approvable_type', 'approvable_id', 'step_order', 'role_slug', 'action', 'remarks', 'acted_at', 'approver_id'])
             ->whereIn('action', ['approved', 'rejected'])
+            ->where('is_current', true)
             ->where('acted_at', '>=', $historySince)
-            ->orderByDesc('acted_at')
-            ->limit(200)
+            ->orderByDesc('acted_at');
+        if ($kindFilter !== null) {
+            $types = [];
+            foreach (ApprovalTypeRegistry::all() as $class => $meta) {
+                if ($meta['kind'] === $kindFilter) {
+                    $types[] = $class;
+                }
+            }
+            $actionedQuery->whereIn('approvable_type', $types);
+        }
+        $actionedRows = $actionedQuery
+            ->limit(($historyLimit * 4) + 1)
             ->get();
+        $actionedTruncated = $actionedRows->count() > ($historyLimit * 4);
+        $actioned = $actionedRows->take($historyLimit * 4)->values();
 
         // For each approvable, find the earliest pending step (the active step).
         $activeStepByApprovable = [];
@@ -95,13 +117,30 @@ class ApprovalBoardService
         // ADV4 — batch-load source rows for active steps so we can also
         // surface the requester's role on each card without N+1.
         $activePrefetch = [];
+        $sourceIdsByTable = [];
         $creatorIds = [];
         foreach ($activeStepByApprovable as $key => $row) {
-            $meta = self::TYPE_MAP[$row->approvable_type] ?? null;
+            $meta = ApprovalTypeRegistry::forClass((string) $row->approvable_type);
             if (! $meta) continue;
-            $source = DB::table($meta['table'])->where('id', $row->approvable_id)->first();
-            if (! $source) continue;
-            $activePrefetch[$key] = ['row' => $row, 'meta' => $meta, 'source' => $source];
+            $activePrefetch[$key] = ['row' => $row, 'meta' => $meta];
+            $sourceIdsByTable[$meta['table']][] = (int) $row->approvable_id;
+        }
+        $sourcesByTable = [];
+        foreach ($sourceIdsByTable as $table => $ids) {
+            $sourcesByTable[$table] = DB::table($table)
+                ->whereIn('id', array_values(array_unique($ids)))
+                ->get()
+                ->keyBy('id');
+        }
+        foreach ($activePrefetch as $key => $entry) {
+            $meta = $entry['meta'];
+            $source = $sourcesByTable[$meta['table']]
+                ->get((int) $entry['row']->approvable_id);
+            if (! $source) {
+                unset($activePrefetch[$key]);
+                continue;
+            }
+            $activePrefetch[$key]['source'] = $source;
             if (property_exists($source, 'created_by') && $source->created_by) {
                 $creatorIds[] = (int) $source->created_by;
             }
@@ -111,12 +150,25 @@ class ApprovalBoardService
         // ADV4 — batch-load approvers for actioned cards (one query, with role).
         $approverIds = $actioned->pluck('approver_id')->filter()->map(fn ($v) => (int) $v)->unique()->all();
         $approvers = $this->loadUsersWithRole($approverIds);
+        $actionedSources = $this->loadSourcesForRows($actioned);
 
         $myAction = [];
         $awaitingOthers = [];
 
         foreach ($activePrefetch as $entry) {
-            $card = $this->cardForActive($entry['row'], $entry['meta'], $entry['source'], $creators);
+            $meta = $entry['meta'];
+            $canViewModule = ApprovalTypeRegistry::userCanView($user, $meta);
+            $isDelegatedAction = in_array($entry['row']->role_slug, $userRoleSlugs, true);
+            if (! $canViewModule && ! $isDelegatedAction) {
+                continue;
+            }
+            $card = $this->cardForActive(
+                $entry['row'],
+                $meta,
+                $entry['source'],
+                $creators,
+                redacted: ! $canViewModule,
+            );
             if ($card === null) continue;
             if ($kindFilter !== null && $card['type'] !== $kindFilter) continue;
 
@@ -136,7 +188,11 @@ class ApprovalBoardService
             if (isset($seen[$key])) continue;
             $seen[$key] = true;
 
-            $card = $this->cardForActioned($row, $approvers);
+            $meta = ApprovalTypeRegistry::forClass((string) $row->approvable_type);
+            if ($meta === null || ! ApprovalTypeRegistry::userCanView($user, $meta)) {
+                continue;
+            }
+            $card = $this->cardForActioned($row, $meta, $actionedSources, $approvers);
             if ($card === null) continue;
             if ($kindFilter !== null && $card['type'] !== $kindFilter) continue;
 
@@ -147,16 +203,25 @@ class ApprovalBoardService
         // Sort my_action by oldest first (most urgent).
         usort($myAction, fn ($a, $b) => strcmp((string) $a['since'], (string) $b['since']));
 
+        $approved = array_slice($approved, 0, $historyLimit);
+        $rejected = array_slice($rejected, 0, $historyLimit);
+
         return [
             'my_action'       => $myAction,
             'awaiting_others' => $awaitingOthers,
-            'approved'        => array_slice($approved, 0, 50),
-            'rejected'        => array_slice($rejected, 0, 50),
+            'approved'        => $approved,
+            'rejected'        => $rejected,
             'summary'         => [
                 'my_action'       => count($myAction),
                 'awaiting_others' => count($awaitingOthers),
                 'approved'        => count($approved),
                 'rejected'        => count($rejected),
+            ],
+            'meta' => [
+                'pending_limit' => $pendingLimit,
+                'history_limit' => $historyLimit,
+                'pending_truncated' => $pendingTruncated,
+                'history_truncated' => $actionedTruncated,
             ],
         ];
     }
@@ -168,7 +233,12 @@ class ApprovalBoardService
         // forward compat with multi-role assignment.
         $user->loadMissing('role');
         $slug = $user->role?->slug;
-        return $slug ? [$slug] : [];
+        $slugs = $slug ? [$slug] : [];
+
+        return array_values(array_unique(array_merge(
+            $slugs,
+            ApprovalDelegation::actsForRoles($user->id, now()),
+        )));
     }
 
     /**
@@ -176,9 +246,11 @@ class ApprovalBoardService
      * @param  array<string, mixed>  $meta     Pre-resolved type metadata.
      * @param  object  $source   Pre-fetched approvable source row.
      * @param  Collection<int, User>  $creators  Pre-loaded users keyed by id.
+     * @param  bool  $redacted  Mask module data when delegation grants action
+     *                          authority but not the module's view permission.
      * @return array<string, mixed>|null
      */
-    private function cardForActive(object $row, array $meta, object $source, Collection $creators): ?array
+    private function cardForActive(object $row, array $meta, object $source, Collection $creators, bool $redacted = false): ?array
     {
         $hashId = app('hashids')->encode((int) $row->approvable_id);
         $number = $meta['number'] ? (string) ($source->{$meta['number']} ?? $hashId) : $hashId;
@@ -198,6 +270,22 @@ class ApprovalBoardService
                     ] : null,
                 ];
             }
+        }
+
+        if ($redacted) {
+            return [
+                'id' => $hashId,
+                'type' => $meta['kind'],
+                'number' => 'Restricted',
+                'link' => '/approvals',
+                'step_order' => (int) $row->step_order,
+                'role_slug' => (string) $row->role_slug,
+                'since' => $created->toIso8601String(),
+                'age_hours' => (int) abs(Carbon::now()->diffInHours($created)),
+                'amount' => null,
+                'summary' => 'Approval assigned to your delegated role',
+                'requester' => null,
+            ];
         }
 
         return [
@@ -220,14 +308,9 @@ class ApprovalBoardService
      * @param  Collection<int, User>  $approvers  Pre-loaded users keyed by id.
      * @return array<string, mixed>|null
      */
-    private function cardForActioned(object $row, Collection $approvers): ?array
+    private function cardForActioned(object $row, array $meta, array $sources, Collection $approvers): ?array
     {
-        $meta = self::TYPE_MAP[$row->approvable_type] ?? null;
-        if ($meta === null) return null;
-
-        $source = DB::table($meta['table'])
-            ->where('id', $row->approvable_id)
-            ->first();
+        $source = $sources[$row->approvable_type.'#'.$row->approvable_id] ?? null;
         if (! $source) return null;
 
         $hashId = app('hashids')->encode((int) $row->approvable_id);
@@ -261,6 +344,28 @@ class ApprovalBoardService
             'summary'   => $this->summaryFor($meta['kind'], $source),
             'actor'     => $actor,
         ];
+    }
+
+    /** @return array<string, object> */
+    private function loadSourcesForRows(Collection $rows): array
+    {
+        $idsByTable = [];
+        foreach ($rows as $row) {
+            $meta = ApprovalTypeRegistry::forClass((string) $row->approvable_type);
+            if ($meta === null) continue;
+            $idsByTable[$meta['table']][] = (int) $row->approvable_id;
+        }
+
+        $sources = [];
+        foreach (ApprovalTypeRegistry::all() as $class => $meta) {
+            $ids = array_values(array_unique($idsByTable[$meta['table']] ?? []));
+            if ($ids === []) continue;
+            foreach (DB::table($meta['table'])->whereIn('id', $ids)->get() as $source) {
+                $sources[$class.'#'.$source->id] = $source;
+            }
+        }
+
+        return $sources;
     }
 
     /**

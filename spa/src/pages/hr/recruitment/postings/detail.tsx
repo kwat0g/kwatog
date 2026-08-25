@@ -3,8 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { LuPencil, LuTrash2, LuArchiveRestore } from '@/lib/icons';
 import { recruitmentApi } from '@/api/recruitment';
-import { ArchiveFilter } from '@/components/ui/ArchiveFilter';
-import type { ArchiveScope } from '@/lib/archiveScope';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -42,7 +40,8 @@ export default function PostingDetailPage() {
  const { can } = usePermission();
  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
  const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
- const [scope, setScope] = useState<ArchiveScope>('active');
+ const [applicationPage, setApplicationPage] = useState(1);
+ const [applicationPerPage, setApplicationPerPage] = useState(20);
 
  const { data: posting, isLoading, isError, refetch } = useQuery({
  queryKey: ['recruitment-posting', id],
@@ -51,8 +50,12 @@ export default function PostingDetailPage() {
  });
 
  const { data: appsData } = useQuery({
- queryKey: ['recruitment-applications', { job_posting_id: id }],
- queryFn: () => recruitmentApi.listApplications({ job_posting_id: id }).then((r) => r.data),
+ queryKey: ['recruitment-applications', { job_posting_id: id, page: applicationPage, per_page: applicationPerPage }],
+ queryFn: () => recruitmentApi.listApplications({
+  job_posting_id: id,
+  page: applicationPage,
+  per_page: applicationPerPage,
+ }).then((r) => r.data),
  enabled: !!id,
  });
  const { data: recruitmentOptions } = useQuery({
@@ -62,6 +65,7 @@ export default function PostingDetailPage() {
  });
  const stageLabel = new Map((recruitmentOptions?.application_stages ?? []).map((stage) => [stage.value, stage.label]));
  const postingStatusLabel = new Map((recruitmentOptions?.posting_statuses ?? []).map((status) => [status.value, status.label]));
+ const isArchived = Boolean(posting?.deleted_at);
 
  const statusMutation = useMutation({
  mutationFn: (status: string) => recruitmentApi.changePostingStatus(id!, status),
@@ -87,8 +91,7 @@ export default function PostingDetailPage() {
   queryClient.invalidateQueries({ queryKey: ['recruitment-posting', id] });
   toast.success('Posting restored.');
   setShowRestoreConfirm(false);
-  setScope('active');
-  },
+ },
   onError: () => toast.error('Failed to restore posting.'),
  });
 
@@ -137,7 +140,7 @@ export default function PostingDetailPage() {
  Close
  </Button>
  )}
- {scope === 'only' ? (
+ {isArchived ? (
   <Button variant="secondary" size="sm" icon={<LuArchiveRestore size={12} />} onClick={() => setShowRestoreConfirm(true)}>
   Restore
   </Button>
@@ -150,10 +153,6 @@ export default function PostingDetailPage() {
  ) : undefined
  }
  />
-
- <div className="flex items-center gap-2 px-5 pt-4">
-  <ArchiveFilter value={scope} onChange={setScope} />
- </div>
 
  <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 px-5 py-4">
  <div className="space-y-4">
@@ -178,7 +177,7 @@ export default function PostingDetailPage() {
  </Panel>
 
  <Panel
- title={`Applications (${appsData?.data?.length ?? 0})`}
+ title={`Applications (${appsData?.meta?.total ?? posting.application_count ?? 0})`}
  noPadding
  >
  {appsData?.data?.length ? (
@@ -186,6 +185,9 @@ export default function PostingDetailPage() {
  onRowClick={(row) => navigate(`/hr/recruitment/applications/${row.id}`)}
  columns={appColumns}
  data={appsData.data}
+ meta={appsData.meta}
+ onPageChange={(page) => setApplicationPage(page)}
+ onPageSizeChange={(perPage) => { setApplicationPerPage(perPage); setApplicationPage(1); }}
  />
  ) : (
  <EmptyState

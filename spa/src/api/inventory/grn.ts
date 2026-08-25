@@ -12,6 +12,13 @@ export interface ReceiveGoodsData {
  location_id: string;
  quantity_received: string;
  unit_cost?: string;
+ received_uom_code?: string;
+ lot_number?: string;
+ material_lot_number?: string;
+ supplier_lot_reference?: string;
+ expiry_date?: string;
+ moisture_percentage?: string;
+ coa_document_path?: string;
  remarks?: string;
  }>;
  qc: {

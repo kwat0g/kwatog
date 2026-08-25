@@ -21,27 +21,29 @@ class UserPermissionOverrideResource extends JsonResource
             : (string) $this->type;
 
         return [
-            'id'         => $this->hash_id,
-            'type'       => $type,
+            'id' => $this->hash_id,
+            'type' => $type,
             'type_label' => Str::headline($type),
             'permission' => $this->whenLoaded('permission', fn () => [
-                'id'          => $this->permission->hash_id,
-                'slug'        => $this->permission->slug,
-                'name'        => $this->permission->name,
-                'module'      => $this->permission->module,
+                'id' => $this->permission->hash_id,
+                'slug' => $this->permission->slug,
+                'name' => $this->permission->name,
+                'module' => $this->permission->module,
                 'description' => $this->permission->description,
             ]),
             'granted_by' => $this->whenLoaded('grantedBy', fn () => $this->grantedBy
                 ? [
-                    'id'    => $this->grantedBy->hash_id,
-                    'name'  => $this->grantedBy->name,
+                    'id' => $this->grantedBy->hash_id,
+                    'name' => $this->grantedBy->name,
                     'email' => $this->grantedBy->email,
                 ]
                 : null
             ),
-            'reason'     => $this->reason,
+            'reason' => $this->reason,
             'expires_at' => $this->expires_at?->toISOString(),
             'is_expired' => $this->isExpired(),
+            'is_deleted' => $this->deleted_at !== null,
+            'deleted_at' => $this->deleted_at?->toISOString(),
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
         ];

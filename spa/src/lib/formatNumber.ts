@@ -10,6 +10,11 @@ const decimal = new Intl.NumberFormat('en-PH', {
  maximumFractionDigits: 2,
 });
 
+const quantity = new Intl.NumberFormat('en-PH', {
+ minimumFractionDigits: 3,
+ maximumFractionDigits: 3,
+});
+
 const percent = new Intl.NumberFormat('en-PH', {
  style: 'percent',
  minimumFractionDigits: 1,
@@ -49,6 +54,12 @@ export function formatInt(value: number | string | null | undefined, fallback = 
 export function formatDecimal(value: number | string | null | undefined, fallback = '—'): string {
  const n = toNumber(value);
  return n === null ? fallback : decimal.format(n);
+}
+
+/** Inventory quantities use the API's three-decimal precision, including zeroes. */
+export function formatQuantity(value: number | string | null | undefined, fallback = '—'): string {
+ const n = toNumber(value);
+ return n === null ? fallback : quantity.format(n);
 }
 
 export function formatPercent(value: number | string | null | undefined, fallback = '—'): string {

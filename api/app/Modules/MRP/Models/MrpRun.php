@@ -22,8 +22,8 @@ class MrpRun extends Model
     protected $fillable = [
         'run_at', 'started_at', 'heartbeat_at', 'triggered_by', 'triggered_by_user_id',
         'sales_orders_evaluated', 'shortages_found', 'prs_created',
-        'prs_updated', 'plans_generated', 'duration_ms',
-        'status', 'error_message', 'summary',
+        'prs_updated', 'plans_generated', 'failed_sales_orders', 'duration_ms',
+        'status', 'error_message', 'error_code', 'recovery_action', 'summary',
     ];
 
     protected $casts = [
@@ -38,6 +38,7 @@ class MrpRun extends Model
         'prs_created'            => 'integer',
         'prs_updated'            => 'integer',
         'plans_generated'        => 'integer',
+        'failed_sales_orders'    => 'integer',
         'duration_ms'            => 'integer',
     ];
 

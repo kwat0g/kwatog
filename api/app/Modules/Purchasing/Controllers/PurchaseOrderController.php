@@ -7,9 +7,11 @@ namespace App\Modules\Purchasing\Controllers;
 use App\Common\Services\SettingsService;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
+use App\Modules\SupplyChain\Enums\Incoterm;
 use App\Modules\Purchasing\Requests\CancelPurchaseOrderRequest;
 use App\Modules\Purchasing\Requests\StorePurchaseOrderRequest;
 use App\Modules\Purchasing\Requests\UpdatePurchaseOrderRequest;
+use App\Modules\Purchasing\Requests\RejectPurchaseOrderRequest;
 use App\Modules\Purchasing\Resources\PurchaseOrderResource;
 use App\Modules\Purchasing\Services\PurchaseOrderPdfService;
 use App\Modules\Purchasing\Services\PurchaseOrderService;
@@ -39,6 +41,10 @@ class PurchaseOrderController
                 'value' => $status->value,
                 'label' => str_replace('_', ' ', ucfirst($status->value)),
             ], PurchaseOrderStatus::cases()),
+            'incoterms' => array_map(static fn (Incoterm $term): array => [
+                'value' => $term->value,
+                'label' => $term->label(),
+            ], Incoterm::cases()),
             'approval_sla_hours' => $this->settings->requiredInt('approvals.reminder_hours', 1),
         ]]);
     }
@@ -74,7 +80,11 @@ class PurchaseOrderController
 
     public function restore(PurchaseOrder $purchaseOrder): JsonResponse
     {
-        $purchaseOrder->restore();
+        try {
+            $this->service->restore($purchaseOrder);
+        } catch (BusinessRuleException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
         return response()->json(['message' => 'Purchase order restored.']);
     }
 
@@ -99,10 +109,9 @@ class PurchaseOrderController
         return new PurchaseOrderResource($this->service->show($po));
     }
 
-    public function reject(Request $request, PurchaseOrder $purchaseOrder): PurchaseOrderResource
+    public function reject(RejectPurchaseOrderRequest $request, PurchaseOrder $purchaseOrder): PurchaseOrderResource
     {
-        $reason = $request->input('reason');
-        if (! $reason) abort(422, 'Reason is required.');
+        $reason = $request->validated()['reason'];
         try { $po = $this->service->reject($purchaseOrder, $request->user(), $reason); }
         catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
         return new PurchaseOrderResource($this->service->show($po));

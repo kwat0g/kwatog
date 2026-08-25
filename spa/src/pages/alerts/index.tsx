@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import {
  LuTriangleAlert, LuCircleAlert, LuInfo, LuX, LuBoxes, LuFactory, LuWrench, LuReceipt, LuFileText,
- LuShieldCheck, LuClock,
+ LuShieldCheck, LuClock, LuEye,
 } from '@/lib/icons';
 import { alertsApi } from '@/api/alerts';
 import type { Alert, AlertListParams, AlertSeverity, AlertType } from '@/types/alerts';
@@ -14,6 +14,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { LinkButton } from '@/components/ui/LinkButton';
 import { ToggleChip } from '@/components/ui/SegmentedControl';
+import { DataTablePagination } from '@/components/ui/DataTablePagination';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDateTime } from '@/lib/formatDate';
@@ -31,10 +32,12 @@ const TYPE_ICON: Record<AlertType, typeof LuCircleAlert> = {
  ar_overdue_60: LuReceipt,
  ap_due_soon: LuFileText,
  qc_fail_rate_high: LuShieldCheck,
+ chain_bottleneck: LuFactory,
  mrp_shortage: LuBoxes,
  mrp_schedule_conflict: LuFactory,
  mrp_run_failed: LuTriangleAlert,
  mrp_data_error: LuTriangleAlert,
+ scheduler_stale: LuClock,
 };
 
 const severityVariant = (s: AlertSeverity): 'danger' | 'warning' | 'info' =>
@@ -73,6 +76,15 @@ export default function AlertsListPage() {
  onError: () => toast.error('Failed to dismiss alert'),
  });
 
+ const markRead = useMutation({
+ mutationFn: (id: string) => alertsApi.markRead(id),
+ onSuccess: () => {
+ queryClient.invalidateQueries({ queryKey: ['alerts'] });
+ queryClient.invalidateQueries({ queryKey: ['alerts', 'unread-count'] });
+ },
+ onError: () => toast.error('Failed to mark alert as read'),
+ });
+
  const toggleSeverity = (sev: AlertSeverity) => {
  setFilters((f) => {
  const cur = f.severity ?? [];
@@ -95,7 +107,7 @@ export default function AlertsListPage() {
  <div>
  <PageHeader
  title="Alerts"
- subtitle={data ? `${total} active ${total === 1 ? 'alert' : 'alerts'}` : undefined}
+ subtitle={data ? `${total} ${filters.is_dismissed ? 'dismissed' : 'active'} ${total === 1 ? 'alert' : 'alerts'}` : undefined}
  />
 
  <div className="px-5 pb-3 flex items-center gap-2 flex-wrap">
@@ -196,6 +208,19 @@ export default function AlertsListPage() {
  {formatDateTime(a.created_at)}
  </p>
  </div>
+ <div className="flex items-center gap-1 shrink-0">
+ {!a.is_read && (
+ <Button
+ variant="ghost"
+ size="sm"
+ iconOnly
+ icon={<LuEye size={13} />}
+ onClick={() => markRead.mutate(a.id)}
+ disabled={markRead.isPending}
+ aria-label={`Mark alert as read: ${a.title}`}
+ className="text-muted hover:text-primary"
+ />
+ )}
  {!a.is_dismissed && can('alerts.dismiss') && (
  <Button
  variant="secondary"
@@ -209,12 +234,21 @@ export default function AlertsListPage() {
  </Button>
  )}
  </div>
+ </div>
  );
  })}
  </div>
  </section>
  );
  })}
+ {data.meta.last_page > 1 && (
+ <DataTablePagination
+ meta={data.meta}
+ perPage={filters.per_page}
+ onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+ onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
+ />
+ )}
  </div>
  )}
  </div>

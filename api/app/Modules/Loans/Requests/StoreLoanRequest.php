@@ -31,7 +31,7 @@ class StoreLoanRequest extends FormRequest
         return [
             'employee_id' => ['required', 'string'],
             'loan_type'   => ['required', Rule::in(LoanType::values())],
-            'principal'   => ['required', 'numeric', 'min:1'],
+            'principal'   => ['required', 'numeric', 'decimal:0,2', 'min:1'],
             'pay_periods' => ['required', 'integer', 'min:1', 'max:'.$maxPeriods],
             'purpose'     => ['nullable', 'string', 'max:1000'],
         ];

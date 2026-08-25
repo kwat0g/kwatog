@@ -28,7 +28,7 @@ class WorkOrderOutputResource extends JsonResource
             'shift'        => $this->shift,
             'batch_code'   => $this->batch_code,
             'remarks'      => $this->remarks,
-            'material_lineage' => $this->material_lineage,
+            'material_lineage' => $this->normalizeMaterialLineage($this->material_lineage),
             'production_receipt_handoff' => [
                 'status' => $this->production_receipt_handoff_status instanceof ProductionReceiptHandoffStatus
                     ? $this->production_receipt_handoff_status->value
@@ -60,5 +60,41 @@ class WorkOrderOutputResource extends JsonResource
                 ])
             ),
         ];
+    }
+
+    private function normalizeMaterialLineage(mixed $lineage): mixed
+    {
+        if (! is_array($lineage)) {
+            return $lineage;
+        }
+
+        if (array_key_exists('authorized_by', $lineage)) {
+            $lineage['authorized_by'] = $this->hashId($lineage['authorized_by']);
+        }
+
+        if (is_array($lineage['materials'] ?? null)) {
+            $lineage['materials'] = array_map(function (array $material): array {
+                if (array_key_exists('item_id', $material)) {
+                    $material['item_id'] = $this->hashId($material['item_id']);
+                }
+
+                return $material;
+            }, $lineage['materials']);
+        }
+
+        return $lineage;
+    }
+
+    private function hashId(mixed $id): ?string
+    {
+        if ($id === null || $id === '') {
+            return null;
+        }
+
+        if (is_string($id) && ! ctype_digit($id)) {
+            return $id;
+        }
+
+        return app('hashids')->encode((int) $id);
     }
 }

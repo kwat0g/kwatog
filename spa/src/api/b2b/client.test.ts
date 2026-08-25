@@ -16,6 +16,14 @@ describe('createPortalClient', () => {
  expect(client.defaults.headers.common.Authorization).toBeUndefined();
  });
 
+ it('defaults to credentialed cookie requests without browser token storage', () => {
+ const { client } = createPortalClient();
+
+ expect(client.defaults.withCredentials).toBe(true);
+ expect(client.defaults.headers.common.Authorization).toBeUndefined();
+ expect(window.sessionStorage.length).toBe(0);
+ });
+
  it('creates isolated clients for each portal', () => {
  const supplier = createPortalClient();
  const customer = createPortalClient();

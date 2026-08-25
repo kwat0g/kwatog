@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Tests\Feature\HR;
 
 use App\Modules\Auth\Models\User;
+use App\Common\Services\SettingsService;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Loans\Enums\LoanStatus;
+use App\Modules\Loans\Enums\LoanType;
 use App\Modules\Loans\Events\LoanSubmitted;
 use App\Modules\Loans\Models\EmployeeLoan;
 use Database\Seeders\WorkflowSeeder;
@@ -95,5 +97,34 @@ class SelfServiceLoanLifecycleTest extends TestCase
             ->assertJsonFragment(['message' => 'An active or pending cash_advance already exists for this employee.']);
 
         $this->assertSame(1, EmployeeLoan::query()->where('employee_id', $employee->id)->count());
+    }
+
+    public function test_history_limit_keeps_all_active_loans_but_caps_completed_history(): void
+    {
+        $employee = Employee::factory()->create(['basic_monthly_salary' => 30000]);
+        $user = User::factory()->create(['employee_id' => $employee->id]);
+        app(SettingsService::class)->set('self_service.history_limit', 1);
+
+        EmployeeLoan::factory()->create([
+            'employee_id' => $employee->id,
+            'loan_type' => LoanType::CompanyLoan->value,
+            'status' => LoanStatus::Active->value,
+        ]);
+        EmployeeLoan::factory()->create([
+            'employee_id' => $employee->id,
+            'loan_type' => LoanType::CashAdvance->value,
+            'status' => LoanStatus::Paid->value,
+        ]);
+        EmployeeLoan::factory()->create([
+            'employee_id' => $employee->id,
+            'loan_type' => LoanType::CashAdvance->value,
+            'status' => LoanStatus::Cancelled->value,
+        ]);
+
+        $this->actingAs($user)
+            ->getJson('/api/v1/hr/self-service/loans')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.active')
+            ->assertJsonCount(1, 'data.history');
     }
 }

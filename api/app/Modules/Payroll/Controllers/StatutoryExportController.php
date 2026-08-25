@@ -22,14 +22,37 @@ class StatutoryExportController
         return response($body, 200, [
             'Content-Type' => 'text/csv; charset=UTF-8',
             'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+            'Cache-Control' => 'private, no-store, max-age=0, must-revalidate',
+            'Pragma' => 'no-cache',
+            'X-Content-Type-Options' => 'nosniff',
         ]);
+    }
+
+    /** @return array{0:int, 1:int} */
+    private function yearMonth(Request $request): array
+    {
+        $validated = $request->validate([
+            'year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
+            'month' => ['nullable', 'integer', 'min:1', 'max:12'],
+        ]);
+
+        return [
+            (int) ($validated['year'] ?? now()->year),
+            (int) ($validated['month'] ?? now()->month),
+        ];
+    }
+
+    private function year(Request $request): int
+    {
+        return (int) ($request->validate([
+            'year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
+        ])['year'] ?? now()->year);
     }
 
     public function bir1601c(Request $request, Bir1601CService $service): Response
     {
         abort_unless($request->user()?->can('payroll.statutory.export'), 403);
-        $year = (int) $request->query('year', now()->year);
-        $month = (int) $request->query('month', now()->month);
+        [$year, $month] = $this->yearMonth($request);
         $data = $service->generate($year, $month);
 
         return $this->csv($service->toCsv($data), sprintf('BIR-1601-C-%04d-%02d.csv', $year, $month));
@@ -38,8 +61,7 @@ class StatutoryExportController
     public function philhealthRf1(Request $request, PhilhealthRf1Service $service): Response
     {
         abort_unless($request->user()?->can('payroll.statutory.export'), 403);
-        $year = (int) $request->query('year', now()->year);
-        $month = (int) $request->query('month', now()->month);
+        [$year, $month] = $this->yearMonth($request);
 
         return $this->csv($service->toCsv($service->generate($year, $month)),
             sprintf('PhilHealth-RF1-%04d-%02d.csv', $year, $month));
@@ -48,8 +70,7 @@ class StatutoryExportController
     public function pagibigMcrf(Request $request, PagibigMcrfService $service): Response
     {
         abort_unless($request->user()?->can('payroll.statutory.export'), 403);
-        $year = (int) $request->query('year', now()->year);
-        $month = (int) $request->query('month', now()->month);
+        [$year, $month] = $this->yearMonth($request);
 
         return $this->csv($service->toCsv($service->generate($year, $month)),
             sprintf('PagIBIG-MCRF-%04d-%02d.csv', $year, $month));
@@ -58,7 +79,7 @@ class StatutoryExportController
     public function bir1604cf(Request $request, Bir1604CfService $service): Response
     {
         abort_unless($request->user()?->can('payroll.statutory.export'), 403);
-        $year = (int) $request->query('year', now()->year);
+        $year = $this->year($request);
 
         return $this->csv($service->toCsv($service->generate($year)), sprintf('BIR-1604-CF-%04d.csv', $year));
     }
@@ -76,10 +97,16 @@ class StatutoryExportController
     {
         abort_unless($request->user()?->can('payroll.statutory.export'), 403);
 
-        return $spreadsheets->download(
+        $response = $spreadsheets->download(
             new SssR3Export($period),
             sprintf('SSS-R3-%s.xlsx', $period->period_start?->format('Y-m') ?? 'period'),
             ExportFormat::Xlsx,
         );
+
+        $response->headers->set('Cache-Control', 'private, no-store, max-age=0, must-revalidate');
+        $response->headers->set('Pragma', 'no-cache');
+        $response->headers->set('X-Content-Type-Options', 'nosniff');
+
+        return $response;
     }
 }

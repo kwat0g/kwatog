@@ -99,7 +99,7 @@ export default function DriverDeliveryDetail() {
   // same pixel is "Mark in transit" on one load and "Mark delivered" on the next.
   // Naming the transition in a sheet is the only thing standing between a
   // mis-tap and a delivery confirmed at the wrong gate.
-  const isCustomerConfirm = next === 'delivered';
+  const isDeliveryCompletion = next === 'delivered';
 
   return (
     <div className="space-y-4">
@@ -161,7 +161,7 @@ export default function DriverDeliveryDetail() {
         onConfirm={() => confirming && transition.mutate(confirming)}
         title={label ? `${label}?` : 'Advance this delivery?'}
         confirmLabel={advanceLabel || (label ?? 'Confirm')}
-        variant={isCustomerConfirm ? 'danger' : 'primary'}
+        variant="primary"
         pending={transition.isPending}
       >
         <p>
@@ -181,8 +181,8 @@ export default function DriverDeliveryDetail() {
           </span>
           .
         </p>
-        {isCustomerConfirm && (
-          <p>Marking delivered records customer receipt. Capture the receipt photo first.</p>
+        {isDeliveryCompletion && (
+          <p>Marking delivered records arrival at the customer site. Afterward, upload the signed receipt photo as delivery evidence.</p>
         )}
       </TouchConfirmSheet>
     </div>

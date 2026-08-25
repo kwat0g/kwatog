@@ -125,6 +125,14 @@ export default function TrainingMatrixPage() {
  </div>
  )}
 
+ {data?.meta?.truncated && (
+  <div className="mx-5 mt-4 rounded-md border border-warning bg-warning-bg px-3 py-2 text-sm text-warning-fg" role="alert">
+   Showing the first {data.meta.employee_limit} employees and {data.meta.skill_limit} skills of{' '}
+   {data.meta.total_employees} employees and {data.meta.total_skills} skills. Narrow the department
+   filter to inspect the complete matrix safely.
+  </div>
+ )}
+
  {/* Loading skeleton */}
  {isLoading && (
  <div className="px-5 py-4">

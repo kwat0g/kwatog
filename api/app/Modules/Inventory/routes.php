@@ -69,19 +69,19 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
     Route::get('/warehouse/options', [WarehouseController::class, 'options'])->middleware('permission:inventory.view');
     Route::get('/warehouse', [WarehouseController::class, 'tree'])->middleware('permission:inventory.view');
     Route::get('/warehouses', [WarehouseController::class, 'indexWarehouses'])->middleware('permission:inventory.view');
-    Route::post('/warehouses', [WarehouseController::class, 'storeWarehouse'])->middleware('permission:inventory.items.manage');
-    Route::put('/warehouses/{warehouse}', [WarehouseController::class, 'updateWarehouse'])->middleware('permission:inventory.items.manage');
-    Route::delete('/warehouses/{warehouse}', [WarehouseController::class, 'destroyWarehouse'])->middleware('permission:inventory.items.manage');
+    Route::post('/warehouses', [WarehouseController::class, 'storeWarehouse'])->middleware('permission:inventory.warehouse.manage');
+    Route::put('/warehouses/{warehouse}', [WarehouseController::class, 'updateWarehouse'])->middleware('permission:inventory.warehouse.manage');
+    Route::delete('/warehouses/{warehouse}', [WarehouseController::class, 'destroyWarehouse'])->middleware('permission:inventory.warehouse.manage');
     Route::patch('/warehouses/{warehouse}/restore', [WarehouseController::class, 'restoreWarehouse'])->middleware('permission:inventory.warehouse.manage');
 
-    Route::post('/zones', [WarehouseController::class, 'storeZone'])->middleware('permission:inventory.items.manage');
-    Route::put('/zones/{zone}', [WarehouseController::class, 'updateZone'])->middleware('permission:inventory.items.manage');
-    Route::delete('/zones/{zone}', [WarehouseController::class, 'destroyZone'])->middleware('permission:inventory.items.manage');
+    Route::post('/zones', [WarehouseController::class, 'storeZone'])->middleware('permission:inventory.warehouse.manage');
+    Route::put('/zones/{zone}', [WarehouseController::class, 'updateZone'])->middleware('permission:inventory.warehouse.manage');
+    Route::delete('/zones/{zone}', [WarehouseController::class, 'destroyZone'])->middleware('permission:inventory.warehouse.manage');
     Route::patch('/zones/{zone}/restore', [WarehouseController::class, 'restoreZone'])->middleware('permission:inventory.warehouse.manage');
 
-    Route::post('/locations', [WarehouseController::class, 'storeLocation'])->middleware('permission:inventory.items.manage');
-    Route::put('/locations/{location}', [WarehouseController::class, 'updateLocation'])->middleware('permission:inventory.items.manage');
-    Route::delete('/locations/{location}', [WarehouseController::class, 'destroyLocation'])->middleware('permission:inventory.items.manage');
+    Route::post('/locations', [WarehouseController::class, 'storeLocation'])->middleware('permission:inventory.warehouse.manage');
+    Route::put('/locations/{location}', [WarehouseController::class, 'updateLocation'])->middleware('permission:inventory.warehouse.manage');
+    Route::delete('/locations/{location}', [WarehouseController::class, 'destroyLocation'])->middleware('permission:inventory.warehouse.manage');
     Route::patch('/locations/{location}/restore', [WarehouseController::class, 'restoreLocation'])->middleware('permission:inventory.warehouse.manage');
 
     /* ─── Stock ─── */
@@ -152,6 +152,7 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
     /* ─── REC-08 — Material Review Board (hold / quarantine nonconforming stock) ─── */
     Route::get('/mrb/options', [MrbController::class, 'options'])->middleware('permission:inventory.mrb.view');
     Route::get('/mrb', [MrbController::class, 'index'])->middleware('permission:inventory.mrb.view');
+    Route::get('/mrb/quality-options', [MrbController::class, 'qualityOptions'])->middleware('permission:inventory.mrb.view');
     Route::get('/mrb/{mrb}', [MrbController::class, 'show'])->middleware('permission:inventory.mrb.view');
     Route::post('/mrb', [MrbController::class, 'store'])->middleware('permission:inventory.mrb.manage');
     Route::post('/mrb/{mrb}/release', [MrbController::class, 'release'])->middleware('permission:inventory.mrb.manage');

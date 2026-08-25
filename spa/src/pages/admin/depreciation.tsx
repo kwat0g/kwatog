@@ -1,6 +1,7 @@
 /** Sprint 8 — Task 70. Manual monthly depreciation runner. Idempotent. */
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
+import { isAxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { depreciationApi } from '@/api/assets';
 import { Button } from '@/components/ui/Button';
@@ -11,17 +12,17 @@ import { formatPeso } from '@/lib/formatNumber';
 
 export default function DepreciationRunsPage() {
  const now = new Date();
- const [year, setYear] = useState<number>(now.getFullYear());
- const [month, setMonth] = useState<number>(now.getMonth()); // previous month by default (0-indexed = previous)
+ const previousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+ const [year, setYear] = useState<number>(previousMonth.getFullYear());
+ const [month, setMonth] = useState<number>(previousMonth.getMonth() + 1);
 
  const run = useMutation({
  mutationFn: () => depreciationApi.runMonth(year, month),
- // eslint-disable-next-line @typescript-eslint/no-explicit-any
- onSuccess: (res: any) => {
- const d = res.data ?? res;
+ onSuccess: (res) => {
+ const d = (res.data ?? res) as { posted_count?: number; total_amount?: string };
  toast.success(`Posted ${d.posted_count ?? '—'} entries totalling ${formatPeso(d.total_amount)}.`);
  },
- onError: () => toast.error('Failed to run depreciation.'),
+ onError: (error) => toast.error(isAxiosError(error) ? error.response?.data?.message ?? 'Failed to run depreciation.' : 'Failed to run depreciation.'),
  });
 
  return (

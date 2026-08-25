@@ -14,7 +14,6 @@ use App\Modules\HR\Enums\SeparationReason;
 use App\Modules\HR\Enums\EmployeeSkillLevel;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\JobApplication;
-use App\Modules\HR\Requests\SeparateEmployeeRequest;
 use App\Modules\HR\Requests\StoreEmployeeRequest;
 use App\Modules\HR\Requests\UpdateEmployeeRequest;
 use App\Modules\HR\Resources\EmployeeResource;
@@ -23,6 +22,7 @@ use App\Modules\HR\Services\RecruitmentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -154,17 +154,42 @@ class EmployeeController
         $fromApplication = $data['from_application'] ?? null;
         unset($data['from_application']);
 
-        $employee = $this->service->create($data);
-
+        $application = null;
         if ($fromApplication) {
-            $decoded = app('hashids')->decode($fromApplication);
-            if (! empty($decoded)) {
-                $application = JobApplication::find($decoded[0]);
-                if ($application && $application->stage === ApplicationStage::Hired) {
-                    $this->recruitmentService->markConverted($application, $employee);
-                }
+            $applicationId = JobApplication::tryDecodeHash((string) $fromApplication);
+            abort_if($applicationId === null, 422, 'Invalid application.');
+
+            $application = JobApplication::findOrFail($applicationId);
+            abort_unless(
+                $application->stage === ApplicationStage::Hired,
+                422,
+                'Only hired applications can be converted.',
+            );
+
+            // The conversion endpoint is replay-safe: a client retry after a
+            // lost response returns the employee already linked to this
+            // application instead of creating a second employee.
+            if ($application->converted_employee_id) {
+                $existing = Employee::withTrashed()->find($application->converted_employee_id);
+                abort_if($existing === null, 409, 'The application links to a missing employee.');
+
+                return (new EmployeeResource($existing))->response()->setStatusCode(200);
             }
         }
+
+        // EmployeeService has its own transaction. Keeping the recruitment
+        // link in this outer transaction makes the nested work atomic: a
+        // failed application handoff rolls back the employee and its outbox
+        // record together with the recruitment update.
+        $employee = DB::transaction(function () use ($data, $application, $request): Employee {
+            $employee = $this->service->create($data);
+
+            if ($application) {
+                $this->recruitmentService->markConverted($application, $employee, $request->user());
+            }
+
+            return $employee;
+        });
 
         return (new EmployeeResource($employee))->response()->setStatusCode(201);
     }
@@ -228,11 +253,6 @@ class EmployeeController
     {
         $employee->restore();
         return response()->json(['message' => 'Employee restored.']);
-    }
-
-    public function separate(SeparateEmployeeRequest $request, Employee $employee): EmployeeResource
-    {
-        return new EmployeeResource($this->service->separate($employee, $request->validated()));
     }
 
     /**

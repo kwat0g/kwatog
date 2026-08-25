@@ -57,7 +57,11 @@ class PriceAgreementController
 
     public function restore(PriceAgreement $priceAgreement): JsonResponse
     {
-        $priceAgreement->restore();
+        try {
+            $this->service->restore($priceAgreement);
+        } catch (BusinessRuleException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
         return response()->json(['message' => 'Price agreement restored.']);
     }
 

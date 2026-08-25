@@ -1,4 +1,4 @@
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { LuRefreshCw } from '@/lib/icons';
 import toast from 'react-hot-toast';
@@ -60,17 +60,25 @@ export default function SupplierPerformancePage() {
       backLabel="Vendors"
       subtitle={d ? d.vendor.name : undefined}
       actions={
-        can('purchasing.suppliers.performance.recompute') && (
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={<LuRefreshCw size={14} />}
-            disabled={recompute.isPending}
-            onClick={() => recompute.mutate()}
+        <div className="flex items-center gap-2">
+          <Link
+            to="/purchasing/suppliers/performance"
+            className="text-xs text-link hover:underline"
           >
-            {recompute.isPending ? 'Recomputing…' : 'Recompute now'}
-          </Button>
-        )
+            View ranking
+          </Link>
+          {can('purchasing.suppliers.performance.recompute') && (
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<LuRefreshCw size={14} />}
+              disabled={recompute.isPending}
+              onClick={() => recompute.mutate()}
+            >
+              {recompute.isPending ? 'Recomputing…' : 'Recompute now'}
+            </Button>
+          )}
+        </div>
       }
     />
   );
@@ -232,9 +240,13 @@ export default function SupplierPerformancePage() {
       {/* Trend (simple bars) */}
       {data.trend.length > 1 && (
         <div className="px-5 py-4 border-t border-default">
-          <h3 className="text-sm font-medium mb-3">6-month trend</h3>
-          <div className="bg-surface border border-default rounded-md p-4">
-            <div className="flex items-end gap-2 h-32">
+          <h3 className="text-sm font-medium mb-3">{data.policy.trend_months}-month trend</h3>
+          <div
+            className="bg-surface border border-default rounded-md p-4"
+            role="img"
+            aria-label={`Supplier score trend across ${data.trend.length} months`}
+          >
+            <div className="flex items-end gap-2 h-32" aria-hidden="true">
               {data.trend.map((p) => {
                 const v = p.overall_score === null ? 0 : Number(p.overall_score);
                 const heightPct = maxTrendScore > 0 ? (v / maxTrendScore) * 100 : 0;
@@ -262,6 +274,40 @@ export default function SupplierPerformancePage() {
                 );
               })}
             </div>
+          </div>
+          <div className="overflow-x-auto mt-3">
+            <table className="w-full border-collapse text-xs">
+              <caption className="sr-only">Supplier score trend by month</caption>
+              <thead>
+                <tr className="border-b border-default text-left text-2xs uppercase tracking-wider text-muted">
+                  <th scope="col" className="h-row px-2.5">
+                    Period
+                  </th>
+                  <th scope="col" className="h-row px-2.5 text-right">
+                    Score
+                  </th>
+                  <th scope="col" className="h-row px-2.5 text-right">
+                    Tier
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.trend.map((p) => (
+                  <tr
+                    key={`${p.period_year}-${p.period_month}`}
+                    className="h-row border-b border-subtle"
+                  >
+                    <th scope="row" className="px-2.5 py-1 text-left font-normal">
+                      {monthLabel(p.period_year, p.period_month)}
+                    </th>
+                    <td className="px-2.5 py-1 text-right font-mono tabular-nums">
+                      {p.overall_score === null ? '—' : Number(p.overall_score).toFixed(1)}
+                    </td>
+                    <td className="px-2.5 py-1 text-right">{p.tier ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

@@ -196,7 +196,16 @@ class WoOperationController
             'reason' => ['required', 'string', 'max:500'],
         ]);
 
-        $this->service->skipOperation($operation, $request->input('reason'));
+        $operator = $this->resolveOperator($request);
+        if ($operator instanceof JsonResponse) {
+            return $operator;
+        }
+
+        try {
+            $this->service->skipOperation($operation, $request->input('reason'), $operator);
+        } catch (BusinessRuleException $e) {
+            return response()->json(['message' => $e->getMessage()], 409);
+        }
 
         return new WoOperationResource($operation->fresh(['machine', 'mold', 'operator:id,first_name,last_name']));
     }

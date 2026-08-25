@@ -64,33 +64,18 @@ class AdminDashboardService
      */
     private function systemKpis(User $user): array
     {
-        $activeWindowMinutes = $this->activeWindowMinutes();
-        $activeSessions = $this->safeCount('sessions', fn ($q) =>
-            $q->where('last_activity', '>=', now()->subMinutes($activeWindowMinutes)->timestamp)
-        );
-
-        // Locked accounts right now
-        $lockedAccounts = $this->safeCount('users', fn ($q) =>
-            $q->whereNotNull('locked_until')
-              ->where('locked_until', '>', now())
-              ->whereNull('deleted_at')
-        );
-
-        $authWindowHours = $this->authHistoryWindowHours();
-        // Failed login attempts in the configured history window.
-        $failedLogins = $this->safeCount('login_history', fn ($q) =>
-            $q->whereIn('status', LoginHistoryStatus::failureValues())
-              ->where('created_at', '>=', now()->subHours($authWindowHours))
-        );
-
-        // Failed background jobs
-        $failedJobs = $this->safeCount('failed_jobs');
-
         return $this->gate->kpis($user, [
-            ['admin.users.manage',    fn () => $this->kpi('Active Sessions',     (string) $activeSessions, 'sessions')],
-            ['admin.users.manage',    fn () => $this->kpi('Locked Accounts',     (string) $lockedAccounts, 'accounts')],
-            ['admin.audit_logs.view', fn () => $this->kpi("Failed Logins ({$authWindowHours}h)", (string) $failedLogins,   'attempts')],
-            ['admin.settings.manage', fn () => $this->kpi('Failed Jobs',         (string) $failedJobs,     'jobs')],
+            ['admin.users.manage', fn () => $this->kpi('Active Sessions', (string) $this->safeCount('sessions', fn ($q) =>
+                $q->where('last_activity', '>=', now()->subMinutes($this->activeWindowMinutes())->timestamp)
+            ), 'sessions')],
+            ['admin.users.manage', fn () => $this->kpi('Locked Accounts', (string) $this->safeCount('users', fn ($q) =>
+                $q->whereNotNull('locked_until')->where('locked_until', '>', now())->whereNull('deleted_at')
+            ), 'accounts')],
+            ['admin.audit_logs.view', fn () => $this->kpi('Failed Logins ('.$this->authHistoryWindowHours().'h)', (string) $this->safeCount('login_history', fn ($q) =>
+                $q->whereIn('status', LoginHistoryStatus::failureValues())
+                    ->where('created_at', '>=', now()->subHours($this->authHistoryWindowHours()))
+            ), 'attempts')],
+            ['admin.settings.manage', fn () => $this->kpi('Failed Jobs', (string) $this->safeCount('failed_jobs'), 'jobs')],
         ]);
     }
 

@@ -105,6 +105,10 @@ class WorkOrderOutputService
             throw new BusinessRuleException("The total sum of defects ({$defectSum}) must exactly equal the Reject count ({$reject}).");
         }
 
+        if ($reject === 0 && $defectSum > 0) {
+            throw new BusinessRuleException('Defect rows require a positive Reject count.');
+        }
+
         if (count(array_unique($uniqueDefectTypes)) !== count($uniqueDefectTypes)) {
             throw new BusinessRuleException('Duplicate defect types are not allowed.');
         }
@@ -256,6 +260,9 @@ class WorkOrderOutputService
                         ? $e->reasonCode
                         : 'production_receipt_business_rule';
                     $this->markProductionReceiptManual($output->id);
+                    $wasRecentlyCreated = $output->wasRecentlyCreated;
+                    $output = $output->fresh();
+                    $output->wasRecentlyCreated = $wasRecentlyCreated;
                     Log::warning('F-04: ProductionReceipt handoff requires recovery', [
                         'wo_id' => $fresh->id,
                         'output_id' => $output->id,

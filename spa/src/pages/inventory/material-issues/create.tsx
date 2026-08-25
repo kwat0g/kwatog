@@ -29,6 +29,8 @@ const itemSchema = z.object({
  .string()
  .regex(/^\d+(\.\d{1,4})?$/, 'Valid quantity required')
  .refine((v) => Number(v) > 0, 'Must be > 0'),
+ issued_uom_code: z.string().max(20).optional().or(z.literal('')),
+ lot_number: z.string().max(50).optional().or(z.literal('')),
  remarks: z.string().max(200).optional().or(z.literal('')),
 });
 
@@ -47,7 +49,7 @@ const schema = z
 
 type FormValues = z.infer<typeof schema>;
 
-const blankLine = { item_id: '', location_id: '', quantity_issued: '', remarks: '' };
+const blankLine = { item_id: '', location_id: '', quantity_issued: '', issued_uom_code: '', lot_number: '', remarks: '' };
 
 export default function CreateMaterialIssuePage() {
  const nav = useNavigate();
@@ -107,6 +109,8 @@ export default function CreateMaterialIssuePage() {
  item_id: i.item_id,
  location_id: i.location_id,
  quantity_issued: i.quantity_issued,
+ issued_uom_code: i.issued_uom_code || undefined,
+ lot_number: i.lot_number || undefined,
  remarks: i.remarks || undefined,
  })),
  }),
@@ -191,6 +195,14 @@ export default function CreateMaterialIssuePage() {
  </option>
  ))}
  </Select>
+ <Input
+  fieldSize="sm"
+  className="mt-1"
+  placeholder="Lot (optional)"
+  maxLength={50}
+  {...register(`items.${idx}.lot_number` as const)}
+  error={errors.items?.[idx]?.lot_number?.message}
+ />
  </div>
  <div className="col-span-3">
  <Select required {...register(`items.${idx}.location_id` as const)} error={errors.items?.[idx]?.location_id?.message}>
@@ -210,6 +222,14 @@ export default function CreateMaterialIssuePage() {
  {...numberInputProps()}
  {...register(`items.${idx}.quantity_issued` as const)}
  error={errors.items?.[idx]?.quantity_issued?.message}
+ />
+ <Input
+  fieldSize="sm"
+  className="mt-1"
+  placeholder="UOM code"
+  maxLength={20}
+  {...register(`items.${idx}.issued_uom_code` as const)}
+  error={errors.items?.[idx]?.issued_uom_code?.message}
  />
  </div>
  <div className="col-span-2">

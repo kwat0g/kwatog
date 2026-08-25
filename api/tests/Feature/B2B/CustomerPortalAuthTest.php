@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\B2B;
 
 use App\Common\Models\AuditLog;
+use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\B2B\Models\CustomerPortalUser;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -48,22 +49,38 @@ class CustomerPortalAuthTest extends TestCase
         RateLimiter::clear(md5('api127.0.0.1'));
     }
 
+    private function withPortalHeaders(): self
+    {
+        $csrf = 'customer-portal-test-csrf';
+
+        return $this->withSession(['_token' => $csrf])
+            ->withHeaders([
+                'Origin' => 'http://localhost',
+                'X-CSRF-TOKEN' => $csrf,
+            ]);
+    }
+
+    private function postLogin(string $email, string $password)
+    {
+        return $this->withPortalHeaders()->postJson('/api/v1/b2b/customer/login', [
+            'email' => $email,
+            'password' => $password,
+        ]);
+    }
+
     public function test_login_succeeds_and_returns_hashids(): void
     {
         $password = 'CustomerPass-1!';
         $user = $this->makeUser($password);
         $this->clearAuthThrottle($user->email);
 
-        $response = $this->postJson('/api/v1/b2b/customer/login', [
-            'email'    => $user->email,
-            'password' => $password,
-        ]);
+        $response = $this->postLogin($user->email, $password);
 
         $response->assertOk();
-        $response->assertJsonStructure(['data' => ['token', 'user' => ['id', 'name', 'email', 'customer_id', 'must_change_password']]]);
+        $response->assertJsonStructure(['data' => ['user' => ['id', 'name', 'email', 'customer_id', 'must_change_password']]])
+            ->assertJsonMissingPath('data.token');
 
         $payload = $response->json('data');
-        $this->assertNotEmpty($payload['token']);
 
         $this->assertIsString($payload['user']['id']);
         $this->assertNotSame((string) $user->id, $payload['user']['id']);
@@ -79,12 +96,11 @@ class CustomerPortalAuthTest extends TestCase
         $user = $this->makeUser($password, ['must_change_password' => true]);
         $this->clearAuthThrottle($user->email);
 
-        $login = $this->postJson('/api/v1/b2b/customer/login', [
-            'email' => $user->email,
-            'password' => $password,
-        ])->assertOk()->assertJsonPath('data.user.must_change_password', true);
+        $this->postLogin($user->email, $password)
+            ->assertOk()
+            ->assertJsonPath('data.user.must_change_password', true);
 
-        $this->withToken($login->json('data.token'))
+        $this->withPortalHeaders()
             ->getJson('/api/v1/b2b/customer/dashboard')
             ->assertStatus(403)
             ->assertJsonPath('code', 'password_change_required');
@@ -95,12 +111,9 @@ class CustomerPortalAuthTest extends TestCase
         $password = 'CustomerPass-1!';
         $user = $this->makeUser($password, ['must_change_password' => true]);
         $this->clearAuthThrottle($user->email);
-        $login = $this->postJson('/api/v1/b2b/customer/login', [
-            'email' => $user->email,
-            'password' => $password,
-        ])->assertOk();
+        $this->postLogin($user->email, $password)->assertOk();
 
-        $this->withToken($login->json('data.token'))
+        $this->withPortalHeaders()
             ->postJson('/api/v1/b2b/customer/change-password', [
                 'current_password' => $password,
                 'new_password' => 'Replacement-2!',
@@ -113,6 +126,11 @@ class CustomerPortalAuthTest extends TestCase
         $this->assertDatabaseMissing('personal_access_tokens', [
             'tokenable_type' => CustomerPortalUser::class,
             'tokenable_id' => $user->id,
+        ]);
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'portal.password.changed',
+            'model_type' => CustomerPortalUser::class,
+            'model_id' => $user->id,
         ]);
     }
 
@@ -148,10 +166,7 @@ class CustomerPortalAuthTest extends TestCase
         $user = $this->makeUser($password);
         $this->clearAuthThrottle($user->email);
 
-        $this->postJson('/api/v1/b2b/customer/login', [
-            'email'    => $user->email,
-            'password' => $password,
-        ])->assertOk();
+        $this->postLogin($user->email, $password)->assertOk();
 
         $row = AuditLog::where('action', 'customer.login.success')
             ->where('model_type', CustomerPortalUser::class)
@@ -161,5 +176,85 @@ class CustomerPortalAuthTest extends TestCase
         $this->assertNotNull($row, 'customer.login.success row should be persisted');
         $this->assertNull($row->user_id);
         $this->assertSame($user->email, $row->new_values['email'] ?? null);
+    }
+
+    public function test_login_normalizes_email_case(): void
+    {
+        $password = 'CustomerPass-1!';
+        $user = $this->makeUser($password, ['email' => 'Mixed.Case+'.uniqid().'@t.test']);
+        $this->clearAuthThrottle($user->email);
+
+        $this->postLogin(strtoupper($user->email), $password)
+            ->assertOk()
+            ->assertJsonPath('data.user.email', $user->email);
+    }
+
+    public function test_expired_customer_password_is_gated_until_changed(): void
+    {
+        $password = 'CustomerPass-1!';
+        $user = $this->makeUser($password, ['password_changed_at' => now()->subDays(91)]);
+        $this->clearAuthThrottle($user->email);
+
+        $this->postLogin($user->email, $password)->assertOk();
+
+        $this->withPortalHeaders()
+            ->getJson('/api/v1/b2b/customer/dashboard')
+            ->assertStatus(403)
+            ->assertJsonPath('code', 'password_expired');
+
+        $this->withPortalHeaders()
+            ->postJson('/api/v1/b2b/customer/change-password', [
+                'current_password' => $password,
+                'new_password' => 'Replacement-2!',
+                'new_password_confirmation' => 'Replacement-2!',
+            ])
+            ->assertOk();
+    }
+
+    public function test_customer_password_history_blocks_recent_reuse(): void
+    {
+        $oldPassword = 'CustomerPass-1!';
+        $newPassword = 'Replacement-2!';
+        $user = $this->makeUser($oldPassword);
+        $this->clearAuthThrottle($user->email);
+
+        $this->postLogin($user->email, $oldPassword)->assertOk();
+        $this->withPortalHeaders()
+            ->postJson('/api/v1/b2b/customer/change-password', [
+                'current_password' => $oldPassword,
+                'new_password' => $newPassword,
+                'new_password_confirmation' => $newPassword,
+            ])
+            ->assertOk();
+
+        $this->clearAuthThrottle($user->email);
+        $this->postLogin($user->email, $newPassword)->assertOk();
+        $this->withPortalHeaders()
+            ->postJson('/api/v1/b2b/customer/change-password', [
+                'current_password' => $newPassword,
+                'new_password' => $oldPassword,
+                'new_password_confirmation' => $oldPassword,
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrorFor('new_password');
+    }
+
+    public function test_customer_public_auth_routes_are_feature_gated(): void
+    {
+        $settings = app(SettingsService::class);
+        $settings->set('modules.b2b_portals', false, 'modules');
+        $email = 'customer-feature-disabled+'.uniqid().'@example.test';
+        $this->clearAuthThrottle($email);
+
+        try {
+            $this->postJson('/api/v1/b2b/customer/login', [
+                'email' => $email,
+                'password' => 'CustomerPass-1!',
+            ])
+                ->assertStatus(403)
+                ->assertJsonPath('code', 'feature_disabled');
+        } finally {
+            $settings->set('modules.b2b_portals', true, 'modules');
+        }
     }
 }

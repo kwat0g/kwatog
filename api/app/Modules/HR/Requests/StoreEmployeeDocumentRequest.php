@@ -10,7 +10,7 @@ class StoreEmployeeDocumentRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->hasPermission('hr.employees.documents.view') ?? false;
+        return $this->user()?->hasPermission('hr.employees.documents.upload') ?? false;
     }
 
     public function rules(): array

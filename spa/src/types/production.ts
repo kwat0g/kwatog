@@ -52,6 +52,13 @@ export interface WorkOrderOutput {
  batch_code: string | null;
  remarks: string | null;
  production_receipt_handoff?: ProductionReceiptHandoff;
+ material_lineage?: {
+  work_order_class?: string | null;
+  exception_reason?: string | null;
+  authorized_by?: string | null;
+  material_plan_source?: string | null;
+  materials?: Array<{ item_id: string | null; bom_quantity: string; actual_quantity_issued: string }>;
+ } | null;
  recorder?: { id: string; name: string } | null;
  defects?: WorkOrderDefectRow[];
 }
@@ -74,12 +81,16 @@ export interface WorkOrder {
  batch_number: string | null;
  /** ADV3 — Snapshot of the supplier lots used by this batch. */
  material_lot_references: WorkOrderMaterialLotReference[];
+ work_order_class: 'standard' | 'service' | 'non_stock' | 'prototype' | string;
+ exception_reason: string | null;
+ exception_authorized_by: string | null;
+ material_plan_source: string | null;
  product?: { id: string; part_number: string; name: string };
  parent?: { id: string; wo_number: string } | null;
  children?: Array<{
   id: string;
   wo_number: string;
-  product_id: number;
+  product_id: string | null;
   quantity_target: number;
   quantity_good: number;
   status: WorkOrderStatus;
@@ -150,6 +161,8 @@ export interface CreateWorkOrderData {
  planned_start: string;
  planned_end: string;
  priority?: number;
+ work_order_class?: 'standard' | 'service' | 'non_stock' | 'prototype';
+ exception_reason?: string;
 }
 
 export interface RecordOutputData {

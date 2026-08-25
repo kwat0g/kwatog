@@ -352,6 +352,43 @@ class ApprovalServiceTest extends TestCase
         $this->assertSame(2, $pendingCount, 'Resubmit must not duplicate pending rows');
     }
 
+    public function test_current_attempt_controls_terminal_state_helpers(): void
+    {
+        WorkflowDefinition::create([
+            'workflow_type' => 't2_current_attempt_state',
+            'name' => 'CurrentAttemptState',
+            'steps' => [
+                ['order' => 1, 'role' => 'department_head'],
+                ['order' => 2, 'role' => 'finance_officer'],
+            ],
+        ]);
+
+        $departmentHead = User::factory()->create([
+            'role_id' => Role::firstOrCreate(['slug' => 'department_head'], ['name' => 'Department Head'])->id,
+        ]);
+        $financeOfficer = User::factory()->create([
+            'role_id' => Role::firstOrCreate(['slug' => 'finance_officer'], ['name' => 'Finance Officer'])->id,
+        ]);
+        $approvable = $this->fakeApprovable(600);
+        $svc = app(ApprovalService::class);
+
+        $svc->submit($approvable, 't2_current_attempt_state');
+        $svc->approve($approvable, $departmentHead);
+        $svc->reject($approvable, $financeOfficer, 'First attempt rejected');
+        $this->assertTrue($svc->isRejected($approvable));
+
+        $svc->submit($approvable, 't2_current_attempt_state');
+        $this->assertFalse($svc->isRejected($approvable));
+        $this->assertFalse($svc->isFullyApproved($approvable));
+
+        $svc->approve($approvable, $departmentHead);
+        $svc->approve($approvable, $financeOfficer);
+
+        $this->assertTrue($svc->isFullyApproved($approvable));
+        $this->assertTrue($svc->records($approvable)->where('action', 'rejected')->exists());
+        $this->assertCount(2, $svc->currentChain($approvable));
+    }
+
     public function test_system_admin_cannot_approve_when_role_mismatches(): void
     {
         WorkflowDefinition::create([

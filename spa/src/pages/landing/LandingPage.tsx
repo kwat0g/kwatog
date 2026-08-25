@@ -107,7 +107,7 @@ function LandingPageContent({ contact, content }: { contact: LandingContact; con
     >
       <ScrollProgress />
       <a
-        href={content?.section_copy?.nav_links?.[0]?.href ?? '#'}
+        href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[60] focus:rounded-md focus:bg-accent focus:px-4 focus:py-2 focus:font-sans focus:text-sm focus:font-medium focus:text-accent-fg"
       >
         Skip to content
@@ -117,7 +117,7 @@ function LandingPageContent({ contact, content }: { contact: LandingContact; con
 
       {/* While the mobile menu is open, hide page content from AT + pointer.
           `inert` is set via a ref-free attribute prop (cast) for RB18 typings. */}
-      <main {...inertWhen(menuOpen)}>
+      <main id="main-content" {...inertWhen(menuOpen)}>
         <HeroSection />
         <MarqueeSection />
         <CapabilitiesSection />

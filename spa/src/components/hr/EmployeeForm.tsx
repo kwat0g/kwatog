@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -96,11 +97,14 @@ export const employeeSchema = z.object({
  bank_account_no: z.string().max(50).regex(/^[A-Za-z0-9\-\s]*$/, 'Letters, digits, spaces, hyphens only').optional().or(z.literal('')),
 
  shift_id: z.string().optional().or(z.literal('')),
+ // Internal form-only marker: compensation is required on create but is
+ // intentionally omitted from the generic edit payload.
+ __edit: z.boolean().optional(),
 }).refine(
- (d) => d.pay_type !== 'monthly' || (!!d.basic_monthly_salary && moneyPattern.test(d.basic_monthly_salary) && Number(d.basic_monthly_salary) > 0),
+ (d) => d.__edit === true || d.pay_type !== 'monthly' || (!!d.basic_monthly_salary && moneyPattern.test(d.basic_monthly_salary) && Number(d.basic_monthly_salary) > 0),
  { message: 'Enter a valid monthly salary greater than 0', path: ['basic_monthly_salary'] },
 ).refine(
- (d) => d.pay_type !== 'semi_monthly' || (!!d.semi_monthly_rate && moneyPattern.test(d.semi_monthly_rate) && Number(d.semi_monthly_rate) > 0),
+ (d) => d.__edit === true || d.pay_type !== 'semi_monthly' || (!!d.semi_monthly_rate && moneyPattern.test(d.semi_monthly_rate) && Number(d.semi_monthly_rate) > 0),
  { message: 'Enter a valid semi-monthly rate greater than 0', path: ['semi_monthly_rate'] },
 ).refine(
  (d) => !d.basic_monthly_salary || Number(d.basic_monthly_salary) <= 9_999_999.99,
@@ -149,7 +153,7 @@ const FIELD_LABELS: Partial<Record<keyof EmployeeFormValues, string>> = {
  shift_id: 'Shift',
 };
 
-function defaults(employee?: Employee | null): EmployeeFormValues {
+function defaults(employee?: Employee | null, canEditSensitive = true, isEditing = false): EmployeeFormValues {
  return {
  first_name: employee?.first_name ?? '',
  middle_name: employee?.middle_name ?? '',
@@ -160,22 +164,22 @@ function defaults(employee?: Employee | null): EmployeeFormValues {
  civil_status: employee?.civil_status ?? '',
  nationality: employee?.nationality ?? '',
 
- street_address: employee?.address.street ?? '',
- barangay: employee?.address.barangay ?? '',
- city: employee?.address.city ?? '',
- province: employee?.address.province ?? '',
- zip_code: employee?.address.zip_code ?? '',
+ street_address: employee?.address?.street ?? '',
+ barangay: employee?.address?.barangay ?? '',
+ city: employee?.address?.city ?? '',
+ province: employee?.address?.province ?? '',
+ zip_code: employee?.address?.zip_code ?? '',
 
- mobile_number: digitsOnly(employee?.contact.mobile_number ?? ''),
- email: employee?.contact.email ?? '',
- emergency_contact_name: employee?.contact.emergency_contact_name ?? '',
- emergency_contact_relation: employee?.contact.emergency_contact_relation ?? '',
- emergency_contact_phone: digitsOnly(employee?.contact.emergency_contact_phone ?? ''),
+ mobile_number: digitsOnly(employee?.contact?.mobile_number ?? ''),
+ email: employee?.contact?.email ?? '',
+ emergency_contact_name: employee?.contact?.emergency_contact_name ?? '',
+ emergency_contact_relation: employee?.contact?.emergency_contact_relation ?? '',
+ emergency_contact_phone: digitsOnly(employee?.contact?.emergency_contact_phone ?? ''),
 
- sss_no: digitsOnly(employee?.sss_no ?? ''),
- philhealth_no: digitsOnly(employee?.philhealth_no ?? ''),
- pagibig_no: digitsOnly(employee?.pagibig_no ?? ''),
- tin: digitsOnly(employee?.tin ?? ''),
+ sss_no: canEditSensitive ? digitsOnly(employee?.sss_no ?? '') : '',
+ philhealth_no: canEditSensitive ? digitsOnly(employee?.philhealth_no ?? '') : '',
+ pagibig_no: canEditSensitive ? digitsOnly(employee?.pagibig_no ?? '') : '',
+ tin: canEditSensitive ? digitsOnly(employee?.tin ?? '') : '',
 
  department_id: employee?.department?.id ?? '',
  position_id: employee?.position?.id ?? '',
@@ -186,10 +190,11 @@ function defaults(employee?: Employee | null): EmployeeFormValues {
  basic_monthly_salary: employee?.basic_monthly_salary ?? '',
  semi_monthly_rate: employee?.semi_monthly_rate ?? '',
 
- bank_name: employee?.bank_name ?? '',
- bank_account_no: employee?.bank_account_no ?? '',
+ bank_name: canEditSensitive ? (employee?.bank_name ?? '') : '',
+ bank_account_no: canEditSensitive ? (employee?.bank_account_no ?? '') : '',
 
  shift_id: '',
+ __edit: isEditing,
  };
 }
 
@@ -201,15 +206,18 @@ interface Props {
  /** RHF setError callback exposed via ref for the page to map server errors. */
  registerSetError?: (fn: (field: keyof EmployeeFormValues, msg: string) => void) => void;
  submitLabel: string;
+ canEditSensitive?: boolean;
 }
 
-export function EmployeeForm({ employee, onSubmit, onCancel, isPending, registerSetError, submitLabel }: Props) {
+export function EmployeeForm({ employee, onSubmit, onCancel, isPending, registerSetError, submitLabel, canEditSensitive: sensitivePermission = true }: Props) {
+ const isEditing = Boolean(employee?.id);
+ const canEditSensitive = !isEditing || sensitivePermission;
  const {
  register, handleSubmit, watch, setError, control,
  formState: { errors, isSubmitting },
  } = useForm<EmployeeFormValues>({
  resolver: zodResolver(employeeSchema),
- defaultValues: defaults(employee),
+ defaultValues: defaults(employee, canEditSensitive, isEditing),
  });
 
  useEffect(() => {
@@ -319,13 +327,13 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isPending, register
  <option value="">— Select —</option>
  {employmentTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
  </Select>
- <Select label="Pay type" required {...register('pay_type')} error={errors.pay_type?.message}>
+ <Select label="Pay type" required disabled={isEditing} {...register('pay_type')} error={errors.pay_type?.message}>
  <option value="">— Select —</option>
  {payTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
  </Select>
  <Input label="Date hired" type="date" required max={todayStr} min="1980-01-01" {...register('date_hired')} error={errors.date_hired?.message} />
  <Input label="Date regularized" type="date" max={todayStr} {...register('date_regularized')} error={errors.date_regularized?.message} />
- {payType === 'monthly' && (
+ {!isEditing && payType === 'monthly' && (
  <Input
  label="Monthly salary"
  type="number"
@@ -340,7 +348,7 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isPending, register
  error={errors.basic_monthly_salary?.message}
  />
  )}
- {payType === 'semi_monthly' && (
+ {!isEditing && payType === 'semi_monthly' && (
  <Input
  label="Semi-monthly rate"
  helper="Amount paid each cutoff (twice a month)"
@@ -355,6 +363,12 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isPending, register
  {...register('semi_monthly_rate')}
  error={errors.semi_monthly_rate?.message}
  />
+ )}
+ {isEditing && (
+ <div className="col-span-2 rounded-md border border-default bg-elevated/30 px-3 py-2 text-sm text-muted">
+ Compensation is managed through the salary-adjustment approval workflow.{' '}
+ <Link className="text-link hover:underline" to="/hr/salary-adjustments">Open salary adjustments</Link>.
+ </div>
  )}
  </div>
  </Section>
@@ -372,6 +386,7 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isPending, register
  </div>
  </Section>
 
+ {canEditSensitive ? (
  <Section title="Government IDs" hint="Stored encrypted at rest. Digits-only — formatting is automatic.">
  <div className="grid grid-cols-2 gap-3">
  <Controller name="sss_no" control={control}
@@ -400,14 +415,27 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isPending, register
  )} />
  </div>
  </Section>
+ ) : (
+ <Section title="Government IDs">
+ <p className="text-sm text-muted rounded-md border border-default bg-elevated/30 px-3 py-2">
+ Sensitive government IDs are hidden and cannot be edited with your current access.
+ </p>
+ </Section>
+ )}
 
- <Section title="Banking">
+ {canEditSensitive ? <Section title="Banking">
  <div className="grid grid-cols-2 gap-3">
  <Input label="Bank name" maxLength={100} {...register('bank_name')} error={errors.bank_name?.message} />
  <Input label="Account number" className="font-mono" maxLength={50} placeholder="Enter bank account number"
  {...register('bank_account_no')} error={errors.bank_account_no?.message} />
  </div>
+ </Section> : (
+ <Section title="Banking">
+ <p className="text-sm text-muted rounded-md border border-default bg-elevated/30 px-3 py-2">
+ Bank details are hidden and cannot be edited with your current access.
+ </p>
  </Section>
+ )}
 
  <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
  <Button type="button" variant="secondary" onClick={onCancel} disabled={isSubmitting || isPending}>Cancel</Button>

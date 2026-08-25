@@ -19,11 +19,16 @@ use Illuminate\Validation\ValidationException;
 
 class PasswordResetService
 {
-    public function __construct(private readonly SettingsService $settings) {}
+    public function __construct(
+        private readonly SettingsService $settings,
+        private readonly SessionRevocationService $sessions,
+        private readonly AuthAuditLogger $audit,
+    ) {}
 
     public function sendResetLink(string $email, Request $request): void
     {
-        $user = User::where('email', $email)->first();
+        $email = strtolower(trim($email));
+        $user = User::whereRaw('LOWER(email) = ?', [$email])->first();
 
         if (! $user || ! $user->is_active) {
             return;
@@ -70,11 +75,7 @@ class PasswordResetService
             ]);
         }
 
-        Log::channel('auth')->info('password.reset_requested', [
-            'user_id' => $user->id,
-            'email' => $user->email,
-            'ip' => $request->ip(),
-        ]);
+        $this->audit->internal('password.reset_requested', $user, $request);
     }
 
     public function reset(string $token, string $newPassword, Request $request): void
@@ -129,6 +130,8 @@ class PasswordResetService
                 'locked_until' => null,
             ])->save();
 
+            $this->sessions->revokeAllSessions($user);
+
             $row->forceFill(['used_at' => now()])->save();
 
             $keepIds = $user->passwordHistory()
@@ -143,10 +146,6 @@ class PasswordResetService
             return $user;
         });
 
-        Log::channel('auth')->info('password.reset', [
-            'user_id' => $user->id,
-            'email' => $user->email,
-            'ip' => $request->ip(),
-        ]);
+        $this->audit->internal('password.reset', $user, $request);
     }
 }

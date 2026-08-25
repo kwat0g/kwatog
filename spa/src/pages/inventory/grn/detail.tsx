@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, Link } from 'react-router-dom';
 import { AxiosError } from 'axios';
@@ -25,6 +25,28 @@ import { formatPeso } from '@/lib/formatNumber';
 import { buildP2pChain } from '@/lib/chains';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
+interface FinalizeLine {
+ location_id: string;
+ quantity_received: string;
+ received_uom_code: string;
+ lot_number: string;
+ supplier_lot_reference: string;
+ expiry_date: string;
+ moisture_percentage: string;
+ coa_document_path: string;
+}
+
+const emptyFinalizeLine: FinalizeLine = {
+ location_id: '',
+ quantity_received: '0',
+ received_uom_code: '',
+ lot_number: '',
+ supplier_lot_reference: '',
+ expiry_date: '',
+ moisture_percentage: '',
+ coa_document_path: '',
+};
+
 export default function GrnDetailPage() {
  const { id = '' } = useParams<{ id: string }>();
  const qc = useQueryClient();
@@ -35,7 +57,7 @@ export default function GrnDetailPage() {
  const [confirmPostBill, setConfirmPostBill] = useState(false);
  const [rejectOpen, setRejectOpen] = useState(false);
  const [acceptMap, setAcceptMap] = useState<Record<string, string>>({});
- const [finalizeInput, setFinalizeInput] = useState<Record<string, { location_id: string; quantity_received: string }>>({});
+ const [finalizeInput, setFinalizeInput] = useState<Record<string, FinalizeLine>>({});
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['inventory', 'grn', id],
@@ -54,7 +76,9 @@ export default function GrnDetailPage() {
  });
  const locations = useMemo(
  () => (warehouses ?? []).flatMap((w) =>
- (w.zones ?? []).flatMap((z) => (z.locations ?? []).map((l) => ({
+ (w.is_active ? (w.zones ?? []) : []).flatMap((z) => (z.locations ?? [])
+  .filter((l) => l.is_active && z.zone_type !== 'quarantine' && z.zone_type !== 'scrap')
+  .map((l) => ({
   id: l.id,
   label: `${w.code}-${z.code}-${l.code}`,
   sub: `${w.name} / ${z.name}`,
@@ -94,6 +118,12 @@ export default function GrnDetailPage() {
      purchase_order_item_id: l.purchase_order_item_id,
      location_id: v.location_id,
      quantity_received: v.quantity_received,
+     received_uom_code: v.received_uom_code.trim() || undefined,
+     lot_number: v.lot_number.trim() || undefined,
+     supplier_lot_reference: v.supplier_lot_reference.trim() || undefined,
+     expiry_date: v.expiry_date || undefined,
+     moisture_percentage: v.moisture_percentage.trim() || undefined,
+     coa_document_path: v.coa_document_path.trim() || undefined,
     }];
    }),
  }),
@@ -105,6 +135,13 @@ export default function GrnDetailPage() {
  onError: (e: AxiosError<{ message?: string }>) =>
   toast.error(e.response?.data?.message ?? 'Failed to finalize GRN.'),
  });
+
+ const updateFinalizeLine = (lineId: string, patch: Partial<FinalizeLine>) => {
+  setFinalizeInput((current) => ({
+   ...current,
+   [lineId]: { ...emptyFinalizeLine, ...current[lineId], ...patch },
+  }));
+ };
  const retryIncomingQc = useMutation({
   mutationFn: () => grnApi.retryIncomingQc(id),
   onSuccess: () => {
@@ -169,6 +206,7 @@ export default function GrnDetailPage() {
   const v = finalizeInput[l.id];
   return !!v?.location_id && Number(v.quantity_received) > 0;
  });
+ const columnCount = 6 + (isDraft ? 2 : 0) + (isEditable ? 1 : 0);
  const incomingQcNeedsAttention = data.status === 'pending_qc'
   && data.incoming_qc_handoff
   && data.incoming_qc_handoff.status !== 'generated'
@@ -278,6 +316,8 @@ export default function GrnDetailPage() {
    <div><dt className="text-2xs uppercase tracking-wider text-muted">Received by</dt><dd>{data.receiver?.name ?? '—'}</dd></div>
    {data.accepted_at && <div><dt className="text-2xs uppercase tracking-wider text-muted">Accepted</dt><dd className="font-mono">{formatDate(data.accepted_at)} · {data.acceptor?.name}</dd></div>}
    {data.rejected_reason && <div className="col-span-4"><dt className="text-2xs uppercase tracking-wider text-muted">Rejection reason</dt><dd className="text-danger-fg">{data.rejected_reason}</dd></div>}
+   {data.qc_inspection && <div><dt className="text-2xs uppercase tracking-wider text-muted">Incoming QC</dt><dd>{can('quality.inspections.view') ? <Link to={`/quality/inspections/${data.qc_inspection.id}`} className="font-mono text-accent hover:underline">{data.qc_inspection.inspection_number}</Link> : <span className="font-mono">{data.qc_inspection.inspection_number}</span>} · {data.qc_inspection.status_label ?? data.qc_inspection.status ?? '—'}</dd></div>}
+   {data.journal_entry && can('accounting.journal.view') && <div><dt className="text-2xs uppercase tracking-wider text-muted">Inventory GL</dt><dd><Link to={`/accounting/journal-entries/${data.journal_entry.id}`} className="font-mono text-accent hover:underline">{data.journal_entry.entry_number}</Link> · {data.journal_entry.status_label ?? data.journal_entry.status ?? '—'}</dd></div>}
    </dl>
   </Panel>
   <Panel title="Line items">
@@ -296,6 +336,7 @@ export default function GrnDetailPage() {
    </tr></thead>
    <tbody>
    {data.items?.map((l) => (
+    <Fragment key={l.id}>
     <tr key={l.id} className={trCls}>
     <Td>
      <span className="font-mono">{l.item?.code}</span>
@@ -310,7 +351,7 @@ export default function GrnDetailPage() {
       containerClassName="w-44"
       aria-label={`Bin ${l.item?.code ?? l.id}`}
       value={finalizeInput[l.id]?.location_id ?? ''}
-      onChange={(e) => setFinalizeInput((m) => ({ ...m, [l.id]: { ...m[l.id], location_id: e.target.value, quantity_received: m[l.id]?.quantity_received ?? '0' } }))}
+      onChange={(e) => updateFinalizeLine(l.id, { location_id: e.target.value })}
      >
       <option value="">Select bin…</option>
       {locations.map((loc) => (
@@ -326,7 +367,7 @@ export default function GrnDetailPage() {
       type="number" min="0" step="0.001"
       aria-label={`Qty ${l.item?.code ?? l.id}`}
       value={finalizeInput[l.id]?.quantity_received ?? '0'}
-      onChange={(e) => setFinalizeInput((m) => ({ ...m, [l.id]: { ...m[l.id], quantity_received: e.target.value, location_id: m[l.id]?.location_id ?? '' } }))}
+      onChange={(e) => updateFinalizeLine(l.id, { quantity_received: e.target.value })}
       className="w-24 h-7 text-right font-mono"
      />
      </Td>
@@ -348,6 +389,30 @@ export default function GrnDetailPage() {
     <Td align="right" mono>{Number(l.unit_cost).toFixed(4)}</Td>
     <Td align="right" mono>{(Number(l.quantity_received) * Number(l.unit_cost)).toFixed(2)}</Td>
     </tr>
+    <tr className="border-b border-subtle bg-subtle/40">
+     <Td colSpan={columnCount}>
+     {isDraft ? (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2">
+       <Input fieldSize="sm" label="Received UOM" placeholder="Base / BAG" value={finalizeInput[l.id]?.received_uom_code ?? ''} onChange={(e) => updateFinalizeLine(l.id, { received_uom_code: e.target.value })} />
+       <Input fieldSize="sm" label="Lot number" maxLength={50} value={finalizeInput[l.id]?.lot_number ?? ''} onChange={(e) => updateFinalizeLine(l.id, { lot_number: e.target.value })} />
+       <Input fieldSize="sm" label="Supplier lot" maxLength={100} value={finalizeInput[l.id]?.supplier_lot_reference ?? ''} onChange={(e) => updateFinalizeLine(l.id, { supplier_lot_reference: e.target.value })} />
+       <Input fieldSize="sm" label="Expiry" type="date" value={finalizeInput[l.id]?.expiry_date ?? ''} onChange={(e) => updateFinalizeLine(l.id, { expiry_date: e.target.value })} />
+       <Input fieldSize="sm" label="Moisture %" inputMode="decimal" value={finalizeInput[l.id]?.moisture_percentage ?? ''} onChange={(e) => updateFinalizeLine(l.id, { moisture_percentage: e.target.value })} />
+       <Input fieldSize="sm" label="COA path" maxLength={500} value={finalizeInput[l.id]?.coa_document_path ?? ''} onChange={(e) => updateFinalizeLine(l.id, { coa_document_path: e.target.value })} />
+      </div>
+     ) : (
+      <div className="flex flex-wrap gap-x-5 gap-y-1 text-2xs text-muted">
+       <span>UOM: <span className="font-mono text-primary">{l.received_uom_code ?? 'base'}</span></span>
+       <span>Lot: <span className="font-mono text-primary">{l.lot_number ?? '—'}</span></span>
+       <span>Supplier lot: <span className="font-mono text-primary">{l.supplier_lot_reference ?? '—'}</span></span>
+       <span>Expiry: <span className="font-mono text-primary">{l.expiry_date ?? '—'}</span></span>
+       <span>Moisture: <span className="font-mono text-primary">{l.moisture_percentage ?? '—'}{l.moisture_percentage ? '%' : ''}</span></span>
+       <span>COA: <span className="font-mono text-primary">{l.coa_document_path ?? '—'}</span> · {l.coa_verified ? 'Verified by Quality' : 'Pending Quality verification'}</span>
+      </div>
+     )}
+     </Td>
+    </tr>
+    </Fragment>
    ))}
    </tbody>
    </table>

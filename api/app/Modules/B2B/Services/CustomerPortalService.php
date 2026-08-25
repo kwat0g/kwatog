@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace App\Modules\B2B\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Models\AuditLog;
 use App\Common\Support\HashIdFilter;
+use App\Common\Support\Money;
+use App\Common\Support\SearchOperator;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Enums\InvoiceStatus;
@@ -17,12 +20,13 @@ use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Services\ComplaintService;
 use App\Modules\CRM\Services\SalesOrderService;
+use App\Modules\Quality\Enums\NcrStatus;
 use App\Common\Services\SystemUserResolver;
 use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\Production\Enums\WorkOrderStatus;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Collection;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -31,8 +35,9 @@ use Illuminate\Support\Str;
  *
  * Every method receives the owning customer_id as the first argument so that
  * row-level scoping is guaranteed — the controller resolves the authenticated
- * portal user and passes `$user->customer_id`. This service NEVER reads the
- * auth guard directly; scoping is always explicit.
+ * portal user and passes `$user->customer_id`. Scoping is always explicit;
+ * complaint creation performs one separate guard lookup only to attach
+ * durable external-actor audit metadata.
  */
 class CustomerPortalService
 {
@@ -63,13 +68,19 @@ class CustomerPortalService
             ->whereIn('status', [InvoiceStatus::Finalized, InvoiceStatus::Partial]);
         $openInvoiceCount = (clone $openInvoices)->count();
 
-        $totalOutstanding = (clone $openInvoices)->sum('balance');
+        $totalOutstanding = (clone $openInvoices)
+            ->pluck('balance')
+            ->reduce(
+                static fn (string $total, mixed $balance): string => Money::add($total, (string) $balance),
+                Money::zero(),
+            );
 
         $recentOrders = SalesOrder::where('customer_id', $customerId)
             ->withCount('items')
             ->orderByDesc('created_at')->limit(5)->get();
 
         $recentInvoices = Invoice::where('customer_id', $customerId)
+            ->whereIn('status', [InvoiceStatus::Finalized, InvoiceStatus::Partial, InvoiceStatus::Paid])
             ->orderByDesc('created_at')->limit(5)->get();
 
         $recentDeliveries = Delivery::whereHas(
@@ -84,7 +95,7 @@ class CustomerPortalService
             'open_so_count' => $openSoCount,
             'pending_delivery_count' => $pendingDeliveryCount,
             'open_invoice_count' => $openInvoiceCount,
-            'total_outstanding' => number_format((float) $totalOutstanding, 2),
+            'total_outstanding' => Money::add((string) $totalOutstanding),
             'recent_orders' => $recentOrders,
             'recent_invoices' => $recentInvoices,
             'recent_deliveries' => $recentDeliveries,
@@ -118,9 +129,9 @@ class CustomerPortalService
 
         $salesOrder->load([
             'items.product:id,part_number,name',
-            'deliveries:id,delivery_number,status,delivered_at,confirmed_at',
-            'invoices:id,invoice_number,total_amount,status,created_at',
-            'workOrders:id,wo_number,status',
+            'deliveries:id,sales_order_id,delivery_number,status,delivered_at,confirmed_at',
+            'invoices:id,sales_order_id,invoice_number,total_amount,status,created_at',
+            'workOrders:id,sales_order_id,wo_number,status',
         ]);
 
         $salesOrder->workOrders->each(function ($workOrder): void {
@@ -145,8 +156,13 @@ class CustomerPortalService
     public function invoices(int $customerId, array $filters): LengthAwarePaginator
     {
         $query = Invoice::where('customer_id', $customerId)
+            ->whereIn('status', [InvoiceStatus::Finalized, InvoiceStatus::Partial, InvoiceStatus::Paid])
             ->with(['salesOrder:id,so_number'])
             ->orderByDesc('created_at');
+
+        if (! empty($filters['status'])) {
+            $query->where('status', $filters['status']);
+        }
 
         $perPage = min((int) ($filters['per_page'] ?? 25), 100);
 
@@ -156,6 +172,7 @@ class CustomerPortalService
     public function invoiceDetail(int $customerId, Invoice $invoice): Invoice
     {
         abort_if($invoice->customer_id !== $customerId, 403);
+        abort_if(! in_array($invoice->status, [InvoiceStatus::Finalized, InvoiceStatus::Partial, InvoiceStatus::Paid], true), 404);
 
         $invoice->load(['salesOrder:id,so_number', 'items', 'collections']);
 
@@ -164,7 +181,7 @@ class CustomerPortalService
 
     /* ─── Deliveries ─────────────────────────────────────────────── */
 
-    public function deliveries(int $customerId, array $filters): Collection
+    public function deliveries(int $customerId, array $filters): LengthAwarePaginator
     {
         $query = Delivery::whereHas(
             'salesOrder',
@@ -176,7 +193,7 @@ class CustomerPortalService
             $query->where('status', $filters['status']);
         }
 
-        return $query->get();
+        return $query->paginate(min((int) ($filters['per_page'] ?? 25), 100));
     }
 
     public function deliveryDetail(int $customerId, Delivery $delivery): Delivery
@@ -198,11 +215,31 @@ class CustomerPortalService
 
     /* ─── Complaints ─────────────────────────────────────────────── */
 
-    public function complaints(int $customerId): Collection
+    public function complaints(int $customerId, array $filters = []): LengthAwarePaginator
     {
-        return CustomerComplaint::where('customer_id', $customerId)
+        $query = CustomerComplaint::query()
+            ->where('customer_id', $customerId);
+
+        if (! empty($filters['status'])) {
+            $query->where('status', $filters['status']);
+        }
+        if (! empty($filters['date_from'])) {
+            $query->whereDate('received_date', '>=', $filters['date_from']);
+        }
+        if (! empty($filters['date_to'])) {
+            $query->whereDate('received_date', '<=', $filters['date_to']);
+        }
+        if (! empty($filters['search'])) {
+            $term = '%'.trim((string) $filters['search']).'%';
+            $query->where(fn ($q) => $q
+                ->where('complaint_number', SearchOperator::like(), $term)
+                ->orWhere('description', SearchOperator::like(), $term));
+        }
+
+        return $query
             ->orderByDesc('created_at')
-            ->get();
+            ->orderByDesc('id')
+            ->paginate(min((int) ($filters['per_page'] ?? 25), 100));
     }
 
     public function createComplaint(int $customerId, array $data): CustomerComplaint
@@ -226,7 +263,8 @@ class CustomerPortalService
         // HasAuditLog writes a valid users.id into audit_logs.user_id. Route
         // the write through CRM so the 8D record and durable NCR handoff are
         // identical to the internal complaint workflow.
-        return $this->systemUser->impersonate(function () use ($customerId, $data, $salesOrderId) {
+        $portalUser = auth('customer_portal')->user();
+        $complaint = $this->systemUser->impersonate(function () use ($customerId, $data, $salesOrderId) {
             return $this->complaintService->create([
                 'customer_id' => $customerId,
                 'sales_order_id' => $salesOrderId,
@@ -236,6 +274,30 @@ class CustomerPortalService
                 'affected_quantity' => $data['affected_quantity'],
             ], $this->systemUser->user());
         });
+
+        // CRM's created_by is intentionally an internal-user FK. Add a second
+        // append-only audit event carrying the external actor so the complaint
+        // remains attributable without weakening that FK contract.
+        AuditLog::create([
+            'user_id' => null,
+            'actor_type' => 'customer_portal',
+            'action' => 'customer.complaint.submitted',
+            'model_type' => CustomerComplaint::class,
+            'model_id' => $complaint->getKey(),
+            'old_values' => null,
+            'new_values' => [
+                'portal_user_id' => $portalUser?->hash_id,
+                'email' => $portalUser?->email,
+                'customer_id' => app('hashids')->encode($customerId),
+            ],
+            'ip_address' => request()?->ip(),
+            'user_agent' => request()?->userAgent(),
+            'source_command' => request()?->route()?->getName() ?? 'b2b.customer.complaints.create',
+            'correlation_id' => request()?->attributes->get('request_id') ?? request()?->header('X-Request-ID'),
+            'created_at' => now(),
+        ]);
+
+        return $complaint;
     }
 
     public function complaint8dReport(int $customerId, CustomerComplaint $complaint): ?array
@@ -248,12 +310,29 @@ class CustomerPortalService
             return null;
         }
 
+        $status = $complaint->status instanceof ComplaintStatus
+            ? $complaint->status
+            : ComplaintStatus::tryFrom((string) $complaint->status);
+        $ncr = $complaint->ncr;
+        if (! $report->finalized_at
+            || ! in_array($status, [ComplaintStatus::Resolved, ComplaintStatus::Closed], true)
+            || ! $ncr
+            || $ncr->status !== NcrStatus::Closed
+            || $ncr->disposition === null) {
+            return null;
+        }
+
+        $statusValue = $status?->value ?? (string) $complaint->status;
+        $severityValue = $complaint->severity instanceof \BackedEnum
+            ? $complaint->severity->value
+            : (string) $complaint->severity;
+
         return [
             'complaint_number' => $complaint->complaint_number,
-            'complaint_status' => $complaint->status?->value ?? $complaint->status,
-            'complaint_status_label' => ComplaintStatus::tryFrom((string) ($complaint->status?->value ?? $complaint->status))?->label() ?? (string) $complaint->status,
-            'severity' => $complaint->severity?->value ?? $complaint->severity,
-            'severity_label' => Str::headline((string) ($complaint->severity?->value ?? $complaint->severity)),
+            'complaint_status' => $statusValue,
+            'complaint_status_label' => Str::headline($statusValue),
+            'severity' => $severityValue,
+            'severity_label' => Str::headline($severityValue),
             'description' => $complaint->description,
             'report' => [
                 'id' => $report->hash_id,
@@ -279,11 +358,11 @@ class CustomerPortalService
 
     /* ─── Delivery Schedules ─────────────────────────────────────── */
 
-    public function deliverySchedules(int $customerId): Collection
+    public function deliverySchedules(int $customerId, array $filters = []): LengthAwarePaginator
     {
         return DeliverySchedule::where('customer_id', $customerId)
             ->orderByDesc('created_at')
-            ->get();
+            ->paginate(min((int) ($filters['per_page'] ?? 25), 100));
     }
 
     public function storeDeliverySchedule(int $customerId, array $data): DeliverySchedule
@@ -293,25 +372,53 @@ class CustomerPortalService
         // existing submission first and return it; the partial unique index
         // `delivery_schedules_customer_month_unique` backs this guard at the
         // DB level.
-        $schedule = DB::transaction(function () use ($customerId, $data): DeliverySchedule {
-            $existing = DeliverySchedule::query()
-                ->where('customer_id', $customerId)
-                ->where('month', $data['month'])
-                ->lockForUpdate()
-                ->first();
+        try {
+            $schedule = DB::transaction(function () use ($customerId, $data): DeliverySchedule {
+                $existing = DeliverySchedule::query()
+                    ->where('customer_id', $customerId)
+                    ->where('month', $data['month'])
+                    ->lockForUpdate()
+                    ->first();
 
-            if ($existing) {
-                return $existing;
+                if ($existing) {
+                    if ($this->scheduleFingerprint($existing->lines ?? []) !== $this->scheduleFingerprint($data['lines'])) {
+                        throw new BusinessRuleException('A delivery schedule already exists for this customer and month with a different payload.');
+                    }
+
+                    return $existing;
+                }
+
+                return DeliverySchedule::create([
+                    'customer_id' => $customerId,
+                    'month' => $data['month'],
+                    'status' => 'submitted',
+                    'lines' => $data['lines'],
+                ]);
+            });
+        } catch (QueryException $e) {
+            // Two first submissions can both miss the row lock. The partial
+            // unique index is the final arbiter; turn its race into the same
+            // deterministic replay/conflict contract instead of a raw 500.
+            if (! str_contains($e->getMessage(), 'delivery_schedules_customer_month_unique')) {
+                throw $e;
             }
 
-            return DeliverySchedule::create([
-                'customer_id' => $customerId,
-                'month' => $data['month'],
-                'status' => 'submitted',
-                'lines' => $data['lines'],
-            ]);
-        });
+            $schedule = DeliverySchedule::query()
+                ->where('customer_id', $customerId)
+                ->where('month', $data['month'])
+                ->firstOrFail();
+
+            if ($this->scheduleFingerprint($schedule->lines ?? []) !== $this->scheduleFingerprint($data['lines'])) {
+                throw new BusinessRuleException('A delivery schedule already exists for this customer and month with a different payload.');
+            }
+        }
 
         return $schedule;
+    }
+
+    /** @param array<int, array<string, mixed>> $lines */
+    private function scheduleFingerprint(array $lines): string
+    {
+        return hash('sha256', json_encode($lines, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
     }
 }

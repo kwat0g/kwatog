@@ -5,23 +5,33 @@ declare(strict_types=1);
 namespace App\Modules\HR\Controllers;
 
 use App\Common\Services\SettingsService;
+use App\Modules\Attendance\Enums\AttendanceStatus;
 use App\Modules\Attendance\Enums\OvertimeStatus;
+use App\Modules\Attendance\Models\Attendance;
 use App\Modules\Attendance\Models\OvertimeRequest;
+use App\Modules\Attendance\Resources\AttendanceResource;
 use App\Modules\Attendance\Services\OvertimeService;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Enums\ProfileUpdateStatus;
+use App\Modules\HR\Enums\EmployeeTrainingStatus;
 use App\Modules\HR\Models\EmployeeTraining;
 use App\Modules\HR\Resources\EmployeeTrainingResource;
 use App\Modules\HR\Services\ProfileUpdateRequestService;
 use App\Modules\HR\Services\SelfServiceDocumentService;
 use App\Modules\HR\Services\SelfServiceHomeService;
+use App\Modules\Leave\Models\LeaveRequest;
+use App\Modules\Leave\Resources\LeaveRequestResource;
 use App\Modules\Payroll\Models\Payroll;
+use App\Modules\Payroll\Resources\PayrollResource;
+use App\Modules\Payroll\Services\PayslipPdfService;
+use App\Modules\Payroll\Services\PayrollPublicationPolicy;
 use App\Modules\Loans\Services\LoanService;
 use App\Modules\Loans\Enums\LoanStatus;
 use App\Modules\Loans\Enums\LoanType;
 use App\Modules\Loans\Models\EmployeeLoan;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
@@ -41,6 +51,8 @@ class SelfServiceController
         private readonly SelfServiceHomeService $home,
         private readonly SettingsService $settings,
         private readonly LoanService $loans,
+        private readonly PayrollPublicationPolicy $payrollPublication,
+        private readonly PayslipPdfService $payslipPdf,
     ) {}
 
     private function currentEmployee(Request $request): Employee
@@ -86,6 +98,121 @@ class SelfServiceController
         ]);
     }
 
+    /**
+     * M024 owner-only DTR read. The shared attendance list intentionally keeps
+     * department-head scope for HR screens; this endpoint never accepts an
+     * employee filter and derives the owner from the authenticated session.
+     */
+    public function attendance(Request $request): AnonymousResourceCollection|JsonResponse
+    {
+        $employee = $this->currentEmployee($request);
+        $validated = $request->validate([
+            'from' => ['nullable', 'date_format:Y-m-d'],
+            'to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:from'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        if (! Schema::hasTable('attendances')) {
+            return $this->emptyPage((int) ($validated['per_page'] ?? 25));
+        }
+
+        $query = Attendance::query()
+            ->with(['employee.department', 'shift'])
+            ->where('employee_id', $employee->id)
+            ->when(isset($validated['from']), fn ($q) => $q->whereDate('date', '>=', $validated['from']))
+            ->when(isset($validated['to']), fn ($q) => $q->whereDate('date', '<=', $validated['to']))
+            ->orderByDesc('date')
+            ->orderByDesc('id');
+
+        return AttendanceResource::collection($query->paginate((int) ($validated['per_page'] ?? 25)));
+    }
+
+    /** M024 status catalogue for the owner-only DTR page. */
+    public function attendanceOptions(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'statuses' => array_map(static fn (AttendanceStatus $status): array => [
+                'value' => $status->value,
+                'label' => $status->label(),
+            ], AttendanceStatus::cases()),
+        ]]);
+    }
+
+    /**
+     * M024 owner-only leave read. The shared leave list retains department
+     * scope for approval screens; this path cannot be broadened by query
+     * parameters or the actor's approval permissions.
+     */
+    public function leaveRequests(Request $request): AnonymousResourceCollection|JsonResponse
+    {
+        $employee = $this->currentEmployee($request);
+        $validated = $request->validate([
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        if (! Schema::hasTable('leave_requests')) {
+            return $this->emptyPage((int) ($validated['per_page'] ?? 25));
+        }
+
+        $query = LeaveRequest::query()
+            ->with(['employee.department', 'leaveType', 'deptApprover', 'hrApprover'])
+            ->where('employee_id', $employee->id)
+            ->orderByDesc('created_at')
+            ->orderByDesc('id');
+
+        return LeaveRequestResource::collection($query->paginate((int) ($validated['per_page'] ?? 25)));
+    }
+
+    /**
+     * M024 owner-only payslip read. Publication is enforced here as well as
+     * in the shared payroll controller so a self-service list cannot expose a
+     * draft, voided, or errored payroll row.
+     */
+    public function payslips(Request $request): AnonymousResourceCollection|JsonResponse
+    {
+        $employee = $this->currentEmployee($request);
+        $validated = $request->validate([
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'sort' => ['nullable', Rule::in(['created_at', 'gross_pay', 'net_pay'])],
+            'direction' => ['nullable', Rule::in(['asc', 'desc'])],
+        ]);
+
+        if (! Schema::hasTable('payrolls') || ! Schema::hasTable('payroll_periods')) {
+            return $this->emptyPage((int) ($validated['per_page'] ?? 25));
+        }
+
+        $query = Payroll::query()
+            ->with(['employee.department', 'employee.position', 'period', 'deductionDetails'])
+            ->where('employee_id', $employee->id);
+        $this->payrollPublication->scopePublishable($query);
+
+        $sort = (string) ($validated['sort'] ?? 'created_at');
+        $direction = (string) ($validated['direction'] ?? 'desc');
+
+        return PayrollResource::collection(
+            $query->orderBy($sort, $direction)->paginate((int) ($validated['per_page'] ?? 25)),
+        );
+    }
+
+    /**
+     * M024 owner-only payslip download. Do not reuse the shared payroll route:
+     * department heads are allowed to open department payroll rows there.
+     */
+    public function payslip(Request $request, string $id): StreamedResponse
+    {
+        $employee = $this->currentEmployee($request);
+        $payrollId = Payroll::tryDecodeHash($id);
+        abort_if($payrollId === null, 404);
+
+        $payroll = Payroll::query()
+            ->whereKey($payrollId)
+            ->where('employee_id', $employee->id)
+            ->firstOrFail();
+        $this->payrollPublication->assertPayrollPublishable($payroll);
+
+        return $this->payslipPdf->stream($payroll, $request->user());
+    }
+
     public function loans(Request $request): JsonResponse
     {
         $employee = $this->currentEmployee($request);
@@ -94,9 +221,19 @@ class SelfServiceController
             return response()->json(['data' => ['active' => [], 'history' => [], 'loan_types' => $this->loans->types(), 'max_pay_periods' => $this->settings->requiredInt('loans.max_pay_periods', 1, 120)]]);
         }
 
-        $rows = EmployeeLoan::query()
+        $historyLimit = $this->settings->requiredInt('self_service.history_limit', 1, 500);
+        $activeRows = EmployeeLoan::query()
             ->where('employee_id', $employee->id)
+            ->whereIn('status', [LoanStatus::Pending->value, LoanStatus::Active->value])
             ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->get();
+        $historyRows = EmployeeLoan::query()
+            ->where('employee_id', $employee->id)
+            ->whereNotIn('status', [LoanStatus::Pending->value, LoanStatus::Active->value])
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->limit($historyLimit)
             ->get();
 
         $map = fn (EmployeeLoan $loan) => [
@@ -113,18 +250,8 @@ class SelfServiceController
             'created_at' => optional($loan->created_at)->toIso8601String(),
         ];
 
-        $active = $rows->filter(fn (EmployeeLoan $loan): bool => in_array(
-            $loan->status,
-            [LoanStatus::Pending, LoanStatus::Active],
-            true,
-        ))
-            ->map($map)->values()->all();
-        $history = $rows->reject(fn (EmployeeLoan $loan): bool => in_array(
-            $loan->status,
-            [LoanStatus::Pending, LoanStatus::Active],
-            true,
-        ))
-            ->map($map)->values()->all();
+        $active = $activeRows->map($map)->values()->all();
+        $history = $historyRows->map($map)->values()->all();
 
         return response()->json(['data' => ['active' => $active, 'history' => $history, 'loan_types' => $this->loans->types(), 'max_pay_periods' => $this->settings->requiredInt('loans.max_pay_periods', 1, 120)]]);
     }
@@ -454,25 +581,30 @@ class SelfServiceController
         $thisYear = (int) now()->format('Y');
         $lastYear = $thisYear - 1;
 
-        // BIR 2316 covers the prior calendar year and is issued after year-end
-        // closing (typically January). Available once we have any payroll rows
-        // for that year.
-        $bir2316Available = Schema::hasTable('payrolls')
-            && Payroll::query()
-                ->where('employee_id', $employee->id)
-                ->whereHas('period', fn ($q) => $q->whereYear('period_start', $lastYear))
-                ->exists();
+        // The catalogue and direct PDF routes use the same published-payroll
+        // predicate. A listed certificate is not downloadable until its
+        // authoritative payroll output exists.
+        $currentPayrollAvailable = $this->hasPublishedPayrollForYear($employee, $thisYear);
+        $bir2316Available = $this->hasPublishedPayrollForYear($employee, $lastYear);
 
-        $catalog = array_values(array_filter((array) $this->settings->get('hr.self_service.certificate_catalog', []), static fn ($certificate): bool => is_array($certificate) && isset($certificate['key'], $certificate['label'])));
-        $certificates = array_map(function (array $certificate) use ($bir2316Available, $thisYear, $lastYear): array {
+        $catalog = $this->certificateCatalog();
+        $certificates = array_map(function (array $certificate) use ($currentPayrollAvailable, $bir2316Available, $thisYear, $lastYear): array {
             $key = (string) $certificate['key'];
-            $available = $key !== 'bir_2316' || $bir2316Available;
+            $available = match ($key) {
+                'employment' => true,
+                'sss', 'philhealth', 'pagibig' => $currentPayrollAvailable,
+                'bir_2316' => $bir2316Available,
+                default => false,
+            };
             $noteKey = (string) ($certificate['note'] ?? '');
             $note = match ($noteKey) {
                 'current_year' => "Year {$thisYear}",
                 'prior_year' => $bir2316Available ? "Year {$lastYear}" : 'Available after year-end closing',
                 default => $noteKey,
             };
+            if (! $available && in_array($key, ['sss', 'philhealth', 'pagibig'], true)) {
+                $note = 'Available after payroll is finalized';
+            }
             return ['key' => $key, 'label' => (string) $certificate['label'], 'available' => $available, 'note' => $note];
         }, $catalog);
 
@@ -487,6 +619,7 @@ class SelfServiceController
 
     public function employmentCertificate(Request $request): StreamedResponse
     {
+        $this->assertCertificateListed('employment');
         $employee = $this->currentEmployee($request);
         $withSalary = $request->boolean('with_salary');
 
@@ -496,16 +629,26 @@ class SelfServiceController
     public function contributionCertificate(Request $request, string $type): StreamedResponse
     {
         abort_unless(in_array($type, ['sss', 'philhealth', 'pagibig'], true), 404);
+        $this->assertCertificateListed($type);
         $employee = $this->currentEmployee($request);
-        $year = (int) ($request->integer('year') ?: now()->format('Y'));
+        $validated = $request->validate([
+            'year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
+        ]);
+        $year = (int) ($validated['year'] ?? now()->year);
+        abort_unless($year === now()->year, 404, 'This certificate is available for the current calendar year only.');
 
         return $this->documents->contributionCertificate($employee, $type, $year, $request->user());
     }
 
     public function bir2316(Request $request): StreamedResponse
     {
+        $this->assertCertificateListed('bir_2316');
         $employee = $this->currentEmployee($request);
-        $year = (int) ($request->integer('year') ?: ((int) now()->format('Y') - 1));
+        $validated = $request->validate([
+            'year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
+        ]);
+        $year = (int) ($validated['year'] ?? (now()->year - 1));
+        abort_unless($year === now()->year - 1, 404, 'BIR 2316 is available for the prior calendar year only.');
 
         return $this->documents->bir2316($employee, $year, $request->user());
     }
@@ -518,16 +661,83 @@ class SelfServiceController
     {
         $employee = $this->currentEmployee($request);
 
-        $rows = EmployeeTraining::query()
+        $historyLimit = $this->settings->requiredInt('self_service.history_limit', 1, 500);
+        $scheduled = EmployeeTraining::query()
             ->with('training')
             ->where('employee_id', $employee->id)
+            ->where('status', EmployeeTrainingStatus::Scheduled->value)
             ->orderByDesc('scheduled_for')
             ->orderByDesc('id')
             ->get();
+        $history = EmployeeTraining::query()
+            ->with('training')
+            ->where('employee_id', $employee->id)
+            ->where('status', '!=', EmployeeTrainingStatus::Scheduled->value)
+            ->orderByDesc('scheduled_for')
+            ->orderByDesc('id')
+            ->limit($historyLimit)
+            ->get();
+        $rows = $scheduled->merge($history)
+            ->sortByDesc(fn (EmployeeTraining $training): string => sprintf(
+                '%s-%010d',
+                $training->scheduled_for?->toDateString() ?? '',
+                (int) $training->id,
+            ))
+            ->values();
 
         return response()->json([
             'data' => EmployeeTrainingResource::collection($rows)->resolve(),
         ]);
+    }
+
+    private function emptyPage(int $perPage): JsonResponse
+    {
+        return response()->json([
+            'data' => [],
+            'meta' => [
+                'current_page' => 1,
+                'last_page' => 1,
+                'per_page' => $perPage,
+                'total' => 0,
+                'from' => null,
+                'to' => null,
+            ],
+            'links' => ['first' => null, 'last' => null, 'prev' => null, 'next' => null],
+        ]);
+    }
+
+    /** @return array<int, array{key: string, label: string, note?: string}> */
+    private function certificateCatalog(): array
+    {
+        return array_values(array_filter(
+            (array) $this->settings->get('hr.self_service.certificate_catalog', []),
+            static fn ($certificate): bool => is_array($certificate)
+                && isset($certificate['key'], $certificate['label']),
+        ));
+    }
+
+    private function assertCertificateListed(string $key): void
+    {
+        abort_unless(
+            collect($this->certificateCatalog())->contains(fn (array $certificate): bool => (string) $certificate['key'] === $key),
+            404,
+            'This document is not available in the self-service catalogue.',
+        );
+    }
+
+    private function hasPublishedPayrollForYear(Employee $employee, int $year): bool
+    {
+        if (! Schema::hasTable('payrolls') || ! Schema::hasTable('payroll_periods')) {
+            return false;
+        }
+
+        $query = Payroll::query();
+        $this->payrollPublication->scopePublishable($query);
+
+        return $query
+            ->where('employee_id', $employee->id)
+            ->whereHas('period', fn ($q) => $q->whereYear('period_start', $year))
+            ->exists();
     }
 
     private function greeting(): string

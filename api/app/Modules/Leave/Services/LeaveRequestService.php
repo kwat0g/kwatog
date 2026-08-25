@@ -11,6 +11,7 @@ use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\OutboxService;
 use App\Modules\Attendance\Enums\AttendanceStatus;
 use App\Modules\Attendance\Models\Attendance;
+use App\Modules\Attendance\Services\AttendanceDateMutabilityGuard;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Leave\Enums\LeaveRequestStatus;
@@ -24,8 +25,10 @@ use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Leave\Models\LeaveType;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class LeaveRequestService
 {
@@ -45,6 +48,7 @@ class LeaveRequestService
         private readonly DocumentSequenceService $sequences,
         private readonly LeaveBalanceService $balances,
         private readonly ApprovalService $approvals,
+        private readonly AttendanceDateMutabilityGuard $attendanceMutability,
     ) {}
 
     /**
@@ -98,7 +102,14 @@ class LeaveRequestService
     public function list(array $filters, ?User $user = null): LengthAwarePaginator
     {
         $q = LeaveRequest::query()
-            ->with(['employee:id,employee_no,first_name,middle_name,last_name,suffix,department_id', 'employee.department:id,name', 'leaveType', 'deptApprover:id,name', 'hrApprover:id,name']);
+            ->with([
+                'employee:id,employee_no,first_name,middle_name,last_name,suffix,department_id',
+                'employee.department:id,name',
+                'leaveType',
+                'deptApprover:id,name',
+                'hrApprover:id,name',
+                'canceller:id,name',
+            ]);
 
         TrashedFilter::apply($q, $filters);
 
@@ -155,108 +166,145 @@ class LeaveRequestService
 
     public function submit(int $employeeId, array $data): LeaveRequest
     {
-        return DB::transaction(function () use ($employeeId, $data) {
-            // Serialize every submission for one employee on a row that is
-            // guaranteed to exist. Locking only matching leave rows cannot
-            // protect the empty-gap race where two overlapping requests both
-            // observe no row before either inserts.
-            Employee::query()->lockForUpdate()->findOrFail($employeeId);
+        $storedDocumentPath = null;
 
-            $start = CarbonImmutable::parse($data['start_date']);
-            $end   = CarbonImmutable::parse($data['end_date']);
-            if ($end->lt($start)) {
-                throw new \InvalidArgumentException('End date must be on or after start date.');
-            }
+        try {
+            return DB::transaction(function () use ($employeeId, $data, &$storedDocumentPath) {
+                // Serialize every submission for one employee on a row that is
+                // guaranteed to exist. Locking only matching leave rows cannot
+                // protect the empty-gap race where two overlapping requests both
+                // observe no row before either inserts.
+                Employee::query()->lockForUpdate()->findOrFail($employeeId);
 
-            // M-18 — half-day leave. Must be a single-date request.
-            $halfDayPeriod = $data['half_day_period'] ?? null;
-            if ($halfDayPeriod !== null) {
-                if (! in_array($halfDayPeriod, ['am', 'pm'], true)) {
-                    throw new \InvalidArgumentException('half_day_period must be "am" or "pm".');
+                $start = CarbonImmutable::parse($data['start_date']);
+                $end   = CarbonImmutable::parse($data['end_date']);
+                if ($end->lt($start)) {
+                    throw new \InvalidArgumentException('End date must be on or after start date.');
                 }
-                if (! $start->isSameDay($end)) {
-                    throw new \InvalidArgumentException('Half-day leave must start and end on the same date.');
+                if ($start->year !== $end->year) {
+                    throw new BusinessRuleException(
+                        'Leave requests cannot span calendar years. Submit one request for each year.',
+                    );
                 }
+
+                // M-18 — half-day leave. Must be a single-date request.
+                $halfDayPeriod = $data['half_day_period'] ?? null;
+                if ($halfDayPeriod !== null) {
+                    if (! in_array($halfDayPeriod, ['am', 'pm'], true)) {
+                        throw new \InvalidArgumentException('half_day_period must be "am" or "pm".');
+                    }
+                    if (! $start->isSameDay($end)) {
+                        throw new \InvalidArgumentException('Half-day leave must start and end on the same date.');
+                    }
+                }
+
+                $days = $halfDayPeriod !== null
+                    ? 0.5
+                    : $this->businessDaysInclusive($start, $end);
+                $year = $start->year;
+
+                $type = LeaveType::query()->whereKey($data['leave_type_id'])->first();
+                if (! $type || ! $type->is_active) {
+                    throw new BusinessRuleException('This leave type is not available for new requests.');
+                }
+
+                $document = $data['document'] ?? null;
+                if ($type->requires_document && ! $document instanceof UploadedFile) {
+                    throw new BusinessRuleException(
+                        'A supporting document is required for this leave type before submission.',
+                    );
+                }
+                if ($document !== null && ! $document instanceof UploadedFile) {
+                    throw new BusinessRuleException('The supporting document could not be validated.');
+                }
+                if ($document instanceof UploadedFile) {
+                    $storedDocumentPath = $this->storeDocument($employeeId, $document);
+                }
+
+                // Balance check — locked inside the transaction so concurrent
+                // requests see the updated balance of whichever commits first.
+                $bal = \App\Modules\Leave\Models\EmployeeLeaveBalance::query()
+                    ->where('employee_id', $employeeId)
+                    ->where('leave_type_id', $type->id)
+                    ->where('year', $year)
+                    ->lockForUpdate()
+                    ->first();
+                if (! $bal) {
+                    throw new BusinessRuleException(
+                        'Leave balance is not initialized for this employee, leave type, and year. Contact HR before submitting.',
+                    );
+                }
+                if ((float) $bal->remaining < $days) {
+                    throw new BusinessRuleException("Insufficient leave balance ({$bal->remaining} remaining; {$days} requested).");
+                }
+
+                // Overlap check remains the user-facing rule; the employee lock
+                // above is the concurrency authority for empty and populated gaps.
+                //
+                // M-18 — half-day awareness. The base date-range query stays the
+                // same; we add a closure that excludes opposite-half collisions
+                // on a single-date request. An AM and a PM request on the same
+                // day do not collide. Any full-day on the same date does collide.
+                $overlap = LeaveRequest::query()
+                    ->where('employee_id', $employeeId)
+                    ->whereIn('status', [LeaveRequestStatus::PendingDept->value, LeaveRequestStatus::PendingHr->value, LeaveRequestStatus::Approved->value])
+                    ->where(function ($q) use ($start, $end) {
+                        $q->whereBetween('start_date', [$start->toDateString(), $end->toDateString()])
+                          ->orWhereBetween('end_date', [$start->toDateString(), $end->toDateString()])
+                          ->orWhere(function ($qq) use ($start, $end) {
+                              $qq->where('start_date', '<=', $start->toDateString())
+                                 ->where('end_date', '>=', $end->toDateString());
+                          });
+                    })
+                    ->when($halfDayPeriod !== null, function ($q) use ($halfDayPeriod) {
+                        // Single-day half-day request: collides ONLY with rows that
+                        // are full-day (half_day_period IS NULL) OR same half.
+                        $q->where(function ($qq) use ($halfDayPeriod) {
+                            $qq->whereNull('half_day_period')
+                               ->orWhere('half_day_period', $halfDayPeriod);
+                        });
+                    })
+                    ->lockForUpdate()
+                    ->exists();
+                if ($overlap) {
+                    throw new BusinessRuleException('You already have a leave request for these dates.');
+                }
+
+                $req = LeaveRequest::create([
+                    'leave_request_no' => $this->sequences->generate('leave_request'),
+                    'employee_id'      => $employeeId,
+                    'leave_type_id'    => $type->id,
+                    'start_date'       => $start->toDateString(),
+                    'end_date'         => $end->toDateString(),
+                    'days'             => $days,
+                    'half_day_period'  => $halfDayPeriod,
+                    'reason'           => $data['reason'] ?? null,
+                    'document_path'    => $storedDocumentPath,
+                ]);
+                // status + approval fields are non-fillable; service-only writes.
+                $req->forceFill(['status' => LeaveRequestStatus::PendingDept->value])->save();
+
+                $this->approvals->submit($req, 'leave_request');
+
+                app(OutboxService::class)->record(
+                    new LeaveRequestSubmitted($req->fresh(['employee', 'employee.department', 'leaveType'])),
+                );
+
+                return $req->load(['employee', 'employee.department', 'leaveType']);
+            });
+        } catch (\Throwable $e) {
+            if ($storedDocumentPath !== null) {
+                Storage::disk('local')->delete($storedDocumentPath);
             }
-
-            $days = $halfDayPeriod !== null
-                ? 0.5
-                : $this->businessDaysInclusive($start, $end);
-            $year = $start->year;
-
-            $type = LeaveType::findOrFail($data['leave_type_id']);
-
-            // Balance check — locked inside the transaction so concurrent
-            // requests see the updated balance of whichever commits first.
-            $bal = \App\Modules\Leave\Models\EmployeeLeaveBalance::query()
-                ->where('employee_id', $employeeId)
-                ->where('leave_type_id', $type->id)
-                ->where('year', $year)
-                ->lockForUpdate()
-                ->first();
-            if ($bal && (float) $bal->remaining < $days) {
-                throw new BusinessRuleException("Insufficient leave balance ({$bal->remaining} remaining; {$days} requested).");
-            }
-
-            // Overlap check remains the user-facing rule; the employee lock
-            // above is the concurrency authority for empty and populated gaps.
-            //
-            // M-18 — half-day awareness. The base date-range query stays the
-            // same; we add a closure that excludes opposite-half collisions
-            // on a single-date request. An AM and a PM request on the same
-            // day do not collide. Any full-day on the same date does collide.
-            $overlap = LeaveRequest::query()
-                ->where('employee_id', $employeeId)
-                ->whereIn('status', [LeaveRequestStatus::PendingDept->value, LeaveRequestStatus::PendingHr->value, LeaveRequestStatus::Approved->value])
-                ->where(function ($q) use ($start, $end) {
-                    $q->whereBetween('start_date', [$start->toDateString(), $end->toDateString()])
-                      ->orWhereBetween('end_date', [$start->toDateString(), $end->toDateString()])
-                      ->orWhere(function ($qq) use ($start, $end) {
-                          $qq->where('start_date', '<=', $start->toDateString())
-                             ->where('end_date', '>=', $end->toDateString());
-                      });
-                })
-                ->when($halfDayPeriod !== null, function ($q) use ($halfDayPeriod) {
-                    // Single-day half-day request: collides ONLY with rows that
-                    // are full-day (half_day_period IS NULL) OR same half.
-                    $q->where(function ($qq) use ($halfDayPeriod) {
-                        $qq->whereNull('half_day_period')
-                           ->orWhere('half_day_period', $halfDayPeriod);
-                    });
-                })
-                ->lockForUpdate()
-                ->exists();
-            if ($overlap) {
-                throw new BusinessRuleException('You already have a leave request for these dates.');
-            }
-
-            $req = LeaveRequest::create([
-                'leave_request_no' => $this->sequences->generate('leave_request'),
-                'employee_id'      => $employeeId,
-                'leave_type_id'    => $type->id,
-                'start_date'       => $start->toDateString(),
-                'end_date'         => $end->toDateString(),
-                'days'             => $days,
-                'half_day_period'  => $halfDayPeriod,
-                'reason'           => $data['reason'] ?? null,
-                'document_path'    => $data['document_path'] ?? null,
-            ]);
-            // status + approval fields are non-fillable; service-only writes.
-            $req->forceFill(['status' => LeaveRequestStatus::PendingDept->value])->save();
-
-            $this->approvals->submit($req, 'leave_request');
-
-            app(OutboxService::class)->record(
-                new LeaveRequestSubmitted($req->fresh(['employee', 'employee.department', 'leaveType'])),
-            );
-
-            return $req->load(['employee', 'employee.department', 'leaveType']);
-        });
+            throw $e;
+        }
     }
 
     public function approveDept(LeaveRequest $req, User $approver, ?string $remarks = null): LeaveRequest
     {
         return DB::transaction(function () use ($req, $approver, $remarks) {
+            $req = $this->lockRequest($req);
+            $this->assertDepartmentDecisionScope($req, $approver);
             if ($req->status !== LeaveRequestStatus::PendingDept) {
                 throw new BusinessRuleException('Only requests pending department head approval can be approved here.');
             }
@@ -279,6 +327,7 @@ class LeaveRequestService
     public function approveHR(LeaveRequest $req, User $approver, ?string $remarks = null): LeaveRequest
     {
         return DB::transaction(function () use ($req, $approver, $remarks) {
+            $req = $this->lockRequest($req);
             if ($req->status !== LeaveRequestStatus::PendingHr) {
                 throw new BusinessRuleException('Only requests pending HR approval can be approved here.');
             }
@@ -295,7 +344,7 @@ class LeaveRequestService
             $this->balances->consume($req->employee_id, $req->leave_type_id, $year, (float) $req->days);
 
             // Side effect 2: mark attendance days as on_leave.
-            $this->markAttendance($req);
+            $req->forceFill(['attendance_snapshot' => $this->markAttendance($req)])->save();
 
             app(OutboxService::class)->record(
                 new LeaveRequestApproved($req->fresh(['employee', 'employee.department', 'leaveType'])),
@@ -366,8 +415,14 @@ class LeaveRequestService
     public function reject(LeaveRequest $req, User $approver, string $reason): LeaveRequest
     {
         return DB::transaction(function () use ($req, $approver, $reason) {
+            $req = $this->lockRequest($req);
             if (! in_array($req->status, [LeaveRequestStatus::PendingDept, LeaveRequestStatus::PendingHr], true)) {
                 throw new BusinessRuleException('Only pending requests can be rejected.');
+            }
+            if ($req->status === LeaveRequestStatus::PendingDept) {
+                $this->assertDepartmentDecisionScope($req, $approver);
+            } elseif (! $approver->hasPermission('leave.approve_hr')) {
+                throw new ForbiddenActionException('Only HR may reject a request pending HR approval.');
             }
             $this->approvals->reject($req, $approver, $reason);
             $req->forceFill([
@@ -386,11 +441,20 @@ class LeaveRequestService
     public function cancel(LeaveRequest $req, User $user): LeaveRequest
     {
         return DB::transaction(function () use ($req, $user) {
+            $req = $this->lockRequest($req);
+            $canOverride = $user->hasPermission('leave.approve_hr');
+            if (! $canOverride && (int) $req->employee_id !== (int) $user->employee_id) {
+                throw new ForbiddenActionException('You may only cancel your own leave requests.');
+            }
             if (in_array($req->status, [LeaveRequestStatus::Cancelled, LeaveRequestStatus::Rejected], true)) {
                 throw new BusinessRuleException('Already finalized.');
             }
             $wasApproved = $req->status === LeaveRequestStatus::Approved;
-            $req->forceFill(['status' => LeaveRequestStatus::Cancelled->value])->save();
+            $req->forceFill([
+                'status'       => LeaveRequestStatus::Cancelled->value,
+                'cancelled_by' => $user->id,
+                'cancelled_at' => now(),
+            ])->save();
 
             if ($wasApproved) {
                 $year = (int) $req->start_date->format('Y');
@@ -398,7 +462,7 @@ class LeaveRequestService
                 $this->unmarkAttendance($req);
             }
 
-            return $req->fresh(['employee', 'employee.department', 'leaveType']);
+            return $req->fresh(['employee', 'employee.department', 'leaveType', 'canceller']);
         });
     }
 
@@ -413,33 +477,183 @@ class LeaveRequestService
         return (float) $count;
     }
 
-    private function markAttendance(LeaveRequest $req): void
+    private function storeDocument(int $employeeId, UploadedFile $document): string
     {
-        for ($d = CarbonImmutable::parse($req->start_date); $d->lte(CarbonImmutable::parse($req->end_date)); $d = $d->addDay()) {
-            Attendance::updateOrCreate(
-                ['employee_id' => $req->employee_id, 'date' => $d->toDateString()],
-                [
-                    'status'           => AttendanceStatus::OnLeave->value,
-                    'is_manual_entry'  => false,
-                    'remarks'          => "leave:{$req->leave_request_no}",
-                    // Keep computed numeric fields zero — payroll will apply leave-pay logic.
-                    'regular_hours'    => 0,
-                    'overtime_hours'   => 0,
-                    'night_diff_hours' => 0,
-                    'tardiness_minutes'=> 0,
-                    'undertime_minutes'=> 0,
-                    'day_type_rate'    => 1.00,
-                ],
-            );
+        $path = $document->store('leave-documents/'.$employeeId, 'local');
+        if (! is_string($path) || $path === '') {
+            throw new BusinessRuleException('Unable to store the supporting document.');
+        }
+
+        return $path;
+    }
+
+    /** @return array<string, array<string, mixed>> */
+    private function markAttendance(LeaveRequest $req): array
+    {
+        $snapshot = [];
+        $start = CarbonImmutable::parse($req->start_date);
+        $end = CarbonImmutable::parse($req->end_date);
+
+        for ($d = $start; $d->lte($end); $d = $d->addDay()) {
+            // Leave days use the same business-day contract as balance debit.
+            if ($d->dayOfWeek === CarbonImmutable::SUNDAY) {
+                continue;
+            }
+
+            $date = $d->toDateString();
+            // This is intentionally called even for half-day requests: a leave
+            // approval must not silently cross a payroll-locked date.
+            $this->attendanceMutability->assertMutable((int) $req->employee_id, $date);
+
+            $attendance = Attendance::withTrashed()
+                ->where('employee_id', $req->employee_id)
+                ->where('date', $date)
+                ->lockForUpdate()
+                ->first();
+
+            $isHalfDay = $req->half_day_period !== null;
+            $mutated = ! $isHalfDay && ! $attendance?->trashed();
+            $snapshot[$date] = [
+                'id'        => $attendance?->id,
+                'mutated'   => $mutated,
+                'attributes'=> $attendance && ! $attendance->trashed()
+                    ? $this->attendanceSnapshotAttributes($attendance)
+                    : null,
+            ];
+
+            // There is one attendance row per date, not per half-day. A
+            // half-day leave therefore leaves an existing punch/DTR row intact
+            // and relies on the leave request itself as the half-day record. This
+            // avoids turning AM/PM leave into a full-day absence and avoids
+            // inventing a second row that the unique (employee,date) key forbids.
+            if ($isHalfDay || $attendance?->trashed()) {
+                continue;
+            }
+
+            $values = [
+                'status'            => AttendanceStatus::OnLeave->value,
+                'is_manual_entry'   => false,
+                'remarks'           => "leave:{$req->leave_request_no}",
+                // Keep computed numeric fields zero — payroll uses the leave
+                // request and flat-cutoff rules for paid-leave treatment.
+                'regular_hours'     => 0,
+                'overtime_hours'    => 0,
+                'night_diff_hours'  => 0,
+                'tardiness_minutes' => 0,
+                'undertime_minutes' => 0,
+                'day_type_rate'     => 1.00,
+            ];
+
+            if ($attendance) {
+                $attendance->forceFill($values)->save();
+            } else {
+                Attendance::create($values + [
+                    'employee_id' => $req->employee_id,
+                    'date'        => $date,
+                ]);
+            }
+        }
+
+        return $snapshot;
+    }
+
+    /** @return array<string, mixed> */
+    private function attendanceSnapshotAttributes(Attendance $attendance): array
+    {
+        $fields = [
+            'employee_id', 'date', 'shift_id', 'time_in', 'time_out',
+            'regular_hours', 'overtime_hours', 'night_diff_hours',
+            'tardiness_minutes', 'undertime_minutes', 'holiday_type',
+            'is_rest_day', 'day_type_rate', 'status', 'is_manual_entry', 'remarks',
+        ];
+
+        $attributes = [];
+        foreach ($fields as $field) {
+            $attributes[$field] = $attendance->getRawOriginal($field);
+        }
+
+        return $attributes;
+    }
+
+    /**
+     * Restore only attendance rows this request actually replaced or created.
+     * A changed leave marker is a concurrent/manual edit and fails closed rather
+     * than deleting or overwriting somebody else's DTR correction.
+     */
+    private function unmarkAttendance(LeaveRequest $req): void
+    {
+        $snapshot = is_array($req->attendance_snapshot) ? $req->attendance_snapshot : [];
+        $start = CarbonImmutable::parse($req->start_date);
+        $end = CarbonImmutable::parse($req->end_date);
+        $token = "leave:{$req->leave_request_no}";
+
+        for ($d = $start; $d->lte($end); $d = $d->addDay()) {
+            if ($d->dayOfWeek === CarbonImmutable::SUNDAY) {
+                continue;
+            }
+
+            $date = $d->toDateString();
+            $this->attendanceMutability->assertMutable((int) $req->employee_id, $date);
+            $entry = $snapshot[$date] ?? null;
+            if (is_array($entry) && ! ($entry['mutated'] ?? false)) {
+                continue;
+            }
+
+            $attendance = Attendance::withTrashed()
+                ->where('employee_id', $req->employee_id)
+                ->where('date', $date)
+                ->lockForUpdate()
+                ->first();
+
+            if (is_array($entry) && $entry['attributes'] !== null) {
+                if (! $attendance || $attendance->trashed()) {
+                    throw new BusinessRuleException(
+                        "Attendance for {$date} changed after leave approval; contact HR for a manual correction.",
+                    );
+                }
+                if ((string) $attendance->remarks !== $token) {
+                    throw new BusinessRuleException(
+                        "Attendance for {$date} changed after leave approval; contact HR for a manual correction.",
+                    );
+                }
+                $attendance->forceFill($entry['attributes'])->save();
+                continue;
+            }
+
+            // No prior row: delete only the exact leave-created marker. A row
+            // created later by attendance staff is left untouched.
+            if ($attendance && ! $attendance->trashed() && (string) $attendance->remarks === $token) {
+                $attendance->delete();
+            }
         }
     }
 
-    private function unmarkAttendance(LeaveRequest $req): void
+    private function lockRequest(LeaveRequest $request): LeaveRequest
     {
-        Attendance::query()
-            ->where('employee_id', $req->employee_id)
-            ->whereBetween('date', [$req->start_date, $req->end_date])
-            ->where('remarks', "leave:{$req->leave_request_no}")
-            ->delete();
+        return LeaveRequest::query()
+            ->lockForUpdate()
+            ->with('employee')
+            ->findOrFail($request->getKey());
+    }
+
+    private function assertDepartmentDecisionScope(LeaveRequest $request, User $approver): void
+    {
+        // HR/system administrators have an explicit company-wide view grant.
+        // ApprovalService still enforces the workflow step's role/SoD gate.
+        if ($approver->hasPermission('leave.approve_hr')) {
+            return;
+        }
+
+        $approverDepartmentId = $approver->employee_id
+            ? Employee::query()->whereKey($approver->employee_id)->value('department_id')
+            : null;
+        $targetDepartmentId = $request->employee?->department_id;
+
+        if ($approverDepartmentId === null || $targetDepartmentId === null
+            || (int) $approverDepartmentId !== (int) $targetDepartmentId) {
+            throw new ForbiddenActionException(
+                'Department heads may only decide leave requests for their own department.',
+            );
+        }
     }
 }

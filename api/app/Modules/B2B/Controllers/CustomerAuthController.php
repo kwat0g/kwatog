@@ -6,11 +6,13 @@ namespace App\Modules\B2B\Controllers;
 use App\Common\Rules\StrongPassword;
 
 use App\Modules\B2B\Models\CustomerPortalUser;
+use App\Modules\B2B\Resources\CustomerPortalUserResource;
 use App\Modules\B2B\Services\B2bAuthService;
 use App\Modules\B2B\Services\PortalPasswordResetService;
 use App\Modules\B2B\Services\PortalPasswordService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class CustomerAuthController
 {
@@ -19,7 +21,7 @@ class CustomerAuthController
     public function forgotPassword(Request $request, PortalPasswordResetService $resets): JsonResponse
     {
         $data = $request->validate(['email' => ['required', 'email']]);
-        $resets->requestReset('customer', $data['email']);
+        $resets->requestReset('customer', $data['email'], $request);
 
         return response()->json(['message' => 'If an active portal account exists for that email, a reset link will be sent shortly.']);
     }
@@ -30,14 +32,14 @@ class CustomerAuthController
             'token' => ['required', 'string'],
             'password' => ['required', 'string', 'confirmed', new StrongPassword()],
         ]);
-        $resets->reset('customer', $data['token'], $data['password']);
+        $resets->reset('customer', $data['token'], $data['password'], $request);
 
         return response()->json(['message' => 'Portal password updated. You can now sign in.']);
     }
 
     /**
      * POST /api/v1/b2b/customer/login
-     * Authenticate customer portal user and return a Sanctum API token.
+     * Authenticate customer portal user and establish an HTTP-only session.
      */
     public function login(Request $request): JsonResponse
     {
@@ -53,22 +55,14 @@ class CustomerAuthController
             $request,
             'customer-portal',
             'customer',
+            'customer_portal',
         );
 
         /** @var CustomerPortalUser $user */
-        $user = $result['user'];
+        $user = $result['user']->load('customer:id,name');
 
         return response()->json([
-            'data' => [
-                'token' => $result['token'],
-                'user'  => [
-                    'id'          => $user->hash_id,
-                    'name'        => $user->name,
-                    'email'       => $user->email,
-                    'customer_id' => app('hashids')->encode((int) $user->customer_id),
-                    'must_change_password' => $user->must_change_password,
-                ],
-            ],
+            'data' => ['user' => new CustomerPortalUserResource($user)],
         ]);
     }
 
@@ -77,9 +71,11 @@ class CustomerAuthController
      */
     public function logout(Request $request): JsonResponse
     {
-        /** @var \App\Modules\B2B\Models\CustomerPortalUser $user */
-        $user = $request->user('customer_portal');
-        $user?->currentAccessToken()?->delete();
+        Auth::guard('customer_portal')->logout();
+        if ($request->hasSession()) {
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+        }
 
         return response()->json(['message' => 'Logged out successfully.']);
     }
@@ -94,6 +90,12 @@ class CustomerAuthController
 
         $passwords->change($request->user('customer_portal'), $data['current_password'], $data['new_password'], $request);
 
+        Auth::guard('customer_portal')->logout();
+        if ($request->hasSession()) {
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+        }
+
         return response()->json(['message' => 'Password updated successfully. Please sign in again.']);
     }
 
@@ -105,15 +107,6 @@ class CustomerAuthController
         /** @var \App\Modules\B2B\Models\CustomerPortalUser $user */
         $user = $request->user('customer_portal')->load('customer:id,name');
 
-        return response()->json([
-            'data' => [
-                'id'            => $user->hash_id,
-                'name'          => $user->name,
-                'email'         => $user->email,
-                'customer_id'   => app('hashids')->encode((int) $user->customer_id),
-                'customer_name' => $user->customer?->name,
-                'must_change_password' => $user->must_change_password,
-            ],
-        ]);
+        return response()->json(['data' => new CustomerPortalUserResource($user)]);
     }
 }

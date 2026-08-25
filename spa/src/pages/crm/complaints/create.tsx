@@ -2,6 +2,7 @@
 import { useForm } from 'react-hook-form';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import toast from 'react-hot-toast';
@@ -9,6 +10,7 @@ import type { AxiosError } from 'axios';
 import { complaintsApi } from '@/api/crm/complaints';
 import { customersApi } from '@/api/accounting/customers';
 import { productsApi } from '@/api/crm/products';
+import { salesOrdersApi } from '@/api/crm/salesOrders';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -21,6 +23,7 @@ import type { CreateComplaintData, ComplaintSeverity } from '@/types/crm';
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
+import { useDebounce } from '@/hooks/useDebounce';
 const schema = z.object({
  customer_id: z.string().min(1, 'Customer is required'),
  product_id: z.string().optional().or(z.literal('')),
@@ -35,14 +38,38 @@ type FormValues = z.infer<typeof schema>;
 
 export default function CreateComplaintPage() {
  const navigate = useNavigate();
+ const [selectedCustomerId, setSelectedCustomerId] = useState('');
+ const [customerSearch, setCustomerSearch] = useState('');
+ const [productSearch, setProductSearch] = useState('');
+ const [salesOrderSearch, setSalesOrderSearch] = useState('');
+ const debouncedCustomerSearch = useDebounce(customerSearch, 300);
+ const debouncedProductSearch = useDebounce(productSearch, 300);
+ const debouncedSalesOrderSearch = useDebounce(salesOrderSearch, 300);
 
  const customers = useQuery({
- queryKey: ['accounting', 'customers', { per_page: 200 }],
- queryFn: () => customersApi.list({ per_page: 200 }),
+ queryKey: ['accounting', 'customers', 'complaint-lookup', debouncedCustomerSearch],
+ queryFn: () => customersApi.list({
+ per_page: 100,
+ is_active: true,
+ search: debouncedCustomerSearch || undefined,
+ }),
  });
  const products = useQuery({
- queryKey: ['crm', 'products', { is_active: true, per_page: 200 }],
- queryFn: () => productsApi.list({ is_active: true, per_page: 200 }),
+ queryKey: ['crm', 'products', 'complaint-lookup', debouncedProductSearch],
+ queryFn: () => productsApi.list({
+ is_active: true,
+ per_page: 100,
+ search: debouncedProductSearch || undefined,
+ }),
+ });
+ const salesOrders = useQuery({
+  queryKey: ['crm', 'sales-orders', 'complaint-lookup', selectedCustomerId, debouncedSalesOrderSearch],
+  queryFn: () => salesOrdersApi.list({
+   customer_id: selectedCustomerId,
+   search: debouncedSalesOrderSearch || undefined,
+   per_page: 100,
+  }),
+ enabled: Boolean(selectedCustomerId),
  });
  const complaintOptions = useQuery({
  queryKey: ['crm', 'complaints', 'options'],
@@ -62,7 +89,7 @@ export default function CreateComplaintPage() {
  },
  });
  const {
- register, handleSubmit, setError, formState: { errors },
+ register, handleSubmit, setError, setValue, formState: { errors },
  } = form;
 
  const submit = useMutation({
@@ -103,19 +130,63 @@ export default function CreateComplaintPage() {
  >
  <div className="space-y-4">
  <Panel title="Subject">
- <div className="grid grid-cols-2 gap-3">
- <Select label="Customer" required {...register('customer_id')} error={errors.customer_id?.message}>
+ <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+ <div className="space-y-2">
+ <Input
+ label="Find customer"
+ value={customerSearch}
+ onChange={(e) => setCustomerSearch(e.target.value)}
+ placeholder="Name or contact…"
+ />
+ <Select
+ label="Customer"
+ required
+ {...register('customer_id', {
+ onChange: (e) => {
+  setSelectedCustomerId(e.target.value);
+  setValue('sales_order_id', '');
+  setSalesOrderSearch('');
+ },
+ })}
+ error={errors.customer_id?.message}
+ >
  <option value="">Select…</option>
  {customers.data?.data?.map((c) => (
  <option key={c.id} value={c.id}>{c.name}</option>
  ))}
  </Select>
+ </div>
+ <div className="space-y-2">
+ <Input
+ label="Find product"
+ value={productSearch}
+ onChange={(e) => setProductSearch(e.target.value)}
+ placeholder="Part number or name…"
+ />
  <Select label="Product (optional)" {...register('product_id')} error={errors.product_id?.message}>
  <option value="">— None —</option>
  {products.data?.data?.map((p) => (
  <option key={p.id} value={p.id}>{p.part_number} — {p.name}</option>
  ))}
  </Select>
+ </div>
+ <div className="space-y-2">
+ <Input
+  label="Find sales order"
+  value={salesOrderSearch}
+  onChange={(e) => setSalesOrderSearch(e.target.value)}
+  placeholder="SO number…"
+  disabled={!selectedCustomerId}
+ />
+ <Select label="Sales order (optional)" {...register('sales_order_id')} error={errors.sales_order_id?.message}>
+ <option value="">— None —</option>
+ {(salesOrders.data?.data ?? [])
+  .filter((order) => order.status !== 'cancelled')
+  .map((order) => (
+  <option key={order.id} value={order.id}>{order.so_number} — {order.date}</option>
+  ))}
+ </Select>
+ </div>
  </div>
  </Panel>
 

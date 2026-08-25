@@ -21,9 +21,9 @@ use Illuminate\Support\Facades\DB;
  *      remaining (or convert per conversion_rate).
  *   3. Create the new year's balance with default_balance + carried.
  *
- * Idempotent: uses updateOrInsert keyed by (emp, type, year). Re-running
- * Jan 1 → Feb 28 won't double-credit. The carry-forward source is read
- * once, not accumulated.
+ * Idempotent: inserts are keyed by (emp, type, year). Re-running after a
+ * target-year leave has been consumed preserves that row's used/remaining
+ * state instead of resetting it to zero.
  */
 class ResetLeaveBalancesForYear extends Command
 {
@@ -110,27 +110,41 @@ class ResetLeaveBalancesForYear extends Command
                     }
 
                     $total = (float) $lt->default_balance + $carried;
-                    $existed = EmployeeLeaveBalance::query()
+                    // Serialize with LeaveBalanceService::consume(). An
+                    // existing target balance is authoritative: it may already
+                    // contain approved leave usage from an earlier retry.
+                    $existing = EmployeeLeaveBalance::query()
                         ->where('employee_id', $emp->id)
                         ->where('leave_type_id', $lt->id)
                         ->where('year', $year)
-                        ->exists();
+                        ->lockForUpdate()
+                        ->first();
+                    if ($existing) {
+                        continue;
+                    }
 
-                    EmployeeLeaveBalance::query()->updateOrInsert(
-                        [
-                            'employee_id' => $emp->id,
-                            'leave_type_id' => $lt->id,
-                            'year' => $year,
-                        ],
-                        [
-                            'total_credits' => round($total, 1),
-                            'used' => 0,
-                            'remaining' => round($total, 1),
-                            'updated_at' => Carbon::now(),
-                            'created_at' => Carbon::now(),
-                        ]
-                    );
-                    if (! $existed) {
+                    $now = Carbon::now();
+                    $inserted = DB::table('employee_leave_balances')->insertOrIgnore([
+                        'employee_id' => $emp->id,
+                        'leave_type_id' => $lt->id,
+                        'year' => $year,
+                        'total_credits' => round($total, 1),
+                        'used' => 0,
+                        'remaining' => round($total, 1),
+                        'updated_at' => $now,
+                        'created_at' => $now,
+                    ]);
+
+                    // A concurrent rollover may have won the unique-key race.
+                    // Re-read under the row lock so this transaction never
+                    // reports a missing balance after a successful insert.
+                    EmployeeLeaveBalance::query()
+                        ->where('employee_id', $emp->id)
+                        ->where('leave_type_id', $lt->id)
+                        ->where('year', $year)
+                        ->lockForUpdate()
+                        ->firstOrFail();
+                    if ($inserted > 0) {
                         $created++;
                     }
                 }

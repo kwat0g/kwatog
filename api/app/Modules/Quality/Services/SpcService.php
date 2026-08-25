@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Quality\Services;
 
 use App\Common\Services\SettingsService;
+use App\Modules\Quality\Enums\InspectionStatus;
+use App\Modules\Quality\Models\InspectionSpec;
 use App\Modules\Quality\Models\InspectionSpecItem;
 use Illuminate\Support\Facades\DB;
 
@@ -90,7 +92,7 @@ class SpcService
         $variance = array_sum(array_map(fn ($v) => ($v - $mean) ** 2, $measurements)) / ($n - 1);
         $sigma    = sqrt($variance);
         if ($sigma < 1e-10) {
-            $sigma = 1e-10;
+            return null;
         }
 
         $cp  = ($usl - $lsl) / (6 * $sigma);
@@ -112,17 +114,31 @@ class SpcService
     }
 
     /**
-     * Compute SPC for all items of an InspectionSpec across all completed inspections.
+     * Compute SPC for the current revision of an InspectionSpec across
+     * completed inspections governed by that same revision.
      *
      * Only items with both tolerance_min and tolerance_max populated (bilateral
      * spec) are included. Items with fewer than the configured minimum sample count are
      * silently skipped — the UI should convey "not enough data" where absent.
      *
+     * Passed and failed inspections are both completed evidence: a failed
+     * reading is a quality signal and is intentionally included. Draft,
+     * in-progress, and cancelled inspections are excluded.
+     *
      * @return array<string, array>  Keyed by inspection_spec_item hash_id
      */
     public function computeForSpec(int $inspectionSpecId): array
     {
-        $items = InspectionSpecItem::where('inspection_spec_id', $inspectionSpecId)->get();
+        $spec = InspectionSpec::withTrashed()->with('currentRevision')->find($inspectionSpecId);
+        $currentRevisionId = $spec?->currentRevision?->id;
+        if (! $currentRevisionId) {
+            return [];
+        }
+
+        $items = InspectionSpecItem::query()
+            ->where('inspection_spec_id', $inspectionSpecId)
+            ->where('inspection_spec_revision_id', $currentRevisionId)
+            ->get();
         $results = [];
 
         foreach ($items as $item) {
@@ -130,10 +146,14 @@ class SpcService
                 continue;
             }
 
-            $measurements = DB::table('inspection_measurements')
-                ->where('inspection_spec_item_id', $item->id)
-                ->whereNotNull('measured_value')
-                ->pluck('measured_value')
+            $measurements = DB::table('inspection_measurements as m')
+                ->join('inspections as i', 'i.id', '=', 'm.inspection_id')
+                ->where('i.inspection_spec_id', $inspectionSpecId)
+                ->where('i.inspection_spec_revision_id', $currentRevisionId)
+                ->whereIn('i.status', $this->completedInspectionStatuses())
+                ->where('m.inspection_spec_item_id', $item->id)
+                ->whereNotNull('m.measured_value')
+                ->pluck('m.measured_value')
                 ->map(fn ($v) => (float) $v)
                 ->toArray();
 
@@ -152,17 +172,33 @@ class SpcService
     /** @return array<int, array{A2: float, D3: float, D4: float, d2: float}> */
     public function computeCapabilityStudy(int $productId, int $specItemId, int $sampleSize = 50): ?array
     {
-        $specItem = InspectionSpecItem::find($specItemId);
-        if (!$specItem || $specItem->tolerance_min === null || $specItem->tolerance_max === null) {
+        $specItem = InspectionSpecItem::query()
+            ->with([
+                'spec' => fn ($query) => $query->withTrashed()->with('currentRevision'),
+                'revision',
+            ])
+            ->find($specItemId);
+        $currentRevision = $specItem?->spec?->currentRevision;
+        if (! $specItem
+            || $specItem->trashed()
+            || $specItem->tolerance_min === null
+            || $specItem->tolerance_max === null
+            || ! $currentRevision
+            || (int) $specItem->inspection_spec_revision_id !== (int) $currentRevision->id
+            || ($productId > 0 && (int) $specItem->spec?->product_id !== $productId)) {
             return null;
         }
 
-        $measurements = DB::table('inspection_measurements')
-            ->where('inspection_spec_item_id', $specItemId)
-            ->whereNotNull('measured_value')
-            ->orderByDesc('id')
+        $measurements = DB::table('inspection_measurements as m')
+            ->join('inspections as i', 'i.id', '=', 'm.inspection_id')
+            ->where('i.inspection_spec_id', $specItem->inspection_spec_id)
+            ->where('i.inspection_spec_revision_id', $currentRevision->id)
+            ->whereIn('i.status', $this->completedInspectionStatuses())
+            ->where('m.inspection_spec_item_id', $specItemId)
+            ->whereNotNull('m.measured_value')
+            ->orderByDesc('m.id')
             ->limit($sampleSize)
-            ->pluck('measured_value')
+            ->pluck('m.measured_value')
             ->map(fn ($v) => (float) $v)
             ->toArray();
 
@@ -174,6 +210,15 @@ class SpcService
         $result['histogram'] = $this->buildHistogram($measurements, (float) $specItem->tolerance_min, (float) $specItem->tolerance_max);
 
         return $result;
+    }
+
+    /** @return array<int, string> */
+    private function completedInspectionStatuses(): array
+    {
+        return [
+            InspectionStatus::Passed->value,
+            InspectionStatus::Failed->value,
+        ];
     }
 
     private function buildHistogram(array $values, float $lsl, float $usl, int $bins = 20): array

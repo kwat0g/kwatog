@@ -28,7 +28,7 @@ const schema = z.object({
  name: z.string().min(1, 'Name is required').max(200),
  description: z.string().max(1000).optional().or(z.literal('')),
  duration_hours: z.coerce.number().min(0).optional().or(z.literal('')),
- validity_months: z.coerce.number().min(0).optional().or(z.literal('')),
+ validity_months: z.coerce.number().min(1, 'Validity must be at least 1 month').optional().or(z.literal('')),
  is_certification: z.boolean().optional(),
  department_id: z.string().optional().or(z.literal('')),
 });
@@ -116,7 +116,7 @@ export default function TrainingFormPage() {
  <Textarea label="Description" {...register('description')} error={errors.description?.message} rows={3} />
  <div className="grid grid-cols-2 gap-3">
  <Input label="Duration (hours)" type="number" min="0" {...register('duration_hours')} error={errors.duration_hours?.message} />
- <Input label="Validity (months)" type="number" min="0" {...register('validity_months')} error={errors.validity_months?.message} />
+ <Input label="Validity (months)" type="number" min="1" {...register('validity_months')} error={errors.validity_months?.message} />
  </div>
  <Select label="Department" {...register('department_id')} error={errors.department_id?.message}>
  <option value="">— All departments —</option>

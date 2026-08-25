@@ -9,6 +9,7 @@ use App\Common\Support\Money;
 use App\Modules\CRM\Models\Product;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\MRP\Models\Bom;
+use App\Modules\MRP\Models\BomItem;
 use App\Modules\Production\Models\ProductRouting;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -20,11 +21,13 @@ use RuntimeException;
  * points to a manufactured product with an active BOM, that BOM's full cost
  * is rolled up instead of using the component item's standalone cost. Active
  * routing operations add labor, machine, and overhead costs from their cycle
- * time and hourly rates. Setup time is intentionally excluded from a per-unit
- * BOM cost because no production batch size is available for allocation.
+ * time and hourly rates. Setup time is allocated across the configured cost
+ * batch size before the per-unit BOM cost is frozen.
  */
 class BomCostingService
 {
+    public function __construct(private readonly BomComponentIntegrityService $integrity) {}
+
     public function recalculate(Bom $bom): Bom
     {
         return DB::transaction(function () use ($bom): Bom {
@@ -35,11 +38,61 @@ class BomCostingService
     }
 
     /**
+     * Rebuild a BOM snapshot when a component or nested BOM changed after it
+     * was costed. This keeps planning runs from consuming stale money data.
+     */
+    public function ensureFresh(Bom $bom): Bom
+    {
+        $this->ensureFreshBom($bom, []);
+
+        return $bom->fresh()->load(['product', 'items.item']);
+    }
+
+    /** @param list<int> $path */
+    private function ensureFreshBom(Bom $bom, array $path): void
+    {
+        $productId = (int) $bom->product_id;
+        if (in_array($productId, $path, true)) {
+            return;
+        }
+
+        $bom->refresh();
+        $costedAt = $bom->costed_at;
+        $stale = $costedAt === null;
+        $lines = BomItem::query()->where('bom_id', $bom->id)->get(['item_id']);
+        $items = Item::withTrashed()->whereIn('id', $lines->pluck('item_id'))->get()->keyBy('id');
+
+        foreach ($lines as $line) {
+            $item = $items->get((int) $line->item_id);
+            if ($item === null || $costedAt === null || $item->updated_at?->gt($costedAt)) {
+                $stale = true;
+                continue;
+            }
+
+            $nested = $this->activeBomForItem($item);
+            if ($nested === null) {
+                continue;
+            }
+
+            $this->ensureFreshBom($nested, [...$path, $productId]);
+            $nested->refresh();
+            if ($costedAt === null || $nested->updated_at?->gt($costedAt)) {
+                $stale = true;
+            }
+        }
+
+        if ($stale) {
+            $this->recalculateBom($bom, []);
+        }
+    }
+
+    /**
      * @param list<int> $path
      * @return array{material_cost:string, labor_cost:string, machine_cost:string, overhead_cost:string, total_cost:string, warnings:list<array<string, string>>}
      */
     private function recalculateBom(Bom $bom, array $path): array
     {
+        $this->integrity->assertValid($bom);
         $productId = (int) $bom->product_id;
         if (in_array($productId, $path, true)) {
             throw new BusinessRuleException('Circular bill of materials detected while costing product '.$productId.'.');

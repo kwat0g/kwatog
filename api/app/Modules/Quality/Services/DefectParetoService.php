@@ -6,7 +6,7 @@ namespace App\Modules\Quality\Services;
 
 use App\Common\Services\SettingsService;
 use Carbon\Carbon;
-use Illuminate\Database\Query\Builder;
+use App\Modules\Quality\Enums\InspectionStatus;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -32,7 +32,7 @@ class DefectParetoService
         $to = isset($filters['to']) ? Carbon::parse($filters['to'])->endOfDay() : now()->endOfDay();
 
         $query = DB::table('inspections')
-            ->whereIn('status', ['passed', 'failed'])
+            ->whereIn('status', $this->completedInspectionStatuses())
             ->whereBetween('completed_at', [$from, $to]);
         if (! empty($filters['product_id'])) {
             $query->where('product_id', (int) $filters['product_id']);
@@ -85,6 +85,7 @@ class DefectParetoService
         $q = DB::table('inspection_measurements as m')
             ->join('inspections as i', 'i.id', '=', 'm.inspection_id')
             ->where('m.is_pass', false)
+            ->whereIn('i.status', $this->completedInspectionStatuses())
             ->whereBetween('i.completed_at', [$from, $to]);
 
         if (! empty($filters['product_id'])) {
@@ -152,6 +153,7 @@ class DefectParetoService
             ->leftJoin('products as p', 'p.id', '=', 'i.product_id')
             ->where('m.parameter_name', $parameterName)
             ->where('m.is_pass', false)
+            ->whereIn('i.status', $this->completedInspectionStatuses())
             ->whereBetween('i.completed_at', [$from, $to])
             ->select(
                 'i.id', 'i.inspection_number', 'i.stage', 'i.status', 'i.completed_at', 'i.defect_count',
@@ -181,5 +183,14 @@ class DefectParetoService
             'defect_count'      => (int) $r->defect_count,
             'completed_at'      => $r->completed_at,
         ])->all();
+    }
+
+    /** @return array<int, string> */
+    private function completedInspectionStatuses(): array
+    {
+        return [
+            InspectionStatus::Passed->value,
+            InspectionStatus::Failed->value,
+        ];
     }
 }

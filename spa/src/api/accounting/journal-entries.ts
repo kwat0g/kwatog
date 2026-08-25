@@ -8,6 +8,7 @@ export interface JournalEntryListParams extends ListParams {
  to?: string;
  account_id?: string;
  reference_type?: string;
+ trashed?: 'with' | 'only';
 }
 
 export const journalEntriesApi = {
@@ -26,7 +27,7 @@ export const journalEntriesApi = {
   client.patch(`/journal-entries/${id}/restore`),
  post: (id: string) =>
  client.patch<ApiSuccess<JournalEntry>>(`/journal-entries/${id}/post`).then((r) => r.data.data),
- reverse: (id: string, reverse_date?: string) =>
- client.post<ApiSuccess<JournalEntry>>(`/journal-entries/${id}/reverse`, { reverse_date }).then((r) => r.data.data),
+ reverse: (id: string, data: { reverse_date?: string; reason: string }) =>
+  client.post<ApiSuccess<JournalEntry>>(`/journal-entries/${id}/reverse`, data).then((r) => r.data.data),
  pdfUrl: (id: string) => `/api/v1/journal-entries/${id}/pdf`,
 };

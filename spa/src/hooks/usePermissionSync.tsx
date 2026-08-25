@@ -27,7 +27,7 @@ export function usePermissionSync() {
 
       // Listen for permission changes on user's private channel
       const userChannel = echo.private(`user.${user.id}`);
-      userChannel.listen('.PermissionsChanged', () => {
+      userChannel.listen('.permission.override.changed', () => {
         toast('Your permissions have been updated.', {
           icon: <LuKey size={16} className="text-muted" />,
         });
@@ -42,7 +42,7 @@ export function usePermissionSync() {
       });
 
       teardown = () => {
-        userChannel.stopListening('.PermissionsChanged');
+        userChannel.stopListening('.permission.override.changed');
         settingsChannel.stopListening('.ModuleToggled');
         echo.leave(`user.${user.id}`);
         echo.leave('settings');

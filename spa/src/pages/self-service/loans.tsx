@@ -18,17 +18,18 @@ import { tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { formatDate } from '@/lib/formatDate';
 import { cn } from '@/lib/cn';
 import { formatPeso } from '@/lib/formatNumber';
+import { chipVariantForStatus } from '@/components/ui/Chip';
 
 const schema = z.object({
  loan_type: z.string().min(1, 'Required'),
- amount: z.coerce.number().positive('Must be > 0'),
+ amount: z.string().regex(/^\d+(?:\.\d{1,2})?$/, 'Enter a valid amount (up to 2 decimals)').refine((value) => Number(value) > 0, 'Must be > 0'),
  periods: z.coerce.number().int().min(1),
  reason: z.string().max(500).optional().or(z.literal('')),
 });
 
 type FormValues = z.infer<typeof schema>;
 
-function loanColumns(active: boolean, loanTypeLabels: ReadonlyMap<string, string>): Column<SelfServiceLoan>[] {
+function loanColumns(loanTypeLabels: ReadonlyMap<string, string>): Column<SelfServiceLoan>[] {
  return [
  {
  key: 'loan_type',
@@ -73,15 +74,7 @@ function loanColumns(active: boolean, loanTypeLabels: ReadonlyMap<string, string
  header: 'Status',
  cell: (l) => (
  <Chip
- variant={
- l.status === 'pending'
- ? 'warning'
- : active
- ? 'info'
- : l.status === 'paid' || l.status === 'closed'
- ? 'neutral'
- : 'success'
- }
+ variant={chipVariantForStatus(l.status)}
  >
  {l.status_label ?? l.status}
  </Chip>
@@ -163,7 +156,7 @@ export default function SelfServiceLoansPage() {
  <h2 className="text-2xs uppercase tracking-wider text-muted font-medium mb-2">
  Active · {data.active.length}
  </h2>
- <DataTable columns={loanColumns(true, loanTypeLabels)} data={data.active} stickyHeader={false} />
+ <DataTable columns={loanColumns(loanTypeLabels)} data={data.active} stickyHeader={false} />
  </section>
  )}
 
@@ -172,7 +165,7 @@ export default function SelfServiceLoansPage() {
  <h2 className="text-2xs uppercase tracking-wider text-muted font-medium mb-2">
  History · {data.history.length}
  </h2>
- <DataTable columns={loanColumns(false, loanTypeLabels)} data={data.history} stickyHeader={false} />
+ <DataTable columns={loanColumns(loanTypeLabels)} data={data.history} stickyHeader={false} />
  </section>
  )}
 
@@ -214,7 +207,7 @@ function ApplyLoanModal({
  resolver: zodResolver(schema),
  // The permitted period count is returned by the live loan-limits query;
  // require the employee to choose it rather than using a stale default.
- defaultValues: { loan_type: '', amount: undefined as unknown as number, reason: '' },
+ defaultValues: { loan_type: '', amount: '', reason: '' },
  });
 
  useEffect(() => {
@@ -224,17 +217,19 @@ function ApplyLoanModal({
  }, [loanTypes, reset, watch]);
 
  const watchedAmount = watch('amount');
+ const watchedLoanType = watch('loan_type');
  const watchedPeriods = watch('periods');
  const debouncedAmount = useDebounce(watchedAmount, 500);
  const debouncedPeriods = useDebounce(watchedPeriods, 300);
 
  const { data: preview, isFetching: previewLoading } = useQuery({
- queryKey: ['loan-preview', debouncedAmount, debouncedPeriods],
+ queryKey: ['loan-preview', watchedLoanType, debouncedAmount, debouncedPeriods],
  queryFn: () => selfServiceApi.previewLoanAmortization(
- Number(debouncedAmount),
+ watchedLoanType,
+ debouncedAmount,
  Number(debouncedPeriods),
  ),
- enabled: Number(debouncedAmount) > 0 && Number(debouncedPeriods) >= 1,
+ enabled: !!watchedLoanType && Number(debouncedAmount) > 0 && Number(debouncedPeriods) >= 1,
  staleTime: 30_000,
  });
 
@@ -285,13 +280,13 @@ function ApplyLoanModal({
  <div className="flex items-center justify-between text-xs text-muted">
  <span>Estimated monthly deduction</span>
  {previewLoading && <span className="font-mono tabular-nums">…</span>}
- {!previewLoading && preview && (
+ {!previewLoading && preview && preview.length > 0 && (
  <span className="font-mono tabular-nums font-medium text-primary">
- {formatPeso(preview.monthly_amortization)}
+ {formatPeso(preview[0].amount)}
  </span>
  )}
  </div>
- {preview && preview.schedule.length > 0 && (
+ {preview && preview.length > 0 && (
  <div className="max-h-44 overflow-y-auto rounded border border-subtle">
  <table className={cn(tableCls, 'font-mono tabular-nums')}>
  <thead>
@@ -302,11 +297,11 @@ function ApplyLoanModal({
  </tr>
  </thead>
  <tbody>
- {preview.schedule.slice(0, 24).map((row) => (
+ {preview.slice(0, 24).map((row) => (
  <tr key={row.period} className={trCls}>
  <Td>{row.period}</Td>
  <Td align="right" mono>{formatPeso(row.amount)}</Td>
- <Td align="right" mono className="text-muted">{formatPeso(row.running_balance)}</Td>
+ <Td align="right" mono className="text-muted">{formatPeso(row.remaining_after)}</Td>
  </tr>
  ))}
  </tbody>

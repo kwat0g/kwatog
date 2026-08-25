@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Resources;
 
+use App\Modules\Inventory\Services\StockLocationSummaryService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -33,13 +34,14 @@ class WarehouseMapResource extends JsonResource
                             'is_blocked'      => $loc->is_blocked,
                             'blocked_reason'  => $loc->blocked_reason,
                             'capacity_kg'     => $loc->capacity_kg,
-                            'current_item'    => $loc->current_item_id ? [
-                                'id'       => $loc->currentItem?->hash_id,
-                                'code'     => $loc->currentItem?->code,
-                                'name'     => $loc->currentItem?->name,
+                            'current_item'    => $this->summary($loc)['current_item'] ? [
+                                'id'       => $this->summary($loc)['current_item']->hash_id,
+                                'code'     => $this->summary($loc)['current_item']->code,
+                                'name'     => $this->summary($loc)['current_item']->name,
                             ] : null,
-                            'current_quantity'    => $loc->current_quantity,
-                            'current_lot_number'  => $loc->current_lot_number,
+                            'current_quantity'    => $this->summary($loc)['current_quantity'],
+                            'current_lot_number'  => $this->summary($loc)['current_lot_number'],
+                            'current_expiry_date' => $this->summary($loc)['current_expiry_date'],
                             'stock_status'        => $this->getStockStatus($loc),
                             'stock_status_label'  => $this->getStockStatusLabel($loc),
                             'stock_quantity'      => $this->getStockQuantity($loc),
@@ -74,7 +76,21 @@ class WarehouseMapResource extends JsonResource
 
     private function getStockQuantity($loc): float|string
     {
-        // Use current_quantity from enhanced warehouse_locations
-        return $loc->current_quantity ?? 0;
+        return $this->summary($loc)['total_quantity'];
+    }
+
+    /** @return array{current_item: mixed, current_quantity: string, current_lot_number: ?string, current_expiry_date: ?string, total_quantity: string} */
+    private function summary($loc): array
+    {
+        $summary = $loc->getAttribute('inventory_summary');
+        if (is_array($summary)) {
+            return $summary;
+        }
+
+        $levels = $loc->relationLoaded('stockLevels')
+            ? $loc->stockLevels
+            : $loc->stockLevels()->with('item')->get();
+
+        return app(StockLocationSummaryService::class)->summarize($levels);
     }
 }

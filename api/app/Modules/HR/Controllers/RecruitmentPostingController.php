@@ -23,15 +23,48 @@ class RecruitmentPostingController
 
     public function index(Request $request): AnonymousResourceCollection
     {
-        $query = JobPosting::with(['department', 'position'])
-            ->withCount('applications')
-            ->orderByDesc('created_at');
+        $filters = $request->validate([
+            'status' => ['nullable', Rule::enum(JobPostingStatus::class)],
+            'trashed' => ['nullable', Rule::in(['active', 'with', 'only'])],
+            'search' => ['nullable', 'string', 'max:120'],
+            'sort' => ['nullable', Rule::in([
+                'posting_number',
+                'title',
+                'status',
+                'slots',
+                'posted_at',
+                'created_at',
+            ])],
+            'direction' => ['nullable', Rule::in(['asc', 'desc'])],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
 
-        if ($request->filled('status')) {
-            $query->where('status', $request->input('status'));
+        $query = JobPosting::with(['department', 'position'])
+            ->withCount('applications');
+
+        $trashed = $filters['trashed'] ?? 'active';
+        if ($trashed === 'with') {
+            $query->withTrashed();
+        } elseif ($trashed === 'only') {
+            $query->onlyTrashed();
         }
 
-        return JobPostingResource::collection($query->paginate(15));
+        if (! empty($filters['status'])) {
+            $query->where('status', $filters['status']);
+        }
+        if (! empty($filters['search'])) {
+            $term = trim((string) $filters['search']);
+            $query->where(fn ($q) => $q
+                ->where('title', 'like', "%{$term}%")
+                ->orWhere('posting_number', 'like', "%{$term}%"));
+        }
+
+        $sort = $filters['sort'] ?? 'created_at';
+        $direction = $filters['direction'] ?? 'desc';
+
+        return JobPostingResource::collection(
+            $query->orderBy($sort, $direction)->paginate((int) ($filters['per_page'] ?? 25))
+        );
     }
 
     /** Return the live employment-type catalog used by posting forms. */
@@ -86,28 +119,23 @@ class RecruitmentPostingController
 
     public function destroy(JobPosting $jobPosting): JsonResponse
     {
-        if ($jobPosting->status !== JobPostingStatus::Draft) {
-            abort(422, 'Only draft postings can be deleted.');
-        }
-
-        if ($jobPosting->applications()->exists()) {
-            abort(422, 'Cannot delete a posting that has applications.');
-        }
-
-        $jobPosting->delete();
+        $this->service->archivePosting($jobPosting);
         return response()->json(null, 204);
     }
 
     public function restore(JobPosting $jobPosting): JsonResponse
     {
-        $jobPosting->restore();
+        $this->service->restorePosting($jobPosting);
         return response()->json(['message' => 'Job posting restored.']);
     }
 
     public function changeStatus(Request $request, JobPosting $jobPosting): JobPostingResource
     {
         $request->validate(['status' => ['required', Rule::enum(JobPostingStatus::class)] ]);
-        $this->service->changePostingStatus($jobPosting, JobPostingStatus::from($request->input('status')));
+        $this->service->changePostingStatus(
+            $jobPosting,
+            JobPostingStatus::from($request->input('status')),
+        );
         return new JobPostingResource($jobPosting->fresh()->load(['department', 'position']));
     }
 }

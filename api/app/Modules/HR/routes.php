@@ -75,19 +75,18 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
 
         Route::get('/{employee}', [EmployeeController::class, 'show'])->middleware('permission:hr.employees.view');
         Route::put('/{employee}', [EmployeeController::class, 'update'])->middleware('permission:hr.employees.edit');
-Route::delete('/{employee}', [EmployeeController::class, 'destroy'])->middleware('permission:hr.employees.delete');
-Route::patch('/{employee}/restore', [EmployeeController::class, 'restore'])
-    ->middleware('permission:hr.employees.delete')
-    ->withTrashed();
-Route::patch('/{employee}/separate', [EmployeeController::class, 'separate'])->middleware('permission:hr.employees.separate');
-Route::post('/{employee}/photo', [EmployeeController::class, 'uploadPhoto'])->middleware('permission:hr.employees.edit');
-// Photos are low-sensitivity directory assets: the directory itself is open
-// to all internal roles via hr.directory.view, and self-service shows the
-// employee's own photo with only session auth. Both consumers must be able
-// to load the image, so the gate mirrors the loosest legitimate consumer.
-Route::get('/{employee}/photo', [EmployeeController::class, 'photo'])
-    ->middleware('permission_any:hr.employees.view,hr.directory.view');
-Route::delete('/{employee}/photo', [EmployeeController::class, 'deletePhoto'])->middleware('permission:hr.employees.edit');
+        Route::delete('/{employee}', [EmployeeController::class, 'destroy'])->middleware('permission:hr.employees.delete');
+        Route::patch('/{employee}/restore', [EmployeeController::class, 'restore'])
+            ->middleware('permission:hr.employees.delete')
+            ->withTrashed();
+        Route::post('/{employee}/photo', [EmployeeController::class, 'uploadPhoto'])->middleware('permission:hr.employees.edit');
+        // Photos are low-sensitivity directory assets: the directory itself is open
+        // to all internal roles via hr.directory.view, and self-service shows the
+        // employee's own photo with only session auth. Both consumers must be able
+        // to load the image, so the gate mirrors the loosest legitimate consumer.
+        Route::get('/{employee}/photo', [EmployeeController::class, 'photo'])
+            ->middleware('permission_any:hr.employees.view,hr.directory.view');
+        Route::delete('/{employee}/photo', [EmployeeController::class, 'deletePhoto'])->middleware('permission:hr.employees.edit');
 
         // U1 — system account lifecycle.
         Route::get('/{employee}/account-status', [EmployeeAccountController::class, 'status'])
@@ -103,6 +102,8 @@ Route::delete('/{employee}/photo', [EmployeeController::class, 'deletePhoto'])->
         Route::get('/{employee}/onboarding', [EmployeeOnboardingController::class, 'show'])
             ->middleware('permission:hr.employees.edit');
         Route::post('/{employee}/onboarding/recompute', [EmployeeOnboardingController::class, 'recompute'])
+            ->middleware('permission:hr.employees.edit');
+        Route::post('/{employee}/onboarding/department-team-notified', [EmployeeOnboardingController::class, 'markDepartmentTeamNotified'])
             ->middleware('permission:hr.employees.edit');
 
         // Sprint 8 — Task 71: separation + clearance flow
@@ -130,11 +131,11 @@ Route::delete('/{employee}/photo', [EmployeeController::class, 'deletePhoto'])->
             Route::get('/', [EmployeeDocumentController::class, 'index'])
                 ->middleware('permission:hr.employees.documents.view');
             Route::post('/', [EmployeeDocumentController::class, 'store'])
-                ->middleware('permission:hr.employees.documents.view');
+                ->middleware('permission:hr.employees.documents.upload');
             Route::delete('/{employeeDocument}', [EmployeeDocumentController::class, 'destroy'])
-                ->middleware('permission:hr.employees.edit');
+                ->middleware('permission:hr.employees.documents.delete');
             Route::patch('/{employeeDocument}/restore', [EmployeeDocumentController::class, 'restore'])
-                ->middleware('permission:hr.employees.edit')
+                ->middleware('permission:hr.employees.documents.delete')
                 ->withTrashed();
         });
         // Document download — outside {employee} prefix so URL is clean
@@ -164,6 +165,9 @@ Route::delete('/{employee}/photo', [EmployeeController::class, 'deletePhoto'])->
         ->middleware('permission:hr.employees.trainings.manage');
     Route::patch('/employee-trainings/{record}/cancel', [EmployeeTrainingController::class, 'cancel'])
         ->middleware('permission:hr.employees.trainings.manage');
+    Route::get('/employee-trainings/{record}/certificate', [EmployeeTrainingController::class, 'download'])
+        ->middleware('permission:hr.employees.trainings.view')
+        ->name('hr.employee-trainings.certificate');
 
     // Training matrix heatmap — must come BEFORE {training} param routes.
     Route::get('training/matrix', [TrainingMatrixController::class, 'index'])
@@ -222,6 +226,9 @@ Route::delete('/{employee}/photo', [EmployeeController::class, 'deletePhoto'])->
         Route::patch('/{employeeSkill}/restore', [EmployeeSkillController::class, 'restore'])
             ->middleware('permission:hr.employees.trainings.manage')
             ->withTrashed();
+        Route::get('/{employeeSkill}/certificate', [EmployeeSkillController::class, 'download'])
+            ->middleware('permission:hr.employees.trainings.view')
+            ->name('hr.employee-skills.certificate');
     });
 
     // U3 (HR side) — review queue for profile-update requests.
@@ -241,6 +248,13 @@ Route::delete('/{employee}/photo', [EmployeeController::class, 'deletePhoto'])->
     // resolves the employee from the session and rejects cross-employee access.
     Route::prefix('self-service')->group(function () {
         Route::get('/home', [SelfServiceController::class, 'home']);
+        // M024 owner-only reads. These do not reuse department-scoped list
+        // endpoints because approval permissions must never broaden this UI.
+        Route::get('/attendance', [SelfServiceController::class, 'attendance']);
+        Route::get('/attendance/options', [SelfServiceController::class, 'attendanceOptions']);
+        Route::get('/leave-requests', [SelfServiceController::class, 'leaveRequests']);
+        Route::get('/payslips', [SelfServiceController::class, 'payslips']);
+        Route::get('/payslips/{id}/download', [SelfServiceController::class, 'payslip']);
         Route::get('/loans', [SelfServiceController::class, 'loans']);
         Route::post('/loans', [SelfServiceController::class, 'applyLoan']);
         Route::get('/profile', [SelfServiceController::class, 'profile']);
@@ -286,7 +300,9 @@ Route::delete('/{employee}/photo', [EmployeeController::class, 'deletePhoto'])->
             Route::get('/options', [RecruitmentPostingController::class, 'options'])->middleware('permission:hr.recruitment.view');
             Route::get('/', [RecruitmentPostingController::class, 'index'])->middleware('permission:hr.recruitment.view');
             Route::post('/', [RecruitmentPostingController::class, 'store'])->middleware('permission:hr.recruitment.manage');
-            Route::get('/{jobPosting}', [RecruitmentPostingController::class, 'show'])->middleware('permission:hr.recruitment.view');
+            Route::get('/{jobPosting}', [RecruitmentPostingController::class, 'show'])
+                ->middleware('permission:hr.recruitment.view')
+                ->withTrashed();
             Route::put('/{jobPosting}', [RecruitmentPostingController::class, 'update'])->middleware('permission:hr.recruitment.manage');
             Route::delete('/{jobPosting}', [RecruitmentPostingController::class, 'destroy'])->middleware('permission:hr.recruitment.manage');
             Route::patch('/{jobPosting}/restore', [RecruitmentPostingController::class, 'restore'])
@@ -298,7 +314,8 @@ Route::delete('/{employee}/photo', [EmployeeController::class, 'deletePhoto'])->
         Route::prefix('applications')->group(function () {
             Route::get('/', [RecruitmentApplicationController::class, 'index'])->middleware('permission:hr.recruitment.view');
             Route::get('/{jobApplication}', [RecruitmentApplicationController::class, 'show'])->middleware('permission:hr.recruitment.view');
-            Route::patch('/{jobApplication}/stage', [RecruitmentApplicationController::class, 'changeStage'])->middleware('permission:hr.recruitment.applications');
+            Route::get('/{jobApplication}/history', [RecruitmentApplicationController::class, 'history'])->middleware('permission:hr.recruitment.view');
+            Route::patch('/{jobApplication}/stage', [RecruitmentApplicationController::class, 'changeStage'])->middleware('permission_any:hr.recruitment.applications,hr.recruitment.hire');
             Route::post('/{jobApplication}/interviews', [RecruitmentApplicationController::class, 'storeInterview'])->middleware('permission:hr.recruitment.applications');
             Route::post('/{jobApplication}/notes', [RecruitmentApplicationController::class, 'storeNote'])->middleware('permission:hr.recruitment.applications');
             Route::get('/{jobApplication}/resume', [RecruitmentApplicationController::class, 'downloadResume'])->middleware('permission:hr.recruitment.view');

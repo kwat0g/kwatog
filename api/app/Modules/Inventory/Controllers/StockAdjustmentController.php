@@ -8,6 +8,7 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\HashIdFilter;
 use App\Modules\Accounting\Exceptions\ClosedPeriodException;
 use App\Modules\Inventory\Enums\StockAdjustmentStatus;
+use App\Modules\Inventory\Enums\StockAdjustmentReason;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Exceptions\InvalidMovementException;
 use App\Modules\Inventory\Models\Item;
@@ -39,6 +40,13 @@ class StockAdjustmentController
                 ['value' => 'in', 'label' => 'In'],
                 ['value' => 'out', 'label' => 'Out'],
             ],
+            'reasons' => array_map(
+                static fn (StockAdjustmentReason $reason): array => [
+                    'value' => $reason->value,
+                    'label' => $reason->label(),
+                ],
+                StockAdjustmentReason::cases(),
+            ),
         ]]);
     }
 

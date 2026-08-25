@@ -11,6 +11,6 @@ class QueueMrpOnReplanRequested
 {
     public function handle(MrpReplanRequested $event): void
     {
-        RunAutomaticMrpJob::dispatch($event->salesOrderIds, $event->reason);
+        RunAutomaticMrpJob::dispatch($event->salesOrderIds, $event->reason, $event->initiatedBy);
     }
 }

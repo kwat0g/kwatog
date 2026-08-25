@@ -175,6 +175,72 @@ class RoleManagementTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_role_lifecycle_is_audited_and_restore_preserves_permissions(): void
+    {
+        $admin = $this->seedAdmin();
+
+        $this->actingAs($admin)
+            ->postJson('/api/v1/admin/roles', [
+                'name' => 'Lifecycle Role',
+                'slug' => 'lifecycle_role',
+                'description' => 'Before update',
+            ])
+            ->assertCreated();
+
+        $role = Role::where('slug', 'lifecycle_role')->firstOrFail();
+        $permission = Permission::where('slug', 'hr.employees.view')->firstOrFail();
+        $role->permissions()->sync([$permission->id]);
+
+        $this->assertSame(1, AuditLog::query()
+            ->where('model_type', $role->getMorphClass())
+            ->where('model_id', $role->id)
+            ->where('action', 'created')
+            ->count());
+
+        $this->actingAs($admin)
+            ->putJson("/api/v1/admin/roles/{$role->hash_id}", [
+                'description' => 'After update',
+            ])
+            ->assertOk();
+
+        $this->assertSame(1, AuditLog::query()
+            ->where('model_type', $role->getMorphClass())
+            ->where('model_id', $role->id)
+            ->where('action', 'updated')
+            ->count());
+
+        $this->actingAs($admin)
+            ->deleteJson("/api/v1/admin/roles/{$role->hash_id}")
+            ->assertNoContent();
+
+        $this->assertSoftDeleted('roles', ['id' => $role->id]);
+        $this->assertSame(1, AuditLog::query()
+            ->where('model_type', $role->getMorphClass())
+            ->where('model_id', $role->id)
+            ->where('action', 'deleted')
+            ->count());
+
+        $this->actingAs($admin)
+            ->patchJson("/api/v1/admin/roles/{$role->hash_id}/restore")
+            ->assertOk();
+
+        $restored = Role::findOrFail($role->id);
+        $this->assertSame(1, $restored->permissions()->count());
+        $this->assertSame(1, AuditLog::query()
+            ->where('model_type', $role->getMorphClass())
+            ->where('model_id', $role->id)
+            ->where('action', 'restored')
+            ->count());
+
+        $restoreAudit = AuditLog::query()
+            ->where('model_type', $role->getMorphClass())
+            ->where('model_id', $role->id)
+            ->where('action', 'restored')
+            ->firstOrFail();
+        $this->assertNotNull($restoreAudit->old_values['deleted_at'] ?? null);
+        $this->assertNull($restoreAudit->new_values['deleted_at'] ?? null);
+    }
+
     /**
      * P3.8 — lastModifiedFor() must return the LATEST timestamp, not an older one.
      *

@@ -16,6 +16,7 @@ class MaterialIssueSlipItem extends Model
     protected $fillable = [
         'material_issue_slip_id', 'item_id', 'location_id',
         'quantity_issued', 'unit_cost', 'total_cost',
+        'issued_uom_code', 'lot_number',
         'material_reservation_id', 'remarks',
     ];
 

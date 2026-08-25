@@ -12,6 +12,7 @@ import type {
  VendorStatementOfAccount,
  DeliverySchedule,
 } from '@/types/b2b';
+import type { PaginatedResponse } from '@/types';
 import type { BusinessPolicies } from '@/api/businessPolicies';
 
 const { client: portalClient, setToken } = createPortalClient('ogami_supplier_portal_token');
@@ -77,9 +78,9 @@ export const supplierPortalApi = {
  },
 
  // ── Purchase Orders ────────────────────────────────
- listPos: async (params?: { status?: string; page?: number }) => {
- const { data } = await portalClient.get<{ data: PortalPoSummary[] }>('/b2b/supplier/purchase-orders', { params });
- return data.data;
+ listPos: async (params?: { status?: string; search?: string; page?: number; per_page?: number }) => {
+ const { data } = await portalClient.get<PaginatedResponse<PortalPoSummary>>('/b2b/supplier/purchase-orders', { params });
+ return data;
  },
 
  getPo: async (id: string) => {
@@ -93,15 +94,15 @@ export const supplierPortalApi = {
  },
 
  // ── Shipments ──────────────────────────────────────
- updateShipment: async (poId: string, form: { tracking_number?: string; estimated_arrival?: string; notes?: string }) => {
+ updateShipment: async (poId: string, form: { shipped_date?: string; carrier?: string; tracking_number?: string; estimated_arrival?: string; notes?: string }) => {
  const { data } = await portalClient.post<{ message: string }>(`/b2b/supplier/purchase-orders/${poId}/shipment-update`, form);
  return data;
  },
 
  // ── Invoices ───────────────────────────────────────
- listInvoices: async (params?: { status?: string; page?: number }) => {
- const { data } = await portalClient.get<{ data: SupplierBillSummary[] }>('/b2b/supplier/invoices', { params });
- return data.data;
+ listInvoices: async (params?: { status?: string; page?: number; per_page?: number }) => {
+ const { data } = await portalClient.get<PaginatedResponse<SupplierBillSummary>>('/b2b/supplier/invoices', { params });
+ return data;
  },
 
  getInvoice: async (id: string) => {
@@ -110,9 +111,9 @@ export const supplierPortalApi = {
  },
 
  // ── Deliveries ─────────────────────────────────────
- listDeliveries: async () => {
- const { data } = await portalClient.get<{ data: SupplierDeliverySummary[] }>('/b2b/supplier/deliveries');
- return data.data;
+ listDeliveries: async (params?: { status?: string; page?: number; per_page?: number }) => {
+ const { data } = await portalClient.get<PaginatedResponse<SupplierDeliverySummary>>('/b2b/supplier/deliveries', { params });
+ return data;
  },
 
  // ── Statement of Account ────────────────────────────
@@ -122,15 +123,15 @@ export const supplierPortalApi = {
  },
 
  // ── Delivery Schedules ──────────────────────────────
- listDeliverySchedules: async () => {
- const { data } = await portalClient.get<{ data: DeliverySchedule[] }>('/b2b/supplier/delivery-schedules');
- return data.data;
+ listDeliverySchedules: async (params?: { page?: number; per_page?: number }) => {
+ const { data } = await portalClient.get<PaginatedResponse<DeliverySchedule>>('/b2b/supplier/delivery-schedules', { params });
+ return data;
  },
 
  createDeliverySchedule: async (form: {
  purchase_order_id: string;
  month: string;
- lines: Array<{ product_name: string; quantity: number; notes?: string }>;
+ lines: Array<{ purchase_order_item_id: string; product_name?: string; quantity: number; notes?: string }>;
  }) => {
  const { data } = await portalClient.post<{ data: DeliverySchedule; message: string }>('/b2b/supplier/delivery-schedules', form);
  return data;
@@ -164,8 +165,7 @@ export const supplierPortalApi = {
  uploadShippingDocument: async (poId: string, form: FormData) => {
  const { data } = await portalClient.post<{ data: PortalShippingDocument; message: string }>(
  `/b2b/supplier/purchase-orders/${poId}/shipping-documents`,
- form,
- { headers: { 'Content-Type': 'multipart/form-data' } }
+ form
  );
  return data;
  },
@@ -182,8 +182,7 @@ export const supplierPortalApi = {
  submitInvoice: async (poId: string, form: FormData) => {
  const { data } = await portalClient.post<{ data: SubmittedBill; message: string }>(
  `/b2b/supplier/purchase-orders/${poId}/submit-invoice`,
- form,
- { headers: { 'Content-Type': 'multipart/form-data' } }
+ form
  );
  return data;
  },

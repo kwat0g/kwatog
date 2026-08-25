@@ -16,6 +16,8 @@ class ApprovalRecord extends Model
     protected $fillable = [
         'approvable_type', 'approvable_id',
         'step_order', 'role_slug',
+        'attempt', 'is_current',
+        'workflow_definition_id', 'workflow_version', 'workflow_snapshot',
         'approver_id', 'action', 'remarks', 'acted_at', 'created_at',
         // Task A7
         'reminder_sent_at', 'escalated_at', 'escalated_to_user_id',
@@ -23,6 +25,9 @@ class ApprovalRecord extends Model
         'auto_resolved_at',
     ];
     protected $casts = [
+        'attempt'          => 'integer',
+        'is_current'       => 'boolean',
+        'workflow_snapshot' => 'array',
         'acted_at'         => 'datetime',
         'created_at'       => 'datetime',
         'reminder_sent_at' => 'datetime',
@@ -53,5 +58,10 @@ class ApprovalRecord extends Model
     public function approver(): BelongsTo
     {
         return $this->belongsTo(\App\Modules\Auth\Models\User::class, 'approver_id');
+    }
+
+    public function workflowDefinition(): BelongsTo
+    {
+        return $this->belongsTo(WorkflowDefinition::class);
     }
 }

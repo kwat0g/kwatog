@@ -9,6 +9,8 @@ use App\Modules\Dashboard\Enums\KpiStatus;
 use App\Modules\Dashboard\Enums\KpiTrend;
 use App\Modules\Dashboard\Models\KpiDefinition;
 use App\Modules\Dashboard\Models\KpiSnapshot;
+use App\Modules\Inventory\Enums\StockMovementType;
+use App\Modules\Accounting\Enums\InvoiceStatus;
 use Carbon\Carbon;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Facades\DB;
@@ -186,6 +188,68 @@ class KpiSnapshotService
                 'status_label' => Str::headline((string) $s->status?->value),
             ])
             ->all();
+    }
+
+    /**
+     * Load several KPI trends in one response so the scorecard does not make
+     * one HTTP request per card. Definitions remain permission-filtered using
+     * the same boundary as the scorecard and individual trend endpoint.
+     *
+     * @param  array<int, string>  $kpiCodes
+     * @return array<string, array<int, array<string, mixed>>>
+     */
+    public function getTrends(array $kpiCodes, int $months = 12, ?Authenticatable $user = null): array
+    {
+        $codes = array_values(array_unique(array_filter(
+            array_map(static fn ($code): string => trim((string) $code), $kpiCodes),
+            static fn (string $code): bool => $code !== '',
+        )));
+        $months = max(1, min(24, $months));
+        if ($codes === []) {
+            return [];
+        }
+
+        $definitions = KpiDefinition::query()->whereIn('code', $codes)->get()->keyBy('code');
+        $definitionIds = [];
+        foreach ($codes as $code) {
+            $definition = $definitions->get($code);
+            if (! $definition) {
+                continue;
+            }
+            if ($user && ! $this->userCanSeeModule($user, $definition->module)) {
+                abort(403, 'You do not have permission to view this KPI.');
+            }
+            $definitionIds[$code] = (int) $definition->id;
+        }
+
+        if ($definitionIds === []) {
+            return [];
+        }
+
+        $snapshots = KpiSnapshot::query()
+            ->whereIn('definition_id', array_values($definitionIds))
+            ->orderByDesc('period_year')
+            ->orderByDesc('period_month')
+            ->get()
+            ->groupBy('definition_id');
+
+        $result = [];
+        foreach ($definitionIds as $code => $definitionId) {
+            $result[$code] = $snapshots->get($definitionId, collect())
+                ->take($months)
+                ->sortBy(fn ($snapshot) => sprintf('%04d-%02d', $snapshot->period_year, $snapshot->period_month))
+                ->values()
+                ->map(fn (KpiSnapshot $snapshot): array => [
+                    'period' => sprintf('%04d-%02d', $snapshot->period_year, $snapshot->period_month),
+                    'value' => $snapshot->actual_value,
+                    'target' => $snapshot->target_value,
+                    'status' => $snapshot->status?->value,
+                    'status_label' => Str::headline((string) $snapshot->status?->value),
+                ])
+                ->all();
+        }
+
+        return $result;
     }
 
     private function userCanSeeModule(Authenticatable $user, string $module): bool
@@ -407,19 +471,25 @@ class KpiSnapshotService
 
     private function computeArAging60d(int $year, int $month): ?float
     {
-        // Percentage of AR balance that is over 60 days old
+        // Snapshot open AR at the end of the requested period. Invoice balance
+        // is the authoritative remaining amount; draft, paid, and cancelled
+        // invoices are not receivables. Historical balance movements are not
+        // available in this module, so the stored balance is evaluated against
+        // the period-end invoice population.
         $lookbackDays = app(\App\Common\Services\SettingsService::class)->requiredInt('dashboard.kpi_snapshot_lookback_days', 1, 3650);
-        $cutoff = Carbon::create($year, $month, 1)->endOfMonth()->subDays($lookbackDays)->toDateString();
+        $periodEnd = Carbon::create($year, $month, 1)->endOfMonth();
+        $cutoff = $periodEnd->copy()->subDays($lookbackDays)->toDateString();
+        $openStatuses = [InvoiceStatus::Finalized->value, InvoiceStatus::Partial->value];
 
         $totalAr = (float) DB::table('invoices')
-            ->where('status', '!=', 'paid')
-            ->where('status', '!=', 'cancelled')
-            ->sum('balance_due');
+            ->whereIn('status', $openStatuses)
+            ->whereDate('date', '<=', $periodEnd->toDateString())
+            ->sum('balance');
         $overdue = (float) DB::table('invoices')
-            ->where('status', '!=', 'paid')
-            ->where('status', '!=', 'cancelled')
+            ->whereIn('status', $openStatuses)
+            ->whereDate('date', '<=', $periodEnd->toDateString())
             ->where('due_date', '<', $cutoff)
-            ->sum('balance_due');
+            ->sum('balance');
 
         if ($totalAr == 0) {
             return null;
@@ -468,23 +538,27 @@ class KpiSnapshotService
 
     private function computeInventoryTurnover(int $year, int $month): ?float
     {
-        // COGS / Average inventory value. Simplified: use issued qty * cost
+        // Annualised COGS / current ending inventory value. The inventory
+        // ledger stores authoritative issue value in total_cost and current
+        // stock value as quantity × weighted_avg_cost; there is no historical
+        // stock snapshot in this module from which to derive a period average.
         $from = Carbon::create($year, $month, 1)->startOfDay()->toDateTimeString();
         $to = Carbon::create($year, $month, 1)->endOfMonth()->toDateTimeString();
 
-        if (! DB::getSchemaBuilder()->hasTable('stock_movements')) {
+        if (! DB::getSchemaBuilder()->hasTable('stock_movements')
+            || ! DB::getSchemaBuilder()->hasTable('stock_levels')) {
             return null;
         }
 
         $cogs = (float) DB::table('stock_movements')
-            ->where('type', 'issue')
+            ->where('movement_type', StockMovementType::MaterialIssue->value)
             ->whereBetween('created_at', [$from, $to])
-            ->sum(DB::raw('ABS(quantity) * unit_cost'));
+            ->sum('total_cost');
 
         $avgInventory = (float) DB::table('stock_levels')
-            ->sum(DB::raw('quantity * unit_cost'));
+            ->sum(DB::raw('quantity * weighted_avg_cost'));
 
-        if ($avgInventory == 0) {
+        if ($cogs <= 0 || $avgInventory <= 0) {
             return null;
         }
 

@@ -47,6 +47,12 @@ class RequestMonthlyDepreciation extends Command
             $month = $target->month;
         }
 
+        if (CarbonImmutable::create($year, $month, 1)->startOfMonth()->gte(CarbonImmutable::now()->startOfMonth())) {
+            $this->error('Depreciation can only be staged for a completed period.');
+
+            return self::FAILURE;
+        }
+
         $period = sprintf('%04d-%02d', $year, $month);
         $requestId = $period;
         $dedupeKey = 'assets-depreciation:'.$period;

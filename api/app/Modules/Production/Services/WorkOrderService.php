@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Production\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\ActivityFeedService;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
@@ -27,13 +28,13 @@ use App\Modules\MRP\Services\BomService;
 use App\Modules\Production\Enums\MachineDowntimeCategory;
 use App\Modules\Production\Enums\ProductionScheduleStatus;
 use App\Modules\Production\Enums\WorkOrderStatus;
-use App\Modules\Production\Exceptions\IllegalLifecycleTransitionException;
 use App\Modules\Production\Events\WorkOrderCompleted;
 use App\Modules\Production\Events\WorkOrderStatusChanged;
 use App\Modules\Production\Models\MachineDowntime;
 use App\Modules\Production\Models\ProductionSchedule;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderMaterial;
+use App\Modules\Production\Support\WorkOrderStateMachine;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -63,21 +64,10 @@ use Illuminate\Support\Facades\DB;
  */
 class WorkOrderService
 {
-    /** @var array<string, list<string>> */
-    private const ALLOWED = [
-        'planned'     => ['confirmed', 'cancelled'],
-        'confirmed'   => ['in_progress', 'cancelled'],
-        'in_progress' => ['paused', 'completed'],
-        'paused'      => ['in_progress', 'cancelled'],
-        'completed'   => ['closed'],
-        'closed'      => [],
-        'cancelled'   => [],
-    ];
-
     /** @return array<string, list<string>> */
     public static function allowedTransitions(): array
     {
-        return self::ALLOWED;
+        return WorkOrderStateMachine::TRANSITIONS;
     }
 
     public function __construct(
@@ -85,6 +75,8 @@ class WorkOrderService
         private readonly BomService $boms,
         private readonly StockMovementService $stock,
         private readonly SettingsService $settings,
+        private readonly WoOperationService $operations,
+        private readonly WorkOrderStateMachine $stateMachine,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -95,6 +87,7 @@ class WorkOrderService
                 'salesOrder:id,so_number',
                 'machine:id,machine_code,name',
                 'mold:id,mold_code,name',
+                'exceptionAuthorizer:id,name',
             ]);
 
         TrashedFilter::apply($q, $filters);
@@ -129,7 +122,9 @@ class WorkOrderService
             'product', 'salesOrder', 'salesOrderItem',
             'machine', 'mold', 'parent:id,wo_number',
             'children:id,wo_number,product_id,parent_wo_id,status,quantity_target,quantity_good',
+            'children.product:id,part_number,name',
             'creator:id,name,role_id',
+            'exceptionAuthorizer:id,name',
             'materials.item:id,code,name,unit_of_measure',
             'outputs.recorder:id,name,role_id', 'outputs.defects.defectType',
             'inspections:id,inspection_number,stage,status,entity_type,entity_id,completed_at',
@@ -197,6 +192,11 @@ class WorkOrderService
                     ]);
                 }
             }
+
+            // Snapshot the active routing after the WO and material plan exist.
+            // The operation service is idempotent so retries cannot duplicate
+            // the execution rows for the same work order.
+            $this->operations->generateFromRouting($wo);
 
             return $this->show($wo->fresh());
         });
@@ -309,12 +309,12 @@ class WorkOrderService
         }
     }
 
-    public function start(WorkOrder $wo): WorkOrder
+    public function start(WorkOrder $wo, int $startedBy): WorkOrder
     {
         $this->assertTransition($wo, WorkOrderStatus::InProgress);
         $from = $wo->status?->value ?? 'confirmed';
 
-        $result = DB::transaction(function () use ($wo, &$from) {
+        $result = DB::transaction(function () use ($wo, $startedBy, &$from) {
             $lockedWo = WorkOrder::query()->lockForUpdate()->find($wo->id);
             if (! $lockedWo) {
                 throw new BusinessRuleException('Work order not found.');
@@ -355,7 +355,7 @@ class WorkOrderService
             // Issue reserved materials. Best-effort: if no reservation exists
             // (e.g. legacy WOs that were confirmed before the audit fix), the
             // WO still starts — material_issue rows just won't be created.
-            $this->issueReservedMaterials($lockedWo, (int) ($lockedWo->creator?->id ?? $lockedWo->created_by));
+            $this->issueReservedMaterials($lockedWo, $startedBy);
 
             // ADV3 — Capture incoming material lot references for backward traceability.
             // Best-effort: queries the latest GRN item with a material_lot_number for
@@ -595,6 +595,33 @@ class WorkOrderService
         });
     }
 
+    public function restore(WorkOrder $wo, int $restoredBy): WorkOrder
+    {
+        return DB::transaction(function () use ($wo, $restoredBy): WorkOrder {
+            $locked = WorkOrder::withTrashed()
+                ->lockForUpdate()
+                ->findOrFail($wo->id);
+            if (! $locked->trashed()) {
+                throw new BusinessRuleException('Only deleted work orders can be restored.');
+            }
+
+            $deletedAt = (string) $locked->deleted_at;
+            $locked->restore();
+
+            app(ActivityFeedService::class)->record(
+                type: 'production.work_order',
+                action: 'restored',
+                subject: $locked,
+                summary: "Work order {$locked->wo_number} restored.",
+                detail: ['work_order_id' => $locked->hash_id],
+                idempotencyKey: 'production:work-order:restore:'.$locked->id.':'.hash('sha256', $deletedAt),
+                actorUserId: $restoredBy,
+            );
+
+            return $this->show($locked->fresh());
+        });
+    }
+
     /**
      * Chain-visualization payload for the WO detail page.
      */
@@ -622,10 +649,7 @@ class WorkOrderService
 
     private function assertTransition(WorkOrder $wo, WorkOrderStatus $to): void
     {
-        $from = $wo->status?->value ?? 'planned';
-        if (! in_array($to->value, self::ALLOWED[$from] ?? [], true)) {
-            throw new IllegalLifecycleTransitionException($from, $to->value);
-        }
+        $this->stateMachine->assertAllowed($wo, $to);
     }
 
     private function assertMaterialPlan(WorkOrder $wo): void

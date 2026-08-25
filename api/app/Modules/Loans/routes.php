@@ -12,7 +12,8 @@ Route::middleware(['auth:sanctum', 'feature:loans'])->prefix('loans')->group(fun
     Route::post('/', [LoanController::class, 'store'])->middleware('permission:loans.create');
     // Pure calculation used by the employee self-service form; it reads no
     // employee or loan record and therefore only requires authentication.
-    Route::post('/preview-amortization', [LoanController::class, 'previewAmortization']);
+    Route::post('/preview-amortization', [LoanController::class, 'previewAmortization'])
+        ->middleware('throttle:sensitive');
     Route::post('/bulk-approve', [LoanController::class, 'bulkApprove'])->middleware('permission:loans.approve');
     Route::get('/limits/{employee}', [LoanController::class, 'limits'])->middleware('permission:loans.approve');
     Route::get('/{loan}', [LoanController::class, 'show'])->middleware('permission:loans.view');

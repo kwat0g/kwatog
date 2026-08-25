@@ -102,7 +102,11 @@ class Budget extends Model
         }
 
         return round(
-            ((float) $this->total_spent + (float) $this->total_committed) / (float) $this->total_allocated * 100,
+            (float) Money::div(
+                Money::add((string) $this->total_spent, (string) $this->total_committed),
+                (string) $this->total_allocated,
+                Money::INNER,
+            ) * 100,
             1,
         );
     }

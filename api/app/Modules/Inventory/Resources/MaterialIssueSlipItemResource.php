@@ -26,6 +26,8 @@ class MaterialIssueSlipItemResource extends JsonResource
             'quantity_issued' => (string) $this->quantity_issued,
             'unit_cost'       => (string) $this->unit_cost,
             'total_cost'      => (string) $this->total_cost,
+            'issued_uom_code' => $this->issued_uom_code,
+            'lot_number'      => $this->lot_number,
             'remarks'         => $this->remarks,
         ];
     }

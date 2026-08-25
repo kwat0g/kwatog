@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Resources;
 
-use App\Modules\Accounting\Models\JournalEntry;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -25,14 +24,31 @@ class BillResource extends JsonResource
             'balance'        => (string) $this->balance,
             'status'         => $this->status?->value,
             'status_label'   => $this->status?->label(),
+            'cancelled_at'   => optional($this->cancelled_at)->toIso8601String(),
             // 2026-08-08 — source receipt for auto-created draft bills.
             'goods_receipt_note_id' => $this->whenLoaded('goodsReceiptNote', fn () => $this->goodsReceiptNote ? $this->goodsReceiptNote->hash_id : null),
             'is_overdue'     => $this->isOverdue(),
             'aging_bucket'   => $this->agingBucket(),
             'remarks'        => $this->remarks,
+            'provenance_type' => $this->provenance_type,
+            'exception_evidence' => $this->exception_evidence,
+            'exception_owner' => $this->whenLoaded('exceptionOwner', fn () => $this->exceptionOwner ? [
+                'id' => $this->exceptionOwner->hash_id,
+                'name' => $this->exceptionOwner->name,
+            ] : null),
+            'exception_approved_by' => $this->whenLoaded('exceptionApprover', fn () => $this->exceptionApprover ? [
+                'id' => $this->exceptionApprover->hash_id,
+                'name' => $this->exceptionApprover->name,
+            ] : null),
+            'exception_approved_at' => optional($this->exception_approved_at)->toIso8601String(),
             'has_variances'  => (bool) $this->has_variances,
             'three_way_overridden' => (bool) $this->three_way_overridden,
             'three_way_override_reason' => $this->three_way_override_reason,
+            'three_way_overridden_by' => $this->whenLoaded('threeWayOverrider', fn () => $this->threeWayOverrider ? [
+                'id' => $this->threeWayOverrider->hash_id,
+                'name' => $this->threeWayOverrider->name,
+            ] : null),
+            'three_way_overridden_at' => optional($this->three_way_overridden_at)->toIso8601String(),
             'three_way_review_status' => $this->threeWayReviewStatus(),
             'three_way_match_url' => $this->purchase_order_id ? '/api/v1/purchasing/three-way-match/'.$this->hash_id : null,
             'purchase_order' => $this->whenLoaded('purchaseOrder', fn () => $this->purchaseOrder ? [

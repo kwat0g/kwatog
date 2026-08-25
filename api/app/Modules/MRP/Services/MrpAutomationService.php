@@ -31,7 +31,7 @@ class MrpAutomationService
         ?int $userId,
         string $reason,
     ): MrpRun {
-        $run = $this->engine->runForActiveSalesOrders($trigger, $userId, $salesOrderIds);
+        $run = $this->engine->runForActiveSalesOrders($trigger, $userId, $salesOrderIds, $reason);
         $evaluatedIds = collect((array) ($run->summary['per_sales_order'] ?? []))
             ->filter(static fn ($row): bool => is_array($row) && ! isset($row['error']))
             ->pluck('so_id')
@@ -113,6 +113,17 @@ class MrpAutomationService
                 $run->error_message ?: "MRP run {$run->id} failed without an error message.",
                 $run,
                 ['run_id' => $run->id],
+            );
+        }
+
+        if ($run->status === MrpRunStatus::Partial && $planningErrors->isEmpty()) {
+            $this->alerts->raise(
+                AlertType::MrpDataError,
+                AlertSeverity::Warning,
+                'MRP run completed with planning exceptions',
+                'One or more sales orders could not be planned. Review the run recovery instructions and rerun the affected orders.',
+                $run,
+                ['run_id' => $run->id, 'failed_sales_orders' => (int) ($run->failed_sales_orders ?? 0)],
             );
         }
     }

@@ -120,7 +120,7 @@ class AgingReportTest extends TestCase
 
         $this->assertStringContainsString('text/csv', $res->headers->get('Content-Type'));
         $body = $res->streamedContent();
-        $this->assertStringContainsString('Customer,Current,1-30', $body);
+        $this->assertStringContainsString('Row Type,Currency,Customer,Current,1-30', $body);
         $this->assertStringContainsString('Honda Cars Phils', $body);
         $this->assertStringContainsString('TOTAL', $body);
     }

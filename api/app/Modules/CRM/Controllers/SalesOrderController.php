@@ -70,10 +70,14 @@ class SalesOrderController
         return response()->json(null, 204);
     }
 
-    public function restore(SalesOrder $salesOrder): JsonResponse
+    public function restore(SalesOrder $salesOrder): SalesOrderResource|JsonResponse
     {
-        $salesOrder->restore();
-        return response()->json(['message' => 'Sales order restored.']);
+        try {
+            $so = $this->service->restore($salesOrder);
+        } catch (BusinessRuleException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+        return new SalesOrderResource($so);
     }
 
     public function confirm(SalesOrder $salesOrder): SalesOrderResource|JsonResponse
@@ -113,14 +117,6 @@ class SalesOrderController
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return new SalesOrderResource($so);
-    }
-
-    public function transition(Request $request, SalesOrder $salesOrder): JsonResponse
-    {
-        $target = SalesOrderStatus::tryFrom((string) $request->input('status'));
-        if ($target === null) return response()->json(['message' => 'Unknown sales order status.'], 422);
-        $result = $this->service->transitionTo($salesOrder->id, $target, $request->user()?->id);
-        return response()->json(['data' => $result->toArray()], $result->statusCode);
     }
 
     public function chain(SalesOrder $salesOrder): JsonResponse

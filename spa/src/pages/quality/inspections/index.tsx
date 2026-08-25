@@ -201,14 +201,14 @@ export default function InspectionsListPage() {
     value={data.data.filter(i => i.status === 'passed').length}
     helper="in current view"
     linkTo="?status=passed"
-    className="border-success/30 bg-success-bg/20"
+    className="border-success bg-success-bg"
   />
   <StatCard
     label={labels.get('failed') ?? '—'}
     value={data.data.filter(i => i.status === 'failed').length}
     helper="in current view"
     linkTo="?status=failed"
-    className="border-danger/30 bg-danger-bg/20"
+    className="border-danger bg-danger-bg"
   />
   </div>
  )}

@@ -15,7 +15,7 @@ Route::middleware(['auth:sanctum', 'feature:attendance'])->prefix('attendance')-
     Route::get('/shifts/{shift}', [ShiftController::class, 'show'])->middleware('permission_any:attendance.edit,attendance.shifts.manage');
     Route::put('/shifts/{shift}', [ShiftController::class, 'update'])->middleware('permission:attendance.shifts.manage');
     Route::delete('/shifts/{shift}', [ShiftController::class, 'destroy'])->middleware('permission:attendance.shifts.manage');
-    Route::patch('/shifts/{shift}/restore', [ShiftController::class, 'restore'])->middleware('permission:attendance.shifts.manage');
+    Route::patch('/shifts/{shift}/restore', [ShiftController::class, 'restore'])->middleware('permission:attendance.shifts.manage')->withTrashed();
     Route::post('/shifts/bulk-assign', [ShiftController::class, 'bulkAssign'])->middleware('permission:attendance.shifts.manage');
     Route::post('/shifts/assign-employee/{employee}', [ShiftController::class, 'assignEmployee'])->middleware('permission:attendance.shifts.manage');
     Route::get('/shifts/current/{employee}', [ShiftController::class, 'currentEmployeeShift'])->middleware('permission_any:attendance.edit,attendance.shifts.manage');
@@ -27,7 +27,7 @@ Route::middleware(['auth:sanctum', 'feature:attendance'])->prefix('attendance')-
     Route::get('/holidays/{holiday}', [HolidayController::class, 'show'])->middleware('permission_any:attendance.edit,attendance.holidays.manage');
     Route::put('/holidays/{holiday}', [HolidayController::class, 'update'])->middleware('permission:attendance.holidays.manage');
     Route::delete('/holidays/{holiday}', [HolidayController::class, 'destroy'])->middleware('permission:attendance.holidays.manage');
-    Route::patch('/holidays/{holiday}/restore', [HolidayController::class, 'restore'])->middleware('permission:attendance.holidays.manage');
+    Route::patch('/holidays/{holiday}/restore', [HolidayController::class, 'restore'])->middleware('permission:attendance.holidays.manage')->withTrashed();
 
     // Attendance
     Route::get('/attendances/options', [AttendanceController::class, 'options'])->middleware('permission:attendance.view');
@@ -36,7 +36,7 @@ Route::middleware(['auth:sanctum', 'feature:attendance'])->prefix('attendance')-
     Route::get('/attendances/{attendance}', [AttendanceController::class, 'show'])->middleware('permission:attendance.view');
     Route::put('/attendances/{attendance}', [AttendanceController::class, 'update'])->middleware('permission:attendance.edit');
     Route::delete('/attendances/{attendance}', [AttendanceController::class, 'destroy'])->middleware('permission:attendance.edit');
-    Route::patch('/attendances/{attendance}/restore', [AttendanceController::class, 'restore'])->middleware('permission:attendance.edit');
+    Route::patch('/attendances/{attendance}/restore', [AttendanceController::class, 'restore'])->middleware('permission:attendance.edit')->withTrashed();
     Route::post('/attendances/import', [AttendanceController::class, 'import'])->middleware('permission:attendance.import');
 
     // Overtime requests

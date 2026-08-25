@@ -12,6 +12,7 @@ use App\Modules\Attendance\Requests\RejectOvertimeRequestRequest;
 use App\Modules\Attendance\Requests\StoreOvertimeRequestRequest;
 use App\Modules\Attendance\Resources\OvertimeRequestResource;
 use App\Modules\Attendance\Services\OvertimeService;
+use App\Modules\Attendance\Services\OvertimeDecisionPolicy;
 use App\Modules\HR\Models\Employee;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,7 +20,10 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class OvertimeController
 {
-    public function __construct(private readonly OvertimeService $service) {}
+    public function __construct(
+        private readonly OvertimeService $service,
+        private readonly OvertimeDecisionPolicy $decisionPolicy,
+    ) {}
 
     public function options(): JsonResponse
     {
@@ -41,7 +45,7 @@ class OvertimeController
     public function show(OvertimeRequest $overtime, Request $request): OvertimeRequestResource
     {
         $user = $request->user();
-        $canView = $user?->role?->slug === 'system_admin'
+        $canView = $user && $this->decisionPolicy->isAllRecordActor($user)
             || (int) $user?->employee_id === (int) $overtime->employee_id;
 
         if (! $canView && $user?->hasPermission('attendance.ot.approve') && $user->employee_id) {
@@ -92,7 +96,7 @@ class OvertimeController
     public function cancel(Request $request, OvertimeRequest $overtime): OvertimeRequestResource
     {
         $user = $request->user();
-        $isAdmin = $user?->role?->slug === 'system_admin';
+        $isAdmin = $user && $this->decisionPolicy->isAllRecordActor($user);
         $isOwner = (int) $user?->employee_id === (int) $overtime->employee_id;
         $canCancel = $isAdmin || $isOwner;
 

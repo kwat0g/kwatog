@@ -24,7 +24,7 @@ class EmailPartyOnReturnRequestUpdated implements ShouldQueue
         $permission = 'return_management.view';
         $fallback = app(EmailDeliveryFailureNotifier::class);
         $context = [
-            'link_to' => '/return-management/return-requests/'.$rma->hash_id,
+            'link_to' => '/return-management/'.$rma->hash_id,
             'entity_type' => 'return_request',
             'entity_id' => $rma->hash_id,
             'reason' => 'The party email was missing, invalid, unreachable, or rejected by the email provider.',

@@ -10,10 +10,12 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Auth\Notifications\PasswordResetLinkNotification;
 use App\Modules\Auth\Services\PasswordResetService;
+use App\Common\Models\AuditLog;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
@@ -80,6 +82,26 @@ class PasswordResetTest extends TestCase
         $this->assertDatabaseHas('password_reset_requests', ['user_id' => $user->id]);
         $this->assertSame(1, PasswordResetRequest::where('user_id', $user->id)->count());
         Notification::assertSentTo($user, PasswordResetLinkNotification::class);
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'password.reset_requested',
+            'model_type' => 'auth.event',
+            'model_id' => $user->id,
+        ]);
+    }
+
+    public function test_forgot_password_finds_legacy_mixed_case_email(): void
+    {
+        Notification::fake();
+        $user = $this->makeUser();
+        DB::table('users')->whereKey($user->id)->update(['email' => 'Legacy.Reset+'.uniqid().'@t.test']);
+        $legacyEmail = (string) DB::table('users')->whereKey($user->id)->value('email');
+        $this->clearAuthThrottle($legacyEmail);
+
+        $this->postJson('/api/v1/auth/forgot-password', [
+            'email' => strtoupper($legacyEmail),
+        ])->assertOk();
+
+        $this->assertDatabaseHas('password_reset_requests', ['user_id' => $user->id]);
     }
 
     // ─── reset-password ───────────────────────────────────────────────────────
@@ -111,6 +133,46 @@ class PasswordResetTest extends TestCase
 
         $row = PasswordResetRequest::where('user_id', $user->id)->first();
         $this->assertNotNull($row->used_at, 'Token used_at should be stamped after successful reset.');
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'password.reset',
+            'model_type' => 'auth.event',
+            'model_id' => $user->id,
+        ]);
+    }
+
+    public function test_reset_password_revokes_all_existing_sessions(): void
+    {
+        $user = $this->makeUser();
+        $raw = 'session-reset-token-'.bin2hex(random_bytes(12));
+        PasswordResetRequest::create([
+            'user_id' => $user->id,
+            'token_hash' => hash('sha256', $raw),
+            'expires_at' => now()->addMinutes(60),
+            'ip_address' => '127.0.0.1',
+        ]);
+
+        DB::table('sessions')->insert([
+            [
+                'id' => 'reset-session-a-'.uniqid(),
+                'user_id' => $user->id,
+                'payload' => 'a',
+                'last_activity' => now()->timestamp,
+            ],
+            [
+                'id' => 'reset-session-b-'.uniqid(),
+                'user_id' => $user->id,
+                'payload' => 'b',
+                'last_activity' => now()->timestamp,
+            ],
+        ]);
+
+        $this->postJson('/api/v1/auth/reset-password', [
+            'token' => $raw,
+            'password' => 'NewStr0ng!Pass',
+            'password_confirmation' => 'NewStr0ng!Pass',
+        ])->assertOk();
+
+        $this->assertDatabaseMissing('sessions', ['user_id' => $user->id]);
     }
 
     public function test_reset_password_rejects_weak_password(): void

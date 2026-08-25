@@ -30,6 +30,14 @@ class PayrollResource extends JsonResource
             'pay_type'        => $this->pay_type,
             'days_worked'     => $this->days_worked,
 
+            // The pay period, not computed_at, is the authoritative employee
+            // facing period/status contract.
+            'period_start'    => $this->whenLoaded('period', fn () => $this->period->period_start?->toDateString()),
+            'period_end'      => $this->whenLoaded('period', fn () => $this->period->period_end?->toDateString()),
+            'period_payroll_date' => $this->whenLoaded('period', fn () => $this->period->payroll_date?->toDateString()),
+            'period_status'   => $this->whenLoaded('period', fn () => $this->period->status?->value),
+            'period_status_label' => $this->whenLoaded('period', fn () => $this->period->status?->label()),
+
             'basic_pay'       => $this->basic_pay,
             'leave_pay'       => $this->leave_pay,
             'overtime_pay'    => $this->overtime_pay,

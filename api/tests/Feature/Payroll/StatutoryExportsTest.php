@@ -88,6 +88,8 @@ class StatutoryExportsTest extends TestCase
         $csv = $this->actingAs($user)
             ->get('/api/v1/payroll/statutory/1601c?year=2025&month=3')
             ->assertStatus(200)
+            ->assertHeader('Cache-Control', 'max-age=0, must-revalidate, no-store, private')
+            ->assertHeader('X-Content-Type-Options', 'nosniff')
             ->getContent();
 
         $this->assertStringContainsString('25000.00', $csv); // total compensation
@@ -282,5 +284,13 @@ class StatutoryExportsTest extends TestCase
         $this->assertStringContainsString('Non-Taxable Compensation', $csv);
         $this->assertStringContainsString('28500.00', $csv);
         $this->assertStringContainsString('1500.00', $csv);
+    }
+
+    public function test_statutory_export_rejects_invalid_period_input(): void
+    {
+        $response = $this->actingAs($this->userWithRole('finance_officer'))
+            ->get('/api/v1/payroll/statutory/1601c?year=2025&month=13');
+
+        $response->assertStatus(422);
     }
 }

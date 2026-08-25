@@ -111,13 +111,13 @@ export interface Mold {
 }
 
 export interface MrpMaterialDiagnostic {
- item_id: number;
+ item_id: string;
  item_code: string;
  gross: number;
  on_hand: number;
  reserved: number;
  in_transit: number;
- standard_unit_cost?: number;
+ standard_unit_cost?: string;
  gross_cost?: string;
  net_cost?: string;
  net: number;
@@ -130,8 +130,8 @@ export interface MrpMaterialDiagnostic {
 export interface MrpPlanWarningDiagnostic {
  kind: 'warning';
  type: string;
- product_id: number;
- sales_order_line_id: number;
+ product_id: string;
+ sales_order_line_id: string;
  message: string;
 }
 
@@ -144,7 +144,7 @@ export interface MrpPlanCostSummary {
  overhead_cost: string;
  planned_production_cost: string;
  products?: Array<{
-  product_id: number;
+  product_id: string;
   part_number: string;
   name: string;
   quantity: number;
@@ -170,7 +170,7 @@ export interface MrpPlan {
  work_orders?: Array<{
   id: string;
   wo_number: string;
-  product_id: number;
+  product_id: string;
   quantity_target: number;
   status: string;
   status_label?: string;

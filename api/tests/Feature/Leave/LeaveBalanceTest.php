@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Leave;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Leave\Exceptions\InsufficientLeaveBalanceException;
 use App\Modules\Leave\Models\EmployeeLeaveBalance;
@@ -201,15 +202,13 @@ class LeaveBalanceTest extends TestCase
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // 6. restore() on missing balance row is a silent no-op (not an error)
+    // 6. restore() on missing balance row fails closed with a business error
     // ─────────────────────────────────────────────────────────────────────────
 
-    public function test_restore_on_missing_balance_row_is_noop(): void
+    public function test_restore_on_missing_balance_row_fails_closed(): void
     {
-        // No balance row created for employee 999.
-        $this->expectNotToPerformAssertions();
-
-        // Should not throw.
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('balance is not initialized');
         $this->svc->restore($this->employee->id, $this->leaveType->id, 1990, 1.0);
     }
 }

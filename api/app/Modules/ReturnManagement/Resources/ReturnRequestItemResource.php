@@ -21,6 +21,7 @@ class ReturnRequestItemResource extends JsonResource
             'item_id'           => $this->item_id ? \App\Common\Support\HashId::encode((int) $this->item_id) : null,
             'quantity'          => (string) $this->quantity,
             'returned_quantity' => (string) $this->returned_quantity,
+            'receipt_recorded'  => (bool) $this->receipt_recorded,
             'unit_price'        => (string) $this->unit_price,
             'original_unit_price' => $this->original_unit_price !== null ? (string) $this->original_unit_price : null,
             'total'             => (string) $this->total,
@@ -32,6 +33,12 @@ class ReturnRequestItemResource extends JsonResource
                 ? \App\Common\Support\HashId::encode((int) $this->source_invoice_item_id) : null,
             'source_delivery_item_id' => $this->source_delivery_item_id
                 ? \App\Common\Support\HashId::encode((int) $this->source_delivery_item_id) : null,
+            'source_po_item_id' => $this->source_po_item_id
+                ? \App\Common\Support\HashId::encode((int) $this->source_po_item_id) : null,
+            'source_grn_item_id' => $this->source_grn_item_id
+                ? \App\Common\Support\HashId::encode((int) $this->source_grn_item_id) : null,
+            'source_bill_item_id' => $this->source_bill_item_id
+                ? \App\Common\Support\HashId::encode((int) $this->source_bill_item_id) : null,
             'quarantine_status' => $this->quarantine_status,
             'quarantine_location_id' => $this->quarantine_location_id
                 ? \App\Common\Support\HashId::encode((int) $this->quarantine_location_id) : null,

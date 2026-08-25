@@ -14,7 +14,10 @@ use Illuminate\Support\Facades\Log;
 
 class BudgetEnforcementService
 {
-    public function __construct(private readonly SettingsService $settings) {}
+    public function __construct(
+        private readonly SettingsService $settings,
+        private readonly BudgetConsumptionService $consumption,
+    ) {}
 
     /**
      * Check if a department has remaining budget for a given amount.
@@ -38,6 +41,8 @@ class BudgetEnforcementService
         if ($budgets->isEmpty()) {
             return [true, 'ok', 'No active budget for this department.'];
         }
+
+        $this->consumption->hydrate($budgets);
 
         // Exact sums. Collection::sum() on these columns coerces to float.
         $available = Money::zero();

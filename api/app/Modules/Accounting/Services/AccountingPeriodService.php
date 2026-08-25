@@ -11,6 +11,7 @@ use App\Modules\Accounting\Models\AccountingPeriod;
 use App\Modules\Auth\Models\User;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -52,11 +53,52 @@ class AccountingPeriodService
     {
         $this->assertValidMonth($month);
 
-        return DB::transaction(function () use ($year, $month, $by) {
-            // Lock-then-guard: lock the authoritative row so a concurrent
-            // close/reopen cannot race past the closed-check. A brand-new
-            // period races the unique (year, month) index instead; on a unique
-            // violation the winner is re-read under lock and relocked.
+        try {
+            return $this->closeInTransaction($year, $month, $by);
+        } catch (QueryException $e) {
+            if (! $this->isDuplicatePeriodViolation($e)) {
+                throw $e;
+            }
+
+            // PostgreSQL aborts the transaction that saw a 23505 statement
+            // error. Recovery must therefore start after that transaction has
+            // rolled back; issuing SELECT ... FOR UPDATE in the old closure
+            // would only produce "current transaction is aborted".
+            return DB::transaction(function () use ($year, $month, $by, $e): AccountingPeriod {
+                $this->acquirePeriodLock($year, $month);
+                $period = AccountingPeriod::query()
+                    ->where('year', $year)
+                    ->where('month', $month)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $period) {
+                    // The unique violation came from this period's insert, so
+                    // a missing winner means the database state changed again
+                    // before recovery. Preserve the original database error.
+                    throw $e;
+                }
+
+                if ($period->status === AccountingPeriodStatus::Closed) {
+                    return $period;
+                }
+
+                $this->markClosed($period, $by);
+                $period->save();
+
+                return $period;
+            });
+        }
+    }
+
+    private function closeInTransaction(int $year, int $month, User $by): AccountingPeriod
+    {
+        return DB::transaction(function () use ($year, $month, $by): AccountingPeriod {
+            // All period lifecycle writes and GL posts take the same
+            // transaction-scoped advisory lock before reading the row. The
+            // advisory lock also serializes a brand-new (row-less) month,
+            // where SELECT ... FOR UPDATE cannot lock a missing row.
+            $this->acquirePeriodLock($year, $month);
             $period = AccountingPeriod::query()
                 ->where('year', $year)
                 ->where('month', $month)
@@ -68,34 +110,28 @@ class AccountingPeriodService
             }
 
             $period ??= new AccountingPeriod(['year' => $year, 'month' => $month]);
-            $period->fill(['year' => $year, 'month' => $month]);
-            $period->status      = AccountingPeriodStatus::Closed;
-            $period->closed_at   = now();
-            $period->closed_by   = $by->id;
-            // Clear stale reopen metadata on a re-close so the row reflects the
-            // current (closed) state cleanly.
-            $period->reopened_at   = null;
-            $period->reopened_by   = null;
-            $period->reopen_reason = null;
-
-            try {
-                $period->save();
-            } catch (\Illuminate\Database\QueryException $e) {
-                if (($e->errorInfo[0] ?? null) !== '23505') {
-                    throw $e;
-                }
-                // Concurrent close won the insert; relock the winner.
-                $period = AccountingPeriod::query()
-                    ->where('year', $year)
-                    ->where('month', $month)
-                    ->lockForUpdate()
-                    ->firstOrFail();
-                $period->status = AccountingPeriodStatus::Closed;
-                $period->save();
-            }
+            $this->markClosed($period, $by);
+            $period->save();
 
             return $period;
         });
+    }
+
+    private function markClosed(AccountingPeriod $period, User $by): void
+    {
+        $period->fill(['status' => AccountingPeriodStatus::Closed]);
+        $period->closed_at = now();
+        $period->closed_by = $by->id;
+        // Clear stale reopen metadata on a re-close so the row reflects the
+        // current (closed) state cleanly.
+        $period->reopened_at = null;
+        $period->reopened_by = null;
+        $period->reopen_reason = null;
+    }
+
+    private function isDuplicatePeriodViolation(QueryException $e): bool
+    {
+        return ($e->errorInfo[0] ?? null) === '23505';
     }
 
     /**
@@ -116,6 +152,8 @@ class AccountingPeriodService
         }
 
         return DB::transaction(function () use ($year, $month, $by, $reason) {
+            $this->acquirePeriodLock($year, $month);
+
             // Lock-then-guard: re-read under lock so a concurrent close cannot
             // race a reopen's closed-status check.
             $period = AccountingPeriod::query()
@@ -152,7 +190,16 @@ class AccountingPeriodService
     {
         $d = $date instanceof Carbon ? $date : Carbon::parse($date);
 
-        $period = AccountingPeriod::forDate($d);
+        // This method is called from the create/post transactions of every GL
+        // writer. Taking the same transaction-scoped lock as close() means a
+        // post either gets in before a close, or waits and observes the closed
+        // state; it cannot read OPEN and commit after close is authoritative.
+        $this->acquirePeriodLock((int) $d->year, (int) $d->month);
+        $period = AccountingPeriod::query()
+            ->where('year', (int) $d->year)
+            ->where('month', (int) $d->month)
+            ->lockForUpdate()
+            ->first();
 
         if ($period && $period->isClosed()) {
             throw new ClosedPeriodException(
@@ -185,21 +232,56 @@ class AccountingPeriodService
             ->where('status', AccountingPeriodStatus::Reopened)
             ->whereNotNull('reopened_at')
             ->where('reopened_at', '<', now()->subHours($hours))
-            ->get();
+            ->get(['id', 'year', 'month']);
 
         $count = 0;
-        foreach ($stalePeriods as $period) {
-            $period->status = AccountingPeriodStatus::Closed;
-            $period->closed_at = now();
-            // We preserve the last closed_by since it was an automated systemic close,
-            // or we could null it. Preserving the historical closer is fine.
-            $period->reopened_at = null;
-            $period->reopened_by = null;
-            $period->reopen_reason = null;
-            $period->save();
-            $count++;
+        foreach ($stalePeriods as $candidate) {
+            $relocked = DB::transaction(function () use ($candidate, $hours): bool {
+                // Acquire the advisory lock before the row lock, matching
+                // close(), reopen(), and posting. Re-read the expected state
+                // after both locks so a manual lifecycle write that won the
+                // race is never overwritten by this stale snapshot.
+                $this->acquirePeriodLock((int) $candidate->year, (int) $candidate->month);
+                $period = AccountingPeriod::query()->lockForUpdate()->find($candidate->id);
+                if (! $period || $period->status !== AccountingPeriodStatus::Reopened || $period->reopened_at === null) {
+                    return false;
+                }
+                if ($period->reopened_at->gte(now()->subHours($hours))) {
+                    return false;
+                }
+
+                $period->status = AccountingPeriodStatus::Closed;
+                $period->closed_at = now();
+                // The audit log actor is system for scheduler work. Preserve
+                // closed_by as the last human close actor; it remains history,
+                // while the fresh closed_at identifies this relock.
+                $period->reopened_at = null;
+                $period->reopened_by = null;
+                $period->reopen_reason = null;
+                $period->save();
+
+                return true;
+            });
+            $count += $relocked ? 1 : 0;
         }
 
         return $count;
+    }
+
+    /**
+     * Serialize all operations that can change or authorize a calendar month.
+     * PostgreSQL advisory locks cover the missing-row case before a period is
+     * first created; row locks below still protect an existing period's data.
+     */
+    private function acquirePeriodLock(int $year, int $month): void
+    {
+        if (DB::connection()->getDriverName() !== 'pgsql') {
+            return;
+        }
+
+        DB::select(
+            'SELECT pg_advisory_xact_lock(hashtext(?))',
+            [sprintf('accounting-period:%04d-%02d', $year, $month)],
+        );
     }
 }

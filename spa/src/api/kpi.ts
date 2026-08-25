@@ -2,6 +2,7 @@ import { client } from '@/api/client';
 import type { KpiScorecardItem, KpiTrendPoint } from '@/types/dashboard/kpi';
 
 type JsonCollection<T> = T[] | Record<string, T>;
+type KpiTrendMap = Record<string, KpiTrendPoint[]>;
 
 function normalizeCollection<T>(value: JsonCollection<T> | null | undefined): T[] {
  return Array.isArray(value) ? value : Object.values(value ?? {});
@@ -17,6 +18,11 @@ export const kpiApi = {
  client
  .get<{ data: JsonCollection<KpiTrendPoint> }>(`/dashboard/kpi/trend/${code}`, { params: { months } })
  .then((response) => normalizeCollection(response.data.data)),
+
+ trends: (codes: string[], months?: number) =>
+ client
+ .get<{ data: KpiTrendMap }>('/dashboard/kpi/trends', { params: { codes: codes.join(','), months } })
+ .then((response) => response.data.data),
 
  compute: (year: number, month: number) =>
  client.post<{ message: string }>('/dashboard/kpi/compute', { year, month }),

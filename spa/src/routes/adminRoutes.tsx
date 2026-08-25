@@ -145,7 +145,7 @@ export const adminRoutes = (
  <Route
  path="/admin/scheduled-exports"
  element={
- <PermissionGuard permission="admin.scheduled_exports.view">
+ <PermissionGuard anyOf={['admin.scheduled_exports.view', 'hr.employees.export']}>
  <ScheduledExportsPage />
  </PermissionGuard>
  }

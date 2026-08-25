@@ -25,6 +25,7 @@ export interface JobPosting {
  application_count?: number;
  created_at: string;
  updated_at: string;
+ deleted_at?: string | null;
 }
 
 export interface PublicJobPosting {
@@ -60,6 +61,7 @@ export interface JobApplication {
  interviews?: ApplicationInterview[];
  notes?: ApplicationNote[];
  converted_employee?: { id: string; employee_no: string } | null;
+ history?: RecruitmentApplicationEvent[];
  created_at: string;
  updated_at: string;
 }
@@ -80,6 +82,20 @@ export interface ApplicationNote {
  id: string;
  body: string;
  user: { id: string; name: string };
+ created_at: string;
+}
+
+export interface RecruitmentApplicationEvent {
+ id: string;
+ event_type: string;
+ actor_type: 'user' | 'system' | string;
+ actor?: { id: string; name: string } | null;
+ from_stage: ApplicationStage | null;
+ to_stage: ApplicationStage | null;
+ before: Record<string, unknown> | null;
+ after: Record<string, unknown> | null;
+ metadata: Record<string, unknown> | null;
+ correlation_id: string | null;
  created_at: string;
 }
 

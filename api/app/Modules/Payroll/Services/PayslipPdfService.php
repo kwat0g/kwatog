@@ -22,6 +22,7 @@ class PayslipPdfService
     public function __construct(
         private readonly PdfRenderService $renderer,
         private readonly DocumentVaultService $vault,
+        private readonly PayrollPublicationPolicy $publication,
     ) {}
 
     /**
@@ -29,6 +30,7 @@ class PayslipPdfService
      */
     public function generate(Payroll $payroll, ?User $generator = null): string
     {
+        $this->publication->assertPayrollPublishable($payroll);
         $payroll->loadMissing(['employee.department', 'employee.position', 'period', 'deductionDetails']);
 
         return $this->renderer->render(

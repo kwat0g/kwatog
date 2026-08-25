@@ -4,15 +4,17 @@ declare(strict_types=1);
 
 namespace App\Modules\Production\Exceptions;
 
-use Illuminate\Http\Exceptions\HttpResponseException;
-use Illuminate\Http\JsonResponse;
+use App\Common\Exceptions\BusinessRuleException;
 
-class IllegalLifecycleTransitionException extends HttpResponseException
+final class IllegalLifecycleTransitionException extends BusinessRuleException
 {
     public function __construct(string $from, string $to)
     {
-        parent::__construct(new JsonResponse([
-            'message' => "Illegal work-order lifecycle transition: {$from} → {$to}.",
-        ], 409));
+        parent::__construct("Illegal work-order lifecycle transition: {$from} → {$to}.");
+    }
+
+    public function errorCode(): ?string
+    {
+        return 'ILLEGAL_WORK_ORDER_TRANSITION';
     }
 }

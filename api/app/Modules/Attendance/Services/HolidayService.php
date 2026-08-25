@@ -32,6 +32,7 @@ class HolidayService
     public function create(array $data): Holiday
     {
         return DB::transaction(function () use ($data) {
+            $this->assertDateAvailable((string) $data['date']);
             $h = Holiday::create($data);
             $this->bustCache($h->date->year);
             return $h;
@@ -41,20 +42,37 @@ class HolidayService
     public function update(Holiday $h, array $data): Holiday
     {
         return DB::transaction(function () use ($h, $data) {
-            $oldYear = $h->date->year;
-            $h->update($data);
-            $h->refresh();
+            $locked = Holiday::query()->lockForUpdate()->findOrFail($h->getKey());
+            $oldYear = $locked->date->year;
+            if (array_key_exists('date', $data)) {
+                $this->assertDateAvailable((string) $data['date'], $locked->getKey());
+            }
+            $locked->update($data);
+            $locked->refresh();
             $this->bustCache($oldYear);
-            $this->bustCache($h->date->year);
-            return $h;
+            $this->bustCache($locked->date->year);
+            return $locked;
         });
     }
 
     public function delete(Holiday $h): void
     {
-        $year = $h->date->year;
-        $h->delete();
-        $this->bustCache($year);
+        DB::transaction(function () use ($h): void {
+            $locked = Holiday::query()->lockForUpdate()->findOrFail($h->getKey());
+            $year = $locked->date->year;
+            $locked->delete();
+            $this->bustCache($year);
+        });
+    }
+
+    public function restore(Holiday $h): void
+    {
+        DB::transaction(function () use ($h): void {
+            $locked = Holiday::withTrashed()->lockForUpdate()->findOrFail($h->getKey());
+            $this->assertDateAvailable((string) $locked->date, $locked->getKey());
+            $locked->restore();
+            $this->bustCache($locked->date->year);
+        });
     }
 
     /** Used by DTR engine. */
@@ -77,11 +95,27 @@ class HolidayService
     {
         return Holiday::query()
             ->whereYear('date', $year)
+            ->orderBy('date')
+            ->orderBy('id')
             ->get()
             ->mapWithKeys(fn ($h) => [
                 $h->date->toDateString() => ['id' => $h->id, 'name' => $h->name, 'type' => $h->type->value],
             ])
             ->all();
+    }
+
+    private function assertDateAvailable(string $date, ?int $ignoreId = null): void
+    {
+        $query = Holiday::query()->whereDate('date', $date)->lockForUpdate();
+        if ($ignoreId !== null) {
+            $query->whereKeyNot($ignoreId);
+        }
+
+        if ($query->exists()) {
+            throw new \App\Common\Exceptions\BusinessRuleException(
+                "Only one active holiday may be recorded for {$date}. Choose the existing holiday or archive it first.",
+            );
+        }
     }
 
     private function bustCache(int $year): void

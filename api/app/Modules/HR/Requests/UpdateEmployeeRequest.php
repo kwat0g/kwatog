@@ -6,10 +6,8 @@ namespace App\Modules\HR\Requests;
 
 use App\Common\Support\PhFormat;
 use App\Modules\HR\Enums\CivilStatus;
-use App\Modules\HR\Enums\EmployeeStatus;
 use App\Modules\HR\Enums\EmploymentType;
 use App\Modules\HR\Enums\Gender;
-use App\Modules\HR\Enums\PayType;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Position;
 use Illuminate\Foundation\Http\FormRequest;
@@ -51,6 +49,11 @@ class UpdateEmployeeRequest extends FormRequest
 
     public function rules(): array
     {
+        $canViewSensitive = $this->user()?->hasPermission('hr.employees.view_sensitive') ?? false;
+        $sensitive = static fn (array $rules): array => $canViewSensitive
+            ? ['sometimes', 'nullable', ...$rules]
+            : ['prohibited'];
+
         return [
             'first_name'      => ['sometimes', 'required', 'string', 'max:100', "regex:/^[\\p{L}\\s.''\\-]+$/u"],
             'middle_name'     => ['sometimes', 'nullable', 'string', 'max:100', "regex:/^[\\p{L}\\s.''\\-]*$/u"],
@@ -73,24 +76,27 @@ class UpdateEmployeeRequest extends FormRequest
             'emergency_contact_relation' => ['sometimes', 'nullable', 'string', 'max:50'],
             'emergency_contact_phone'    => ['sometimes', 'nullable', 'string', 'digits_between:7,15'],
 
-            'sss_no'         => ['sometimes', 'nullable', 'string', 'digits:'.PhFormat::SSS_LEN],
-            'philhealth_no'  => ['sometimes', 'nullable', 'string', 'digits:'.PhFormat::PHILHEALTH_LEN],
-            'pagibig_no'     => ['sometimes', 'nullable', 'string', 'digits:'.PhFormat::PAGIBIG_LEN],
-            'tin'            => ['sometimes', 'nullable', 'string', 'digits_between:'.PhFormat::TIN_MIN.','.PhFormat::TIN_MAX],
+            'sss_no'         => $sensitive(['string', 'digits:'.PhFormat::SSS_LEN]),
+            'philhealth_no'  => $sensitive(['string', 'digits:'.PhFormat::PHILHEALTH_LEN]),
+            'pagibig_no'     => $sensitive(['string', 'digits:'.PhFormat::PAGIBIG_LEN]),
+            'tin'            => $sensitive(['string', 'digits_between:'.PhFormat::TIN_MIN.','.PhFormat::TIN_MAX]),
 
             'department_id'  => ['sometimes', 'string'],
             'position_id'    => ['sometimes', 'string'],
 
             'employment_type'      => ['sometimes', Rule::in(EmploymentType::values())],
-            'pay_type'             => ['sometimes', Rule::in(PayType::values())],
-            'status'               => ['sometimes', Rule::in(EmployeeStatus::values())],
+            // Pay type is part of the maker-checker compensation workflow.
+            'pay_type'             => ['prohibited'],
+            // Lifecycle status is owned by the separation/state-machine path.
+            'status'               => ['prohibited'],
             'date_hired'           => ['sometimes', 'date', 'before_or_equal:today', 'after:1980-01-01'],
             'date_regularized'     => ['sometimes', 'nullable', 'date', 'before_or_equal:today'],
-            'basic_monthly_salary' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:9999999.99'],
-            'semi_monthly_rate'    => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:9999999.99'],
+            // Pay changes must go through the salary-adjustment maker-checker queue.
+            'basic_monthly_salary' => ['prohibited'],
+            'semi_monthly_rate'    => ['prohibited'],
 
-            'bank_name'       => ['sometimes', 'nullable', 'string', 'max:100'],
-            'bank_account_no' => ['sometimes', 'nullable', 'string', 'max:50', 'regex:/^[A-Za-z0-9\\-\\s]+$/'],
+            'bank_name'       => $sensitive(['string', 'max:100']),
+            'bank_account_no' => $sensitive(['string', 'max:50', 'regex:/^[A-Za-z0-9\\-\\s]+$/']),
         ];
     }
 
@@ -126,9 +132,19 @@ class UpdateEmployeeRequest extends FormRequest
             abort_if($posId === null, 422, 'Invalid position.');
             $data['position_id'] = $posId;
         }
-        if (isset($data['department_id'], $data['position_id'])) {
-            $position = Position::find($data['position_id']);
-            abort_if(!$position || $position->department_id !== $data['department_id'], 422, 'Selected position does not belong to the chosen department.');
+
+        // Validate the effective pair even when only one side was supplied;
+        // otherwise changing a department alone could leave the employee
+        // pointing at a position from the previous department.
+        $employee = $this->route('employee');
+        $departmentId = $data['department_id'] ?? $employee?->department_id;
+        $positionId = $data['position_id'] ?? $employee?->position_id;
+        if ($departmentId !== null) {
+            abort_if(! Department::query()->whereKey($departmentId)->exists(), 422, 'Invalid department.');
+        }
+        if ($positionId !== null) {
+            $position = Position::find($positionId);
+            abort_if(! $position || (int) $position->department_id !== (int) $departmentId, 422, 'Selected position does not belong to the chosen department.');
         }
         return $data;
     }

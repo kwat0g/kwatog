@@ -100,7 +100,7 @@ export const employeesApi = {
 
   separate: (id: string, data: SeparateData) =>
     client
-      .patch<ApiSuccess<Employee>>(`/hr/employees/${id}/separate`, data)
+      .post<ApiSuccess<unknown>>(`/hr/employees/${id}/separation`, data)
       .then((r) => r.data.data),
 
   uploadPhoto: (id: string, file: File) => {

@@ -70,6 +70,10 @@ class NcrResource extends JsonResource
             'effectiveness_status'       => $this->effectiveness_status instanceof \BackedEnum ? $this->effectiveness_status->value : $this->effectiveness_status,
             'effectiveness_status_label' => $this->effectiveness_status instanceof \App\Modules\Quality\Enums\EffectivenessStatus ? $this->effectiveness_status->label() : null,
             'effectiveness_closed_at'    => optional($this->effectiveness_closed_at)?->toISOString(),
+            'recurrence_of_ncr'          => $this->whenLoaded('recurrenceOf', fn () => $this->recurrenceOf ? [
+                'id'         => $this->recurrenceOf->hash_id,
+                'ncr_number' => $this->recurrenceOf->ncr_number,
+            ] : null),
             'created_at'         => optional($this->created_at)?->toISOString(),
             'updated_at'         => optional($this->updated_at)?->toISOString(),
         ];

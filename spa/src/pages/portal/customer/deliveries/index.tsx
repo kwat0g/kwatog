@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { PortalTable } from '@/components/portal/PortalTable';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
@@ -9,18 +10,21 @@ import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { DataTablePagination } from '@/components/ui/DataTablePagination';
 
 export default function CustomerDeliveriesPage() {
+  const [page, setPage] = useState(1);
   const {
-    data: deliveries,
+    data: deliveriesPage,
     isLoading,
     isError,
     refetch,
   } = useQuery({
-    queryKey: ['portal', 'customer', 'deliveries'],
-    queryFn: () => customerPortalApi.listDeliveries(),
+    queryKey: ['portal', 'customer', 'deliveries', { page }],
+    queryFn: () => customerPortalApi.listDeliveries({ page }),
     placeholderData: (prev) => prev,
   });
+  const deliveries = deliveriesPage?.data ?? [];
 
   return (
     <div>
@@ -44,7 +48,8 @@ export default function CustomerDeliveriesPage() {
 
         {!isLoading && !isError && (
           <Panel noPadding>
-            {deliveries && deliveries.length > 0 ? (
+            {deliveries.length > 0 ? (
+              <>
               <PortalTable>
 <table className={tableCls}>
                 <thead>
@@ -68,7 +73,12 @@ export default function CustomerDeliveriesPage() {
                           {d.delivery_number}
                         </Link>
                       </Td>
-                      <Td className="text-muted">{d.delivered_at ?? '—'}</Td>
+                      <Td className="text-muted">
+                        {d.delivered_at ?? d.scheduled_date ?? '—'}
+                        {!d.delivered_at && d.scheduled_date && (
+                          <span className="ml-1 text-2xs text-text-subtle">(scheduled)</span>
+                        )}
+                      </Td>
                       <Td align="right" mono>
                         <Chip variant={chipVariantForStatus(d.status)}>
                           {d.status_label ?? d.status.replace(/_/g, ' ')}
@@ -79,6 +89,12 @@ export default function CustomerDeliveriesPage() {
                 </tbody>
               </table>
 </PortalTable>
+              {deliveriesPage?.meta && (
+                <div className="px-4 pb-4">
+                  <DataTablePagination meta={deliveriesPage.meta} onPageChange={setPage} />
+                </div>
+              )}
+              </>
             ) : (
               <EmptyState
                 icon="truck"

@@ -48,7 +48,12 @@ class InspectionMeasurement extends Model
 
     public function specItem(): BelongsTo
     {
-        return $this->belongsTo(InspectionSpecItem::class, 'inspection_spec_item_id');
+        return $this->belongsTo(InspectionSpecItem::class, 'inspection_spec_item_id')->withTrashed();
+    }
+
+    public function hasTolerance(): bool
+    {
+        return $this->tolerance_min !== null || $this->tolerance_max !== null;
     }
 
     /**
@@ -58,7 +63,7 @@ class InspectionMeasurement extends Model
     public function evaluate(): ?bool
     {
         if ($this->measured_value === null) return null;
-        if ($this->tolerance_min === null && $this->tolerance_max === null) return null;
+        if (! $this->hasTolerance()) return null;
         $val = (float) $this->measured_value;
         if ($this->tolerance_min !== null && $val < (float) $this->tolerance_min) return false;
         if ($this->tolerance_max !== null && $val > (float) $this->tolerance_max) return false;

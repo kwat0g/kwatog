@@ -3,7 +3,7 @@
  * Subscribes to production.wo.{id} for live cumulative updates while the
  * supervisor is filling the form.
  */
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFieldArray, useForm, useWatch } from 'react-hook-form';
@@ -42,6 +42,7 @@ export default function RecordOutputPage() {
  const navigate = useNavigate();
  const qc = useQueryClient();
  const [liveCumulative, setLiveCumulative] = useState<{ produced: number; good: number; reject: number; scrap: string } | null>(null);
+ const submissionKey = useRef<{ fingerprint: string; key: string } | null>(null);
 
  const wo = useQuery({
  queryKey: ['production', 'work-orders', 'detail', id],
@@ -88,9 +89,7 @@ export default function RecordOutputPage() {
  );
 
  const submit = useMutation({
- mutationFn: async (values: FormValues) => {
- // Generate a UUID-ish idempotency key.
- const key = `${id}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+ mutationFn: async ({ values, key }: { values: FormValues; key: string }) => {
  const computedReject = values.defects.reduce((sum, d) => sum + Number(d.count || 0), 0);
  return workOrdersApi.recordOutput(id!, {
  good_count: Number(values.good_count),
@@ -107,6 +106,7 @@ export default function RecordOutputPage() {
  toast.success(`Output ${output.batch_code ?? ''} recorded.`);
  }
  reset({ good_count: '', shift: '', remarks: '', defects: [] });
+ submissionKey.current = null;
  navigate(`/production/work-orders/${id}`);
  },
  onError: (e: AxiosError<{ message?: string; errors?: Record<string, string[]> }>) => {
@@ -120,6 +120,22 @@ export default function RecordOutputPage() {
  }
  },
  });
+
+ const onSubmit = (values: FormValues) => {
+ const fingerprint = JSON.stringify(values);
+ if (submissionKey.current?.fingerprint !== fingerprint) {
+ submissionKey.current = {
+ fingerprint,
+ key: `${id}-${crypto.randomUUID()}`,
+ };
+ }
+ const key = submissionKey.current?.key;
+ if (!key) {
+ toast.error('Could not prepare the output submission. Please try again.');
+ return;
+ }
+ submit.mutate({ values, key });
+ };
 
  const cumulative = liveCumulative ?? (wo.data ? {
  produced: wo.data.quantity_produced,
@@ -137,7 +153,7 @@ export default function RecordOutputPage() {
  />
  <div className="px-5 py-4 grid gap-4 lg:grid-cols-3">
  <div className="lg:col-span-2">
- <form onSubmit={handleSubmit((v) => submit.mutate(v), onFormInvalid<FormValues>())}>
+ <form onSubmit={handleSubmit(onSubmit, onFormInvalid<FormValues>())}>
  <Panel title="New recording">
  <div className="grid grid-cols-2 gap-3">
  <Input label="Good count" required type="number" min={0} {...register('good_count')}

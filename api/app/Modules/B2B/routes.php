@@ -58,22 +58,37 @@ Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired', 'featu
     ->prefix('b2b/portal-access')
     ->group(function (): void {
         Route::post('customers/{customer}/invite', [PortalAccessController::class, 'inviteCustomer'])
-            ->middleware('permission:accounting.customers.manage');
+            ->middleware('permission:b2b.portal_access.manage');
+        Route::get('suppliers', [PortalAccessController::class, 'suppliers'])
+            ->middleware('permission:b2b.portal_access.view');
         Route::post('suppliers/{vendor}/invite', [PortalAccessController::class, 'inviteSupplier'])
-            ->middleware('permission:accounting.vendors.manage');
+            ->middleware('permission:b2b.portal_access.manage');
+        Route::post('suppliers/{supplierPortalUser}/resend', [PortalAccessController::class, 'resendSupplier'])
+            ->middleware('permission:b2b.portal_access.manage')
+            ->withTrashed();
+        Route::patch('suppliers/{supplierPortalUser}/deactivate', [PortalAccessController::class, 'deactivateSupplier'])
+            ->middleware('permission:b2b.portal_access.manage')
+            ->withTrashed();
+        Route::patch('suppliers/{supplierPortalUser}/reactivate', [PortalAccessController::class, 'reactivateSupplier'])
+            ->middleware('permission:b2b.portal_access.manage')
+            ->withTrashed();
+        Route::delete('suppliers/{supplierPortalUser}/tokens', [PortalAccessController::class, 'revokeSupplierTokens'])
+            ->middleware('permission:b2b.portal_access.manage')
+            ->withTrashed();
     });
 
 /* ─── Customer Portal ─────────────────────────────────────────── */
 Route::prefix('b2b/customer')->group(function () {
     // Public — throttle:auth (5/min/ip|email) protects against credential
     // spraying. Logout shares the limiter to bound DoS on the token-revoke path.
-    Route::post('login', [CustomerAuthController::class, 'login'])->middleware('throttle:auth');
-    Route::post('logout', [CustomerAuthController::class, 'logout'])->middleware('throttle:auth');
-    Route::post('forgot-password', [CustomerAuthController::class, 'forgotPassword'])->middleware('throttle:auth');
-    Route::post('reset-password', [CustomerAuthController::class, 'resetPassword'])->middleware('throttle:auth');
+    Route::post('login', [CustomerAuthController::class, 'login'])->middleware(['throttle:auth', 'feature:b2b_portals']);
+    Route::post('logout', [CustomerAuthController::class, 'logout'])
+        ->middleware(['throttle:auth', 'auth:customer_portal', 'portal:customer_portal', 'feature:b2b_portals']);
+    Route::post('forgot-password', [CustomerAuthController::class, 'forgotPassword'])->middleware(['throttle:auth', 'feature:b2b_portals']);
+    Route::post('reset-password', [CustomerAuthController::class, 'resetPassword'])->middleware(['throttle:auth', 'feature:b2b_portals']);
 
     // Authenticated
-    Route::middleware(['auth:customer_portal', 'portal:customer_portal', 'feature:b2b_portals', \App\Modules\B2B\Middleware\B2BTenancyScopeMiddleware::class])->group(function () {
+    Route::middleware(['auth:customer_portal', 'portal:customer_portal', 'feature:b2b_portals', \App\Modules\B2B\Middleware\CheckPortalPasswordExpiry::class, \App\Modules\B2B\Middleware\B2BTenancyScopeMiddleware::class])->group(function () {
         Route::get('me', [CustomerAuthController::class, 'me']);
         Route::post('change-password', [CustomerAuthController::class, 'changePassword'])->middleware('throttle:sensitive');
         Route::middleware('portal.password.changed')->group(function (): void {

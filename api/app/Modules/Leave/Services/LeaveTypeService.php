@@ -37,6 +37,20 @@ class LeaveTypeService
 
     public function delete(LeaveType $lt): void
     {
-        DB::transaction(fn () => $lt->delete());
+        DB::transaction(function () use ($lt): void {
+            LeaveType::query()->lockForUpdate()->findOrFail($lt->getKey())->delete();
+        });
+    }
+
+    public function restore(LeaveType $lt): LeaveType
+    {
+        return DB::transaction(function () use ($lt): LeaveType {
+            $locked = LeaveType::withTrashed()->lockForUpdate()->findOrFail($lt->getKey());
+            if ($locked->trashed()) {
+                $locked->restore();
+            }
+
+            return $locked->fresh();
+        });
     }
 }

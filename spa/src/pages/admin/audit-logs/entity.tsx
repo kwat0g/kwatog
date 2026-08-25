@@ -9,7 +9,7 @@
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { LuDownload, LuClock, LuUser as UserIcon, LuArrowRight } from '@/lib/icons';
-import { auditLogsApi, type AuditLogEntry, type AuditLogParams } from '@/api/admin/audit-logs';
+import { auditLogsApi, type AuditLogEntry, type AuditLogParams, type AuditDiffRow } from '@/api/admin/audit-logs';
 import { downloadAuthenticatedFile } from '@/api/download';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -17,19 +17,17 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { formatDateTime } from '@/lib/formatDate';
+import { formatDate, formatDateTime } from '@/lib/formatDate';
+import { formatPeso } from '@/lib/formatNumber';
 
-const actionVariant = {
+const actionVariant: Record<string, 'success' | 'info' | 'danger' | 'neutral'> = {
  created: 'success',
  updated: 'info',
  deleted: 'danger',
 } as const;
 
 function ChangeSummary({ entry }: { entry: AuditLogEntry }) {
- const old = entry.old_values ?? {};
- const nw = entry.new_values ?? {};
- const keys = [...new Set([...Object.keys(old), ...Object.keys(nw)])];
- const changes = keys.filter((k) => old[k] !== nw[k]);
+ const changes = entry.diff ?? [];
 
  if (entry.action === 'created') {
  return <span className="text-xs text-muted">Record created</span>;
@@ -43,22 +41,21 @@ function ChangeSummary({ entry }: { entry: AuditLogEntry }) {
 
  return (
  <ul className="space-y-1 mt-1">
- {changes.slice(0, 8).map((key) => {
- const label = key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+ {changes.slice(0, 8).map((row) => {
  return (
- <li key={key} className="text-xs flex items-center gap-1.5 flex-wrap">
- <span className="font-medium text-primary">{label}</span>
- {old[key] !== undefined && (
+ <li key={row.key} className="text-xs flex items-center gap-1.5 flex-wrap">
+ <span className="font-medium text-primary">{row.label}</span>
+ {row.old !== undefined && (
  <span className="font-mono tabular-nums text-muted line-through">
- {formatFieldValue(old[key])}
+ {formatDiffValue(row.old, row)}
  </span>
  )}
- {old[key] !== undefined && nw[key] !== undefined && (
+ {row.old !== undefined && row.new !== undefined && (
  <LuArrowRight size={10} className="text-muted shrink-0" />
  )}
- {nw[key] !== undefined && (
+ {row.new !== undefined && (
  <span className="font-mono tabular-nums text-primary">
- {formatFieldValue(nw[key])}
+ {formatDiffValue(row.new, row)}
  </span>
  )}
  </li>
@@ -71,9 +68,14 @@ function ChangeSummary({ entry }: { entry: AuditLogEntry }) {
  );
 }
 
-function formatFieldValue(value: unknown): string {
+function formatDiffValue(value: unknown, row: AuditDiffRow): string {
+ if (row.type === 'encrypted') return '(changed; hidden)';
  if (value === null || value === undefined) return '(empty)';
  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+ if (row.type === 'money') return formatPeso(String(value));
+ if (row.type === 'date') return typeof value === 'string' ? formatDate(value) : String(value);
+ if (row.type === 'datetime') return typeof value === 'string' ? formatDateTime(value) : String(value);
+ if (row.type === 'enum') return String(value).replace(/_/g, ' ');
  if (typeof value === 'object') {
  try {
  return JSON.stringify(value);
@@ -85,15 +87,24 @@ function formatFieldValue(value: unknown): string {
 }
 
 export default function EntityAuditTrailPage() {
- const [searchParams] = useSearchParams();
+ const [searchParams, setSearchParams] = useSearchParams();
  const modelType = searchParams.get('model_type') ?? '';
  const modelId = searchParams.get('model_id') ?? '';
+ const rawPage = Number(searchParams.get('page') ?? '1');
+ const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1;
 
  const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['admin', 'audit-logs', 'entity', modelType, modelId],
- queryFn: () => auditLogsApi.entityTrail(modelType, modelId),
+ queryKey: ['admin', 'audit-logs', 'entity', modelType, modelId, page],
+ queryFn: () => auditLogsApi.entityTrail(modelType, modelId, { page, per_page: 25 }),
  enabled: !!modelType && !!modelId,
+ placeholderData: (previous) => previous,
  });
+
+ const goToPage = (nextPage: number) => {
+ const next = new URLSearchParams(searchParams);
+ next.set('page', String(nextPage));
+ setSearchParams(next);
+ };
 
  const handleExportPdf = () => {
  const url = auditLogsApi.exportPdfUrl({ model_type: modelType, model_id: modelId } as AuditLogParams);
@@ -219,6 +230,33 @@ export default function EntityAuditTrailPage() {
  </Panel>
  </div>
  ))}
+ </div>
+ )}
+
+ {data && data.meta.last_page > 1 && (
+ <div className="flex items-center justify-between mt-3 text-xs text-muted">
+ <span>
+ Page <span className="font-mono tabular-nums">{data.meta.current_page}</span> of{' '}
+ <span className="font-mono tabular-nums">{data.meta.last_page}</span>
+ </span>
+ <div className="flex gap-1">
+ <Button
+ variant="secondary"
+ size="sm"
+ disabled={data.meta.current_page <= 1}
+ onClick={() => goToPage(data.meta.current_page - 1)}
+ >
+ Previous
+ </Button>
+ <Button
+ variant="secondary"
+ size="sm"
+ disabled={data.meta.current_page >= data.meta.last_page}
+ onClick={() => goToPage(data.meta.current_page + 1)}
+ >
+ Next
+ </Button>
+ </div>
  </div>
  )}
  </div>

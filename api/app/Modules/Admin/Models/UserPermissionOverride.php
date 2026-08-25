@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Modules\Admin\Models;
 
 use App\Common\Enums\PermissionOverrideType;
-use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\User;
@@ -16,7 +15,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class UserPermissionOverride extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog, SoftDeletes;
+    use HasFactory, HasHashId, SoftDeletes;
 
     protected $fillable = [
         'user_id',

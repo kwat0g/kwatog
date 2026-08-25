@@ -38,6 +38,7 @@ export interface PayrollPeriodSummary {
 
 export interface BankFileRef {
  id: string;
+ format?: string;
  record_count: number;
  total_amount: string;
  generated_at: string | null;
@@ -213,6 +214,12 @@ export interface Payroll {
  net_pay: string;
  error_message: string | null;
  computed_at: string | null;
+ /** Publication metadata from the parent payroll period. */
+ period_start?: string | null;
+ period_end?: string | null;
+ period_payroll_date?: string | null;
+ period_status?: PayrollPeriodStatus | null;
+ period_status_label?: string | null;
  /** ADV1 — Disbursement status from the parent period. */
  period_disbursement_status?: 'pending' | 'partially_disbursed' | 'disbursed';
  deduction_details?: PayrollDeductionDetail[];

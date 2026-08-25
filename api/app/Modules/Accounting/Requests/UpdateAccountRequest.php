@@ -26,7 +26,6 @@ class UpdateAccountRequest extends FormRequest
             'normal_balance' => ['sometimes', Rule::in(NormalBalance::values())],
             'parent_id'      => ['sometimes', 'nullable', 'string'],
             'description'    => ['sometimes', 'nullable', 'string', 'max:500'],
-            'is_active'      => ['sometimes', 'boolean'],
         ];
     }
 }

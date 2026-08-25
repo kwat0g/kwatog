@@ -10,10 +10,14 @@ use App\Modules\Inventory\Enums\ReservationStatus;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\MaterialReservation;
 use App\Modules\Inventory\Models\StockLevel;
+use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\MRP\Models\Mold;
 use App\Modules\MRP\Services\BomService;
 use App\Modules\Production\Enums\WorkOrderStatus;
+use App\Modules\Production\Models\ProductRouting;
+use App\Modules\Production\Models\RoutingOperation;
+use App\Modules\Production\Models\WoOperation;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderMaterial;
 use App\Modules\Production\Services\WorkOrderService;
@@ -177,12 +181,53 @@ class WorkOrderSplitReservationTest extends TestCase
         $mold->compatibleMachines()->syncWithoutDetaching([$machine->id]);
 
         $confirmed = app(WorkOrderService::class)->confirm($wo, $machine->id, $mold->id);
-        app(WorkOrderService::class)->start($confirmed);
+        $operator = User::factory()->create();
+        app(WorkOrderService::class)->start($confirmed, $operator->id);
+
+        $this->assertSame(
+            $operator->id,
+            StockMovement::query()
+                ->where('reference_type', 'work_order')
+                ->where('reference_id', $wo->id)
+                ->where('movement_type', 'material_issue')
+                ->value('created_by'),
+            'Material issues must be attributed to the actor starting the work order, not its creator.',
+        );
 
         $material = $wo->materials()->firstOrFail()->fresh();
         $this->assertSame('30.000', (string) $material->actual_quantity_issued);
         $this->assertSame('360.00', (string) $material->actual_cost);
         $this->assertSame('60.00', (string) $material->cost_variance);
+    }
+
+    public function test_create_draft_snapshots_active_routing_once(): void
+    {
+        $routing = ProductRouting::create([
+            'product_id' => $this->product->id,
+            'version' => 1,
+            'is_active' => true,
+            'total_cycle_time' => '12.00',
+        ]);
+        RoutingOperation::create([
+            'routing_id' => $routing->id,
+            'sequence' => 10,
+            'operation_name' => 'Injection',
+            'cycle_time_minutes' => '12.00',
+        ]);
+
+        $wo = $this->service->createDraft([
+            'product_id' => $this->product->id,
+            'quantity_target' => 15,
+            'planned_start' => Carbon::today()->addDay()->toDateTimeString(),
+            'planned_end' => Carbon::today()->addDays(2)->toDateTimeString(),
+            'created_by' => $this->user->id,
+        ]);
+
+        $this->assertCount(1, WoOperation::query()->where('work_order_id', $wo->id)->get());
+
+        // The routing snapshot is safe to retry without duplicating execution rows.
+        app(\App\Modules\Production\Services\WoOperationService::class)->generateFromRouting($wo);
+        $this->assertCount(1, WoOperation::query()->where('work_order_id', $wo->id)->get());
     }
 
     public function test_confirm_uses_single_location_when_it_covers_demand(): void

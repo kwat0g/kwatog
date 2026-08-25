@@ -39,11 +39,14 @@ class RunAutomaticMrpJob implements ShouldBeUnique, ShouldQueue
 
     public readonly string $reason;
 
+    public readonly ?int $initiatedBy;
+
     /** @param list<int> $salesOrderIds */
-    public function __construct(array $salesOrderIds, string $reason)
+    public function __construct(array $salesOrderIds, string $reason, ?int $initiatedBy = null)
     {
         $this->salesOrderIds = array_values(array_unique(array_map('intval', $salesOrderIds)));
         $this->reason = $reason;
+        $this->initiatedBy = $initiatedBy;
     }
 
     public function uniqueId(): string
@@ -66,7 +69,7 @@ class RunAutomaticMrpJob implements ShouldBeUnique, ShouldQueue
         $automation->run(
             $this->salesOrderIds,
             MrpRunTrigger::Automatic,
-            null,
+            $this->initiatedBy,
             $this->reason,
         );
     }

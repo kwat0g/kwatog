@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { LuArchiveRestore, LuPrinter } from '@/lib/icons';
+import { LuArchiveRestore, LuPencil, LuPrinter } from '@/lib/icons';
 import { journalEntriesApi } from '@/api/accounting/journal-entries';
 import { downloadAuthenticatedFile } from '@/api/download';
 import { Button } from '@/components/ui/Button';
@@ -10,6 +10,8 @@ import { Chip, type ChipVariant } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
+import { Textarea } from '@/components/ui/Textarea';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
@@ -29,6 +31,7 @@ export default function JournalEntryDetailPage() {
  const [showPost, setShowPost] = useState(false);
  const [showDelete, setShowDelete] = useState(false);
  const [showReverse, setShowReverse] = useState(false);
+ const [reverseReason, setReverseReason] = useState('');
 
  const { data: je, isLoading, isError, refetch } = useQuery({
  queryKey: ['accounting', 'journal-entries', id],
@@ -45,7 +48,7 @@ export default function JournalEntryDetailPage() {
  onError: (e: Error & { response?: { data?: { message?: string } } }) => toast.error(e.response?.data?.message ?? 'Failed to post.'),
  });
  const reverseMut = useMutation({
- mutationFn: () => journalEntriesApi.reverse(id),
+ mutationFn: () => journalEntriesApi.reverse(id, { reason: reverseReason.trim() }),
  onSuccess: (rev) => {
  toast.success(`Reversal ${rev.entry_number} posted.`);
  qc.invalidateQueries({ queryKey: ['accounting', 'journal-entries'] });
@@ -78,6 +81,7 @@ export default function JournalEntryDetailPage() {
 
  const isDraft = je.status === 'draft';
  const isPosted = je.status === 'posted';
+ const isArchived = !!je.deleted_at;
 
  return (
  <div>
@@ -93,23 +97,28 @@ export default function JournalEntryDetailPage() {
  actions={
  <div className="flex gap-1.5">
  <Button variant="secondary" size="sm" icon={<LuPrinter size={14} />} onClick={() => void downloadAuthenticatedFile(journalEntriesApi.pdfUrl(je.id), { openInNewTab: true, errorMessage: 'Failed to generate journal entry PDF.' })}>Print</Button>
- {isDraft && can('accounting.journal.post') && (
+ {isDraft && !isArchived && can('accounting.journal.create') && (
+ <Button variant="secondary" size="sm" icon={<LuPencil size={14} />} onClick={() => navigate(`/accounting/journal-entries/${je.id}/edit`)}>
+ Edit
+ </Button>
+ )}
+ {isDraft && !isArchived && can('accounting.journal.post') && (
  <Button variant="primary" size="sm" onClick={() => setShowPost(true)} disabled={postMut.isPending}>
  Post
  </Button>
  )}
-{isDraft && can('accounting.journal.create') && (
+ {isDraft && !isArchived && can('accounting.journal.create') && (
   <Button variant="danger" size="sm" onClick={() => setShowDelete(true)} disabled={deleteMut.isPending}>
   Delete
   </Button>
   )}
- {can('accounting.journal.create') && (
+ {isArchived && can('accounting.journal.create') && (
   <Button variant="secondary" size="sm" icon={<LuArchiveRestore size={14} />} onClick={() => restoreMut.mutate()} loading={restoreMut.isPending} disabled={restoreMut.isPending}>
   Restore
   </Button>
   )}
  {isPosted && !je.reversed_by_entry_id && can('accounting.journal.reverse') && (
- <Button variant="secondary" size="sm" onClick={() => setShowReverse(true)} loading={reverseMut.isPending} disabled={reverseMut.isPending}>
+ <Button variant="secondary" size="sm" onClick={() => { setReverseReason(''); setShowReverse(true); }} loading={reverseMut.isPending} disabled={reverseMut.isPending}>
  Reverse
  </Button>
  )}
@@ -168,6 +177,9 @@ export default function JournalEntryDetailPage() {
  <dl className="text-xs space-y-2">
  <div><dt className="text-muted">Created by</dt><dd>{je.created_by?.name ?? '—'}</dd></div>
  <div><dt className="text-muted">Posted by</dt><dd>{je.posted_by?.name ?? '—'}</dd></div>
+ {je.reversal_reason && (
+ <div><dt className="text-muted">Reversal reason</dt><dd>{je.reversal_reason}</dd></div>
+ )}
  {je.reversed_by_entry_id && (
  <div><dt className="text-muted">Reversed by</dt><dd className="font-mono">{je.reversed_by_number ?? je.reversed_by_entry_id}</dd></div>
  )}
@@ -196,16 +208,30 @@ export default function JournalEntryDetailPage() {
  variant="danger"
  pending={deleteMut.isPending}
  />
- <ConfirmDialog
- isOpen={showReverse}
- onClose={() => setShowReverse(false)}
- onConfirm={() => { reverseMut.mutate(); setShowReverse(false); }}
- title="Reverse this posted entry?"
- description="A new reversing entry will be created and posted automatically."
- confirmLabel="Reverse"
- variant="warning"
- pending={reverseMut.isPending}
- />
+ <Modal isOpen={showReverse} onClose={() => setShowReverse(false)} title="Reverse this posted entry?" size="sm" closeOnOverlayClick={!reverseMut.isPending}>
+  <div className="space-y-4">
+   <p className="text-sm text-muted">A new reversing entry will be created and posted automatically. Record why this correction is required.</p>
+   <Textarea
+    label="Reason"
+    required
+    value={reverseReason}
+    onChange={(event) => setReverseReason(event.target.value)}
+    maxLength={500}
+    placeholder="Explain the correction…"
+   />
+   <ModalFooter>
+    <Button variant="secondary" onClick={() => setShowReverse(false)} disabled={reverseMut.isPending}>Cancel</Button>
+    <Button
+     variant="danger"
+     onClick={() => { reverseMut.mutate(); setShowReverse(false); }}
+     loading={reverseMut.isPending}
+     disabled={!reverseReason.trim() || reverseMut.isPending}
+    >
+     Reverse
+    </Button>
+   </ModalFooter>
+  </div>
+ </Modal>
  </div>
  );
 }

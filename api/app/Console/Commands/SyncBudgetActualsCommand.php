@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Modules\Accounting\Services\BudgetActualsSyncService;
+use Illuminate\Validation\ValidationException;
+use App\Common\Exceptions\BusinessRuleException;
 use Illuminate\Console\Command;
 
 /**
@@ -23,13 +25,24 @@ class SyncBudgetActualsCommand extends Command
     public function handle(BudgetActualsSyncService $actualsSync): int
     {
         $fiscalYearId = $this->option('fiscal-year');
-        $fiscalYearId = $fiscalYearId !== null ? (int) $fiscalYearId : null;
+        $fiscalYearId = $fiscalYearId === null || $fiscalYearId === ''
+            ? null
+            : (ctype_digit((string) $fiscalYearId) ? (int) $fiscalYearId : 0);
 
-        $outbox = $actualsSync->request($fiscalYearId);
+        try {
+            $outbox = $actualsSync->request($fiscalYearId);
+        } catch (ValidationException|BusinessRuleException $exception) {
+            $this->error($exception->getMessage());
+
+            return self::FAILURE;
+        }
+
+        $run = $actualsSync->runForOutbox((string) $outbox->getKey());
+        $runId = $run?->getKey() ?? '—';
 
         $msg = $fiscalYearId
-            ? "Staged durable budget actuals sync for fiscal year {$fiscalYearId} (outbox {$outbox->getKey()})."
-            : "Staged durable budget actuals sync for the current active fiscal year (outbox {$outbox->getKey()}).";
+            ? "Staged durable budget actuals sync for fiscal year {$fiscalYearId} (run {$runId}, outbox {$outbox->getKey()})."
+            : "Staged durable budget actuals sync for the current active fiscal year (run {$runId}, outbox {$outbox->getKey()}).";
 
         $this->info($msg);
 

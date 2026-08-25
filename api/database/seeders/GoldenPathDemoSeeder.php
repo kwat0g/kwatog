@@ -427,17 +427,38 @@ class GoldenPathDemoSeeder extends Seeder
         ])->save();
 
         // Passed outgoing QC inspection linked to the WO (trace forward leg).
-        $exists = DB::table('inspections')
+        $spec = DB::table('inspection_specs as s')
+            ->join('inspection_spec_revisions as r', function ($join): void {
+                $join->on('r.inspection_spec_id', '=', 's.id')
+                    ->on('r.version', '=', 's.version');
+            })
+            ->where('s.product_id', $wo->product_id)
+            ->where('s.is_active', true)
+            ->select(['s.id as inspection_spec_id', 'r.id as inspection_spec_revision_id'])
+            ->first();
+        if (! $spec) {
+            $this->command?->warn('  No revision-linked inspection spec; skipping hero QC inspection.');
+
+            return;
+        }
+
+        $existing = DB::table('inspections')
             ->where('entity_type', 'work_order')->where('entity_id', $wo->id)
-            ->where('stage', 'outgoing')->exists();
-        if (! $exists) {
-            $specId = DB::table('inspection_specs')->where('product_id', $wo->product_id)->value('id');
+            ->where('stage', 'outgoing')->first();
+        if ($existing) {
+            DB::table('inspections')->where('id', $existing->id)->update([
+                'inspection_spec_id' => $spec->inspection_spec_id,
+                'inspection_spec_revision_id' => $spec->inspection_spec_revision_id,
+                'updated_at' => now(),
+            ]);
+        } else {
             DB::table('inspections')->insert([
                 'inspection_number' => 'QC-'.Carbon::now()->format('Ym').'-9001',
                 'stage' => 'outgoing',
                 'status' => 'passed',
                 'product_id' => $wo->product_id,
-                'inspection_spec_id' => $specId,
+                'inspection_spec_id' => $spec->inspection_spec_id,
+                'inspection_spec_revision_id' => $spec->inspection_spec_revision_id,
                 'entity_type' => 'work_order',
                 'entity_id' => $wo->id,
                 'batch_quantity' => 10000,

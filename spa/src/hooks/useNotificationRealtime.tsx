@@ -25,27 +25,31 @@ export function useNotificationRealtime(): void {
     let disposed = false;
     let teardown: (() => void) | undefined;
 
-    void getEcho().then((echo) => {
-      if (disposed) return;
+    void getEcho()
+      .then((echo) => {
+        if (disposed) return;
 
-      const channel = echo.private(`user.${user.id}`);
+        const channel = echo.private(`user.${user.id}`);
 
-      channel.listen('.notification.created', (payload: NotificationPayload) => {
-        qc.invalidateQueries({ queryKey: ['notifications'] });
+        channel.listen('.notification.created', (payload: NotificationPayload) => {
+          qc.invalidateQueries({ queryKey: ['notifications'] });
 
-        const title = payload.data?.title ?? 'New notification';
-        toast(title, { icon: <LuBell size={16} className="text-muted" />, duration: 4000 });
+          const title = payload.data?.title ?? 'New notification';
+          toast(title, { icon: <LuBell size={16} className="text-muted" />, duration: 4000 });
+        });
+
+        teardown = () => {
+          try {
+            channel.stopListening('.notification.created');
+          } catch {
+            // ignore HMR teardown
+          }
+          echo.leave(`user.${user.id}`);
+        };
+      })
+      .catch(() => {
+        // The bell's polling query remains the delivery fallback when Reverb is unavailable.
       });
-
-      teardown = () => {
-        try {
-          channel.stopListening('.notification.created');
-        } catch {
-          // ignore HMR teardown
-        }
-        echo.leave(`user.${user.id}`);
-      };
-    });
 
     return () => {
       disposed = true;

@@ -125,7 +125,7 @@ export default function PurchaseOrderDetailPage() {
  {data.status === 'draft' && can('purchasing.po.create') && (
  <Button size="sm" variant="primary" icon={<LuSend size={14} />} onClick={() => setConfirm('submit')} loading={submit.isPending}>Submit</Button>
  )}
- {(data.status === 'draft' || data.status === 'pending_approval') && can('purchasing.po.approve') && (
+ {data.status === 'pending_approval' && can('purchasing.po.approve') && (
  <>
  <Button size="xs" variant="secondary" icon={<LuThumbsDown size={14} />} onClick={() => setRejectOpen(true)} loading={reject.isPending}>Reject</Button>
  <Button size="xs" variant="primary" icon={<LuThumbsUp size={14} />} onClick={() => setConfirm('approve')} loading={approve.isPending}>Approve</Button>
@@ -139,7 +139,7 @@ export default function PurchaseOrderDetailPage() {
  )}
  <Button size="sm" variant="secondary" icon={<LuFileText size={14} />}
  onClick={() => void downloadAuthenticatedFile(purchaseOrdersApi.pdfUrl(id), { openInNewTab: true, errorMessage: 'Failed to generate purchase order PDF.' })}>PDF</Button>
- {!['received', 'closed', 'cancelled'].includes(data.status) && (
+ {!['received', 'closed', 'cancelled'].includes(data.status) && can('purchasing.po.create') && (
  <Button size="sm" variant="secondary" icon={<LuX size={14} />} onClick={() => setCancelOpen(true)} loading={cancel.isPending}>Cancel</Button>
  )}
  </div>
@@ -181,6 +181,7 @@ export default function PurchaseOrderDetailPage() {
  <div><dt className="text-2xs uppercase tracking-wider text-muted">Vendor</dt><dd>{data.vendor?.name ?? '—'}</dd></div>
  <div><dt className="text-2xs uppercase tracking-wider text-muted">Date</dt><dd className="font-mono">{formatDate(data.date)}</dd></div>
  <div><dt className="text-2xs uppercase tracking-wider text-muted">Expected</dt><dd className="font-mono">{data.expected_delivery_date ? formatDate(data.expected_delivery_date) : '—'}</dd></div>
+ <div><dt className="text-2xs uppercase tracking-wider text-muted">Incoterm</dt><dd className="font-mono">{data.incoterm ?? '—'}</dd></div>
  <div><dt className="text-2xs uppercase tracking-wider text-muted">Approved by</dt><dd>{data.approver?.name ?? '—'}</dd></div>
  <div><dt className="text-2xs uppercase tracking-wider text-muted">Approved at</dt><dd className="font-mono">{data.approved_at ? formatDate(data.approved_at) : '—'}</dd></div>
  <div><dt className="text-2xs uppercase tracking-wider text-muted">Sent at</dt><dd className="font-mono">{data.sent_to_supplier_at ? formatDate(data.sent_to_supplier_at) : '—'}</dd></div>
@@ -450,7 +451,7 @@ export default function PurchaseOrderDetailPage() {
  onClose={() => setRejectOpen(false)}
  onConfirm={(reason) => reject.mutate(reason)}
  title="Reject this PO?"
- description="The PO returns to the requester with your reason. Please be specific."
+ description="This cancels the PO and records your reason in the approval and audit history. Please be specific."
  reasonLabel="Rejection reason"
  reasonPlaceholder="e.g. Vendor not on approved-supplier list for this material"
  minLength={10}

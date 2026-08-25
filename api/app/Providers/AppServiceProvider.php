@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Common\Models\ApprovalRecord;
+use App\Common\Models\AuditLog;
 use App\Common\Services\ChainListenerRunService;
 use App\Common\Services\EmailBrandingService;
 use App\Common\Services\ScheduleTickFailureTracker;
@@ -26,6 +27,8 @@ use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Observers\JournalEntryObserver;
+use App\Modules\Admin\Listeners\RecordActivityFromEvent;
+use App\Modules\Admin\Listeners\RecordAuthActivity;
 use App\Modules\Assets\Events\MonthlyDepreciationRequested;
 use App\Modules\Assets\Listeners\RunMonthlyDepreciationOnRequested;
 use App\Modules\Attendance\Events\OvertimeRequestDecided;
@@ -193,6 +196,8 @@ class AppServiceProvider extends ServiceProvider
         // queue lifecycle listeners below use it to record completion and
         // failure against the correct chain step.
         Queue::createPayloadUsing(static fn (): array => OutboxDispatchContext::payload());
+        AuditLog::observe(RecordAuthActivity::class);
+        Event::listen('*', [RecordActivityFromEvent::class, 'handleWildcard']);
         Event::listen(ScheduledTaskFailed::class, [ScheduleTickFailureTracker::class, 'record']);
         Event::listen(ScheduledTaskStarting::class, [SchedulerExecutionLedger::class, 'recordTaskStarting']);
         Event::listen(ScheduledTaskFinished::class, [SchedulerExecutionLedger::class, 'recordTaskFinished']);

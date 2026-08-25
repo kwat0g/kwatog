@@ -14,6 +14,7 @@ enum ProductionLogEvent: string
     case RecordOutput    = 'record_output';
     case RecordScrap     = 'record_scrap';
     case EndProduction   = 'end_production';
+    case Skip             = 'skip';
     case DowntimeStart   = 'downtime_start';
     case DowntimeEnd     = 'downtime_end';
 
@@ -33,6 +34,7 @@ enum ProductionLogEvent: string
             self::RecordOutput    => 'Record Output',
             self::RecordScrap     => 'Record Scrap',
             self::EndProduction   => 'End Production',
+            self::Skip             => 'Skip Operation',
             self::DowntimeStart   => 'Downtime Start',
             self::DowntimeEnd     => 'Downtime End',
         };

@@ -219,4 +219,39 @@ class InvoiceDraftNumberingTest extends TestCase
         $this->assertSame('9000.00', (string) $finalized->journalEntry->total_credit);
         $this->assertSame(InvoiceStatus::Finalized, $finalized->status);
     }
+
+    public function test_update_rejects_a_stale_draft_after_the_persisted_invoice_is_finalized(): void
+    {
+        $user     = $this->newUser();
+        $customer = Customer::create(['name' => 'Stale Update PH', 'payment_terms_days' => 30]);
+        $svc      = app(InvoiceService::class);
+        $draft    = $this->makeDraft($svc, $user, $customer);
+        $originalItem = $draft->items->firstOrFail();
+
+        DB::table('invoices')->where('id', $draft->id)->update([
+            'status' => InvoiceStatus::Finalized->value,
+        ]);
+
+        $exception = null;
+        try {
+            $svc->update($draft, [
+                'items' => [[
+                    'revenue_account_id' => $this->accountHashId('4010'),
+                    'description' => 'Must not replace posted lines',
+                    'quantity' => '1',
+                    'unit_price' => '1.00',
+                ]],
+            ], $user);
+        } catch (\RuntimeException $e) {
+            $exception = $e;
+        }
+
+        $this->assertNotNull($exception);
+        $this->assertSame('Only draft invoices can be edited.', $exception->getMessage());
+
+        $this->assertDatabaseHas('invoice_items', [
+            'id' => $originalItem->id,
+            'description' => $originalItem->description,
+        ]);
+    }
 }

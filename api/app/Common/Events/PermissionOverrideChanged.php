@@ -37,7 +37,6 @@ class PermissionOverrideChanged implements ShouldBroadcast
     public function broadcastWith(): array
     {
         return [
-            'user_id' => $this->userId,
             'permission_slug' => $this->permissionSlug,
             'old_type' => $this->oldType?->value,
             'new_type' => $this->newType?->value,

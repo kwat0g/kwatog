@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\HR;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Enums\ApplicationStage;
@@ -137,6 +138,25 @@ class PublicRecruitmentTest extends TestCase
         $response->assertStatus(422);
     }
 
+    public function test_service_rechecks_posting_status_inside_submission_transaction(): void
+    {
+        Storage::fake('local');
+        Mail::fake();
+
+        $stalePosting = $this->posting->fresh();
+        $this->posting->forceFill(['status' => JobPostingStatus::Closed])->save();
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('This position is no longer accepting applications.');
+
+        app(RecruitmentService::class)->submitApplication($stalePosting, [
+            'first_name' => 'Race',
+            'last_name' => 'Candidate',
+            'email' => 'race@example.com',
+            'phone' => '09170000000',
+        ], UploadedFile::fake()->create('resume.pdf', 512, 'application/pdf'));
+    }
+
     public function test_public_can_track_application(): void
     {
         Storage::fake('local');
@@ -156,6 +176,31 @@ class PublicRecruitmentTest extends TestCase
         $trackResponse->assertOk();
         $trackResponse->assertJsonPath('data.status', 'Application Received');
         $trackResponse->assertJsonPath('data.position', 'Molding Operator');
+    }
+
+    public function test_public_tracker_exposes_hired_status_and_terminal_step(): void
+    {
+        $application = new JobApplication();
+        $application->fill([
+            'application_number'   => 'JA-T-' . substr(uniqid(), -5),
+            'job_posting_id'       => $this->posting->id,
+            'tracking_code'        => 'RCT-HIRED1',
+            'first_name'           => 'Hired',
+            'last_name'            => 'Candidate',
+            'email'                => 'hired@example.com',
+            'phone'                => '09170000000',
+            'resume_path'          => 'recruitment/resumes/hired.pdf',
+            'resume_original_name' => 'hired.pdf',
+            'applied_at'           => now(),
+        ]);
+        $application->stage = ApplicationStage::Hired;
+        $application->save();
+
+        $response = $this->getJson('/api/v1/public/recruitment/applications/track/RCT-HIRED1');
+
+        $response->assertOk();
+        $response->assertJsonPath('data.status', 'Hired');
+        $response->assertJsonPath('data.stage_steps.4.value', 'hired');
     }
 
     public function test_invalid_tracking_code_returns_404(): void

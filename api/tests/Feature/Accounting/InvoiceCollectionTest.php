@@ -11,6 +11,7 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Collection as InvoiceCollection;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\JournalEntry;
+use App\Modules\Accounting\Models\OfficialReceipt;
 use App\Modules\Accounting\Services\InvoiceService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -164,6 +165,50 @@ class InvoiceCollectionTest extends TestCase
         $this->assertSame(InvoiceStatus::Partial, $invoice->status, 'Invoice should be Partial after partial collection.');
         $this->assertSame('4000.00', (string) $invoice->amount_paid);
         $this->assertSame('6000.00', (string) $invoice->balance, 'Balance should be total minus paid.');
+    }
+
+    public function test_collection_replay_returns_original_collection_and_receipt(): void
+    {
+        $user     = $this->newUser();
+        $customer = Customer::create(['name' => 'Replay Toyota PH', 'payment_terms_days' => 30]);
+        $svc      = app(InvoiceService::class);
+        $cashId   = $this->accountHashId('1010');
+        $invoice  = $this->makeFinalizedInvoice($svc, $user, $customer, '1000.00', false);
+        $payload  = [
+            'cash_account_id' => $cashId,
+            'collection_date' => '2026-04-15',
+            'amount'          => '10000.00',
+            'payment_method'  => PaymentMethod::Cash->value,
+            'idempotency_key' => 'collection-replay-'.uniqid(),
+        ];
+
+        $first  = $svc->recordCollection($invoice, $payload, $user);
+        $second = $svc->recordCollection($invoice->fresh(), $payload, $user);
+
+        $this->assertSame($first->id, $second->id);
+        $this->assertNotNull($first->officialReceipt);
+        $this->assertSame($first->officialReceipt->id, $second->officialReceipt->id);
+        $this->assertSame(1, InvoiceCollection::query()->where('invoice_id', $invoice->id)->count());
+        $this->assertSame(1, JournalEntry::query()->where('reference_type', 'collection')->count());
+        $this->assertSame(1, OfficialReceipt::query()->where('collection_id', $first->id)->count());
+    }
+
+    public function test_collection_rejects_a_non_asset_cash_account(): void
+    {
+        $user     = $this->newUser();
+        $customer = Customer::create(['name' => 'Wrong Account PH', 'payment_terms_days' => 30]);
+        $svc      = app(InvoiceService::class);
+        $invoice  = $this->makeFinalizedInvoice($svc, $user, $customer, '1000.00', false);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('must be of type asset');
+
+        $svc->recordCollection($invoice, [
+            'cash_account_id' => $this->accountHashId('4010'),
+            'collection_date' => '2026-04-15',
+            'amount'          => '100.00',
+            'payment_method'  => PaymentMethod::Cash->value,
+        ], $user);
     }
 
     // ─── Test 3: Overpayment rejected ────────────────────────────────────────

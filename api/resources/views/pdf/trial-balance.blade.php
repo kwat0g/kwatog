@@ -8,6 +8,10 @@
       <label>Period</label>
       <div class="v">{{ \Carbon\Carbon::parse($data['from'])->format('M d, Y') }} — {{ \Carbon\Carbon::parse($data['to'])->format('M d, Y') }}</div>
     </div>
+    <div class="col" style="text-align:right;">
+      <label>Currency</label>
+      <div class="v">{{ $currency }}</div>
+    </div>
   </div>
 
   <table class="lines">
@@ -26,14 +30,14 @@
           <td>{{ $a['code'] }}</td>
           <td>{{ $a['name'] }}</td>
           <td>{{ $a['type'] }}</td>
-          <td class="r">{{ number_format((float) $a['debit_total'],  2) }}</td>
-          <td class="r">{{ number_format((float) $a['credit_total'], 2) }}</td>
+          <td class="r">{{ $currency }} {{ $money->format($a['debit_total']) }}</td>
+          <td class="r">{{ $currency }} {{ $money->format($a['credit_total']) }}</td>
         </tr>
       @endforeach
       <tr style="font-weight:bold;border-top:2px solid #09090B;">
         <td colspan="3" class="r">Totals</td>
-        <td class="r">{{ number_format((float) $data['totals']['debit'],  2) }}</td>
-        <td class="r">{{ number_format((float) $data['totals']['credit'], 2) }}</td>
+        <td class="r">{{ $currency }} {{ $money->format($data['totals']['debit']) }}</td>
+        <td class="r">{{ $currency }} {{ $money->format($data['totals']['credit']) }}</td>
       </tr>
     </tbody>
   </table>

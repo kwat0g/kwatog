@@ -19,7 +19,8 @@ class CompleteReturnRequest extends FormRequest
 
     public function authorize(): bool
     {
-        return $this->user()?->can('return_management.manage') === true;
+        return $this->user()?->can('return_management.complete') === true
+            || $this->user()?->can('return_management.manage') === true;
     }
 
     protected function hashIdFields(): array

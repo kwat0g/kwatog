@@ -101,9 +101,10 @@ const BY_TYPE: Record<string, NotificationMeta> = {
  'loans.rejected': { icon: LuHandCoins, group: 'approvals', label: 'Loans' },
  'chain.payslip_ready': { icon: LuReceipt, group: 'system', label: 'Payroll' },
  'chain.separation_initiated': { icon: LuUsers, group: 'system', label: 'HR' },
-  'recruitment.new_application': { icon: LuUserPlus, group: 'system', label: 'Recruitment' },
-  'recruitment.bottleneck': { icon: LuCalendar, group: 'alerts', label: 'Recruitment' },
+ 'recruitment.new_application': { icon: LuUserPlus, group: 'system', label: 'Recruitment' },
+ 'recruitment.bottleneck': { icon: LuCalendar, group: 'alerts', label: 'Recruitment' },
  'training.expiry': { icon: LuGraduationCap, group: 'alerts', label: 'Training' },
+ 'hr.onboarding.stale': { icon: LuUsers, group: 'alerts', label: 'HR' },
 
  // ── Quality & compliance ─────────────────────────────────────────────
  'auto_ncr_created': { icon: LuShieldAlert, group: 'alerts', label: 'Quality' },

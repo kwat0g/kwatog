@@ -129,7 +129,7 @@ class WorkOrderMachineConflictTest extends TestCase
         $confirmed = $this->service->confirm($wo);
 
         $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
-        $this->service->start($confirmed);
+        $this->service->start($confirmed, $this->user->id);
     }
 
     public function test_parent_work_order_cannot_start_before_subassembly_child_is_ready(): void
@@ -152,7 +152,7 @@ class WorkOrderMachineConflictTest extends TestCase
         $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
         $this->expectExceptionMessage('waiting for subassembly work orders');
 
-        $this->service->start($parent->fresh());
+        $this->service->start($parent->fresh(), $this->user->id);
     }
 
     public function test_parent_work_order_can_start_after_child_produces_required_good_quantity(): void
@@ -175,7 +175,7 @@ class WorkOrderMachineConflictTest extends TestCase
             'status' => WorkOrderStatus::Completed->value,
         ])->save();
 
-        $started = $this->service->start($parent->fresh());
+        $started = $this->service->start($parent->fresh(), $this->user->id);
 
         $this->assertSame(WorkOrderStatus::InProgress, $started->status);
     }

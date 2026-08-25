@@ -169,14 +169,14 @@ class RawPunchImportTest extends TestCase
         $this->assertDatabaseHas('attendances', ['employee_id' => $emp->id, 'date' => '2026-05-05']);
     }
 
-    public function test_the_finalized_period_guard_reads_payroll_periods_once_per_import(): void
+    public function test_the_payroll_guard_rechecks_each_day_inside_its_write_transaction(): void
     {
         $emp = $this->employee();
 
-        // Six day records for one employee. The guard is a per-date question, so
-        // a per-row implementation asks the database the same thing six times.
-        // A real monthly import is ~200 employees x ~30 days, so the multiplier
-        // is ~6,000 identical queries rather than six.
+        // Six day records for one employee. The guard deliberately re-reads and
+        // locks the overlapping payroll periods for every day transaction so a
+        // period that becomes finalized midway through the upload cannot be
+        // bypassed by an import snapshot.
         $rows = '';
         foreach (['2026-05-04', '2026-05-05', '2026-05-06', '2026-05-07', '2026-05-08', '2026-05-11'] as $day) {
             $rows .= "{$emp->employee_no},{$day} 08:00:00,in\n";
@@ -195,9 +195,9 @@ class RawPunchImportTest extends TestCase
 
         $this->assertSame(6, $result['imported'], 'fixture must genuinely import six day records: '.json_encode($result['errors']));
         $this->assertSame(
-            1,
+            6,
             $periodQueries,
-            'the finalized-period ranges must be read once per import, not once per day record'
+            'the payroll lock fence must be checked once per day write transaction'
         );
     }
 }

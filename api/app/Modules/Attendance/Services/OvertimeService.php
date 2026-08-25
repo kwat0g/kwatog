@@ -21,6 +21,7 @@ class OvertimeService
     public function __construct(
         private readonly AttendanceService $attendance,
         private readonly SettingsService $settings,
+        private readonly OvertimeDecisionPolicy $decisionPolicy,
     ) {}
 
     /**
@@ -169,14 +170,15 @@ class OvertimeService
         if (!empty($filters['from'])) $q->where('date', '>=', $filters['from']);
         if (!empty($filters['to'])) $q->where('date', '<=', $filters['to']);
 
-        // Row-level filtering. Admin/approvers see all; otherwise own only.
+        // HR/admin see all records; department-head approvers see their own
+        // department; everyone else sees only their own records.
         if ($user) {
             $roleSlug = $user->role?->slug;
-            $isAdmin = $roleSlug === 'system_admin';
+            $isAllRecord = in_array($roleSlug, ['system_admin', 'hr_officer'], true);
             $isApprover = $user->hasPermission('attendance.ot.approve');
-            if (! $isAdmin && ! $isApprover) {
+            if (! $isAllRecord && ! $isApprover) {
                 $q->where('employee_id', $user->employee_id);
-            } elseif (! $isAdmin && $isApprover) {
+            } elseif (! $isAllRecord && $isApprover) {
                 $deptId = \App\Modules\HR\Models\Employee::query()->whereKey($user->employee_id)->value('department_id');
                 $q->where(function ($qq) use ($user, $deptId) {
                     $qq->where('employee_id', $user->employee_id);
@@ -208,20 +210,23 @@ class OvertimeService
                 ->findOrFail($ot->id)
                 ->loadMissing('employee.user');
 
+            // Lock the employee row before applying department policy. A stale
+            // route-bound relationship must not authorize a decision after the
+            // employee has moved departments in a concurrent transaction.
+            $authoritative->setRelation(
+                'employee',
+                \App\Modules\HR\Models\Employee::query()
+                    ->lockForUpdate()
+                    ->findOrFail($authoritative->employee_id)
+                    ->load('user'),
+            );
+
             if ($authoritative->status !== OvertimeStatus::Pending) {
                 throw new BusinessRuleException('Only pending overtime requests can be approved.');
             }
 
-            // SoD: the requesting employee must not approve their own OT. The
-            // user<->employee link is one-directional (users.employee_id ->
-            // employees.id), exposed via Employee::user(); there is NO
-            // employees.user_id column, so resolve the submitter through the
-            // relationship rather than a non-existent attribute (OGAMI audit
-            // DEFECT-1 — the old $ot->employee?->user_id was always null).
-            $submitterId = $authoritative->employee?->user?->id;
-            if ($submitterId !== null && (int) $submitterId === (int) $approver->id) {
-                throw new BusinessRuleException('You cannot approve your own overtime request.');
-            }
+            $this->decisionPolicy->assertNotSelfDecision($authoritative, $approver);
+            $this->decisionPolicy->assertCanDecide($authoritative, $approver);
 
             $authoritative->update([
                 'status'      => OvertimeStatus::Approved->value,
@@ -274,11 +279,22 @@ class OvertimeService
         $result = DB::transaction(function () use ($ot, $approver, $reason) {
             $authoritative = OvertimeRequest::query()
                 ->lockForUpdate()
-                ->findOrFail($ot->id);
+                ->findOrFail($ot->id)
+                ->loadMissing('employee.user');
+
+            $authoritative->setRelation(
+                'employee',
+                \App\Modules\HR\Models\Employee::query()
+                    ->lockForUpdate()
+                    ->findOrFail($authoritative->employee_id)
+                    ->load('user'),
+            );
 
             if ($authoritative->status !== OvertimeStatus::Pending) {
                 throw new BusinessRuleException('Only pending overtime requests can be rejected.');
             }
+            $this->decisionPolicy->assertNotSelfDecision($authoritative, $approver);
+            $this->decisionPolicy->assertCanDecide($authoritative, $approver);
             $authoritative->update([
                 'status'           => OvertimeStatus::Rejected->value,
                 'approved_by'      => $approver->id,
@@ -306,10 +322,22 @@ class OvertimeService
         $result = DB::transaction(function () use ($ot, $user, $reason) {
             $authoritative = OvertimeRequest::query()
                 ->lockForUpdate()
-                ->findOrFail($ot->id);
+                ->findOrFail($ot->id)
+                ->loadMissing('employee');
+
+            $authoritative->setRelation(
+                'employee',
+                \App\Modules\HR\Models\Employee::query()
+                    ->lockForUpdate()
+                    ->findOrFail($authoritative->employee_id),
+            );
 
             if ($authoritative->status !== OvertimeStatus::Pending) {
                 throw new BusinessRuleException('Only pending overtime requests can be cancelled.');
+            }
+            $isOwner = (int) $user->employee_id === (int) $authoritative->employee_id;
+            if (! $isOwner) {
+                $this->decisionPolicy->assertCanDecide($authoritative, $user);
             }
             $authoritative->update([
                 'status'           => OvertimeStatus::Rejected->value,

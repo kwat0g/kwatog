@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Purchasing\Services;
 
-use App\Common\Services\SettingsService;
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\OutboxService;
+use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Purchasing\Events\SupplierPerformanceComputed;
 use App\Modules\Purchasing\Models\SupplierPerformanceSnapshot;
@@ -35,10 +36,15 @@ use Illuminate\Support\Facades\Log;
  */
 class SupplierPerformanceService
 {
+    public const MIN_PERIOD_YEAR = 2000;
+    public const MAX_PERIOD_YEAR = 2100;
+
     public function __construct(private readonly SettingsService $settings) {}
 
     public function compute(Vendor $vendor, int $year, int $month): SupplierPerformanceSnapshot
     {
+        $this->validatePeriod($year, $month);
+
         $snapshot = DB::transaction(function () use ($vendor, $year, $month) {
             $start = Carbon::create($year, $month, 1)->startOfDay();
             $end   = $start->copy()->endOfMonth()->endOfDay();
@@ -63,28 +69,49 @@ class SupplierPerformanceService
             $overall = $this->compositeScore($onTime, $quality, $ncrRate, $price, $leadTime);
             $tier    = $this->tierFromScore($overall);
 
-            $snapshot = SupplierPerformanceSnapshot::updateOrCreate(
+            $computedAt = now();
+            $snapshotValues = [
+                'vendor_id'               => $vendor->id,
+                'period_year'             => $year,
+                'period_month'            => $month,
+                'on_time_delivery_rate'   => $onTime,
+                'quality_pass_rate'       => $quality,
+                'incoming_quality_rate'   => $qcBreakdown['incoming'] ?? null,
+                'in_process_quality_rate' => $qcBreakdown['in_process'] ?? null,
+                'outgoing_quality_rate'   => $qcBreakdown['outgoing'] ?? null,
+                'ncr_rate'                => $ncrRate,
+                'price_variance_pct'      => $price,
+                'lead_time_variance_days' => $leadTime,
+                'overall_score'           => $overall,
+                'tier'                    => $tier,
+                'po_count'                => $poCount,
+                'grn_count'               => $grnCount,
+                'computed_at'             => $computedAt,
+                'created_at'              => $computedAt,
+                'updated_at'              => $computedAt,
+            ];
+
+            // updateOrCreate can race when two first computations both observe
+            // no row. The unique key remains authoritative; a database upsert
+            // makes the concurrent writers converge on one snapshot instead of
+            // surfacing a duplicate-key exception.
+            SupplierPerformanceSnapshot::query()->upsert(
+                [$snapshotValues],
+                ['vendor_id', 'period_year', 'period_month'],
                 [
-                    'vendor_id'    => $vendor->id,
-                    'period_year'  => $year,
-                    'period_month' => $month,
-                ],
-                [
-                    'on_time_delivery_rate'   => $onTime,
-                    'quality_pass_rate'       => $quality,
-                    'incoming_quality_rate'   => $qcBreakdown['incoming'] ?? null,
-                    'in_process_quality_rate' => $qcBreakdown['in_process'] ?? null,
-                    'outgoing_quality_rate'   => $qcBreakdown['outgoing'] ?? null,
-                    'ncr_rate'                => $ncrRate,
-                    'price_variance_pct'      => $price,
-                    'lead_time_variance_days' => $leadTime,
-                    'overall_score'           => $overall,
-                    'tier'                    => $tier,
-                    'po_count'                => $poCount,
-                    'grn_count'               => $grnCount,
-                    'computed_at'             => now(),
+                    'on_time_delivery_rate', 'quality_pass_rate',
+                    'incoming_quality_rate', 'in_process_quality_rate',
+                    'outgoing_quality_rate', 'ncr_rate', 'price_variance_pct',
+                    'lead_time_variance_days', 'overall_score', 'tier',
+                    'po_count', 'grn_count', 'computed_at', 'updated_at',
                 ],
             );
+
+            $snapshot = SupplierPerformanceSnapshot::query()
+                ->where('vendor_id', $vendor->id)
+                ->where('period_year', $year)
+                ->where('period_month', $month)
+                ->firstOrFail();
             app(OutboxService::class)->record(new SupplierPerformanceComputed($snapshot));
 
             return $snapshot;
@@ -146,6 +173,8 @@ class SupplierPerformanceService
      */
     public function recomputeAll(int $year, int $month): array
     {
+        $this->validatePeriod($year, $month);
+
         $count = 0;
         $failed = [];
         Vendor::query()->orderBy('id')->chunk(100, function ($vendors) use (&$count, &$failed, $year, $month) {
@@ -177,16 +206,20 @@ class SupplierPerformanceService
      * T3.3.B — Cross-vendor ranking for a given period.
      *
      * Returns supplier_performance_snapshots rows joined to their vendor,
-     * ordered by overall_score desc. Optional tier filter (A|B|C|D) and
-     * server-side limit (clamped to 100).
+     * ordered by overall_score desc with nulls last, then vendor name.
+     * Optional tier filter (A|B|C|D) and server-side limit (clamped to 100).
      *
      * @return Collection<int, SupplierPerformanceSnapshot>
      */
     public function ranking(int $year, int $month, ?string $tier = null, int $limit = 50): Collection
     {
+        $this->validatePeriod($year, $month);
+
         $clampedLimit = max(1, min($limit, 100));
 
         $q = SupplierPerformanceSnapshot::query()
+            ->select('supplier_performance_snapshots.*')
+            ->leftJoin('vendors', 'supplier_performance_snapshots.vendor_id', '=', 'vendors.id')
             ->with('vendor:id,name')
             ->where('period_year', $year)
             ->where('period_month', $month);
@@ -195,10 +228,31 @@ class SupplierPerformanceService
             $q->where('tier', $tier);
         }
 
-        return $q->orderByDesc('overall_score')
-            ->orderBy('vendor_id')
+        return $q->orderByRaw('CASE WHEN supplier_performance_snapshots.overall_score IS NULL THEN 1 ELSE 0 END')
+            ->orderByDesc('supplier_performance_snapshots.overall_score')
+            ->orderBy('vendors.name')
+            ->orderBy('supplier_performance_snapshots.vendor_id')
             ->limit($clampedLimit)
             ->get();
+    }
+
+    /**
+     * Validate the period at every service entry point before Carbon or a
+     * database write can normalize an invalid month into another date.
+     */
+    public function validatePeriod(int $year, int $month): void
+    {
+        if ($year < self::MIN_PERIOD_YEAR || $year > self::MAX_PERIOD_YEAR) {
+            throw new BusinessRuleException(sprintf(
+                'Supplier performance year must be between %d and %d.',
+                self::MIN_PERIOD_YEAR,
+                self::MAX_PERIOD_YEAR,
+            ));
+        }
+
+        if ($month < 1 || $month > 12) {
+            throw new BusinessRuleException('Supplier performance month must be between 1 and 12.');
+        }
     }
 
     private function onTimeDeliveryRate(int $vendorId, Carbon $start, Carbon $end): ?float

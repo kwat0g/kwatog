@@ -153,24 +153,24 @@ export default function PostingCreatePage() {
  ))}
  </Select>
 
- <Select label="Position" {...register('position_id')} disabled={!departmentId}>
+ <Select label="Position" {...register('position_id')} disabled={!departmentId} error={errors.position_id?.message}>
  <option value="">{departmentId ? 'Select position' : 'Select department first'}</option>
  {positions.map((p) => (
  <option key={p.id} value={p.id}>{p.title}</option>
  ))}
  </Select>
 
- <Select label="Employment Type" required {...register('employment_type')}>
+ <Select label="Employment Type" required {...register('employment_type')} error={errors.employment_type?.message}>
  <option value="">Select employment type</option>
  {employmentTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
  </Select>
  </div>
 
  <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
- <Input label="Salary Min" {...register('salary_range_min')} type="number" step="0.01" placeholder="0.00" prefix="₱" />
- <Input label="Salary Max" {...register('salary_range_max')} type="number" step="0.01" placeholder="0.00" prefix="₱" />
- <Input label="Slots" {...register('slots')} type="number" min={1} max={100} />
- <Input label="Deadline" {...register('closes_at')} type="date" />
+ <Input label="Salary Min" {...register('salary_range_min')} type="number" step="0.01" placeholder="0.00" prefix="₱" error={errors.salary_range_min?.message} />
+ <Input label="Salary Max" {...register('salary_range_max')} type="number" step="0.01" placeholder="0.00" prefix="₱" error={errors.salary_range_max?.message} />
+ <Input label="Slots" {...register('slots')} type="number" min={1} max={100} error={errors.slots?.message} />
+ <Input label="Deadline" {...register('closes_at')} type="date" error={errors.closes_at?.message} />
  </div>
 
  <Checkbox id="show_salary" label="Show salary range on public listing" {...register('show_salary')} />

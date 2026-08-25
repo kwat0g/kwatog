@@ -47,6 +47,7 @@ class StockMovementService
 {
     public function __construct(
         private readonly MovementGlPostingService $glPosting,
+        private readonly StockLocationSummaryService $locationSummary,
     ) {}
 
     public function move(StockMovementInput $in): StockMovement
@@ -54,6 +55,10 @@ class StockMovementService
         $this->validateInput($in);
         SourceReferenceRegistry::assertValid($in->referenceType, $in->referenceId);
 
+        // Laravel retries deadlock/serialization failures for these bounded
+        // attempts. Each retry re-enters after PostgreSQL rolls the previous
+        // transaction back, so no partial ledger row survives a transient
+        // concurrency failure.
         return DB::transaction(function () use ($in) {
             if (! $in->bypassCountFreeze) {
                 $this->assertLocationsNotFrozen([
@@ -62,15 +67,14 @@ class StockMovementService
                 ]);
             }
 
-            // Lock affected rows in ID-ordered fashion for deadlock safety.
-            $fromLevel = $in->fromLocationId
-                ? $this->lockOrCreate($in->itemId, $in->fromLocationId)
-                : null;
-            $toLevel = $in->toLocationId
-                ? ($in->fromLocationId !== null && $in->fromLocationId === $in->toLocationId
-                    ? $fromLevel
-                    : $this->lockOrCreate($in->itemId, $in->toLocationId))
-                : null;
+            // Lock every affected (item, location) row in one deterministic
+            // location-id order. A->B and B->A therefore acquire the same pair
+            // in the same order and cannot deadlock on opposite row locks.
+            [$fromLevel, $toLevel] = $this->lockAffectedLevels(
+                $in->itemId,
+                $in->fromLocationId,
+                $in->toLocationId,
+            );
 
             // F-15 — optimistic-lock check: when the caller passes the lock
             // version it previously read, reject the movement if the ledger
@@ -100,6 +104,14 @@ class StockMovementService
                 throw new BusinessRuleException('A unit cost is required for this stock movement.');
             }
             $totalCost = bcmul($in->quantity, (string) $unitCost, 4);
+
+            $lotNumber = $in->lotNumber;
+            $expiryDate = $in->expiryDate;
+            if ($in->type === StockMovementType::Transfer && $lotNumber === null && $in->fromLocationId !== null) {
+                $lot = $this->locationSummary->preferredLot($in->itemId, $in->fromLocationId);
+                $lotNumber = $lot['lot_number'] ?? null;
+                $expiryDate = $lot['expiry_date'] ?? null;
+            }
 
             // ── Issue side: validate availability and decrement source.
             if ($fromLevel) {
@@ -143,6 +155,8 @@ class StockMovementService
                 'total_cost'       => $this->round2($totalCost),
                 'reference_type'   => $in->referenceType,
                 'reference_id'     => $in->referenceId,
+                'lot_number'       => $lotNumber,
+                'expiry_date'      => $expiryDate,
                 'remarks'          => $in->remarks,
                 'created_by'       => $in->createdBy,
                 'created_at'       => now(),
@@ -171,7 +185,7 @@ class StockMovementService
             }
 
             return $movement;
-        });
+        }, 3);
     }
 
     /**
@@ -233,6 +247,28 @@ class StockMovementService
                 ->firstOrFail();
         }
         return $level;
+    }
+
+    /**
+     * @return array{0: StockLevel|null, 1: StockLevel|null}
+     */
+    private function lockAffectedLevels(int $itemId, ?int $fromLocationId, ?int $toLocationId): array
+    {
+        $locationIds = array_values(array_unique(array_filter(
+            [$fromLocationId, $toLocationId],
+            static fn (?int $id): bool => $id !== null,
+        )));
+        sort($locationIds, SORT_NUMERIC);
+
+        $levels = [];
+        foreach ($locationIds as $locationId) {
+            $levels[$locationId] = $this->lockOrCreate($itemId, $locationId);
+        }
+
+        return [
+            $fromLocationId === null ? null : $levels[$fromLocationId],
+            $toLocationId === null ? null : $levels[$toLocationId],
+        ];
     }
 
     private function validateInput(StockMovementInput $in): void
@@ -303,6 +339,7 @@ class StockMovementService
 
         $locations = WarehouseLocation::query()
             ->whereIn('id', $ids)
+            ->orderBy('id')
             ->lockForUpdate()
             ->get(['id', 'zone_id']);
 

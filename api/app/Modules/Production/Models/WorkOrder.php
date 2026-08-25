@@ -99,6 +99,11 @@ class WorkOrder extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    public function exceptionAuthorizer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'exception_authorized_by');
+    }
+
     public function materials(): HasMany
     {
         return $this->hasMany(WorkOrderMaterial::class);

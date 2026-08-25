@@ -24,6 +24,11 @@ class EmployeeSkill extends Model
         'expires_at',
         'certified_by',
         'certification_document_path',
+        'certification_document_name',
+        'certification_document_mime_type',
+        'certification_document_size',
+        'certification_document_uploaded_by',
+        'certification_document_uploaded_at',
         'notes',
     ];
 
@@ -31,6 +36,7 @@ class EmployeeSkill extends Model
         'proficiency_level' => EmployeeSkillLevel::class,
         'acquired_date'     => 'date',
         'expires_at'        => 'date',
+        'certification_document_uploaded_at' => 'datetime',
     ];
 
     public function employee(): BelongsTo
@@ -46,5 +52,10 @@ class EmployeeSkill extends Model
     public function certifier(): BelongsTo
     {
         return $this->belongsTo(User::class, 'certified_by');
+    }
+
+    public function documentUploader(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'certification_document_uploaded_by');
     }
 }

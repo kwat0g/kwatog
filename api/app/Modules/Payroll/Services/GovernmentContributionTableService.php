@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Payroll\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Payroll\Enums\ContributionAgency;
 use App\Modules\Payroll\Models\GovernmentContributionTable;
 use Illuminate\Support\Carbon;
@@ -92,30 +93,71 @@ class GovernmentContributionTableService
     public function update(GovernmentContributionTable $row, array $data): GovernmentContributionTable
     {
         return DB::transaction(function () use ($row, $data) {
-            $row->fill($data)->save();
-            $this->bust($row->agency);
-            return $row->fresh();
+            $locked = GovernmentContributionTable::query()->lockForUpdate()->findOrFail($row->id);
+            $locked->fill($data);
+            if ($locked->is_active) {
+                $this->assertNoOverlap($locked);
+            }
+            $locked->save();
+            DB::afterCommit(fn () => $this->bust($locked->agency));
+            return $locked->fresh();
         });
     }
 
     public function deactivate(GovernmentContributionTable $row): GovernmentContributionTable
     {
         return DB::transaction(function () use ($row) {
-            $row->is_active = false;
-            $row->save();
-            $this->bust($row->agency);
-            return $row->fresh();
+            $locked = GovernmentContributionTable::query()->lockForUpdate()->findOrFail($row->id);
+            $locked->is_active = false;
+            $locked->save();
+            DB::afterCommit(fn () => $this->bust($locked->agency));
+            return $locked->fresh();
         });
     }
 
     public function activate(GovernmentContributionTable $row): GovernmentContributionTable
     {
         return DB::transaction(function () use ($row) {
-            $row->is_active = true;
-            $row->save();
-            $this->bust($row->agency);
-            return $row->fresh();
+            $locked = GovernmentContributionTable::query()->lockForUpdate()->findOrFail($row->id);
+            $locked->is_active = true;
+            $this->assertNoOverlap($locked);
+            $locked->save();
+            DB::afterCommit(fn () => $this->bust($locked->agency));
+            return $locked->fresh();
         });
+    }
+
+    private function assertNoOverlap(GovernmentContributionTable $candidate): void
+    {
+        if (bccomp((string) $candidate->bracket_max, (string) $candidate->bracket_min, 2) < 0) {
+            throw new BusinessRuleException('Bracket maximum must be greater than or equal to bracket minimum.');
+        }
+
+        $agency = $candidate->getRawOriginal('agency');
+        $effectiveDate = $candidate->getRawOriginal('effective_date');
+
+        $overlap = GovernmentContributionTable::query()
+            ->where('agency', $agency)
+            ->whereDate('effective_date', $effectiveDate)
+            ->where('is_active', true)
+            ->whereKeyNot($candidate->id)
+            ->get(['id', 'bracket_min', 'bracket_max'])
+            ->first(function (GovernmentContributionTable $other) use ($candidate): bool {
+                return bccomp((string) $candidate->bracket_min, (string) $other->bracket_max, 2) <= 0
+                    && bccomp((string) $other->bracket_min, (string) $candidate->bracket_max, 2) <= 0;
+            });
+
+        if ($overlap) {
+            throw new BusinessRuleException(sprintf(
+                'Bracket %s-%s overlaps active bracket %s-%s for %s on %s.',
+                $candidate->bracket_min,
+                $candidate->bracket_max,
+                $overlap->bracket_min,
+                $overlap->bracket_max,
+                $agency,
+                $effectiveDate,
+            ));
+        }
     }
 
     private function bust(ContributionAgency|string|null $agency): void

@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace App\Modules\Dashboard\Services;
 
+use App\Common\Services\ApprovalBoardService;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Enums\BillStatus;
+use App\Modules\Accounting\Models\FiscalYear;
+use App\Modules\Accounting\Services\BudgetConsumptionService;
 use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\Quality\Enums\InspectionStatus;
@@ -35,6 +38,8 @@ class DashboardWidgetDataService
         private readonly SettingsService $settings,
         private readonly ForecastingDashboardService $forecasts,
         private readonly WidgetScope $scope,
+        private readonly ApprovalBoardService $approvals,
+        private readonly BudgetConsumptionService $budgetConsumption,
     ) {}
     /** @return array<string, array{key:string,value:string|null,kind:string,helper:?string,available:bool,updated_at:string}> */
     public function summaries(array $keys, User $user): array
@@ -236,19 +241,16 @@ class DashboardWidgetDataService
      */
     private function budgetUtilization(): array
     {
-        $row = DB::table('budgets')->whereIn('status', ['approved', 'active'])
-            ->selectRaw('COALESCE(SUM(total_allocated),0) AS allocated, COALESCE(SUM(total_spent),0) AS spent')
-            ->first();
-
-        $allocated = (float) ($row->allocated ?? 0);
-        if ($allocated <= 0.0) {
+        $fiscalYear = FiscalYear::query()->active()->current()->orderByDesc('year')->first();
+        $totals = $this->budgetConsumption->dashboardTotals($fiscalYear);
+        if ((float) $totals['allocated'] <= 0.0) {
             return ['value' => null, 'kind' => 'percent', 'helper' => 'No approved budget to measure against'];
         }
 
         return [
-            'value' => number_format(((float) $row->spent / $allocated) * 100, 1, '.', ''),
+            'value' => number_format($totals['utilization_pct'], 1, '.', ''),
             'kind' => 'percent',
-            'helper' => 'of approved budget spent',
+            'helper' => 'of approved budget spent or committed',
         ];
     }
 
@@ -416,23 +418,16 @@ class DashboardWidgetDataService
     }
 
     /**
-     * Pending approvals routed to THIS user's role — never the company-wide
-     * queue. Mirrors the "my action" rule in ApprovalBoardService::board()
-     * and the `approvals` badge in BadgeService: a row is yours when its
-     * `role_slug` matches your role. Counting every pending row instead
-     * leaked the company's total approval backlog to every authenticated
-     * user, including `employee` and `driver`, because this widget carries
-     * no permission of its own.
+     * Pending approvals routed to THIS user's effective roles. Reuse the
+     * board's visibility policy so the scalar fallback cannot disagree with
+     * the richer approval worklist or hide delegated work.
      */
     private function pendingApprovalsForRole(User $user): array
     {
-        $roleSlug = $user->role?->slug;
-        if ($roleSlug === null) {
-            return ['value' => null, 'kind' => 'number', 'helper' => 'No role is assigned to this account'];
-        }
+        $board = $this->approvals->board($user, null, 500, 1);
 
         return $this->number(
-            DB::table('approval_records')->where('action', 'pending')->where('role_slug', $roleSlug)->count(),
+            (int) $board['summary']['my_action'],
             'approval requests awaiting your role',
         );
     }

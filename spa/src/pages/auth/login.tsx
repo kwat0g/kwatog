@@ -12,7 +12,6 @@ import { useAuthStore } from '@/stores/authStore';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Checkbox } from '@/components/ui/Checkbox';
 import { Panel } from '@/components/ui/Panel';
 import { FormErrorSummary } from '@/components/ui/FormErrorSummary';
 import { actionLabel } from '@/lib/labels';
@@ -23,7 +22,6 @@ import { landingApi } from '@/api/landing';
 const schema = z.object({
  email: z.string().min(1, 'Email is required').email('Invalid email'),
  password: z.string().min(1, 'Password is required'),
- remember: z.boolean().optional(),
 });
 
 type LoginForm = z.infer<typeof schema>;
@@ -123,7 +121,6 @@ export default function LoginPage() {
  formState: { errors, isSubmitting },
  } = useForm<LoginForm>({
  resolver: zodResolver(schema),
- defaultValues: { remember: false },
  });
 
  const onSubmit = async (data: LoginForm) => {
@@ -131,7 +128,6 @@ export default function LoginPage() {
  const user = await login({
  email: data.email,
  password: data.password,
- remember: data.remember,
  });
  useSidebarStore.getState().init(user.sidebar_collapsed);
  const from = (location.state as { from?: string } | null)?.from ?? '/dashboard';
@@ -222,7 +218,6 @@ export default function LoginPage() {
  suffix={
  <button
  type="button"
- tabIndex={-1}
  onClick={() => setShowPassword((v) => !v)}
  aria-label={showPassword ? 'Hide password' : 'Show password'}
  className="flex h-full items-center justify-center px-2 text-muted transition-colors hover:text-primary"
@@ -242,8 +237,7 @@ export default function LoginPage() {
  </div>
  </div>
 
- <div className="flex items-center justify-between">
- <Checkbox label="Remember me" {...register('remember')} />
+ <div className="flex justify-end">
  <Link
  to="/forgot-password"
  className="text-xs text-muted underline-offset-2 transition-colors hover:text-primary hover:underline"

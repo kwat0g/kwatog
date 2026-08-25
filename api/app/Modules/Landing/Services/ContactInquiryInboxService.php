@@ -36,8 +36,9 @@ class ContactInquiryInboxService
             });
         }
 
-        return $q->orderByDesc('id')
-            ->paginate(min((int) ($filters['per_page'] ?? 25), 100));
+        $perPage = max(1, min((int) ($filters['per_page'] ?? 25), 100));
+
+        return $q->orderByDesc('id')->paginate($perPage);
     }
 
     public function show(ContactInquiry $inquiry): ContactInquiry

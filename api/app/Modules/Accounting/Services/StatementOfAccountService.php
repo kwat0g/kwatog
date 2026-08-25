@@ -9,6 +9,7 @@ use App\Common\Support\Money;
 use App\Modules\Accounting\Enums\StatementAgingBucket;
 use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Models\Collection;
+use App\Modules\Accounting\Models\CreditNoteApplication;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use Carbon\Carbon;
@@ -36,7 +37,7 @@ class StatementOfAccountService
      */
     public function forCustomer(Customer $customer, ?string $asOf = null): array
     {
-        $asOfDate = $asOf ? Carbon::parse($asOf) : now();
+        $asOfDate = $asOf ? $this->parseAsOf($asOf) : now();
 
         $transactions = $this->buildTransactions($customer, $asOfDate);
 
@@ -99,11 +100,29 @@ class StatementOfAccountService
 
         // --- Invoice postings (positive amounts) ---
         $invoices = Invoice::where('customer_id', $customer->id)
-            ->whereNotIn('status', [InvoiceStatus::Draft, InvoiceStatus::Cancelled])
             ->whereDate('date', '<=', $asOfDate->toDateString())
+            ->where(function ($query) use ($asOfDate): void {
+                $query
+                    ->where('status', '!=', InvoiceStatus::Draft)
+                    ->where(function ($lifecycle) use ($asOfDate): void {
+                        $lifecycle
+                            ->where('status', '!=', InvoiceStatus::Cancelled)
+                            ->orWhere(function ($cancelled) use ($asOfDate): void {
+                                $cancelled
+                                    ->where('status', InvoiceStatus::Cancelled)
+                                    ->whereNotNull('cancelled_at');
+                            });
+                    })
+                    ->orWhere(function ($cancelled) use ($asOfDate): void {
+                        $cancelled
+                            ->where('status', InvoiceStatus::Cancelled)
+                            ->whereNotNull('cancelled_at')
+                            ->where('cancelled_at', '>', $asOfDate);
+                    });
+            })
             ->orderBy('date')
             ->orderBy('id')
-            ->get(['id', 'invoice_number', 'date', 'total_amount', 'status']);
+            ->get(['id', 'invoice_number', 'date', 'total_amount', 'status', 'cancelled_at']);
 
         foreach ($invoices as $inv) {
             $txns[] = [
@@ -118,6 +137,17 @@ class StatementOfAccountService
                 'amount'      => (string) $inv->total_amount,
                 'cutoff_date' => $inv->date,
             ];
+            if ($inv->status === InvoiceStatus::Cancelled && $inv->cancelled_at !== null
+                && $inv->cancelled_at->lte($asOfDate->copy()->endOfDay())) {
+                $txns[] = [
+                    'date'        => $inv->cancelled_at->toDateString(),
+                    'type'        => 'cancellation',
+                    'reference'   => $inv->invoice_number ?? ('INV-' . $inv->hash_id),
+                    'description' => 'Invoice cancellation',
+                    'amount'      => Money::negate((string) $inv->total_amount),
+                    'cutoff_date' => $inv->cancelled_at,
+                ];
+            }
         }
 
         // --- Collections (payments received — negative amounts) ---
@@ -155,6 +185,7 @@ class StatementOfAccountService
      */
     private function computeAging(Customer $customer, Carbon $asOfDate): array
     {
+        $cutoff = $asOfDate->copy()->endOfDay();
         $buckets = [
             'current' => Money::zero(),
             'd30_days' => Money::zero(),
@@ -163,23 +194,55 @@ class StatementOfAccountService
         ];
 
         $invoices = Invoice::where('customer_id', $customer->id)
-            ->whereIn('status', [InvoiceStatus::Finalized, InvoiceStatus::Partial])
             ->whereDate('date', '<=', $asOfDate->toDateString())
-            ->get(['balance', 'due_date']);
+            ->where(function ($query) use ($cutoff): void {
+                $query
+                    ->whereIn('status', [InvoiceStatus::Finalized, InvoiceStatus::Partial, InvoiceStatus::Paid])
+                    ->orWhere(function ($cancelled) use ($cutoff): void {
+                        $cancelled
+                            ->where('status', InvoiceStatus::Cancelled)
+                            ->whereNotNull('cancelled_at')
+                            ->where('cancelled_at', '>', $cutoff);
+                    });
+            })
+            ->get(['id', 'total_amount', 'due_date']);
+
+        $invoiceIds = $invoices->modelKeys();
+        $collected = Collection::query()
+            ->whereIn('invoice_id', $invoiceIds)
+            ->whereDate('collection_date', '<=', $asOfDate->toDateString())
+            ->get(['invoice_id', 'amount'])
+            ->groupBy('invoice_id')
+            ->map(static fn ($items): string => Money::add(...$items->pluck('amount')->all()));
+        $credited = CreditNoteApplication::query()
+            ->whereIn('invoice_id', $invoiceIds)
+            ->where('created_at', '<=', $cutoff)
+            ->get(['invoice_id', 'amount'])
+            ->groupBy('invoice_id')
+            ->map(static fn ($items): string => Money::add(...$items->pluck('amount')->all()));
 
         foreach ($invoices as $inv) {
-            $balance = (string) $inv->balance;
+            $balance = Money::clampMin(
+                Money::sub(
+                    (string) $inv->total_amount,
+                    Money::add(
+                        (string) ($collected[$inv->id] ?? Money::zero()),
+                        (string) ($credited[$inv->id] ?? Money::zero()),
+                    ),
+                ),
+                Money::zero(),
+            );
             if (Money::isZero($balance)) {
                 continue;
             }
 
             $dueDate = $inv->due_date;
-            if (! $dueDate || $dueDate->gte($asOfDate)) {
+            if (! $dueDate || $dueDate->toDateString() >= $asOfDate->toDateString()) {
                 $buckets['current'] = Money::add($buckets['current'], $balance);
                 continue;
             }
 
-            $daysOverdue = $dueDate->diffInDays($asOfDate, true);
+            $daysOverdue = $dueDate->diffInDays($asOfDate->copy()->startOfDay(), true);
 
             if ($daysOverdue <= 30) {
                 $buckets['d30_days'] = Money::add($buckets['d30_days'], $balance);
@@ -191,5 +254,21 @@ class StatementOfAccountService
         }
 
         return $buckets;
+    }
+
+    private function parseAsOf(string $value): Carbon
+    {
+        try {
+            $date = Carbon::createFromFormat('!Y-m-d', $value, config('app.timezone'));
+        } catch (\Throwable) {
+            $date = false;
+        }
+        if (! $date || $date->format('Y-m-d') !== $value) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'as_of' => ['The as_of date must use the YYYY-MM-DD format.'],
+            ]);
+        }
+
+        return $date;
     }
 }
