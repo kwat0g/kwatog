@@ -180,7 +180,10 @@ class LotTraceabilityTest extends TestCase
             'quantity_received' => '0.000',
         ]);
 
-        // OGAMI-005 — receive resin WITH COA + moisture reading.
+        // OGAMI-005 — receive resin WITH the COA document reference + moisture
+        // reading. `coa_verified` is deliberately absent: GRN-07 established
+        // that verifying a supplier certificate is a Quality decision, so
+        // receiving may only capture the document, never assert it was checked.
         $grn = $this->grnSvc->create($po, [[
             'purchase_order_item_id' => $poItem->id,
             'item_id' => $item->id,
@@ -190,14 +193,54 @@ class LotTraceabilityTest extends TestCase
             'lot_number' => 'RESIN-LOT-77',
             'moisture_percentage' => '0.025',
             'coa_document_path' => 'coa/resin-lot-77.pdf',
-            'coa_verified' => true,
         ]], [], $this->user);
 
         $line = $grn->items->first();
         $this->assertSame('0.025', (string) $line->moisture_percentage);
         $this->assertSame('coa/resin-lot-77.pdf', $line->coa_document_path);
-        $this->assertTrue((bool) $line->coa_verified);
         $this->assertSame('RESIN-LOT-77', $line->material_lot_number);
+        // Captured, not certified. The line lands unverified and stays that way
+        // until a Quality-owned verification transition exists.
+        $this->assertFalse((bool) $line->coa_verified);
+    }
+
+    public function test_receiving_cannot_self_certify_the_supplier_coa(): void
+    {
+        $item = Item::factory()->create(['is_active' => true]);
+        $location = WarehouseLocation::factory()->create();
+
+        $po = PurchaseOrder::factory()->create([
+            'status' => PurchaseOrderStatus::Approved->value,
+            'created_by' => $this->user->id,
+        ]);
+        $poItem = PurchaseOrderItem::create([
+            'purchase_order_id' => $po->id,
+            'item_id' => $item->id,
+            'description' => 'Resin Type A',
+            'quantity' => '500.000',
+            'unit' => 'kg',
+            'unit_price' => '80.00',
+            'total' => '40000.00',
+            'quantity_received' => '0.000',
+        ]);
+
+        // GRN-07 — a receiver who supplies coa_verified is refused outright,
+        // rather than having the value silently dropped, so the caller cannot
+        // believe a certificate was accepted when it was not. The guard is
+        // enforced in the service as well as the request so direct service
+        // callers (jobs, imports, other modules) cannot bypass it.
+        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->expectExceptionMessage('COA verification is a Quality decision');
+
+        $this->grnSvc->create($po, [[
+            'purchase_order_item_id' => $poItem->id,
+            'item_id' => $item->id,
+            'location_id' => $location->id,
+            'quantity_received' => '500',
+            'unit_cost' => '80.00',
+            'coa_document_path' => 'coa/resin-lot-77.pdf',
+            'coa_verified' => true,
+        ]], [], $this->user);
     }
 
     public function test_over_receipt_blocked_by_default_but_allowed_within_tolerance(): void

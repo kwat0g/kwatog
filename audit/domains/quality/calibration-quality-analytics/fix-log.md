@@ -18,3 +18,49 @@ The module was claimed with an existing `📋 Plan Ready` action plan, so the pl
 - **Item 12 — deferred.** Production-manager calibration access remains an open RBAC/product question documented in `audit-report.md`; no permission was broadened without confirmation.
 
 Verification: isolated analytics tests passed **6 tests / 20 assertions**; isolated calibration tests passed **11 tests / 23 assertions**. PHP lint passed for changed backend files and targeted ESLint passed for changed M059 SPA files. Full SPA typecheck remains blocked by the unrelated pre-existing parser error at `spa/src/pages/production/work-orders/detail.tsx:624`. The module is released as `🔁 Needs Re-audit` pending the policy decisions, a quiet shared-schema run, and SPA typecheck/build/browser verification.
+
+## 2026-08-27 — separate-session verification run (own DB `ogami_w2_qc`)
+
+This session is the "separate session" the 2026-08-25 items were released against. It re-ran the module's tests against a freshly migrated schema and repaired the one genuine defect found.
+
+- **`QualityAnalyticsBoundaryTest::test_capability_uses_only_passed_and_failed_inspection_measurements` — fixed (test fixture, not production code).**
+  Before: all eight fixture readings were `'10.0000'` at `api/tests/Feature/Quality/QualityAnalyticsBoundaryTest.php:184` (pre-edit), so the five terminal samples had zero sigma. `SpcService::compute()` correctly returns `null` for σ < 1e-10 (`api/app/Modules/Quality/Services/SpcService.php:93-95`) and `CapabilityController::capability()` correctly turned that into the typed 422 `quality_capability_insufficient_samples` (`api/app/Modules/Quality/Controllers/CapabilityController.php:94-99`). The assertion of 200 was the wrong expectation, not the guard.
+  After: the fixture now carries real spread — five terminal readings averaging 10.0200 with sample σ 0.1581, and three non-terminal readings parked at 10.9000 so a population leak moves the mean, not only the count — at `api/tests/Feature/Quality/QualityAnalyticsBoundaryTest.php:156-192`, with `data.mean` and `data.std_dev` now asserted alongside `data.sample_count` at `:201-203`. The zero-variance guard was **not** weakened.
+  Also added: `test_capability_refuses_zero_variance_readings_instead_of_reporting_infinite_capability` at `api/tests/Feature/Quality/QualityAnalyticsBoundaryTest.php:206-259` — six terminal readings all `'10.0000'` (well past the 5-sample minimum) must still 422, pinning the guard so a later session cannot "fix" it by deleting the σ check.
+  Evidence: `QualityAnalyticsBoundaryTest` — **7 passed / 24 assertions**.
+- **Diagnosis correction.** The inherited diagnosis also claimed the fixture's spec/item/inspections lacked `inspection_spec_revision_id` and were therefore rejected by `computeCapabilityStudy()`. That half is **wrong**: `InspectionSpecItem::booted()` (`api/app/Modules/Quality/Models/InspectionSpecItem.php:27-39`) and `Inspection::booted()` (`api/app/Modules/Quality/Models/Inspection.php:34-46`) auto-fill the revision through `InspectionSpec::ensureCurrentRevision()` (`api/app/Modules/Quality/Models/InspectionSpec.php:68-78`) precisely for direct model writers like this fixture. Zero variance was the sole cause — proven by the test going green on a fixture change that touched only `measured_value`.
+
+### ⚠️ CROSS-MODULE ENTRY — belongs to `inventory/goods-receiving` (M0xx), fixed here under coordinator authorisation
+
+Read this if you own **inventory/goods-receiving**. A Quality-scoped session was authorised to repair one test in your module because the guard it tripped over is Quality-owned. Nothing else in your module was touched.
+
+- **`Tests\Feature\Inventory\LotTraceabilityTest::test_incoming_resin_qc_attributes_persist_on_grn_line` — fixed (test was wrong; the guard is correct).**
+  Before: the test received a GRN line with `'coa_verified' => true` and asserted `assertTrue($line->coa_verified)` at `api/tests/Feature/Inventory/LotTraceabilityTest.php:193,199` (pre-edit). That is precisely the behaviour your own audit finding **GRN-07** classified as broken — a warehouse receiver self-certifying a supplier Certificate of Analysis. The test predates the guard your GRN-07 fix added at `api/app/Modules/Inventory/Services/GrnService.php:140-144` (`create()`) and `:378-382` (`finalizeDraft()`), reinforced by `['prohibited']` rules at `api/app/Modules/Inventory/Requests/StoreGrnRequest.php:60`, `api/app/Modules/Inventory/Requests/FinalizeGrnRequest.php:30`, and `api/app/Modules/Inventory/Controllers/GoodsReceiptNoteController.php:170`.
+  After: the receiving payload no longer carries `coa_verified`; the test asserts the receiver-owned fields still persist (`moisture_percentage`, `coa_document_path`, `material_lot_number`) and that the line lands **unverified** — `api/tests/Feature/Inventory/LotTraceabilityTest.php:183-204`. The guard was **not** weakened, and no production code was changed.
+  Added alongside it: `test_receiving_cannot_self_certify_the_supplier_coa` at `api/tests/Feature/Inventory/LotTraceabilityTest.php:207-266`, which pins the service-level refusal. Before this session the `['prohibited']` request rules and both service guards had **zero test coverage anywhere in `api/tests`** (`grep -rn 'coa_verified' api/tests` returned only the now-fixed assertions), so a later session could have deleted the guard and the suite would still have gone green.
+  Evidence: `LotTraceabilityTest` — **5 passed / 18 assertions**.
+- **Reaches beyond the one test (Quality-owned, NOT fixed here — needs a business decision).** `coa_verified` currently has **no writer that can ever set it true**. The only writes in the codebase are the two hard-coded `false` literals at `api/app/Modules/Inventory/Services/GrnService.php:240` and `:437`. The Quality incoming-QC path does not touch it either: `api/app/Modules/Quality/Listeners/TriggerIncomingQC.php` creates a per-line incoming inspection and `api/app/Modules/Quality/Services/InspectionService.php:203-265` records the verdict, but neither references `coa_verified`. Meanwhile `api/app/Modules/Inventory/Resources/GrnItemResource.php:38` publishes the flag and the SPA renders it, so the UI shows a permanently-unverified COA on every received resin lot. Your own fix-log already records this as deliberately deferred ("Quality's COA verification transition also remain undecided"), so this is a known gap, not new breakage — but it means the Chain 2 control "verify resin certs before accepting inventory" is currently only half-closed: the document is captured and the verification is refused to everyone. Options are written up in `audit-report.md` under *COA verification has no owner*; no option was chosen, because deciding who may certify a supplier certificate is a business/IATF decision, not an audit-session one.
+
+### Re-verification of the 2026-08-25 items (previously "done but unexecuted")
+
+The prior session shipped source it could not run: a broken migration made `migrate:fresh` fail repo-wide until 2026-08-26, so its "verified" claims were source-only. Every backend item was re-run here on a private, freshly migrated database (`ogami_w2_qc`), one test class per `--filter` invocation.
+
+| Prior item | Status now | Evidence |
+|---|---|---|
+| 1, 2 (Pareto denominator + terminal population) | **Verified** | `QualityAnalyticsBoundaryTest` 7/24 |
+| 3 (capability ownership + terminal readings) | **Verified** | same run; the failing member of this group was the fixture, now fixed |
+| 4 (calibration future date + frequency default) | **Verified** | `CalibrationBoundaryTest` 3/8; `CalibrationRegisterTest` 7/12 |
+| 6 (typed no-data contract) | **Verified** at the API; source-only in the SPA | 422 asserted in `QualityAnalyticsBoundaryTest`; the SPA arm exists at `spa/src/pages/quality/capability/index.tsx:133` and lints clean, but was not exercised in a browser |
+| 7 (fail-closed product hash filter) | **Verified** | `QualityAnalyticsBoundaryTest` |
+| 8 (calibration SPA + routes + sidebar) | **Source-only** | files present, routes permission-gated at `spa/src/routes/qualityRoutes.tsx:44-49,74-75`, sidebar at `spa/src/components/layout/Sidebar.tsx:433-448`, ESLint clean — no browser walk, no typecheck (see below) |
+| 9 (dashboard KPI error/retry) | **Source-only** | `spa/src/pages/quality/dashboard.tsx:66-95` present and lints clean |
+| 10 (route/boundary coverage) | **Verified** | all four calibration/analytics classes green |
+| 11 (COPQ drift removal) | **Verified** | `grep -rn 'copq\|COPQ'` over `docs/PROCESS-FLOWS.md`, `docs/AUTO-BROWSER-TESTS.md`, `spa/e2e/helpers-extended.ts`, `CLAUDE.md`, `api/routes`, `api/app` returns nothing |
+| 5, 12 (policy decisions) | **Still deferred** | no decision recorded; see *Open questions* in `audit-report.md` |
+
+Adjacent classes run as regression cover, all green: `CalibrationBackdatedRecordRaceTest` 1/3, `QualityInspectionSummaryTest` 1/4, `SpcServiceTest` (unit) 9/29. `php -l` clean on both changed test files.
+
+**SPA typecheck still not verified, and not for the previously reported reason.** The parse error at `spa/src/pages/production/work-orders/detail.tsx:624` that blocked the prior session has since been repaired by another session. `tsc --noEmit` now fails for an environment reason instead: it exceeds an 800 MB V8 heap on this host (`FATAL ERROR: Ineffective mark-compacts near heap limit`, exit 134). The cap was deliberate — three other audit sessions were live and the host was OOM-killed the previous day — so the run was contained rather than retried larger. Targeted ESLint over all six changed/claimed M059 SPA files passes with `--max-warnings 0`. The typecheck and the calibration browser walk remain the outstanding gates.
+
+
+

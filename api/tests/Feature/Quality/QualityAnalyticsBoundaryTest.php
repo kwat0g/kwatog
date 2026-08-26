@@ -153,20 +153,82 @@ class QualityAnalyticsBoundaryTest extends TestCase
             'sort_order' => 0,
         ]);
 
+        // Terminal readings must carry real spread: a capability study of
+        // zero-variance data is a meaningless infinity, so SpcService::compute()
+        // rejects it. The five terminal values below average 10.0200 with a
+        // sample sigma of 0.1581; the three non-terminal readings sit at
+        // 10.9000 so a population leak moves the mean as well as the count.
         foreach ([
-            InspectionStatus::Passed,
-            InspectionStatus::Passed,
-            InspectionStatus::Passed,
-            InspectionStatus::Failed,
-            InspectionStatus::Failed,
-            InspectionStatus::Draft,
-            InspectionStatus::InProgress,
-            InspectionStatus::Cancelled,
-        ] as $index => $status) {
+            [InspectionStatus::Passed, '9.8200'],
+            [InspectionStatus::Passed, '10.0200'],
+            [InspectionStatus::Passed, '10.2200'],
+            [InspectionStatus::Failed, '9.9200'],
+            [InspectionStatus::Failed, '10.1200'],
+            [InspectionStatus::Draft, '10.9000'],
+            [InspectionStatus::InProgress, '10.9000'],
+            [InspectionStatus::Cancelled, '10.9000'],
+        ] as $index => [$status, $measuredValue]) {
             $inspection = Inspection::create([
                 'inspection_number' => 'CAP-'.strtoupper(str_replace('.', '', uniqid('', true))),
                 'stage' => InspectionStage::Outgoing,
                 'status' => $status,
+                'product_id' => $product->id,
+                'inspection_spec_id' => $spec->id,
+                'batch_quantity' => 10,
+                'sample_size' => 1,
+                'completed_at' => now(),
+            ]);
+            InspectionMeasurement::create([
+                'inspection_id' => $inspection->id,
+                'inspection_spec_item_id' => $item->id,
+                'sample_index' => $index + 1,
+                'parameter_name' => $item->parameter_name,
+                'parameter_type' => 'dimensional',
+                'tolerance_min' => '9.0000',
+                'tolerance_max' => '11.0000',
+                'measured_value' => $measuredValue,
+                'is_critical' => true,
+                'is_pass' => true,
+            ]);
+        }
+
+        $this->actingAs($viewer, 'sanctum')
+            ->postJson('/api/v1/quality/spc/capability', [
+                'product_id' => $product->hash_id,
+                'spec_item_id' => $item->hash_id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.sample_count', 5)
+            ->assertJsonPath('data.mean', 10.02)
+            ->assertJsonPath('data.std_dev', 0.1581);
+    }
+
+    public function test_capability_refuses_zero_variance_readings_instead_of_reporting_infinite_capability(): void
+    {
+        $viewer = $this->userWithPermissions('quality-capability-flat', ['quality.inspections.view']);
+        $product = Product::factory()->create();
+        $spec = InspectionSpec::create([
+            'product_id' => $product->id,
+            'version' => 1,
+            'is_active' => true,
+            'created_by' => $viewer->id,
+        ]);
+        $item = InspectionSpecItem::create([
+            'inspection_spec_id' => $spec->id,
+            'parameter_name' => 'Diameter',
+            'parameter_type' => 'dimensional',
+            'unit_of_measure' => 'mm',
+            'tolerance_min' => '9.0000',
+            'tolerance_max' => '11.0000',
+            'is_critical' => true,
+            'sort_order' => 0,
+        ]);
+
+        for ($index = 0; $index < 6; $index++) {
+            $inspection = Inspection::create([
+                'inspection_number' => 'FLAT-'.strtoupper(str_replace('.', '', uniqid('', true))),
+                'stage' => InspectionStage::Outgoing,
+                'status' => InspectionStatus::Passed,
                 'product_id' => $product->id,
                 'inspection_spec_id' => $spec->id,
                 'batch_quantity' => 10,
@@ -187,13 +249,15 @@ class QualityAnalyticsBoundaryTest extends TestCase
             ]);
         }
 
+        // Enough samples, but sigma is zero. Cp/Cpk would be infinite, so the
+        // study must be refused rather than reported as perfect capability.
         $this->actingAs($viewer, 'sanctum')
             ->postJson('/api/v1/quality/spc/capability', [
                 'product_id' => $product->hash_id,
                 'spec_item_id' => $item->hash_id,
             ])
-            ->assertOk()
-            ->assertJsonPath('data.sample_count', 5);
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'quality_capability_insufficient_samples');
     }
 
     public function test_capability_route_requires_inspection_view_permission(): void

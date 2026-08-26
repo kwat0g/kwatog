@@ -37,3 +37,14 @@ Verification evidence: the isolated targeted API runs passed **6 tests / 20 asse
 ## Re-audit gate
 
 M059 should remain `Needs Re-audit` until the two policy decisions are recorded, the shared-schema focused suite is rerun without a concurrent refresh, and the SPA typecheck/build plus calibration browser path pass against a current schema.
+
+## 2026-08-27 execution status (the separate session the above items waited for)
+
+The 2026-08-25 work turned out to be source-only: a broken migration made `migrate:fresh` fail repo-wide until 2026-08-26, so nothing that session claimed had actually executed. All backend items were re-run here on a private database and **items 1, 2, 3, 4, 6 (API half), 7, 10 and 11 are now genuinely verified**; items 8, 9 and the SPA half of 6 remain source-only (ESLint clean, no typecheck, no browser walk). See the evidence table in `fix-log.md`.
+
+One real defect was found and fixed, and it was a test, not production code: the capability fixture had zero measurement variance, so the correct zero-variance refusal read as a failure. The guard was kept and is now pinned by a dedicated test. Details and a correction to the inherited diagnosis are in `fix-log.md`.
+
+Items **5** and **12** are still deferred, unchanged — no policy decision was guessed. A **third** decision now joins them: `grn_items.coa_verified` has no writer that can set it true, so incoming COA verification is refused to everyone including QC. Three options with trade-offs are written up in `audit-report.md` under *COA verification has no owner*; none was chosen, because it decides who may certify supplier material quality.
+
+Remaining gates for `✅ Verified`: the three policy decisions, an SPA `tsc --noEmit` on a host with enough RAM (it needs more than 800 MB and was contained rather than allowed to OOM the shared box), and the calibration browser walk.
+
