@@ -63,6 +63,28 @@ guarantee. Evidence for each is in the named module's `fix-log.md`.
    what the FCIE Dasmariñas terminals actually export; if they emit raw punches,
    exposing it is required for real hardware. → `people/attendance-dtr`
 
+8. **Training re-completion — two committed tests demand opposite behaviour.**
+   `EmployeeTrainingStateMachine:37-39` short-circuits `$current === $target` to a
+   silent return, so re-completing a completed training rewrites `completed_at`,
+   recomputes `expires_at`, clears `last_alert_*` and can swap the certificate —
+   with a 200. Removing that makes a *different* committed test fail:
+   - `EmployeeTrainingExpiresAtTest:67-89` (`d035e062`, 2026-06-15, a deliberate
+     `test(t3.4.b)`) requires re-completion to **succeed** — it *is* the retake path.
+   - `EmployeeTrainingAssignTest:143-171` (`167de85e`, the "NOT REVIEWED" batch)
+     requires **422**.
+
+   The newer test and the state machine landed in the same unreviewed commit, and
+   the state machine cannot satisfy its own new test — **it was committed red.**
+   This is a recertification policy question (HR / IATF 16949): may a completed
+   training be re-completed, and if so is early renewal allowed? Three costed
+   options are in the module's `fix-log.md`. The fix was implemented, verified,
+   and reverted; only a BLOCKED-ON-DECISION comment remains so nobody fixes it in
+   isolation. → `people/employee-master`
+
+   Related, not blocking: the same blanket `$current === $target` no-op exists in
+   `ComplaintService`, `ReturnRequestStateMachine`, `LoanStateMachine` and
+   `InspectionStateMachine`. Whatever you decide here probably applies to those.
+
 Also queued behind you, not a decision but only you can do it:
 **`sudo chown -R $USER spa/node_modules spa/test-results`** (or `rm -rf
 spa/node_modules/.vite-temp spa/test-results`). Root ownership there blocks BOTH
