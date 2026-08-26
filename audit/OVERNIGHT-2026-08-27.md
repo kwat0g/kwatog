@@ -85,6 +85,26 @@ guarantee. Evidence for each is in the named module's `fix-log.md`.
    `ComplaintService`, `ReturnRequestStateMachine`, `LoanStateMachine` and
    `InspectionStateMachine`. Whatever you decide here probably applies to those.
 
+9. **Dept-head PR auto-approve reads a column that does not exist.**
+   `PurchaseRequestService.php:296` reads `$requester->employee->is_department_head`.
+   That column is **not in the `employees` table** — I confirmed against the live
+   schema (0 rows in `information_schema`), and that line is its only reference
+   anywhere in `api/app` or `api/database`. Eloquent returns null for a missing
+   attribute rather than throwing, so the auto-approve branch at `:298-321` is
+   simply unreachable dead code — while `approval.pr.dept_head_auto_approve_threshold`
+   is seeded live at **₱5,000**, is admin-editable, and `:223` still documents the
+   feature. An operator can tune a threshold that does nothing.
+
+   It is also a booby trap: that branch approves **every step as the requester**,
+   and `PurchaseRequest` has no `approvalSubmitterId()` override — so simply adding
+   the column would immediately raise the segregation-of-duties refusal from
+   *inside* `submit()`, rolling the submission back with a 403. Options:
+   (a) keep it, which needs the column **plus** an explicit self-approval design
+   (an SoD-exempt system actor, or model it as a threshold *skip* — the mechanism
+   `submit($…, $total)` already has); or (b) drop it: delete the branch, the
+   settings row, and the validator entry. Zero test coverage either way.
+   → `platform/approval-workflows`
+
 Also queued behind you, not a decision but only you can do it:
 **`sudo chown -R $USER spa/node_modules spa/test-results`** (or `rm -rf
 spa/node_modules/.vite-temp spa/test-results`). Root ownership there blocks BOTH
