@@ -81,12 +81,17 @@ export default function ReturnRequestDetailPage() {
     staleTime: 5 * 60 * 1000,
   });
   const locations = (warehouses ?? []).flatMap((w) =>
-    (w.is_active ? (w.zones ?? []).filter((z) => z.zone_type !== 'quarantine' && z.zone_type !== 'scrap') : []).flatMap((z) =>
-      (z.locations ?? []).filter((l) => l.is_active).map((l) => ({
-        id: l.id,
-        label: `${w.code}-${z.code}-${l.code}`,
-        sub: `${w.name} / ${z.name}`,
-      })),
+    (w.is_active
+      ? (w.zones ?? []).filter((z) => z.zone_type !== 'quarantine' && z.zone_type !== 'scrap')
+      : []
+    ).flatMap((z) =>
+      (z.locations ?? [])
+        .filter((l) => l.is_active)
+        .map((l) => ({
+          id: l.id,
+          label: `${w.code}-${z.code}-${l.code}`,
+          sub: `${w.name} / ${z.name}`,
+        })),
     ),
   );
   const { data: options } = useQuery({
@@ -123,7 +128,11 @@ export default function ReturnRequestDetailPage() {
     mutationFn: () => returnManagementApi.approve(id!),
     onSuccess: (updated) => {
       invalidate();
-      toast.success(updated.status === 'pending_approval' ? 'Approval recorded; another approval step remains.' : 'RMA approved.');
+      toast.success(
+        updated.status === 'pending_approval'
+          ? 'Approval recorded; another approval step remains.'
+          : 'RMA approved.',
+      );
       setConfirm(null);
     },
     onError: (e) => toast.error(errMsg(e, 'Failed to approve RMA.')),
@@ -236,13 +245,9 @@ export default function ReturnRequestDetailPage() {
           { key: 'reject', label: 'Reject', variant: 'danger' },
         ];
       case 'approved':
-        return [
-          { key: 'receive', label: 'Record Receipt', variant: 'primary' },
-        ];
+        return [{ key: 'receive', label: 'Record Receipt', variant: 'primary' }];
       case 'received':
-        return [
-          { key: 'inspect', label: 'Stage Quality Handoff', variant: 'primary' },
-        ];
+        return [{ key: 'inspect', label: 'Stage Quality Handoff', variant: 'primary' }];
       case 'inspected': {
         const disposed = rma?.disposition_status === 'disposed';
         return [
@@ -425,7 +430,9 @@ export default function ReturnRequestDetailPage() {
           <div className="flex gap-1.5">
             {rma.is_editable && canManage && (
               <Link to={`/return-management/${rma.id}/edit`}>
-                <Button size="sm" variant="secondary">Edit Draft</Button>
+                <Button size="sm" variant="secondary">
+                  Edit Draft
+                </Button>
               </Link>
             )}
             {rma.inspection_handoff?.status === 'manual_required' && canInspect && (
@@ -627,7 +634,9 @@ export default function ReturnRequestDetailPage() {
                           {formatQuantity(item.quantity)}
                         </Td>
                         <Td align="right" mono>
-                          {formatQuantity(item.receipt_recorded ? item.returned_quantity : item.quantity)}
+                          {formatQuantity(
+                            item.receipt_recorded ? item.returned_quantity : item.quantity,
+                          )}
                         </Td>
                         <Td align="right" mono>
                           {formatPeso(item.unit_price)}
@@ -656,7 +665,9 @@ export default function ReturnRequestDetailPage() {
                         <Td>
                           {item.moved_quantity && Number(item.moved_quantity) > 0 ? (
                             rma.type === 'supplier_return' ? (
-                              <Chip variant="danger">{formatQuantity(item.moved_quantity)} out</Chip>
+                              <Chip variant="danger">
+                                {formatQuantity(item.moved_quantity)} out
+                              </Chip>
                             ) : (
                               <Chip variant="success">
                                 <LuCheck
@@ -814,23 +825,41 @@ export default function ReturnRequestDetailPage() {
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-2xs uppercase tracking-wider text-muted">Quality inspections</dt>
+                      <dt className="text-2xs uppercase tracking-wider text-muted">
+                        Quality inspections
+                      </dt>
                       <dd>
                         {rma.inspections && rma.inspections.length > 0 ? (
                           <div className="space-y-1">
                             {rma.inspections.map((inspection) => (
                               <div key={inspection.id} className="flex items-center gap-2">
-                                <Link to={`/quality/inspections/${inspection.id}`} className="text-accent hover:underline font-mono">
+                                <Link
+                                  to={`/quality/inspections/${inspection.id}`}
+                                  className="text-accent hover:underline font-mono"
+                                >
                                   {inspection.inspection_number}
                                 </Link>
-                                <Chip variant={inspection.status === 'passed' ? 'success' : inspection.status === 'failed' ? 'danger' : 'warning'}>
+                                <Chip
+                                  variant={
+                                    inspection.status === 'passed'
+                                      ? 'success'
+                                      : inspection.status === 'failed'
+                                        ? 'danger'
+                                        : 'warning'
+                                  }
+                                >
                                   {inspection.status}
                                 </Chip>
                               </div>
                             ))}
                           </div>
                         ) : rma.inspection ? (
-                          <Link to={`/quality/inspections/${rma.inspection.id}`} className="text-accent hover:underline font-mono">{rma.inspection.inspection_number}</Link>
+                          <Link
+                            to={`/quality/inspections/${rma.inspection.id}`}
+                            className="text-accent hover:underline font-mono"
+                          >
+                            {rma.inspection.inspection_number}
+                          </Link>
                         ) : (
                           <span className="text-muted">—</span>
                         )}
