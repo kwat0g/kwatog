@@ -217,7 +217,10 @@ class EffectivenessService
                 );
             }
 
-            $overdueDays = max(0, $action->next_effectiveness_check_at->startOfDay()->diffInDays($today));
+            // Magnitude: the query above filters `next_effectiveness_check_at <= today`,
+            // so the receiver is provably the earlier instant and the signed and
+            // absolute results agree. `true` says so out loud (see CarbonDiffSignConventionTest).
+            $overdueDays = max(0, $action->next_effectiveness_check_at->startOfDay()->diffInDays($today, true));
             if ($overdueDays < $escalationDays) {
                 continue;
             }
