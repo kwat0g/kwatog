@@ -21,6 +21,17 @@ class PortalPasswordResetTest extends TestCase
 {
     use RefreshDatabase;
 
+    private function makeSupplier(string $email): SupplierPortalUser
+    {
+        return SupplierPortalUser::create([
+            'vendor_id' => Vendor::factory()->create()->id,
+            'name' => 'Supplier Portal User',
+            'email' => $email,
+            'password' => Hash::make('OldPassword-1!'),
+            'is_active' => true,
+        ]);
+    }
+
     public function test_customer_reset_email_is_queued_and_token_updates_password(): void
     {
         Mail::fake();
@@ -94,6 +105,66 @@ class PortalPasswordResetTest extends TestCase
             ->assertOk();
 
         Mail::assertQueued(PortalPasswordResetMail::class, fn (PortalPasswordResetMail $mail): bool => $mail->portalType === 'supplier');
+    }
+
+    public function test_supplier_reset_request_invalidates_the_previous_link(): void
+    {
+        Mail::fake();
+        $user = $this->makeSupplier('supplier-two-links@example.test');
+
+        $tokens = [];
+        $this->postJson('/api/v1/b2b/supplier/forgot-password', ['email' => $user->email])->assertOk();
+        $this->postJson('/api/v1/b2b/supplier/forgot-password', ['email' => $user->email])->assertOk();
+        Mail::assertQueued(PortalPasswordResetMail::class, function (PortalPasswordResetMail $queued) use (&$tokens): bool {
+            $tokens[] = $queued->token;
+            return true;
+        });
+        self::assertCount(2, $tokens);
+
+        // Newest-only semantics: the first link must be dead the moment a
+        // second is issued, or a stale email keeps working.
+        $this->postJson('/api/v1/b2b/supplier/reset-password', [
+            'token' => $tokens[0],
+            'password' => 'NewPassword-2!',
+            'password_confirmation' => 'NewPassword-2!',
+        ])->assertStatus(422);
+        self::assertTrue(Hash::check('OldPassword-1!', $user->fresh()->password));
+
+        $this->postJson('/api/v1/b2b/supplier/reset-password', [
+            'token' => $tokens[1],
+            'password' => 'NewPassword-2!',
+            'password_confirmation' => 'NewPassword-2!',
+        ])->assertOk();
+        self::assertTrue(Hash::check('NewPassword-2!', $user->fresh()->password));
+    }
+
+    public function test_supplier_reset_revokes_live_portal_tokens_and_clears_lock_state(): void
+    {
+        Mail::fake();
+        $user = $this->makeSupplier('supplier-reset-revokes@example.test');
+        $user->forceFill(['failed_login_attempts' => 3, 'locked_until' => now()->addMinutes(10)])->save();
+        $user->createToken('supplier_portal');
+        self::assertSame(1, $user->tokens()->count());
+
+        $this->postJson('/api/v1/b2b/supplier/forgot-password', ['email' => $user->email])->assertOk();
+        $token = null;
+        Mail::assertQueued(PortalPasswordResetMail::class, function (PortalPasswordResetMail $queued) use (&$token): bool {
+            $token = $queued->token;
+            return true;
+        });
+
+        $this->postJson('/api/v1/b2b/supplier/reset-password', [
+            'token' => $token,
+            'password' => 'NewPassword-2!',
+            'password_confirmation' => 'NewPassword-2!',
+        ])->assertOk();
+
+        // A reset is the recovery path for a compromised or locked-out account:
+        // every existing bearer token has to die with the old password.
+        $fresh = $user->fresh();
+        self::assertSame(0, $fresh->tokens()->count());
+        self::assertSame(0, (int) $fresh->failed_login_attempts);
+        self::assertNull($fresh->locked_until);
     }
 
     public function test_customer_invitation_creates_account_and_queues_branded_access_mail(): void

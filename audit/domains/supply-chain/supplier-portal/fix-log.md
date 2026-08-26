@@ -53,20 +53,338 @@ Source scope: the supplier portal module and the explicitly required B2B/Auth/Ac
 - `spa/src/pages/portal/supplier/purchase-orders/detail.tsx:88-164`: Before, action visibility was inferred from stale client state and the shipment form omitted supported fields. After, capabilities come from the API and the form sends/loads shipped date, carrier, tracking number, ETA, and notes.
 - `api/app/Modules/B2B/Resources/SupplierPurchaseOrderResource.php:33-41` and `spa/src/types/b2b.ts:38-73`: Before, the client had no stable action contract. After, server-published capabilities govern acknowledge, shipment, document, and invoice actions, including accepted-GRN gating for invoice submission.
 
-## Verification
+---
+
+# Re-audit session: 2026-08-27
+
+The 2026-08-25 session applied all seven plan items to the source but never
+executed one line of them — `migrate:fresh` was broken repo-wide, so no fix ever
+reached a database. `migrate:fresh` works now. This session's job was execution.
+
+Baseline on entry, `SupplierPortalServiceTest`: **4 failed / 19 passed**, exactly
+the four failures the coordinator listed and for exactly the reasons the code
+implied.
+
+## 8. The four failures were all one thing: fixtures asserting the retired contract
+
+Verdict on the scoping question: **the scope is correct; the fixtures were stale.**
+Not over-filtering. Evidence:
+
+- `api/app/Modules/B2B/Services/SupplierPortalService.php:49-55` declares
+  `SUPPLIER_VISIBLE_PO_STATUSES` = approved / sent / partially_received /
+  received / closed. `docs/PROCESS-FLOWS.md:571` states the policy the constant
+  encodes: "`portal_available` — the **approved** PO is visible to an active
+  supplier portal user". Draft and pending_approval are internal.
+- `api/database/factories/PurchaseOrderFactory.php:44` defaults `status` to
+  `draft`, so every fixture that let the factory choose was building a row the
+  policy is *designed* to hide.
+- The sibling test that already passed proves the intended convention is
+  fixture-side: `test_dashboard_returns_own_data` has always written
+  `->forceFill(['status' => 'approved'])->save()` explicitly.
+
+Widening the scope would have been the wrong direction — this is a supplier-facing
+external portal, and admitting draft/pending_approval rows would hand vendors
+internal pre-approval orders. No production source was changed for these four.
+
+### 8.1 `test_purchase_orders_scoped_to_own_vendor` — size 0 vs 3
+
+- `api/tests/Feature/B2B/SupplierPortalServiceTest.php:117-133` → `:145-172`.
+  Before: `PurchaseOrder::factory()->count(3)->create(['vendor_id' => …])` —
+  three `draft` rows — then asserted all three were visible. After: three rows in
+  explicitly portal-visible states (approved / sent / partially_received), plus a
+  fourth own-vendor draft that is asserted **absent** from the response, so the
+  test now pins the exclusion instead of merely surviving it.
+
+### 8.2 `test_purchase_order_detail_succeeds_for_own_vendor` — 200 vs 404
+
+Same root cause, as hypothesised. `SupplierPortalService::purchaseOrderDetail()`
+at `api/app/Modules/B2B/Services/SupplierPortalService.php:168-170` checks vendor
+ownership (403) and then portal-availability (404) — a `draft` PO belonging to
+the caller's own vendor is legitimately a 404.
+
+- `api/tests/Feature/B2B/SupplierPortalServiceTest.php:150-161` → `:191-202`.
+  Before: factory-default draft PO, `assertOk()`. After: `sent` PO.
+
+### 8.3 `test_shipment_update_succeeds` — 200 vs 422
+
+Two stale assumptions, not an over-strict rule:
+
+- The draft PO tripped `SUPPLIER_SHIPMENT_STATUSES` (sent / partially_received) at
+  `api/app/Modules/B2B/Services/SupplierPortalService.php:58-61,234-236`. A
+  supplier cannot ship against an order that was never transmitted to them.
+- The test then asserted `Shipped: …`, `Maersk`, `MAEU1234567` were appended to
+  `purchase_orders.remarks` — the append-only free-text behaviour that plan item 6
+  (M047-F009) deliberately **replaced** with the structured `supplier_shipments`
+  row. The assertions were checking for the absence of the fix.
+
+- `api/tests/Feature/B2B/SupplierPortalServiceTest.php:330-353` → `:406-435`.
+  Before: draft PO + four `assertStringContainsString` on `remarks`. After: `sent`
+  PO; asserts the `SupplierShipment` current-state row (shipped_date, carrier,
+  tracking_number, estimated_arrival, notes, `portal_user_id`) and one immutable
+  update snapshot. `expected_delivery_date` assertion kept — still written.
+
+### 8.4 `test_store_delivery_schedule_is_idempotent_for_same_po_and_month` — 201 vs 422
+
+Fixture, again — the payload was genuinely invalid under the new contract:
+
+- Sent `lines: [['product_name' => 'Relay Cover', 'quantity' => 500]]`.
+  `StoreDeliveryScheduleRequest` now requires
+  `lines.*.purchase_order_item_id` (`api/app/Modules/B2B/Requests/Supplier/StoreDeliveryScheduleRequest.php:41`)
+  so `normalizeScheduleLines()` can reconcile each line to a real PO line and its
+  remaining quantity (`api/app/Modules/B2B/Services/SupplierPortalService.php:744-771`).
+  The verbatim 422 was `The lines.0.purchase_order_item_id field is required.`
+  The SPA already sends the hashed item ID
+  (`spa/src/pages/portal/supplier/delivery-schedules.tsx`), so the request rule
+  and the only real client agree; the test was the last holder of the old shape.
+- The fixture PO also had no line items at all and was `draft`.
+
+- `api/tests/Feature/B2B/SupplierPortalServiceTest.php:567-590` → `:665-690`.
+  After: `sent` PO with a real `PurchaseOrderItem`, line addressed by
+  `$poItem->hash_id`.
+
+### 8.5 New helpers + regression coverage for the previously untested P1/P2 policies
+
+The 2026-08-25 report listed "no focused test covers draft/pending PO exclusion,
+… schedule line reconciliation" as an explicit evidence gap. Closed the cheap part
+of it while the fixtures were open:
+
+- `api/tests/Feature/B2B/SupplierPortalServiceTest.php:59-95` — added
+  `makePo(Vendor, string $status = 'sent')` and `makePoItem(PurchaseOrder, $qty)`.
+  `makePo` exists so no future fixture silently inherits `draft` again; its
+  docblock states why.
+- Added six tests: non-portal `?status=draft` filter returns 0 rather than falling
+  back to unfiltered (`:174-188`); own-vendor pre-approval detail is 404 not 403
+  (`:204-216`); shipment update replaces current state and keeps both snapshots
+  (`:437-457`); schedule rejects quantity beyond remaining (`:692-707`), a line
+  belonging to a different PO of the *same* vendor (`:709-726`), and an
+  `approved`-but-not-yet-`sent` PO (`:728-746`).
+- `test_store_delivery_schedule_rejects_other_vendors_purchase_order` (`:640-663`)
+  was passing for the wrong reason — its old payload was missing
+  `purchase_order_item_id`, so it would 422 whether or not the cross-vendor check
+  existed. Now sends an otherwise-complete payload and asserts
+  `assertJsonValidationErrors(['purchase_order_id'])`, so it actually proves
+  ownership rejection.
+
+Result: `SupplierPortalServiceTest` **29 passed / 103 assertions**, from
+19 passed / 4 failed.
+
+## 9. Plan item 2 (M047-F003/F004) — verified, coverage added
+
+Source was already correct on inspection; it had simply never run. Nothing to
+change. The 2026-08-25 report's evidence gap ("no expiry or concurrent-attempt
+test") was half-closed already and I closed the rest:
+
+- Concurrency was **already covered** and passes:
+  `api/tests/Feature/B2B/LoginThresholdTwoConnectionHarnessTest.php` drives two
+  real DB connections through `B2bAuthService::login()` for both the supplier and
+  customer audiences — increments cannot be lost, and a failure observes a
+  successful counter reset. 4/4 green.
+- Lock **expiry** had no test. `B2bAuthService::login()` clears both
+  `failed_login_attempts` and `locked_until` while still holding the row lock
+  (`api/app/Modules/B2B/Services/B2bAuthService.php:82-88`). Added
+  `api/tests/Feature/B2B/SupplierPortalAuthTest.php:163-182` (waiting out a lock
+  restores login) and `:184-205` (the first typo afterwards is strike 1, not an
+  instant re-lock — the accidental-permanent-lockout case F003 described).
+- Reset-token invalidation had no test.
+  `PortalPasswordResetService::requestReset()` invalidates outstanding tokens
+  under the row lock before inserting the new one
+  (`api/app/Modules/B2B/Services/PortalPasswordResetService.php:47-54`) and
+  `reset()` consumes every remaining token for the address plus deletes bearer
+  tokens (`:127-133`). Added
+  `api/tests/Feature/B2B/PortalPasswordResetTest.php:80-108` (the first of two
+  issued links is dead, the second works) and `:110-137` (reset revokes live
+  portal tokens and clears lock state). Both are supplier-typed so the
+  customer-portal module is untouched; added a small `makeSupplier()` helper at
+  `:23-33`.
+
+## 10. Plan item 3 (M047-F005/F006) — verified, was entirely untested
+
+`PortalAccessService` (188 lines) and the hardened `inviteSupplier()` had **zero**
+tests. This is the tenant boundary — `supplier_portal_users.email` is globally
+unique while the row holds one `vendor_id`, so a silent reassignment re-points one
+supplier's credential at another supplier's purchase orders. Source verified
+correct; added `api/tests/Feature/B2B/SupplierPortalAccessLifecycleTest.php`
+(new file, 14 tests):
+
+- Cross-vendor invitation refused, and the account stays with the original vendor
+  (`PortalInvitationService::inviteSupplier()` at
+  `api/app/Modules/B2B/Services/PortalInvitationService.php:65-67`); also proven
+  case-insensitively, since emails normalise to lowercase on write and a
+  case-sensitive conflict check would be bypassable by capitalisation.
+- Refused at the service level too, not only over HTTP, so future callers inherit it.
+- An email held by a deactivated account is refused — re-inviting is not a back
+  door around the audited reactivation decision (`:69-71`).
+- Same-vendor re-invitation rotates the credential AND deletes old bearer tokens (`:88-89`).
+- Deactivate revokes tokens and `EnsurePortalGuard` then 401s the principal.
+- Resend cannot quietly reactivate; reactivate clears lock state and forces a new password.
+- Token revocation does not deactivate the account (two distinct decisions).
+- List reports all four lifecycle states and each `status` filter returns only its own.
+- No response leaks `password`/`temporary_password` — the temp credential travels
+  by mail, not through an API response that gets logged and cached client-side.
+- RBAC: `warehouse_staff` gets 403 on all five routes; a supplier portal principal
+  gets 401 on the administration routes.
+
+14 passed / 53 assertions.
+
+## 11. Plan items 1, 4, 5, 6, 7 — verified, coverage added
+
+All source was already applied and, on execution, all of it works. The gap was
+purely that nothing proved it. Added to
+`api/tests/Feature/B2B/SupplierPortalServiceTest.php`:
+
+- **Item 1 (M047-F001/F002), resource allowlist** — `:497-531`
+  asserts the supplier PO detail response carries none of
+  `current_approval_step`, `approval_steps`, `approvals`, `approved_by`,
+  `approved_at`, `budget_warning`, `budget_acknowledged_by/_at`, `remarks`,
+  `purchase_request`, `pr_number`, `created_by`, `creator`, `dispatch*`, `vendor`
+  — the fields the internal `PurchaseOrderResource` does expose — and that the
+  server-published `capabilities` block is what the SPA reads. `:479-495` pins
+  that draft and cancelled AP rows are not supplier invoices.
+- **Item 4 (M047-F007), exact money** — `:533-568`. The regression this actually
+  catches is the retired `number_format()` presentation step: it inserts a
+  thousands separator, so `1234567.89` reached the client as `"1,234,567.89"` and
+  any client parsing it as a decimal broke. Asserts the dashboard total and SOA
+  total are the exact string `1234568.20`, contain no comma, that the five aging
+  buckets re-sum to the total exactly via `Money::add`, and that each bucket
+  matches `/^-?\d+\.\d{2}$/`.
+- **Item 5 (M047-F008/F013), document identity** — `:783-815` uploads two files
+  with the **same filename and same byte size but different content** (the exact
+  case the old `(po, type, filename, size)` dedupe key silently swallowed,
+  returning the superseded document) and asserts two distinct rows with two
+  distinct `content_sha256`. `:817-836` asserts the resource returns the PO hash
+  ID and a bounded `{id,name}` uploader rather than raw integers. `:838-853`
+  asserts a pre-dispatch upload is refused **and leaves no stored file behind**.
+- **Item 6 (M047-F009/F010)** — covered by §8.3/§8.4 above plus the three new
+  schedule-reconciliation tests.
+- **Item 7 (M047-F012), portal actor attribution** — `:1000-1026` asserts the
+  `supplier_ship.update` audit row carries `actor_type = 'supplier_portal'`,
+  a null `user_id`, and the real `portal_user_id` + `vendor_id` in `new_values`,
+  so a reviewer can identify which supplier account made the write despite the
+  system-user impersonation the FK requires.
+
+`SupplierPortalServiceTest`: **36 passed / 157 assertions**.
+
+## 12. New source fix — the upload cleanup window extended past COMMIT
+
+Found while reading the upload path; not in the original plan.
+
+`api/app/Modules/B2B/Services/SupplierPortalService.php:310-357`. The `try`
+wrapped the transaction **and** the two statements after it:
+
+```php
+$document = DB::transaction(...);          // commits
+$document->load([...]);                    // may throw
+$this->recordPortalAudit(...);             // may throw
+} catch (\Throwable $e) {
+    Storage::disk('local')->delete($path); // deletes a COMMITTED row's file
+```
+
+A throw from `load()` or `recordPortalAudit()` happens after commit, so the
+cleanup deleted the file belonging to a persisted `portal_shipping_documents`
+row — a readable document record pointing at nothing, which is worse than the
+orphan file the guard exists to prevent. Now only the transaction is wrapped;
+the two post-commit statements sit outside it, with a comment stating that the
+cleanup window ends at commit. Covered by the new `:838-853` (a rolled-back
+upload still leaves no file).
+
+## 13. Stale documentation corrected
+
+`docs/PROCESS-FLOWS.md:582-590`. The paragraph still described supplier shipment
+updates as "appended to the PO's shipment remarks" — the behaviour plan item 6
+deliberately replaced. Left as-is it would invite a future session to "restore"
+the append. Now describes the `supplier_shipments` current-state row plus
+`supplier_shipment_updates` snapshots, and names the two accepted PO states. This
+is the one file I touched outside the module tree; it documents this module's
+behaviour and nothing else changed in it.
+
+## 14. Flagged, NOT changed — a cross-module disagreement about supplier payments
+
+`Tests\Feature\Accounting\AccountsPayableHardeningTest > supplier bill resource…`
+fails, and it is **not** caused by this session (my only source change is §12,
+in the upload path). It is pre-existing: both the test and the resource arrived
+together in the sweep commit `167de85e`.
+
+```
+FAILED  Tests\Feature\Accounting\AccountsPayableHardeningTest > supplier…
+Failed asserting that an array does not have the key 'payments'.
+at tests/Feature/Accounting/AccountsPayableHardeningTest.php:229
+```
+
+Two separate things are tangled here:
+
+1. **A test-method artifact.** `api/app/Modules/Accounting/Resources/SupplierBillResource.php:40`
+   uses `whenLoaded('payments', …)`. Verified directly in the container: on an
+   unloaded bill, `toArray()` returns the key holding an
+   `Illuminate\Http\Resources\MissingValue`, while `resolve()` strips it —
+   `purchase_order`, `vendor` and `items` behave identically. The assertion at
+   line 229 uses `toArray()`; lines 232-233 of the same test already use
+   `resolve()` for the items check. So the one-line correction is to assert
+   against `resolve()`.
+2. **A real boundary question underneath it**, which is why I did not just make
+   the assertion pass. `SupplierPortalService::invoiceDetail()` at
+   `api/app/Modules/B2B/Services/SupplierPortalService.php:586` **does**
+   eager-load `payments`, so on the live supplier invoice-detail response the key
+   is populated. My reading is that this is correct — the supplier already sees
+   `amount_paid` and `balance` uncontested, and the allowlisted payment fields are
+   date / amount / method / reference / status with no journal entry, GL account,
+   or internal approver — i.e. a statement of account, which this module ships
+   deliberately. But it is a supplier-visibility decision recorded in the
+   accounts-payable module's test, on a file outside this module's scope, so it is
+   the AP owner's call, not mine.
+
+Both files (`api/tests/Feature/Accounting/AccountsPayableHardeningTest.php`,
+`api/app/Modules/Accounting/Resources/SupplierBillResource.php`) are outside this
+module and were left untouched.
+
+## Verification (this session)
+
+All runs on an isolated `ogami_test_sp` database, `memory_limit = 512M`. Full
+suite deliberately NOT run — host has ~1.1 GiB free and was OOM-killed earlier.
 
 Passed:
 
-- `php -l` passed for all changed PHP files; the final schedule/access files also passed after the last patch.
-- Targeted ESLint passed for all changed supplier/access SPA files.
-- `git diff --check` passed for the final changed files.
-- `docker compose exec -T api php artisan route:list --path=b2b/portal-access --no-ansi` passed and listed the seven access-management routes.
+- `SupplierPortalServiceTest` — **36 passed / 157 assertions** (was 4 failed / 19 passed).
+- `SupplierPortalAccessLifecycleTest` — **14 passed / 53 assertions** (new file).
+- Whole-module run: `SupplierPortalServiceTest|SupplierPortalAuthTest|SupplierPortalAccessLifecycleTest|PortalPasswordResetTest|PortalTokenCrossGuardTest|SupplierPpapViewTest|PortalValidationTest|LoginThresholdTwoConnectionHarnessTest`
+  — **83 passed / 358 assertions / 0 failed**.
+- `tests/Feature/B2B` (whole folder) — **111 passed, 2 failed**; both failures are
+  `CustomerPortalServiceTest` (delivery-proof view 500, 8D report 404), which belong
+  to the separate `commercial/customer-portal` module and were not touched.
+- `--filter=PurchaseOrder` — 30 passed / 97 assertions (no regression in the
+  dependency module whose lifecycle policy this module now enforces).
+- SPA `tsc --noEmit` — **2 errors, both in `src/pages/assets/detail.tsx`**
+  (missing `qrcode` module, implicit `dataUrl`), zero in any portal/B2B file. The
+  third error the previous session reported (duplicate JSX attributes in
+  `return-management/detail.tsx`) has since been fixed by another session.
+- SPA `eslint` on `src/pages/portal/supplier`, `src/api/b2b/supplier.ts`,
+  `src/api/b2b/portal-access.ts`, `src/pages/accounting/portal-access.tsx`,
+  `src/types/b2b.ts` — clean.
+- `node scripts/check-token-discipline.mjs` — clean, 785 files.
 
-Limited:
+Known-failing, out of scope, itemised:
 
-- `spa/npm run typecheck` reaches the compiler but exits on three pre-existing unrelated errors: missing `qrcode` in `src/pages/assets/detail.tsx`, its implicit `dataUrl` type, and duplicate JSX attributes in `src/pages/return-management/detail.tsx`. No M047 file appears in the errors.
-- The focused backend test run was attempted against an isolated `ogami_m047_test` database. It could not reach assertions because baseline migrations outside this module fail first: duplicate `scheduler_tick_runs` creation and the existing `holidays_date_name_unique` constraint/index drop conflict. The shared test database was not modified further.
+- `AccountsPayableHardeningTest > supplier bill resource…` — see §14. Pre-existing,
+  another module's file, needs an AP owner decision on supplier payment visibility.
+- `CustomerPortalServiceTest` ×2 — the separate `commercial/customer-portal` module.
+- `PortalInvitationService::inviteCustomer()` at
+  `api/app/Modules/B2B/Services/PortalInvitationService.php:26-40` still uses the
+  old `withTrashed()->firstOrNew()` + `forceFill('customer_id')` pattern, so a
+  customer-portal email **can** still be silently reassigned between customers —
+  the exact defect M047-F005 fixed on the supplier side (`:65-71`). Same class,
+  same file, different tenant. Left alone because `customer-portal` is a separate
+  claimed module; raised here so its owner inherits the finding rather than
+  rediscovering it.
 
-## Release status
+## Release status (2026-08-27)
 
-All planned M047 implementation items were applied. Focused backend execution/re-audit remains pending because the repository baseline migration defects block test bootstrapping outside module scope; no source item was deferred for a business-rule decision. Release as `🔁 Needs Re-audit`, with the next session starting by fixing or isolating those baseline migrations and then running the supplier security/regression suite (draft PO exclusion, resource allowlists, lock expiry/concurrency, multiple reset tokens, invitation conflict/revocation, Money precision, content-digest dedupe, schedule reconciliation, and portal actor attribution).
+All seven plan items are now applied **and executed**: the four known failures are
+fixed at the fixture layer (the scope was right; widening it would have leaked
+pre-approval purchase orders to suppliers), one new post-commit cleanup defect was
+fixed in source, stale documentation was corrected, and the previously untested
+P1 boundaries — cross-vendor invitation, credential lifecycle, resource allowlist,
+lock expiry, reset-token invalidation, exact money, content-addressed documents,
+schedule reconciliation, portal actor attribution — now have 33 new tests.
+
+Releasing as `🔁 Needs Re-audit` for one reason only: §14 needs an accounts-payable
+owner decision on whether a supplier may see the payment records applied to their
+own invoice. Nothing in this module is deferred, and no supplier-portal test fails.

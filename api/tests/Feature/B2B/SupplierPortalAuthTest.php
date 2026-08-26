@@ -164,6 +164,48 @@ class SupplierPortalAuthTest extends TestCase
         $this->assertNull($fresh->locked_until);
     }
 
+    public function test_expired_lock_restores_login_and_resets_the_strike_window(): void
+    {
+        $password = 'SupplierPass-1!';
+        $user = $this->makeUser($password, [
+            'failed_login_attempts' => 5,
+            'locked_until' => now()->subMinute(),
+        ]);
+        $this->clearAuthThrottle($user->email);
+
+        // Waiting out the lock must actually restore access, not merely stop
+        // returning 423 while the strike counter stays at the threshold.
+        $this->postJson('/api/v1/b2b/supplier/login', [
+            'email'    => $user->email,
+            'password' => $password,
+        ])->assertOk();
+
+        $fresh = $user->fresh();
+        $this->assertSame(0, (int) $fresh->failed_login_attempts);
+        $this->assertNull($fresh->locked_until);
+    }
+
+    public function test_first_failure_after_an_expired_lock_does_not_re_lock_the_account(): void
+    {
+        $user = $this->makeUser('SupplierPass-1!', [
+            'failed_login_attempts' => 5,
+            'locked_until' => now()->subMinute(),
+        ]);
+        $this->clearAuthThrottle($user->email);
+
+        // A lock is a strike WINDOW. If the expired window left the counter at
+        // 5, this single typo would immediately re-lock the supplier for
+        // another 15 minutes — an accidental permanent lockout.
+        $this->postJson('/api/v1/b2b/supplier/login', [
+            'email'    => $user->email,
+            'password' => 'wrong-password',
+        ])->assertStatus(422);
+
+        $fresh = $user->fresh();
+        $this->assertSame(1, (int) $fresh->failed_login_attempts);
+        $this->assertNull($fresh->locked_until);
+    }
+
     public function test_audit_row_written_on_success(): void
     {
         $password = 'SupplierPass-1!';

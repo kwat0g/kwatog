@@ -346,15 +346,20 @@ class SupplierPortalService
                     'uploaded_at' => now(),
                 ]);
             });
-
-            $document->load(['purchaseOrder', 'uploader']);
-            $this->recordPortalAudit('supplier_doc.upload', $document, $portalUserId, $vendorId);
-
-            return $document;
         } catch (\Throwable $e) {
+            // The cleanup window ends at COMMIT. Past that point a persisted
+            // document row owns this path, and deleting the file would leave a
+            // readable record pointing at nothing — worse than the orphan file
+            // this guard exists to prevent. So only the transaction is wrapped;
+            // a later load/audit failure must not take the stored file with it.
             Storage::disk('local')->delete($path);
             throw $e;
         }
+
+        $document->load(['purchaseOrder', 'uploader']);
+        $this->recordPortalAudit('supplier_doc.upload', $document, $portalUserId, $vendorId);
+
+        return $document;
     }
 
     public function shippingDocuments(int $vendorId, PurchaseOrder $purchaseOrder): Collection

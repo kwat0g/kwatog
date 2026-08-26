@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace Tests\Feature\B2B;
 
 use App\Common\Models\ChainStepRun;
+use App\Common\Models\AuditLog;
+use App\Common\Support\Money;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\DeliverySchedule;
 use App\Modules\B2B\Models\SupplierPortalUser;
+use App\Modules\B2B\Models\SupplierShipment;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\GrnItem;
@@ -61,6 +64,37 @@ class SupplierPortalServiceTest extends TestCase
         Sanctum::actingAs($user, ['*'], 'supplier_portal');
 
         return $this;
+    }
+
+    /**
+     * A purchase order in a lifecycle state the supplier portal may see.
+     *
+     * PurchaseOrderFactory defaults to `draft`, but a PO only becomes
+     * `portal_available` once it is approved (docs/PROCESS-FLOWS.md), so
+     * SupplierPortalService hides draft/pending_approval/rejected/cancelled
+     * rows. Every supplier-visibility fixture must therefore state the
+     * lifecycle state it means instead of relying on the factory default.
+     */
+    private function makePo(Vendor $vendor, string $status = 'sent'): PurchaseOrder
+    {
+        $po = PurchaseOrder::factory()->create(['vendor_id' => $vendor->id]);
+        $po->forceFill(['status' => $status])->save();
+
+        return $po->refresh();
+    }
+
+    private function makePoItem(PurchaseOrder $po, string $quantity = '500.00'): PurchaseOrderItem
+    {
+        return PurchaseOrderItem::create([
+            'purchase_order_id' => $po->id,
+            'item_id' => Item::factory()->create()->id,
+            'description' => 'Relay Cover',
+            'quantity' => $quantity,
+            'unit' => 'pcs',
+            'unit_price' => '10.00',
+            'total' => Money::mul($quantity, '10.00'),
+            'quantity_received' => '0.00',
+        ]);
     }
 
     private function createBill(int $vendorId): Bill
@@ -119,10 +153,17 @@ class SupplierPortalServiceTest extends TestCase
         $vendor = Vendor::factory()->create();
         $user = $this->makePortalUser($vendor);
 
-        PurchaseOrder::factory()->count(3)->create(['vendor_id' => $vendor->id]);
+        $this->makePo($vendor, 'approved');
+        $this->makePo($vendor, 'sent');
+        $this->makePo($vendor, 'partially_received');
+
+        // Own vendor, but pre-approval: an internal draft is not the supplier's
+        // business and must not be enumerable through the portal API.
+        $draft = PurchaseOrder::factory()->create(['vendor_id' => $vendor->id]);
 
         $other = Vendor::factory()->create();
-        PurchaseOrder::factory()->count(2)->create(['vendor_id' => $other->id]);
+        $this->makePo($other, 'sent');
+        $this->makePo($other, 'approved');
 
         $this->actAs($user);
 
@@ -130,6 +171,28 @@ class SupplierPortalServiceTest extends TestCase
 
         $response->assertOk();
         $this->assertCount(3, $response->json('data'));
+        $this->assertNotContains(
+            $draft->hash_id,
+            array_column($response->json('data'), 'id'),
+            'A pre-approval purchase order must never reach the supplier portal list.',
+        );
+    }
+
+    public function test_purchase_orders_reject_a_non_portal_status_filter(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $user = $this->makePortalUser($vendor);
+
+        $this->makePo($vendor, 'sent');
+        PurchaseOrder::factory()->create(['vendor_id' => $vendor->id]);
+
+        $this->actAs($user);
+
+        // Asking for a hidden state must return nothing rather than fall back
+        // to the unfiltered list.
+        $this->getJson('/api/v1/b2b/supplier/purchase-orders?status=draft')
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
     }
 
     public function test_purchase_order_detail_forbidden_for_other_vendor(): void
@@ -151,13 +214,27 @@ class SupplierPortalServiceTest extends TestCase
     {
         $vendor = Vendor::factory()->create();
         $user = $this->makePortalUser($vendor);
-        $po = PurchaseOrder::factory()->create(['vendor_id' => $vendor->id]);
+        $po = $this->makePo($vendor, 'sent');
 
         $this->actAs($user);
 
         $response = $this->getJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}");
 
         $response->assertOk();
+    }
+
+    public function test_purchase_order_detail_hides_own_vendor_pre_approval_order(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $user = $this->makePortalUser($vendor);
+        $draft = PurchaseOrder::factory()->create(['vendor_id' => $vendor->id]);
+
+        $this->actAs($user);
+
+        // The row belongs to this vendor, so this is not a 403 — it is simply
+        // not portal-available yet, and must not be readable by hash ID.
+        $this->getJson("/api/v1/b2b/supplier/purchase-orders/{$draft->hash_id}")
+            ->assertStatus(404);
     }
 
     /* ─── Acknowledge PO ─────────────────────────────────────────── */
@@ -331,7 +408,7 @@ class SupplierPortalServiceTest extends TestCase
     {
         $vendor = Vendor::factory()->create();
         $user = $this->makePortalUser($vendor);
-        $po = PurchaseOrder::factory()->create(['vendor_id' => $vendor->id]);
+        $po = $this->makePo($vendor, 'sent');
 
         $this->actAs($user);
 
@@ -344,12 +421,39 @@ class SupplierPortalServiceTest extends TestCase
         ]);
 
         $response->assertOk();
-        $fresh = $po->fresh();
-        $this->assertSame('2026-07-15', $fresh->expected_delivery_date->toDateString());
-        $this->assertStringContainsString('Shipped: 2026-07-10', $fresh->remarks);
-        $this->assertStringContainsString('Maersk', $fresh->remarks);
-        $this->assertStringContainsString('MAEU1234567', $fresh->remarks);
-        $this->assertStringContainsString('Container sealed at origin.', $fresh->remarks);
+        $this->assertSame('2026-07-15', $po->fresh()->expected_delivery_date->toDateString());
+
+        // Shipment state is a structured row, not free text appended to the PO
+        // remarks: receiving and logistics have to be able to query the current
+        // carrier/tracking value, and a retry must not contradict history.
+        $shipment = SupplierShipment::query()->where('purchase_order_id', $po->id)->firstOrFail();
+        $this->assertSame('2026-07-10', $shipment->shipped_date->toDateString());
+        $this->assertSame('Maersk', $shipment->carrier);
+        $this->assertSame('MAEU1234567', $shipment->tracking_number);
+        $this->assertSame('2026-07-15', $shipment->estimated_arrival->toDateString());
+        $this->assertSame('Container sealed at origin.', $shipment->notes);
+        $this->assertSame($user->id, $shipment->portal_user_id);
+        $this->assertSame(1, $shipment->updates()->count());
+    }
+
+    public function test_shipment_update_replaces_current_state_and_snapshots_history(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $user = $this->makePortalUser($vendor);
+        $po = $this->makePo($vendor, 'sent');
+
+        $this->actAs($user);
+        $url = "/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/shipment-update";
+
+        $this->postJson($url, ['carrier' => 'Maersk', 'tracking_number' => 'MAEU1234567'])->assertOk();
+        $this->postJson($url, ['carrier' => 'DHL', 'tracking_number' => 'DHL-999'])->assertOk();
+
+        // One current-state row per PO, latest values win, both updates retained.
+        $this->assertSame(1, SupplierShipment::query()->where('purchase_order_id', $po->id)->count());
+        $shipment = SupplierShipment::query()->where('purchase_order_id', $po->id)->firstOrFail();
+        $this->assertSame('DHL', $shipment->carrier);
+        $this->assertSame('DHL-999', $shipment->tracking_number);
+        $this->assertSame(2, $shipment->updates()->count());
     }
 
     public function test_shipment_update_rejects_terminal_po_without_mutation(): void
@@ -392,6 +496,93 @@ class SupplierPortalServiceTest extends TestCase
     }
 
     /* ─── Invoices / Bills ───────────────────────────────────────── */
+
+    public function test_invoices_exclude_draft_and_cancelled_ap_workflow_rows(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $user = $this->makePortalUser($vendor);
+
+        $this->createBill($vendor->id);
+        // A draft bill is an internal AP workflow row, not a supplier invoice.
+        $this->createBill($vendor->id)->forceFill(['status' => 'draft'])->save();
+        $this->createBill($vendor->id)->forceFill(['status' => 'cancelled'])->save();
+
+        $this->actAs($user);
+
+        $this->getJson('/api/v1/b2b/supplier/invoices')
+            ->assertOk()
+            ->assertJsonCount(1, 'data');
+    }
+
+    public function test_supplier_purchase_order_response_omits_internal_workflow_fields(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $user = $this->makePortalUser($vendor);
+        $po = $this->makePo($vendor, 'sent');
+        $this->makePoItem($po);
+
+        $this->actAs($user);
+
+        $row = $this->getJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}")
+            ->assertOk()
+            ->json('data');
+
+        // The internal PurchaseOrderResource exposes the approval chain, budget
+        // warnings, internal remarks, the originating PR and dispatch evidence.
+        // None of that is the supplier's business, and hiding it in the SPA is
+        // not a boundary — the allowlist has to be server-side.
+        foreach ([
+            'current_approval_step', 'approval_steps', 'approvals', 'approved_by', 'approved_at',
+            'budget_warning', 'budget_acknowledged_by', 'budget_acknowledged_at',
+            'remarks', 'purchase_request', 'pr_number', 'created_by', 'creator',
+            'dispatch', 'dispatch_status', 'vendor',
+        ] as $internal) {
+            $this->assertArrayNotHasKey($internal, $row, "Supplier PO contract must not expose `{$internal}`.");
+        }
+
+        // And the fields it does expose are the opaque/portal-safe ones.
+        $this->assertSame($po->hash_id, $row['id']);
+        $this->assertArrayHasKey('capabilities', $row);
+        $this->assertTrue($row['capabilities']['can_update_shipment']);
+        $this->assertFalse($row['capabilities']['can_acknowledge']);
+    }
+
+    public function test_supplier_finance_totals_are_exact_decimal_strings(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $user = $this->makePortalUser($vendor);
+
+        // Values chosen so a float round-trip or a number_format() presentation
+        // step is visible: the thousands separator alone breaks any client that
+        // parses these as decimals, and decimal(15,2) exists to stop the drift.
+        foreach (['1234567.89', '0.10', '0.20', '0.01'] as $balance) {
+            $this->createBill($vendor->id)->forceFill([
+                'subtotal' => $balance,
+                'vat_amount' => '0.00',
+                'total_amount' => $balance,
+                'amount_paid' => '0.00',
+                'balance' => $balance,
+            ])->save();
+        }
+
+        $this->actAs($user);
+
+        $dashboardTotal = $this->getJson('/api/v1/b2b/supplier/dashboard')
+            ->assertOk()->json('data.total_unpaid_amount');
+        $this->assertSame('1234568.20', $dashboardTotal);
+        $this->assertIsString($dashboardTotal);
+        $this->assertStringNotContainsString(',', $dashboardTotal);
+
+        $soa = $this->getJson('/api/v1/b2b/supplier/statement-of-account')->assertOk()->json('data');
+        $this->assertSame('1234568.20', $soa['total_outstanding']);
+
+        // The buckets must reconcile to the total exactly, not approximately.
+        $bucketSum = Money::add(...array_values($soa['aging_buckets']));
+        $this->assertSame($soa['total_outstanding'], $bucketSum);
+        foreach ($soa['aging_buckets'] as $key => $value) {
+            $this->assertMatchesRegularExpression('/^-?\d+\.\d{2}$/', (string) $value, "aging bucket `{$key}` must be a 2-dp decimal string.");
+        }
+    }
 
     public function test_invoices_scoped_to_own_vendor(): void
     {
@@ -548,15 +739,20 @@ class SupplierPortalServiceTest extends TestCase
         $vendor = Vendor::factory()->create();
         $otherVendor = Vendor::factory()->create();
         $user = $this->makePortalUser($vendor);
-        $otherPo = PurchaseOrder::factory()->create(['vendor_id' => $otherVendor->id]);
+        $otherPo = $this->makePo($otherVendor, 'sent');
+        $otherItem = $this->makePoItem($otherPo);
 
         $this->actAs($user);
 
         $this->postJson('/api/v1/b2b/supplier/delivery-schedules', [
             'purchase_order_id' => $otherPo->hash_id,
             'month' => '2026-08',
-            'lines' => [['product_name' => 'Relay Cover', 'quantity' => 500]],
-        ])->assertStatus(422);
+            'lines' => [['purchase_order_item_id' => $otherItem->hash_id, 'quantity' => 500]],
+        ])
+            // Assert the vendor check specifically: an otherwise-complete payload
+            // must fail on ownership, not incidentally on a missing field.
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['purchase_order_id']);
 
         $this->assertDatabaseMissing('delivery_schedules', [
             'vendor_id' => $vendor->id,
@@ -568,14 +764,15 @@ class SupplierPortalServiceTest extends TestCase
     {
         $vendor = Vendor::factory()->create();
         $user = $this->makePortalUser($vendor);
-        $po = PurchaseOrder::factory()->create(['vendor_id' => $vendor->id]);
+        $po = $this->makePo($vendor, 'sent');
+        $poItem = $this->makePoItem($po);
 
         $this->actAs($user);
 
         $payload = [
             'purchase_order_id' => $po->hash_id,
             'month' => '2026-08',
-            'lines' => [['product_name' => 'Relay Cover', 'quantity' => 500]],
+            'lines' => [['purchase_order_item_id' => $poItem->hash_id, 'quantity' => 500]],
         ];
 
         $first = $this->postJson('/api/v1/b2b/supplier/delivery-schedules', $payload);
@@ -587,6 +784,63 @@ class SupplierPortalServiceTest extends TestCase
 
         $this->assertDatabaseCount('delivery_schedules', 1);
         $this->assertSame($first->json('data.id'), $second->json('data.id'));
+    }
+
+    public function test_store_delivery_schedule_rejects_quantity_beyond_the_remaining_po_quantity(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $user = $this->makePortalUser($vendor);
+        $po = $this->makePo($vendor, 'sent');
+        $poItem = $this->makePoItem($po, '100.00');
+
+        $this->actAs($user);
+
+        $this->postJson('/api/v1/b2b/supplier/delivery-schedules', [
+            'purchase_order_id' => $po->hash_id,
+            'month' => '2026-08',
+            'lines' => [['purchase_order_item_id' => $poItem->hash_id, 'quantity' => 101]],
+        ])->assertStatus(422);
+
+        $this->assertDatabaseCount('delivery_schedules', 0);
+    }
+
+    public function test_store_delivery_schedule_rejects_a_line_from_another_purchase_order(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $user = $this->makePortalUser($vendor);
+        $po = $this->makePo($vendor, 'sent');
+        // Same vendor, different PO — the line still does not belong to $po.
+        $foreignItem = $this->makePoItem($this->makePo($vendor, 'sent'));
+
+        $this->actAs($user);
+
+        $this->postJson('/api/v1/b2b/supplier/delivery-schedules', [
+            'purchase_order_id' => $po->hash_id,
+            'month' => '2026-08',
+            'lines' => [['purchase_order_item_id' => $foreignItem->hash_id, 'quantity' => 10]],
+        ])->assertStatus(422);
+
+        $this->assertDatabaseCount('delivery_schedules', 0);
+    }
+
+    public function test_store_delivery_schedule_rejects_a_pre_dispatch_purchase_order(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $user = $this->makePortalUser($vendor);
+        $po = $this->makePo($vendor, 'approved');
+        $poItem = $this->makePoItem($po);
+
+        $this->actAs($user);
+
+        // Approved is portal-visible but not yet dispatched; scheduling deliveries
+        // against it would commit the supplier before the order is transmitted.
+        $this->postJson('/api/v1/b2b/supplier/delivery-schedules', [
+            'purchase_order_id' => $po->hash_id,
+            'month' => '2026-08',
+            'lines' => [['purchase_order_item_id' => $poItem->hash_id, 'quantity' => 500]],
+        ])->assertStatus(422);
+
+        $this->assertDatabaseCount('delivery_schedules', 0);
     }
 
     public function test_shipping_document_upload_is_idempotent_for_same_file(): void
@@ -614,6 +868,78 @@ class SupplierPortalServiceTest extends TestCase
 
         $this->assertDatabaseCount('portal_shipping_documents', 1);
         $this->assertSame($first->json('data.id'), $second->json('data.id'));
+    }
+
+    public function test_shipping_document_upload_stores_a_revision_when_only_the_content_differs(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $user = $this->makePortalUser($vendor);
+        $po = $this->makePo($vendor, 'sent');
+        $this->actAs($user);
+        Storage::fake('local');
+
+        $endpoint = "/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/shipping-documents";
+
+        // Same filename, same byte size, different bytes — a corrected packing
+        // list. The old dedupe key was (po, type, filename, size), which
+        // silently returned the SUPERSEDED document and threw the revision
+        // away; identity has to come from the content digest.
+        $first = $this->postJson($endpoint, [
+            'document_type' => 'packing_list',
+            'file' => UploadedFile::fake()->createWithContent('packing-list.pdf', 'REV-A-CONTENT'),
+        ]);
+        $first->assertStatus(201);
+
+        $second = $this->postJson($endpoint, [
+            'document_type' => 'packing_list',
+            'file' => UploadedFile::fake()->createWithContent('packing-list.pdf', 'REV-B-CONTENT'),
+        ]);
+        $second->assertStatus(201);
+
+        $this->assertNotSame($first->json('data.id'), $second->json('data.id'));
+        $this->assertDatabaseCount('portal_shipping_documents', 2);
+        $this->assertSame(2, \App\Modules\B2B\Models\PortalShippingDocument::query()
+            ->where('purchase_order_id', $po->id)
+            ->distinct()
+            ->count('content_sha256'));
+    }
+
+    public function test_shipping_document_resource_returns_opaque_identifiers(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $user = $this->makePortalUser($vendor);
+        $po = $this->makePo($vendor, 'sent');
+        $this->actAs($user);
+        Storage::fake('local');
+
+        $row = $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/shipping-documents", [
+            'document_type' => 'packing_list',
+            'file' => UploadedFile::fake()->create('packing-list.pdf', 12),
+        ])->assertStatus(201)->json('data');
+
+        // Raw integer keys make tenant-boundary mistakes and enumeration easier.
+        $this->assertSame($po->hash_id, $row['purchase_order_id']);
+        $this->assertIsNotNumeric($row['purchase_order_id']);
+        $this->assertSame($user->hash_id, $row['uploaded_by']['id'] ?? null);
+        $this->assertSame($user->name, $row['uploaded_by']['name'] ?? null);
+    }
+
+    public function test_shipping_document_upload_is_rejected_before_dispatch(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $user = $this->makePortalUser($vendor);
+        $po = $this->makePo($vendor, 'approved');
+        $this->actAs($user);
+        Storage::fake('local');
+
+        $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/shipping-documents", [
+            'document_type' => 'packing_list',
+            'file' => UploadedFile::fake()->create('packing-list.pdf', 12),
+        ])->assertStatus(422);
+
+        $this->assertDatabaseCount('portal_shipping_documents', 0);
+        // A rejected upload must not leave the stored file behind.
+        $this->assertEmpty(Storage::disk('local')->allFiles("portal/shipping-docs/{$po->id}"));
     }
 
     public function test_shipping_document_download_scoped_to_own_vendor(): void
@@ -650,6 +976,33 @@ class SupplierPortalServiceTest extends TestCase
     }
 
     /* ─── Auth guard ─────────────────────────────────────────────── */
+
+    public function test_portal_mutations_record_the_supplier_principal_not_just_the_system_actor(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $user = $this->makePortalUser($vendor);
+        $po = $this->makePo($vendor, 'sent');
+
+        $this->actAs($user);
+        $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/shipment-update", [
+            'carrier' => 'Maersk',
+        ])->assertOk();
+
+        // Portal writes impersonate a system user so audit_logs.user_id can
+        // satisfy its FK. Without this row an audit reviewer sees a system-user
+        // write and cannot tell WHICH supplier account made it.
+        $row = AuditLog::query()
+            ->where('action', 'supplier_ship.update')
+            ->where('model_type', PurchaseOrder::class)
+            ->where('model_id', $po->id)
+            ->firstOrFail();
+
+        $this->assertSame('supplier_portal', $row->actor_type);
+        $this->assertNull($row->user_id, 'A portal principal is not an internal user.');
+        $this->assertSame($user->id, $row->new_values['portal_user_id'] ?? null);
+        $this->assertSame($vendor->id, $row->new_values['vendor_id'] ?? null);
+        $this->assertNotEmpty($row->ip_address);
+    }
 
     public function test_unauthenticated_returns_401(): void
     {

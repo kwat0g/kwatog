@@ -580,9 +580,14 @@ returns a business-state error and cannot resurrect the PO or publish a second
 `PurchaseOrderSent` handoff.
 
 Supplier shipment updates use the authoritative locked PO row as well. Carrier,
-tracking number, shipped date, ETA, and supplier notes are appended to the PO's
-shipment remarks without overwriting a concurrent acknowledgement or
-cancellation. Updates against cancelled, received, or closed POs are rejected.
+tracking number, shipped date, ETA, and supplier notes are stored as **structured
+current state** in `supplier_shipments` (one row per PO), with every submission
+snapshotted immutably into `supplier_shipment_updates`. They are no longer
+appended to the PO's `remarks` — receiving and logistics need to query the
+current carrier and tracking value, and an append-only text field made retries
+indistinguishable from corrections. Only `sent` and `partially_received` POs
+accept a shipment update; draft, pending-approval, approved, cancelled, received,
+and closed POs are rejected.
 
 Cancelling or rejecting a PO closes any supplier-dispatch ledger row as
 `cancelled`. Replayed cancellation events are safe and do not reopen a
