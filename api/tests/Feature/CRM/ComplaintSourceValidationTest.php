@@ -15,6 +15,7 @@ use App\Modules\CRM\Services\ComplaintService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class ComplaintSourceValidationTest extends TestCase
@@ -126,7 +127,12 @@ class ComplaintSourceValidationTest extends TestCase
         ]);
 
         try {
-            $customer->forceDelete();
+            // The FK violation aborts the enclosing PostgreSQL transaction, and
+            // RefreshDatabase has one open around the whole test. Issue the
+            // doomed delete inside a nested transaction so Laravel wraps it in a
+            // SAVEPOINT and can roll back to it, leaving the outer transaction
+            // usable for the assertion below.
+            DB::transaction(static fn () => $customer->forceDelete());
             $this->fail('A customer with complaint history must not be physically deleted.');
         } catch (QueryException) {
             // The complaint foreign key is intentionally RESTRICT, preserving

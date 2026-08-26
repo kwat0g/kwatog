@@ -18,6 +18,13 @@ class Complaint8dEscalationDelivery extends Model
 {
     use HasFactory;
 
+    /**
+     * Eloquent infers `complaint8d_escalation_deliveries` from the class name
+     * (Str::snake does not split a digit from the preceding word), which is not
+     * the migrated table. Complaint8DReport pins its table for the same reason.
+     */
+    protected $table = 'complaint_8d_escalation_deliveries';
+
     protected $fillable = [
         'complaint_id',
         'tier',
