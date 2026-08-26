@@ -1,11 +1,11 @@
 # Module Registry
 
-_Generated 2026-08-25 20:22 UTC by scripts/regenerate-registry.sh - do not edit by hand, edit each module's status.md instead._
+_Generated 2026-08-26 20:55 UTC by scripts/regenerate-registry.sh - do not edit by hand, edit each module's status.md instead._
 
 | ID | Domain | Module | Tier | Roles | Depends On | Status | Last Session | Locked? |
 |----|--------|--------|------|-------|-----------|--------|---------------|---------|
 | M034 | commercial | customer-complaints-8d | 3 | system_admin, customer-portal | sales-orders, inspections-certificates, ncr-capa, customer-product-pricing | 🔁 Needs Re-audit | 2026-08-25 | 🔒 yes |
-| M035 | commercial | customer-portal | 4 | customer-portal, system_admin, finance_officer | auth-session, sales-orders, accounts-receivable, deliveries-proof, customer-complaints-8d | 🔁 Needs Re-audit | 2026-08-25 | 🔒 yes |
+| M035 | commercial | customer-portal | 4 | customer-portal, system_admin, finance_officer | auth-session, sales-orders, accounts-receivable, deliveries-proof, customer-complaints-8d | 🔁 Needs Re-audit | 2026-08-26 | no |
 | M032 | commercial | customer-product-pricing | 2 | system_admin | auth-session, rbac | 🔁 Needs Re-audit | 2026-08-24 | 🔒 yes |
 | M033 | commercial | sales-orders | 2 | system_admin, customer-portal | customer-product-pricing, auth-session, rbac | 🔁 Needs Re-audit | 2026-08-25 | no |
 | M027 | finance | accounts-payable | 2 | system_admin, finance_officer, purchasing_officer | chart-of-accounts-periods, journal-ledger, purchase-orders, goods-receiving | ✅ Verified | 2026-08-24 | no |
@@ -62,6 +62,6 @@ _Generated 2026-08-25 20:22 UTC by scripts/regenerate-registry.sh - do not edit 
 | M044 | supply-chain | deliveries-proof | 3 | system_admin, purchasing_officer, warehouse_staff, impex_officer, driver, customer-portal | sales-orders, inspections-certificates, warehouse-stock-control, accounts-receivable | 🔁 Needs Re-audit | 2026-08-25 | 🔒 yes |
 | M045 | supply-chain | fleet-driver | 3 | system_admin, driver | deliveries-proof, maintenance-machine-health, fixed-assets-depreciation | 🔁 Needs Re-audit | 2026-08-25 | 🔒 yes |
 | M043 | supply-chain | import-shipments-customs | 3 | system_admin, purchasing_officer, impex_officer, supplier-portal | purchase-orders, supplier-portal, accounts-payable | 🔁 Needs Re-audit | 2026-08-25 | 🔒 yes |
-| M046 | supply-chain | returns-rma | 3 | system_admin, finance_officer, production_manager, ppc_head, purchasing_officer, warehouse_staff, qc_inspector, department_head | sales-orders, deliveries-proof, inspections-certificates, accounts-receivable, warehouse-stock-control | 🔁 Needs Re-audit | 2026-08-25 | 🔒 yes |
-| M047 | supply-chain | supplier-portal | 4 | supplier-portal, system_admin, finance_officer | auth-session, purchase-orders, import-shipments-customs, accounts-payable, traceability-ppap | 🔁 Needs Re-audit | 2026-08-25 | 🔒 yes |
+| M046 | supply-chain | returns-rma | 3 | system_admin, finance_officer, production_manager, ppc_head, purchasing_officer, warehouse_staff, qc_inspector, department_head | sales-orders, deliveries-proof, inspections-certificates, accounts-receivable, warehouse-stock-control | 🔁 Needs Re-audit | 2026-08-26 | no |
+| M047 | supply-chain | supplier-portal | 4 | supplier-portal, system_admin, finance_officer | auth-session, purchase-orders, import-shipments-customs, accounts-payable, traceability-ppap | 🔁 Needs Re-audit | 2026-08-26 | no |
 
