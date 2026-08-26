@@ -455,6 +455,24 @@ system_admin, hr_officer, finance_officer, production_manager, ppc_head, purchas
 ### Event/listener wiring
 Explicit `Event::listen($EventClass, [$ListenerClass, 'handle'])` in `AppServiceProvider::boot()`. No auto-discovery. Listeners default to `ShouldQueue` w/ try/catch + `Log::warning` so a failure never blocks the dispatcher.
 
+**That pattern hides dead subsystems — never wrap the failure-recorder in it too.**
+On 2026-08-26 the 8D SLA escalation ledger was found to be 100% dead code: its
+model inferred a table name that does not exist, so every read and write threw
+`SQLSTATE[42P01]`. `advanceOne()` caught it into `Log::warning`, and
+`recordFailure()` — the thing whose job was to record that failure — hit the same
+missing table inside its *own* `catch (Throwable) → Log::error`. The scheduled
+command therefore printed `d3=0 d4=0 finalize=0` and exited **SUCCESS** every 15
+minutes, so a subsystem that had never once worked was indistinguishable from a
+healthy idle one. No IATF-required escalation notification was ever delivered.
+
+So when you use this convention:
+- The **work** may be caught-and-logged. Its **failure path** must not swallow its
+  own errors — if `recordFailure()` cannot record, that has to surface.
+- A command that did nothing because everything threw must not exit 0 with a
+  zero-count summary. Distinguish "nothing to do" from "everything failed."
+- A `catch (Throwable)` around a whole transaction will also swallow schema and
+  binding errors, which are programmer bugs, not transient runtime ones.
+
 ### NCR.actions() / GROUP BY trap
 `NonConformanceReport::actions()` defines a default `orderBy('performed_at')`. Aggregate queries (`->selectRaw(... GROUP BY ...)`) must call `->reorder()` inside the closure or PG throws `SQLSTATE[42803]`.
 
@@ -482,7 +500,7 @@ read it rather than trusting a copy here. One scheduling gotcha worth knowing wi
   not a bug.
 
 ### Migration numbering
-Recent additions use 4-digit numbered (`0186_*`, `0187_*`, …). Highest as of 2026-08-20 = **0474**. New migrations use highest+1. The sequence is contiguous through 0474: `0472_add_link_path_to_dashboard_widgets` used to be missing from `main` because it lived on an unmerged frontend branch, and that branch has now merged. Mixed timestamp-style migrations (`2026_06_09_*`, `2026_08_16_*`) coexist for older HR/Payroll changes and recent BOM-costing work — don't introduce more.
+Recent additions use 4-digit numbered (`0186_*`, `0187_*`, …). Highest as of 2026-08-27 = **0478** (`0475_harden_activity_events` … `0478_harden_ncr_capa_contracts` arrived from audit sessions and were committed in `167de85e`; the "0474" this line used to claim was already stale). Confirm the real max before using it — `ls api/database/migrations | grep -E '^04' | sort | tail -3` — rather than trusting this number, which goes out of date exactly when several sessions are landing work. The sequence is contiguous through 0478: `0472_add_link_path_to_dashboard_widgets` used to be missing from `main` because it lived on an unmerged frontend branch, and that branch has now merged. Mixed timestamp-style migrations (`2026_06_09_*`, `2026_08_16_*`, and a run of `2026_08_26_*`) coexist for older HR/Payroll changes, recent BOM-costing work, and anything that must run after a timestamp-named migration — see the dependency rule below.
 
 **"highest + 1" is WRONG when your migration depends on a timestamp-named one.**
 The migrator sorts by full filename, and `'0'` < `'2'`, so **every** `0NNN_` file
