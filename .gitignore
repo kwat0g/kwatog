@@ -69,3 +69,8 @@ codex/
 .antigravitycli/
 .playwright-mcp/
 .codex/
+
+# Audit-session coordination locks are runtime state, not source. They were
+# committed by accident in 167de85e; a fresh checkout would resurrect stale locks
+# and every claim/release would show as a git change.
+audit/domains/*/*/.lock/
