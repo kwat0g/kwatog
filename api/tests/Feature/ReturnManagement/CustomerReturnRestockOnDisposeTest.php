@@ -187,10 +187,13 @@ class CustomerReturnRestockOnDisposeTest extends TestCase
         $this->assertSame('draft', $rma->creditNote->status->value);
 
         // The API surfaces the restock facts for the detail page banner.
+        // `moved_quantity` is a bcadd sum at 3 dp, matching the per-line
+        // `moved_quantity` and the decimal(12,3) column — it is deliberately not
+        // trimmed to '8', which is what the old float sum produced.
         $this->actingAs($admin)
             ->getJson("/api/v1/return-management/return-requests/{$rma->hash_id}")
             ->assertOk()
-            ->assertJsonPath('data.moved_quantity', '8')
+            ->assertJsonPath('data.moved_quantity', '8.000')
             ->assertJsonPath('data.stock_movement.to_location.code', $loc->code);
     }
 

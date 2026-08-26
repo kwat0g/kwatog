@@ -240,4 +240,84 @@ class ReturnInspectionHandoffTest extends TestCase
 
         return $rma->load('items.product');
     }
+
+    /** An active visual spec, so inspect() can stage synchronously. */
+    private function activeSpec(Product $product): InspectionSpec
+    {
+        $spec = InspectionSpec::create([
+            'product_id' => $product->id,
+            'version' => 1,
+            'is_active' => true,
+            'created_by' => $this->user->id,
+        ]);
+        InspectionSpecItem::create([
+            'inspection_spec_id' => $spec->id,
+            'parameter_name' => 'Visual return condition',
+            'parameter_type' => InspectionParameterType::Visual->value,
+            'is_critical' => true,
+            'sort_order' => 1,
+        ]);
+
+        return $spec;
+    }
+
+    /**
+     * RMA quantities are decimal(12,3) and the AQL batch size is an integer, so
+     * the conversion is a real rounding decision. It used to run through
+     * `(int) ceil((float) $sum)`: the float step can nudge an exact 3.000 to
+     * 3.0000000004 and inflate the batch to 4, and a plain `(int)` cast would
+     * truncate a genuine fraction away instead. Both directions change the
+     * sample size, so both are asserted here.
+     *
+     * @return array<string, array{0: list<string>, 1: int}>
+     */
+    public static function fractionalBatchProvider(): array
+    {
+        return [
+            'thirds summing to an exact whole' => [['1.500', '1.500'], 3],
+            'fraction rounds up to a whole unit' => [['1.200', '2.200'], 4],
+            'a single sub-unit line still inspects one' => [['0.400'], 1],
+        ];
+    }
+
+    /** @dataProvider fractionalBatchProvider */
+    public function test_fractional_return_quantities_produce_a_decimal_safe_batch_size(
+        array $quantities,
+        int $expectedBatch,
+    ): void {
+        $product = Product::factory()->create([
+            'part_number' => 'RMA-QC-FR-' . substr(uniqid(), -5),
+            'name' => 'Fractional return product',
+        ]);
+        $this->activeSpec($product);
+
+        $rma = ReturnRequest::create([
+            'rma_number' => 'RMA-QF-' . substr(uniqid(), -8),
+            'type' => 'customer_return',
+            'status' => ReturnRequestStatus::Received,
+            'received_at' => now(),
+            'created_by' => $this->user->id,
+        ]);
+        foreach ($quantities as $qty) {
+            ReturnRequestItem::create([
+                'return_request_id' => $rma->id,
+                'product_id' => $product->id,
+                'quantity' => $qty,
+                'returned_quantity' => $qty,
+                'receipt_recorded' => true,
+                'unit_price' => '10.00',
+                'total' => '10.00',
+            ]);
+        }
+
+        app(ReturnRequestService::class)->inspect($rma->load('items.product'), null, $this->user);
+
+        $inspection = Inspection::query()
+            ->where('entity_type', 'return_request')
+            ->where('entity_id', $rma->id)
+            ->where('product_id', $product->id)
+            ->firstOrFail();
+
+        $this->assertSame($expectedBatch, (int) $inspection->batch_quantity);
+    }
 }

@@ -7,6 +7,8 @@ namespace Tests\Feature\ReturnManagement;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillItem;
+use App\Modules\Accounting\Enums\JournalEntryStatus;
+use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -62,6 +64,26 @@ class SupplierReturnLifecycleTest extends TestCase
     {
         return User::factory()->create([
             'role_id' => Role::query()->where('slug', $slug)->value('id'),
+        ]);
+    }
+
+    /**
+     * A posted GL entry to hang a billed document off, mirroring the
+     * `CreditNoteTest::postedJournalEntry()` fixture. The amounts are token
+     * values — only the posted status is what `CreditNoteService::apply()`
+     * inspects on the target bill.
+     */
+    private function postedJournalEntry(User $by): JournalEntry
+    {
+        return JournalEntry::create([
+            'entry_number' => 'JE-RMA-' . substr(uniqid(), -8),
+            'date'         => now()->toDateString(),
+            'description'  => 'Posted target bill fixture',
+            'total_debit'  => '1.00',
+            'total_credit' => '1.00',
+            'status'       => JournalEntryStatus::Posted,
+            'posted_at'    => now(),
+            'posted_by'    => $by->id,
         ]);
     }
 
@@ -138,6 +160,11 @@ class SupplierReturnLifecycleTest extends TestCase
             'date'              => now()->toDateString(),
             'due_date'          => now()->addDays(30)->toDateString(),
             'is_vatable'        => true,
+            // A supplier credit can only be applied to a bill that reached the
+            // GL (CreditNoteService::apply → "The target bill does not have a
+            // posted journal entry."). A billed GRN is posted in production, so
+            // the fixture has to be too.
+            'journal_entry_id'  => $this->postedJournalEntry($by)->id,
             'created_by'        => $by->id,
         ]);
         $billItem = BillItem::create([

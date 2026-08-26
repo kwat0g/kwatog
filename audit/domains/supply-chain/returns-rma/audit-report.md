@@ -6,6 +6,31 @@
 - Status recommendation: `📋 Plan Ready`
 - Scope: Return Management API, its RMA migrations/models/services/listeners, the RMA SPA pages/API types, and the module's feature/permission entry points. Dependency modules were read for contracts only.
 
+> **2026-08-27 resolution pass.** Findings below are the original text, kept as the record.
+> Current state per finding — details and file:line in `fix-log.md`:
+>
+> | finding | state |
+> |---|---|
+> | RMA-001, RMA-003 | fixed 2026-08-25, **runtime-verified 2026-08-27** (were never executed) |
+> | RMA-005, RMA-006, RMA-007, RMA-008, RMA-010, RMA-011, RMA-012, RMA-013 | fixed and verified 2026-08-27 |
+> | RMA-002, RMA-004, RMA-009 | **deferred — need a product/finance decision**, see "Deferred" in `fix-log.md` |
+>
+> Two defects NOT in the original findings were found by finally running the suite, and are
+> the reason it mattered that no session had reached a database:
+>
+> - **`settledQuantity()` ignored a recorded receipt count** — it gated on the
+>   `receipt_recorded` flag alone, contradicting the invariant its own migration
+>   (`2026_08_25_190000`) declares and backfills. It over-moved stock
+>   (`InsufficientStockException` on every customer restock) and **over-credited the
+>   customer** by the difference between requested and returned quantity.
+> - **Supplier-credit test fixtures built an unposted `Bill`**, so 7 failures were a fixture
+>   gap against a correct Accounting invariant, not a module defect.
+>
+> A third, self-inflicted and worth remembering: a new migration named `0479_` per the
+> "highest + 1" convention silently skipped its own guards, because every `04xx_` file sorts
+> before every `2026_` file and the table it constrains is created by a timestamp migration.
+
+
 The previous report was not reused as a source-of-truth because the module files had substantial uncommitted changes after that report and the change was not recorded in `fix-log.md`. No production source file was changed during this audit session.
 
 ## Discovery

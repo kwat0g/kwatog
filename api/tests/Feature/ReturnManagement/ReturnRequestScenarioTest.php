@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\ReturnManagement;
 
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\InvoiceItem;
@@ -27,10 +28,15 @@ use App\Modules\ReturnManagement\Models\ReturnRequestSourceAllocation;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\DeliveryItem;
 use App\Common\Services\ApprovalService;
+use App\Common\Services\SettingsService;
+use App\Common\Exceptions\BusinessRuleException;
+use App\Modules\ReturnManagement\Services\ReturnRequestService;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -69,6 +75,16 @@ class ReturnRequestScenarioTest extends TestCase
             'part_number' => 'PT-' . substr(uniqid(), -5),
             'name'        => 'Scenario Product',
         ]);
+    }
+
+    /**
+     * `invoice_items.revenue_account_id` is NOT NULL, so an invoice source line
+     * cannot be built without one. 4010 is the sales-revenue account the
+     * ChartOfAccountsSeeder installs, matching the other RMA fixtures.
+     */
+    private function revenueAccountId(): int
+    {
+        return (int) Account::query()->where('code', '4010')->firstOrFail()->id;
     }
 
     private function invoice(Customer $c, User $by): Invoice
@@ -130,6 +146,27 @@ class ReturnRequestScenarioTest extends TestCase
         }
 
         return $rma->load('items');
+    }
+
+    /**
+     * Classify an RMA as finance-only.
+     *
+     * A line carrying neither an inventory item nor a source document line is
+     * exactly what finance-only exists for: `resolveSource()` short-circuits on
+     * it (`ReturnRequestService::234-236`) and `createCreditNote()` refuses a
+     * product-only credit without it. Without this the fixture is an
+     * unsubmittable stockable return, and submit fails on the source contract
+     * instead of on the behaviour under test.
+     */
+    private function asFinanceOnly(ReturnRequest $rma, User $by): ReturnRequest
+    {
+        $rma->forceFill([
+            'finance_only'             => true,
+            'finance_only_reason'      => 'Product-only credit scenario is non-stock.',
+            'finance_only_approved_by' => $by->id,
+        ])->save();
+
+        return $rma;
     }
 
     /* ───────────────── Boundary: hash IDs ───────────────── */
@@ -282,39 +319,39 @@ class ReturnRequestScenarioTest extends TestCase
         $customer = $this->customer();
         $invoice  = $this->invoice($customer, $admin);
         $rma      = $this->inspectedRma($admin, $customer, $invoice, $this->product());
-        $rma->forceFill([
-            'finance_only' => true,
-            'finance_only_reason' => 'Legacy product-only credit scenario is non-stock.',
-            'finance_only_approved_by' => $admin->id,
-        ])->save();
-        $loc      = WarehouseLocation::factory()->create();
+        $this->asFinanceOnly($rma, $admin);
 
+        // `no_return` is the only disposition a finance-only RMA may take
+        // (DispositionType::allowedFor) — it books the credit without moving
+        // stock, and is deliberately exempt from the zero-quantity rule that
+        // applies to stockable returns (ReturnRequestService::984-991).
         $this->actingAs($admin)
             ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/dispose", [
                 'dispositions' => [[
                     'item_id'     => $rma->items->first()->hash_id,
-                    'disposition' => 'restock',
+                    'disposition' => 'no_return',
                 ]],
-                'location_id'  => $loc->hash_id,
             ])
             ->assertOk();
 
         // 8 returned × 100.00 = 800.00 credited, NOT the 10 originally requested.
+        // This is the regression guard for settledQuantity(): the line carries
+        // returned_quantity 8 without receipt_recorded, and reading `quantity`
+        // there over-credited the customer by ₱200.
         $this->assertSame('800.00', $rma->fresh()->creditNote->subtotal);
     }
 
-    public function test_scrapped_lines_are_not_credited_back_to_the_customer(): void
+    public function test_a_customer_line_cannot_be_routed_onward_to_the_supplier(): void
     {
         $admin    = $this->admin();
         $customer = $this->customer();
         $invoice  = $this->invoice($customer, $admin);
         $rma      = $this->inspectedRma($admin, $customer, $invoice, $this->product());
-        $rma->forceFill([
-            'finance_only' => true,
-            'finance_only_reason' => 'Legacy product-only credit scenario is non-stock.',
-            'finance_only_approved_by' => $admin->id,
-        ])->save();
 
+        // `return_to_supplier` is a supplier-return disposition. Offering it on a
+        // customer RMA would produce a terminal return that credits nobody, so
+        // DispositionType::allowedFor() keeps it off the customer matrix and the
+        // dispose validator refuses it at the boundary.
         $this->actingAs($admin)
             ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/dispose", [
                 'dispositions' => [[
@@ -322,10 +359,12 @@ class ReturnRequestScenarioTest extends TestCase
                     'disposition' => 'return_to_supplier',
                 ]],
             ])
-            ->assertOk();
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('dispositions.0.disposition');
 
         // A customer line routed onward to the supplier is not a customer credit.
         $this->assertNull($rma->fresh()->credit_note_id);
+        $this->assertNull($rma->fresh()->disposition_status);
     }
 
     /* ───────────────── Completion ───────────────── */
@@ -478,6 +517,7 @@ class ReturnRequestScenarioTest extends TestCase
         // No WorkflowSeeder → the return_request workflow definition is absent.
         $admin = $this->admin();
         $rma   = $this->inspectedRma($admin, $this->customer());
+        $this->asFinanceOnly($rma, $admin);
         $rma->forceFill(['status' => ReturnRequestStatus::Draft->value])->save();
 
         $this->actingAs($admin)
@@ -493,6 +533,7 @@ class ReturnRequestScenarioTest extends TestCase
         $this->seed(WorkflowSeeder::class);
         $admin = $this->admin();
         $rma   = $this->inspectedRma($admin, $this->customer());
+        $this->asFinanceOnly($rma, $admin);
         $rma->forceFill(['status' => ReturnRequestStatus::Draft->value])->save();
 
         $this->actingAs($admin)
@@ -579,6 +620,8 @@ class ReturnRequestScenarioTest extends TestCase
         $invoice = $this->invoice($customer, $admin);
         $invoiceItem = InvoiceItem::create([
             'invoice_id' => $invoice->id,
+            'revenue_account_id' => $this->revenueAccountId(),
+            'description' => 'Returned stock',
             'product_id' => $product->id,
             'quantity' => '5.000',
             'unit_price' => '77.00',
@@ -619,6 +662,8 @@ class ReturnRequestScenarioTest extends TestCase
         $invoice = $this->invoice($customer, $admin);
         $invoiceItem = InvoiceItem::create([
             'invoice_id' => $invoice->id,
+            'revenue_account_id' => $this->revenueAccountId(),
+            'description' => 'Returned stock',
             'product_id' => $this->product()->id,
             'quantity' => '5.000',
             'unit_price' => '77.00',
@@ -683,8 +728,7 @@ class ReturnRequestScenarioTest extends TestCase
         ]);
     }
 
-    public function test_store_resolves_a_delivery_source_kind(): void
-    {
+    public function test_store_resolves_a_delivery_source_kind(): void    {
         $admin = $this->admin();
         $customer = $this->customer();
         $product = $this->product();
@@ -736,5 +780,311 @@ class ReturnRequestScenarioTest extends TestCase
             'source_kind' => 'delivery_item',
             'source_id' => $deliveryItem->id,
         ]);
+    }
+
+    /* ───────────────── Service-level disposition invariant ───────────────── */
+
+    /**
+     * The HTTP validator already refuses a partial disposition set. This drives
+     * the SERVICE directly — the path a queued workflow or console command would
+     * take — because `dispose()` skips lines it has no entry for and then marks
+     * the RMA `disposed`, stranding the undecided ones forever.
+     */
+    public function test_service_dispose_refuses_a_partial_disposition_set(): void
+    {
+        $admin = $this->admin();
+        $product = $this->product();
+        $rma   = $this->inspectedRma($admin, $this->customer(), null, $product);
+        $this->asFinanceOnly($rma, $admin);
+        // Same product as line 1 — a second product would have no passed return
+        // inspection, and that gate fires before the completeness check.
+        ReturnRequestItem::create([
+            'return_request_id' => $rma->id,
+            'product_id'        => $product->id,
+            'quantity'          => 2,
+            'returned_quantity' => 2,
+            'unit_price'        => '50.00',
+            'total'             => '100.00',
+        ]);
+        $rma->load('items');
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('1 line(s) are undecided');
+
+        try {
+            app(ReturnRequestService::class)->dispose($rma, [[
+                'item_id'     => $rma->items->first()->hash_id,
+                'disposition' => 'no_return',
+            ]], $admin);
+        } finally {
+            // No side effect may survive the refusal.
+            $this->assertNull($rma->fresh()->disposition_status);
+            $this->assertNull($rma->fresh()->credit_note_id);
+            foreach ($rma->fresh()->items as $line) {
+                $this->assertNull($line->disposition);
+            }
+        }
+    }
+
+    public function test_service_dispose_refuses_the_same_line_twice(): void
+    {
+        $admin = $this->admin();
+        $rma   = $this->inspectedRma($admin, $this->customer(), null, $this->product());
+        $this->asFinanceOnly($rma, $admin);
+        $line  = $rma->items->first();
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('only one disposition');
+
+        try {
+            app(ReturnRequestService::class)->dispose($rma, [
+                ['item_id' => $line->hash_id, 'disposition' => 'no_return'],
+                ['item_id' => $line->hash_id, 'disposition' => 'no_return'],
+            ], $admin);
+        } finally {
+            $this->assertNull($rma->fresh()->disposition_status);
+        }
+    }
+
+    /* ───────────────── Source reservations & DB backstops ───────────────── */
+
+    /**
+     * RMA-005 — a reservation made at draft time is not evidence that the source
+     * can still back it. Submit used to skip the check entirely whenever an
+     * active allocation existed, so a draft raised against 5 available units
+     * survived the invoice line being cut to 1.
+     */
+    public function test_submit_refuses_a_reservation_the_shrunken_source_can_no_longer_back(): void
+    {
+        $admin = $this->admin();
+        $customer = $this->customer();
+        $product = $this->product();
+        $item = Item::factory()->create();
+        $invoice = $this->invoice($customer, $admin);
+        $invoiceItem = InvoiceItem::create([
+            'invoice_id' => $invoice->id,
+            'revenue_account_id' => $this->revenueAccountId(),
+            'description' => 'Returned stock',
+            'product_id' => $product->id,
+            'quantity' => '5.000',
+            'unit_price' => '77.00',
+            'total' => '385.00',
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson('/api/v1/return-management/return-requests', [
+                'type' => 'customer_return',
+                'customer_id' => $customer->hash_id,
+                'invoice_id' => $invoice->hash_id,
+                'reason_code' => 'defective',
+                'items' => [[
+                    'product_id' => $product->hash_id,
+                    'item_id' => $item->hash_id,
+                    'quantity' => '4.000',
+                    'source_invoice_item_id' => $invoiceItem->hash_id,
+                ]],
+            ])
+            ->assertCreated();
+
+        $rma = ReturnRequest::query()->latest('id')->firstOrFail();
+        $this->assertDatabaseHas('return_request_source_allocations', [
+            'return_request_item_id' => $rma->items()->value('id'),
+            'quantity' => '4.000',
+        ]);
+
+        // The source document is cut below the standing reservation.
+        $invoiceItem->update(['quantity' => '1.000']);
+
+        $this->actingAs($admin)
+            ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/submit")
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Return quantity exceeds the remaining quantity on the invoice_item source line.');
+
+        $this->assertSame(ReturnRequestStatus::Draft, $rma->fresh()->status);
+    }
+
+    public function test_submit_still_passes_when_the_source_can_back_the_standing_reservation(): void
+    {
+        $admin = $this->admin();
+        $customer = $this->customer();
+        $product = $this->product();
+        $item = Item::factory()->create();
+        $invoice = $this->invoice($customer, $admin);
+        $invoiceItem = InvoiceItem::create([
+            'invoice_id' => $invoice->id,
+            'revenue_account_id' => $this->revenueAccountId(),
+            'description' => 'Returned stock',
+            'product_id' => $product->id,
+            'quantity' => '5.000',
+            'unit_price' => '77.00',
+            'total' => '385.00',
+        ]);
+        $this->seed(WorkflowSeeder::class);
+
+        $this->actingAs($admin)
+            ->postJson('/api/v1/return-management/return-requests', [
+                'type' => 'customer_return',
+                'customer_id' => $customer->hash_id,
+                'invoice_id' => $invoice->hash_id,
+                'reason_code' => 'defective',
+                'items' => [[
+                    'product_id' => $product->hash_id,
+                    'item_id' => $item->hash_id,
+                    'quantity' => '4.000',
+                    'source_invoice_item_id' => $invoiceItem->hash_id,
+                ]],
+            ])
+            ->assertCreated();
+
+        $rma = ReturnRequest::query()->latest('id')->firstOrFail();
+
+        // Revalidation must not double-count the line's OWN reservation.
+        $this->actingAs($admin)
+            ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/submit")
+            ->assertOk();
+
+        $this->assertSame(ReturnRequestStatus::PendingApproval, $rma->fresh()->status);
+        $this->assertSame(1, ReturnRequestSourceAllocation::query()
+            ->whereNull('released_at')
+            ->count(), 'Revalidation must reuse the reservation, not stack a second one.');
+    }
+
+    /**
+     * RMA-006 — the state machine is an application table; the column was an
+     * unconstrained string, so a direct writer could persist a status outside
+     * `ReturnRequestStatus` and the failure surfaced later as an enum-hydration
+     * error on read.
+     */
+    public function test_database_refuses_a_return_request_status_outside_the_enum(): void
+    {
+        $rma = $this->inspectedRma($this->admin(), $this->customer());
+
+        $this->expectException(QueryException::class);
+
+        DB::table('return_requests')->where('id', $rma->id)->update(['status' => 'not_a_status']);
+    }
+
+    public function test_database_refuses_a_malformed_source_allocation(): void
+    {
+        $rma  = $this->inspectedRma($this->admin(), $this->customer());
+        $line = $rma->items->first();
+
+        foreach ([
+            'negative quantity'   => ['quantity' => '-1.000', 'unit_price' => '1.00', 'source_kind' => 'invoice_item'],
+            'negative unit price' => ['quantity' => '1.000', 'unit_price' => '-1.00', 'source_kind' => 'invoice_item'],
+            'unresolvable kind'   => ['quantity' => '1.000', 'unit_price' => '1.00', 'source_kind' => 'bill_item'],
+        ] as $label => $attributes) {
+            $threw = false;
+            try {
+                DB::table('return_request_source_allocations')->insert($attributes + [
+                    'return_request_item_id' => $line->id,
+                    'source_id'              => 1,
+                    'created_at'             => now(),
+                    'updated_at'             => now(),
+                ]);
+            } catch (QueryException) {
+                $threw = true;
+            }
+            $this->assertTrue($threw, "The database must refuse a source allocation with a {$label}.");
+        }
+    }
+
+    /**
+     * RMA-010 — the source picker advertised the raw document quantity as
+     * available, so two operators saw the same headroom and the second only
+     * learned of the first's reservation from a late submit rejection.
+     */
+    public function test_source_options_report_the_quantity_actually_still_reservable(): void
+    {
+        $admin = $this->admin();
+        $customer = $this->customer();
+        $product = $this->product();
+        $item = Item::factory()->create();
+        $invoice = $this->invoice($customer, $admin);
+        $invoiceItem = InvoiceItem::create([
+            'invoice_id' => $invoice->id,
+            'revenue_account_id' => $this->revenueAccountId(),
+            'description' => 'Returned stock',
+            'product_id' => $product->id,
+            'quantity' => '5.000',
+            'unit_price' => '77.00',
+            'total' => '385.00',
+        ]);
+
+        // Before any RMA: the whole line is reservable. `quantity` keeps the
+        // source document's own cast (invoice_items is decimal:2); the reservable
+        // figure is reported at the allocation ledger's 3 dp, which is the
+        // precision an RMA actually reserves at.
+        $this->actingAs($admin)
+            ->getJson('/api/v1/return-management/return-requests/source-options?type=customer_return&customer_id='.$customer->hash_id)
+            ->assertOk()
+            ->assertJsonPath('data.customer.invoices.0.lines.0.quantity', '5.00')
+            ->assertJsonPath('data.customer.invoices.0.lines.0.remaining_quantity', '5.000');
+
+        $this->actingAs($admin)
+            ->postJson('/api/v1/return-management/return-requests', [
+                'type' => 'customer_return',
+                'customer_id' => $customer->hash_id,
+                'invoice_id' => $invoice->hash_id,
+                'reason_code' => 'defective',
+                'items' => [[
+                    'product_id' => $product->hash_id,
+                    'item_id' => $item->hash_id,
+                    'quantity' => '2.000',
+                    'source_invoice_item_id' => $invoiceItem->hash_id,
+                ]],
+            ])
+            ->assertCreated();
+
+        // The document quantity is unchanged; only the reservable amount moves.
+        $this->actingAs($admin)
+            ->getJson('/api/v1/return-management/return-requests/source-options?type=customer_return&customer_id='.$customer->hash_id)
+            ->assertOk()
+            ->assertJsonPath('data.customer.invoices.0.lines.0.quantity', '5.00')
+            ->assertJsonPath('data.customer.invoices.0.lines.0.remaining_quantity', '3.000');
+
+        // And the reservation is now traceable from the RMA detail response.
+        $rma = ReturnRequest::query()->latest('id')->firstOrFail();
+        $this->actingAs($admin)
+            ->getJson("/api/v1/return-management/return-requests/{$rma->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.items.0.source_allocation.source_kind', 'invoice_item')
+            ->assertJsonPath('data.items.0.source_allocation.quantity', '2.000')
+            ->assertJsonPath('data.items.0.source_allocation.unit_price', '77.00');
+    }
+
+    /* ───────────────── Feature toggle ───────────────── */
+    /**
+     * Turning the module off must close the API, not merely hide the sidebar
+     * entry. The permission check is deliberately nested INSIDE the feature
+     * boundary, so a user who still holds `return_management.*` is refused too.
+     */
+    public function test_reads_are_refused_when_the_return_management_feature_is_switched_off(): void
+    {
+        app(SettingsService::class)->set('modules.return_management', false, 'modules');
+
+        $this->actingAs($this->admin())
+            ->getJson('/api/v1/return-management/return-requests')
+            ->assertForbidden()
+            ->assertJsonPath('code', 'feature_disabled');
+    }
+
+    public function test_writes_are_refused_when_the_return_management_feature_is_switched_off(): void
+    {
+        $admin = $this->admin();
+        $rma   = $this->inspectedRma($admin, $this->customer(), null, $this->product());
+        app(SettingsService::class)->set('modules.return_management', false, 'modules');
+
+        $this->actingAs($admin)
+            ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/dispose", [
+                'dispositions' => [[
+                    'item_id'     => $rma->items->first()->hash_id,
+                    'disposition' => 'scrap',
+                ]],
+            ])
+            ->assertForbidden()
+            ->assertJsonPath('code', 'feature_disabled');
+
+        $this->assertNull($rma->fresh()->disposition_status, 'A disabled module must not mutate an RMA.');
     }
 }

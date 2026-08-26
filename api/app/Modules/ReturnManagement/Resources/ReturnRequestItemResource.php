@@ -22,6 +22,22 @@ class ReturnRequestItemResource extends JsonResource
             'quantity'          => (string) $this->quantity,
             'returned_quantity' => (string) $this->returned_quantity,
             'receipt_recorded'  => (bool) $this->receipt_recorded,
+            // RMA-010 — the reservation this line holds on its source document.
+            // Without it the source contract was invisible: an operator hitting
+            // "exceeds the remaining quantity" could not see which RMA had taken
+            // the headroom. Only exposed when the caller loaded the relation, so
+            // the list endpoint pays nothing for it.
+            'source_allocation' => $this->whenLoaded('sourceAllocations', function (): ?array {
+                $active = $this->sourceAllocations->firstWhere('released_at', null);
+
+                return $active ? [
+                    'id'          => $active->hash_id,
+                    'source_kind' => (string) $active->source_kind,
+                    'quantity'    => (string) $active->quantity,
+                    'unit_price'  => (string) $active->unit_price,
+                    'reserved_at' => $active->created_at?->toIso8601String(),
+                ] : null;
+            }),
             'unit_price'        => (string) $this->unit_price,
             'original_unit_price' => $this->original_unit_price !== null ? (string) $this->original_unit_price : null,
             'total'             => (string) $this->total,

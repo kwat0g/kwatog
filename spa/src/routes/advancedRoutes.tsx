@@ -43,9 +43,11 @@ export const advancedRoutes = (
  </Route>
 
  {/* ADV12 — Return Management (RMA) */}
+ <Route element={<ModuleGuard module="return_management" />}>
  <Route path="/return-management" element={<PermissionGuard permission="return_management.view"><ReturnManagementListPage /></PermissionGuard>} />
  <Route path="/return-management/new" element={<PermissionGuard permission="return_management.manage"><CreateReturnRequestPage /></PermissionGuard>} />
  <Route path="/return-management/:id/edit" element={<PermissionGuard permission="return_management.manage"><CreateReturnRequestPage /></PermissionGuard>} />
  <Route path="/return-management/:id" element={<PermissionGuard permission="return_management.view"><ReturnManagementDetailPage /></PermissionGuard>} />
+ </Route>
  </>
 );

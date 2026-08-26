@@ -361,17 +361,28 @@ class ReturnRequestService
         ];
     }
 
-    private function reserveSource(
-        ReturnRequestItem $line,
-        string $kind,
-        int $sourceId,
-        string $quantity,
-        string $unitPrice,
-    ): void {
-        $limit = $this->sourceLimit($kind, $sourceId);
-        $allocated = (string) ReturnRequestSourceAllocation::query()
+    /**
+     * Active reserved quantity per source line, keyed by source id.
+     *
+     * RMA-010 — `sourceOptions()` used to advertise the raw document quantity as
+     * "available", so two operators could both see 10 units remaining, one would
+     * get a late `reserveSource()` rejection at submit, and neither could see the
+     * reservation that caused it. This is the batched read that lets the option
+     * list show the actually-reservable amount. One query per kind, never per
+     * line.
+     *
+     * @param  list<int> $sourceIds
+     * @return array<int, string> source id => reserved quantity (3 dp string)
+     */
+    public function activeAllocationsBySource(string $kind, array $sourceIds): array
+    {
+        if ($sourceIds === []) {
+            return [];
+        }
+
+        return ReturnRequestSourceAllocation::query()
             ->where('source_kind', $kind)
-            ->where('source_id', $sourceId)
+            ->whereIn('source_id', $sourceIds)
             ->whereNull('released_at')
             ->whereHas('returnRequestItem.returnRequest', function ($query): void {
                 $query->whereNotIn('status', [
@@ -379,8 +390,48 @@ class ReturnRequestService
                     ReturnRequestStatus::Cancelled->value,
                 ]);
             })
+            ->selectRaw('source_id, SUM(quantity) AS reserved')
+            ->groupBy('source_id')
+            ->pluck('reserved', 'source_id')
+            ->map(static fn ($reserved): string => bcadd((string) $reserved, '0', 3))
+            ->all();
+    }
+
+    /**
+     * Quantity still reservable on a source line.
+     *
+     * `$excludeAllocationIds` lets a caller re-check an allocation that already
+     * exists without counting itself as competition.
+     *
+     * @param list<int> $excludeAllocationIds
+     */
+    private function remainingSourceQuantity(string $kind, int $sourceId, array $excludeAllocationIds = []): string
+    {
+        $limit = $this->sourceLimit($kind, $sourceId);
+        $allocated = (string) ReturnRequestSourceAllocation::query()
+            ->where('source_kind', $kind)
+            ->where('source_id', $sourceId)
+            ->whereNull('released_at')
+            ->when($excludeAllocationIds !== [], fn ($query) => $query->whereNotIn('id', $excludeAllocationIds))
+            ->whereHas('returnRequestItem.returnRequest', function ($query): void {
+                $query->whereNotIn('status', [
+                    ReturnRequestStatus::Rejected->value,
+                    ReturnRequestStatus::Cancelled->value,
+                ]);
+            })
             ->sum('quantity');
-        $available = bcsub($limit, $allocated, 3);
+
+        return bcsub($limit, $allocated, 3);
+    }
+
+    private function reserveSource(
+        ReturnRequestItem $line,
+        string $kind,
+        int $sourceId,
+        string $quantity,
+        string $unitPrice,
+    ): void {
+        $available = $this->remainingSourceQuantity($kind, $sourceId);
         if (bccomp($quantity, $available, 3) > 0) {
             throw new BusinessRuleException("Return quantity exceeds the remaining quantity on the {$kind} source line.");
         }
@@ -392,6 +443,46 @@ class ReturnRequestService
             'quantity'                => $quantity,
             'unit_price'              => Money::round2($unitPrice),
         ]);
+    }
+
+    /**
+     * Re-check an EXISTING reservation against the source line as it stands now.
+     *
+     * `reserveSource()` only validates at the moment it creates an allocation, and
+     * submit used to skip the check entirely whenever an active allocation was
+     * already present. A draft could therefore be created against 10 available
+     * units, the source document reduced to 4, and the stale 10-unit reservation
+     * would still sail through submit — reserving more than the source can back.
+     * A changed source selection re-reserves; a shrunk source is refused.
+     */
+    private function revalidateSourceAllocation(ReturnRequestItem $line, array $source): void
+    {
+        $allocation = $line->sourceAllocations()->whereNull('released_at')->latest('id')->first();
+        if (! $allocation) {
+            return;
+        }
+
+        if ((string) $allocation->source_kind !== (string) $source['kind']
+            || (int) $allocation->source_id !== (int) $source['id']) {
+            $allocation->update(['released_at' => now()]);
+            $this->reserveSource($line, $source['kind'], (int) $source['id'], (string) $line->quantity, $source['unit_price']);
+            return;
+        }
+
+        $available = $this->remainingSourceQuantity(
+            (string) $source['kind'],
+            (int) $source['id'],
+            [(int) $allocation->id],
+        );
+        if (bccomp((string) $line->quantity, $available, 3) > 0) {
+            throw new BusinessRuleException(
+                "Return quantity exceeds the remaining quantity on the {$source['kind']} source line."
+            );
+        }
+
+        if (bccomp((string) $allocation->quantity, (string) $line->quantity, 3) !== 0) {
+            $allocation->update(['quantity' => (string) $line->quantity]);
+        }
     }
 
     private function sourceLimit(string $kind, int $sourceId): string
@@ -457,8 +548,14 @@ class ReturnRequestService
                 'total' => Money::mul((string) $line->quantity, $unitPrice),
             ]);
 
-            if ($source !== null && ! $line->sourceAllocations()->whereNull('released_at')->exists()) {
-                $this->reserveSource($line, $source['kind'], $source['id'], (string) $line->quantity, $source['unit_price']);
+            if ($source !== null) {
+                if ($line->sourceAllocations()->whereNull('released_at')->exists()) {
+                    // RMA-005 — an allocation made at draft time is not evidence
+                    // that the source can still back it.
+                    $this->revalidateSourceAllocation($line, $source);
+                } else {
+                    $this->reserveSource($line, $source['kind'], $source['id'], (string) $line->quantity, $source['unit_price']);
+                }
             }
         }
     }
@@ -780,11 +877,16 @@ class ReturnRequestService
                 continue;
             }
 
-            $batchQty = (int) ceil((float) $productItems->sum(
-                fn (ReturnRequestItem $item): float => (float) ($item->returned_quantity > 0
-                    ? $item->returned_quantity
-                    : $item->quantity)
-            ));
+            // Decimal-safe: quantities are decimal(12,3), so summing them through
+            // float and then ceil()ing can land on the wrong sample size at the
+            // boundary (0.1 + 0.2 style drift makes 3.000 read as 3.0000000004,
+            // which ceils to 4 and inflates the AQL batch). Sum with bcadd, then
+            // round up only once, on an exact decimal string.
+            $batchDecimal = '0';
+            foreach ($productItems as $productItem) {
+                $batchDecimal = bcadd($batchDecimal, $this->settledQuantity($productItem), 3);
+            }
+            $batchQty = $this->wholeUnits($batchDecimal);
 
             try {
                 $inspection = $this->inspections->create([
@@ -900,9 +1002,10 @@ class ReturnRequestService
                         'defect_description' => "Auto-created from RMA {$rma->rma_number}. "
                             . "Disposition: {$disp['disposition']}. "
                             . ($disp['notes'] ?? ''),
-                        'affected_quantity'  => (int) ($item->returned_quantity > 0
-                            ? $item->returned_quantity
-                            : $item->quantity),
+                        // Same settled-quantity rule as every other consumer,
+                        // rounded UP: an NCR covering 8.4 units affects 9, and
+                        // truncating understated the defect on the Pareto data.
+                        'affected_quantity'  => $this->wholeUnits($this->settledQuantity($item)),
                         'is_auto_generated'  => true,
                     ], $by);
                     $item->update(['ncr_id' => $ncr->id]);
@@ -950,12 +1053,34 @@ class ReturnRequestService
     /**
      * The quantity that physically came back on a line, falling back to the
      * requested quantity for RMAs received before per-line counts existed.
+     *
+     * `receipt_recorded` is authoritative WHEN SET, because receive() writes it
+     * in the same statement as the count: that is what keeps an explicit zero a
+     * recorded no-return instead of silently re-reading the requested quantity.
+     *
+     * A positive `returned_quantity` with the flag unset is still a physical
+     * receipt. Migration 2026_08_25_190000, which introduced the flag, states
+     * that rule and backfills exactly it ("Existing positive counts were
+     * explicit physical receipts in the pre-flag schema"); only zero stays
+     * ambiguous, because the old default cannot distinguish "not counted" from
+     * "none returned". Gating on the flag alone contradicted that invariant and
+     * was a money-and-stock defect, not a cosmetic one: the units sitting in
+     * quarantine are `returned_quantity`, so falling through to `quantity`
+     * asked the ledger to move goods that never arrived (InsufficientStock on
+     * the restock leg) and credited the customer for them (₱200 over-credit on
+     * a 10-requested / 8-returned line at ₱100).
      */
     private function settledQuantity(ReturnRequestItem $item): string
     {
-        return (bool) $item->receipt_recorded
-            ? (string) $item->returned_quantity
-            : (string) $item->quantity;
+        if ((bool) $item->receipt_recorded) {
+            return (string) $item->returned_quantity;
+        }
+
+        if (bccomp((string) $item->returned_quantity, '0', 3) > 0) {
+            return (string) $item->returned_quantity;
+        }
+
+        return (string) $item->quantity;
     }
 
     private function creditableAmount(ReturnRequestItem $item): string
@@ -963,7 +1088,40 @@ class ReturnRequestService
         return Money::mul($this->settledQuantity($item), (string) $item->unit_price);
     }
 
-    /** @param array<int, array<string, mixed>> $dispositions */
+    /**
+     * A decimal quantity as whole units, rounded UP, without ever touching a
+     * float. `(int) ceil((float) $decimal)` is the form this replaces: the float
+     * conversion can nudge an exact 3.000 to 3.0000000004 and ceil it to 4, and
+     * a plain `(int)` cast truncates a real fraction away instead. Integer
+     * consumers (inspection batch size, NCR affected quantity) need the ceiling,
+     * because a partial unit is still a whole unit to inspect or report.
+     */
+    private function wholeUnits(string $quantity): int
+    {
+        $truncated = (int) bcdiv($quantity, '1', 0);
+
+        return bccomp($quantity, (string) $truncated, 3) > 0
+            ? $truncated + 1
+            : $truncated;
+    }
+
+    /**
+     * Every disposition rule that must hold before `dispose()` causes any
+     * side effect: the legality matrix, AND a one-to-one map onto the RMA's
+     * lines.
+     *
+     * The completeness half is duplicated from `DisposeReturnRequest` on
+     * purpose. Disposition is one-shot and irreversible — it issues the credit
+     * note, reverses GRN receipts and moves stock — and the loop in `dispose()`
+     * silently `continue`s past any line it has no entry for, then marks the RMA
+     * `disposed`. That leaves undecided lines that can never be revisited. Only
+     * the HTTP validator enforced it, so a queued workflow, a console command or
+     * a future controller could terminalise an RMA through the service and
+     * strand those lines. An invariant this destructive belongs on the service,
+     * not only on one of its callers.
+     *
+     * @param array<int, array<string, mixed>> $dispositions
+     */
     private function assertDispositionMatrix(ReturnRequest $rma, array $dispositions): void
     {
         $allowed = array_map(
@@ -971,16 +1129,22 @@ class ReturnRequestService
             DispositionType::allowedFor($rma->type, (bool) $rma->finance_only),
         );
         $lines = $rma->items->keyBy(fn (ReturnRequestItem $line): string => $line->hash_id);
+        $seen  = [];
 
         foreach ($dispositions as $row) {
             $disposition = (string) ($row['disposition'] ?? '');
             if (! in_array($disposition, $allowed, true)) {
                 throw new BusinessRuleException("The {$disposition} disposition is not valid for this RMA type.");
             }
-            $line = $lines->get((string) ($row['item_id'] ?? ''));
+            $key  = (string) ($row['item_id'] ?? '');
+            $line = $lines->get($key);
             if (! $line) {
                 throw new BusinessRuleException('Every disposition must reference a line on this RMA.');
             }
+            if (in_array($key, $seen, true)) {
+                throw new BusinessRuleException('Each return line may take only one disposition.');
+            }
+            $seen[] = $key;
             if ($disposition === DispositionType::NoReturn->value
                 && ! $rma->finance_only
                 && bccomp($this->settledQuantity($line), '0', 3) > 0) {
@@ -989,6 +1153,13 @@ class ReturnRequestService
             if ($rma->finance_only && $disposition !== DispositionType::NoReturn->value) {
                 throw new BusinessRuleException('Finance-only RMAs cannot create stock dispositions.');
             }
+        }
+
+        $undecided = $lines->keys()->diff($seen);
+        if ($undecided->isNotEmpty()) {
+            throw new BusinessRuleException(
+                "Every return line needs a disposition — {$undecided->count()} line(s) are undecided."
+            );
         }
     }
 
@@ -1109,11 +1280,16 @@ class ReturnRequestService
     private function recalculatePurchaseOrderReceiptStatus(ReturnRequest $rma, User $by): void
     {
         $po = $rma->purchaseOrder()->lockForUpdate()->firstOrFail();
-        $ordered = (float) $po->items()->sum('quantity');
-        $accepted = (float) $po->items()->sum('quantity_accepted');
-        $status = $accepted <= 0
+        // Decimal-safe: PO quantities are decimal, and a float comparison can
+        // classify a fully-received fractional PO as partially received (or the
+        // reverse) at the boundary. bccomp at 3 dp is the column's precision.
+        $ordered  = (string) $po->items()->sum('quantity');
+        $accepted = (string) $po->items()->sum('quantity_accepted');
+        $status = bccomp($accepted, '0', 3) <= 0
             ? PurchaseOrderStatus::Approved
-            : ($accepted < $ordered ? PurchaseOrderStatus::PartiallyReceived : PurchaseOrderStatus::Received);
+            : (bccomp($accepted, $ordered, 3) < 0
+                ? PurchaseOrderStatus::PartiallyReceived
+                : PurchaseOrderStatus::Received);
 
         if ($po->status === $status) {
             return;

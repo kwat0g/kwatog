@@ -172,12 +172,19 @@ export default function CreateReturnRequestPage() {
   const items = itemsData?.data ?? [];
   const isSupplierReturn = returnType === 'supplier_return';
 
+  // RMA-010 — label the amount actually still reservable, not the raw document
+  // quantity. The old labels said "10 available" to two operators at once; the
+  // second only found out at submit, with no way to see whose reservation took
+  // the headroom. Falls back to the document quantity if the API omits it.
+  const reservable = (line: { quantity: string; remaining_quantity?: string | null }) =>
+    line.remaining_quantity ?? line.quantity;
+
   const customerSourceLines = useMemo<SourceChoice[]>(() => sourceOptions ? [
-    ...sourceOptions.customer.invoices.flatMap((doc) => doc.lines.map((line) => ({ ...line, value: `invoice_item:${line.id}`, rootId: doc.id, sourceKind: 'invoice_item' as const, label: `Invoice ${doc.label} · ${line.label} · ${line.quantity} available` }))),
-    ...sourceOptions.customer.salesOrders.flatMap((doc) => doc.lines.map((line) => ({ ...line, value: `sales_order_item:${line.id}`, rootId: doc.id, sourceKind: 'sales_order_item' as const, label: `SO ${doc.label} · ${line.label} · ${line.quantity} delivered` }))),
-    ...sourceOptions.customer.deliveries.flatMap((doc) => doc.lines.map((line) => ({ ...line, value: `delivery_item:${line.id}`, rootId: doc.sales_order_id, sourceKind: 'delivery_item' as const, label: `Delivery ${doc.label} · ${line.label} · ${line.quantity} delivered` }))),
+    ...sourceOptions.customer.invoices.flatMap((doc) => doc.lines.map((line) => ({ ...line, value: `invoice_item:${line.id}`, rootId: doc.id, sourceKind: 'invoice_item' as const, label: `Invoice ${doc.label} · ${line.label} · ${reservable(line)} available` }))),
+    ...sourceOptions.customer.salesOrders.flatMap((doc) => doc.lines.map((line) => ({ ...line, value: `sales_order_item:${line.id}`, rootId: doc.id, sourceKind: 'sales_order_item' as const, label: `SO ${doc.label} · ${line.label} · ${reservable(line)} returnable of ${line.quantity} delivered` }))),
+    ...sourceOptions.customer.deliveries.flatMap((doc) => doc.lines.map((line) => ({ ...line, value: `delivery_item:${line.id}`, rootId: doc.sales_order_id, sourceKind: 'delivery_item' as const, label: `Delivery ${doc.label} · ${line.label} · ${reservable(line)} returnable of ${line.quantity} delivered` }))),
   ] : [], [sourceOptions]);
-  const supplierSourceLines = useMemo<SourceChoice[]>(() => sourceOptions ? sourceOptions.supplier.goodsReceipts.flatMap((doc) => doc.lines.map((line) => ({ ...line, value: `grn_item:${line.id}`, rootId: doc.purchase_order_id, sourceKind: 'grn_item' as const, label: `GRN ${doc.label} · ${line.label} · ${line.quantity} accepted` }))) : [], [sourceOptions]);
+  const supplierSourceLines = useMemo<SourceChoice[]>(() => sourceOptions ? sourceOptions.supplier.goodsReceipts.flatMap((doc) => doc.lines.map((line) => ({ ...line, value: `grn_item:${line.id}`, rootId: doc.purchase_order_id, sourceKind: 'grn_item' as const, label: `GRN ${doc.label} · ${line.label} · ${reservable(line)} returnable of ${line.quantity} accepted` }))) : [], [sourceOptions]);
   const billLines = useMemo<SourceChoice[]>(() => sourceOptions ? sourceOptions.supplier.bills.flatMap((doc) => doc.lines.map((line) => ({ ...line, value: `bill_item:${line.id}`, rootId: doc.id, sourceKind: 'grn_item' as const, label: `Bill ${doc.label} · ${line.label}` }))) : [], [sourceOptions]);
 
   const selectSourceLine = (index: number, value: string) => {

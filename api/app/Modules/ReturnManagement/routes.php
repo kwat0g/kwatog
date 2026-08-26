@@ -8,9 +8,14 @@ use Illuminate\Support\Facades\Route;
 /*
  * Return Management (RMA) routes — ADV12.
  * Mounted automatically under /api/v1 by App\Providers\ModuleServiceProvider.
+ *
+ * `feature:return_management` sits OUTSIDE the per-action permission checks on
+ * purpose: turning the module off must close the API for everyone, including
+ * users who still hold `return_management.*`. Without it, disabling the setting
+ * only hid the sidebar entry while every RMA endpoint stayed reachable by URL.
  */
 
-Route::middleware(['auth:sanctum'])->prefix('return-management')->group(function () {
+Route::middleware(['auth:sanctum', 'feature:return_management'])->prefix('return-management')->group(function () {
     Route::get('/options', [ReturnRequestController::class, 'options'])->middleware('permission:return_management.view');
     Route::get('/return-requests/source-options', [ReturnRequestController::class, 'sourceOptions'])->middleware('permission:return_management.view');
 

@@ -143,6 +143,13 @@ export interface ReturnSourceLine {
  item_id?: string | null;
  po_item_id?: string | null;
  quantity: string;
+ /**
+  * What is still reservable on this line: `quantity` minus every active RMA
+  * reservation against it. Absent on PO and bill lines, which carry no
+  * reservation. Reported at 3 dp, so it may differ from `quantity` in trailing
+  * zeros — compare numerically, never as strings.
+  */
+ remaining_quantity?: string | null;
  unit_price: string;
  lot_number?: string | null;
  label: string;

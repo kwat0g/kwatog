@@ -578,7 +578,10 @@ export default function ReturnRequestDetailPage() {
                       'The return cannot be disposed or completed until Quality inspection staging succeeds.'}
                   </div>
                 </div>
-                {canManage && (
+                {/* Same policy as the page-header retry: the action is
+                    return_management.inspect, so a QC inspector is not shown a
+                    retry in one placement and denied it in the other. */}
+                {canInspect && (
                   <Button
                     variant="secondary"
                     size="sm"
@@ -898,7 +901,6 @@ export default function ReturnRequestDetailPage() {
         description="The RMA is returned to the requester with your reason. Please be specific."
         reasonLabel="Rejection reason"
         reasonPlaceholder="e.g. Items were not received within the return window"
-        minLength={10}
         minLength={10}
         confirmLabel="Reject"
         variant="danger"

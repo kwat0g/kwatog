@@ -6,4 +6,4 @@ roles: system_admin, finance_officer, production_manager, ppc_head, purchasing_o
 depends_on: sales-orders, deliveries-proof, inspections-certificates, accounts-receivable, warehouse-stock-control
 surface: L
 status: 🔁 Needs Re-audit
-last_session: 2026-08-25
+last_session: 2026-08-26
