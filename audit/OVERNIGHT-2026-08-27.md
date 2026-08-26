@@ -261,4 +261,69 @@ Fixed in `c7b2c483`. The lesson is recorded in CLAUDE.md.
 
 ---
 
-## Status log (appended as the night proceeds)
+## Status log
+
+### Result
+
+**Suite went 105 failed → 4 failed.** Measured, not estimated, by three full runs on
+dedicated databases:
+
+| point in the night | result |
+|---|---|
+| start (2026-08-26 morning) | 105 failed / 2268 passed |
+| after the first 8 modules | 65 failed / 2321 passed |
+| after wave 1 (4 agents) | 23 failed / 2420 passed |
+| after wave 2 (4 agents) | **4 failed / 2445 passed** |
+
+**Three of the four remaining failures are your decisions above, deliberately left
+red because each is a true statement about production:**
+- `AccountsPayableHardeningTest` → decision 4
+- `EmployeeTrainingAssignTest` → decision 8
+- `PayrollMoneyFindingsRegressionTest` → decision 12
+
+The fourth (`AssetDepreciationCommandTest`) was still being worked when this was
+written; see the git log for its outcome.
+
+### Modules audited
+
+17 modules claimed, fixed and released. Two at `✅ Verified`
+(`production-routings`, `inspection-specifications`); the rest at
+`🔁 Needs Re-audit` **for stated reasons**, not as a bounce-back — mostly SPA
+verification blocked by the root-owned `node_modules`, or a decision above.
+
+One status was actively corrected: `platform/approval-workflows` was marked
+`✅ Verified` while carrying 3 failing tests, because that status was written when
+`migrate:fresh` was broken and no approval test had ever run. **Treat every
+remaining `✅ Verified` as unproven** until a suite run backs it.
+
+### What the night actually found
+
+Not test breakage. Real defects that had been invisible because nothing could run:
+
+- a credit note paying for 10 units when 8 came back
+- AP and VAT Input postings resolved with **no account-type guard**, so a
+  wrong-class account could take them and the journal still balanced
+- three KPI calculators querying nonexistent columns; the work-order completion
+  rate **read high** because it filtered on a status not in the enum
+- 8D SLA escalation that could never fire, behind a cron reporting SUCCESS every
+  15 minutes
+- every delivery-proof download returning 500 from an unclosed regex character class
+- a customer portal account silently takeable over by another customer
+- every purchase request stalled at approval step 2, forever
+- a balance sheet that goes imbalanced the moment it is dated after its fiscal year
+- every machine-generated journal entry losing its maker
+
+**Three of these were regressions introduced by `167de85e`** — the batch commit I
+made to get the tree buildable, containing ~50 crashed sessions' unreviewed work.
+That commit was the right call to make the branch coherent, and it also shipped
+defects. Both things are true, and the second is why the label `NOT REVIEWED` is on
+it.
+
+### Process note
+
+Agents were told repeatedly not to weaken a guard, widen a scope, or edit an
+expected money value to reach green. That instruction did work: on the supplier
+portal all four failures turned out to be fixtures building `draft` rows the policy
+deliberately hides; the MRP money assertion was proven by adding one missing
+fixture field and watching all five original expected values pass unchanged; and one
+agent corrected a diagnosis I had given it rather than accepting it.
