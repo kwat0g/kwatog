@@ -502,12 +502,22 @@ class MrpNettingTest extends TestCase
     public function test_mrp_plan_persists_bom_cost_summary_and_material_cost_diagnostics(): void
     {
         $bom = $this->createBom(2.0);
+        // `costed_at` is written by BomCostingService::recalculateBom() in the
+        // same forceFill as the five cost columns, so a BOM carrying costs with
+        // a null `costed_at` is a state production code cannot reach. Planning
+        // treats a never-costed BOM as stale and recosts it
+        // (BomCostingService::ensureFreshBom()), which would discard this
+        // snapshot. Stamp it so the fixture is a *frozen* snapshot, which is
+        // what this test is about: the plan multiplies the frozen BOM cost
+        // buckets by the remaining line quantity. Costing itself is pinned by
+        // BomCostingTest.
         $bom->forceFill([
             'material_cost' => '10.00',
             'labor_cost' => '5.00',
             'machine_cost' => '10.00',
             'overhead_cost' => '2.50',
             'total_cost' => '27.50',
+            'costed_at' => now(),
         ])->save();
 
         $plan = $this->engine->runForSalesOrder($this->createConfirmedSo(10));
