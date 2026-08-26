@@ -484,6 +484,27 @@ read it rather than trusting a copy here. One scheduling gotcha worth knowing wi
 ### Migration numbering
 Recent additions use 4-digit numbered (`0186_*`, `0187_*`, …). Highest as of 2026-08-20 = **0474**. New migrations use highest+1. The sequence is contiguous through 0474: `0472_add_link_path_to_dashboard_widgets` used to be missing from `main` because it lived on an unmerged frontend branch, and that branch has now merged. Mixed timestamp-style migrations (`2026_06_09_*`, `2026_08_16_*`) coexist for older HR/Payroll changes and recent BOM-costing work — don't introduce more.
 
+**"highest + 1" is WRONG when your migration depends on a timestamp-named one.**
+The migrator sorts by full filename, and `'0'` < `'2'`, so **every** `0NNN_` file
+runs before **every** `2026_*` file — regardless of when you wrote it. A new
+`0475_` that touches a table created by, or a column added by, a `2026_*`
+migration therefore runs *before* its dependency exists. Two sessions hit this on
+2026-08-26 and it does not always fail loudly: one added four constraints and
+**three were silently skipped** (`ADD CONSTRAINT IF NOT EXISTS`-style guards and
+`Schema::hasColumn()` checks no-op when the column isn't there yet), so
+`migrate:fresh` went green with the guards absent.
+
+So pick the name by dependency, not by convention:
+
+| your migration touches | use |
+|---|---|
+| only tables from `0NNN_` migrations | `0NNN_`, next unused prefix |
+| anything created/altered by a `2026_*` migration | `2026_MM_DD_HHMMSS_*`, dated after it |
+
+Check before writing, don't trust a max: `ls api/database/migrations | grep '^0475_'`
+for the numbered case, and `grep -rln '<table_or_column>' api/database/migrations | sort | tail -1`
+to find what actually creates the thing you depend on.
+
 **Four prefixes are used twice, and must NOT be renamed:**
 
 | prefix | the two files |
