@@ -22,23 +22,53 @@ class PortalInvitationService
     /** @return array{user: CustomerPortalUser, temporary_password: string} */
     public function inviteCustomer(Customer $customer, string $name, string $email): array
     {
+        $name = trim($name);
+        $email = strtolower(trim($email));
         $password = $this->temporaryPasswords->generate();
-        $user = CustomerPortalUser::withTrashed()->firstOrNew(['email' => strtolower(trim($email))]);
-        $user->forceFill([
-            'customer_id' => $customer->id,
-            'name' => trim($name),
-            'email' => strtolower(trim($email)),
-            'password' => $password,
-            'is_active' => true,
-            'must_change_password' => true,
-            'failed_login_attempts' => 0,
-            'locked_until' => null,
-            'password_changed_at' => null,
-        ]);
-        if ($user->trashed()) {
-            $user->restore();
-        }
-        $user->save();
+        $user = DB::transaction(function () use ($customer, $name, $email, $password): CustomerPortalUser {
+            // customer_portal_users.email is globally UNIQUE while the row holds
+            // a single customer_id, so this lookup IS the tenant boundary. The
+            // match must normalise case the same way the write does, or the
+            // boundary is bypassable by capitalisation; the row lock keeps two
+            // concurrent invitations from interleaving the ownership check with
+            // the write.
+            $user = CustomerPortalUser::withTrashed()
+                ->whereRaw('LOWER(email) = ?', [$email])
+                ->lockForUpdate()
+                ->first();
+
+            // Without this check, customer B inviting an address already held by
+            // customer A silently re-pointed A's portal login at B's orders,
+            // invoices and deliveries and reset it to a password B chose — an
+            // account takeover of A plus a denial of A's own access.
+            if ($user && (int) $user->customer_id !== (int) $customer->id) {
+                throw new BusinessRuleException('This email is already assigned to a different customer. Remove the existing portal account before assigning it elsewhere.');
+            }
+
+            $user ??= new CustomerPortalUser();
+            $user->forceFill([
+                'customer_id' => $customer->id,
+                'name' => $name,
+                'email' => $email,
+                'password' => $password,
+                'is_active' => true,
+                'must_change_password' => true,
+                'failed_login_attempts' => 0,
+                'locked_until' => null,
+                'password_changed_at' => null,
+            ]);
+            if ($user->trashed()) {
+                $user->restore();
+            }
+            $user->save();
+            // A new invitation is a credential rotation. The customer guard is
+            // session-backed, but the model still carries HasApiTokens and rows
+            // may predate that migration, so do not leave a stale bearer token
+            // behind a freshly rotated password.
+            $user->tokens()->delete();
+
+            return $user;
+        });
 
         $this->queueInvitation($user->email, $user->name, 'customer', $password, [
             'permission' => 'accounting.customers.manage',

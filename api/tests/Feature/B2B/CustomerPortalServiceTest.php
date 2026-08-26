@@ -436,6 +436,38 @@ class CustomerPortalServiceTest extends TestCase
         ]);
     }
 
+    /**
+     * `order_id` is the one customer-supplied foreign key on the portal's only
+     * write path, so it is also the only place a customer could aim a complaint
+     * at somebody else's order. The rule exists in CreateComplaintRequest; this
+     * pins it, because an untested ownership check is one refactor away from
+     * being a cross-customer write.
+     */
+    public function test_create_complaint_rejects_another_customers_order(): void
+    {
+        $customer = Customer::factory()->create();
+        $otherCustomer = Customer::factory()->create();
+        $user = $this->makePortalUser($customer);
+        $foreignOrder = SalesOrder::factory()->create(['customer_id' => $otherCustomer->id]);
+
+        $this->actAs($user)
+            ->postJson('/api/v1/b2b/customer/complaints', [
+                'order_id' => $foreignOrder->hash_id,
+                'severity' => 'critical',
+                'description' => 'Parts arrived damaged',
+                'affected_quantity' => 1,
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['order_id']);
+
+        // Neither customer may end up with the complaint: not the caller (who
+        // does not own the order) and not the owner (who never reported it).
+        $this->assertDatabaseMissing('customer_complaints', [
+            'sales_order_id' => $foreignOrder->id,
+        ]);
+        $this->assertDatabaseCount('customer_complaints', 0);
+    }
+
     public function test_portal_8d_report_requires_finalized_report_and_terminal_status(): void
     {
         $customer = Customer::factory()->create();
@@ -467,7 +499,7 @@ class CustomerPortalServiceTest extends TestCase
             'finalized_at' => now(),
         ]);
 
-        NonConformanceReport::create([
+        $ncr = NonConformanceReport::create([
             'ncr_number' => 'NCR-PORTAL-'.substr(uniqid(), -6),
             'source' => 'customer_complaint',
             'severity' => 'medium',
@@ -478,6 +510,13 @@ class CustomerPortalServiceTest extends TestCase
             'disposition' => 'use_as_is',
             'created_by' => $internalUser->id,
         ]);
+        // ComplaintService links BOTH directions after the handoff succeeds
+        // (ComplaintService::create/requestNcr forceFill `ncr_id`), and the
+        // portal gate reads the forward link `CustomerComplaint::ncr()`, a
+        // belongsTo on customer_complaints.ncr_id. Setting only the NCR's
+        // reverse complaint_id leaves that relation null, so the fixture — not
+        // the gate — was what withheld the finalized report.
+        $complaint->forceFill(['ncr_id' => $ncr->id])->save();
 
         $this->getJson("/api/v1/b2b/customer/complaints/{$complaint->hash_id}/8d-report")
             ->assertOk()

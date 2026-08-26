@@ -25,6 +25,7 @@ import { CompanyName } from '@/components/brand/CompanyName';
 export default function CustomerComplaintsPage() {
  const queryClient = useQueryClient();
  const [showForm, setShowForm] = useState(false);
+ const [orderId, setOrderId] = useState('');
  const [severity, setSeverity] = useState('');
  const [description, setDescription] = useState('');
  const [affectedQty, setAffectedQty] = useState('');
@@ -42,6 +43,18 @@ export default function CustomerComplaintsPage() {
  queryFn: () => customerPortalApi.complaintOptions(),
  });
 
+ // Order provenance for the complaint form. The backend already validates that
+ // the id decodes, belongs to THIS customer and is not cancelled
+ // (CreateComplaintRequest), so this select only has to offer a sane shortlist —
+ // it is never the authority on ownership. Cancelled orders are filtered out
+ // because the server refuses them, and only fetched while the form is open.
+ const { data: linkableOrdersPage } = useQuery({
+ queryKey: ['portal', 'customer', 'complaint-linkable-orders'],
+ queryFn: () => customerPortalApi.listOrders({ per_page: 100 }),
+ enabled: showForm,
+ });
+ const linkableOrders = (linkableOrdersPage?.data ?? []).filter((o) => o.status !== 'cancelled');
+
  const { data: complaintsPage, isLoading, isError, refetch } = useQuery({
  queryKey: ['portal', 'customer', 'complaints', { page, perPage, status: statusFilter, search: debouncedSearch, dateFrom, dateTo }],
  queryFn: () => customerPortalApi.listComplaints({
@@ -58,6 +71,7 @@ export default function CustomerComplaintsPage() {
 
  const createMut = useMutation({
  mutationFn: () => customerPortalApi.createComplaint({
+ order_id: orderId || undefined,
  severity,
  description,
  affected_quantity: parseInt(affectedQty, 10),
@@ -68,9 +82,13 @@ export default function CustomerComplaintsPage() {
  setDescription('');
  setSeverity('');
  setAffectedQty('');
+ setOrderId('');
  queryClient.invalidateQueries({ queryKey: ['portal', 'customer', 'complaints'] });
  },
- onError: () => toast.error('Failed to submit complaint.'),
+ // Surface the server's own rule text — "The order ID is invalid or does not
+ // belong to your account." is far more actionable than a generic failure.
+ onError: (e: Error & { response?: { data?: { message?: string } } }) =>
+ toast.error(e.response?.data?.message ?? 'Failed to submit complaint.'),
  });
 
  const open8d = async (complaintId: string) => {
@@ -110,6 +128,19 @@ export default function CustomerComplaintsPage() {
  {!isLoading && !isError && showForm && (
  <Panel title="Submit a complaint">
  <form onSubmit={(e) => { e.preventDefault(); createMut.mutate(); }} className="flex flex-col gap-3">
+ <Select
+ label="Related order"
+ helper="Optional. Linking the order carries your complaint through to the quality investigation."
+ value={orderId}
+ onChange={(e) => setOrderId(e.target.value)}
+ >
+ <option value="">— Not order specific —</option>
+ {linkableOrders.map((order) => (
+ <option key={order.id} value={order.id}>
+ {order.so_number}{order.date ? ` · ${order.date}` : ''}
+ </option>
+ ))}
+ </Select>
  <Select label="Severity" value={severity} onChange={(e) => setSeverity(e.target.value)}>
  <option value="">— Select —</option>
  {(complaintOptions?.severities ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}

@@ -185,7 +185,17 @@ class CustomerPortalController extends Controller
         $stream = $disk->readStream($proof->file_path);
         abort_unless(is_resource($stream), 404, 'Proof file could not be opened.');
         $filename = basename((string) $proof->file_name);
-        $filename = preg_replace('/[\r\n"\\]/', '', $filename) ?: 'delivery-proof';
+        // Strip every C0 control character, DEL, the quote and the backslash:
+        // all of them can terminate or forge a Content-Disposition parameter.
+        //
+        // The class is written with hex escapes and a doubled backslash on
+        // purpose. The obvious spelling — '/[\r\n"\\]/' — is a trap: in a
+        // single-quoted PHP string `\\` collapses to ONE backslash, so PCRE
+        // received `[\r\n"\]`, read `\]` as an escaped literal `]`, and never
+        // closed the class. preg_replace() then failed to compile, returned
+        // null, and the warning Laravel promotes to ErrorException turned every
+        // proof download into a 500.
+        $filename = preg_replace('/[\x00-\x1f\x7f"\\\\]/', '', $filename) ?: 'delivery-proof';
         $asciiFilename = preg_replace('/[^A-Za-z0-9._-]/', '_', $filename) ?: 'delivery-proof';
 
         return response()->stream(
