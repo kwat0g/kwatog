@@ -237,8 +237,8 @@ class InvoiceService
                 $this->assertInvoiceMatchesConfirmedDelivery($lockedInvoice, $delivery);
             }
 
-            $arId        = $this->configuredAccountId($this->accounts->ar(), AccountType::Asset);
-            $vatOutputId = $this->configuredAccountId($this->accounts->vatOutput(), AccountType::Liability);
+            $arId        = $this->configuredAccountId($this->accounts->ar());
+            $vatOutputId = $this->configuredAccountId($this->accounts->vatOutput());
 
             $lines = [];
             $lines[] = [
@@ -418,7 +418,7 @@ class InvoiceService
                 'created_by'       => $by->id,
             ]);
 
-            $arId = $this->configuredAccountId($this->accounts->ar(), AccountType::Asset);
+            $arId = $this->configuredAccountId($this->accounts->ar());
             $je = $this->journals->create([
                 'date'           => $coll->collection_date->toDateString(),
                 'description'    => "Collection for Invoice {$lockedInvoice->invoice_number}",
@@ -642,9 +642,14 @@ class InvoiceService
         }
     }
 
-    private function configuredAccountId(string $code, AccountType $type): int
+    /**
+     * Resolve a configured control account. The expected classification comes
+     * from {@see AccountingAccountPolicyService::typeFor()} so this service does
+     * not keep its own copy of the AR/VAT/discount type rules.
+     */
+    private function configuredAccountId(string $code): int
     {
-        return $this->postingAccounts->configuredIdByCode($code, $type);
+        return $this->accounts->controlAccountId($code);
     }
 
     /**
@@ -788,6 +793,6 @@ class InvoiceService
     /** OGAMI-008 — account debited for the Senior/PWD discount contra-revenue line. */
     private function discountAccountId(): int
     {
-        return $this->configuredAccountId($this->accounts->discount(), AccountType::Revenue);
+        return $this->configuredAccountId($this->accounts->discount());
     }
 }

@@ -379,16 +379,6 @@ class CreditNoteService
 
     private function accountId(string $code): int
     {
-        $type = match ($code) {
-            $this->accounts->ar() => AccountType::Asset,
-            $this->accounts->ap() => AccountType::Liability,
-            $this->accounts->vatOutput() => AccountType::Liability,
-            $this->accounts->vatInput() => AccountType::Asset,
-            default => null,
-        };
-
-        return $type
-            ? $this->postingAccounts->configuredIdByCode($code, $type)
-            : $this->postingAccounts->idByCode($code);
+        return $this->accounts->controlAccountId($code);
     }
 }

@@ -185,7 +185,12 @@ function collectIds(nodes: Account[]): string[] {
  return ids;
 }
 
-function TreeRow({
+/**
+ * One account row. `canManage` and `canChangeStatus` are the two independent
+ * COA grants, passed in rather than read from the store so the role matrix is
+ * testable without an authenticated shell — see index.permissions.test.tsx.
+ */
+export function TreeRow({
  node, depth, expanded, onToggle, canManage, canChangeStatus, onStatusChange, statusPending,
 }: {
  node: Account;

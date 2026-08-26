@@ -1027,7 +1027,7 @@ class BillService
 
     private function accountId(string $code): int
     {
-        return $this->postingAccounts->configuredIdByCode($code);
+        return $this->accounts->controlAccountId($code);
     }
 
     private function expenseAccountId(mixed $value): int

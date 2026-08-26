@@ -16,6 +16,7 @@ use App\Modules\Auth\Models\User;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 use Throwable;
@@ -26,19 +27,17 @@ use Throwable;
  * The parent holds the month lock while a child enters the actual posting or
  * scheduler service. Releasing the lock after changing the authoritative row
  * proves that the child cannot commit from an earlier OPEN read.
+ *
+ * Every test here commits the RefreshDatabase transaction, because a forked
+ * child on its own connection can only see committed fixtures. That makes the
+ * usual per-test rollback a no-op, so this class owns rebuilding the database
+ * it dirtied — see {@see tearDownAfterClass()}. Each test confines itself to
+ * one distinct month of 2031 and its own factory user, so the committed rows
+ * cannot reach another test in this class.
  */
 class AccountingPeriodPostingConcurrencyTest extends TestCase
 {
     use RefreshDatabase;
-
-    /** @var array<int, int> */
-    private array $fixtureJournalIds = [];
-
-    /** @var array<int, int> */
-    private array $fixtureUserIds = [];
-
-    /** @var array<int, array{year:int, month:int}> */
-    private array $fixturePeriods = [];
 
     private string $currentWorkerResultPath = '';
 
@@ -49,13 +48,21 @@ class AccountingPeriodPostingConcurrencyTest extends TestCase
         $this->seed(ChartOfAccountsSeeder::class);
     }
 
-    protected function tearDown(): void
+    /**
+     * Hand the next test class a freshly migrated database.
+     *
+     * The committed fixtures cannot be hand-deleted, and must not be: `users`
+     * is referenced by `audit_logs` with ON DELETE SET NULL while `audit_logs`
+     * carries an append-only trigger, so deleting an audited user raises
+     * "Audit logs are immutable."; posted `journal_entry_lines` are protected
+     * the same way. Those triggers are the audit-integrity guarantee, so the
+     * reset happens at the schema level instead of by chipping at them.
+     */
+    public static function tearDownAfterClass(): void
     {
-        try {
-            $this->cleanupFixtures();
-        } finally {
-            parent::tearDown();
-        }
+        RefreshDatabaseState::$migrated = false;
+
+        parent::tearDownAfterClass();
     }
 
     public function test_manual_post_waits_for_close_on_an_existing_period(): void
@@ -68,6 +75,7 @@ class AccountingPeriodPostingConcurrencyTest extends TestCase
         $this->commitFixtureTransaction();
 
         $result = $this->runBlockedWorker(
+            8,
             function () use ($je, $admin): void {
                 app(JournalEntryService::class)->post(
                     JournalEntry::findOrFail($je->id),
@@ -94,10 +102,10 @@ class AccountingPeriodPostingConcurrencyTest extends TestCase
 
         $admin = $this->admin();
         $je = $this->draft($admin, '2031-09-15');
-        $this->fixturePeriods[] = ['year' => 2031, 'month' => 9];
         $this->commitFixtureTransaction();
 
         $result = $this->runBlockedWorker(
+            9,
             function () use ($je, $admin): void {
                 app(JournalEntryService::class)->postSystem(
                     JournalEntry::findOrFail($je->id),
@@ -132,6 +140,7 @@ class AccountingPeriodPostingConcurrencyTest extends TestCase
         $this->commitFixtureTransaction();
 
         $result = $this->runBlockedWorker(
+            10,
             function () use ($je, $admin): void {
                 app(JournalEntryService::class)->post(
                     JournalEntry::findOrFail($je->id),
@@ -164,15 +173,18 @@ class AccountingPeriodPostingConcurrencyTest extends TestCase
             'month' => 11,
             'status' => AccountingPeriodStatus::Reopened,
         ]);
-        $period->update([
+        // reopened_* and reopen_reason are deliberately unfillable: only the
+        // service may set them. Fixtures assign them directly for the same
+        // reason, rather than widening $fillable for a test.
+        $period->forceFill([
             'reopened_at' => now()->subHours(49),
             'reopened_by' => $admin->id,
             'reopen_reason' => 'Concurrency harness',
-        ]);
-        $this->fixturePeriods[] = ['year' => 2031, 'month' => 11];
+        ])->save();
         $this->commitFixtureTransaction();
 
         $result = $this->runBlockedWorker(
+            11,
             function (): void {
                 $count = app(AccountingPeriodService::class)->relockStaleReopenedPeriods(48);
                 file_put_contents($this->workerResultPath(), (string) $count);
@@ -201,32 +213,27 @@ class AccountingPeriodPostingConcurrencyTest extends TestCase
 
     private function admin(): User
     {
-        $admin = User::factory()->create([
+        return User::factory()->create([
             'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
             'is_active' => true,
         ]);
-        $this->fixtureUserIds[] = $admin->id;
-
-        return $admin;
     }
 
     private function openPeriod(int $year, int $month): AccountingPeriod
     {
-        $period = AccountingPeriod::create([
+        return AccountingPeriod::create([
             'year' => $year,
             'month' => $month,
             'status' => AccountingPeriodStatus::Open,
         ]);
-        $this->fixturePeriods[] = ['year' => $year, 'month' => $month];
-
-        return $period;
     }
 
     private function draft(User $admin, string $date): JournalEntry
     {
         $cash = Account::query()->where('code', '1010')->firstOrFail();
         $equity = Account::query()->where('code', '3010')->firstOrFail();
-        $je = app(JournalEntryService::class)->create([
+
+        return app(JournalEntryService::class)->create([
             'date' => $date,
             'description' => 'Period lock concurrency harness',
             'lines' => [
@@ -234,16 +241,18 @@ class AccountingPeriodPostingConcurrencyTest extends TestCase
                 ['account_id' => $equity->hash_id, 'debit' => '0', 'credit' => '100.00'],
             ],
         ], $admin);
-        $this->fixtureJournalIds[] = $je->id;
-
-        return $je;
     }
 
     /**
-     * @param callable():void $worker
-     * @param callable():void $afterWorkerStarted
+     * Hold the month's advisory lock, start the worker, then hand the lock over.
+     *
+     * @param  int  $month  The 2031 month under test. It must name the same lock
+     *                      key the service takes, so it is passed explicitly
+     *                      rather than inferred from fixture bookkeeping.
+     * @param  callable():void  $worker
+     * @param  callable():void  $afterWorkerStarted
      */
-    private function runBlockedWorker(callable $worker, callable $afterWorkerStarted, bool $workerWritesResult = false): string
+    private function runBlockedWorker(int $month, callable $worker, callable $afterWorkerStarted, bool $workerWritesResult = false): string
     {
         $resultPath = $this->workerResultPath();
         $this->currentWorkerResultPath = $resultPath;
@@ -252,7 +261,7 @@ class AccountingPeriodPostingConcurrencyTest extends TestCase
         DB::beginTransaction();
         DB::select(
             'SELECT pg_advisory_xact_lock(hashtext(?))',
-            ['accounting-period:2031-'.str_pad((string) $this->latestFixtureMonth(), 2, '0', STR_PAD_LEFT)],
+            [sprintf('accounting-period:%04d-%02d', 2031, $month)],
         );
 
         [$parentSocket, $childSocket] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, 0);
@@ -298,18 +307,6 @@ class AccountingPeriodPostingConcurrencyTest extends TestCase
         return $result;
     }
 
-    private function latestFixtureMonth(): int
-    {
-        $period = end($this->fixturePeriods);
-        if ($period !== false) {
-            return $period['month'];
-        }
-
-        // The row-less test registers its month only when cleanup metadata is
-        // needed; its journal date is the source of truth for the lock key.
-        return 9;
-    }
-
     private function workerResultPath(): string
     {
         return $this->currentWorkerResultPath !== ''
@@ -321,23 +318,6 @@ class AccountingPeriodPostingConcurrencyTest extends TestCase
     {
         if (DB::transactionLevel() > 0) {
             DB::commit();
-        }
-    }
-
-    private function cleanupFixtures(): void
-    {
-        if ($this->fixtureJournalIds !== []) {
-            DB::table('journal_entry_lines')->whereIn('journal_entry_id', $this->fixtureJournalIds)->delete();
-            DB::table('journal_entries')->whereIn('id', $this->fixtureJournalIds)->delete();
-        }
-        foreach ($this->fixturePeriods as $period) {
-            DB::table('accounting_periods')
-                ->where('year', $period['year'])
-                ->where('month', $period['month'])
-                ->delete();
-        }
-        if ($this->fixtureUserIds !== []) {
-            DB::table('users')->whereIn('id', $this->fixtureUserIds)->delete();
         }
     }
 }
