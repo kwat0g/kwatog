@@ -4,15 +4,14 @@ declare(strict_types=1);
 
 namespace App\Modules\B2B\Services;
 
-use App\Common\Models\AuditLog;
 use App\Common\Services\SettingsService;
 use App\Modules\Admin\Services\LoginHistoryService;
+use App\Modules\Auth\Services\AuthAuditLogger;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -29,6 +28,7 @@ class B2bAuthService
     public function __construct(
         private readonly LoginHistoryService $loginHistory,
         private readonly SettingsService $settings,
+        private readonly AuthAuditLogger $audit,
     ) {}
 
     /**
@@ -176,47 +176,20 @@ class B2bAuthService
         return ['token' => $result['token'], 'user' => $user];
     }
 
+    /**
+     * Delegates to AuthAuditLogger::portal(), which writes the same row plus the
+     * actor_type / source_command / correlation_id this method used to omit.
+     *
+     * This used to hold a second, independent copy of the action-compaction logic
+     * ('portal_login.ok' for any .success event), justified by the same comment
+     * AuthAuditLogger carried: "audit_logs.action is intentionally bounded to 20
+     * characters". Migration 0176 widened that column to varchar(40), so both
+     * copies were reasoning from a premise that had stopped being true, and the
+     * real event names ('supplier.login.success', 22 chars) fit comfortably. The
+     * portal auth tests query for the real names and found nothing.
+     */
     private function logAuthEvent(string $event, Model $user, Request $request): void
     {
-        Log::channel('auth')->info($event, [
-            'user_id'    => $user->getKey(),
-            'email'      => $user->email,
-            'audience'   => $user::class,
-            'ip'         => $request->ip(),
-            'user_agent' => $request->userAgent(),
-        ]);
-
-        try {
-            // audit_logs.action is intentionally bounded to 20 characters.
-            // Keep the rich event name in the auth channel and use a compact
-            // stable action here, with the portal model + audience retaining
-            // the principal and event context.
-            $auditAction = str_ends_with($event, '.success')
-                ? 'portal_login.ok'
-                : (str_ends_with($event, '.locked_threshold')
-                    ? 'login.threshold'
-                    : (str_ends_with($event, '.locked') ? 'portal_login.locked' : 'portal_login.fail'));
-
-            AuditLog::create([
-                // user_id is the internal users.id FK — portal users are a
-                // different population, so it stays null. The portal user is
-                // identified by model_type + model_id below.
-                'user_id'    => null,
-                'action'     => $auditAction,
-                'model_type' => $user::class,
-                'model_id'   => $user->getKey(),
-                'old_values' => null,
-                'new_values' => ['email' => $user->email, 'event' => $event],
-                'ip_address' => $request->ip(),
-                'user_agent' => $request->userAgent(),
-                'created_at' => now(),
-            ]);
-        } catch (\Throwable $e) {
-            Log::channel('auth')->warning('audit_log_mirror_failed', [
-                'event'   => $event,
-                'user_id' => $user->getKey(),
-                'error'   => $e->getMessage(),
-            ]);
-        }
+        $this->audit->portal($event, $user, $request);
     }
 }

@@ -201,8 +201,14 @@ class AuthEventsAuditTest extends TestCase
     {
         $original = 'Original-1!';
         $user = $this->makeUser($original);
-        $currentSessionId = 'auth-current-'.uniqid();
-        $otherSessionId = 'auth-other-'.uniqid();
+        // Session IDs must be exactly 40 alphanumeric characters. Store::setId()
+        // silently swaps an invalid id for a fresh random one (isValidId() =>
+        // ctype_alnum && strlen === 40), so the previous 'auth-current-'.uniqid()
+        // — 26 chars, hyphenated — never reached changePassword(). It compared
+        // against a random id instead, matched neither row, and deleted BOTH,
+        // making this read as a production bug that revokes the current session.
+        $currentSessionId = str_pad('authcurrent'.bin2hex(random_bytes(8)), 40, 'a');
+        $otherSessionId = str_pad('authother'.bin2hex(random_bytes(8)), 40, 'b');
 
         DB::table('sessions')->insert([
             [
