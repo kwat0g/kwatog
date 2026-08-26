@@ -105,6 +105,35 @@ guarantee. Evidence for each is in the named module's `fix-log.md`.
    settings row, and the validator entry. Zero test coverage either way.
    → `platform/approval-workflows`
 
+10. **The local suite and CI disagree about `APP_ENV`, and the comment saying
+    otherwise is wrong.** `config('app.env')` resolves to **`local`**, not
+    `testing`, when the suite runs here. `api/phpunit.xml`'s
+    `<env name="APP_ENV" value="testing" force="true"/>` writes `$_ENV` and
+    `putenv()` but **never `$_SERVER`**, and phpdotenv's `ServerConstAdapter` reads
+    `$_SERVER` first — where `docker-compose.yml:12` has already put
+    `APP_ENV=local`. Measured inside PHPUnit: `$_SERVER=local`, `$_ENV=testing`,
+    `getenv=testing`, resolved config **`local`**.
+
+    Consequence: all **5** `app()->environment('testing')` branches are dead
+    locally and live in CI — `HasHashId::resolveRouteBinding`,
+    `resolveSoftDeletableRouteBinding`, `ActivityFeedService`,
+    `AuditLogController::decodePublicId`, and `LogSlowQueries`. So CI and local
+    disagree about identifier handling on **every hashid route**, and a test can
+    pass in one and fail in the other. Three entity-trail tests were doing exactly
+    that.
+
+    **`api/phpunit.xml:40-56` documents this under "finding F-042" and asserts
+    `force="true"` resolves it. It does not.** A comment asserting a fix that does
+    not work is worse than no comment, because it stops the next person checking.
+
+    Not fixed autonomously: it is a shared file with ~2400-test blast radius, and
+    changing it flips which `.env` file Laravel loads. Your call whether the right
+    move is to set `APP_ENV=testing` in the compose api service, drop the
+    `$_SERVER` value, or delete the five escape hatches and make the tests use
+    hashids everywhere (my preference — the hatches exist only to let tests skip
+    encoding, and hiding a production code path behind an env check is what let
+    this go unnoticed). → `platform/audit-activity`
+
 Also queued behind you, not a decision but only you can do it:
 **`sudo chown -R $USER spa/node_modules spa/test-results`** (or `rm -rf
 spa/node_modules/.vite-temp spa/test-results`). Root ownership there blocks BOTH
