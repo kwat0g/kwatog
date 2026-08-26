@@ -10,6 +10,7 @@ use App\Modules\Attendance\Models\OvertimeRequest;
 use App\Modules\Attendance\Services\OvertimeService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\HR\Models\Employee;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
@@ -22,7 +23,7 @@ use Tests\TestCase;
  * Event::fake() intercepts dispatches without running actual listeners.
  *
  * Requires RolePermissionSeeder because OvertimeService checks role/permission
- * relationships and userWithRole() looks up role slugs.
+ * relationships and departmentHeadFor() looks up role slugs.
  */
 class OvertimeNotificationTest extends TestCase
 {
@@ -36,10 +37,29 @@ class OvertimeNotificationTest extends TestCase
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private function userWithRole(string $slug): User
+    /**
+     * An approver who is actually allowed to decide $ot.
+     *
+     * A user created with only a `role_id` has no `employee_id`, so it has no
+     * department either, and `OvertimeDecisionPolicy::assertCanDecide()` correctly
+     * refuses it — an approver who cannot see a request must not decide it. That
+     * refusal is the guard working, not a bug, so the fixture has to supply the
+     * missing link: an employee in the requester's own department.
+     */
+    private function departmentHeadFor(OvertimeRequest $ot): User
     {
-        $role = Role::where('slug', $slug)->firstOrFail();
-        return User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
+        $requester = $ot->employee ?? Employee::query()->findOrFail($ot->employee_id);
+
+        $approverEmployee = Employee::factory()->create([
+            'department_id' => $requester->department_id,
+            'position_id'   => $requester->position_id,
+        ]);
+
+        return User::factory()->create([
+            'role_id'     => Role::where('slug', 'department_head')->firstOrFail()->id,
+            'employee_id' => $approverEmployee->id,
+            'is_active'   => true,
+        ]);
     }
 
     // ── Tests ─────────────────────────────────────────────────────────────────
@@ -71,7 +91,7 @@ class OvertimeNotificationTest extends TestCase
         Event::fake([OvertimeRequestDecided::class]);
 
         $ot       = OvertimeRequest::factory()->pending()->create();
-        $approver = $this->userWithRole('department_head');
+        $approver = $this->departmentHeadFor($ot);
 
         app(OvertimeService::class)->approve($ot, $approver);
 
@@ -89,7 +109,7 @@ class OvertimeNotificationTest extends TestCase
         Event::fake([OvertimeRequestDecided::class]);
 
         $ot       = OvertimeRequest::factory()->pending()->create();
-        $approver = $this->userWithRole('department_head');
+        $approver = $this->departmentHeadFor($ot);
 
         app(OvertimeService::class)->reject($ot, $approver, 'No budget.');
 
