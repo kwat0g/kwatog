@@ -173,6 +173,44 @@ guarantee. Evidence for each is in the named module's `fix-log.md`.
     `PayrollMoneyFindingsRegressionTest` is left **red on purpose** — it is a true
     statement about production. → `people/payslip-statutory-disbursement`
 
+13. **IATF Chain 2 control is half-closed: `coa_verified` can never become true.**
+    I verified this independently. The only writes to `grn_items.coa_verified` in
+    `api/app` are two hard-coded `false` literals (`GrnService.php:240`, `:437`), and
+    the Quality side never touches it either. Yet it is published at
+    `GrnItemResource.php:38` and the SPA renders
+    `spa/src/pages/inventory/grn/detail.tsx:410` as "Verified by Quality" or
+    "Pending Quality verification" — so that label can only ever read **Pending,
+    permanently**.
+
+    The receiving-side guard is correct and should stay: goods-receiving's own finding
+    GRN-07 classifies receiver self-certification as broken, and
+    `moisture_percentage`, `coa_document_path` and `material_lot_number` all still
+    persist from receiving — only the *verdict* is refused. But nobody, **including
+    QC**, can record that a supplier's certificate of analysis was actually checked.
+    For a resin cert on an IATF-controlled incoming material, that is a control that
+    looks present and is not. Three options are written up: model COA as an inspection
+    spec parameter, add a dedicated `quality.coa.verify` transition, or drop the flag
+    from the contract. Decides who may certify supplier material quality.
+    → `quality/calibration-quality-analytics` + `inventory/goods-receiving`
+
+14. **The MRP planning run mutates frozen cost snapshots.** M02's planning-time recost
+    (`BomCostingService.php:85`) rewrites five money columns, `cost_basis`, `costed_at`
+    and every `BomItem.unit_cost`/`extended_cost` from inside a planning run. That
+    directly contradicts the unresolved mutable-vs-immutable costing question the
+    module's own `audit-report.md:123-125` raises. Whether a plan may retroactively
+    change the costs a previous plan was built on is a business call.
+    → `manufacturing/bom-mrp-planning`
+
+    Also confirmed and unfixed there: the **MRP cancellation race**.
+    `runForActiveSalesOrders()` snapshots candidates outside any transaction and
+    `runForSalesOrder()` locks the prior plan but never re-reads `$so->status`, while
+    `SalesOrderService::cancel()` correctly re-reads under lock *and cleans up* MRP
+    artifacts. So a run committing after that cleanup writes a fresh Active plan,
+    draft auto-PRs and planned work orders against a cancelled order that nothing
+    will collect. The mechanical fix is small; the decision is what the run then
+    *reports* (silent skip / failed-SO, which makes routine cancellations render as
+    `partial` and trips `rerun()`'s throw / a new skipped counter).
+
 Also queued behind you, not a decision but only you can do it:
 **`sudo chown -R $USER spa/node_modules spa/test-results`** (or `rm -rf
 spa/node_modules/.vite-temp spa/test-results`). Root ownership there blocks BOTH
