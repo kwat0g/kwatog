@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Accounting\Controllers;
 
 use App\Common\Services\SettingsService;
+use App\Common\Support\Money;
 use App\Modules\Accounting\Requests\StatementAsOfRequest;
 use App\Modules\Accounting\Requests\StatementDateRangeRequest;
 use App\Modules\Accounting\Services\BillService;
@@ -43,7 +44,12 @@ class FinancialStatementController
             $rows[] = ['Total', $currency, '', '', '', $data['totals']['debit'], $data['totals']['credit'], '', ''];
             $rows[] = [
                 'Status', $currency, '', 'Reconciled', '', '', '',
-                $data['totals']['debit'] === $data['totals']['credit'] ? 'true' : 'false', '',
+                // Money::cmp, not ===. Both totals are scale-2 accumulations today,
+                // so string identity happens to agree, but comparing decimal
+                // strings byte-wise reports "unreconciled" the moment a scale
+                // differs ('1000.0' vs '1000.00'). Reconciliation is a numeric
+                // question and BalanceSheetService already answers it this way.
+                Money::cmp($data['totals']['debit'], $data['totals']['credit']) === 0 ? 'true' : 'false', '',
             ];
             return $this->csv("trial-balance-{$from->toDateString()}-{$to->toDateString()}.csv",
                 ['Row Type', 'Currency', 'Code', 'Name', 'Type', 'Debit Total', 'Credit Total', 'Balance', 'Side'],

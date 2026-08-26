@@ -6,4 +6,4 @@ roles: system_admin, finance_officer
 depends_on: journal-ledger, accounts-payable, accounts-receivable
 surface: M
 status: 🔁 Needs Re-audit
-last_session: 2026-08-24
+last_session: 2026-08-26

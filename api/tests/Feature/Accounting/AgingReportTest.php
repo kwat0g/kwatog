@@ -119,10 +119,46 @@ class AgingReportTest extends TestCase
             ->assertStatus(200);
 
         $this->assertStringContainsString('text/csv', $res->headers->get('Content-Type'));
-        $body = $res->streamedContent();
-        $this->assertStringContainsString('Row Type,Currency,Customer,Current,1-30', $body);
-        $this->assertStringContainsString('Honda Cars Phils', $body);
-        $this->assertStringContainsString('TOTAL', $body);
+
+        // Decode instead of string-matching the raw body. fputcsv() encloses any
+        // field containing a space, so the header is emitted as `"Row Type",...`
+        // and a hardcoded unquoted header string can never match. Asserting the
+        // decoded columns pins the contract that actually matters for a finance
+        // export — every label AND its position — rather than the writer's
+        // quoting rules.
+        $rows = $this->parseCsv($res->streamedContent());
+
+        $this->assertSame(
+            ['Row Type', 'Currency', 'Customer', 'Current', '1-30', '31-60', '61-90', '91+', 'Total'],
+            $rows[0],
+        );
+        // A dropped or added column silently shifts every money value one bucket
+        // over, so pin the width of every row against the header.
+        foreach ($rows as $i => $row) {
+            $this->assertCount(count($rows[0]), $row, "CSV row {$i} must have the same width as the header");
+        }
+        // Due 10 days ago, so the 750.00 belongs in 1-30 — never in Current.
+        $this->assertSame(
+            ['Account', 'PHP', 'Honda Cars Phils', '0.00', '750.00', '0.00', '0.00', '0.00', '750.00'],
+            $rows[1],
+        );
+        $this->assertSame(
+            ['Total', 'PHP', 'TOTAL', '0.00', '750.00', '0.00', '0.00', '0.00', '750.00'],
+            $rows[2],
+        );
+    }
+
+    /**
+     * @return list<list<string>>
+     */
+    private function parseCsv(string $body): array
+    {
+        $lines = array_values(array_filter(
+            preg_split('/\R/', trim($body)) ?: [],
+            static fn (string $line): bool => $line !== '',
+        ));
+
+        return array_map(static fn (string $line): array => str_getcsv($line), $lines);
     }
 
     public function test_aging_requires_statements_permission(): void
