@@ -11,6 +11,7 @@ use App\Modules\Dashboard\Models\KpiDefinition;
 use App\Modules\Dashboard\Models\KpiSnapshot;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Accounting\Enums\InvoiceStatus;
+use App\Modules\Production\Enums\WorkOrderStatus;
 use Carbon\Carbon;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Facades\DB;
@@ -366,6 +367,17 @@ class KpiSnapshotService
         return round($availability * $performance * $quality * 100, 2);
     }
 
+    /**
+     * Defects per million parts inspected.
+     *
+     * The defect column is `defect_count` — the figure
+     * InspectionService::recordMeasurements() writes from the failed
+     * measurements. There is no `defects_found` column anywhere in the schema
+     * (migration 0100 / the live table both name it `defect_count`, and every
+     * other reader in Quality agrees), so summing that name aborted the whole
+     * monthly run. `completed_at` is only stamped on a completed inspection,
+     * so the BETWEEN already excludes draft/in-progress rows.
+     */
     private function computeDppm(int $year, int $month): ?float
     {
         $from = Carbon::create($year, $month, 1)->startOfDay()->toDateTimeString();
@@ -374,13 +386,14 @@ class KpiSnapshotService
         $totalInspected = (int) DB::table('inspections')
             ->whereBetween('completed_at', [$from, $to])
             ->sum('sample_size');
-        $totalDefects = (int) DB::table('inspections')
-            ->whereBetween('completed_at', [$from, $to])
-            ->sum('defects_found');
 
-        if ($totalInspected == 0) {
+        if ($totalInspected === 0) {
             return null;
         }
+
+        $totalDefects = (int) DB::table('inspections')
+            ->whereBetween('completed_at', [$from, $to])
+            ->sum('defect_count');
 
         return round(($totalDefects / $totalInspected) * 1_000_000, 2);
     }
@@ -498,6 +511,21 @@ class KpiSnapshotService
         return round(($overdue / $totalAr) * 100, 2);
     }
 
+    /**
+     * Budgeted vs actual for the fiscal YEAR, as a percentage.
+     *
+     * The budgeted column is `annual_total` — the generated-always column
+     * migration 0162 defines as jan+feb+…+dec. There is no `budgeted_amount`
+     * column, so the previous name aborted the monthly run. `annual_total` is
+     * the natural counterpart to `actual_total`, which the other half of this
+     * ratio already reads.
+     *
+     * NOTE (metric contract, not a schema issue): `$month` is deliberately
+     * unused because `actual_total` is a single annual figure, so this KPI is a
+     * year-to-date ratio and every month of a fiscal year snapshots the same
+     * value. Narrowing it to a month would need a month-resolved actuals
+     * source, which this table does not carry.
+     */
     private function computeBudgetUtilization(int $year, int $month): ?float
     {
         if (! DB::getSchemaBuilder()->hasTable('budget_line_items')) {
@@ -507,16 +535,17 @@ class KpiSnapshotService
             ->join('budgets', 'budget_line_items.budget_id', '=', 'budgets.id')
             ->join('fiscal_years', 'budgets.fiscal_year_id', '=', 'fiscal_years.id')
             ->where('fiscal_years.year', $year)
-            ->sum('budget_line_items.budgeted_amount');
+            ->sum('budget_line_items.annual_total');
+
+        if ($totalBudget == 0) {
+            return null;
+        }
+
         $totalActual = (float) DB::table('budget_line_items')
             ->join('budgets', 'budget_line_items.budget_id', '=', 'budgets.id')
             ->join('fiscal_years', 'budgets.fiscal_year_id', '=', 'fiscal_years.id')
             ->where('fiscal_years.year', $year)
             ->sum('budget_line_items.actual_total');
-
-        if ($totalBudget == 0) {
-            return null;
-        }
 
         return round(($totalActual / $totalBudget) * 100, 2);
     }
@@ -565,23 +594,57 @@ class KpiSnapshotService
         return round($cogs / $avgInventory * 12, 2); // annualized
     }
 
+    /**
+     * Work orders completed vs work orders due, as a percentage.
+     *
+     * The due-date column is `planned_end` (migration 0074 / the live table);
+     * there is no `scheduled_end`, so the previous name aborted the monthly
+     * run. `actual_end` on the numerator side is correct and unchanged.
+     *
+     * The in-flight status is `in_progress`. The filter used to name `started`,
+     * which WorkOrderStatus does not define and the check constraint
+     * `work_orders_status_lifecycle_check` rejects, so no row could ever match
+     * it: every running work order due in the month fell out of the
+     * denominator and the rate read high. Enum values, not literals, so the
+     * next rename is a compile-time problem rather than a silent zero.
+     *
+     * KNOWN metric-contract gaps left for a decision, NOT schema issues — see
+     * the M007-13/M007-14 entries in the audit fix log:
+     *   1. The denominator counts work due in the month (`planned_end`) while
+     *      the numerator counts work finished in the month (`actual_end`), so a
+     *      WO planned for July but finished in August is a July miss AND an
+     *      August hit. The ratio can therefore exceed 100%.
+     *   2. `work_orders` is soft-deleted and these raw queries ignore
+     *      `deleted_at`, so cancelled-and-deleted work still lands in the
+     *      denominator. computeAttendanceRate excludes soft deletes; this does
+     *      not.
+     */
     private function computeWoCompletionRate(int $year, int $month): ?float
     {
         $from = Carbon::create($year, $month, 1)->startOfDay()->toDateTimeString();
         $to = Carbon::create($year, $month, 1)->endOfMonth()->toDateTimeString();
 
         $total = (int) DB::table('work_orders')
-            ->whereIn('status', ['completed', 'closed', 'started', 'paused'])
-            ->whereBetween('scheduled_end', [$from, $to])
-            ->count();
-        $completed = (int) DB::table('work_orders')
-            ->whereIn('status', ['completed', 'closed'])
-            ->whereBetween('actual_end', [$from, $to])
+            ->whereIn('status', [
+                WorkOrderStatus::Completed->value,
+                WorkOrderStatus::Closed->value,
+                WorkOrderStatus::InProgress->value,
+                WorkOrderStatus::Paused->value,
+            ])
+            ->whereBetween('planned_end', [$from, $to])
             ->count();
 
-        if ($total == 0) {
+        if ($total === 0) {
             return null;
         }
+
+        $completed = (int) DB::table('work_orders')
+            ->whereIn('status', [
+                WorkOrderStatus::Completed->value,
+                WorkOrderStatus::Closed->value,
+            ])
+            ->whereBetween('actual_end', [$from, $to])
+            ->count();
 
         return round(($completed / $total) * 100, 2);
     }

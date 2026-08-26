@@ -244,14 +244,32 @@ class BadgeControllerTest extends TestCase
         ]);
 
         // ── Employee trainings (upcoming / expiring soon) ──────────────
+        // `assignment_key` is derived by EmployeeTraining::booted()'s `creating`
+        // hook, which a raw DB::table() insert bypasses — every row would
+        // otherwise fall to the column default '__unscheduled__' and trip
+        // uq_emp_training_assignment_key (employee_id, training_id,
+        // assignment_key) on the second insert. Mirror the hook explicitly.
+        //
+        // The two completed/expiring rows also need DIFFERENT trainings: the
+        // key for an unscheduled row is the '__unscheduled__' sentinel, so one
+        // employee may hold only one unscheduled assignment per training. That
+        // is the invariant migration 2026_08_25_233000 added on purpose when it
+        // replaced the NULL-bearing uq_emp_training_scheduled (Postgres treats
+        // NULLs as distinct, so the old index let both rows through).
         $employee = Employee::factory()->create();
         $training = Training::create(['name' => 'IATF Awareness']);
+        $certTraining = Training::create(['name' => 'Forklift Certification']);
         DB::table('employee_trainings')->insert([
-            ['employee_id' => $employee->id, 'training_id' => $training->id, 'scheduled_for' => today()->addDays(7)->toDateString(), 'completed_at' => null, 'expires_at' => null, 'status' => 'scheduled', 'created_at' => now(), 'updated_at' => now()],
-            ['employee_id' => $employee->id, 'training_id' => $training->id, 'scheduled_for' => null, 'completed_at' => today()->subDays(10)->toDateString(), 'expires_at' => today()->addDays(15)->toDateString(), 'status' => 'completed', 'created_at' => now(), 'updated_at' => now()],
-            ['employee_id' => $employee->id, 'training_id' => $training->id, 'scheduled_for' => today()->addDays(40)->toDateString(), 'completed_at' => null, 'expires_at' => null, 'status' => 'scheduled', 'created_at' => now(), 'updated_at' => now()],
-            ['employee_id' => $employee->id, 'training_id' => $training->id, 'scheduled_for' => null, 'completed_at' => today()->subDays(30)->toDateString(), 'expires_at' => today()->addDays(60)->toDateString(), 'status' => 'completed', 'created_at' => now(), 'updated_at' => now()],
-            ['employee_id' => $employee->id, 'training_id' => $training->id, 'scheduled_for' => today()->addDays(3)->toDateString(), 'completed_at' => null, 'expires_at' => null, 'status' => 'cancelled', 'created_at' => now(), 'updated_at' => now()],
+            // Scheduled inside the 14-day window → counts.
+            ['employee_id' => $employee->id, 'training_id' => $training->id, 'assignment_key' => today()->addDays(7)->toDateString(), 'scheduled_for' => today()->addDays(7)->toDateString(), 'completed_at' => null, 'expires_at' => null, 'status' => 'scheduled', 'created_at' => now(), 'updated_at' => now()],
+            // Completed, expiring inside the 30-day window → counts.
+            ['employee_id' => $employee->id, 'training_id' => $training->id, 'assignment_key' => '__unscheduled__', 'scheduled_for' => null, 'completed_at' => today()->subDays(10)->toDateString(), 'expires_at' => today()->addDays(15)->toDateString(), 'status' => 'completed', 'created_at' => now(), 'updated_at' => now()],
+            // Scheduled beyond 14 days → excluded.
+            ['employee_id' => $employee->id, 'training_id' => $training->id, 'assignment_key' => today()->addDays(40)->toDateString(), 'scheduled_for' => today()->addDays(40)->toDateString(), 'completed_at' => null, 'expires_at' => null, 'status' => 'scheduled', 'created_at' => now(), 'updated_at' => now()],
+            // Expiring beyond 30 days → excluded.
+            ['employee_id' => $employee->id, 'training_id' => $certTraining->id, 'assignment_key' => '__unscheduled__', 'scheduled_for' => null, 'completed_at' => today()->subDays(30)->toDateString(), 'expires_at' => today()->addDays(60)->toDateString(), 'status' => 'completed', 'created_at' => now(), 'updated_at' => now()],
+            // Inside the window but cancelled → excluded by status.
+            ['employee_id' => $employee->id, 'training_id' => $training->id, 'assignment_key' => today()->addDays(3)->toDateString(), 'scheduled_for' => today()->addDays(3)->toDateString(), 'completed_at' => null, 'expires_at' => null, 'status' => 'cancelled', 'created_at' => now(), 'updated_at' => now()],
         ]);
 
         // ── Invoices / Bills (factories) ───────────────────────────────

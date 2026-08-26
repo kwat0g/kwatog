@@ -75,13 +75,22 @@ class NewDomainAnalyticsTest extends TestCase
         );
     }
 
+    /**
+     * The gauge reads `FiscalYear::active()->current()`, so the fixture must
+     * seed the year that CONTAINS today with the status that scope accepts.
+     * This previously hard-coded 2031 with status `open` and so matched
+     * nothing: `active()` wants `active` (fiscal_years is draft/active/closed,
+     * migration 0162) and `current()` wants today inside start_date..end_date.
+     * The gauge then correctly declined with [] and the assertion tripped over
+     * a missing key — a fixture that only ever passed if run during 2031.
+     */
     public function test_budget_gauge_reports_a_percentage_once_allocated(): void
     {
         $fiscalYearId = DB::table('fiscal_years')->insertGetId([
-            'year' => 2031,
-            'start_date' => '2031-01-01',
-            'end_date' => '2031-12-31',
-            'status' => 'open',
+            'year' => (int) now()->year,
+            'start_date' => now()->startOfYear()->toDateString(),
+            'end_date' => now()->endOfYear()->toDateString(),
+            'status' => 'active',
             'created_at' => now(),
             'updated_at' => now(),
         ]);
