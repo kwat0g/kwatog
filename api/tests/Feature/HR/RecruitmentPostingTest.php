@@ -137,7 +137,9 @@ class RecruitmentPostingTest extends TestCase
         JobApplication::create([
             'application_number' => 'JA-ARCHIVE-'.substr(uniqid(), -8),
             'job_posting_id' => $posting->id,
-            'tracking_code' => 'RCT-ARCH'.substr(uniqid(), -4),
+            // tracking_code is varchar(10) — production builds exactly
+            // 'RCT-' + 6 chars, so a fixture may not exceed that either.
+            'tracking_code' => 'RCT-A'.substr(uniqid(), -5),
             'first_name' => 'Applicant',
             'last_name' => 'Candidate',
             'email' => 'archive@example.com',

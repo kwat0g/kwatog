@@ -103,7 +103,8 @@ class RecruitmentBottleneckCommandTest extends TestCase
         $hr = User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
         $department = Department::factory()->create();
         $posting = JobPosting::create([
-            'posting_number' => 'JP-BOT-HIRED-'.substr(uniqid(), -8),
+            // posting_number is varchar(20); 'JP-BOT-HIRED-' + 8 was 21.
+            'posting_number' => 'JP-BH-'.substr(uniqid(), -8),
             'title' => 'Hired Position',
             'department_id' => $department->id,
             'description' => 'Description',
@@ -118,7 +119,9 @@ class RecruitmentBottleneckCommandTest extends TestCase
             $application = JobApplication::create([
                 'application_number' => 'JA-BOT-HIRED-'.($converted ? 'C' : 'U').substr(uniqid(), -6),
                 'job_posting_id' => $posting->id,
-                'tracking_code' => 'RCT-H'.($converted ? 'CONV' : 'OPEN').substr(uniqid(), -2),
+                // tracking_code is varchar(10); 'RCT-H' + 'CONV|OPEN' + 2 was 11.
+                // The C/U letter keeps the two loop rows distinct under UNIQUE.
+                'tracking_code' => 'RCT-'.($converted ? 'C' : 'U').substr(uniqid(), -5),
                 'first_name' => $converted ? 'Converted' : 'Pending',
                 'last_name' => 'Candidate',
                 'email' => ($converted ? 'converted' : 'pending').'@example.com',

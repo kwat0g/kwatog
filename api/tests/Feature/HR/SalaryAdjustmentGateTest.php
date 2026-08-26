@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\HR;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Exceptions\ForbiddenActionException;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -40,17 +41,32 @@ class SalaryAdjustmentGateTest extends TestCase
         ]);
     }
 
-    /** The hole: editing an employee must NOT change pay directly. */
+    /**
+     * The hole: editing an employee must NOT change pay directly.
+     *
+     * The generic update used to silently drop the salary keys and answer 200,
+     * which F-006 called out as misleading — the caller believed payroll had
+     * been updated. It now refuses the request outright. Both halves are
+     * asserted here on purpose: `expectException` alone would end the test at
+     * the throw and never check the invariant the test is named for, so a guard
+     * that threw *after* writing the new salary would still look green.
+     */
     public function test_direct_employee_update_cannot_change_salary(): void
     {
         $employee = Employee::factory()->create(['basic_monthly_salary' => '20000.00']);
 
-        app(EmployeeService::class)->update($employee, [
-            'basic_monthly_salary' => '99000.00',
-            'semi_monthly_rate'    => '5000.00',
-        ]);
+        try {
+            app(EmployeeService::class)->update($employee, [
+                'basic_monthly_salary' => '99000.00',
+                'semi_monthly_rate'    => '5000.00',
+            ]);
+            $this->fail('Generic employee update accepted a compensation change.');
+        } catch (BusinessRuleException $e) {
+            $this->assertStringContainsString('salary adjustment workflow', $e->getMessage());
+        }
 
         $this->assertSame('20000.00', (string) $employee->fresh()->basic_monthly_salary);
+        $this->assertSame(0, EmployeeSalaryHistory::query()->where('employee_id', $employee->id)->count());
     }
 
     /** Requesting an adjustment defers the write — employee unchanged while pending. */
