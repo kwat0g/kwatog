@@ -187,6 +187,42 @@ final class PurchaseRequestAccessPolicy
     }
 
     /**
+     * The one approval rule ApprovalService cannot know: the department_head
+     * step is scoped to the requesting department.
+     *
+     * Public because a caller that must *explain* its refusal needs this rule
+     * on its own. `canApprove()` answers "show the button?" and may collapse
+     * every reason into one boolean; a service raising
+     * ForbiddenActionException may not, because the sentence is the product
+     * behaviour (see ApprovalRefusalRenderingTest). Step-role match,
+     * self-submission and "nothing pending" belong to ApprovalService, which
+     * authors their sentences — so this deliberately returns true for them.
+     *
+     * That is also why a caller who does not hold the step's role passes here:
+     * "only a department_head can approve this step" is more use to them than a
+     * complaint about a department they were never eligible for.
+     */
+    public function respectsDepartmentScope(User $user, PurchaseRequest $pr): bool
+    {
+        $step = $this->currentPendingRecord($pr);
+        if ($step === null
+            || $step->role_slug !== self::DEPARTMENTAL_STEP_ROLE
+            || ! in_array($step->role_slug, $this->approvalRoleSlugs($user), true)) {
+            return true;
+        }
+
+        // A PR with no department has no departmental boundary to enforce, and
+        // refusing here would strand it at step 1 with no eligible approver.
+        // Requiring a department on every submission (not just generated ones)
+        // is the real fix; see F-013 in this module's fix log.
+        if ($pr->department_id === null) {
+            return true;
+        }
+
+        return $this->departmentId($user) === (int) $pr->department_id;
+    }
+
+    /**
      * Authority for the step the request is actually waiting on.
      *
      * ApprovalService already enforces step-role match, self-submission and
@@ -203,19 +239,7 @@ final class PurchaseRequestAccessPolicy
             return false;
         }
 
-        if ($step->role_slug !== self::DEPARTMENTAL_STEP_ROLE) {
-            return true;
-        }
-
-        // A PR with no department has no departmental boundary to enforce, and
-        // refusing here would strand it at step 1 with no eligible approver.
-        // Requiring a department on every submission (not just generated ones)
-        // is the real fix; see F-013 in this module's fix log.
-        if ($pr->department_id === null) {
-            return true;
-        }
-
-        return $this->departmentId($user) === (int) $pr->department_id;
+        return $this->respectsDepartmentScope($user, $pr);
     }
 
     private function isChainParticipant(User $user, PurchaseRequest $pr): bool

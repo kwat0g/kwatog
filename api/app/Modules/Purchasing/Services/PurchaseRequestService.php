@@ -407,9 +407,7 @@ class PurchaseRequestService
             if ($locked->status !== PurchaseRequestStatus::Pending) {
                 throw new BusinessRuleException('Only pending PRs can be approved.');
             }
-            if (! $this->access->canApprove($by, $locked)) {
-                throw new ForbiddenActionException('You are not authorized to approve this purchase request.');
-            }
+            $this->assertMayDecide($by, $locked, 'approve');
             $this->budget->assertAcknowledged($locked);
 
             $this->approvals->approve($locked, $by, $remarks);
@@ -436,6 +434,44 @@ class PurchaseRequestService
             }
             return $fresh;
         });
+    }
+
+    /**
+     * Refuse only what ApprovalService cannot explain for itself.
+     *
+     * `if (! $this->access->canApprove(...)) throw new ForbiddenActionException(
+     * 'You are not authorized to approve this purchase request.')` used to stand
+     * here, and it flattened five different refusals into one sentence:
+     * no permission, not pending, self-submitted, wrong role for the step, wrong
+     * department. Two of those five are ApprovalService's, and it states them
+     * precisely — "You cannot act on a record you submitted." and "Only users
+     * with role 'department_head' can approve this step." — but the boolean ran
+     * first, so an approver was told only that they were "not authorized" and
+     * could not tell segregation of duties from being the wrong role, i.e. could
+     * not tell "ask someone else" from "you are not the one for this step".
+     * ApprovalRefusalRenderingTest pins those two sentences over HTTP.
+     *
+     * So this asserts the two rules the shared service genuinely cannot know —
+     * the module permission and the department scope on the department_head step
+     * — and lets step-role match, self-submission and "nothing pending" fall
+     * through to ApprovalService, which owns their wording. `canApprove()` stays
+     * as strict as it was; it answers a different question (should the SPA render
+     * the button?) where one boolean is the right shape.
+     *
+     * @param 'approve'|'reject' $action
+     */
+    private function assertMayDecide(User $by, PurchaseRequest $pr, string $action): void
+    {
+        // Defence in depth: the route already carries
+        // `permission:purchasing.pr.approve`, but bulkApprove and any future
+        // internal caller reach this service without passing that middleware.
+        if (! $by->hasPermission('purchasing.pr.approve')) {
+            throw new ForbiddenActionException("You do not have permission to {$action} purchase requests.");
+        }
+
+        if (! $this->access->respectsDepartmentScope($by, $pr)) {
+            throw new ForbiddenActionException("You can only {$action} purchase requests from your own department.");
+        }
     }
 
     /**
@@ -474,9 +510,7 @@ class PurchaseRequestService
             if ($locked->status !== PurchaseRequestStatus::Pending) {
                 throw new BusinessRuleException('Only pending PRs can be rejected.');
             }
-            if (! $this->access->canReject($by, $locked)) {
-                throw new ForbiddenActionException('You are not authorized to reject this purchase request.');
-            }
+            $this->assertMayDecide($by, $locked, 'reject');
             $this->approvals->reject($locked, $by, $reason);
             $locked->forceFill(['status' => PurchaseRequestStatus::Rejected])->save();
             return $locked->fresh();
