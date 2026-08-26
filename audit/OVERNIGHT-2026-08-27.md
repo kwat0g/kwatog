@@ -134,6 +134,45 @@ guarantee. Evidence for each is in the named module's `fix-log.md`.
     encoding, and hiding a production code path behind an env check is what let
     this go unnoticed). → `platform/audit-activity`
 
+11. **P0 — a balance sheet dated after its fiscal year is imbalanced. MEASURED, not
+    inferred.** An agent posted one legitimate FY2025 cash sale of ₱10,000 and asked
+    for two balance sheets:
+    - `2025-12-31` → assets 10000.00, L+E 10000.00, balanced **true**
+    - `2026-04-30` → assets 10000.00, L+E **0.00**, balanced **false**
+
+    `Services/Statements/BalanceSheetService.php` sums assets/liabilities/equity from
+    inception but adds net income for the **current fiscal year only**, so prior-year
+    profit sits in neither retained earnings nor current-year income.
+    `accounting/periods` offers **monthly** close only — there is no annual close and
+    no retained-earnings roll. Options: (a) a controlled annual close into retained
+    earnings, or (b) derive the cumulative closed-period result at read time. Both
+    alter a reported figure, which is why it was not decided.
+    → `finance/financial-statements`
+
+12. **Every machine-generated journal entry loses its maker.**
+    `JournalEntryService.php:139`:
+    ```php
+    'created_by' => empty($data['reference_type']) ? $user?->id : null
+    ```
+    An actor **is** supplied — payroll derives it from `payroll_periods.finalized_by`
+    rather than `Auth::id()`, so it works on queued paths too — and this line discards
+    it for any entry carrying a `reference_type`. `posted_by` and the `audit_logs` row
+    still land, so the gap is specifically `created_by`. `git log -S` dates the line to
+    `167de85e`, the batch commit of ~50 crashed sessions; the test and the actor
+    derivation both predate it.
+
+    **It cannot be naively reverted.** `assertNotSelfPosting()` keys
+    segregation-of-duties on `created_by === $by->id`, and five writers pass the same
+    `$by` to `create()` then `post()` — at the default `je_self_post_limit = 0` they
+    would all start returning 403 for non-admins. The sharpening fact: payroll uses
+    `postSystem()`, which never consults `created_by`, so recording payroll's maker
+    provably cannot trip that guard. Line 139 keys on `reference_type` when what
+    matters is the **posting path**. Any fix must live in `create()`, since
+    `2026_08_25_100000_harden_journal_immutability` installs triggers rejecting
+    post-hoc mutation. Three options are costed in the module's fix-log.
+    `PayrollMoneyFindingsRegressionTest` is left **red on purpose** — it is a true
+    statement about production. → `people/payslip-statutory-disbursement`
+
 Also queued behind you, not a decision but only you can do it:
 **`sudo chown -R $USER spa/node_modules spa/test-results`** (or `rm -rf
 spa/node_modules/.vite-temp spa/test-results`). Root ownership there blocks BOTH
