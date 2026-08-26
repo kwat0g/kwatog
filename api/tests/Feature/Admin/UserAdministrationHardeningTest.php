@@ -52,8 +52,34 @@ class UserAdministrationHardeningTest extends TestCase
 
     public function test_last_active_system_admin_cannot_be_removed(): void
     {
+        $systemRoleId = Role::where('slug', 'system_admin')->value('id');
+
+        // Establish the premise instead of assuming a clean users table.
+        //
+        // RbacConcurrencyTest declares `protected array $connectionsToTransact = []`,
+        // which switches RefreshDatabase's per-test transaction OFF for that class
+        // (it forks, so its fixtures must be visible to a second connection). Its
+        // cleanupConcurrencyFixtures() deletes notifications, overrides and
+        // role_permissions but not the `users` rows, so an ACTIVE system_admin
+        // ("concurrency-admin-…@test.local") stays committed for the rest of the
+        // PHPUnit process. It sorts before this class in tests/Feature/Admin, so in
+        // a full-suite run this test saw two active system admins — where
+        // deactivating one is correctly ALLOWED — and the guard never fired.
+        //
+        // That is a defect in the fixture, not in the guard, but "the LAST active
+        // system admin" is this test's whole premise and must be owned here: any
+        // future committed row would silently disarm the assertion again. The write
+        // below runs inside this test's own transaction and is rolled back.
+        User::query()->where('role_id', $systemRoleId)->update(['is_active' => false]);
+
         $actor = $this->systemAdmin(['is_active' => false]);
         $target = $this->systemAdmin();
+
+        $this->assertSame(
+            1,
+            User::query()->where('role_id', $systemRoleId)->where('is_active', true)->count(),
+            'Precondition: $target must be the only active system administrator.',
+        );
 
         $this->expectException(BusinessRuleException::class);
         app(UserAdminService::class)->deactivate($target, $actor);

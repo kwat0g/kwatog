@@ -156,8 +156,11 @@ class AuditActivityTest extends TestCase
             ]);
         }
 
+        // model_id is a HashID on this endpoint (see AuditLogResource and the
+        // SPA client), not an integer. See AuditLogSearchTest for why the raw
+        // integer form only worked in CI.
         $this->actingAs($admin)
-            ->getJson('/api/v1/admin/audit-logs/entity?model_type=PurchaseOrder&model_id=42&per_page=25')
+            ->getJson('/api/v1/admin/audit-logs/entity?model_type=PurchaseOrder&model_id='.app('hashids')->encode(42).'&per_page=25')
             ->assertOk()
             ->assertJsonPath('meta.current_page', 1)
             ->assertJsonPath('meta.last_page', 2)

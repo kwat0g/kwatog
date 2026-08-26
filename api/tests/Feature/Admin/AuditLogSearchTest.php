@@ -81,9 +81,21 @@ class AuditLogSearchTest extends TestCase
             ]);
         }
 
-        // Query by basename (PurchaseOrder) + integer model_id (test env).
+        // Query by basename (PurchaseOrder) + hashed model_id.
+        //
+        // model_id is a HashID on this endpoint, not an integer. The SPA sends
+        // the hash (`spa/src/api/admin/audit-logs.ts` types model_id as string,
+        // and AuditLogResource emits `app('hashids')->encode(...)`), so a hash
+        // is what production traffic looks like. This used to pass a raw `42`
+        // and lean on AuditLogController::decodePublicId()'s
+        // `app()->environment('testing')` escape hatch, which does not fire
+        // locally: docker-compose.yml sets APP_ENV=local in $_SERVER, phpunit.xml's
+        // <env force="true"> only writes $_ENV/putenv, and Laravel's Env
+        // repository reads $_SERVER first — so the suite runs with
+        // app.env = 'local' locally and 'testing' in CI. Asserting the real
+        // contract passes in both.
         $resp = $this->actingAs($admin)
-            ->getJson('/api/v1/admin/audit-logs/entity?model_type=PurchaseOrder&model_id=42');
+            ->getJson('/api/v1/admin/audit-logs/entity?model_type=PurchaseOrder&model_id='.app('hashids')->encode(42));
 
         $resp->assertOk()
             ->assertJsonCount(3, 'data')
@@ -104,9 +116,11 @@ class AuditLogSearchTest extends TestCase
             ->getJson('/api/v1/admin/audit-logs/entity?model_type=PurchaseOrder')
             ->assertStatus(422);
 
-        // Missing model_type
+        // Missing model_type. The model_id is a valid hash so the only rule that
+        // can fail is `model_type => required` — a raw integer here would 422 on
+        // the identifier instead and the assertion would prove nothing.
         $this->actingAs($admin)
-            ->getJson('/api/v1/admin/audit-logs/entity?model_id=42')
+            ->getJson('/api/v1/admin/audit-logs/entity?model_id='.app('hashids')->encode(42))
             ->assertStatus(422);
 
         // Both missing
@@ -119,8 +133,11 @@ class AuditLogSearchTest extends TestCase
     {
         $admin = $this->seedAdmin();
 
+        // A hash that decodes to a model_id no audit row references. It must
+        // still be a hash: an undecodable value is a 422 (Invalid model_id),
+        // which is a different behaviour from "decodes fine, matches nothing".
         $resp = $this->actingAs($admin)
-            ->getJson('/api/v1/admin/audit-logs/entity?model_type=PurchaseOrder&model_id=999999');
+            ->getJson('/api/v1/admin/audit-logs/entity?model_type=PurchaseOrder&model_id='.app('hashids')->encode(999999));
 
         $resp->assertOk()
             ->assertJsonCount(0, 'data');
