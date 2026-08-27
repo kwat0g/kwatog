@@ -7,9 +7,11 @@ namespace App\Modules\CRM\Listeners;
 use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Modules\CRM\Events\CustomerComplaintUpdated;
 use App\Modules\CRM\Mail\CustomerComplaintUpdateMail;
+use App\Modules\CRM\Models\CustomerComplaint;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 
 class EmailCustomerOnComplaintUpdated implements ShouldQueue
 {
@@ -33,6 +35,7 @@ class EmailCustomerOnComplaintUpdated implements ShouldQueue
                 "Complaint {$complaint->complaint_number} changed to {$this->statusLabel($complaint)} but the customer has no usable email address. Contact the customer through an approved channel.",
                 $context,
             );
+
             return;
         }
 
@@ -56,8 +59,11 @@ class EmailCustomerOnComplaintUpdated implements ShouldQueue
         }
     }
 
-    private function statusLabel($complaint): string
+    private function statusLabel(CustomerComplaint $complaint): string
     {
-        return $complaint->status?->label() ?? (string) $complaint->status;
+        $status = $complaint->status;
+        $value = $status instanceof \BackedEnum ? $status->value : (string) $status;
+
+        return Str::headline($value);
     }
 }

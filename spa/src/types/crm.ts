@@ -198,7 +198,7 @@ export interface CustomerComplaint {
  customer?: { id: string; name: string } | null;
  product?: { id: string; part_number: string; name: string } | null;
  sales_order?: { id: string; so_number: string } | null;
- ncr?: { id: string; ncr_number: string; status: string; status_label?: string; severity: string; severity_label?: string } | null;
+ ncr?: { id: string; ncr_number: string; status: string; status_label?: string; severity: string; severity_label?: string; disposition?: string | null } | null;
  creator?: { id: string; name: string } | null;
  assignee?: { id: string; name: string } | null;
  eight_d_report?: EightDReport | null;

@@ -12,9 +12,10 @@ use App\Modules\CRM\Models\CustomerComplaint;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Services\ComplaintService;
+use App\Modules\Quality\Models\NonConformanceReport;
 use Database\Seeders\RolePermissionSeeder;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Database\QueryException;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -109,6 +110,62 @@ class ComplaintSourceValidationTest extends TestCase
             ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['customer_id']);
+    }
+
+    public function test_http_list_with_an_invalid_customer_hash_returns_no_complaints(): void
+    {
+        $admin = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+        ]);
+        $customer = Customer::factory()->create();
+
+        CustomerComplaint::create([
+            'complaint_number' => 'CC-FILTER-'.substr(uniqid(), -6),
+            'customer_id' => $customer->id,
+            'received_date' => today(),
+            'severity' => 'medium',
+            'status' => 'open',
+            'description' => 'Invalid filter boundary test',
+            'affected_quantity' => 1,
+            'created_by' => $admin->id,
+        ]);
+
+        $this->actingAs($admin)
+            ->getJson('/api/v1/crm/complaints?customer_id=not-a-valid-hash')
+            ->assertOk()
+            ->assertJsonCount(0, 'data')
+            ->assertJsonPath('meta.total', 0);
+    }
+
+    public function test_http_list_includes_the_ncr_severity_and_disposition_contract(): void
+    {
+        $admin = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+        ]);
+        $customer = Customer::factory()->create();
+        $complaint = CustomerComplaint::create([
+            'complaint_number' => 'CC-NCR-LIST-'.substr(uniqid(), -6),
+            'customer_id' => $customer->id,
+            'received_date' => today(),
+            'severity' => 'medium',
+            'status' => 'open',
+            'description' => 'NCR list contract test',
+            'affected_quantity' => 1,
+            'created_by' => $admin->id,
+        ]);
+        $ncr = NonConformanceReport::factory()->create([
+            'severity' => 'high',
+            'status' => 'closed',
+            'disposition' => 'use_as_is',
+            'complaint_id' => $complaint->id,
+        ]);
+        $complaint->update(['ncr_id' => $ncr->id]);
+
+        $this->actingAs($admin)
+            ->getJson('/api/v1/crm/complaints')
+            ->assertOk()
+            ->assertJsonPath('data.0.ncr.severity', 'high')
+            ->assertJsonPath('data.0.ncr.disposition', 'use_as_is');
     }
 
     public function test_customer_force_delete_cannot_remove_complaint_history(): void

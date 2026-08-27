@@ -148,7 +148,7 @@ export default function ComplaintDetailPage() {
 
  const report = data.eight_d_report;
  const isFinalized = Boolean(report?.finalized_at);
- const qualityCompletionReady = isFinalized && data.ncr?.status === 'closed';
+ const qualityCompletionReady = isFinalized && data.ncr?.status === 'closed' && Boolean(data.ncr?.disposition);
  const isTerminal = data.status === 'closed' || data.status === 'cancelled';
 
  const complaintChain: ChainStep[] = [

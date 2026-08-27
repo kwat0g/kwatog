@@ -30,9 +30,14 @@ class ComplaintController
     public function index(Request $request): AnonymousResourceCollection
     {
         $f = $request->query();
-        if (! empty($f['customer_id']) && is_string($f['customer_id'])) {
-            $f['customer_id'] = Customer::tryDecodeHash($f['customer_id']);
+        if (array_key_exists('customer_id', $f) && $f['customer_id'] !== null && $f['customer_id'] !== '') {
+            if (is_string($f['customer_id'])) {
+                // An invalid supplied filter must not become an unfiltered
+                // list after hash decoding returns null.
+                $f['customer_id'] = Customer::tryDecodeHash($f['customer_id']) ?? -1;
+            }
         }
+
         return CustomerComplaintResource::collection($this->service->list($f));
     }
 

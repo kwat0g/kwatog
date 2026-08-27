@@ -1,3 +1,12 @@
+@php
+    $status = $complaint->status instanceof \BackedEnum
+        ? $complaint->status->value
+        : (string) $complaint->status;
+    $severity = $complaint->severity instanceof \BackedEnum
+        ? $complaint->severity->value
+        : (string) $complaint->severity;
+@endphp
+
 <x-mail::message>
 # Customer complaint update
 
@@ -7,8 +16,8 @@ Your complaint **{{ $complaint->complaint_number }}** has been updated by {{ con
 
 | Detail | Value |
 |---|---|
-| Status | {{ $complaint->status?->label() ?? $complaint->status }} |
-| Severity | {{ $complaint->severity?->label() ?? $complaint->severity }} |
+| Status | {{ \Illuminate\Support\Str::headline($status) }} |
+| Severity | {{ \Illuminate\Support\Str::headline($severity) }} |
 | Description | {{ $complaint->description }} |
 | Affected quantity | {{ $complaint->affected_quantity }} |
 @if ($complaint->product)

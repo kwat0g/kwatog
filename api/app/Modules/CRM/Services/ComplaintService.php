@@ -71,7 +71,7 @@ class ComplaintService
             'customer:id,name',
             'product:id,part_number,name',
             'salesOrder:id,so_number',
-            'ncr:id,ncr_number,status',
+            'ncr:id,ncr_number,status,severity,disposition',
             'creator:id,name,role_id',
             'assignee:id,name',
         ]);

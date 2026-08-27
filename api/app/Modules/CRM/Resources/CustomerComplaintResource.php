@@ -48,6 +48,7 @@ class CustomerComplaintResource extends JsonResource
                 'ncr_number' => $this->ncr->ncr_number,
                 'status'     => $this->ncr->status instanceof \BackedEnum ? $this->ncr->status->value : $this->ncr->status,
                 'severity'   => $this->ncr->severity instanceof \BackedEnum ? $this->ncr->severity->value : $this->ncr->severity,
+                'disposition' => $this->ncr->disposition instanceof \BackedEnum ? $this->ncr->disposition->value : $this->ncr->disposition,
                 'status_label' => Str::headline((string) ($this->ncr->status instanceof \BackedEnum ? $this->ncr->status->value : $this->ncr->status)),
                 'severity_label' => Str::headline((string) ($this->ncr->severity instanceof \BackedEnum ? $this->ncr->severity->value : $this->ncr->severity)),
             ] : null),

@@ -1,7 +1,7 @@
 # M034 — Customer complaints / 8D inventory
 
-Audit date: 2026-08-24  
-Release target: 📋 Plan Ready  
+Audit date: 2026-08-27
+Release target: 🔁 Needs Re-audit
 Audit mode: discovery, hardening, and polish review with local evidence only
 
 ## Purpose and boundary
@@ -33,16 +33,16 @@ After the registry refresh, the remaining Tier 2 financial-statements and fixed-
 | Customer portal API | `api/app/Modules/B2B/routes.php:75-97`; `CustomerPortalService.php`; `CustomerPortalController.php` | Tenant boundary, complaint creation, resource shape, 8D report visibility |
 | Customer portal UI | `spa/src/pages/portal/customer/complaints/index.tsx`; `spa/src/api/b2b/customer.ts` | Form, list, status/8D gating, recovery states, pagination and contract alignment |
 | Design/deployment surface | `docs/DESIGN-SYSTEM.md`; `docs/DEPLOY.md`; `docs/RESTORE-DRILL.md` | Atelier density/accessibility conventions, migration order, worker/rollback evidence |
-| Verification | focused CRM and B2B feature tests | 21 tests, 58 assertions passed after the shared test database was idle |
+| Verification | focused CRM and B2B feature tests | 62 tests, 205 assertions passed on isolated PostgreSQL database `ogami_test_m034_20260827` |
 
 ## Observed workflow
 
 1. An internal user or authenticated customer-portal user submits a complaint. `ComplaintService::create` creates the complaint and an empty 8D report inside a transaction, then attempts the Quality NCR handoff. Expected handoff failures remain durable as `manual_required` with an outbox replay path.
-2. Internal staff edit D1–D8 fields, finalize the report once all fields are non-empty, and may resolve or close the complaint. The current server-side lifecycle gate checks only that the NCR handoff is generated.
-3. A scheduler invokes `complaints:check-8d-slas` every 15 minutes. The service records fired tiers in `sla_alert_levels` and sends in-app/email notifications to configured quality roles and the assignee.
-4. The internal detail page shows linked NCR/8D information and hides the PDF button until finalization, while the API PDF action checks only that an 8D row exists. The customer portal lists complaints and has a separate 8D endpoint, but the API does not enforce the UI's resolved/closed or finalized visibility assumptions.
+2. Internal staff edit D1–D8 fields, finalize the report once all fields are non-empty, and may resolve or close the complaint. The server requires a finalized 8D report and a closed, dispositioned linked NCR for both lifecycle transitions.
+3. A scheduler invokes `complaints:check-8d-slas` every 15 minutes. The service records each complaint/tier outcome in a durable ledger, keeps the compatibility `sla_alert_levels` marker, and retries failed or recipientless deliveries.
+4. The internal detail page and API hide the PDF until finalization, while the customer portal's 8D endpoint additionally requires resolved/closed status and a closed, dispositioned NCR. The internal list now includes the NCR fields its resource advertises.
 
-## Verification completed
+## Historical verification baseline
 
 The clean Docker-backed focused run passed on 2026-08-24:
 
@@ -59,16 +59,24 @@ Result: 21 passed, 58 assertions, 19.53 seconds.
 
 The suite covers creation due dates, required-field finalization, sequential finalization idempotency, sequential SLA tier dedupe, terminal complaint skipping, NCR manual handoff/replay, portal validation, token cross-guards, and recurrence 8D idempotency. It does not cover concurrent stale updates/finalization, concurrent SLA workers, portal resource redaction, finalized-only API/PDF boundaries, source-party mismatch, cancellation, or assignment authorization.
 
-## Discovery, hardening, and polish observations
+## Historical baseline observations
 
 - Discovery: the module has a coherent service/listener split and the complaint-to-NCR failure path is durable rather than silently losing the complaint.
 - Hardening: 8D and complaint state transitions are not consistently lock-and-reload operations; portal and PDF publication rules are stronger in the SPA than at the API boundary; SLA tier claims are not atomically claimed.
 - Polish: the internal form exposes customer/product but not its own `sales_order_id` field, portal request types advertise `product_id` while the service ignores it, and portal complaint retrieval is unbounded and has no search/filter/pagination contract.
 - The internal SPA follows the Atelier guidance with dense panels/tables, semantic chips, form draft safety, and loading/error/empty states. No browser/e2e run was available.
 
+## Current re-audit observations
+
+- Broken notification rendering was found and fixed: the complaint email view and missing-email fallback previously called `label()` on enums that do not define it.
+- Incomplete filter hardening was found and fixed: an invalid internal customer hash now produces no records instead of broadening the list to all complaints.
+- The internal CRM resource and SPA now expose/check NCR disposition consistently with the server-side resolve/close gate.
+- Cancellation remains an explicit policy question; the `cancelled` and `investigating` states have no first-class transition route or documented actor/reason contract.
+
 ## Evidence gaps
 
 - No deployed permission matrix or staging worker run was available.
 - No browser/e2e verification of internal or customer-portal complaint flows was run.
-- No adversarial tests cover stale 8D edits, concurrent resolve/close, duplicate SLA sends, invalid/mismatched source IDs, unfinalized PDF access, portal redaction, or cancellation.
-- The worktree contains pre-existing user changes in backup, notification, landing, Docker, and database-script areas. M034 production files were not changed.
+- No concurrent worker/lifecycle/SLA test or browser/e2e verification was run in this session.
+- Cancellation/investigation semantics and internal permission granularity still require product/RBAC-owner decisions.
+- The worktree contains pre-existing user changes in backup, notification, landing, Docker, and database-script areas; unrelated dependency modules remain read-only.

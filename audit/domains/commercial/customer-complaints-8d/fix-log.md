@@ -277,15 +277,17 @@ contains a digit for a missing `protected $table`; zero hits).
 Both remaining plan items are genuine human calls. Options and evidence below;
 no option was chosen.
 
-### M034-R04 — cancellation: implement it, or retire the status?
+### M034-R04 — lifecycle states: implement them, or retire the statuses?
 
 Confirmed still true in current code:
 
-- `api/app/Modules/CRM/Enums/ComplaintStatus.php:14` defines
-  `Cancelled = 'cancelled'` and `:16-19` treats it as terminal.
-- No cancellation route exists in `api/app/Modules/CRM/routes.php:64-84`.
-- `ComplaintService` has no transition into `cancelled` (the lifecycle matrix
-  admits only `investigating`/`resolved`/`closed`).
+- `api/app/Modules/CRM/Enums/ComplaintStatus.php:10,14` defines
+  `Investigating = 'investigating'` and `Cancelled = 'cancelled'`; `:16-19`
+  treats only the latter as terminal.
+- No investigation or cancellation route exists in
+  `api/app/Modules/CRM/routes.php:64-84`.
+- `ComplaintService` has no transition into either state (the lifecycle matrix
+  admits only resolve from `open`/`investigating` and close from `resolved`).
 
 New evidence this session — **the unreachable status is published as a filter**:
 
@@ -300,6 +302,10 @@ New evidence this session — **the unreachable status is published as a filter*
 - `api/app/Modules/CRM/Services/Complaint8dEscalationService.php:65` excludes
   `cancelled` from SLA candidates — so the status is load-bearing in code while
   being unreachable in data.
+
+The `investigating` state needs the same policy decision: whether starting the
+8D investigation should be an explicit auditable transition or whether the
+status should be retired in favor of the report workflow alone.
 
 Options:
 
@@ -317,10 +323,11 @@ Options:
   the `options` response so the UI stops promising an unreachable filter, leaving
   the enum case for future use.
 
-Blocking question for product/quality: **is cancelling a customer complaint
-permitted at all under IATF 16949 record-retention expectations, and if so, may
-it happen after an NCR has been raised?** That is a quality-records question, not
-an engineering one, so it is not answered here.
+Blocking question for product/quality: **should investigation be an explicit
+state transition, and is cancelling a customer complaint permitted at all
+under IATF 16949 record-retention expectations? If so, may cancellation happen
+after an NCR has been raised?** That is a quality-records question, not an
+engineering one, so it is not answered here.
 
 ### M034-R05 — split the single `crm.complaints.manage` gate?
 
@@ -352,10 +359,13 @@ that exists the change is mechanical: new permission slugs, route gate swaps, SP
 | R01 durable SLA delivery ledger | **fixed and verified** (was dead code; R06) |
 | R02 reject cancelled portal source order | verified |
 | R03 normalize portal complaint audit action | verified |
-| R04 cancellation policy | **deferred — needs product/quality decision** |
+| R04 lifecycle state policy | **deferred — needs product/quality decision** |
 | R05 permission split | **deferred — needs RBAC owner's matrix** |
 | R06 ledger table name (new this session) | fixed and verified |
 | R07 F12 retention fixture (new this session) | fixed and verified |
+| R08 complaint update email rendering | **fixed and verified** |
+| R09 invalid internal customer filter | **fixed and verified** |
+| R10 NCR list/UI contract | **fixed and verified** |
 
 Still not covered, and honestly out of reach here: **two-worker concurrency** for
 the SLA claim. The single-process idempotency path is proven, and the
@@ -364,3 +374,54 @@ mechanism, but a genuine two-writer race was not executed — 3 agents share
 3.7 GiB on this host and a second concurrent PHP worker risks the OOM that killed
 the stack earlier today. Browser/e2e evidence for the complaint flows is likewise
 not available in this session.
+
+# Execution session — 2026-08-27 (continued)
+
+## M034-R08 — complaint update email rendering (P1, Broken)
+
+The red regression run reproduced two production failures: rendering
+`CustomerComplaintUpdateMail` called `label()` on `ComplaintStatus`, and the
+missing-customer-email fallback called the same invalid method before writing
+the internal notification. The shared `NcrSeverity` enum used by the Blade
+view also has no `label()` method.
+
+The fix is contained in the complaint notification path:
+
+- `api/app/Modules/CRM/Listeners/EmailCustomerOnComplaintUpdated.php:61-67`
+  now converts a backed enum value with `Str::headline`.
+- `api/resources/views/emails/customer/complaint-update.blade.php:1-20`
+  derives both status and severity values and renders them without calling an
+  unavailable enum method.
+- `api/tests/Feature/CRM/ComplaintEmailTest.php:28-74` covers the valid-email
+  mailable render and missing-email internal fallback.
+
+## M034-R09 — invalid internal customer filter (P2, Incomplete)
+
+`ComplaintController::index` previously turned an invalid customer hash into
+`null`, and `ComplaintService::list` interpreted that as no customer filter.
+The controller now substitutes an impossible positive-key-space value (`-1`)
+for an invalid supplied hash at
+`api/app/Modules/CRM/Controllers/ComplaintController.php:30-40`. The regression
+at `api/tests/Feature/CRM/ComplaintSourceValidationTest.php:115-139` confirms a
+malformed filter returns no complaints rather than all complaints.
+
+## M034-R10 — NCR list/UI contract drift (P2, Incomplete)
+
+The internal list query selected only NCR status even though the resource
+returned severity, and the resource omitted disposition although the server
+requires it for resolve/close. The list projection at
+`api/app/Modules/CRM/Services/ComplaintService.php:70-77` now includes both;
+`CustomerComplaintResource.php:46-54` exposes disposition; and the SPA type
+and completion gate at `spa/src/types/crm.ts:201` and
+`spa/src/pages/crm/complaints/detail.tsx:149-152` mirror the server contract.
+The API regression is at `ComplaintSourceValidationTest.php:141-169`.
+
+## Continued-session verification
+
+The new tests were first run red before each fix and green after the fix. The
+full M034 sweep, including `ComplaintEmailTest`, runs on isolated PostgreSQL
+database `ogami_test_m034_20260827`: 62 tests and 205 assertions passed with
+0 failures. PHP lint, `git diff --check`, SPA typecheck, and scoped ESLint pass.
+Laravel Pint still reports pre-existing
+formatting drift in several legacy files; no unrelated formatter rewrite was
+included. Two-worker concurrency and browser/e2e evidence remain deferred.
