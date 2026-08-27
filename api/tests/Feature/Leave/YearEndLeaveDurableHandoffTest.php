@@ -113,13 +113,45 @@ class YearEndLeaveDurableHandoffTest extends TestCase
             'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
         ]);
 
-        $this->actingAs($user)
-            ->postJson('/api/v1/leaves/process-year-end', ['year' => $year])
+        if (is_float($year)) {
+            $response = $this->actingAs($user)->call(
+                'POST',
+                '/api/v1/leaves/process-year-end',
+                [],
+                [],
+                [],
+                ['CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json'],
+                json_encode(['year' => $year], JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR),
+            );
+        } else {
+            $response = $this->actingAs($user)->postJson('/api/v1/leaves/process-year-end', ['year' => $year]);
+        }
+
+        $response
             ->assertUnprocessable()
             ->assertJsonValidationErrors('year')
             ->assertJsonPath('errors.year.0', ProcessYearEndLeaveRequest::yearValidationMessage());
 
         $this->assertDatabaseCount('event_outbox', 0);
+    }
+
+    #[DataProvider('supportedYearInputs')]
+    public function test_api_accepts_the_supported_boundary_years(mixed $year, int $expectedYear): void
+    {
+        Queue::fake();
+
+        $user = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+        ]);
+
+        $this->actingAs($user)
+            ->postJson('/api/v1/leaves/process-year-end', ['year' => $year])
+            ->assertAccepted();
+
+        $this->assertDatabaseHas('event_outbox', [
+            'event_type' => YearEndLeaveProcessingRequested::class,
+            'dedupe_key' => 'leave-year-end:'.$expectedYear.':'.hash('sha256', 'all'),
+        ]);
     }
 
     #[DataProvider('invalidYearInputs')]
@@ -139,7 +171,38 @@ class YearEndLeaveDurableHandoffTest extends TestCase
             'malformed text' => ['abc'],
             'before supported range' => ['2019'],
             'after supported range' => ['2100'],
+            'whitespace padded string' => [' 2025 '],
+            'decimal-looking string' => ['2025.0'],
+            'decimal JSON number' => [2025.0],
+            'signed string' => ['+2025'],
+            'leading-zero string' => ['02025'],
         ];
+    }
+
+    /** @return array<string, array{0: mixed, 1: int}> */
+    public static function supportedYearInputs(): array
+    {
+        return [
+            'minimum integer' => [2020, 2020],
+            'minimum string' => ['2020', 2020],
+            'maximum integer' => [2099, 2099],
+            'maximum string' => ['2099', 2099],
+        ];
+    }
+
+    public function test_api_and_cli_read_the_same_checked_in_validation_contract(): void
+    {
+        $contract = json_decode(
+            (string) file_get_contents(resource_path('contracts/leave-year-end-validation.json')),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+
+        $this->assertIsArray($contract);
+        $this->assertSame($contract['minimum_year'], ProcessYearEndLeaveRequest::minSupportedYear());
+        $this->assertSame($contract['maximum_year'], ProcessYearEndLeaveRequest::maxSupportedYear());
+        $this->assertSame($contract['canonical_input']['string_pattern'], ProcessYearEndLeaveRequest::canonicalYearPattern());
     }
 
     public function test_previous_year_option_targets_the_prior_calendar_year(): void

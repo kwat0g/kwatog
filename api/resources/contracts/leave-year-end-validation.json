@@ -1,0 +1,15 @@
+{
+    "contract": "leave-year-end-year",
+    "version": 1,
+    "minimum_year": 2020,
+    "maximum_year": 2099,
+    "canonical_input": {
+        "description": "An integer value or a string containing exactly four ASCII decimal digits.",
+        "accepted_runtime_types": ["integer", "string"],
+        "string_pattern": "^[0-9]{4}$"
+    },
+    "examples": {
+        "valid_strings": ["2020", "2099"],
+        "invalid_strings": ["2019", "2100", " 2025 ", "2025.0", "+2025", "02025"]
+    }
+}

@@ -7,14 +7,16 @@ import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { usePermission } from '@/hooks/usePermission';
 import toast from 'react-hot-toast';
 
-// Keep this mirror of ProcessYearEndLeaveRequest's canonical API contract in
-// the page boundary so the browser rejects the same years before submitting.
+// The PHP API owns the checked-in machine-readable contract at
+// api/resources/contracts/leave-year-end-validation.json. These browser-side
+// values are parity-tested against it because the API image and SPA artifact
+// are built separately.
 const YEAR_END_MIN_YEAR = 2020;
 const YEAR_END_MAX_YEAR = 2099;
 const YEAR_END_YEAR_ERROR = `Enter a whole year from ${YEAR_END_MIN_YEAR} through ${YEAR_END_MAX_YEAR}.`;
 
 function parseSupportedYear(value: string): number | null {
-  if (!/^[+-]?(?:0|[1-9]\d*)$/.test(value)) return null;
+  if (!/^[0-9]{4}$/.test(value)) return null;
 
   const year = Number(value);
   return Number.isSafeInteger(year) && year >= YEAR_END_MIN_YEAR && year <= YEAR_END_MAX_YEAR

@@ -403,3 +403,40 @@ M019-F21 is applied. M019-F10/F12–F19 remain deferred and are not part of this
 | Diff check | **PASS** | `git diff --check`. |
 
 Module status remains 🔁 Needs Re-audit; no registry regeneration was performed.
+
+## Session 6 (2026-08-28) — M019-F17 year-contract consistency follow-up
+
+- Added the checked-in machine-readable contract at
+  `api/resources/contracts/leave-year-end-validation.json`. It is the runtime
+  source for the API/CLI bounds and canonical input pattern: integer values or
+  exactly four ASCII decimal digits, from **2020 through 2099**.
+- Updated `ProcessYearEndLeaveRequest` to load that contract instead of keeping
+  PHP bounds as constants. The strict normalizer rejects non-integers, padded
+  strings, signs, leading zeros, and decimal-looking values. Because the global
+  `SanitizeInput` middleware trims strings before FormRequest hooks run, the
+  request restores the raw JSON `year` before validation; API input such as
+  `" 2025 "` therefore cannot be silently normalized into a valid request.
+- Kept CLI dispatch behind the same normalizer. The SPA retains its build-local
+  validation mirror because the production API image and SPA artifact are built
+  separately, but its bounds, format examples, and invalid-submit behavior are
+  parity-tested against the same checked-in contract.
+- Added API boundary and rejection coverage for 2020/2099, whitespace-padded
+  strings, `2025.0` strings and raw JSON numbers, signs, leading zeros, and
+  out-of-range values. The SPA test now exercises the contract's valid and
+  invalid examples and retains the min/max attributes.
+
+### Verification
+
+| Check | Result | Exact command / notes |
+|---|---|---|
+| Focused PostgreSQL backend | **PASS — 26 tests, 93 assertions** | `docker compose run --rm --no-deps -e DB_DATABASE=ogami_test_m019_yc_20260828 api php artisan test tests/Feature/Leave/YearEndLeaveDurableHandoffTest.php` |
+| SPA Vitest | **PASS — 2 tests** | `docker compose run --rm --no-deps spa npm run test:run -- src/pages/leaves/year-end.test.tsx` |
+| SPA ESLint | **PASS** | `docker compose run --rm --no-deps spa npx eslint src/pages/leaves/year-end.tsx src/pages/leaves/year-end.test.tsx --max-warnings 0` |
+| SPA typecheck | **PASS** | `docker compose run --rm --no-deps spa npm run typecheck` |
+| PHP syntax | **PASS** | `docker compose run --rm --no-deps api php -l app/Modules/Leave/Requests/ProcessYearEndLeaveRequest.php` and the focused test file |
+| Laravel Pint | **PASS** | `docker compose run --rm --no-deps api ./vendor/bin/pint --test app/Modules/Leave/Requests/ProcessYearEndLeaveRequest.php tests/Feature/Leave/YearEndLeaveDurableHandoffTest.php` |
+| PHPStan | **PASS — no errors** | `docker compose run --rm --no-deps api ./vendor/bin/phpstan analyse app/Modules/Leave/Requests/ProcessYearEndLeaveRequest.php app/Console/Commands/ProcessYearEndLeaveCommand.php --memory-limit=512M` |
+| JSON and whitespace checks | **PASS** | Node JSON parse and scoped `git diff --check` |
+
+No unrelated files, `status.md`, or the audit registry were changed. Claim released
+as 🔁 Needs Re-audit after the focused commit.
