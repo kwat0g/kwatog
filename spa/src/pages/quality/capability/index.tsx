@@ -92,12 +92,16 @@ export default function CapabilityStudyPage() {
  const [selectedSpecItemId, setSelectedSpecItemId] = useState('');
  const [result, setResult] = useState<SpcCapabilityResult | null>(null);
  const [noDataMessage, setNoDataMessage] = useState<string | null>(null);
- const { data: spcOptions } = useQuery({ queryKey: ['quality', 'spc', 'options'], queryFn: capabilityApi.options, staleTime: 300_000 });
- const thresholds = spcOptions?.capability_thresholds;
+ const optionsQuery = useQuery({
+ queryKey: ['quality', 'spc', 'options'],
+ queryFn: capabilityApi.options,
+ staleTime: 300_000,
+ });
+ const thresholds = optionsQuery.data?.capability_thresholds;
 
  // Fetch products for the dropdown
- // Every query on this page was destructured `{ data }` only, so a failed
- // fetch left the product picker permanently empty with nothing to retry.
+ // Keep this query's error state separate so a failed fetch can be retried
+ // without affecting the study result or the capability options state.
  const productsQuery = useQuery({
  queryKey: ['crm', 'products', 'all'],
  queryFn: () => productsApi.list({ per_page: 200 }),
@@ -160,6 +164,22 @@ export default function CapabilityStudyPage() {
  title="Capability Study"
  subtitle="Compute Cp/Cpk indices for a product dimension"
  />
+
+ {optionsQuery.isLoading && !optionsQuery.data && (
+ <div className="px-5 py-3 border-b border-default text-sm text-muted" role="status">
+ Loading capability thresholds…
+ </div>
+ )}
+
+ {optionsQuery.isError && (
+ <div className="px-5 pt-4">
+ <QueryErrorState
+  subject="capability thresholds"
+  size="compact"
+  onRetry={() => void optionsQuery.refetch()}
+ />
+ </div>
+ )}
 
  <div className="px-5 py-4 space-y-4">
  {/* ─── Input panel ─── */}
@@ -233,16 +253,23 @@ export default function CapabilityStudyPage() {
 
  {noDataMessage && (
  <EmptyState
-  size="compact"
-  icon="bar-chart"
-  title="Not enough completed data"
-  description={noDataMessage}
+ size="compact"
+ icon="bar-chart"
+ title="Not enough completed data"
+ description={noDataMessage}
  />
  )}
 
  {/* ─── Results ─── */}
- {result && thresholds && (
+ {result && (
  <>
+ {!thresholds && (
+ <div className="rounded-md border border-warning bg-warning-bg px-3 py-2.5 text-sm text-warning-fg" role="status">
+  <strong>Thresholds unavailable.</strong>{' '}
+  Computed capability metrics are shown, but no Cpk rating or threshold guidance is available until the options query succeeds.
+ </div>
+ )}
+
  {/* Stats row */}
  <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4">
  <StatCard
@@ -358,6 +385,8 @@ export default function CapabilityStudyPage() {
  </div>
  </dl>
  <div className="text-xs text-muted space-y-2">
+ {thresholds ? (
+ <>
  <p>
  <strong>IATF 16949 targets:</strong>
  </p>
@@ -366,6 +395,12 @@ export default function CapabilityStudyPage() {
  <li>Cpk &gt;= {thresholds.ongoing.toFixed(2)} for ongoing production</li>
  <li>Cpk &lt; {thresholds.action.toFixed(2)} requires immediate corrective action</li>
  </ul>
+ </>
+ ) : (
+ <p className="text-warning-fg">
+ Threshold guidance is unavailable; computed metrics are shown without a rating.
+ </p>
+ )}
  <p className="mt-2">
  Cp measures process spread vs spec width (centering ignored).
  Cpk additionally accounts for centering -- a lower Cpk than Cp

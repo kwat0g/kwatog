@@ -1,5 +1,24 @@
 # M059 — Fix Log
 
+## 2026-08-27 — M059-B09 fixed
+
+- **M059-B09 — fixed.** The capability page now tracks the options query as a
+  full query state with independent loading, error, and retry feedback. A
+  completed study renders independently of that query. When thresholds are
+  unavailable, the page keeps Cp, Cpk, sample count, mean, standard deviation,
+  histogram, and detailed indices visible, explicitly labels thresholds as
+  unavailable, and omits the Cpk rating and threshold guidance rather than
+  inventing an interpretation.
+- Added `spa/src/pages/quality/capability/index.test.tsx`, covering an options
+  failure, retry affordance, and successful study result with no threshold-based
+  rating.
+- B08, B10, I01-I04, archived-SPC I02, and unrelated UI polish were not touched.
+
+Verification: focused Vitest **1 test passed** using an equivalent temporary
+runner config because the repository config's root-owned `spa/node_modules/.vite-temp`
+directory rejected its generated cache file; targeted ESLint passed with
+`--max-warnings 0`; page/test-only strict TypeScript checking passed.
+
 ## 2026-08-25 — focused plan execution
 
 The module was claimed with an existing `📋 Plan Ready` action plan, so the plan was executed in order. The working tree already contained unrelated/pre-existing Quality changes, including the terminal-inspection and capability query changes in `SpcService`; those changes were inspected and preserved. The controller boundary, UI, tests, and documentation changes below were made in this session.
@@ -61,6 +80,4 @@ The prior session shipped source it could not run: a broken migration made `migr
 Adjacent classes run as regression cover, all green: `CalibrationBackdatedRecordRaceTest` 1/3, `QualityInspectionSummaryTest` 1/4, `SpcServiceTest` (unit) 9/29. `php -l` clean on both changed test files.
 
 **SPA typecheck still not verified, and not for the previously reported reason.** The parse error at `spa/src/pages/production/work-orders/detail.tsx:624` that blocked the prior session has since been repaired by another session. `tsc --noEmit` now fails for an environment reason instead: it exceeds an 800 MB V8 heap on this host (`FATAL ERROR: Ineffective mark-compacts near heap limit`, exit 134). The cap was deliberate — three other audit sessions were live and the host was OOM-killed the previous day — so the run was contained rather than retried larger. Targeted ESLint over all six changed/claimed M059 SPA files passes with `--max-warnings 0`. The typecheck and the calibration browser walk remain the outstanding gates.
-
-
 
