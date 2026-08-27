@@ -53,6 +53,16 @@ Source scope: the supplier portal module and the explicitly required B2B/Auth/Ac
 - `spa/src/pages/portal/supplier/purchase-orders/detail.tsx:88-164`: Before, action visibility was inferred from stale client state and the shipment form omitted supported fields. After, capabilities come from the API and the form sends/loads shipped date, carrier, tracking number, ETA, and notes.
 - `api/app/Modules/B2B/Resources/SupplierPurchaseOrderResource.php:33-41` and `spa/src/types/b2b.ts:38-73`: Before, the client had no stable action contract. After, server-published capabilities govern acknowledge, shipment, document, and invoice actions, including accepted-GRN gating for invoice submission.
 
+## 9. M047-R003 — transaction-aware supplier-invoice attachment cleanup
+
+Implementation session: 2026-08-27
+
+- Before: `SupplierPortalService::submitInvoice()` wrapped the database transaction and its post-commit event/audit calls in one cleanup catch, so an event or portal-audit failure could delete the already-committed attachment path while leaving the invoice/document rows committed.
+- `api/app/Modules/B2B/Services/SupplierPortalService.php:407-536`: After, the cleanup catch wraps only `DB::transaction`; event dispatch and portal audit run after the commit boundary, so their failures rethrow without deleting the committed attachment path or document row.
+- `api/tests/Feature/B2B/SupplierPortalServiceTest.php:410-547`: Added event and post-commit audit failure injection tests that assert the committed file/document survive, plus a duplicate-digest transaction failure test that asserts the bill rolls back and no provisional invoice file is orphaned.
+- Verification: `docker compose exec -T -e DB_DATABASE=ogami_test_m047_impl api php -d memory_limit=768M artisan test tests/Feature/B2B/SupplierPortalServiceTest.php` — **39 passed / 167 assertions**; the three new tests — **3 passed / 10 assertions**. Both touched PHP files pass `php -l`; `git diff --check` passes. All test commands used `DB_DATABASE=ogami_test_m047_impl`.
+- Release: `🔁 Needs Re-audit` because other M047 findings remain open.
+
 ---
 
 # Re-audit session: 2026-08-27

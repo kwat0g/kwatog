@@ -11,9 +11,12 @@ use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
+use App\Modules\B2B\Events\SupplierInvoiceSubmitted;
 use App\Modules\B2B\Models\DeliverySchedule;
+use App\Modules\B2B\Models\PortalShippingDocument;
 use App\Modules\B2B\Models\SupplierPortalUser;
 use App\Modules\B2B\Models\SupplierShipment;
+use App\Modules\B2B\Services\SupplierPortalService;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\GrnItem;
@@ -23,8 +26,11 @@ use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -95,6 +101,44 @@ class SupplierPortalServiceTest extends TestCase
             'total' => Money::mul($quantity, '10.00'),
             'quantity_received' => '0.00',
         ]);
+    }
+
+    /**
+     * @return array{user: SupplierPortalUser, purchaseOrder: PurchaseOrder}
+     */
+    private function makeInvoiceFixture(Vendor $vendor): array
+    {
+        $user = $this->makePortalUser($vendor);
+        $item = Item::factory()->create();
+        $purchaseOrder = $this->makePo($vendor, 'sent');
+        $purchaseOrderItem = PurchaseOrderItem::create([
+            'purchase_order_id' => $purchaseOrder->id,
+            'item_id' => $item->id,
+            'description' => 'Resin Type A',
+            'quantity' => '2.00',
+            'unit' => 'kg',
+            'unit_price' => '100.00',
+            'total' => '200.00',
+            'quantity_received' => '0.00',
+        ]);
+        $grn = GoodsReceiptNote::factory()->create([
+            'purchase_order_id' => $purchaseOrder->id,
+            'vendor_id' => $vendor->id,
+            'status' => 'accepted',
+            'accepted_by' => User::factory()->create()->id,
+            'accepted_at' => now(),
+        ]);
+        GrnItem::create([
+            'goods_receipt_note_id' => $grn->id,
+            'purchase_order_item_id' => $purchaseOrderItem->id,
+            'item_id' => $item->id,
+            'location_id' => WarehouseLocation::factory()->create()->id,
+            'quantity_received' => '2.00',
+            'quantity_accepted' => '2.00',
+            'unit_cost' => '100.00',
+        ]);
+
+        return ['user' => $user, 'purchaseOrder' => $purchaseOrder];
     }
 
     private function createBill(int $vendorId): Bill
@@ -361,6 +405,146 @@ class SupplierPortalServiceTest extends TestCase
             ->where('vendor_id', $vendor->id)
             ->where('bill_number', 'SUP-INV-001')
             ->count());
+    }
+
+    public function test_submit_invoice_event_failure_preserves_committed_attachment(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $fixture = $this->makeInvoiceFixture($vendor);
+        $user = $fixture['user'];
+        $purchaseOrder = $fixture['purchaseOrder'];
+        Storage::fake('local');
+        Event::listen(SupplierInvoiceSubmitted::class, static function (): void {
+            throw new \RuntimeException('Injected supplier invoice event failure.');
+        });
+
+        try {
+            app(SupplierPortalService::class)->submitInvoice(
+                $vendor->id,
+                $user->id,
+                $purchaseOrder,
+                [
+                    'bill_number' => 'SUP-INV-EVENT-FAILURE',
+                    'date' => '2026-08-10',
+                    'is_vatable' => false,
+                ],
+                UploadedFile::fake()->createWithContent('supplier-invoice.pdf', '%PDF-event-failure%'),
+            );
+            $this->fail('The injected invoice event failure should be rethrown.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('Injected supplier invoice event failure.', $exception->getMessage());
+        }
+
+        $bill = Bill::query()
+            ->where('vendor_id', $vendor->id)
+            ->where('bill_number', 'SUP-INV-EVENT-FAILURE')
+            ->firstOrFail();
+        $document = PortalShippingDocument::query()->where('bill_id', $bill->id)->firstOrFail();
+
+        $this->assertTrue(Storage::disk('local')->exists($document->file_path));
+        $this->assertDatabaseHas('portal_shipping_documents', [
+            'id' => $document->id,
+            'file_path' => $document->file_path,
+            'bill_id' => $bill->id,
+        ]);
+    }
+
+    public function test_submit_invoice_transaction_failure_cleans_provisional_attachment(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $fixture = $this->makeInvoiceFixture($vendor);
+        $user = $fixture['user'];
+        $purchaseOrder = $fixture['purchaseOrder'];
+        Storage::fake('local');
+        $contents = '%PDF-transaction-failure%';
+
+        // Force the document insert to fail after the bill and provisional
+        // file have been created inside the transaction.
+        PortalShippingDocument::create([
+            'purchase_order_id' => $purchaseOrder->id,
+            'document_type' => 'supplier_invoice',
+            'file_path' => 'portal/supplier-invoices/existing.pdf',
+            'original_filename' => 'existing.pdf',
+            'file_size_bytes' => strlen($contents),
+            'content_sha256' => hash('sha256', $contents),
+            'mime_type' => 'application/pdf',
+            'uploaded_by' => $user->id,
+            'uploaded_at' => now(),
+        ]);
+
+        $failed = false;
+        try {
+            app(SupplierPortalService::class)->submitInvoice(
+                $vendor->id,
+                $user->id,
+                $purchaseOrder,
+                [
+                    'bill_number' => 'SUP-INV-TRANSACTION-FAILURE',
+                    'date' => '2026-08-10',
+                    'is_vatable' => false,
+                ],
+                UploadedFile::fake()->createWithContent('supplier-invoice.pdf', $contents),
+            );
+        } catch (\Throwable) {
+            $failed = true;
+        }
+
+        $this->assertTrue($failed, 'The injected document uniqueness failure should be rethrown.');
+        $this->assertDatabaseMissing('bills', [
+            'vendor_id' => $vendor->id,
+            'bill_number' => 'SUP-INV-TRANSACTION-FAILURE',
+        ]);
+        $this->assertSame(1, PortalShippingDocument::query()
+            ->where('purchase_order_id', $purchaseOrder->id)
+            ->where('content_sha256', hash('sha256', $contents))
+            ->count());
+        $this->assertEmpty(Storage::disk('local')->allFiles('portal/supplier-invoices'));
+    }
+
+    public function test_submit_invoice_portal_audit_failure_preserves_committed_attachment(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $fixture = $this->makeInvoiceFixture($vendor);
+        $user = $fixture['user'];
+        $purchaseOrder = $fixture['purchaseOrder'];
+        Storage::fake('local');
+        Event::fake([SupplierInvoiceSubmitted::class]);
+        DB::listen(static function (QueryExecuted $query): void {
+            $bindings = array_map(static fn (mixed $binding): string => (string) $binding, $query->bindings);
+            if (str_contains($query->sql, 'audit_logs') && in_array('supplier_inv.submit', $bindings, true)) {
+                throw new \RuntimeException('Injected supplier portal audit failure.');
+            }
+        });
+
+        try {
+            app(SupplierPortalService::class)->submitInvoice(
+                $vendor->id,
+                $user->id,
+                $purchaseOrder,
+                [
+                    'bill_number' => 'SUP-INV-AUDIT-FAILURE',
+                    'date' => '2026-08-10',
+                    'is_vatable' => false,
+                ],
+                UploadedFile::fake()->createWithContent('supplier-invoice.pdf', '%PDF-audit-failure%'),
+            );
+            $this->fail('The injected supplier portal audit failure should be rethrown.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('Injected supplier portal audit failure.', $exception->getMessage());
+        }
+
+        $bill = Bill::query()
+            ->where('vendor_id', $vendor->id)
+            ->where('bill_number', 'SUP-INV-AUDIT-FAILURE')
+            ->firstOrFail();
+        $document = PortalShippingDocument::query()->where('bill_id', $bill->id)->firstOrFail();
+
+        $this->assertTrue(Storage::disk('local')->exists($document->file_path));
+        $this->assertDatabaseHas('portal_shipping_documents', [
+            'id' => $document->id,
+            'file_path' => $document->file_path,
+            'bill_id' => $bill->id,
+        ]);
     }
 
     public function test_submit_invoice_rejects_bill_number_already_attached_to_another_po(): void

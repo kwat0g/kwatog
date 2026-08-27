@@ -517,19 +517,22 @@ class SupplierPortalService
                 'message' => 'Invoice submitted successfully. A draft bill is waiting for Accounts Payable review.',
                 ];
             });
-
-            if (str_starts_with((string) $result['message'], 'Invoice submitted successfully')) {
-                event(new SupplierInvoiceSubmitted($result['bill']));
-                $this->recordPortalAudit('supplier_inv.submit', $result['bill'], $portalUserId, $vendorId);
-            }
-
-            return $result;
         } catch (\Throwable $e) {
+            // The attachment is provisional only until the transaction commits.
+            // After commit, the persisted document row owns the path; a later
+            // event or audit failure must not leave that row pointing nowhere.
             if (is_string($storedPath)) {
                 Storage::disk('local')->delete($storedPath);
             }
             throw $e;
         }
+
+        if (str_starts_with((string) $result['message'], 'Invoice submitted successfully')) {
+            event(new SupplierInvoiceSubmitted($result['bill']));
+            $this->recordPortalAudit('supplier_inv.submit', $result['bill'], $portalUserId, $vendorId);
+        }
+
+        return $result;
     }
 
     /**
