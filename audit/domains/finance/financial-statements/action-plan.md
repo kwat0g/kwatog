@@ -1,94 +1,78 @@
 # M029 — Financial Statements action plan
 
-Date: 2026-08-24  
+Date: 2026-08-27
 Status: 📋 Plan Ready  
 Overall recommendation: separate implementation work; no production-code fixes in this audit session
 
-The module has working core report services and screens, but the highest-risk work changes financial calculations, export contracts, or RBAC. The contained dashboard and responsive-polish items are intentionally deferred so they do not create a misleading “finished” state while the report authority remains unresolved.
+The plan is ordered by financial correctness, security/export risk, contract stability, then UI polish. Dependencies were read for context only and are not part of this plan's implementation scope.
 
-## Ordered implementation plan
+## Ordered fixes
 
-### 1. M029-F01 — Enforce separate statement view and export authorization
-
-- Classification/severity: Broken, P0
-- Scope: medium; routes, SPA capability gates, tests
-- Session recommendation: `separate-recommended`
-- Require `accounting.statements.view` for JSON and `accounting.statements.export` for CSV/PDF. Apply the same split to AR/AP aging exports and to any generic export path.
-- Tests: view-only JSON success, view-only CSV/PDF 403, export-capable CSV/PDF success, system-admin bypass, and direct URL/UI parity.
-
-### 2. M029-F02 — Define and implement fiscal-year close/carry-forward semantics
+### 1. M029-F02 — Define and implement fiscal-year close/carry-forward semantics
 
 - Classification/severity: Broken, P0
-- Scope: large; balance-sheet service, fiscal-year/retained-earnings policy, possibly schema/workflow, tests
-- Session recommendation: `separate-recommended`
-- Decide whether prior-year revenue/expense is closed into retained earnings or whether the report must derive a cumulative closed-period result. Make the policy explicit and prevent a valid posted ledger from producing an unexplained rollover imbalance.
+- Size: large
+- Session tag: separate-recommended
+- Decide whether prior-year revenue/expense is closed into retained earnings or whether the balance sheet derives a cumulative closed-period result. Make the policy explicit and prevent a valid posted ledger from becoming unexplained at rollover.
 - Tests: prior-year income, current-year income, January and non-January fiscal starts, manual close entry, repeated close, and intentionally corrupted ledger behavior.
 
-### 3. M029-F03 — Add a strict shared statement-date request contract
-
-- Classification/severity: Incomplete, P1
-- Scope: medium; FormRequest/validation, JSON/CSV/PDF controllers, tests
-- Session recommendation: `separate-recommended`
-- Validate `from`, `to`, and `as_of` as strict `Y-m-d` values, define timezone behavior, reject `from > to`, and return the standard 422 validation envelope on all report formats.
-- Tests: omitted defaults, valid boundaries, malformed dates, ambiguous dates, reversed ranges, and PDF/CSV parity.
-
-### 4. M029-F04 — Make PDF rendering money-safe
+### 2. M029-F10 — Neutralize spreadsheet formulas in aging CSV text
 
 - Classification/severity: Broken, P1
-- Scope: medium; shared PDF money formatter/templates, tests
-- Session recommendation: `separate-recommended`
-- Remove `(float)` conversions from statement templates. Format decimal strings with a shared string-safe helper and preserve sign, scale, and large values.
-- Tests: large balances, negative contra balances, zero values, half-up rounding, and JSON/PDF amount parity.
+- Size: medium
+- Session tag: separate-recommended
+- Add a central CSV-cell policy for user-controlled text and apply it to customer/vendor names while preserving ordinary text. Cover leading equals, plus, minus, and at-sign values in AR and AP exports.
+- Tests: formula-prefix regression cases and ordinary-name/export parity cases.
 
-### 5. M029-F05 — Carry functional currency through every statement output
-
-- Classification/severity: Incomplete, P1
-- Scope: medium; API response/export schema, PDF service/templates, SPA display contract, tests
-- Session recommendation: `separate-recommended`
-- Include the configured functional currency code in report metadata, pass it to all PDFs, remove hardcoded `PHP`, and label CSV/JSON/UI outputs consistently.
-- Tests: PHP default, a non-PHP configured currency, PDF/CSV metadata, and runtime setting changes.
-
-### 6. M029-F06 — Make CSV contracts reconcile with JSON/PDF contracts
+### 3. M029-F06 — Publish a type-safe CSV metadata contract
 
 - Classification/severity: Incomplete, P1
-- Scope: small/medium; controller serializers, export fixtures, tests
-- Session recommendation: `separate-recommended`
-- Add trial-balance totals and balance-sheet equation/status metadata to CSV, define headers/total rows, and document the schema for downstream consumers.
-- Tests: row totals, debit-credit reconciliation, balance-sheet equation, imbalance flag, and JSON/CSV/PDF parity.
+- Size: medium
+- Session tag: separate-recommended
+- Define explicit header/row schemas. Keep status flags out of decimal columns, include trial-balance reconciliation and balance-sheet equation/status metadata, and document compatibility expectations.
+- Tests: every core statement CSV, row widths, totals, status values, and JSON/CSV/PDF parity.
 
-### 7. M029-F07 — Build the missing statement regression matrix
+### 4. M029-F11 — Correct SPA date-only and fiscal-year defaults
+
+- Classification/severity: Incomplete, P1
+- Size: medium
+- Session tag: separate-recommended
+- Replace UTC ISO conversion for date-only inputs with a date-only formatter, and derive income-statement defaults from the configured fiscal start month.
+- Tests: Asia/Manila local-midnight boundaries, leap/day boundaries, and non-January fiscal years.
+
+### 5. M029-F07 — Complete the statement regression matrix
 
 - Classification/severity: Missing, P1
-- Scope: medium; feature tests and report fixtures
-- Session recommendation: `separate-recommended`
-- Cover all service invariants and HTTP boundaries rather than only the current two-entry happy path.
-- Tests: balance sheet, fiscal rollover, date validation, view/export permissions, CSV/PDF downloads, currency, precision, cache invalidation, and no-posted-entry empty results.
+- Size: medium
+- Session tag: separate-recommended
+- Add service and HTTP coverage for rollover, all CSV/PDF shapes, dedicated AP export, permissions, currency changes, precision, cache invalidation, and empty/no-posted-entry paths. Add browser checks for responsive/accessibility behavior.
+- Keep the test database isolated per agent and preserve the coordinator's full-suite ownership.
 
-### 8. M029-F08 — Replace the dashboard placeholder and restore report discoverability
+### 6. M029-F12 — Align AR/AP aging response metadata
 
 - Classification/severity: Incomplete, P2
-- Scope: small; finance dashboard/sidebar links and SPA tests
-- Session recommendation: `same-session-ok`
-- Render real permission-aware links for trial balance, income statement, balance sheet, AR aging, and AP aging, or add equivalent Finance sidebar entries. Avoid exposing a link whose route is not granted.
-- Verification: finance officer and system administrator see working destinations; a user without statement view sees neither the panel nor navigation items.
+- Size: small
+- Session tag: same-session-ok
+- Approve one aging response contract and expose the effective as-of date consistently without changing separately owned aging calculation services during this module audit.
+- Tests: AR/AP JSON, CSV, and UI display of the selected/effective date.
 
-### 9. M029-F09 — Finish responsive and accessible report tables
+### 7. M029-F13 — Move export authorization to the request/route boundary
 
 - Classification/severity: Polish, P2
-- Scope: small; SPA table wrappers, headers, grid breakpoints, visual tests
-- Session recommendation: `same-session-ok`
-- Add `overflow-x-auto` to wide report tables, add `<thead>`/`<th scope="col">` where missing, and change balance-sheet totals to responsive spans such as `sm:col-span-2 lg:col-span-3`.
-- Verification: keyboard traversal, screen-reader table semantics, 320px/768px/desktop layouts, loading/error/empty states, and no horizontal page overflow.
+- Size: small
+- Session tag: separate-recommended
+- Consolidate CSV/PDF export permission enforcement in route middleware or FormRequest authorization so new formats cannot accidentally bypass the policy.
+- Tests: view-only JSON, view-only export rejection, export-capable CSV/PDF, and route additions.
 
-## Session decision
+## Gate decision for this session
 
-No production-code implementation was applied. F01–F07 are the majority of the plan and are financial, money, export-contract, authorization, or broad test changes. F08–F09 are safe contained candidates for a later same-session polish pass after the report authority contract is agreed.
+No production-code implementation was applied. F12 is the only same-session-ok item, and it still requires contract approval. The majority of the ordered plan is separate-recommended, with a large P0 accounting-policy item and several medium security/contract/test changes. The total scope is not small, so the gate result is 📋 Plan Ready.
 
-## Definition of done for the next implementation session
+## Definition of done
 
-- A view-only user cannot retrieve CSV/PDF statement data, while an export-capable user can.
-- Balance-sheet output remains mathematically correct across fiscal-year rollover and explicitly reports/handles genuine ledger imbalance.
-- All report date inputs have one strict validation/error contract.
-- JSON, CSV, and PDF amounts retain exact decimal values and consistently identify the configured currency.
-- Service, controller, permission, export, and UI tests cover both happy paths and direct/adversarial calls.
-- Dashboard/sidebar navigation reaches every granted report and the screens pass narrow-viewport/accessibility review.
+- Fiscal-year rollover produces mathematically correct equity under an explicit annual-close policy.
+- User-controlled CSV text cannot execute as spreadsheet formulas.
+- CSV schemas keep metadata and money types distinct and reconcile with JSON/PDF outputs.
+- Statement date defaults are timezone-safe and respect the configured fiscal year.
+- Service, controller, permission, export, currency, precision, cache, empty-state, and browser checks cover the report surface.
+- AR/AP aging metadata is symmetric and all export authorization is enforced at the boundary.

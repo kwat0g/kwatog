@@ -279,3 +279,29 @@ Released as `🔁 Needs Re-audit`. The two assigned failures are fixed and green
 execution, and F01/F03/F05/F06 are now genuinely verified, but F02 is an open P0
 accounting-policy decision with a measured wrong figure, and F04's value-level PDF
 assertion plus the F07/F08/F09 gaps above remain.
+
+## 2026-08-27 — batch2-agent-a re-audit
+
+- Claim: the preferred attempt `commercial/customer-complaints-8d M034` returned
+  `ERROR: module folder not found: /home/kwat0g/Desktop/kwatog/audit/domains/commercial/customer-complaints-8d/M034`.
+  Per the assigned fallback, `finance financial-statements` returned `CLAIMED`;
+  actual module audited: M029.
+- Re-audit preparation: read the refreshed registry, prior audit-report.md,
+  action-plan.md, and fix-log.md; checked current git diff and module file mtimes.
+  The generated registry and dependency modules were left untouched.
+- Audit result: discovery, hardening, and polish passes completed. Current findings
+  are M029-F02 (P0 Broken), M029-F06 (P1 Incomplete), M029-F07 (P1 Missing),
+  M029-F10 (P1 Broken), M029-F11 (P1 Incomplete), M029-F12 (P2 Incomplete), and
+  M029-F13 (P2 Polish).
+- Gate: no production-code or dependency fixes were applied. The majority of the
+  action plan is separate-recommended and the total scope is not small; status is
+  `📋 Plan Ready`.
+- Verification: focused PHPUnit passed with 12 tests and 69 assertions on
+  `DB_DATABASE=ogami_test_m034_agent_a`; the shared `ogami_test` database was not
+  used. The isolated rollover probe reproduced the 10,000.00 prior-year mismatch.
+  PHP lint, statement route listing, targeted SPA ESLint, and scoped diff checks
+  passed. The SPA API route audit reported only two unrelated pre-existing HR
+  endpoint mismatches. Full suite and browser checks remain coordinator work.
+- Changed audit artifacts: audit-report.md and action-plan.md were refreshed; this
+  session entry was appended here. No production files were changed. Release and
+  lock verification were pending at the time of this entry.
