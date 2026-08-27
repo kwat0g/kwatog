@@ -1,4 +1,78 @@
-# Audit Report — Platform / Audit Activity (M004)
+# Re-audit Report — Platform / Audit Activity (M004)
+
+Audit session: 2026-08-27
+
+Claim: CLAIMED for platform/audit-activity (M004); fallback was not used.
+
+Scope: this module only. Dependency modules were read for integration context and were not modified.
+Final gate: 📋 Plan Ready; no implementation fixes were applied because the current plan is cross-module and not small.
+
+## Re-audit conclusion
+
+The prior hardening work is present: activity projection is registered, auth activity is mirrored, date-only filters use day boundaries, audit context and hash IDs are exposed, entity trails paginate, and activity events have model/database immutability protections. The focused backend and SPA static checks pass on the unique audit database.
+
+The module is not ready for ✅ Verified. Two archive commands can permanently skip rows from a partially expired month, one durable MRP event is silently omitted from the feed, queued event actor IDs are not propagated, and producer taxonomy is wider than the API/UI contract. Those findings require coordinated behavior decisions and regression coverage.
+
+## Discovery and current evidence
+
+- audit/00-MODULE-REGISTRY.md listed M004 as 🔁 Needs Re-audit; the atomic claim succeeded for the preferred target.
+- The admin routes and SPA route guards are present for both activity and audit-log surfaces (api/app/Modules/Admin/routes.php:25-33,101-121; spa/src/routes/dashboardRoutes.tsx:101-105; spa/src/routes/adminRoutes.tsx:118-142,197-198).
+- The event wildcard projection is registered in api/app/Providers/AppServiceProvider.php:195-200; auth projection supplies actor, IP, and timestamp context in api/app/Modules/Admin/Listeners/RecordAuthActivity.php:31-44.
+- Activity filtering now treats from/to as inclusive day boundaries (api/app/Common/Services/ActivityFeedService.php:132-137), and the focused activity tests cover idempotency, date boundaries, event projection, API hashes/context, entity trails, validation, and immutability (api/tests/Feature/Admin/AuditActivityTest.php:29-189).
+- Retention is archive-only and scheduled monthly (api/routes/console.php:243-266), but the archive boundary behavior remains defective as described below.
+
+## Findings
+
+### F-01 — Broken — archive commands can permanently skip a partially expired month
+
+Both commands derive a cutoff at the start of the day (api/app/Console/Commands/PruneAuditLogs.php:57; api/app/Console/Commands/ArchiveActivityEvents.php:45), select any month containing at least one row before that cutoff (PruneAuditLogs.php:67-72; ArchiveActivityEvents.php:54-59), and then skip the entire month whenever a valid final archive already exists (PruneAuditLogs.php:98-103; ArchiveActivityEvents.php:82-85). The archive query itself includes only rows before the cutoff (PruneAuditLogs.php:111-114; ArchiveActivityEvents.php:92-95).
+
+If the cutoff falls inside a month, the first run writes only the expired prefix. Once the remainder of that month becomes eligible, the valid archive causes the command to skip it, so the later rows never enter the archive. Source rows are retained by policy, but the promised archive is incomplete and cannot be repaired by the scheduled rerun.
+
+### F-02 — Missing — MrpReplanRequested is silently omitted from the activity feed
+
+The wildcard projector requires either a model subject or one of the recognized request/run identities; otherwise eventIdentity() returns null (api/app/Modules/Admin/Listeners/RecordActivityFromEvent.php:200-219). MrpReplanRequested carries only salesOrderIds, reason, and initiatedBy (api/app/Modules/MRP/Events/MrpReplanRequested.php:14-19), and both durable dispatch sites construct that event without a model or request ID (api/app/Modules/MRP/Services/BomService.php:181-184; api/app/Modules/Production/Services/ProductionRoutingService.php:522-525). The projector therefore returns before ActivityFeedService::record() is called.
+
+Automatic replans initiated by BOM or routing changes leave no activity evidence even though they cross the durable outbox boundary.
+
+### F-03 — Incomplete — queued event actor attribution falls back to System
+
+RecordActivityFromEvent::handle() forwards the description but does not pass actorUserId, actorType, or event time to the feed (api/app/Modules/Admin/Listeners/RecordActivityFromEvent.php:55-64). The affected durable events carry explicit actor fields: MrpPlanGenerated::$initiatingActorId (api/app/Modules/MRP/Events/MrpPlanGenerated.php:23-28), PayrollComputationRequested::$triggeredBy (api/app/Modules/Payroll/Events/PayrollComputationRequested.php:22-27), and YearEndLeaveProcessingRequested::$runById (api/app/Modules/Leave/Events/YearEndLeaveProcessingRequested.php:23-28). The outbox dispatcher re-emits the decoded event inside dispatch context without restoring an authenticated user (api/app/Common/Services/OutboxDispatcher.php:32-42).
+
+For worker-delivered events, ActivityFeedService::record() therefore defaults the actor to System despite the originating actor being available on the event. This makes the activity trail materially less useful for accountability.
+
+### F-04 — Incomplete — persisted activity taxonomy is wider than the API/UI contract
+
+The endpoint exposes and validates only the five ActivityType enum cases (api/app/Modules/Admin/Enums/ActivityType.php:7-15; api/app/Modules/Admin/Controllers/ActivityFeedController.php:23-42), while direct producers persist hr and production.work_order (api/app/Modules/HR/Services/OnboardingService.php:114-129; api/app/Modules/Production/Services/WorkOrderService.php:611-619). Those rows can exist, but the activity endpoint rejects those values as a filter and the options response cannot offer them. The actor contract also declares only user | system in the SPA (spa/src/types/activity.ts:16-23), while auth audit producers persist self_service, supplier_portal, and customer_portal (api/app/Modules/Auth/Services/AuthAuditLogger.php:18-43, mirrored by api/app/Modules/Admin/Listeners/RecordAuthActivity.php:31-44).
+
+The result is a split contract: valid persisted records are not consistently discoverable or representable by the admin surface.
+
+### F-05 — Polish — audit model identity is formatted inconsistently across views
+
+The list resource normalizes model_type for display (api/app/Modules/Admin/Resources/AuditLogResource.php:14-20), while the detail response returns the stored fully qualified value (api/app/Modules/Admin/Controllers/AuditLogController.php:64-72) and the detail page renders that value directly (spa/src/pages/admin/audit-logs/detail.tsx:100-112). The same audit record can therefore show a short model name in the list and a namespace-qualified name in detail. This is low-risk presentation drift, but it weakens investigation continuity.
+
+### F-06 — Missing — current failure modes lack focused regression coverage
+
+PruneAuditLogsTest covers one wholly expired month and corrupt-file rebuild only (api/tests/Feature/Infrastructure/PruneAuditLogsTest.php:17-55); there is no boundary case for a cutoff inside a month and no focused activity:archive test. AuditActivityTest does not cover MrpReplanRequested omission or queued actor propagation (api/tests/Feature/Admin/AuditActivityTest.php:29-189), and no module-specific SPA test/browser file exists under spa/src for these screens. Typecheck and lint can pass while these integration contracts remain broken.
+
+## Prior finding disposition
+
+The earlier report's producer, date-boundary, context, hash-ID, entity-pagination, activity-immutability, and visible-label issues were rechecked. The corresponding implementation is now present in AppServiceProvider, ActivityFeedService, AuditLogController, AuditLogResource, ActivityEvent, the immutability migration, and the SPA pages. The current findings above supersede the prior “no producers”, raw date-boundary, missing context, and missing-coverage conclusions; the archive, event identity/actor, taxonomy, and regression gaps remain open.
+
+## Verification
+
+- Unique DB: DB_DATABASE=ogami_test_m004_agent_c; migrations are complete, including 0475_harden_activity_events and the audit immutability migration.
+- AuditActivityTest: 8 passed, 28 assertions.
+- AuditLogSearchTest: 8 passed, 22 assertions.
+- AuthEventsAuditTest, MaterialDetailAuditTest, PruneAuditLogsTest: 12 passed, 52 assertions.
+- SPA npm run typecheck: passed; targeted ESLint for activity/audit files: passed.
+- PHP syntax checks for audited backend files: passed; git diff --check: passed.
+- Route and schedule checks confirmed the activity endpoints and monthly audit:prune/activity:archive jobs.
+- The full suite and browser automation were not run; they are deferred in the action plan. No current execution blocker prevented the focused verification.
+
+---
+
+# Historical Audit Report — Platform / Audit Activity (M004)
 
 Audit session: 2026-08-24 04:19–04:28 Asia/Manila  
 Scope: the audit log and activity-feed module only. Dependency modules were read for integration context and were not modified.

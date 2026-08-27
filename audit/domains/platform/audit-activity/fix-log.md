@@ -319,3 +319,11 @@ honest status is not "Verified":
    the obvious remedy is blocked by the audit-integrity triggers, so it needs a decision.
 
 Nothing above is a defect in the audit-activity module's own product code.
+
+## 2026-08-27 — M004 re-audit verification (batch4-agent-c)
+
+- Preferred module claim succeeded for platform/audit-activity; fallback was not used.
+- Re-audit gate is 📋 Plan Ready; no implementation files were changed or fixed. The current open findings are recorded in audit-report.md and action-plan.md.
+- Verification used only DB_DATABASE=ogami_test_m004_agent_c: migrations completed; AuditActivityTest (8/28 assertions), AuditLogSearchTest (8/22), and the auth/material/archive group (12/52) passed sequentially.
+- SPA typecheck and targeted ESLint passed; audited PHP syntax checks and git diff --check passed. Route and scheduler checks confirmed the activity surface and monthly archive jobs.
+- Full-suite/browser verification remains deferred. No dependency files, shared configuration, generated registry, or other module were changed.
