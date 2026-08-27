@@ -1,338 +1,385 @@
 # M025 — Chart of accounts and accounting periods audit report
 
-- Audit date: 2026-08-25
+- Audit date: 2026-08-27
 - Domain/module: finance / chart-of-accounts-periods
 - Tier: 2
 - Surface: M
 - Dependencies: auth-session, rbac
 - Roles: system admin, finance officer
 - Status: Plan Ready
-- Source changes: the prior report was invalidated by substantial uncommitted
-  changes in the shared worktree; this session made no production-source changes.
+- Claimed by: agent-b
+- Test database: `ogami_test_m025_agent_b`
 
-## Scope and summary
+## Scope and disposition
 
-The module has a working API and SPA surface for COA list/tree, CRUD,
-activation, period list, close, reopen, and CSV setup. Current writes use
-transactions, HashID resources, decimal-string balances, and shared business
-exceptions. The current worktree also contains the intended hardening from the
-previous report: period lifecycle and posting now share a PostgreSQL advisory
-lock, account hierarchy writes lock the account set and validate cycles/type,
-new journal lines pass through an active-account resolver, generic account
-updates cannot change status, the importer calls `AccountService`, and the SPA
-period list/reopen form has the previous pagination/filter/reset fixes.
+This audit covers the Accounting COA and fiscal-period API/services, their
+import boundary, the COA and periods SPA surfaces, and the focused tests. The
+module has working HashID resources, transaction-backed hierarchy and period
+writes, decimal-string balances, active-account posting guards, and
+PostgreSQL period locking.
 
-The fresh audit found residual authority and completeness gaps:
+Two small, contained issues were fixed and verified in this session:
 
-1. Some configured GL account paths verify only that an account is active, not
-   that its COA type matches its semantic role.
-2. The PostgreSQL duplicate-period fallback is not transaction-safe after a
-   unique violation, although the normal service paths are serialized before
-   they reach it.
-3. CSV metadata and status authority do not match the importer contract.
-4. Split COA permissions are not represented completely in the SPA.
-5. The period UI's `Open` filter does not match the absence-means-open model.
-6. The new locking and hierarchy rules still lack true PostgreSQL race and
-   route/RBAC acceptance coverage.
-7. The current SPA period page does not typecheck because pagination metadata
-   is dereferenced without narrowing the query result.
+- the COA create/edit forms now mirror the backend code/type/balance/name
+  contract;
+- the duplicate-period PostgreSQL test resets migration state after committing
+  its independent-connection fixtures.
 
-These findings include financial-state and cross-module work, so this first
-post-change audit produces a Plan Ready handoff rather than applying fixes.
+The remaining findings include financial classification, cross-module posting,
+permission-boundary, import-authority, period-model, schema, and acceptance
+decisions. They are therefore left Plan Ready for separate implementation and
+re-audit. No production financial logic, shared configuration, registry file,
+dependency module, or M034 was changed.
 
-## Discovery
+## Pass 1 — Discovery
 
-### Backend
+### Backend/API surface
 
-- `api/app/Modules/Accounting/routes.php:20-38` exposes authenticated,
-  accounting-feature-gated COA and period routes with separate view/manage and
-  deactivate/activate permissions.
-- `api/app/Modules/Accounting/Services/AccountService.php:21-42` provides a
-  paginated flat list; `:49-123` builds a balance-enriched tree and fails
-  deterministically on cyclic parent data; `:125-234` owns create/update,
-  deactivation, and activation.
+- `api/app/Modules/Accounting/routes.php:24-31` exposes authenticated,
+  accounting-feature-gated COA list/tree/show, CRUD, activation/deactivation,
+  and period list/close/reopen routes. COA view, metadata manage, and status
+  permissions are separate.
+- `api/app/Modules/Accounting/Controllers/AccountController.php:20-45`
+  delegates list/tree/show and status/metadata mutations to the Accounting
+  services. `tree()` explicitly resolves `AccountResource` around the service
+  tree at `:27-31`.
+- `api/app/Modules/Accounting/Services/AccountService.php:21-45` provides a
+  flat paginated list; `:49-122` builds a balance-enriched hierarchy and
+  detects legacy cycles; `:125-234` owns create/update/status writes under an
+  ordered account lock.
 - `api/app/Modules/Accounting/Services/AccountingPeriodService.php:32-45`
-  provides paginated year/status filtering; `:51-176` owns close, reopen, and
-  the posting guard; `:194-251` owns scheduler relock.
+  provides year/status filtering; `:52-114` owns close and duplicate recovery;
+  `:147-190` owns reopen and the posting guard; `:229-260` owns scheduler
+  relock.
 - `api/app/Modules/Accounting/Imports/AccountImporter.php:18-79` supports
-  required code/name/type/normal-balance columns plus description, parent code,
-  and optional `is_active`, then delegates creation to `AccountService`.
-- `api/app/Modules/Accounting/Services/PostingAccountResolver.php:20-123`
-  centralizes account existence/active checks and can enforce types when the
-  caller supplies them.
+  required `code`, `name`, `type`, and `normal_balance`, plus description,
+  parent code, and optional `is_active`, then delegates to `AccountService`.
+- `api/app/Modules/Accounting/Resources/AccountResource.php:10-38` emits a
+  HashID and decimal-string balance fields; `AccountingPeriodResource.php:8-32`
+  emits a HashID, enum status label, and actor metadata.
 
-### Frontend
+### Frontend surface
 
-- `spa/src/pages/accounting/coa/index.tsx:19-130` renders the tree with
-  loading/error/empty states, search, expansion, balances, and manage-gated
-  create/edit links; `:151-202` renders role-aware tree rows.
-- `spa/src/pages/accounting/coa/edit.tsx:20-70,75-107` edits account metadata
-  and invokes dedicated activation/deactivation endpoints when authorized.
-- `spa/src/pages/accounting/periods.tsx:41-209` renders paginated periods,
-  year/status filters, loading/error/empty states, close/reopen actions, and
-  role-aware controls; `:211-250` owns the reason modal.
-- `spa/src/pages/accounting/implicitOpenCurrentPeriod.ts:3-18` creates a
-  client-only current-month open target for the empty-state close action.
+- `spa/src/pages/accounting/coa/index.tsx:19-130` loads the balance-enriched
+  tree with loading, error/retry, empty, stale-placeholder, search, and
+  mutation feedback states; `:151-202` renders role-aware rows.
+- `spa/src/pages/accounting/coa/create.tsx:21-37` and
+  `spa/src/pages/accounting/coa/edit.tsx:18-21` provide RHF/Zod metadata
+  forms, server-validation handling, draft safety, cancel actions, and
+  pending submit states.
+- `spa/src/pages/accounting/periods.tsx:41-113` provides URL-backed year and
+  status filters; `:115-209` renders period rows, close/reopen actions,
+  pagination, and loading/error/empty/data states; `:211-250` owns the reopen
+  reason modal.
+- `spa/src/routes/accountingRoutes.tsx:44-52` lazy-loads the Accounting pages
+  under the module guard and applies page-level permission guards.
 
-### Tests and verification surface
+### Tests, diffs, and mtimes
 
 - `api/tests/Feature/Accounting/ChartOfAccountsHardeningTest.php:39-141`
-  covers service-level hierarchy, cycle, inactive-posting, status-update, and
-  importer regressions.
+  covers hierarchy, cycle safety, inactive posting, generic status mutation,
+  and importer invariants.
+- `api/tests/Feature/Accounting/ChartOfAccountsAuthorizationTest.php:31-107`
+  covers the HTTP view/manage/status permission matrix, but only for the
+  exercised endpoints.
 - `api/tests/Feature/Accounting/AccountingPeriodCloseRegressionTest.php:40-96`
-  covers sequential idempotent close, reopen/relock, and stale-row recheck.
-- `api/tests/Feature/Accounting/JournalEntryPostRaceTest.php:52-76` covers a
-  stale journal draft after a concurrent terminal-state change, not a
-  close-versus-post interleaving.
-- `api/tests/Feature/Accounting/AccountingPeriodAuthorizationTest.php`
-  covers period permission boundaries; no equivalent focused AccountController
-  CRUD/activation permission suite was found.
+  covers sequential close, reopen/relock, missing-row reopen, and stale-row
+  recheck.
+- `api/tests/Feature/Accounting/AccountingPeriodPostingConcurrencyTest.php:68-205`
+  now contains independent-connection PostgreSQL interleavings for manual
+  post, system post, later close, and scheduler relock.
+- `api/tests/Feature/Accounting/ConfiguredControlAccountTypeTest.php:39-179`
+  covers the centralized control-account type policy and a wrong-type AP
+  posting that commits no bill or journal.
+- `spa/src/pages/accounting/coa/index.permissions.test.tsx:56-104` covers the
+  four isolated row-grant combinations and status confirmation handler;
+  `spa/src/pages/accounting/periods.test.ts:1-25` covers the synthetic
+  current-period helper.
+- Before this session, `git diff --name-status` showed only the coordinator's
+  generated `audit/00-MODULE-REGISTRY.md` diff. The module source/test mtimes
+  identify the current hardening commits: the policy/test and row-matrix work
+  was written on 2026-08-27, while the Accounting services, routes, and
+  inherited audit docs were last written on 2026-08-26. This audit did not
+  regenerate or edit the registry.
 
-## Prior findings rechecked
+## Pass 2 — Hardening
 
-The previous report's period barrier, hierarchy validation, inactive posting,
-generic status mutation, importer delegation, scheduler relock, period list,
-and reopen-modal findings are no longer present in their originally reported
-forms:
+### F-001 — Configured GL role enforcement is not fail-closed for every role
 
-- Period close and posting both acquire the same transaction-scoped advisory
-  lock and then lock the authoritative row at
-  `api/app/Modules/Accounting/Services/AccountingPeriodService.php:55-67,154-167`
-  and `api/app/Modules/Accounting/Services/JournalEntryService.php:267-287,325-337`.
-- Account updates use ordered account locks and validate parent existence,
-  activity, type, self-parenting, and descendant cycles at
-  `api/app/Modules/Accounting/Services/AccountService.php:164-193,264-310`;
-  tree reads detect legacy cycles at `:49-77`.
-- New journal lines resolve active accounts at
-  `api/app/Modules/Accounting/Services/JournalEntryService.php:490-519` and
-  re-lock them before posting at `:285-287,335-337`.
-- Generic status changes are rejected at
-  `api/app/Modules/Accounting/Services/AccountService.php:147-151`, while
-  status endpoints are separately permission-gated at
-  `api/app/Modules/Accounting/routes.php:28-31`.
-- The importer now delegates creation to the invariant-bearing service at
-  `api/app/Modules/Accounting/Imports/AccountImporter.php:64-79`.
-- Scheduler relock uses a transaction, advisory lock, row lock, and fresh
-  status/time recheck at
-  `api/app/Modules/Accounting/Services/AccountingPeriodService.php:203-229`.
-- Period pagination/year/status controls and reopen-target reset are present at
-  `spa/src/pages/accounting/periods.tsx:45-59,82-113,179-184,219-223`.
-- The status form now uses explicit string values rather than the previously
-  reported coercion at `spa/src/pages/accounting/coa/edit.tsx:20-24,42-46`.
+- Classification: **Broken**
+- Scope: **large**
+- Session recommendation: **separate-recommended**
+- Evidence: `AccountingAccountPolicyService::typeFor()` is keyed by the
+  incoming account code and returns the first matching `match` arm at
+  `api/app/Modules/Accounting/Services/AccountingAccountPolicyService.php:46-55`.
+  `controlAccountId()` then resolves one type for that code at `:66-72`.
+  The existing regression test deliberately pins the silent collision:
+  `api/tests/Feature/Accounting/ConfiguredControlAccountTypeTest.php:106-123`
+  points `vat_input_code` at the AP code, observes `Liability`, and accepts the
+  same account ID. AP requires liability while VAT Input requires asset, so the
+  VAT Input line can be posted to a liability account while the journal remains
+  balanced.
+- The same authority is bypassed by downstream configured-code writers:
+  Payroll bulk-plucks configured accounts without active/type checks at
+  `api/app/Modules/Payroll/Services/PayrollGlPostingService.php:174-186`;
+  GRNI does the same at
+  `api/app/Modules/Inventory/Services/GrnGlPostingService.php:113-125`; and
+  Return Management resolves the configured default revenue ID with a raw
+  query at `api/app/Modules/ReturnManagement/Services/ReturnRequestService.php:1318-1350`.
+  These consumers are outside the M025 edit boundary, but they are part of the
+  configured-account contract M025 owns.
+- Impact: unique AP/AR/VAT/discount settings are type-checked on the current
+  Accounting writers, but conflicting settings and several cross-module
+  writers can still produce semantically misclassified financial postings.
+- Recommendation: key the policy by role rather than code, reject incompatible
+  duplicate role assignments before posting, include every configured semantic
+  role, and route downstream writers through the typed resolver. Coordinate the
+  cross-module changes with M026 and the Payroll, Inventory, Assets, HR, and
+  Return Management owners.
 
-## Findings
+### F-003 — CSV metadata and status authority do not match the importer
 
-### F-001 — Configured GL account roles are not type-safe on every posting path
-
-- Classification: Broken
-- Scope: large
-- Session recommendation: separate-recommended
-- Evidence: `PostingAccountResolver::configuredIdByCode()` supports semantic
-  type enforcement when types are passed at
-  `api/app/Modules/Accounting/Services/PostingAccountResolver.php:99-107`.
-  Invoice passes `Asset`/`Liability` for AR/VAT at
-  `api/app/Modules/Accounting/Services/InvoiceService.php:240-241,645-647`,
-  and Credit Note maps AP/AR/VAT codes to expected types at
-  `api/app/Modules/Accounting/Services/CreditNoteService.php:380-392`.
-  Bill posting resolves AP and VAT Input with the untyped helper at
-  `api/app/Modules/Accounting/Services/BillService.php:968-995,1028-1031`.
-  Payroll and inventory consumers also build configured-code line IDs with
-  raw account queries at
-  `api/app/Modules/Payroll/Services/PayrollGlPostingService.php:174-200` and
-  `api/app/Modules/Inventory/Services/GrnGlPostingService.php:113-125`.
-- Impact: An active account of the wrong type can receive a semantically
-  specific bill/AP, VAT, payroll, GRNI, or inventory posting. The canonical
-  journal boundary rejects missing/inactive accounts, but it intentionally does
-  not infer semantic types from an arbitrary line. This can therefore produce
-  a balanced journal with incorrect financial classification.
-- Recommendation: Define one typed configuration map owned by Accounting,
-  route every configured-code lookup through it, and make each automated
-  writer pass the expected `AccountType` before the final journal transaction.
-  Add negative tests for active-but-wrong-type control accounts and verify the
-  type remains authoritative across a draft-to-post race.
-
-### F-002 — PostgreSQL duplicate-period recovery queries after an aborted transaction
-
-- Classification: Incomplete
-- Scope: medium
-- Session recommendation: separate-recommended
-- Evidence: `close()` catches a PostgreSQL unique violation from `save()` and
-  immediately issues a `SELECT ... FOR UPDATE` in the same outer transaction at
-  `api/app/Modules/Accounting/Services/AccountingPeriodService.php:55-99`.
-  PostgreSQL marks the transaction failed after a `23505` statement error;
-  without a savepoint or outer retry, the recovery query cannot run in that
-  transaction. The advisory lock at `:60` prevents this race among cooperating
-  service callers, but the catch block claims to handle a concurrent insert
-  from a non-cooperating writer or a deployment path that did not take the
-  advisory lock.
-- Impact: The advertised brand-new-row fallback can turn an otherwise
-  recoverable duplicate close into a transaction-aborted error. This is a
-  narrow edge path, but it sits on period creation and undermines the
-  close-is-idempotent contract under concurrent writers.
-- Recommendation: Remove the misleading in-transaction fallback in favor of a
-  savepoint or retrying the whole transaction after rollback, and add a
-  PostgreSQL test that exercises the duplicate insert path explicitly.
-
-### F-003 — CSV metadata and status authority do not match the importer contract
-
-- Classification: Incomplete
-- Scope: medium
-- Session recommendation: separate-recommended
+- Classification: **Incomplete**
+- Scope: **medium**
+- Session recommendation: **separate-recommended**
 - Evidence: `AccountImporter` documents and accepts optional `is_active` at
   `api/app/Modules/Accounting/Imports/AccountImporter.php:14-17,64-75`.
-  The shared import schema, which is the API/UI source of truth, advertises
-  only `description` and `parent_code` for COA at
-  `api/app/Common/Services/Import/MasterDataImportService.php:57-74`.
-  The import routes authorize only `admin.import.manage` at
-  `api/app/Modules/Admin/routes.php:191-203`; they do not also require
-  `accounting.coa.deactivate`.
-- Impact: Import tooling cannot discover or guide users for a supported status
-  column. A trusted migration-capability holder can also create an inactive
-  account without the otherwise separate COA status permission. The importer
-  delegation and batch atomicity are present, so this is a contract/authority
-  gap rather than the previous invariant bypass.
-- Recommendation: Make the metadata derive from the importer (including
-  `is_active`) and explicitly decide whether import is a trusted exception to
-  COA status authority. If not, add the COA permission check; if yes, document
-  and audit that exception. Add dry-run/commit metadata and inactive-row tests.
+  The shared import metadata advertises only `description` and `parent_code`
+  for `coa` at `api/app/Common/Services/Import/MasterDataImportService.php:57-74`.
+  Import routes are gated by only `admin.import.manage` at
+  `api/app/Modules/Admin/routes.php:191-203`; they do not also require the
+  separate `accounting.coa.deactivate` authority.
+- Impact: the import UI cannot discover or guide users for a supported status
+  column, and a trusted migration-capability holder can create an inactive
+  account without the COA status permission. The importer correctly delegates
+  to `AccountService`, so this is a contract/authority gap rather than an
+  invariant bypass.
+- Recommendation: derive metadata from the importer, including `is_active`,
+  and decide whether migration staff are an intentional status-authority
+  exception. Enforce and test that decision across dry-run, commit, rollback,
+  and inactive-row cases. The metadata half is shared infrastructure and was
+  not modified here.
 
-### F-004 — Split COA permissions are not completely usable in the SPA
+### F-004 — Split COA permissions still do not form a usable SPA workflow
 
-- Classification: Incomplete
-- Scope: medium
-- Session recommendation: separate-recommended
-- Evidence: The API deliberately separates generic manage from status
-  activation/deactivation at `api/app/Modules/Accounting/routes.php:25-31`.
-  The tree shows the edit link only when `accounting.coa.manage` is present at
-  `spa/src/pages/accounting/coa/index.tsx:80-84,182-190`, and the edit route
-  itself also requires manage at `spa/src/routes/accountingRoutes.tsx:46-51`.
-  The edit form makes its required `is_active` field disabled without the
-  separate status permission at `spa/src/pages/accounting/coa/edit.tsx:20-24,32,40-47,99-102`.
-- Impact: A role with view + deactivate can use the API but has no UI action to
-  deactivate or activate an account. A role with manage but not deactivate is
-  routed into a form whose required registered status control is disabled;
-  native disabled controls are omitted from submitted form data, so metadata
-  edits are at risk of failing client validation. There is no focused
-  role-matrix/component regression covering these two legitimate permission
-  combinations.
-- Recommendation: Expose dedicated status actions to the status permission,
-  keep generic metadata editing independent of the status field, and add
-  component/API tests for view-only, manage-only, deactivate-only, and full
-  COA roles.
+- Classification: **Incomplete**
+- Scope: **medium**
+- Session recommendation: **separate-recommended**
+- Evidence: the API grants independent view, metadata, and status authorities
+  at `api/app/Modules/Accounting/routes.php:25-31`. However, the actual COA
+  page requires only `accounting.coa.view` at
+  `spa/src/routes/accountingRoutes.tsx:47-52`, and the only sidebar entry is
+  also view-gated at `spa/src/components/layout/Sidebar.tsx:475-480`.
+  A manage-only edit route then fetches its account through
+  `accountsApi.show()` in `spa/src/pages/accounting/coa/edit.tsx:29-32`, while
+  the corresponding API show route requires view at
+  `api/app/Modules/Accounting/routes.php:25-27`.
+  The six passing tests at
+  `spa/src/pages/accounting/coa/index.permissions.test.tsx:67-79` render
+  `TreeRow` in isolation and do not exercise route discovery or the account
+  fetch.
+- Impact: the API's manage-only and deactivate-only combinations pass their
+  direct authorization tests, but a custom role holding only either grant
+  cannot use the corresponding page workflow. The row component advertises a
+  status-only action that the real route cannot reach.
+- Recommendation: choose explicitly whether view is a prerequisite for manage
+  and status grants. If independent grants are required, provide a deliberate
+  read/status workflow and matching API guard; otherwise make the implication
+  explicit and change the row/API tests. Do not silently broaden account
+  visibility as part of a UI-only fix.
 
 ### F-005 — The period `Open` filter does not match the absence-means-open model
 
-- Classification: Incomplete
-- Scope: medium
-- Session recommendation: same-session-ok
-- Evidence: The service documents a missing period row as open at
-  `api/app/Modules/Accounting/Services/AccountingPeriodService.php:147-152`.
-  Its `close()` path creates a row directly as `closed` at `:67-80`, while the
-  SPA offers an `Open` status filter and renders only API rows at
-  `spa/src/pages/accounting/periods.tsx:82-100,115-186`. The only client-side
-  open row is a synthetic current-month object used by the empty-state action
-  at `spa/src/pages/accounting/periods.tsx:122-133` and
+- Classification: **Incomplete**
+- Scope: **medium**
+- Session recommendation: **separate-recommended**
+- Evidence: `AccountingPeriodService::assertPostingAllowed()` treats a missing
+  row as open at `api/app/Modules/Accounting/Services/AccountingPeriodService.php:191-210`.
+  `close()` creates a row directly as closed at `:94-114`, while the SPA's
+  `Open` filter and table render only persisted API rows at
+  `spa/src/pages/accounting/periods.tsx:82-100,115-186`.
+  The only synthetic open row is the current-month empty-state helper at
+  `spa/src/pages/accounting/periods.tsx:122-133` and
   `spa/src/pages/accounting/implicitOpenCurrentPeriod.ts:3-18`.
-- Impact: In normal operation, selecting `Open` generally returns no rows even
-  though unpersisted months are the open state. After one period exists, the
-  page does not offer a close action for another absent/open month; the helper
-  only covers the current month when the entire list is empty. This makes the
-  filter and historical close workflow misleading.
-- Recommendation: Either model/list the relevant open months explicitly, or
-  remove the unreachable filter and provide a deliberate month-picker/current
-  month close action. Record the product decision in the API/UI contract.
+- Impact: selecting `Open` normally returns no rows even though untouched
+  months are open, and after one row exists the page offers no close action for
+  another absent month. A filtered empty state also describes a filtered result
+  as if no period rows exist.
+- Recommendation: either materialize/list a bounded set of open months or
+  remove the unreachable filter and add a deliberate month-picker/current-month
+  close workflow. Record the product decision in the API/UI contract before
+  changing the surface.
 
-### F-006 — No PostgreSQL interleaving regression proves close-versus-post safety
+### F-007 — M025 acceptance coverage is still incomplete at the HTTP/resource boundary
 
-- Classification: Missing
-- Scope: large
-- Session recommendation: separate-recommended
-- Evidence: The implementation now coordinates the posting guard and close
-  with advisory/row locks at
-  `api/app/Modules/Accounting/Services/AccountingPeriodService.php:55-67,154-167`
-  and `api/app/Modules/Accounting/Services/JournalEntryService.php:267-287,325-337`.
-  The current period regression suite exercises only sequential close,
-  reopen/relock, and stale-candidate behavior at
-  `api/tests/Feature/Accounting/AccountingPeriodCloseRegressionTest.php:40-96`.
-  `api/tests/Feature/Accounting/JournalEntryPostRaceTest.php:52-76` tests a
-  stale journal status flip, not a period lifecycle race. No focused test
-  starts independent PostgreSQL transactions for close versus manual,
-  system, and scheduled/automated posting.
-- Impact: The highest-risk financial barrier can regress while all current
-  sequential tests remain green. The code comments describe the desired
-  happens-before rule, but the repository lacks executable evidence for it.
-- Recommendation: Add deterministic PostgreSQL concurrency tests for an
-  existing period and a row-less month, covering both `post()` and
-  `postSystem()`, plus the scheduler relock path. Assert that either posting
-  commits before close or is rejected after close becomes authoritative.
+- Classification: **Missing**
+- Scope: **large**
+- Session recommendation: **separate-recommended**
+- Evidence: the hardening suite exercises service behavior at
+  `api/tests/Feature/Accounting/ChartOfAccountsHardeningTest.php:39-141`, and
+  the authorization suite exercises only list, update, and status combinations
+  at `api/tests/Feature/Accounting/ChartOfAccountsAuthorizationTest.php:31-107`.
+  There is no focused assertion for `AccountController::tree()`'s wrapped
+  response at `api/app/Modules/Accounting/Controllers/AccountController.php:27-31`,
+  nor a complete route-level matrix for show/create/tree, validation, parent
+  status policy, and resource fields. The SPA grant test only renders a row,
+  not `accountingRoutes` or the sidebar.
+- Impact: a service regression can leave the HTTP response shape, HashID
+  serialization, FormRequest boundary, or real page authorization broken while
+  the current tests remain green. Import metadata and cross-module typed
+  writers likewise have no M025 acceptance gate.
+- Recommendation: add a focused M025 acceptance suite for tree/show/CRUD and
+  activation responses, FormRequest/RBAC combinations, parent/child policies,
+  import metadata, and the real SPA route/page permission matrix. Keep
+  cross-module writer tests with their owning modules but require the shared
+  typed-account contract.
 
-### F-007 — COA API/RBAC and cross-writer acceptance coverage is incomplete
+### F-009 — Period service accepts out-of-contract values from internal callers
 
-- Classification: Missing
-- Scope: large
-- Session recommendation: separate-recommended
-- Evidence: The new service-level regression file covers hierarchy and a
-  manual journal inactive-account case at
-  `api/tests/Feature/Accounting/ChartOfAccountsHardeningTest.php:39-112`,
-  plus two importer cases at `:114-141`. The available controller test
-  `api/tests/Feature/Common/ControllerSqlLeakTest.php:102-187` mocks the
-  account service for rendering/error behavior rather than exercising the
-  COA API contract. No focused suite covers the account route permission
-  matrix, dedicated activate/deactivate child policy, type-safe configured
-  AP/VAT paths, or active-but-wrong-type automated writers.
-- Impact: The new invariants can regress at the HTTP boundary or in a
-  cross-module writer without a failing M025 test. Service tests alone do not
-  prove FormRequest authorization, route binding, response shape, or the
-  frontend role matrix.
-- Recommendation: Build an M025 acceptance suite covering API route/RBAC
-  combinations, stale hierarchy writes, tree serialization, import metadata,
-  configured account type checks, inactive-account negative cases across
-  canonical writers, and the four SPA COA permission combinations.
+- Classification: **Incomplete**
+- Scope: **medium**
+- Session recommendation: **separate-recommended**
+- Evidence: HTTP close requests constrain year to 2000–2100 and month to 1–12
+  at `api/app/Modules/Accounting/Requests/CloseAccountingPeriodRequest.php:16-21`.
+  The service close path validates only the month at
+  `api/app/Modules/Accounting/Services/AccountingPeriodService.php:52-57,213-223`;
+  it has no service-level year check. Reopen trims a reason and rejects only an
+  empty string at `:147-155`, while its HTTP request also requires 3–500
+  characters at `api/app/Modules/Accounting/Requests/ReopenAccountingPeriodRequest.php:16-22`.
+  The original period migration has `smallInteger` year/month columns and no
+  range checks at `api/database/migrations/0198_create_accounting_periods_table.php:13-26`.
+- Verification: an isolated-database probe invoked
+  `AccountingPeriodService::close(1999, 1, new User())` and created a closed
+  1999-01 row; the probe removed that row from the isolated database afterward.
+- Impact: a console, job, seeder, or future service caller can create a period
+  outside the HTTP contract or persist a one-character/overlong reopen reason.
+  The normal controller path is protected, so this is an internal-boundary and
+  defense-in-depth gap rather than a current HTTP bypass.
+- Recommendation: define the supported internal period range and reason
+  contract, enforce it in the service, and add compatible database checks after
+  preflighting existing data. Keep the invalid-internal-input error mapping
+  deliberate rather than turning caller defects into operator-facing 422s.
 
-### F-008 — Period pagination dereferences an optional query result
+### F-010 — COA enum values are not protected by database constraints
 
-- Classification: Broken
-- Scope: small
-- Session recommendation: same-session-ok
-- Evidence: The period page conditionally renders the table when
-  `periods.length > 0` at `spa/src/pages/accounting/periods.tsx:136-177`, but
-  passes `periodsQ.data.meta` without a data guard at `:179-184`. `npm run
-  typecheck` reports `TS18048: periodsQ.data is possibly undefined` at line
-  180, so the current SPA build does not typecheck even though the query data
-  is logically present when rows exist.
-- Impact: CI/build validation fails for an in-scope page. The runtime branch is
-  likely safe because `periods` is derived from the same response, but the
-  compiler cannot prove that relationship and blocks a clean deliverable.
-- Recommendation: Narrow or capture the response before rendering pagination,
-  then add the page typecheck/component test to the M025 verification gate.
+- Classification: **Missing**
+- Scope: **medium**
+- Session recommendation: **separate-recommended**
+- Evidence: `AccountType` and `NormalBalance` are backed enums at
+  `api/app/Modules/Accounting/Enums/AccountType.php:7-18` and
+  `api/app/Modules/Accounting/Enums/NormalBalance.php:7-18`, but the accounts migration defines both columns as
+  unconstrained strings at `api/database/migrations/0038_create_accounts_table.php:20-32`.
+  `AccountService` validates these values only before its normal create path at
+  `api/app/Modules/Accounting/Services/AccountService.php:125-143,327-339`.
+  The current lifecycle-check migration protects `accounting_periods.status`,
+  but does not add an equivalent `accounts.type` or `accounts.normal_balance`
+  check at `api/database/migrations/2026_08_13_220000_add_remaining_lifecycle_status_checks.php:20-25`.
+- Impact: a raw SQL/import/seed path that bypasses the service can persist an
+  invalid classification; later enum casting, tree balance calculation, or a
+  configured-account lookup can fail or operate on corrupted financial master
+  data. The normal HTTP/import paths currently validate, so this is a missing
+  database guard rather than evidence of an existing bad row.
+- Recommendation: preflight existing values and add PostgreSQL/SQLite guards
+  for the two enum columns, with a migration test. Keep the service validation
+  as the user-facing error boundary.
 
-## Questions requiring an explicit decision
+## Pass 3 — Polish
 
-1. Is `admin.import.manage` intentionally allowed to set COA `is_active`, or
-   must `accounting.coa.deactivate` remain the sole status authority? Current
-   source supports both interpretations, so the audit does not assume one.
-2. Are absent period rows the intended representation of all open months, or
-   should the periods surface expose a finite set of open months? The answer
-   determines whether F-005 is a UI correction or a period-list contract
-   change.
+### F-011 — COA form validation contract drift: fixed this session
 
-## Verification notes
+- Classification: **Incomplete** (now **fixed + verified**)
+- Scope: **small**
+- Session recommendation: **same-session-ok**
+- Before evidence: the create form accepted codes up to 20 characters, names
+  only up to 100 characters, and arbitrary type/normal-balance strings; the edit
+  form also capped names at 100. The backend requires a 3–6 digit code, enum
+  type/normal-balance values, and a 150-character name at
+  `api/app/Modules/Accounting/Requests/StoreAccountRequest.php:16-23`.
+- After evidence: `spa/src/pages/accounting/coa/create.tsx:21-37` now enforces
+  the same code pattern, type and balance values, and 150-character name;
+  `spa/src/pages/accounting/coa/edit.tsx:18-21` accepts the backend name length.
+- Impact before the fix: valid 101–150-character names were rejected in the
+  SPA, while malformed type/balance/code values reached the server instead of
+  receiving immediate form feedback.
+- Verification: SPA ESLint and `npx tsc --noEmit` passed; the focused COA and
+  periods suite passed 2 files / 7 tests.
 
-- `php -l` passed for the current Accounting and importer service files.
-- `git diff --check` passed for the scoped source/test/audit paths.
-- SPA `npm run typecheck` completed with one in-scope error at
-  `spa/src/pages/accounting/periods.tsx:180` (`TS18048`) and four unrelated
-  errors in HR, Assets, and CRM pages. The in-scope error is recorded as F-008;
-  unrelated source was not modified.
-- The requested focused backend run could not execute assertions: the shared
-  `ogami_test` database was already missing its `migrations` table and had
-  duplicate-table/duplicate-role state, resulting in 31 setup failures and
-  zero assertions. This is recorded as an environment limitation, not a
-  source pass/fail.
+### F-012 — Duplicate-period test committed fixtures without class isolation: fixed this session
+
+- Classification: **Incomplete** (now **fixed + verified**)
+- Scope: **small**
+- Session recommendation: **same-session-ok**
+- Before evidence: the PostgreSQL competitor requires committing the
+  `RefreshDatabase` transaction at
+  `api/tests/Feature/Accounting/AccountingPeriodDuplicateRecoveryTest.php:50-54`,
+  but the class had no migration-state reset; its committed user and period
+  could contaminate the next test class.
+- After evidence: the class now resets
+  `RefreshDatabaseState::$migrated` in
+  `api/tests/Feature/Accounting/AccountingPeriodDuplicateRecoveryTest.php:25-36`,
+  matching the committed-fixture ownership of the period concurrency harness.
+- Verification: PHP syntax passed and the isolated PostgreSQL test passed 1
+  test / 3 assertions on `ogami_test_m025_agent_b`.
+
+## Prior findings rechecked
+
+- **F-002 duplicate-period recovery — resolved.** The `23505` catch now starts
+  recovery in a new transaction after Laravel rolls back the failed insert at
+  `api/app/Modules/Accounting/Services/AccountingPeriodService.php:56-90`.
+  The duplicate-recovery test passed against PostgreSQL; no service change was
+  needed in this session.
+- **F-006 close-versus-post barrier — resolved in the inherited source/tests.**
+  Close and posting use the same advisory/row-lock order, and the current
+  concurrency harness covers existing and row-less periods plus scheduler
+  relock at `api/tests/Feature/Accounting/AccountingPeriodPostingConcurrencyTest.php:68-205`.
+  The focused backend run passed.
+- **F-008 periods pagination narrowing — resolved.** The page captures
+  `periodsQ.data` before deriving rows/meta at
+  `spa/src/pages/accounting/periods.tsx:72-75`; full SPA typechecking is now
+  clean.
+- The inherited service-level hierarchy, cycle, inactive-account, generic
+  status, importer-delegation, and scheduler-recheck findings remain fixed in
+  their current forms. Accounting Bill, Invoice, and Credit Note writers now
+  use the centralized typed policy; F-001 still records its collision and
+  cross-module residuals.
+
+## Verification
+
+All backend assertions below used `DB_DATABASE=ogami_test_m025_agent_b` inside
+the API container; the shared `ogami_test` database was not used.
+
+- Focused backend command:
+  `docker compose exec -T -e DB_DATABASE=ogami_test_m025_agent_b api php artisan test --filter='(ChartOfAccountsHardeningTest|ChartOfAccountsAuthorizationTest|AccountingPeriodAuthorizationTest|AccountingPeriodTest|AccountingPeriodCloseRegressionTest|AccountingPeriodDuplicateRecoveryTest|AccountingPeriodPostingConcurrencyTest|ConfiguredControlAccountTypeTest)'`
+  — **37 tests passed / 107 assertions**.
+- Duplicate-recovery rerun after F-012:
+  `docker compose exec -T -e DB_DATABASE=ogami_test_m025_agent_b api php artisan test --filter=AccountingPeriodDuplicateRecoveryTest`
+  — **1 test passed / 3 assertions**.
+- SPA focused tests:
+  `npm run test -- --run src/pages/accounting/coa/index.permissions.test.tsx src/pages/accounting/periods.test.ts`
+  — **2 files, 7 tests passed**.
+- SPA `npx eslint` on the changed COA forms — passed.
+- SPA `npx tsc --noEmit` — passed with no output.
+- `php -l` on the changed backend test — passed.
+- `git diff --check` on the changed module files — passed.
+- The backend suite still prints existing PHPUnit doc-comment metadata
+  deprecation warnings in unrelated CRM, Dashboard, Return Management, and
+  Supply Chain tests; no assertion failed.
+
+## Decisions and deferred work
+
+1. Decide whether import staff with `admin.import.manage` may set COA status or
+   must also hold `accounting.coa.deactivate`.
+2. Decide whether absent period rows are the complete representation of open
+   months or whether the periods surface should materialize a bounded set.
+3. Decide whether custom roles may hold manage/status without view, then make
+   that implication explicit across API, route, sidebar, and tests.
+4. Coordinate typed configured-account enforcement with dependent modules; no
+   dependency source was modified here.
 
 ## Audit boundary
 
-Dependency modules were read only for GL-consumer context. No dependency source
-was modified. The typed configured-account work should be coordinated with the
-M026 journal-ledger audit and downstream AR/AP, payroll, inventory, assets, and
-HR writers.
+Dependency modules were read only for configured GL-consumer context. All
+writes in this session were limited to M025-owned audit files, the M025 COA
+form files, and the M025 duplicate-period test. The coordinator-owned
+`audit/00-MODULE-REGISTRY.md` diff was preserved unchanged, and M034 was not
+read or modified as a target.

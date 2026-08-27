@@ -589,6 +589,34 @@ Released as `🔁 Needs Re-audit` because F-003 and F-005 await human decisions 
 F-001 / F-007 have residual out-of-module work. Nothing listed as verified above
 is a source-only claim: every line has actual test output in this log.
 
+## 2026-08-27 agent-b follow-up
 
+### F-011 — COA form validation contract: FIXED + VERIFIED
+
+- Before: `spa/src/pages/accounting/coa/create.tsx:24-31` accepted any
+  non-empty type, any normal-balance string, account codes up to 20 characters,
+  and names up to 100 characters, while the backend requires a 3–6 digit code,
+  an enum account type/normal balance, and names up to 150 characters at
+  `api/app/Modules/Accounting/Requests/StoreAccountRequest.php:18-23`.
+- After: the create schema now validates the backend's account-type and
+  normal-balance values, the 3–6 digit code, and the 150-character name at
+  `spa/src/pages/accounting/coa/create.tsx:21-37`; the edit schema accepts the
+  same backend name length at `spa/src/pages/accounting/coa/edit.tsx:18-21`.
+- Verification: SPA ESLint and `npx tsc --noEmit` passed; the focused COA
+  permission and periods tests passed (2 files, 7 tests).
+
+### F-012 — duplicate-period test isolation: FIXED + VERIFIED
+
+- Before: `api/tests/Feature/Accounting/AccountingPeriodDuplicateRecoveryTest.php:52-54`
+  committed the `RefreshDatabase` transaction so an independent PostgreSQL
+  connection could race the insert, but the class had no migration-state reset;
+  its committed user/period fixtures could leak into the next test class.
+- After: the test resets `RefreshDatabaseState::$migrated` in
+  `api/tests/Feature/Accounting/AccountingPeriodDuplicateRecoveryTest.php:25-36`,
+  matching the committed-fixture ownership used by the period concurrency
+  harness.
+- Verification: `php -l` passed and
+  `AccountingPeriodDuplicateRecoveryTest` passed (1 test, 3 assertions) on
+  `DB_DATABASE=ogami_test_m025_agent_b`.
 
 

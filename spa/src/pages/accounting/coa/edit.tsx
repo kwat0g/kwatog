@@ -16,7 +16,7 @@ import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
- name: z.string().min(1, 'Name required').max(100),
+ name: z.string().min(1, 'Name required').max(150),
  description: z.string().max(500).optional().or(z.literal('')),
 });
 type FormValues = z.infer<typeof schema>;

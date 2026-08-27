@@ -11,6 +11,7 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -20,6 +21,19 @@ class AccountingPeriodDuplicateRecoveryTest extends TestCase
     use RefreshDatabase;
 
     private const COMPETITOR_CONNECTION = 'm025_period_competitor';
+
+    /**
+     * The competitor must observe committed fixtures, so the normal
+     * RefreshDatabase transaction is intentionally committed in the test.
+     * Rebuild before the next test class instead of leaking the user and
+     * period fixtures into its transaction.
+     */
+    public static function tearDownAfterClass(): void
+    {
+        RefreshDatabaseState::$migrated = false;
+
+        parent::tearDownAfterClass();
+    }
 
     public function test_close_recovers_when_a_non_cooperating_writer_wins_the_insert(): void
     {

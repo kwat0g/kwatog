@@ -17,11 +17,21 @@ import type { AccountType } from '@/types/accounting';
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
+
+const ACCOUNT_TYPES = ['asset', 'liability', 'equity', 'revenue', 'expense'] as const;
+const NORMAL_BALANCES = ['debit', 'credit'] as const;
+
 const schema = z.object({
- code: z.string().min(1, 'Code required').max(20),
- name: z.string().min(1, 'Name required').max(100),
- type: z.string().min(1, 'Type required'),
- normal_balance: z.string().optional(),
+ code: z.string().regex(/^[0-9]{3,6}$/, 'Code must contain 3 to 6 digits.'),
+ name: z.string().min(1, 'Name required').max(150),
+ type: z.string().min(1, 'Type required').refine(
+   (value) => (ACCOUNT_TYPES as readonly string[]).includes(value),
+   'Invalid account type.',
+ ),
+ normal_balance: z.string().optional().refine(
+   (value) => value === undefined || value === '' || (NORMAL_BALANCES as readonly string[]).includes(value),
+   'Normal balance must be debit or credit.',
+ ),
  parent_id: z.string().optional().or(z.literal('')),
  description: z.string().max(500).optional().or(z.literal('')),
 });
