@@ -1,31 +1,26 @@
 # M036 Action Plan — Purchase Requests
 
-The module is intentionally handed off as `📋 Plan Ready`; no production fixes were made during the audit session.
+Decision: **📋 Plan Ready**. No production fixes are authorized this session because the plan is dominated by separate-recommended lifecycle, policy, and cross-module work.
 
-1. **F-001 — Establish one server-side PR access/action policy.** Scope: **large**. Session recommendation: **separate-recommended**. Scope list/show/PDF, submit/update/delete/cancel, approve/reject/bulk approve, acknowledge, and convert. Preserve explicit all-department authority for system administrators and purchasing officers if confirmed; enforce department/ownership rules for department heads and ordinary requesters. Apply the same policy to `pending-count`. Add cross-department direct-URL/PDF/action tests.
+## Small actions
 
-2. **F-002 — Restore exact money arithmetic at the PR boundary.** Scope: **medium**. Session recommendation: **separate-recommended**. Replace float casts in request and line totals and every submit threshold comparison with the repository's decimal/centavo convention. Add tests just below, at, and just above the workflow threshold, auto-approval threshold, and budget boundary; verify resource display remains a string.
+1. **F-015 — Restore soft-deleted PRs.** Add `withTrashed()` to the PR restore route and a focused soft-delete/restore feature test. **same-session-ok**.
+2. **F-014 — Correct critical-priority confirmation copy.** After the owner confirms the urgent/critical cap and notification policy, describe the actual behavior rather than promising direct VP notification. **same-session-ok**.
+3. **F-018 — Remove the conversion listener's float cast.** Use the repository's exact `Money` comparison for the null/positive price gate and retain manual-conversion fallback. **same-session-ok**.
 
-3. **F-003 — Resolve ownership for generated PRs before budget assessment.** Scope: **medium**. Session recommendation: **separate-recommended**. Define the owning department for MRP and reorder PRs, persist it at creation or resolve it inside the locked submit transaction, and reject/manual-route unowned records. Add source-specific budget warning/acknowledgement tests.
+## Medium actions
 
-4. **F-005 — Make submit lock-then-guarded and idempotent.** Scope: **medium**. Session recommendation: **separate-recommended**. Re-read the PR with `lockForUpdate()` inside the transaction, re-check draft state, and ensure retries cannot rewrite active approval records. Add a concurrent-submit regression test and verify rejected/cancelled/approved transitions remain terminal.
+4. **F-019 — Isolate narrow-screen overflow.** Use the installed browser environment to identify the element causing document-level overflow at 375/390/768px, then keep tables and steppers locally scrollable without clipping. **separate-recommended** because the likely boundary includes shared layout components.
+5. **F-004 — Decide the missing-estimate contract.** Either require positive estimates or add an explicit unknown-price/manual-review state that cannot pass budget/approval as zero; cover API, UI, budget, workflow, and conversion. **separate-recommended**.
+6. **F-010 — Resolve templates.** Either remove the surviving `template_id` validator/service/client contract or implement authorized template application and eager-load the relation in list/show responses. **separate-recommended**.
+7. **F-011 — Enforce catalog source of truth.** Decide whether catalog description/unit/standard cost are editable estimates; if not, reject or ignore conflicting create/update values and add tampering tests. **separate-recommended**.
+8. **F-016 — Serialize delete with submit.** Lock and re-check the authoritative draft row in a transaction before soft deletion; add a stale-instance race test. **separate-recommended**.
+9. **F-017 — Serialize update with submit.** Lock and re-check draft status before replacing fields/lines; add concurrent update/submit coverage so approval amounts cannot diverge from line items. **separate-recommended**.
 
-5. **F-004 — Define and enforce the missing-estimate policy.** Scope: **medium**. Session recommendation: **separate-recommended**. Either require a positive unit estimate on every manual line, or introduce an explicit unknown-price/manual-review control that cannot be treated as amount zero. Test budget, approval, auto-conversion, and manual conversion behavior.
+## Large action
 
-6. **F-006 — Unify priority and urgency semantics.** Scope: **medium**. Session recommendation: **separate-recommended**. Choose the authoritative field, align public validation and internal producers, make the workflow transition match the policy, update the confirmation copy, and add manual/MRP/reorder coverage for normal, urgent, and critical requests.
+10. **F-013 — Establish ownership for every submitted PR.** Require or deterministically resolve a department for manual, MRP, and reorder requests before budget assessment and workflow creation. Coordinate Purchasing, approval-workflow, budgeting, MRP, and inventory fixtures so every pending request has an eligible department-head path. **separate-recommended**.
 
-7. **F-011 — Enforce catalog-item source-of-truth rules server-side.** Scope: **medium**. Session recommendation: **separate-recommended**. Confirm whether standard cost/description/unit may be overridden. If not, ignore/reject conflicting catalog values on create and update and test threshold manipulation attempts.
+## Follow-up verification gate
 
-8. **F-008 — Make approval queue/actions reflect actual authority.** Scope: **medium**. Session recommendation: **separate-recommended**. Reuse the central policy/current-step/delegation/self-approval logic for pending counts and action availability. Keep the API as the final guard and add tests for wrong step, self-submission, delegation, and department scope.
-
-9. **F-009 — Add referential integrity for automation fields.** Scope: **medium**. Session recommendation: **separate-recommended**. Audit existing rows, add indexes and deliberate foreign keys for `template_id` and `suggested_vendor_id`, and document null-on-delete/restrict behavior.
-
-10. **F-010 — Resolve the template product contract.** Scope: **medium**. Session recommendation: **separate-recommended**. If templates remain supported, apply the authorized template server-side and test department/items/hash IDs. Otherwise remove the validator field, service write path, client types/API, and stale test/docs in a coordinated migration.
-
-11. **F-007 — Return preferred suppliers to list/show resources.** Scope: **small**. Session recommendation: **same-session-ok**. Eager-load `items.suggestedVendor` in both list and show, then add an API/resource test proving the SPA conversion map receives the persisted default.
-
-12. **F-012 — Verify and improve narrow-screen table behavior.** Scope: **small**. Session recommendation: **same-session-ok**. Browser-check create/detail at narrow widths; add the standard overflow wrapper if the table causes clipping or page-level scroll. Preserve keyboard access and table header semantics.
-
-## Verification gate
-
-After fixes, run the focused PHP purchasing/approval tests against a reachable PostgreSQL test database, the detail-page Vitest test, relevant SPA type/lint checks, and a browser check for department roles, direct URLs, PDF, approval actions, and mobile tables. Regenerate the module registry after the follow-up audit.
+After the separate work, rerun the focused API suite against `DB_DATABASE=ogami_test_m036_roll_d`, the detail Vitest test, affected-page ESLint, SPA typecheck, PHP lint/PHPStan, and the repository Playwright visual checks at phone/tablet/desktop widths. Install/provision the missing Playwright executable before claiming browser verification. Commit only explicit module-owned files before release; do not regenerate or edit the shared registry.
