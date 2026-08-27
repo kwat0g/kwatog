@@ -4,7 +4,7 @@ Audit date: 2026-08-25 (session 1) · 2026-08-26 (session 2, resumed)
 Module status: 🔁 Needs Re-audit  
 Implementation status: **F01–F09 applied (session 1) and now runtime-verified on PostgreSQL and in
 Chromium (session 2); F10 deferred — employee-master scope + product decision; F11 has one residual
-gap (Vitest), blocked on a root-owned directory**
+gap (Vitest), blocked on a root-owned directory; F20 applied (session 3)**
 
 ## Session 2 (2026-08-26) — runtime verification of the inherited work, and the fixtures it invalidated
 
@@ -354,3 +354,20 @@ The next session should, in order: (1) get root to run
 retention/download — since the second currently leaves an approver unable to view a document the
 system requires. Only then is ✅ Verified defensible.
 
+## Session 3 (2026-08-27) — M019-F20 archived leave type actions
+
+- Before: the leave-type management modal rendered Edit for every row, including archived rows
+  whose normal update route excludes soft-deleted models.
+- After: `spa/src/pages/leaves/types.tsx` derives archived state from the existing `deleted_at`
+  resource field (with the archived-only scope as a safe fallback), hides Edit for archived rows,
+  and keeps Restore as their available archive action. Active rows retain Edit and Archive. The
+  SPA leave type contract now declares the existing optional `deleted_at` field in
+  `spa/src/types/leave.ts`.
+- Regression coverage: `spa/src/pages/leaves/types.test.tsx` verifies active Edit/Archive actions,
+  archived Restore-only actions in the All view, and Restore-only actions in the Archived view.
+- Verification: focused Vitest passed (1 file / 1 test) using runner mode with an ephemeral
+  `/tmp` cache because the normal config cannot write the root-owned `spa/node_modules/.vite-temp`;
+  targeted ESLint passed. Full SPA typecheck remains blocked by the pre-existing missing `qrcode`
+  module errors in `spa/src/pages/assets/detail.tsx`.
+
+Module status: 🔁 Needs Re-audit — M019-F20 is applied; the remaining open findings stay deferred.

@@ -14,6 +14,7 @@ export interface LeaveType {
  is_active: boolean;
  created_at: string;
  updated_at: string;
+ deleted_at?: string | null;
 }
 
 export interface CreateLeaveTypeData {

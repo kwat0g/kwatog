@@ -125,16 +125,21 @@ export function LeaveTypesManager() {
  { key: 'is_active', header: 'Active', cell: (r: LeaveType) => r.is_active ? <Chip variant="success">Active</Chip> : <Chip variant="neutral">Inactive</Chip> },
  {
  key: 'actions', header: '',
- cell: (r: LeaveType) => can('leave.types.manage') ? (
+ cell: (r: LeaveType) => {
+ const isArchived = scope === 'only' || Boolean(r.deleted_at);
+ return can('leave.types.manage') ? (
  <div className="flex gap-1">
+ {!isArchived && (
  <Button variant="ghost" size="xs" iconOnly aria-label={`Edit ${r.name}`} icon={<LuPencil size={12} />} onClick={(e) => { e.stopPropagation(); openEdit(r); }} />
- {scope === 'only' ? (
+ )}
+ {isArchived ? (
  <Button variant="ghost" size="xs" iconOnly aria-label={`Restore ${r.name}`} icon={<LuArchiveRestore size={12} />} onClick={(e) => { e.stopPropagation(); restoreMutation.mutate(r.id); }} />
  ) : (
  <Button variant="ghost" size="xs" iconOnly aria-label={`Archive ${r.name}`} icon={<LuTrash2 size={12} />} onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(r.id); }} />
  )}
  </div>
- ) : null,
+ ) : null;
+ },
  },
  ];
 
