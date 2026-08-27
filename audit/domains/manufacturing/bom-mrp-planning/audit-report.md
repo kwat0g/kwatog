@@ -1,129 +1,103 @@
 # M049 — BOM / MRP Planning Audit Report
 
-Audit session: 2026-08-24 UTC  
-Final session status: 📋 Plan Ready  
+Audit session: 2026-08-27 UTC
+Claimed module: `manufacturing/bom-mrp-planning` (M049)
+Final session status: 📋 Plan Ready
 Scope: BOM authoring/versioning/costing, BOM explosion, MRP plans, shortage netting, automatic/manual MRP runs, and their direct plan-created PR/WO records.
 
 The adjacent capacity-scheduling, machine, and mold surfaces were read only for boundary context and were not audited or changed; those belong to M050.
 
-## Discovery and verification
+## Discovery evidence
 
-- Backend surface: `api/app/Modules/MRP/routes.php:20-29,64-83`, BOM services/resources, MRP engine/run services, migrations, and MRP feature tests.
-- Frontend surface: `spa/src/routes/mrpRoutes.tsx:22-59`, BOM list/detail/create/edit, and MRP plan list/detail pages.
-- Relevant dependencies read only: sales orders, inventory items/stock, production routing costs, purchase requests, work-order draft creation, RBAC, outbox, design-system, and roadmap policy.
-- Focused container verification: `docker compose exec -T api php artisan test tests/Feature/MRP` — **67 passed, 184 assertions**.
-- The same command from the host failed before assertions because the host PHP process could not resolve Docker hostname `db`; the containerized result is the authoritative run.
+- The fresh registry entry was read at `audit/00-MODULE-REGISTRY.md:22`; it was not regenerated or edited.
+- `audit/scripts/claim-module.sh manufacturing bom-mrp-planning` returned `CLAIMED`. The preferred target was used; no fallback was needed.
+- Before this session, the module had no implementation diff. `git status --short --branch` showed only the coordinator-owned modification to `audit/00-MODULE-REGISTRY.md`.
+- Observed mtimes put the main MRP implementation at `2026-08-26 02:30:12`, the focused MRP fixture at `2026-08-27 06:59:56`, and the claim lock at `2026-08-27 19:18:24`; no module source changed after the claim.
+- Read-only dependencies included CRM sales-order cancellation, inventory item updates, production routing costs, purchase requests, work-order draft creation, RBAC, outbox delivery, and the MRP SPA routes/pages.
 
-The existing suite has good positive coverage for BOM costing/UOM conversion, routing cost refresh, cycle detection, multilevel explosion, netting, quarantine/scrap exclusion, rerun reconciliation, automation scoping, and subassembly work orders. It does not cover the negative and contract cases listed below.
+## Verification evidence
 
-## Verified strengths
+- `docker compose exec -T -e DB_DATABASE=ogami_test_m049_agent_c api sh -lc 'cd /var/www && php artisan test tests/Feature/MRP'` — **67 passed, 184 assertions**.
+- `docker compose exec -T -e DB_DATABASE=ogami_test_m049_agent_c api sh -lc 'cd /var/www && php artisan test tests/Feature/Auth/RoleResponsibilityAlignmentTest.php'` — **15 passed, 109 assertions**.
+- `docker compose exec -T spa sh -lc 'cd /app && npm run typecheck'` — passed.
+- `docker compose exec -T spa sh -lc 'cd /app && npm run audit:tokens'` — passed; 786 files checked.
+- Targeted ESLint for MRP pages, the run-status panel, and MRP types — passed.
+- `docker compose exec -T spa sh -lc 'cd /app && npm run test:run -- src/components/mrp/MrpRunStatusPanel.test.tsx'` — **2 passed**.
+- `docker compose exec -T spa sh -lc 'cd /app && npm run build'` — passed; Vite emitted only the existing NotFound dynamic/static import warning.
+- The unique test database confirms the active-BOM database guard: `bill_of_materials_one_active_per_product` is a partial unique index on `product_id` where `is_active = TRUE AND deleted_at IS NULL`.
 
-- BOM creation/versioning and costing are transaction-wrapped in `api/app/Modules/MRP/Services/BomService.php:84-110` and `api/app/Modules/MRP/Services/BomCostingService.php:28-34`.
-- Costing uses the shared Money/BCMath path for the main snapshot and supports UOM conversion, nested BOM roll-up, routing rates, and batch-allocated setup time; the focused costing tests pass.
-- MRP reruns reconcile draft auto-PRs and planned WOs rather than duplicating progressed records; `MrpRerunSafetyTest` passes.
-- Stock netting excludes quarantine/scrap and accounts for reservations, in-transit supply, open PRs, and shared allocation; the demand-integrity tests pass.
-- Backend route middleware exists for BOM view/manage, plan view/rerun, and run view/trigger. The role assignment and some detail-page controls do not consistently match those boundaries.
+All test commands used only `DB_DATABASE=ogami_test_m049_agent_c`.
 
-## Findings
+## Current findings
 
 ### Broken
 
-#### M049-B01 — Standard MRP work orders can be created without a BOM/material plan
+#### M049-B06 — MRP can commit work for a sales order cancelled during candidate selection
 
-Evidence: `api/app/Modules/MRP/Services/MrpEngineService.php:128-141` records a missing-BOM warning and skips explosion, but `:368-455` still creates a root WO for every remaining SO line. The call at `:444-454` omits `work_order_class`, `exception_reason`, and `material_plan_source`. `api/app/Modules/Production/Services/WorkOrderService.php:169-185` defaults the WO to `standard`, leaves the material source null, and intentionally permits the no-BOM path. This conflicts with the no-BOM policy in `docs/SYSTEM-IMPROVEMENT-ROADMAP-2026-08-13.md:267-269`, which permits no-BOM production only for an explicit service, non-stock, or prototype class with an authorized reason and visible exception.
+Evidence: `api/app/Modules/MRP/Services/MrpEngineService.php:607-613` reads the eligible sales orders once, outside the per-order transaction. The transaction in `:83-84` does not lock or re-read the sales order before creating the active plan at `:220-236`, auto-PR rows at `:332-342`, or root work orders at `:476-486`. The direct `runForSalesOrder()` entry point documents a confirmed-order precondition at `:69-79` but does not enforce it. Meanwhile, cancellation re-reads and locks the order at `api/app/Modules/CRM/Services/SalesOrderService.php:649-666`, then cancels the active plan and linked cancellable work orders at `:674-696`.
 
-Impact: an ordinary stock-producing SO can produce a planned standard WO with no effective material plan while the MRP plan only displays a warning. The downstream production queue can therefore contain uncosted/unmaterialized work.
+Impact: if cancellation commits after the batch candidate snapshot but before the MRP transaction creates its records, MRP can create a new active plan, draft PR, and planned WOs for a cancelled order after the cancellation cleanup has completed. Those commitments are orphaned from the cancellation flow. A direct service caller can also bypass the status precondition entirely.
 
-#### M049-B02 — BOM/component lifecycle drift can silently under-plan or plan inactive material
-
-Evidence: costing rejects a missing or inactive component in `api/app/Modules/MRP/Services/BomCostingService.php:53-65`, but the explosion path in `api/app/Modules/MRP/Services/BomService.php:488-503` still accumulates a BOM row even when its related item is absent. MRP netting then uses `Item::find()` and silently continues on null at `api/app/Modules/MRP/Services/MrpEngineService.php:216-219`; it does not reject an inactive item. A soft-deleted component can disappear from shortage calculation, while an inactive component can still become a shortage/PR.
-
-Impact: the costing and planning paths disagree about whether the BOM is valid. A deleted component can be omitted from demand; an inactive component can drive purchasing despite the BOM no longer being valid for authoring.
-
-#### M049-B03 — BOM-change replanning is not atomic with the BOM mutation
-
-Evidence: `BomService::create()` commits its transaction at `api/app/Modules/MRP/Services/BomService.php:84-110`, then calls `requestAutomaticReplan()` at `:112`. That method records the event at `:164-175`. `OutboxService::record()` only joins an existing transaction and otherwise opens its own transaction at `api/app/Common/Services/OutboxService.php:59-61`.
-
-Impact: a BOM version can commit successfully while the replan outbox insert fails or the process dies between the two commits. The active BOM and affected SO plans can then be inconsistent until a manual run occurs.
-
-#### M049-B04 — Planning API responses expose raw integer foreign keys
-
-Evidence: `api/app/Modules/MRP/Resources/MrpPlanResource.php:29-48` passes `diagnostics` and `cost_summary` through unchanged and returns `work_orders.product_id` directly. `MrpRunResource` also returns raw `summary` and `error_message` at `api/app/Modules/MRP/Resources/MrpRunResource.php:24-36`; the engine stores raw `so_id` values and exception text at `api/app/Modules/MRP/Services/MrpEngineService.php:590-607`. This violates the project contract in `CLAUDE.md:133-155` and `:568-575` that API resources never expose integer IDs.
-
-Impact: planning responses leak internal identifiers and break the HashID API contract for diagnostics, linked work orders, and run history. The frontend types currently mirror the leak rather than correcting it.
-
-#### M049-B05 — Production-manager MRP view access does not match the documented role boundary
-
-Evidence: the role matrix documents production-manager as “MRP+quality view-only” in `docs/AUTO-BROWSER-TESTS.md:112-120`. The seeded role grants `mrp.view`, `mrp.schedule`, and `mrp.boms.view` but not `mrp.plans.view` or `mrp.runs.view` at `api/database/seeders/RolePermissionSeeder.php:530-538`. The plan routes require `mrp.plans.view` at `api/app/Modules/MRP/routes.php:64-70`, and `/mrp` redirects to `/mrp/plans` with the same permission guard at `spa/src/routes/mrpRoutes.tsx:25-29,55-58`.
-
-Impact: a production manager can be sent to the MRP module but cannot review plans or run history, contrary to the role definition. This is an RBAC contract failure, not merely a frontend hiding issue.
+Required decision: choose whether a cancelled order is skipped, recorded as a typed per-order failure, or rejected synchronously, then lock/re-read the order and enforce the selected policy in every entry path.
 
 ### Missing
 
-#### M049-M01 — Database invariant for one active BOM per product is missing
+#### M049-M02 — Item standard-cost changes still have no automatic affected-BOM recost/replan path
 
-Evidence: the BOM migration creates only a `(product_id, is_active)` index and `(product_id, version)` uniqueness at `api/database/migrations/0073_create_bill_of_materials_table.php:18-27`. `BomService::create()` attempts to enforce one active row through application locking at `api/app/Modules/MRP/Services/BomService.php:84-97`, but there is no partial unique index equivalent to the MRP-plan guard in `api/database/migrations/2026_08_15_121000_guard_mrp_plan_versions.php:18-25`.
+Evidence: `api/app/Modules/Inventory/Services/ItemService.php:98-113` updates an item without publishing a standard-cost-change event; `api/app/Modules/Inventory/Requests/UpdateItemRequest.php:39` permits `standard_cost` edits. The MRP event wiring at `api/app/Providers/AppServiceProvider.php:294-299` covers sales-order confirmation, stock movement, and explicit BOM replan requests, but not item cost changes. `BomCostingService::ensureFresh()` at `api/app/Modules/MRP/Services/BomCostingService.php:44-87` only repairs stale snapshots when a later planning call happens. BOM creation does request a replan inside its transaction at `api/app/Modules/MRP/Services/BomService.php:85-112`, but item updates do not enter that path.
 
-Impact: concurrent writers, imports, seeders, or direct model writes can create two active BOMs for one product. Planning/costing then selects whichever active row the query happens to return.
+Impact: active BOM snapshots and existing plan cost summaries can remain stale between the item edit and a later MRP run. The current opportunistic recost is not an automatic affected-sales-order replan contract.
 
-#### M049-M02 — Item standard-cost changes have no automatic BOM recost/replan path
+#### M049-M03 — The hardening claims remain under-tested
 
-Evidence: `ItemService::update()` only updates the item in `api/app/Modules/Inventory/Services/ItemService.php:98-113`; `standard_cost` is an editable field in `api/app/Modules/Inventory/Requests/UpdateItemRequest.php:39`. The application event wiring covers sales-order confirmation, stock movement, and explicit BOM replans at `api/app/Providers/AppServiceProvider.php:289-294`, while the BOM snapshot is computed from item standard cost in `api/app/Modules/MRP/Services/BomCostingService.php:78-106`.
+Evidence: the current `api/tests/Feature/MRP` suite is positive-path coverage (67 tests) and has no focused assertions for the nine historical gap areas: no-BOM standard-WO policy, component lifecycle rejection, concurrent active-BOM uniqueness, BOM/outbox rollback, actor/run propagation, nested HashID serialization, partial/redacted recovery, production-manager plan/run access, or item-cost-change recost/replan. `api/tests/Feature/MRP/MrpNettingTest.php:484-523` freezes the BOM cost in its fixture rather than exercising the `ensureFreshBom()` recost path. There is also no cancellation-versus-MRP concurrency test for M049-B06.
 
-Impact: an active BOM’s frozen total and a plan’s production-cost summary can remain stale after a component cost edit. The focused test proves manual recosting works, but there is no automatic freshness or affected-SO replan behavior.
+Impact: the green suite proves ordinary planning behavior but does not pin the safety, concurrency, API-contract, or recovery claims that the prior audit relied on. Regressions in these paths can pass CI unnoticed.
 
 ### Incomplete
 
-#### M049-I01 — MRP still uses float round-trip for monetary values
+#### M049-I04 — Automatic runs preserve context metadata but can misattribute generated records
 
-Evidence: the shared contract says “Never use float for money” in `api/app/Common/Support/Money.php:7-11`. MRP converts standard cost to float at `api/app/Modules/MRP/Services/MrpEngineService.php:246-248,267` and rounds the float before persisting the PR estimated price at `:330-341`. The main cost summary uses BCMath, so the implementation is inconsistent rather than uniformly unsafe.
+Evidence: automatic jobs accept a nullable initiator at `api/app/Modules/MRP/Jobs/RunAutomaticMrpJob.php:42-49` and pass it through at `:67-74`; `MrpAutomationService` forwards it at `api/app/Modules/MRP/Services/MrpAutomationService.php:28-34`. `MrpEngineService` correctly records run/reason/actor metadata at `:85-98`, but falls back to the sales-order creator for the mandatory maker field at `:85-86`. That fallback is written to `generated_by` on plans at `:221-235`, `requested_by` on auto-PRs at `:333-342`, and `created_by` on root WOs at `:476-486` and child WOs at `:802-813`.
 
-Impact: binary floating-point conversion can produce edge-case rounding differences in diagnostics and auto-generated purchase-request prices. Financial values should remain decimal strings through the final Money/DB precision boundary.
+Impact: an automatic system run can show `actor_type=system` while its mandatory maker fields identify the SO creator, who did not initiate the run. Manual runs carry the authenticated user from `api/app/Modules/MRP/Controllers/MrpRunController.php:42-49`, so the remaining defect is the system/queued attribution contract and its audit interpretation.
 
-#### M049-I02 — A run with failed sales orders is still marked `completed`
+#### M049-I05 — Cost-snapshot mutability policy is not resolved
 
-Evidence: per-SO exceptions are caught and recorded at `api/app/Modules/MRP/Services/MrpEngineService.php:565-608`, but the outer completion update always writes `MrpRunStatus::Completed` at `:612-620`. `MrpRunStatus` has no partial state (`running`, `completed`, `failed` only) in `api/app/Modules/MRP/Enums/MrpRunStatus.php:7-16`.
+Evidence: the costing service describes the BOM values as frozen at `api/app/Modules/MRP/Services/BomCostingService.php:17-25`, but `ensureFreshBom()` mutates the BOM and its component cost snapshots through `recalculateBom()` at `:44-87` and `:170-179` whenever a dependency changed. The manage route permits recosting an arbitrary BOM version at `api/app/Modules/MRP/routes.php:21-27`; `api/app/Modules/MRP/Services/BomService.php:127-130` does not restrict `recalculate()` to the active version.
 
-Impact: operators and integrations cannot distinguish “all evaluated successfully” from “some SOs failed and were skipped.” The summary contains an error, but the top-level lifecycle state is misleading and recovery is not explicit.
-
-#### M049-I03 — Run errors are not redacted or paired with recovery guidance
-
-Evidence: raw exception messages are stored in the per-SO summary and catastrophic `error_message` at `api/app/Modules/MRP/Services/MrpEngineService.php:597-607,622-628`, then returned by `MrpRunResource` at `api/app/Modules/MRP/Resources/MrpRunResource.php:31-36`. The roadmap requires an error class and operator-visible recovery instruction, with redacted error messages, at `docs/SYSTEM-IMPROVEMENT-ROADMAP-2026-08-13.md:564-581`.
-
-Impact: SQL/domain internals can be shown to planning users, while the run history does not consistently tell them whether to correct data, retry, or escalate.
-
-#### M049-I04 — Generated plan records lose the initiating actor and run context
-
-Evidence: the manual controller passes the authenticated user into the run at `api/app/Modules/MRP/Controllers/MrpRunController.php:42-49`, and `MrpRun` stores it at `api/app/Modules/MRP/Services/MrpEngineService.php:540-547`. However, `runForSalesOrder()` accepts no actor or run identifier at `:69-78`; generated plans use the sales-order creator at `:197-203`, auto-PRs use the same creator at `:306-315`, and root WOs do so at `:444-454`. Automatic runs can therefore leave generated records attributed to the SO creator or no human actor, rather than the initiating user/system actor and originating run.
-
-Impact: audit reviewers cannot reliably answer who initiated a manual recovery, which run produced a PR/WO, or which named system actor performed an automatic run. This falls short of the actor, correlation/run, and queued-work requirements in `docs/SYSTEM-IMPROVEMENT-ROADMAP-2026-08-13.md:564-580`.
+Impact: a historical, inactive BOM can be rewritten during planning or by a manage request. That may be acceptable as repair, but it is not yet an explicit audit/history policy and has no regression test. Decide whether historical snapshots are mutable; if they are immutable, restrict the operation or create a new revision rather than changing the old one.
 
 ### Polish
 
-#### M049-P01 — BOM detail renders manage actions to view-only users
+No new polish finding remains after the current frontend pass. The prior MRP UI findings are resolved: BOM actions are permission-gated at `spa/src/pages/mrp/boms/detail.tsx:15-16,22,92-107`; plan rerun has success and error feedback at `spa/src/pages/mrp/plans/detail.tsx:32-40`; the diagnostics table uses opaque surfaces, a nine-column span, and horizontal overflow at `spa/src/pages/mrp/plans/detail.tsx:96-108,129-151`; and the costing comment is current at `api/app/Modules/MRP/Services/BomCostingService.php:17-25`. Typecheck, lint, token audit, component test, and build all pass.
 
-Evidence: `spa/src/pages/mrp/boms/detail.tsx:1-12` does not load `usePermission`, yet `:90-104` always renders recalculate, edit, restore, and archive controls. The route itself is correctly view-gated while edit is manage-gated at `spa/src/routes/mrpRoutes.tsx:28-35`.
+## Prior finding disposition
 
-Impact: view-only users see controls that predictably return 403s, creating avoidable error paths and an inconsistent permission experience.
+The original classifications are retained below so the re-audit is traceable. “Resolved” means the current implementation behavior was re-read and the focused checks passed; it does not mean every behavior has a new regression test.
 
-#### M049-P02 — Plan re-run mutation has no local error toast
+| ID | Original classification | Current disposition and evidence |
+|---|---|---|
+| M049-B01 | Broken | Resolved. Missing-BOM demand is diagnosed and both explosion and standard-WO creation are blocked at `api/app/Modules/MRP/Services/MrpEngineService.php:149-166,400-403`. |
+| M049-B02 | Broken | Resolved. Costing and planning share the typed lifecycle guard at `api/app/Modules/MRP/Services/BomComponentIntegrityService.php:20-66`. |
+| M049-B03 | Broken | Resolved. BOM creation and replan outbox recording are inside one transaction at `api/app/Modules/MRP/Services/BomService.php:85-114`; the outbox joins an existing transaction at `api/app/Common/Services/OutboxService.php:59-74`. |
+| M049-B04 | Broken | Resolved. Plan/run resources use `MrpPlanningResponseSerializer` and hash nested identifiers at `api/app/Modules/MRP/Resources/MrpPlanResource.php:35-63`, `MrpRunResource.php:20-41`, and `MrpPlanningResponseSerializer.php:74-113`. |
+| M049-B05 | Broken | Resolved. Seeded production-manager permissions include read-only plan/run access at `api/database/seeders/RolePermissionSeeder.php:558-575`; the role alignment suite passed. |
+| M049-M01 | Missing | Resolved. The guarded migration repairs duplicates and installs the partial unique index at `api/database/migrations/2026_08_26_000100_guard_one_active_bom_per_product.php:17-63`; the index was confirmed in the unique test database. |
+| M049-M02 | Missing | Remains open as current Missing finding: no item standard-cost event or automatic affected-SO replan path. |
+| M049-I01 | Incomplete | Resolved for monetary values. Main cost and PR price paths use decimal strings/BCMath/Money at `api/app/Modules/MRP/Services/MrpEngineService.php:264-275,358-367`; quantity calculations remain numeric quantities, not money. |
+| M049-I02 | Incomplete | Resolved. Failed SOs increment counters and produce `partial` runs at `api/app/Modules/MRP/Services/MrpEngineService.php:655-688`; the enum and resource expose that state. |
+| M049-I03 | Incomplete | Resolved for current API responses. `MrpErrorPolicy` supplies safe messages, codes, and recovery actions, and the resources sanitize legacy rows at `api/app/Modules/MRP/Resources/MrpPlanningResponseSerializer.php:16-36` and `MrpRunResource.php:15-41`. |
+| M049-I04 | Incomplete | Partially resolved but remains open: run/context metadata is present, while automatic maker fields still fall back to the SO creator. See current finding above. |
+| M049-P01 | Polish | Resolved. Manage controls are conditional on `mrp.boms.manage` at `spa/src/pages/mrp/boms/detail.tsx:15-16,22,92-107`. |
+| M049-P02 | Polish | Resolved. Rerun success and error toasts are both present at `spa/src/pages/mrp/plans/detail.tsx:32-40`. |
+| M049-P03 | Polish | Resolved. Opaque cards, the corrected `colSpan={9}`, and overflow wrapper are present at `spa/src/pages/mrp/plans/detail.tsx:96-108,129-151`. |
+| M049-P04 | Polish | Resolved. The setup-time comment now documents cost-batch allocation at `api/app/Modules/MRP/Services/BomCostingService.php:17-25`. |
 
-Evidence: `spa/src/pages/mrp/plans/detail.tsx:26-39` defines success handling for re-run but no `onError` handler. The project mutation pattern requires success and failure feedback in `CLAUDE.md:573-575`; the plans list already implements both paths at `spa/src/pages/mrp/plans/index.tsx:66-81`.
+## Audit gate
 
-#### M049-P03 — A detail page violates the opaque-surface/table polish rules
+The five current actions are all `separate-recommended`; the total scope includes large cross-module/concurrency work. This is not a majority `same-session-ok` small plan, so the gate requires **📋 Plan Ready**. No implementation fixes were applied and no `fix-log.md` entry was added.
 
-Evidence: `MrpPlanDetailPage` uses translucent semantic backgrounds (`bg-danger-bg/5`, `bg-info-bg/5`, `bg-success-bg/5`) at `spa/src/pages/mrp/plans/detail.tsx:95-107`, and its warning row uses `colSpan={10}` while the table declares nine columns at `:132-151`. The design system requires opaque surfaces at `docs/DESIGN-SYSTEM.md:15-21,100-102`.
+## Release handoff
 
-#### M049-P04 — BOM costing comment is stale after batch-size support was added
-
-Evidence: `api/app/Modules/MRP/Services/BomCostingService.php:19-24` says setup time is intentionally excluded because no batch size is available, while the implementation allocates setup time using `cost_batch_size` at `:173-182` and the costing contract documents that behavior in `docs/testing/bom-costing.tdd.md:12-18`.
-
-Impact: future maintainers may “fix” correct batch allocation or misread the cost basis during review.
-
-## Open policy decision
-
-The recalculate endpoint can recost an inactive, non-deleted BOM version (`api/app/Modules/MRP/Services/BomService.php:127-130`; route `api/app/Modules/MRP/routes.php:26`). Decide whether historical BOM cost snapshots are mutable for repair or immutable for audit/history. If immutable is the policy, restrict recosting to the active version and add a regression test.
-
-## Test gaps to close with the action plan
-
-Add focused coverage for: no-BOM standard WO rejection/exception classification; inactive and soft-deleted component handling; concurrent active-BOM uniqueness; BOM/outbox rollback atomicity; initiating actor/run propagation; HashID resource serialization; partial-run status and redacted recovery; production-manager plan/run access; and item-cost-change recost/replan behavior.
+Deferred work is ordered in `action-plan.md`. The module must be re-audited after the cancellation policy, cost event/policy, actor attribution, and regression coverage are implemented. The generated registry remains coordinator-owned and will be regenerated after all cards finish.
