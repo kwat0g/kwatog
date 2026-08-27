@@ -1,103 +1,101 @@
-# M022 — Payslip / statutory / disbursement action plan
+# M022 Action Plan — Payslip & Statutory Disbursement
 
-Date: 2026-08-24  
-Status: 📋 Plan Ready  
-Overall recommendation: separate implementation work; no production-code fixes in this audit session
+Plan date: 2026-08-27
+Status: 📋 Plan Ready
+Gate decision: do not fix in this session
 
-The focused Docker suite passed 39 tests and 119 assertions; SPA typecheck, lint, and token discipline also passed. The primary risks require authorization, publication-state, statutory-policy, export-artifact, and queue semantics work. They should be implemented in reviewable sessions with negative tests and release evidence.
+The plan has one same-session-ok candidate and nine separate-recommended actions. Its total scope includes several large policy/data-contract changes, so it does not satisfy the required majority-same-session-ok plus small-total-scope gate. F01/F02 ownership/publication fixes and the no-store/void-check portions of F06/F07 are already verified and are not repeated below.
 
-## Ordered implementation plan
+## Ordered actions
 
-### 1. M022-F01 — Repair document-vault ownership and permission mapping
+1. M022-F10 — Establish the statutory filing-date basis.
 
-- Classification/severity: Broken, P1
-- Scope: medium/large
-- Session recommendation: separate-recommended
-- Resolve a payslip document to its Payroll owner and compare the payroll employee with the caller. Do not treat payroll.view as cross-employee access. Keep payroll.payslip.view_all, HR-sensitive access, department policy, and system-admin access explicit; reject forged document entity pairs.
-- Tests: owner view/download, cross-owner denial, department-head boundary, view-all success, admin success, malformed entity pair, and regression through both direct payslip and generic document routes.
+   Classification: Broken / P1
+   Scope: large
+   Session recommendation: separate-recommended
+   Action: decide whether statutory and certificate periods use payroll_date or another documented basis; centralize selection and add cross-month/year tests. Owner coordination is required because the repository treats payroll_date as load-bearing.
+   Done when: all statutory and self-service aggregates use the same documented selector and a delayed/cross-year fixture reconciles.
 
-### 2. M022-F02 — Enforce one finalized publication predicate
+2. M022-F04 — Reconcile taxable base, thirteenth-month handling, and Money precision.
 
-- Classification/severity: Broken, P1
-- Scope: medium/large
-- Session recommendation: separate-recommended
-- Define the allowed employee-publication statuses and enforce them in payroll list/show/PDF, self-service certificates, document-vault access, and email send. Keep draft preview as a separately authorized route if required, and make voided/replaced rows non-publishable.
-- Tests: draft, processing, computed, approved, finalized, disbursed, voided, and error rows across direct API, UI-triggered URL, generic document route, certificate endpoints, and email jobs.
+   Classification: Broken / P1
+   Scope: large
+   Session recommendation: separate-recommended
+   Action: define deductible categories and thirteenth-month treatment once; expose a shared centavo-exact calculation result to alphalist, BIR exports, and self-service summaries.
+   Done when: cross-export fixtures reconcile exactly and no exporter converts the authoritative calculation to float before formatting.
 
-### 3. M022-F03 — Resolve the official statutory artifact contract
+3. M022-F03 — Define the official statutory artifact contract.
 
-- Classification/severity: Missing, P1
-- Scope: large
-- Session recommendation: separate-recommended
-- Obtain the authoritative filing specification and decide whether the current alphalist CSV is an internal staging extract or whether official DAT/XML/control records are required. Rename/gate staging output or implement the approved format with versioned fixtures and operator handoff.
-- Tests: official sample file, schema/field-order validation, control totals, rejected invalid file, correct filename/content type, and manual-filing handoff evidence.
+   Classification: Missing / P1
+   Scope: large
+   Session recommendation: separate-recommended
+   Action: version the supported filing formats and control totals; explicitly gate unsupported DAT/XML or other official formats behind a staging/manual workflow.
+   Done when: each download is clearly staging or filing-ready, references a format version, and validates its field/order/control-total contract.
 
-### 4. M022-F04 — Centralize and reconcile taxable-base calculations
+4. M022-F05 — Add statutory completeness preflight.
 
-- Classification/severity: Broken, P1
-- Scope: large
-- Session recommendation: separate-recommended
-- Create one decimal tax-base policy/service used by alphalist, 1601-C, 1604-CF, BIR 2316, payroll summaries, and GL reconciliation. Record treatment for statutory contributions, withholding, loans, adjustments, de minimis, 13th-month correction, and effective dates.
-- Tests: each deduction category individually and together, annual/monthly identity, 13th-month correction, fractional-cent totals, cross-export equality, and reconciliation after void/replacement.
+   Classification: Incomplete / P1
+   Scope: medium
+   Session recommendation: separate-recommended
+   Action: identify missing member IDs, deleted/inactive employees, unsupported records, contribution anomalies, and the EC-share policy before generating a file.
+   Done when: the API returns actionable exceptions and requires a reviewed override for permitted exceptions; focused tests cover every statutory exporter.
 
-### 5. M022-F05 — Add statutory completeness preflight
+5. M022-F06 — Add an immutable statutory export run and artifact record.
 
-- Classification/severity: Incomplete, P1
-- Scope: medium/large
-- Session recommendation: separate-recommended
-- Validate required TIN/SSS/PhilHealth/Pag-IBIG identifiers and agency-specific components before generating a file. Return a bounded exception report, block export by default, and support only an explicit audited override. Model SSS EC or remove the column until the authoritative policy is implemented; never silently emit zero.
-- Tests: missing/invalid identifiers, missing components, soft-deleted employee, override authorization, row counts, contribution totals, and no-download-on-failed-preflight.
+   Classification: Incomplete / P1
+   Scope: large
+   Session recommendation: separate-recommended
+   Action: persist actor, scope/date basis, selected source rows or snapshot, calculation/format versions, preflight result, checksum, retention, and download/approval events for direct CSV and spreadsheet exports.
+   Done when: a later audit can reproduce or identify every downloaded artifact.
 
-### 6. M022-F06 — Govern confidential statutory artifacts
+6. M022-F07 — Make provider-accepted payslip email delivery retry-safe.
 
-- Classification/severity: Incomplete, P1
-- Scope: medium/large
-- Session recommendation: separate-recommended
-- Add no-store/nosniff response headers to direct exports and introduce a confidential export run ledger or vault artifact containing actor, source period ids, table/policy versions, checksum, generated time, and revision/revocation state. Ensure later payroll corrections cannot silently rewrite an already-reviewed run.
-- Tests: response headers, actor/permission audit, exact source snapshot, checksum, repeat download, revoke/retention, and cache-proxy contract.
+   Classification: Incomplete / P1
+   Scope: medium
+   Session recommendation: separate-recommended
+   Action: add provider/message-id idempotency or a durable outbox/accepted state, then test provider acceptance followed by worker/database failure and retry.
+   Done when: a retry cannot submit a duplicate for the same payroll publication unless an explicit recovery action authorizes it.
 
-### 7. M022-F07 — Re-check publication state at email send
+7. M022-F08 — Version and deduplicate payslip artifacts.
 
-- Classification/severity: Incomplete, P1
-- Scope: medium
-- Session recommendation: separate-recommended
-- Lock/re-read the parent period before rendering/sending and refuse voided/non-published periods. Define replacement behavior for queued jobs. Add provider/message idempotency or document the accepted at-least-once delivery policy with support recovery.
-- Tests: queued-then-void, queued-then-replaced, event replay, provider accepted/worker crash, retry, missing email, and failure notification.
+   Classification: Incomplete / P2
+   Scope: medium
+   Session recommendation: separate-recommended
+   Action: separate generation from download, key an artifact to the payroll/publication revision, define concurrency and retention, and make repeated downloads read-only.
+   Done when: repeated and concurrent downloads reuse the canonical version and do not create extra rows/blobs.
 
-### 8. M022-F08 — Make payslip artifacts versioned and downloads read-only
+8. M022-F12 — Repair the operator failure query contract.
 
-- Classification/severity: Incomplete, P2
-- Scope: medium
-- Session recommendation: separate-recommended
-- Separate generation from download, persist one current version per published Payroll/document type, and add a unique version key, retention policy, cleanup, and bounded rendering. Preserve private storage and checksum behavior.
-- Tests: repeat/concurrent download, generation retry, changed source row, missing blob, retention cleanup, and version selection.
+   Classification: Broken / P2
+   Scope: medium
+   Session recommendation: separate-recommended
+   Action: keep employee-facing lists publishable-only but give the permissioned failure tab its own error-inclusive query and tests.
+   Done when: the failure tab returns errored payroll rows without exposing them to employee-facing payslip/download routes.
 
-### 9. M022-F09 — Align UI/API publication and filing controls
+9. M022-F09 — Connect statutory preflight/review evidence to the SPA.
 
-- Classification/severity: Polish, P2
-- Scope: small/medium
-- Session recommendation: same-session-ok
-- Return period start/end and authoritative status, display those instead of computed_at/Computed, validate year/month ranges, and add a statutory preflight/review panel showing included periods, exceptions, totals, and whether output is staging or filing-ready. Keep the Atelier loading/error/empty/accessibility patterns.
-- Tests: UI/API contract, invalid period input, no eligible periods, preflight failure, download success, keyboard interaction, and mobile layout.
+   Classification: Incomplete / P2
+   Scope: medium
+   Session recommendation: same-session-ok
+   Action: show coverage, exceptions, control totals, format/version, and reviewed/download state from the export-run contract.
+   Done when: an operator can inspect and acknowledge readiness from the page and the acknowledgment is represented by the backend run record.
 
-## Cross-module decisions to record
+10. M022-F11 — Decide the audit and retention contract for personal certificates.
 
-- Whether the generic document vault owns payslip authorization or each payroll output has its own resource/policy.
-- Which payroll statuses constitute an employee-publishable payslip and whether voided runs can ever be reissued under the same identity.
-- Whether statutory output is a filing artifact, a staging extract, or both with separate names, permissions, and audit state.
-- Authoritative taxable-base and statutory identifier/EC policy, including effective table versions and correction/void behavior.
-- Whether direct generated personal certificates intentionally bypass the vault and what audit/retention requirements then apply.
+    Classification: Missing / P2
+    Scope: medium
+    Session recommendation: separate-recommended
+    Action: document the intentional direct-render boundary or move BIR/contribution certificates to versioned, access-audited artifacts.
+    Done when: policy, retention, attribution, and reproducibility behavior are explicit and tested.
 
-## Session decision
+11. Dependency P02-01 — Resolve payroll journal-entry actor attribution.
 
-No production-code implementation is authorized for this audit session. Eight findings are separate-recommended because they touch sensitive-data authorization, financial/statutory calculations, publication state, document retention, or queue semantics. Only the UI contract item is a small same-session candidate; applying it alone would make the product look clearer while leaving the primary exposure and filing risks open.
+    Classification: dependency blocker
+    Scope: large
+    Session recommendation: separate-recommended
+    Action: finance/journal-ledger owner must decide how reference-originated payroll journal entries record created_by while preserving auditability; M022 must not edit that dependency.
+    Done when: the focused regression records non-null created_by/posted_by and the audit row without breaking journal-ledger policy.
 
-## Definition of done for the next implementation session
+## Gate and handoff
 
-- Cross-employee document access is denied under ordinary payroll.view and tested through generic and direct routes.
-- Payslip/certificate/email publication requires an authoritative finalized/disbursed state and excludes void/error rows.
-- The official statutory artifact contract is documented and implemented or the staging CSV is explicitly renamed/gated.
-- All statutory outputs share one reconciled tax-base policy and exact decimal totals.
-- Missing identifiers/components block or create an audited override exception; no silent blank/zero statutory fields remain.
-- Confidential export headers, run ledger/snapshot, checksum, retention, and revision behavior are verified.
-- Queue/send races, large-population behavior, migration order, rollback, worker restart, SMTP, and staging filing evidence are documented before release.
+No production fixes are authorized by this plan. The next implementation session should start with the filing-date and taxable-base policy decisions, then build the shared export preflight/run contract before the UI review work.
