@@ -1,149 +1,258 @@
 # M009 — Global Search audit report
 
-Audit date: 2026-08-24  
-Claim: platform / global-search  
-Registry tier: 4  
-Status: 📋 Plan Ready  
-Session recommendation: separate-recommended
+Audit date: 2026-08-27
+Claim: `platform / global-search` (`M009`)
+Claim result: `audit/scripts/claim-module.sh platform global-search` → `CLAIMED`
+Fallback: not used
+Registry tier: 4
+Status: 📋 Plan Ready
+Database used for verification: `ogami_test_m009_roll_c` only
 
 ## Verdict
 
-Production-readiness score: **38/100 — not ready for an unqualified release**.
+The 2026-08-26 hardening commit closed the original row-scope, sensitive-field,
+soft-delete, ranking, failure-state, mobile-entry, and regression-coverage findings.
+The re-audit still finds two P1 authorization-boundary defects: global search ignores
+per-module feature flags, and persisted recent records are not invalidated when the
+same user's permissions or enabled modules change. The remaining findings are contract,
+operational, accessibility, and portability gaps.
 
-The module has a sound outer boundary: the endpoint requires Sanctum authentication, the search feature flag, the global-search permission, and a route throttle; the controller bounds the query; the SPA debounces requests and has a regression test for stale responses. The inner boundary is not production-safe. Per-group queries enforce only broad module permissions and bypass the row-level scopes used by the employee and purchase-order list/detail surfaces. View-only customer and vendor users can also receive raw TINs, which the SPA persists in browser localStorage as a recent-result sublabel. Direct table queries do not consistently exclude soft-deleted rows, and the UI has no error state or mobile search entry point.
+No production-code fix was applied. The open P1 work is medium scope and requires a
+coordinated server/client contract plus negative tests; the plan is therefore not a
+small majority-`same-session-ok` plan. Final status is `📋 Plan Ready`.
 
-The highest risks are authorization and sensitive-data disclosure. The majority of the remediation requires a shared visibility contract and negative security tests, so no production-code fix was applied in this audit session.
+## Audit scope and evidence
 
-## Evidence checked
+- Read the generated registry without editing or regenerating it; read the inherited
+  project/module docs, prior `status.md`, `audit-report.md`, `action-plan.md`, and
+  `fix-log.md` before trusting the prior `✅ Verified` status.
+- Read the current implementation, focused tests, relevant row-scope/feature/auth
+  dependencies, current git diff, recent history, and mtimes. The module source had no
+  uncommitted diff; its latest hardening is commit `1a5d2122`.
+- Re-verified the route, PHP syntax, backend feature tests, SPA unit tests, typecheck,
+  module ESLint, and git whitespace. Existing unrelated worktree changes were preserved.
+- Ran an additional focused probe in `ogami_test_m009_roll_c`: a `system_admin` search
+  still returned a CRM product after `modules.crm=false`; an employee matching only
+  `middle_name` was not returned; and the request validator accepted `q=" a "` while
+  the trimmed service returned no results.
+- `php artisan route:list --path=search` shows the M009 route alongside the separate
+  quality traceability route; no registry generation was run.
 
-- Refreshed the module registry, atomically claimed M009, reviewed the existing dirty worktree, and confirmed the module scaffold was the only M009 audit surface.
-- GlobalSearchService, SearchController, SearchOperator, Admin routes, feature middleware, session/password middleware, role/permission seed data, row-scoped EmployeeService and PurchaseOrderService paths, resources, models, migrations, hash-ID binding, SPA command palette, Topbar trigger, recent-items persistence, and existing CommandPalette tests.
-- php artisan route:list --path=search — the global-search route was enumerated alongside the separate quality traceability search route.
-- PHP syntax check passed for the matched M009 backend files.
-- npm run typecheck in spa — passed.
-- npm run lint in spa — passed.
-- npx vitest run src/components/ui/CommandPalette.test.tsx — could not start because Vitest/Vite attempted to write under the root-owned spa/node_modules/.vite-temp directory and received EACCES.
-- No M009-specific backend test file was found; the existing SPA suite covers debounce, minimum query length, and stale-response behavior only.
-- No live SPA/API server was available for an authenticated browser audit. No production query plan or representative large-dataset benchmark was available.
+## Re-verified strengths and closed findings
 
-## Strengths
-
-- The API route requires auth:sanctum, feature:search, permission:search.global, and throttle:30,1 (api/app/Modules/Admin/routes.php:139-141). Session timeout, password-expiry, API throttling, and slow-query middleware are also appended globally to the API group (api/bootstrap/app.php:44-78).
-- SearchController validates q as a required string from 2 through 120 characters before calling the service (api/app/Modules/Admin/Controllers/SearchController.php:16-24).
-- Search results return hash IDs and hash-based URLs rather than raw numeric identifiers (api/app/Common/Services/GlobalSearchService.php:35,50-56,68-75,87-94,109-115,127-134,146-153,164-170,181-187,198-204,215-221,232-238).
-- The SPA cancels/isolates superseded React Query requests through the query key and AbortSignal, debounces by 200ms, and does not query until two characters are present (spa/src/components/ui/CommandPalette.tsx:153-171). The existing test covers the stale-response regression plus minimum length and debounce behavior (spa/src/components/ui/CommandPalette.test.tsx:32-96).
-- The recent-items store validates persisted data and caps the list at eight entries (spa/src/stores/recentItemsStore.ts:32-79).
-- SQL values are parameter-bound through the query builder, so the wildcard issue below is not a direct SQL-injection finding. The problem is wildcard semantics and the resulting search breadth/performance.
+- The endpoint is protected by Sanctum, the search feature flag, the global-search
+  permission, and a throttle (`api/app/Modules/Admin/routes.php:145-147`).
+- Search now starts from Eloquent models and applies the shared employee and purchase
+  order row scopes (`api/app/Common/Services/GlobalSearchService.php:111-138`,
+  `:173-200`).
+- Sensitive customer/vendor TIN columns are absent from the result contract; the
+  customer fallback is a business code (`api/app/Common/Services/GlobalSearchService.php:335-350`),
+  and the recent store validates its persisted envelope and binds it to an owner
+  (`spa/src/stores/recentItemsStore.ts:86-92`, `:127-151`).
+- Eloquent SoftDeletes now excludes archived base records; deterministic relevance
+  ordering is applied by `rank()` (`api/app/Common/Services/GlobalSearchService.php:402-440`).
+- The palette distinguishes failures, drops stale rows on failure, disables automatic
+  retries, restores focus to its opener, and has a narrow-screen trigger. These were
+  covered in the existing fix log and re-exercised by the focused SPA suite.
+- The prior F04 literal wildcard behavior is fixed for the production PostgreSQL path;
+  the production-sized index/benchmark portion remains open as M009-F13 below.
 
 ## Findings
 
-### M009-F01 — Broken/critical: global search bypasses row-level authorization
+### M009-F09 — Broken: per-module feature flags are bypassed by global search
 
-Priority: **P0**  
-Scope: **medium**  
-Recommendation: **separate-recommended**
+Priority: **P1**
+Scope: **medium**
+Session: **separate-recommended**
 
-GlobalSearchService checks only broad permissions before querying entire tables. The employee branch checks hr.employees.view and then uses an unscoped DB::table query (api/app/Common/Services/GlobalSearchService.php:38-56). The purchase-order branch does the same for purchasing.view (api/app/Common/Services/GlobalSearchService.php:78-94). The service accepts the acting User but never applies the visibility policy associated with that user.
+The search endpoint checks only `feature:search` (`api/app/Modules/Admin/routes.php:145-147`).
+Each result group then checks a permission and table existence, but no corresponding
+`modules.hr`, `modules.crm`, `modules.purchasing`, `modules.production`,
+`modules.accounting`, `modules.inventory`, or `modules.quality` setting; for example,
+the employee, purchase-order, product, and customer branches are gated only at
+`api/app/Common/Services/GlobalSearchService.php:111-121`, `:173-180`, `:283-289`,
+and `:335-340`.
 
-The normal employee list applies DepartmentScope with hr.employees.view_sensitive for all-row access and hr.employees.view for department-plus-self access (api/app/Modules/HR/Services/EmployeeService.php:40-58); EmployeeController passes the request user into that service (api/app/Modules/HR/Controllers/EmployeeController.php:55-58). The normal purchase-order list applies a system-admin/approver/all, department-head/department, or creator-only scope and receives the request user (api/app/Modules/Purchasing/Services/PurchaseOrderService.php:61-119; api/app/Modules/Purchasing/Controllers/PurchaseOrderController.php:30-33). The seeded department_head role has hr.employees.view, purchasing.view, and search.global but not the employee view-all grant (api/database/seeders/RolePermissionSeeder.php:670-688).
+The normal module routes independently enforce their feature flags, for example CRM
+uses `feature:crm` (`api/app/Modules/CRM/routes.php:17-21`), and the middleware returns
+`feature_disabled` when a module is off (`api/app/Common/Middleware/CheckFeature.php:21-33`).
+The SPA also filters navigation by enabled feature (`spa/src/components/layout/Sidebar.tsx:781-796`),
+but renders every API group without a feature check (`spa/src/components/ui/CommandPalette.tsx:316-332`).
 
-Therefore a department head can search and receive employee names, employee numbers, departments, positions, statuses, and purchase orders belonging to other departments or users. Purchase-order detail routes require only purchasing.view and the controller does not apply the list scope to show (api/app/Modules/Purchasing/routes.php:56-71; api/app/Modules/Purchasing/Controllers/PurchaseOrderController.php:46-49), so a result can lead to a broader record disclosure than the search row itself. This is a server-side authorization bypass, not only a UI filtering defect.
+Observed in the unique audit database: with `modules.crm=false`, a system-admin search
+for a CRM-only fixture still returned the `product` group. This exposes records from a
+disabled module in the search response and palette even though its normal routes are
+disabled. The broad system-admin permission bypass makes the discrepancy especially
+clear, but it also affects any user retaining a permission while an organization toggle
+changes.
 
-Action: define one visibility contract per searchable resource and reuse the same user-aware scope for search, list, show, and linked routes. Do not duplicate role checks in GlobalSearchService. Add negative API tests with a department-head fixture proving cross-department employees and unrelated purchase orders are absent from both search and detail responses.
+Action: map every search group to its owning feature and enforce that setting in the
+server result contract, then filter defensively in the SPA. Add negative API tests for
+each disabled feature and a client test proving disabled groups never render.
 
-### M009-F02 — Broken/high: view-only users can receive raw customer and vendor TINs
+### M009-F10 — Broken: same-user recent records survive permission/module revocation
 
-Priority: **P1**  
-Scope: **small-to-medium**  
-Recommendation: **separate-recommended**
+Priority: **P1**
+Scope: **medium**
+Session: **separate-recommended**
 
-The customer and vendor search branches select tin and use it as the fallback sublabel when contact_person is empty (api/app/Common/Services/GlobalSearchService.php:190-221). The normal resources deliberately expose an unmasked TIN only to accounting.customers.manage or accounting.vendors.manage; view-only users receive a masked value (api/app/Modules/Accounting/Resources/CustomerResource.php:14-18,30-59; api/app/Modules/Accounting/Resources/VendorResource.php:12-16,21-45). The permission catalog distinguishes view from manage (api/database/seeders/RolePermissionSeeder.php:164-175).
+Permission and module updates refresh the auth store (`spa/src/hooks/usePermissionSync.tsx:25-42`),
+but the recent-items store only compares the persisted `ownerId`; a same-user claim
+retains every item (`spa/src/stores/recentItemsStore.ts:127-151`). The store explicitly
+documents that localStorage has no permission check (`spa/src/stores/recentItemsStore.ts:16-17`).
+The palette renders all recents without rechecking current permissions/features and
+copies their labels, sublabels, and statuses into new entries (`spa/src/components/ui/CommandPalette.tsx:263-279`,
+`:352-364`).
 
-This makes the global-search response a confidentiality bypass for any view-only user who searches a customer or vendor with no contact person. CommandPalette.pick() then stores the result sublabel in the persisted recent-items store (spa/src/components/ui/CommandPalette.tsx:282-294; spa/src/stores/recentItemsStore.ts:11-19,65-79), extending the exposure into browser localStorage.
+After a permission override or module toggle, a previously authorized employee/PO/
+customer result can therefore remain visible in localStorage and clickable in the
+palette. A later route 403 does not undo the local disclosure already rendered on the
+shared terminal.
 
-Action: remove TIN from the global-search result contract or apply the same permission-aware masking policy used by the resources. Treat recent-result sublabels as sensitive-data-bearing and either redact them at the source or prohibit sensitive fields from persistence. Add view-only negative tests for both customer and vendor search and inspect localStorage in the browser test.
+Action: invalidate or version recents when effective permissions/features change. Prefer
+persisting only a safe route identity and revalidating before display, or implement a
+server-backed visibility token. Add same-user permission-revocation, module-toggle, and
+localStorage regression tests.
 
-### M009-F03 — Broken/high: direct table queries can return archived records
+### M009-F11 — Incomplete: employee middle-name search disagrees with the employee list
 
-Priority: **P1**  
-Scope: **medium**  
-Recommendation: **separate-recommended**
+Priority: **P2**
+Scope: **small**
+Session: **same-session-ok**
 
-GlobalSearchService uses DB::table for every record group and contains no deleted_at predicate or explicit archived-record policy (api/app/Common/Services/GlobalSearchService.php:38-239). Several searched models use SoftDeletes, including Employee, SalesOrder, PurchaseOrder, and WorkOrder (api/app/Modules/HR/Models/Employee.php:20-24; api/app/Modules/CRM/Models/SalesOrder.php:20-24; api/app/Modules/Purchasing/Models/PurchaseOrder.php:21-25; api/app/Modules/Production/Models/WorkOrder.php:22-26). Customers, vendors, products, and inventory items also declare soft deletes in their table migrations (api/database/migrations/0043_create_vendors_table.php:23-29; api/database/migrations/0047_create_customers_table.php:23-29; api/database/migrations/0052_create_items_table.php:28-36; api/database/migrations/0444_add_soft_deletes_to_all_tables.php:29-39,65-71). The ordinary list services explicitly use TrashedFilter, whose default path leaves archived rows excluded by Eloquent and provides deliberate only/with modes (api/app/Common/Support/TrashedFilter.php:15-26; api/app/Modules/Accounting/Services/CustomerService.php:22-40; api/app/Modules/Accounting/Services/VendorService.php:21-39; api/app/Modules/CRM/Services/ProductService.php:16-46; api/app/Modules/Inventory/Services/ItemService.php:19-49; api/app/Modules/Production/Services/WorkOrderService.php:90-123).
+The HR employee list searches `employee_no`, `first_name`, `middle_name`, and `last_name`
+(`api/app/Modules/HR/Services/EmployeeService.php:63-70`), while global search omits
+`middle_name` (`api/app/Common/Services/GlobalSearchService.php:118-121`). The manual
+promises literal substring matching for global search and says results use the same
+allowed row set as module lists (`docs/USER-MANUAL.md:281-288`). The focused probe with a
+middle-name-only fixture returned no result group.
 
-The search can consequently surface records that normal lists hide. Hash-ID route binding also has an explicit with-trashed path for routes that opt in (api/app/Common/Traits/HasHashId.php:45-68), so the result behavior is inconsistent rather than safely guaranteed to be a dead link.
+Action: include `employees.middle_name` in the group predicate and relevance inputs,
+then add a regression fixture that is searchable only through the middle name.
 
-Action: use model queries or add explicit deleted_at is null predicates to every searchable source, then define an administrator-only archived-search policy if required. Add fixtures for soft-deleted employees, orders, customers, vendors, products, and items and assert the default search excludes them.
+### M009-F12 — Incomplete: minimum-length validation is applied before trimming
 
-### M009-F04 — Operational risk: wildcard input and fan-out are unbounded for the search contract
+Priority: **P2**
+Scope: **small**
+Session: **same-session-ok**
 
-Priority: **P2**  
-Scope: **medium**  
-Recommendation: **separate-recommended**
+`SearchController` validates the raw query string with `min:2` and echoes that raw value
+(`api/app/Modules/Admin/Controllers/SearchController.php:16-24`), while the service trims
+before applying its two-character guard (`api/app/Common/Services/GlobalSearchService.php:100-105`).
+Thus `q=" a "` passes HTTP validation but produces an empty 200 response rather than a
+consistent validation error or normalized query. The UI trims before enabling the query,
+so this is primarily an API contract inconsistency and a direct-client edge case.
 
-The service wraps the trimmed user input directly in %...% and passes it to ILIKE/LIKE (api/app/Common/Services/GlobalSearchService.php:30-34; api/app/Common/Support/SearchOperator.php:25-30). SanitizeInput trims and strips HTML but does not escape SQL wildcard characters (api/app/Common/Middleware/SanitizeInput.php:31-53), so % and _ supplied by a user retain wildcard meaning. The leading wildcard also prevents ordinary B-tree prefix use. Each term can execute up to eleven sequential source queries, each with joins or text predicates and no documented query budget (api/app/Common/Services/GlobalSearchService.php:38-239). The migrations show indexes for status, foreign keys, dates, names, and unique identifiers but no full-text, trigram, or equivalent search index contract for these broad predicates (api/database/migrations/0016_create_employees_table.php:64-72; api/database/migrations/0043_create_vendors_table.php:23-29; api/database/migrations/0047_create_customers_table.php:23-29; api/database/migrations/0060_create_purchase_orders_table.php:32-39; api/database/migrations/0071_create_sales_orders_table.php:40-46).
+Action: normalize/trim before validation, validate the normalized value, and return the
+normalized query or a deliberate 422 response. Add whitespace-only and padded one-character
+tests.
 
-The route throttle limits requests but does not establish a latency or database-load budget, and the React Query configuration does not explicitly disable retries for this endpoint (spa/src/components/ui/CommandPalette.tsx:156-166).
+### M009-F13 — Incomplete: query-cost ceiling is documented but not enforced
 
-Action: choose and document the search syntax, escape wildcard characters when literal matching is intended, add exact/prefix ranking or a supported full-text/trigram strategy, and measure the worst-case fan-out with representative data. Add a per-request query/latency budget and explicit retry behavior for rate-limit or server errors.
+Priority: **P2**
+Scope: **large**
+Session: **separate-recommended**
 
-### M009-F05 — Incomplete: result selection is nondeterministic and not relevance-ranked
+`MAX_SOURCE_QUERIES=11` is explicitly described as a documentation ceiling rather than
+a runtime guard (`api/app/Common/Services/GlobalSearchService.php:92-97`). The service
+still contains one sequential branch per group, each using a leading-wildcard search and
+`limit()` (`api/app/Common/Services/GlobalSearchService.php:149-200`, `:283-343`,
+`:354-399`). Employee and purchase-order non-admin paths also perform a department lookup
+through `DepartmentScope::departmentIdFor` (`api/app/Common/Support/DepartmentScope.php:69-72`,
+`:101-110`), so the class comment's “one SELECT plus one Schema probe” is not a complete
+request budget.
 
-Priority: **P2**  
-Scope: **small-to-medium**  
-Recommendation: **same-session only after authorization fixes**
+The old fix log deliberately deferred trigram/full-text indexing and a production-sized
+benchmark because the current database is small and index rights span other modules
+(`audit/domains/platform/global-search/fix-log.md:161-165`). The current tests prove
+matching and row ceilings, not latency or database load under worst-case production data.
 
-Every source query applies limit(perGroup) without an orderBy (api/app/Common/Services/GlobalSearchService.php:40-49,61-67,80-86,99-108,120-126,139-145,158-163,175-180,192-197,209-214,226-231). The first five rows can therefore vary by query plan and may omit an exact identifier match when more rows qualify. The corresponding module list services deliberately order their results, for example customers/vendors/products by name and sales/purchase/work orders by business date or priority (api/app/Modules/Accounting/Services/CustomerService.php:39-40; api/app/Modules/CRM/Services/ProductService.php:45-46; api/app/Modules/CRM/Services/SalesOrderService.php:144-146; api/app/Modules/Purchasing/Services/PurchaseOrderService.php:118-119; api/app/Modules/Production/Services/WorkOrderService.php:121-123).
+Action: make the group registry and query budget executable, record query/latency limits,
+and benchmark representative data. Choose prefix/exact semantics or PostgreSQL trigram
+/full-text indexes from measured plans; coordinate any cross-module migrations with the
+owning module cards.
 
-Action: add deterministic per-group ordering and relevance tiers: exact identifier, prefix identifier, exact name, prefix name, then contains match. Test that an exact record is stable and preferred.
+### M009-F14 — Incomplete: archived related labels are not covered by the soft-delete policy
 
-### M009-F06 — Incomplete: search failures render as an empty or stale result state
+Priority: **P2**
+Scope: **medium**
+Session: **separate-recommended**
 
-Priority: **P2**  
-Scope: **small**  
-Recommendation: **same-session only after security fixes**
+The searched base models now use Eloquent and exclude their own soft-deleted rows, but
+joined labels are read through raw `leftJoin`s without a related-row tombstone predicate;
+for example purchase orders join vendors (`api/app/Common/Services/GlobalSearchService.php:173-180`)
+and customer/vendor results join no relation policy at all (`:335-363`). Vendors and
+customers themselves use `SoftDeletes` (`api/app/Modules/Accounting/Models/Vendor.php:13-17`,
+`api/app/Modules/Accounting/Models/Customer.php:13-17`). A live transaction can therefore display the name of an archived
+related record, and the test suite does not define whether that label should be hidden,
+null, or treated as an explicit archived result.
 
-CommandPalette reads only data and isFetching from useQuery; it does not inspect isError or error (spa/src/components/ui/CommandPalette.tsx:156-171). The empty state is shown only when searching, not loading, and sections are empty (spa/src/components/ui/CommandPalette.tsx:327-383). A 403, 429, or 5xx can therefore look like “No results,” while placeholderData can retain the previous term's rows during a failed transition. There is no retry or rate-limit guidance in the palette.
+Action: decide the archived-related-record contract with the owning module, apply the
+same relation/global-scope semantics to joined labels, and add live-parent/deleted-child
+fixtures for every joined source. Do not add archived-search behavior implicitly.
 
-Action: model loading, error, empty, and stale-result states separately; clear or label stale rows after a failed term; provide a retry action and distinguish permission-disabled, throttled, and server-error responses. Add tests for 403, 429, and 500 responses.
+### M009-F15 — Missing: the `aria-modal` palette has no focus trap
 
-### M009-F07 — Missing: mobile has no visible search entry point
+Priority: **P2**
+Scope: **small**
+Session: **same-session-ok**
 
-Priority: **P2**  
-Scope: **small**  
-Recommendation: **same-session only after security fixes**
+The palette declares a modal dialog (`spa/src/components/ui/CommandPalette.tsx:402-407`)
+and moves focus into it/restores the opener, but its key handler handles only Escape,
+ArrowUp, ArrowDown, and Enter (`spa/src/components/ui/CommandPalette.tsx:367-388`). No
+Tab/Shift+Tab trap or equivalent focus-scope primitive is present. Keyboard and screen
+reader users can tab behind a dialog that claims the background is modal. The prior fix
+log recorded this as intentionally deferred (`audit/domains/platform/global-search/fix-log.md:199-202`).
 
-The only visible Topbar search trigger is hidden below the sm breakpoint (spa/src/components/layout/Topbar.tsx:84-93). The other entry point is a Cmd/Ctrl+K document listener (spa/src/components/layout/Topbar.tsx:48-58), which is not a practical mobile interaction. No mobile menu search action or other palette opener was found. The module is therefore unavailable to touch users on narrow screens despite the manual describing global search as a general feature (docs/USER-MANUAL.md:281-282).
+Action: use the project's focus-scope primitive or implement a tested Tab loop, and add
+an accessibility/browser assertion that focus remains inside the dialog until close.
 
-Action: add a mobile-visible search button or a sidebar/menu action, preserve focus restoration to the opener, and add a narrow-viewport browser test.
+### M009-F16 — Polish: the advertised cross-driver literal wildcard contract is untested on SQLite
 
-### M009-F08 — Missing: negative security and failure-path coverage does not match the module risk
+Priority: **P3**
+Scope: **small**
+Session: **separate-recommended**
 
-Priority: **P1**  
-Scope: **medium**  
-Recommendation: **separate-recommended**
+`SearchOperator` presents itself as cross-driver and promises that `contains()` escapes
+`%` and `_` (`api/app/Common/Support/SearchOperator.php:9-34`), but `escape()` deliberately
+returns raw input on SQLite because SQLite has no default backslash escape
+(`api/app/Common/Support/SearchOperator.php:43-60`). The application and current tests
+run on PostgreSQL, so this is not a production-path failure today; it is a portability
+contract gap that could silently reintroduce wildcard matches if a fallback driver is used.
 
-The only module-specific tests found are three CommandPalette tests for stale responses, minimum length, and debounce (spa/src/components/ui/CommandPalette.test.tsx:32-96). No backend M009 tests cover route denial, feature-off behavior, role-specific row scope, soft-deleted records, TIN masking, wildcard input, deterministic ordering, or per-group result contracts. The failed Vitest startup also means the existing UI tests were not executable in this environment.
+Action: either add an explicit driver-safe `ESCAPE` strategy with SQLite coverage or
+narrow the helper's documentation/availability to supported PostgreSQL deployments.
 
-Action: add authenticated backend tests for every searchable group, with special negative cases for department_head employee/PO scope and view-only TIN masking. Add SPA tests for permission/feature states, error handling, mobile opening, localStorage redaction, and deterministic row rendering. Run them against a writable dependency cache and a live API/SPA smoke path.
+## Verification
 
-## Production-audit assessment
+| Check | Result | Notes |
+|---|---|---|
+| `php artisan test tests/Feature/Admin/GlobalSearchTest.php --no-coverage` | **PASS — 20 tests, 80 assertions** | `ogami_test_m009_roll_c`; no shared `ogami_test` use |
+| Focused SPA Vitest: palette, recents, topbar | **PASS — 17 tests across 3 files** | Container run; existing React `act(...)` warnings only |
+| `npm run typecheck` | **PASS** | SPA container |
+| Module-scoped ESLint | **PASS** | Six M009 SPA source/test files |
+| PHP lint | **PASS** | Service, operator, controller, and focused backend test |
+| `php artisan route:list --path=search` | **PASS** | M009 route enumerated |
+| `git diff --check` | **PASS** | No whitespace errors |
+| Feature-flag/middle-name/whitespace probe | **PASS — defects reproduced** | Unique audit DB; evidence for M009-F09, F11, F12 |
+| Authenticated browser/e2e audit | **Not run** | No dedicated palette e2e path/live authenticated browser evidence in this session |
+| Production-sized query plan/latency benchmark | **Not run** | Deferred by M009-F13; dev data is not representative |
 
-### Blockers / high-value risks
+## Deferred work and blockers
 
-1. M009-F01 allows department-scoped users to enumerate and, for purchase orders, open records outside their authorized row set.
-2. M009-F02 exposes raw customer/vendor TINs through a view-level search permission and persists them in browser storage.
-3. M009-F03 can make archived records searchable despite normal module lists excluding them.
-4. M009-F08 leaves the highest-risk authorization and confidentiality paths without negative regression coverage.
+- M009-F09 and M009-F10 require coordinated backend/client authorization contracts and
+  negative regression coverage; this is the release gate blocker for M009.
+- The purchase-order detail route remains broader than the list scope. Search no longer
+  hands out out-of-scope PO rows, but the route-level issue belongs to the
+  `procurement/purchase-orders` card and was not modified here.
+- Production search indexes/benchmarks span other modules and require database extension
+  rights; do not change those dependency-owned migrations from this card.
+- The unrelated untracked `m036-browser-check.mjs` and unrelated leave-management edits
+  were preserved and are not part of this module's commit.
 
-### Evidence still missing
+## Next action
 
-- A live API test with department-head fixtures proving cross-department employee and purchase-order records are absent from search and show.
-- Soft-deleted fixtures for every searchable SoftDeletes model and an explicit archived-search policy.
-- View-only customer/vendor fixtures with empty contact_person values proving TIN redaction in API responses and recent-items localStorage.
-- Query-plan and latency measurements for worst-case wildcard terms on representative production-sized data.
-- Authenticated browser coverage for mobile opening, error/retry behavior, feature-off/permission-denied states, and result navigation.
-
-### Next action
-
-Do not promote M009 as complete. In a separate hardening session, first centralize the user-aware visibility contract and remove the TIN exposure, then add soft-delete filtering and negative security tests. Only after those controls are proven should the team optimize relevance/query cost and complete mobile/error-state polish.
+In a separate hardening session, implement the per-group feature gate and same-user recent
+invalidation first, add negative tests, then resolve the archive/latency contract before
+taking the small API and accessibility improvements. Re-audit M009 only after those tests
+and a representative performance/browser check are available.
