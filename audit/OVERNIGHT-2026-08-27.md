@@ -211,6 +211,46 @@ guarantee. Evidence for each is in the named module's `fix-log.md`.
     *reports* (silent skip / failed-SO, which makes routine cancellations render as
     `partial` and trips `rerun()`'s throw / a new skipped counter).
 
+15. **Asset disposal in the disposal month reports two different losses.** MEASURED.
+    The same ₱12,000 asset disposed for zero proceeds on 2026-06-15 gives:
+    - disposed **before** the June cron → loss **11,000.00**, with a dangling
+      CR 200.00 left in Accumulated Depreciation
+    - cron runs **first** → loss **10,800.00**, accumulated nets to zero
+
+    `DepreciationService.php:190-195` keeps a disposed asset in service for its
+    disposal month, while `AssetService.php:164-170` reverses accumulated as of
+    disposal time. Current behaviour matches **neither** consistent policy, and the
+    reported loss depends on cron timing. Every candidate fix moves a reported figure;
+    three options are costed in the module's fix-log.
+    → `finance/fixed-assets-depreciation`
+
+---
+
+## Not a decision — a fix someone should just make
+
+**`RbacConcurrencyTest` leaks an active `system_admin` across the whole suite.** Two
+independent agents hit this tonight in unrelated modules, and a third case is already
+documented in-repo at `UserAdministrationHardeningTest.php:59-72`. The test declares
+`protected array $connectionsToTransact = []` — legitimate, its forked children need
+committed fixtures — but its cleanup never deletes the active `system_admin` rows it
+creates, nor resets `RefreshDatabaseState::$migrated`. Because `tests/Feature/Admin`
+sorts before most other directories, those rows survive into later tests and silently
+disarm any guard that asks "is there exactly one active admin?" or "is there an
+automation actor?".
+
+Three tests now work around it individually by establishing their own premise. The
+leak itself is still there, and it will keep disarming guards. The precedent fix is
+one method — `AccountingPeriodPostingConcurrencyTest.php:61-66` uses
+`tearDownAfterClass()` to reset `RefreshDatabaseState::$migrated = false` so the next
+class rebuilds the schema. Recommended: soft-delete the fixture **users** only, not
+the roles — deleting roles would turn a silent count bug into a suite-wide unique
+violation on `roles.slug`. Hard-deleting the users is **not** an option: it trips
+`audit_logs_prevent_update` via the `ON DELETE SET NULL` cascade, and the audit rows
+cannot be deleted first either. Owner: `platform/rbac`.
+
+Also noted there: `AccountingPeriodDuplicateRecoveryTest.php:39` has a bare
+`DB::commit()`.
+
 Also queued behind you, not a decision but only you can do it:
 **`sudo chown -R $USER spa/node_modules spa/test-results`** (or `rm -rf
 spa/node_modules/.vite-temp spa/test-results`). Root ownership there blocks BOTH
