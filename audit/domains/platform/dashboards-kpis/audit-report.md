@@ -1,241 +1,447 @@
 # M007 — Dashboards & KPIs audit
 
-Audit date: 2026-08-24  
-Branch / baseline: main at b269eafd (origin/main)  
-Claim: platform / dashboards-kpis  
-Status: Plan Ready
+Audit date: 2026-08-27
+Branch: `audit/2026-08-26-five-modules`
+Claim: `platform / dashboards-kpis` (M007, preferred target; atomically claimed)
+Status: 📋 Plan Ready
 
 ## Executive outcome
 
-Production audit score: 56/100. The dashboard surfaces are substantially implemented and the dedicated backend suite is green, but this module is not release-ready: the scheduled KPI process has two active calculators that reference columns absent from the live schema, several role services read gated financial/HR data before applying PanelGate, and warehouse/action-center permissions and metric contracts still have production-impacting gaps.
+The previously reported schema, authorization, workflow, metric-source, layout, and
+scorecard-loading defects are implemented in the current branch and the backend
+dashboard gate is green. The re-audit still finds open KPI lifecycle, period-input,
+metric-contract, financial precision, and dashboard consistency issues. No production
+code was changed in this session because the ordered plan is not predominantly small
+and same-session-safe.
 
-No production code was changed in this session. The finding mix is not predominantly small/same-session work, so the workflow decision is to release this module as Plan Ready and schedule a separate hardening session.
+Do not promote M007 to `✅ Verified`. Release it as `📋 Plan Ready` and schedule a
+separate hardening slice for the open findings below.
 
-## Scope and evidence checked
+## Discovery, hardening, and polish scope
 
-- API routes and middleware: api/app/Modules/Dashboard/routes.php:20-95.
-- Role dispatch and dashboard catalog: DashboardDispatchService, DashboardCatalog, DashboardController, and the seven role dashboard services.
-- Widget catalog, layout persistence, server-owned links, scalar data, rich analytics, badge/action-center/rollout-health services.
-- KPI seed definitions, monthly scheduler, command failure behavior, calculators, migrations, and permissions.
-- SPA dashboard routes/pages, dashboardLinks.ts, widget registry, scorecard, and dashboard API clients.
-- Database schema was inspected read-only in the PostgreSQL test database. Invoice columns include balance but not balance_due; stock_levels includes weighted_avg_cost but not unit_cost; stock_movements includes movement_type but not type.
-- Automated backend gate: php artisan test tests/Feature/Dashboard --no-coverage — 128 passed, 609 assertions.
-- PHP syntax gate: 123 Dashboard/related PHP files passed php -l.
-- SPA gate: npm run typecheck passed.
-- Browser route/role audits were attempted but could not run: no local frontend/API server was listening on localhost. Vite/Vitest startup was also blocked by EACCES on the root-owned spa/node_modules/.vite-temp directory.
+- Registry row and inherited `status.md`, `audit-report.md`, `action-plan.md`, and
+  `fix-log.md`; the coordinator registry was not regenerated or edited.
+- Dashboard routes/middleware, dispatch, catalog, role services, PanelGate, layout
+  persistence, widgets, rich analytics, badges, action center, KPI seed/catalog,
+  scheduler, calculators, migrations, and permissions.
+- SPA dashboard routes/pages, scorecard, KPI API client, dashboard links, and the
+  quality inspection worklist.
+- Current worktree diff and target mtimes. M007 had no uncommitted production or test
+  changes on entry; unrelated leave-management edits were preserved.
+- Inherited fix log and prior verification claims were treated as historical evidence,
+  then rechecked on this claim using the unique database below.
 
-## Release blockers and high-value findings
+## Finding status
 
-| ID | Classification | Priority | Finding | Scope | Session |
+| ID | Classification | Priority | Current status | Scope | Session recommendation |
 | --- | --- | --- | --- | --- | --- |
-| M007-01 | Broken | P0 | Active inventory_turnover KPI SQL uses nonexistent schema columns and causes the monthly KPI process to fail. | Large | Separate recommended |
-| M007-02 | Broken | P0 | Active ar_aging_60d KPI sums nonexistent balance_due instead of the invoice balance column. | Medium | Separate recommended |
-| M007-03 | Incomplete | P1 | Multiple bespoke dashboards perform sensitive queries before PanelGate evaluates the viewer permission. | Large | Separate recommended |
-| M007-04 | Broken | P1 | Action-center task authorization treats every quality item as interchangeable, allowing an NCR-only grant to mutate an inspection task if its key is known. | Medium | Separate recommended |
-| M007-05 | Broken | P1 | Warehouse headline counts use status/type values that the inventory module never emits; valid activity renders as zero. | Medium | Separate recommended |
-| M007-06 | Incomplete | P1 | Several KPI labels do not match their source data: plant revenue includes draft/cancelled invoices, quality pass rate includes unfinished inspections, and CoC count is actually closed NCR count. | Medium | Separate recommended |
-| M007-07 | Broken | P1 | The CoCs Gen. MTD card points to /quality/certificates, a SPA route that does not exist. | Small | Same-session possible, deferred with metric fix |
-| M007-08 | Incomplete | P2 | Suppliers Due Review counts every low historical snapshot rather than the latest distinct vendor period. | Medium | Separate recommended |
-| M007-09 | Incomplete | P2 | Probation alerts query using the configured probation period but display a hard-coded six-month end date. | Small | Same-session possible |
-| M007-10 | Missing | P1 | Tests prove generic failure isolation but do not execute the seeded active KPI catalog, so the two schema failures escaped the green process test. | Medium | Separate recommended |
-| M007-11 | Incomplete | P2 | First-login role-layout cloning has a check-then-insert race and no uniqueness constraint for user/widget rows. | Medium | Separate recommended |
-| M007-12 | Polish | P2 | The scorecard makes one trend request per KPI card, producing an avoidable client-side N+1 request pattern. | Medium | Separate recommended |
+| M007-01 | Broken | P0 | Resolved schema defect; formula sign-off deferred | Large | separate-recommended |
+| M007-02 | Broken | P0 | Resolved and verified | Medium | separate-recommended |
+| M007-03 | Incomplete | P1 | Resolved by closure-based gates; focused tests pass | Large | separate-recommended |
+| M007-04 | Broken | P1 | Resolved and verified | Medium | separate-recommended |
+| M007-05 | Broken | P1 | Resolved and verified | Medium | separate-recommended |
+| M007-06 | Incomplete | P1 | Resolved and verified | Medium | separate-recommended |
+| M007-07 | Broken | P1 | Resolved statically; browser check deferred | Small | same-session-ok |
+| M007-08 | Incomplete | P2 | Resolved and verified | Medium | separate-recommended |
+| M007-09 | Incomplete | P2 | Resolved and verified | Small | same-session-ok |
+| M007-10 | Missing | P1 | Resolved; seeded catalog guard passes | Medium | separate-recommended |
+| M007-11 | Incomplete | P2 | Resolved and verified | Medium | separate-recommended |
+| M007-12 | Polish | P2 | Resolved in source; SPA tests/browser deferred | Medium | separate-recommended |
+| M007-13 | Incomplete | P1 | Open: completion-rate populations can diverge | Medium | separate-recommended |
+| M007-14 | Incomplete | P1 | Open: soft-deleted work orders are counted | Medium | separate-recommended |
+| M007-15 | Incomplete | P1 | Open: inactive KPIs remain readable/renderable | Medium | separate-recommended |
+| M007-16 | Missing | P1 | Open: KPI year/month inputs are not validated | Medium | separate-recommended |
+| M007-17 | Incomplete | P1 | Open: draft inspections are omitted from the QC queue | Small | same-session-ok |
+| M007-18 | Incomplete | P2 | Open: “My Action Items” is a global HR queue | Medium | separate-recommended |
+| M007-19 | Incomplete | P1 | Open: dashboard monetary paths cast decimals to float | Large | separate-recommended |
+| M007-20 | Incomplete | P2 | Open: no-data recompute leaves a stale snapshot | Medium | separate-recommended |
+| M007-21 | Incomplete | P2 | Open: generic upcoming payables includes draft bills | Small | same-session-ok |
+| M007-22 | Polish | P3 | Open: scorecard loading skeleton is hard-coded to eight cards | Small | same-session-ok |
 
-## Detailed findings
+## Resolved findings and evidence
 
-### M007-01 — Inventory turnover calculator is broken
+### M007-01 — Inventory turnover schema references
 
-Classification: Broken  
-Priority: P0 / release blocker  
-Scope: Large  
-Session recommendation: separate recommended
+Classification: Broken; original priority P0. Current status: resolved schema defect;
+formula policy still needs inventory-owner sign-off.
 
-Evidence:
+- `api/app/Modules/Dashboard/Services/KpiSnapshotService.php:568-595` now uses
+  `movement_type`, `StockMovementType::MaterialIssue`, `total_cost`, and
+  `quantity * weighted_avg_cost`, with an explicit current-inventory policy.
+- `api/database/seeders/KpiDefinitionSeeder.php:24` keeps the KPI active.
+- `api/tests/Feature/Dashboard/KpiComputeProcessTest.php:306-317` exercises the
+  ledger fixture; the seeded active catalog passes without a SQL failure.
 
-- api/app/Modules/Dashboard/Services/KpiSnapshotService.php:469-491 queries stock_movements.type and stock_levels.unit_cost.
-- api/database/migrations/0057_create_stock_movements_table.php:18-20 defines movement_type, quantity, and unit_cost.
-- api/database/migrations/0056_create_stock_levels_table.php:17-20 defines quantity, reserved_quantity, and weighted_avg_cost.
-- api/database/seeders/KpiDefinitionSeeder.php:24 activates inventory_turnover with computeInventoryTurnover.
-- api/routes/console.php:316-323 schedules the all-active KPI computation monthly.
-- api/app/Console/Commands/ComputeMonthlyKpis.php:46-61 returns failure when any active definition fails.
+The runtime schema failure is closed. The annualized COGS/current-ending-inventory
+definition should be accepted by the inventory owner before final verification.
 
-Impact: the inventory turnover calculator cannot execute against the current schema. The per-definition isolation records the failure, but the scheduled command still exits non-zero, leaving this KPI without a snapshot and making the monthly process operationally red. The correction also needs a domain decision for what “average inventory” means; simply renaming columns would not prove the formula is authoritative.
+### M007-02 — AR aging invoice column and population
 
-### M007-02 — AR aging calculator references a nonexistent invoice column
+Classification: Broken; original priority P0. Current status: resolved and verified.
 
-Classification: Broken  
-Priority: P0 / release blocker  
-Scope: Medium  
-Session recommendation: separate recommended
+- `api/app/Modules/Dashboard/Services/KpiSnapshotService.php:485-511` sums the
+  authoritative `balance`, limits rows to finalized/partial invoices through the
+  requested period end, and applies the configured lookback cutoff.
+- `api/tests/Feature/Dashboard/KpiComputeProcessTest.php:250-278` covers finalized,
+  partial, draft, paid, cancelled, and period-boundary rows.
 
-Evidence:
+### M007-03 — Gate-before-query behavior
 
-- api/app/Modules/Dashboard/Services/KpiSnapshotService.php:408-428 sums invoices.balance_due.
-- api/database/migrations/0048_create_invoices_table.php:20-29 defines date, due_date, total_amount, amount_paid, balance, and status; there is no balance_due.
-- api/app/Modules/Dashboard/Services/DashboardWidgetDataService.php:110-115 and api/app/Modules/Dashboard/Services/FinanceDashboardService.php:76-81 use balance for the same AR boundary.
+Classification: Incomplete; original priority P1. Current status: resolved by the
+current closure-based implementation; focused permission tests pass.
 
-Impact: any non-empty active AR-aging calculation fails at runtime. After the column correction, the implementation still needs an explicit finalized/partial/paid status policy instead of the current generic “not paid and not cancelled” filter, which can include drafts.
+- `api/app/Modules/Dashboard/Support/PanelGate.php:39-49` evaluates permission before
+  invoking the query closure.
+- `api/app/Modules/Dashboard/Services/FinanceDashboardService.php:61-95`,
+  `HrDashboardService.php:47-69`, and `PpcDashboardService.php:40-73` place data
+  reads inside permission-bearing closures; the same pattern is present in the
+  purchasing, warehouse, quality, and admin services.
+- `api/tests/Feature/Dashboard/DashboardPanelGateTest.php` passes its denied-panel
+  and cache-isolation cases.
 
-### M007-03 — Permission gates protect the response, not all data reads
+### M007-04 — Quality action-center source authorization
 
-Classification: Incomplete  
-Priority: P1 / security and least-privilege risk  
-Scope: Large  
-Session recommendation: separate recommended
+Classification: Broken; original priority P1. Current status: resolved and verified.
 
-Evidence:
+- `api/app/Modules/Dashboard/Services/ActionCenterTaskService.php:90-121` parses
+  `quality:inspection:` and `quality:ncr:` separately, requiring the matching narrow
+  permission or `quality.view`.
+- `api/tests/Feature/Dashboard/ActionCenterControllerTest.php` passes the inspection,
+  NCR-only, broad-grant, malformed-key, and unknown-key cases.
 
-- PanelGate explicitly requires closures so refused queries do not run at api/app/Modules/Dashboard/Support/PanelGate.php:26-31 and evaluates them at :39-49.
-- FinanceDashboardService reads cash, AR, AP, revenue, aging, journal entries, and customer aging before calling the gate at api/app/Modules/Dashboard/Services/FinanceDashboardService.php:62-116; the panel map is gated only at :118-142.
-- HrDashboardService precomputes company headcount, leave, and separation counts before panel/KPI gates at api/app/Modules/Dashboard/Services/HrDashboardService.php:49-56.
-- PpcDashboardService precomputes production, shortage, machine, MRP, and accounting values before gates at api/app/Modules/Dashboard/Services/PpcDashboardService.php:40-53 and :89-93.
-- PurchasingDashboardService, WarehouseDashboardService, and QualityDashboardService use the same value-first pattern at their respective methods’ opening blocks.
+### M007-05 — Warehouse state/type drift
 
-Impact: output omission tests pass, but an account without accounting.invoices.view, accounting.bills.view, accounting.journal.view, payroll.periods.view, or the equivalent domain grant can still cause those tables to be queried. This violates the module’s stated least-privilege contract, exposes data to query logging/observability, and makes future query-side effects possible even though the JSON payload is filtered.
+Classification: Broken; original priority P1. Current status: resolved and verified.
 
-### M007-04 — Quality action-center task authorization is too broad
+- `api/app/Modules/Dashboard/Services/WarehouseDashboardService.php:39-46` uses
+  inventory enums, material-issue movements, and `transfer_orders.status = pending`.
+- `api/tests/Feature/Dashboard/RoleDashboardServiceTest.php` and the full dashboard
+  suite pass the warehouse fixture coverage.
 
-Classification: Broken  
-Priority: P1 / authorization boundary  
-Scope: Medium  
-Session recommendation: separate recommended
+### M007-06 — Role-dashboard metric source drift
 
-Evidence:
+Classification: Incomplete; original priority P1. Current status: resolved and verified.
 
-- ActionCenterService emits distinct inspection keys at api/app/Modules/Dashboard/Services/ActionCenterService.php:195-218 and NCR keys at :222-251.
-- ActionCenterTaskService collapses every key beginning with quality: into quality.view or quality.ncr.view at api/app/Modules/Dashboard/Services/ActionCenterTaskService.php:92-109.
-- The controller tests cover alert authorization but do not exercise separate inspection and NCR grants at api/tests/Feature/Dashboard/ActionCenterControllerTest.php:104-120.
+- Plant revenue now filters finalized/partial/paid invoices at
+  `api/app/Modules/Dashboard/Services/PlantManagerDashboardService.php:134-145`.
+- Quality pass rate now uses completed passed/failed outcomes at
+  `api/app/Modules/Dashboard/Services/QualityDashboardService.php:71-81`.
+- CoC MTD now counts non-deleted `delivery_proofs` with `proof_type = coc` at
+  `api/app/Modules/Dashboard/Services/QualityDashboardService.php:83-91`.
+- `api/tests/Feature/Dashboard/RoleDashboardServiceTest.php` passes the metric
+  regression cases.
 
-Impact: a user with only quality.ncr.view can claim, snooze, resolve, or reopen a quality:inspection task when the item key is obtained from a stale client, log, or another channel. Authorization must parse the source and item kind and require quality.inspections.view for inspections and quality.ncr.view for NCRs.
+### M007-07 — Dead CoC drill-down
 
-### M007-05 — Warehouse dashboard headline counts use impossible business states
+Classification: Broken; original priority P1. Current status: resolved statically;
+authenticated browser verification is deferred.
 
-Classification: Broken  
-Priority: P1  
-Scope: Medium  
-Session recommendation: separate recommended
+- `spa/src/lib/dashboardLinks.ts:109-117` now targets the registered inspection
+  worklist with outgoing/passed/current-month filters.
+- `spa/src/routes/qualityRoutes.tsx:50-55` registers `/quality/inspections` and its
+  permission guard.
 
-Evidence:
+### M007-08 — Historical supplier-review duplicates
 
-- WarehouseDashboardService queries goods_receipt_notes.status = pending, stock_movements.movement_type = issue, and stock_movements.movement_type = transfer with a null destination at api/app/Modules/Dashboard/Services/WarehouseDashboardService.php:34-45.
-- GrnStatus has draft, pending_qc, accepted, partial_accepted, and rejected only at api/app/Modules/Inventory/Enums/GrnStatus.php:7-13.
-- StockMovementType defines material_issue, not issue, at api/app/Modules/Inventory/Enums/StockMovementType.php:7-20.
-- StockTransferService requires both source and destination for a transfer; api/app/Modules/Inventory/Services/StockMovementService.php:248-254 rejects a transfer without both locations.
-- Pending transfer work is stored in transfer_orders with status pending at api/app/Modules/Inventory/Services/TransferOrderService.php:41-52, not as a stock movement with a null destination.
+Classification: Incomplete; original priority P2. Current status: resolved and verified.
 
-Impact: Pending GRNs, Issues Today, and Pending Transfers can silently show zero while valid operational work exists. The generic widget path already uses more accurate inventory states, so the dedicated warehouse page is inconsistent with its own module contract.
+- `api/app/Modules/Dashboard/Services/PurchasingDashboardService.php:158-183` uses
+  the latest period and distinct `vendor_id` values below the configured threshold.
+- The supplier panel at `:137-155` uses the same latest-period boundary.
 
-### M007-06 — Several role-dashboard metrics do not match their labels
+### M007-09 — Hard-coded probation period
 
-Classification: Incomplete  
-Priority: P1  
-Scope: Medium  
-Session recommendation: separate recommended
+Classification: Incomplete; original priority P2. Current status: resolved and verified.
 
-Evidence:
+- `api/app/Modules/Dashboard/Services/HrDashboardService.php:205-240` uses the
+  configured `hr.probation.period_months` for both membership and `probation_end`.
+- The three-month configuration regression passes in
+  `api/tests/Feature/Dashboard/RoleDashboardServiceTest.php`.
 
-- Plant Manager “Revenue” sums every invoice in the date range without excluding draft/cancelled records at api/app/Modules/Dashboard/Services/PlantManagerDashboardService.php:134-140. The finance widget path explicitly excludes those statuses at api/app/Modules/Dashboard/Services/DashboardWidgetDataService.php:113-115.
-- Quality “Pass Rate Today” uses all inspections created today as the denominator, including draft/in-progress rows, at api/app/Modules/Dashboard/Services/QualityDashboardService.php:76-82. The scalar widget path uses passed plus failed observations at api/app/Modules/Dashboard/Services/DashboardWidgetDataService.php:361-365.
-- Quality “CoCs Gen. MTD” counts closed non-conformance reports at api/app/Modules/Dashboard/Services/QualityDashboardService.php:39-50. The actual CoC flow is based on passed outgoing inspections at api/app/Modules/Quality/Services/CoCService.php:145-155 and persists delivery_proofs with proof_type coc at api/database/migrations/0156_add_delivery_proofs.php:27-40.
+### M007-10 — Seeded KPI process coverage
 
-Impact: operators can be shown inflated revenue, understated pass rate, and a count unrelated to certificates of conformance. These are decision-support correctness failures even when the endpoint and tests remain green.
+Classification: Missing; original priority P1. Current status: resolved; the seeded
+catalog guard now passes.
 
-### M007-07 — CoC KPI drill-down route is dead
+- `api/tests/Feature/Dashboard/KpiComputeProcessTest.php:67-77` seeds the real
+  `KpiDefinitionSeeder`, runs `computeAll`, and asserts no active definition fails.
+- The same guard exposed and the current branch fixed the remaining `dppm`, budget,
+  and work-order schema/status defects.
 
-Classification: Broken  
-Priority: P1  
-Scope: Small  
-Session recommendation: same-session possible, but coordinate with M007-06
+### M007-11 — Concurrent role-layout cloning
 
-Evidence:
+Classification: Incomplete; original priority P2. Current status: resolved and verified.
 
-- spa/src/lib/dashboardLinks.ts:116-117 maps CoCs Gen. MTD to /quality/certificates.
-- spa/src/routes/qualityRoutes.tsx:29-60 defines dashboard, inspection, NCR, traceability, and capability routes but no /quality/certificates route.
+- `api/app/Modules/Dashboard/Services/DashboardLayoutService.php:105-141` locks the
+  user row before checking and inserting user layout rows.
+- `api/tests/Feature/Admin/DashboardLayoutTest.php` passes idempotency, save/reset,
+  visibility, and version-conflict cases.
 
-Impact: clicking the card sends the user to an unrouted SPA path. The metric source and the destination should be corrected together so a repaired count has a valid worklist.
+### M007-12 — Scorecard trend request fan-out
 
-### M007-08 — Supplier review count includes historical duplicates
+Classification: Polish; original priority P2. Current status: resolved in source;
+SPA unit/browser verification is deferred.
 
-Classification: Incomplete  
-Priority: P2  
-Scope: Medium  
-Session recommendation: separate recommended
+- `api/app/Modules/Dashboard/Services/KpiSnapshotService.php:202-253` implements the
+  permission-aware batch trend query with a 24-month clamp.
+- `spa/src/pages/dashboard/scorecard.tsx:83-92` makes one batch request for visible
+  codes, and `spa/src/api/kpi.ts:22-25` calls the batch endpoint.
+- `api/tests/Feature/Dashboard/KpiScorecardTest.php:69-91` passes the batch response
+  case.
 
-Evidence:
+## Open findings
 
-- PurchasingDashboardService counts every snapshot below the threshold at api/app/Modules/Dashboard/Services/PurchasingDashboardService.php:46-49.
-- supplier_performance_snapshots is unique per vendor/year/month at api/database/migrations/0130_create_supplier_performance_snapshots_table.php:42-76.
-- The adjacent supplier panel correctly selects the latest period first at api/app/Modules/Dashboard/Services/PurchasingDashboardService.php:147-156.
+### M007-13 — Work-order completion rate mixes populations
 
-Impact: a supplier with three historical low scores contributes three “Suppliers Due Review” units. The KPI should use the latest computed period and count distinct vendors, matching the adjacent panel.
-
-### M007-09 — Probation alert output hard-codes six months
-
-Classification: Incomplete  
-Priority: P2  
-Scope: Small  
-Session recommendation: same-session possible
-
-Evidence:
-
-- HrDashboardService reads hr.probation.period_months for the query window at api/app/Modules/Dashboard/Services/HrDashboardService.php:219-231.
-- The returned probation_end is nevertheless calculated with addMonths(6) at :244-250.
-
-Impact: changing the configured probation period changes which employees are listed but leaves the displayed end date wrong.
-
-### M007-10 — Seeded KPI computation is not covered by the process test
-
-Classification: Missing  
-Priority: P1  
-Scope: Medium  
-Session recommendation: separate recommended
-
-Evidence:
-
-- KpiComputeProcessTest creates only synthetic valid_no_data and broken_calculator definitions at api/tests/Feature/Dashboard/KpiComputeProcessTest.php:16-46.
-- The production catalog is a separate active seed at api/database/seeders/KpiDefinitionSeeder.php:14-25, including the two failing calculators above.
-
-Impact: the test proves exception aggregation but not that the shipped catalog can compute. Add a seeded-catalog command/service test that asserts each active definition returns computed, no_data, or an intentionally documented failure.
-
-### M007-11 — First-login layout cloning can duplicate rows under concurrency
-
-Classification: Incomplete  
-Priority: P2  
-Scope: Medium  
-Session recommendation: separate recommended
+Classification: Incomplete
+Priority: P1
+Scope: Medium
+Session recommendation: separate-recommended
 
 Evidence:
 
-- AuthService calls cloneRoleDefaultToUser after successful login at api/app/Modules/Auth/Services/AuthService.php:150-163.
-- cloneRoleDefaultToUser checks for user rows and then inserts the role rows without locking the user or enforcing uniqueness at api/app/Modules/Dashboard/Services/DashboardLayoutService.php:105-135.
-- The dashboard_layouts migration has only an owner index and no owner/widget unique constraint at api/database/migrations/0129_create_dashboard_layouts_table.php:24-37.
+- `api/app/Modules/Dashboard/Services/KpiSnapshotService.php:627-647` counts the
+  denominator by `planned_end` in the requested month but counts the numerator by
+  `actual_end` in that month.
+- `api/app/Modules/Dashboard/Services/KpiSnapshotService.php:611-620` documents the
+  mismatch and the possibility of a value above 100%.
+- `api/database/migrations/0080_create_work_orders_table.php:45-48` confirms the two
+  independent date columns; `KpiDefinitionSeeder.php:25` labels the result “WO
+  Completion Rate”.
 
-Impact: parallel first logins or duplicated login requests can create duplicate widget placements, which then affect layout ordering and user edits. The current idempotency test covers sequential calls only.
+Impact: a work order due in July but completed in August is a July miss and an
+August numerator hit. Production/PPC must choose a due-cohort rate, a completion-
+throughput rate, or a renamed metric before the KPI is decision-safe.
 
-### M007-12 — Scorecard trend loading is client-side N+1
+### M007-14 — Soft-deleted work orders enter the rate
 
-Classification: Polish  
-Priority: P2  
-Scope: Medium  
-Session recommendation: separate recommended
+Classification: Incomplete
+Priority: P1
+Scope: Medium
+Session recommendation: separate-recommended
 
 Evidence:
 
-- ScorecardPage fetches the scorecard at spa/src/pages/dashboard/scorecard.tsx:77-81.
-- Each KpiCard then issues an independent trend request at :159-168.
+- `api/app/Modules/Production/Models/WorkOrder.php:24-26` uses `SoftDeletes`, and
+  migration `api/database/migrations/0444_add_soft_deletes_to_all_tables.php:68-81`
+  adds `deleted_at`.
+- Both raw queries in `api/app/Modules/Dashboard/Services/KpiSnapshotService.php:627-647`
+  omit `whereNull('deleted_at')`.
+- The same service's attendance calculator at `:459-483` explicitly excludes soft
+  deletes, so dashboard KPI history has inconsistent deletion policy.
 
-Impact: an 11-KPI scorecard causes one scorecard request plus up to 11 trend requests, increasing latency and failure surface. A batch trend endpoint or embedded trend points would make the page more resilient.
+Impact: deleted/cancelled historical work can inflate the denominator and depress the
+rate. Confirm whether deleted operational history is excluded, then apply and test a
+single policy across the related calculators.
 
-## What is working
+### M007-15 — Inactive KPI definitions remain exposed
 
-- Permission-derived dashboard dispatch is server-side and tested across roles.
-- Layout/widget visibility is filtered server-side, with version conflicts and reset behavior covered.
-- Rich widget providers degrade to scalar data instead of blanking the dashboard.
-- Finance shared-cache permission signatures prevent response-level cross-user payload leakage.
-- Action-center SQL errors are not returned as SQL-bearing 422 messages; the existing regression suite covers this.
-- Monthly KPI failures are aggregated and surfaced as a failed process rather than reported as success.
-- The dashboard feature suite is green: 128 tests and 609 assertions.
+Classification: Incomplete
+Priority: P1
+Scope: Medium
+Session recommendation: separate-recommended
+
+Evidence:
+
+- `api/app/Modules/Dashboard/Models/KpiDefinition.php:49-52` defines the active
+  scope, and `KpiSnapshotService.php:133` uses it for the scorecard.
+- The individual and batch trend reads at
+  `api/app/Modules/Dashboard/Services/KpiSnapshotService.php:169-181` and `:213-250`
+  query definitions by code without `is_active`.
+- Rich widget analytics at
+  `api/app/Modules/Dashboard/Services/Analytics/KpiWidgetAnalytics.php:51-59` and
+  scalar widget reads at `DashboardWidgetDataService.php:297-315` also omit the
+  active predicate, despite the rich provider comment saying a deactivated
+  definition should degrade.
+
+Impact: an authenticated user with the module grant can still retrieve snapshots for
+a retired definition, and an existing layout can render its stale scalar/trend. Make
+all read surfaces honor the same lifecycle boundary and add inactive-definition
+negative tests.
+
+### M007-16 — KPI period inputs are not validated
+
+Classification: Missing
+Priority: P1
+Scope: Medium
+Session recommendation: separate-recommended
+
+Evidence:
+
+- `api/app/Modules/Dashboard/Controllers/KpiController.php:16-21` and `:40-51`
+  cast raw query/body values to integers without validating a supported year or
+  month range.
+- `api/app/Modules/Dashboard/routes.php:91-96` exposes these endpoints directly to
+  authenticated users, with only the compute route restricted to admins.
+- `api/database/migrations/0260_create_kpi_snapshots_table.php:16-27` stores integer
+  periods and has uniqueness but no month 1..12 constraint. The command signature
+  claims 1..12 at `api/app/Console/Commands/ComputeMonthlyKpis.php:26`, while the
+  controller path has no equivalent guard.
+
+Impact: invalid scorecard periods silently return empty snapshots, and an admin
+backfill can pass a month outside 1..12 to calculators that normalize dates while
+the service persists the raw period key. Validate at the request/command boundary
+and add invalid-period tests.
+
+### M007-17 — Dedicated QC queue omits draft inspections
+
+Classification: Incomplete
+Priority: P1
+Scope: Small
+Session recommendation: same-session-ok
+
+Evidence:
+
+- `api/app/Modules/Quality/Enums/InspectionStatus.php:8-14` defines `draft` as an
+  inspection with a measurement scaffold and no readings yet.
+- `api/app/Modules/Dashboard/Services/QualityDashboardService.php:42` and `:103-106`
+  count/list only `in_progress` inspections.
+- New inspections are created in `draft` at
+  `api/app/Modules/Quality/Services/InspectionService.php:351-369`.
+- The generic widget and badge use both draft and in-progress at
+  `api/app/Modules/Dashboard/Services/DashboardWidgetDataService.php:109` and
+  `api/app/Modules/Dashboard/Services/BadgeService.php:408-415`.
+
+Impact: the dedicated QC dashboard says the queue is empty while newly created,
+unmeasured inspections still await completion. Align the KPI, queue, badge, and
+drill-down semantics and add a draft fixture.
+
+### M007-18 — “My Action Items” is not self-scoped
+
+Classification: Incomplete
+Priority: P2
+Scope: Medium
+Session recommendation: separate-recommended
+
+Evidence:
+
+- `api/app/Modules/Dashboard/Services/HrDashboardService.php:62-63` describes the
+  panel as self-scoped and ungated, passing `$user` to the helper.
+- `HrDashboardService.php:332-349` never uses `$user`; it counts every `pending_hr`
+  leave, every pending profile update, and every pending clearance.
+- `spa/src/pages/dashboard/hr.tsx:286-318` labels the result “My Action Items” and
+  tells the viewer that the items require their attention.
+
+Impact: the HR officer sees a company-wide queue presented as a personal queue. Either
+scope each source to the current actor/approval stage or rename and permission the
+panel as an HR-wide action queue.
+
+### M007-19 — Monetary dashboard paths cast decimal values to float
+
+Classification: Incomplete
+Priority: P1
+Scope: Large
+Session recommendation: separate-recommended
+
+Evidence:
+
+- `api/app/Common/Support/Money.php:8-10` states that currency operations must use
+  decimal strings and never floats.
+- Dashboard currency paths cast sums through float at
+  `api/app/Modules/Dashboard/Services/Concerns/DashboardQueries.php:44-66`,
+  `api/app/Modules/Dashboard/Services/DashboardWidgetDataService.php:324-341`,
+  `api/app/Modules/Dashboard/Services/PlantManagerDashboardService.php:134-145`,
+  and `api/app/Modules/Dashboard/Services/PurchasingDashboardService.php:100-107`.
+- KPI monetary inputs also cast through float at
+  `api/app/Modules/Dashboard/Services/KpiSnapshotService.php:497-505` and
+  `:534-548`; the scorecard parses decimal strings as JavaScript floats at
+  `spa/src/pages/dashboard/scorecard.tsx:54-66` and `:174-176`.
+
+Impact: dashboard financial values do not follow the repository's money contract and
+can lose precision or disagree with the accounting service. Centralize decimal-string
+formatting with `Money`/BCMath and keep currency values as strings through the API and
+SPA.
+
+### M007-20 — No-data recompute preserves a stale snapshot
+
+Classification: Incomplete
+Priority: P2
+Scope: Medium
+Session recommendation: separate-recommended
+
+Evidence:
+
+- `api/app/Modules/Dashboard/Services/KpiSnapshotService.php:95-100` returns `null`
+  before deleting or replacing an existing snapshot for the same definition/period.
+- The service otherwise uses `updateOrCreate` at `:118-128`, and the command describes
+  the job as an idempotent re-computation at
+  `api/app/Console/Commands/ComputeMonthlyKpis.php:14-17`.
+- The comment at `KpiSnapshotService.php:95-98` says the scorecard should expose the
+  definition without a snapshot, which is false if a prior run already persisted it.
+
+Impact: a corrected or deleted source dataset can leave an old value visible as the
+authoritative current-period KPI. Define whether snapshots are immutable or
+recomputed; if recomputed, clear/mark stale rows when the calculator returns no data.
+
+### M007-21 — Generic upcoming payables includes draft bills
+
+Classification: Incomplete
+Priority: P2
+Scope: Small
+Session recommendation: same-session-ok
+
+Evidence:
+
+- `api/app/Modules/Dashboard/Services/DashboardWidgetDataService.php:120` filters
+  only due date and positive balance for `finance.upcoming_payables`.
+- `api/app/Modules/Accounting/Enums/BillStatus.php:9-17` defines `draft` separately
+  from payable `unpaid` and `partial` states.
+- The authoritative finance panel applies the narrower status set at
+  `api/app/Modules/Dashboard/Services/FinanceDashboardService.php:224-229`, while
+  the generic widget is seeded for the bills-read permission at
+  `api/database/seeders/DashboardWidgetSeeder.php:195-201`.
+
+Impact: a draft supplier bill with a balance and future due date inflates the generic
+payables tile while the finance dashboard excludes it. Align the widget status filter
+and add draft/paid/cancelled fixtures.
+
+### M007-22 — Scorecard loading count is stale
+
+Classification: Polish
+Priority: P3
+Scope: Small
+Session recommendation: same-session-ok
+
+Evidence:
+
+- The seeded catalog contains 11 definitions at
+  `api/database/seeders/KpiDefinitionSeeder.php:14-25`.
+- `spa/src/pages/dashboard/scorecard.tsx:117` passes `kpiCount={8}` to the loading
+  shell, while the rendered grid maps all returned definitions at `:159-163`.
+
+Impact: the loading state renders fewer placeholders than the configured scorecard.
+Derive the placeholder count from the catalog or use a neutral loading state.
+
+## Verification
+
+All backend commands below used only `DB_DATABASE=ogami_test_m007_roll_a`.
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| `tests/Feature/Dashboard` | PASS | 137 tests, 631 assertions |
+| `tests/Feature/Admin/DashboardLayoutTest.php` | PASS | 9 tests, 27 assertions |
+| Combined backend dashboard gate | PASS | 146 tests, 658 assertions |
+| Seeded KPI compute process | PASS | `KpiComputeProcessTest`: 7 tests, 15 assertions; active catalog has zero failures |
+| Seeded monthly command | PASS | After `KpiDefinitionSeeder`, `kpi:compute-monthly --year=2026 --month=7` returned `computed=0 no_data=11 failed=0` |
+| KPI route registration | PASS | `php artisan route:list --path=dashboard/kpi` shows 4 expected routes |
+| PHP syntax | PASS | Dashboard PHP syntax check required before commit |
+| `git diff --check` | PASS | Required before commit |
+| SPA typecheck | BLOCKED externally | `qrcode` is declared but absent from the existing root-owned `spa/node_modules`; errors are in unmodified `src/pages/assets/detail.tsx` |
+| SPA KPI unit test | BLOCKED externally | Vitest cannot write `spa/node_modules/.vite-temp` (`EACCES`, root-owned) |
+| Browser role/dynamic-route audits | BLOCKED externally | Playwright receives `ERR_CONNECTION_REFUSED` at `http://localhost`; no SPA server is running |
+| M007-07 route check | PASS statically | Link targets registered `/quality/inspections` route with permission guard |
+
+## Gate decision
+
+The plan is not predominantly `same-session-ok`, includes large/medium financial and
+metric-contract work, and has multiple P1 findings. The gate therefore forbids
+production fixes in this session. Only the audit report, action plan, verification log,
+and release metadata are changed.
 
 ## Required next action
 
-Do not promote M007 as complete. Execute the action plan, beginning with the two active KPI schema failures and the gate-before-query refactor, then add the missing source-specific authorization and metric-contract regressions. Re-run the backend dashboard suite, SPA typecheck/unit tests, seeded KPI command, and authenticated browser route audit before moving the module to Verified.
+Run the separate action plan beginning with M007-15/M007-16 authorization and period
+boundaries, then resolve M007-13/M007-14 metric policy and M007-19 decimal handling.
+Add focused regressions for M007-17/M007-21, clarify M007-18, and rerun the SPA unit,
+browser, and route-role gates once the environment blocker is removed. Keep M007 at
+`📋 Plan Ready` until the open findings and deferred checks are closed.

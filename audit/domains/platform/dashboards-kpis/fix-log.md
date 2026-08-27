@@ -1,9 +1,9 @@
 # M007 — Dashboards & KPIs fix log
 
-Audit date: 2026-08-24  
-Fix session: 2026-08-25  
-Claim: platform / dashboards-kpis  
-Final audit state: Needs Re-audit  
+Audit date: 2026-08-24
+Fix session: 2026-08-25
+Claim: platform / dashboards-kpis
+Final audit state: Needs Re-audit
 Production code changes: implemented; final regression verification is deferred
 
 ## Session record
@@ -186,3 +186,42 @@ more defects of those exact two classes survived and are fixed here.
 ## Release handoff
 
 Release M007 as `🔁 Needs Re-audit`, regenerate the registry, verify the lock is removed, and recommend the next eligible module. The next session should rerun the blocked backend/SPA/browser gates before promoting M007 to `✅ Verified`.
+
+---
+
+# Rolling re-audit session — 2026-08-27
+
+Claim: `platform / dashboards-kpis` (M007), rolling slot `rolling-agent-a`. The
+preferred target was claimed atomically with `audit/scripts/claim-module.sh`; the
+fallback was not used. The coordinator registry was not regenerated or edited.
+
+## Session decision
+
+No production or test source was changed. The inherited M007-01 through M007-12
+implementation was re-read and verified; the refreshed audit report records open
+M007-13 through M007-22 findings. The plan is not predominantly small and
+same-session-safe, so the gate requires `📋 Plan Ready` and defers all production
+remediation.
+
+## Verification record
+
+All database-backed commands in this session used only `DB_DATABASE=ogami_test_m007_roll_a`.
+
+- `tests/Feature/Dashboard`: 137 passed, 631 assertions.
+- `tests/Feature/Admin/DashboardLayoutTest.php`: 9 passed, 27 assertions.
+- Combined backend dashboard gate: 146 passed, 658 assertions.
+- `KpiComputeProcessTest`: 7 passed, 15 assertions; seeded active catalog had no
+  failures.
+- After seeding `KpiDefinitionSeeder`, `kpi:compute-monthly --year=2026 --month=7`
+  returned `computed=0 no_data=11 failed=0`.
+- KPI route listing showed the four expected scorecard/trend/batch/compute routes.
+- SPA typecheck remains externally blocked by missing declared `qrcode` dependencies;
+  the errors are in unmodified Assets code.
+- SPA KPI unit tests remain externally blocked by `EACCES` writing the root-owned
+  `spa/node_modules/.vite-temp` directory.
+- Browser role and dynamic-route audits remain externally blocked by
+  `ERR_CONNECTION_REFUSED` because no SPA server is running.
+
+No temporary files were created outside the module; the unique PostgreSQL database is
+the intentional test resource. Unrelated leave-management worktree changes were
+preserved.
