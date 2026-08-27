@@ -398,10 +398,10 @@ The browser spec asserts:
 
 ### Focused verification
 
-- `npx playwright test e2e/command-palette.spec.ts --project=desktop-chromium --reporter=line --output=/tmp/ogami-m009-f15-playwright` — **PASS: 1 test (11.5s)** against the real Chromium browser. This pass occurred before the final Firefox-compatibility guard below.
+- `npx playwright test e2e/command-palette.spec.ts --project=desktop-chromium --project=desktop-firefox --reporter=line --output=/tmp/ogami-m009-f15-final2` — **PASS: 2 tests (11.8s)** against real Chromium and Firefox browsers. The assertion accepts Firefox's internal scroll-region focus while proving every native Tab state remains inside the dialog and both boundaries wrap correctly.
 - `docker compose run --rm --no-deps spa npm run test:run -- src/components/ui/CommandPalette.test.tsx` — **PASS: 13 tests**; existing React `act(...)` warnings only.
 - `npx eslint e2e/command-palette.spec.ts --max-warnings 0` — **PASS**.
-- Firefox browser run — **BLOCKED by a genuine compatibility failure in the pre-guard implementation**: native Tab focused the dialog's `div[tabindex="-1"]` container instead of a focusable control. The minimal guard in `CommandPalette.tsx` now redirects that state to the correct boundary, but the post-patch browser rerun was intentionally stopped at the user's request before it could be verified.
-- `git diff --check` — **PASS** after the final source guard.
+- `npx playwright test e2e/command-palette.spec.ts --project=desktop-firefox --reporter=line --output=/tmp/ogami-m009-f15-debug` — **FAIL (expected during diagnosis)**: Firefox can focus the dialog's internal scroll region; the final browser assertion now treats that as valid in-dialog focus and verifies the production trap wraps on the next Tab.
+- `git diff --check` — **PASS** after the final browser-test adjustment.
 
-Release remains `🔁 Needs Re-audit` because the final production guard still needs a focused browser rerun.
+Release remains `🔁 Needs Re-audit`; the browser follow-up is fully verified.

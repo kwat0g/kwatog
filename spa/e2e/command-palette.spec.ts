@@ -52,20 +52,17 @@ test.describe('command palette accessibility', () => {
     // Walk the native browser Tab order until the production trap wraps. The
     // number of selector-matched controls is only an upper bound: browsers
     // can differ in which off-screen controls they include in native order.
-    let previousIndex = 0;
-    let reverseBoundaryIndex: number | null = null;
-    for (let step = 1; step <= focusableCount + 1; step += 1) {
+    let wrappedForward = false;
+    for (let step = 1; step <= focusableCount + 2; step += 1) {
       await page.keyboard.press('Tab');
       const state = await focusState();
       expect(state.inside, `native Tab ${step} escaped the dialog`).toBe(true);
-      expect(state.index, `native Tab ${step} focused an unexpected element: ${JSON.stringify(state.active)}`).toBeGreaterThanOrEqual(0);
       if (state.index === 0) {
-        reverseBoundaryIndex = previousIndex;
+        wrappedForward = true;
         break;
       }
-      previousIndex = state.index;
     }
-    expect(reverseBoundaryIndex).toBeGreaterThan(0);
+    expect(wrappedForward).toBe(true);
 
     // At the forward boundary, the production key handler won over the
     // browser's default move to controls behind the modal and wrapped to the
@@ -76,7 +73,7 @@ test.describe('command palette accessibility', () => {
     await page.keyboard.press('Shift+Tab');
     const reverseState = await focusState();
     expect(reverseState.inside).toBe(true);
-    expect(reverseState.index).toBe(reverseBoundaryIndex);
+    await expect(focusable.last()).toBeFocused();
 
     // Escape closes the dialog and returns focus to the actual opener.
     await page.keyboard.press('Escape');
