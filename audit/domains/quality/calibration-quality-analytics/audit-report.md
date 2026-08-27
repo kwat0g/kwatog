@@ -1,179 +1,115 @@
 # M059 — Calibration / Quality Analytics Audit Report
 
-Audit session: 2026-08-24 UTC / 2026-08-25 Asia/Manila  
-Final session status: 🔁 Needs Re-audit  
-Scope: calibration register and due-status automation, defect Pareto / inspection-summary analytics, Cp/Cpk capability analytics, and the directly corresponding quality UI. The inspection, NCR, maintenance, dashboard-platform, and specification modules were read only for boundary evidence; they were not audited or changed.
+Audit session: 2026-08-27 Asia/Manila
+Claimed card: M059 / `quality/calibration-quality-analytics`
+Final session status: 📋 Plan Ready
+Scope: calibration register and due-status automation, defect Pareto / inspection-summary analytics, Cp/Cpk capability analytics, and their directly corresponding Quality UI. The registry, inherited module artifacts, dependencies, implementation, tests, git diff, and mtimes were read before review. Dependency modules were read only.
 
-## 2026-08-25 Revalidation and execution
+The coordinator registry was not regenerated or edited. M059 was claimed atomically with `audit/scripts/claim-module.sh quality calibration-quality-analytics`; the preferred card was available, so the M046 fallback was not used.
 
-The existing report and plan were re-read before implementation. The shared working tree contained pre-existing Quality changes that materially altered `SpcService`, so the affected findings were revalidated against the current code rather than assumed unchanged. The prior finding labels below remain the audit classification; this section records the current disposition after this session's focused fixes.
+## Verification snapshot
 
-- **M059-B01 — resolved/verified.** `DefectParetoService::run()` counts from the ungrouped base query at `api/app/Modules/Quality/Services/DefectParetoService.php:104-112`; the new multi-parameter regression at `api/tests/Feature/Quality/QualityAnalyticsBoundaryTest.php:25-60` verifies one denominator and excludes the cancelled row.
-- **M059-B02 — resolved.** Pareto and drill-down now restrict measurements to `InspectionStatus::Passed`/`Failed` at `api/app/Modules/Quality/Services/DefectParetoService.php:85-89,151-157`.
-- **M059-B03/B04 — resolved at the API boundary.** The current `SpcService` worktree changes filter capability reads to terminal inspections and reject a foreign product/spec pairing at `api/app/Modules/Quality/Services/SpcService.php:139-180`; `CapabilityController` now enforces active ownership and returns typed 422 errors at `api/app/Modules/Quality/Controllers/CapabilityController.php:31-40,57-107`. Route tests cover mismatch, insufficient data, terminal-only sampling, and permission denial.
-- **M059-B05/B06 — resolved.** Recording uses `before_or_equal:today` in `api/app/Modules/Quality/Requests/RecordCalibrationRequest.php:16-20`, the service rejects a future date at `api/app/Modules/Quality/Services/CalibrationService.php:50-60`, and explicit null frequency is rejected by `StoreCalibrationRecordRequest:22-31` and the service guard at `:121-126`.
-- **M059-B07/P02 — resolved.** Insufficient capability samples now produce `quality_capability_insufficient_samples` rather than a successful null response at `api/app/Modules/Quality/Controllers/CapabilityController.php:93-98`; the SPA renders an actionable no-data state at `spa/src/pages/quality/capability/index.tsx:131-140,234-241`.
-- **M059-I01 — still Incomplete / decision required.** Frequency edits still do not define whether `next_calibration_date` is rescheduled from the last completed event or explicitly edited; this is intentionally deferred rather than guessed.
-- **M059-I02 — still Incomplete / decision required.** Capability options and the capability POST path now exclude archived/inactive specs at `api/app/Modules/Quality/Controllers/CapabilityController.php:31-40,71-83`, but the existing `/inspection-specs/{id}/spc` path remains available for archived records via `withTrashed()` at `api/app/Modules/Quality/routes.php:52-54`. Historical-spec analytics policy needs an owner decision.
-- **M059-I03 — resolved.** Analytics product filters now fail with a field-level 422 when a hash is malformed or expired at `api/app/Modules/Quality/Controllers/AnalyticsController.php:24-34,65-77`.
-- **M059-M01/P03 — resolved in the SPA surface.** Calibration list/create/edit/record flows, API client, permission-gated routes, and navigation are present at `spa/src/pages/quality/calibration/index.tsx`, `spa/src/pages/quality/calibration/form.tsx`, `spa/src/api/quality/calibration.ts`, `spa/src/routes/qualityRoutes.tsx:23-48`, and `spa/src/components/layout/Sidebar.tsx:422-466`. Capability Study is now also discoverable from Quality navigation.
-- **M059-M02 — materially improved but still Incomplete.** Focused route/service coverage was added in `api/tests/Feature/Quality/QualityAnalyticsBoundaryTest.php` and `CalibrationBoundaryTest.php`. A full Quality-suite result is not evidence in this session because the shared `ogami_test` database was concurrently refreshed by another process; the isolated targeted runs passed.
-- **M059-P01 — resolved.** Pass-rate and open-NCR KPI failures now display explicit retry states at `spa/src/pages/quality/dashboard.tsx:64-85`.
-- **M059-P04 — resolved for the post-scope-cut baseline.** The stale COPQ route, cron, event, role-matrix, and E2E permission references were removed or replaced in `docs/PROCESS-FLOWS.md:1264-1269,1678-1688`, `docs/AUTO-BROWSER-TESTS.md:114-124`, and `spa/e2e/helpers-extended.ts:94-95,110-111,192-193`; an `rg` check found no remaining `COPQ`, `copq`, or `quality.copq` occurrence in those files or `CLAUDE.md`.
+- Backend focused suite passed: **36 tests, 147 assertions** using only `DB_DATABASE=ogami_test_m059_roll_b`. Covered analytics boundaries, calibration boundaries/register/race behavior, inspection summary, inspection-spec boundaries, and `SpcService` math.
+- PHP syntax lint passed for the M059 Quality services/controllers/requests/routes/models and the focused tests.
+- Targeted SPA ESLint passed with `--max-warnings 0` for the M059 API clients, pages, routes, sidebar, and types.
+- `spa` `npm run typecheck` passed.
+- No browser walk was run in this session; role smoke coverage remains a deferred acceptance gate.
+- Before this session, the M059 audit files had no target diff against `HEAD`; unrelated worktree changes were preserved.
 
-The production-manager calibration permission question remains open from the prior report. The SPA typecheck remains blocked by a pre-existing parser error outside M059 at `spa/src/pages/production/work-orders/detail.tsx:624`; targeted ESLint for the changed M059 SPA files passes.
+## Inherited finding disposition
+
+The prior report was revalidated against the current source rather than copied forward.
+
+| Prior finding | Current disposition |
+|---|---|
+| M059-B01, B02 | Resolved and covered by the focused analytics tests: Pareto uses an ungrouped denominator and terminal `passed`/`failed` populations in `api/app/Modules/Quality/Services/DefectParetoService.php:85-112,151-185`. |
+| M059-B03, B04 | Resolved at the capability API boundary: product/spec ownership, active-spec checks, current-revision readings, and terminal inspection filtering are enforced in `api/app/Modules/Quality/Controllers/CapabilityController.php:31-40,66-99` and `api/app/Modules/Quality/Services/SpcService.php:130-212`. |
+| M059-B05, B06 | Resolved for calibration event dates and explicit null frequency: `api/app/Modules/Quality/Requests/RecordCalibrationRequest.php:11-20`, `api/app/Modules/Quality/Services/CalibrationService.php:50-72,121-126`, and `api/app/Modules/Quality/Requests/StoreCalibrationRecordRequest.php:22-31`. |
+| M059-B07 / P02 | The insufficient-sample API contract is now typed 422 and the capability page has an actionable no-data state at `api/app/Modules/Quality/Controllers/CapabilityController.php:94-99` and `spa/src/pages/quality/capability/index.tsx:131-140,234-241`. Zero variance remains intentionally guarded, with the distinction deferred as wording/product work. |
+| M059-I01, I02 | Still open below: frequency-edit semantics and historical analytics for archived/inactive specifications remain policy decisions. |
+| M059-I03 | Resolved: malformed/expired analytics product hashes fail closed with a field-level validation error at `api/app/Modules/Quality/Controllers/AnalyticsController.php:65-76`. |
+| M059-M01 / P03 | Resolved in the SPA surface: calibration list/create/edit/record routes and navigation exist at `spa/src/routes/qualityRoutes.tsx:23-49`, `spa/src/components/layout/Sidebar.tsx:422-466`, and `spa/src/pages/quality/calibration/`. |
+| M059-M02 | Partially resolved: focused backend coverage exists, but the M059 SPA/browser coverage remains missing below. |
+| M059-P01 / P04 | Resolved: dashboard KPI retry states and the post-scope-cut COPQ documentation/fixture cleanup were revalidated in the inherited artifacts. |
 
 ## Discovery
 
-- Backend calibration surface: `api/app/Modules/Quality/routes.php:23-35`, `CalibrationController`, `CalibrationService`, `CalibrationRecordResource`, and migration `api/database/migrations/0215_create_calibration_register.php:20-35`.
-- Calibration automation: `api/app/Console/Commands/CheckCalibrationDue.php:10-24` and `api/routes/console.php:274-278` run the due/overdue recomputation daily.
-- Backend analytics surface: defect Pareto, inspection summary, and drill-down at `api/app/Modules/Quality/routes.php:126-132`; Cp/Cpk options and study endpoints at `:161-164`.
-- Frontend analytics surface: `spa/src/pages/quality/dashboard.tsx`, `spa/src/pages/quality/capability/index.tsx`, `spa/src/api/quality/analytics.ts`, and `spa/src/api/quality/capability.ts`.
-- Frontend calibration discovery: no `spa/src/pages/quality/calibration*`, calibration API client, calibration route, or calibration navigation item exists. The backend route inventory does contain the five calibration endpoints.
-- Existing focused verification: `docker compose run --rm --no-deps api php artisan test tests/Feature/Quality/CalibrationRegisterTest.php tests/Feature/Quality/CalibrationBackdatedRecordRaceTest.php tests/Feature/Quality/QualityInspectionSummaryTest.php` — **8 passed, 17 assertions**.
-- A broader `tests/Feature/Quality` run was not usable as module evidence: 60 tests failed against a stale/incomplete shared test schema (`roles.deleted_at`, `audit_logs.actor_type`, missing tables, and a deadlock). Those failures were not attributed to M059.
-
-## Verified strengths
-
-- Calibration create, update, and record writes use `DB::transaction()` at `api/app/Modules/Quality/Services/CalibrationService.php:20-38,45-66`.
-- Calibration recording re-reads and locks the authoritative row, and rejects an older/equal event from regressing the register at `api/app/Modules/Quality/Services/CalibrationService.php:47-65`; the dedicated backdated-race test passes.
-- Due/overdue status derivation is centralized and the scheduled command is idempotent in shape at `api/app/Modules/Quality/Services/CalibrationService.php:69-135`.
-- API resources expose hash IDs rather than integer primary keys at `api/app/Modules/Quality/Resources/CalibrationRecordResource.php:18-31`.
-- Analytics and calibration routes are behind the quality feature and Sanctum authentication, with separate view/manage permission middleware at `api/app/Modules/Quality/routes.php:23-35,126-132,161-164`.
-- The quality dashboard has a loading/error/retry path for the Pareto query and uses semantic design tokens in `spa/src/pages/quality/dashboard.tsx:80-117`. The capability page has a product-list retry state and mutation error toast at `spa/src/pages/quality/capability/index.tsx:96-130,154-164`.
+- Calibration API and permissions: `api/app/Modules/Quality/routes.php:23-35`; scheduled status refresh: `api/app/Console/Commands/CheckCalibrationDue.php:10-25` and `api/routes/console.php:318-322`.
+- Analytics and capability API: `api/app/Modules/Quality/routes.php:140-177`, `api/app/Modules/Quality/Controllers/AnalyticsController.php`, `CapabilityController.php`, `DefectParetoService.php`, and `SpcService.php`.
+- Calibration SPA: `spa/src/api/quality/calibration.ts`, `spa/src/pages/quality/calibration/index.tsx`, `form.tsx`, `spa/src/routes/qualityRoutes.tsx:42-49`, and `spa/src/components/layout/Sidebar.tsx:432-452`.
+- Capability SPA: `spa/src/pages/quality/capability/index.tsx`; dashboard analytics presentation: `spa/src/pages/quality/dashboard.tsx:89-179`.
+- Registry metadata lists `system_admin`, `qc_inspector`, and `production_manager` for M059 at `audit/00-MODULE-REGISTRY.md:56`.
 
 ## Findings
 
 ### Broken
 
-#### M059-B01 — Pareto total and percentages are calculated from a grouped count
+#### M059-B08 — Capability Study is reachable under a Quality permission but its required data routes reject intended Quality roles
 
-Evidence: `api/app/Modules/Quality/Services/DefectParetoService.php:104-111` builds the result rows with `groupBy('m.parameter_name')`, then calls `count()` on a clone that retains that grouping. Laravel's aggregate implementation returns the first aggregate row (`api/vendor/laravel/framework/src/Illuminate/Database/Query/Builder.php:3999-4008`), not the count of all defect measurements. With more than one defect parameter, `total_defects`, each percentage, and the cumulative percentage are therefore wrong.
+Evidence: the SPA route and sidebar expose `/quality/capability` with only `quality.inspections.view` at `spa/src/routes/qualityRoutes.tsx:74-76` and `spa/src/components/layout/Sidebar.tsx:448-452`. The page then calls CRM products and Quality product-spec endpoints at `spa/src/pages/quality/capability/index.tsx:98-110`; those endpoints require `crm.products.view` and `quality.specs.view` at `api/app/Modules/CRM/routes.php:27-29` and `api/app/Modules/Quality/routes.php:62-63`. The seeded role definitions grant `production_manager` only `quality.view`, `quality.inspections.view`, and `quality.ncr.view` at `api/database/seeders/RolePermissionSeeder.php:576-585`, while `qc_inspector` receives the Quality module permissions but no CRM product-view permission at `:682-697`; the catalog defines these as separate permission groups at `:302-350`. The same mismatch was confirmed against the seeded role rows on `ogami_test_m059_roll_b`.
 
-Impact: the quality dashboard can report a partial defect total and misleading Pareto percentages. No test currently exercises `DefectParetoService::run()` with multiple parameter groups.
+Impact: the route is advertised as a Quality capability screen, but a QC inspector cannot load the product picker and a production manager cannot load the dependent product/spec data. A role can reach a page that is functionally 403-blocked by its own dependencies. Decide whether to provide a Quality-scoped read endpoint or explicitly grant the cross-module reads; do not silently widen role permissions.
 
-#### M059-B02 — Pareto and drill-down include cancelled inspections while the KPI excludes them
+#### M059-B09 — A successful capability study can be hidden when the thresholds/options query fails
 
-Evidence: `DefectParetoService::run()` and `inspectionsWithDefect()` filter only on `m.is_pass = false` and `i.completed_at` at `api/app/Modules/Quality/Services/DefectParetoService.php:85-95,150-168`; neither restricts inspection status. Cancellation sets `status = cancelled` and still stamps `completed_at` at `api/app/Modules/Quality/Services/InspectionService.php:573-588`. In contrast, `inspectionSummary()` explicitly restricts status to `passed`/`failed` at `DefectParetoService.php:34-36`.
+Evidence: `CapabilityStudyPage` destructures only `data` from the options query at `spa/src/pages/quality/capability/index.tsx:95-96`, sets a successful mutation result and success toast at `:123-130`, but renders the entire result only when both `result` and `thresholds` are truthy at `:243-245`. There is no options-query loading, error, or retry state between those points.
 
-Impact: the dashboard's total-defect chart, drill-down list, and pass-rate KPI can describe different populations for the same date window. A cancelled inspection's failed measurements can appear as production defects.
+Impact: a transient failure of `/quality/spc/charts/options` can produce a “Capability study completed” toast while suppressing the returned Cp/Cpk result and giving the user no recovery path. The page needs an independent options state and a defined rendering contract for a study result whose interpretation thresholds are unavailable.
 
-#### M059-B03 — Capability study does not enforce that the spec item belongs to the selected product
+#### M059-B10 — Calibration create/update accepts an impossible future history and inconsistent date pair
 
-Evidence: `api/app/Modules/Quality/Controllers/CapabilityController.php:60-66` independently resolves a product and a spec item, then passes both to `SpcService`. `SpcService::computeCapabilityStudy()` never uses `$productId`; its query is only keyed by `inspection_spec_item_id` at `api/app/Modules/Quality/Services/SpcService.php:153-169`.
+Evidence: the create/update request accepts both date fields as unconstrained nullable dates at `api/app/Modules/Quality/Requests/StoreCalibrationRecordRequest.php:23-27`. `CalibrationService::create()` persists the supplied dates at `api/app/Modules/Quality/Services/CalibrationService.php:21-31`, while `update()` carries them through without a domain date invariant at `:34-43`. The separate record-event path rejects future dates at `:56-60`, proving the invariant is enforced inconsistently. Nothing prevents a future `last_calibration_date`, a `next_calibration_date` before the last date, or an arbitrary next date unrelated to the selected frequency.
 
-Impact: a caller can submit a valid product hash together with a spec-item hash belonging to another product and receive that other product's measurements. The UI's dependent dropdowns reduce accidental misuse but do not protect the API boundary.
-
-#### M059-B04 — Cp/Cpk analytics read measurements from non-terminal inspections
-
-Evidence: `computeForSpec()` and `computeCapabilityStudy()` query `inspection_measurements` without joining `inspections` or filtering `status` at `api/app/Modules/Quality/Services/SpcService.php:123-140,153-169`. The class documentation says the data is from completed inspections at `SpcService.php:114-119`.
-
-Impact: draft or in-progress readings can change reported process capability, and cancelled readings can remain in the study. The result is not a stable quality metric based on released inspection evidence.
-
-#### M059-B05 — A calibration event can be recorded with a future date
-
-Evidence: `CalibrationController::recordCalibration()` validates only `required|date` at `api/app/Modules/Quality/Controllers/CalibrationController.php:44-48`; `CalibrationService::recordCalibration()` parses and persists any supplied date and derives the next date from it at `api/app/Modules/Quality/Services/CalibrationService.php:45-63`.
-
-Impact: a technician or client can backdate or future-date a completed calibration event. A future date can move the next due date forward and suppress an otherwise overdue instrument.
-
-#### M059-B06 — Explicit `frequency_days: null` passes request validation but violates the database invariant
-
-Evidence: `StoreCalibrationRecordRequest` declares `frequency_days` as nullable at `api/app/Modules/Quality/Requests/StoreCalibrationRecordRequest.php:22-31`, while `calibration_records.frequency_days` is an unsigned, non-null column with a default at `api/database/migrations/0215_create_calibration_register.php:26-29`. `CalibrationService::create()` and `update()` pass the validated payload through to `fill()` at `api/app/Modules/Quality/Services/CalibrationService.php:20-38`.
-
-Impact: a syntactically valid JSON request containing `frequency_days: null` can reach a database exception instead of a field-level 422 response.
-
-#### M059-B07 — “Insufficient samples” is returned as a successful null result and the UI reports success
-
-Evidence: `SpcService::compute()` returns `null` below the configured minimum at `api/app/Modules/Quality/Services/SpcService.php:81-86`; the controller wraps that null in a 200 response at `api/app/Modules/Quality/Controllers/CapabilityController.php:63-76`. The SPA types the mutation as a non-null capability result and always shows “Capability study completed” in `spa/src/pages/quality/capability/index.tsx:120-133`.
-
-Impact: users receive a success toast but no result or explanation when there is not enough data. The page cannot distinguish “no study possible yet” from a completed study with no visible output.
+Impact: the register can claim an instrument was calibrated in the future or display a schedule that contradicts its own history. Add request and service-level date-order/history guards and focused 422 tests before relying on the register as an IATF control.
 
 ### Missing
 
-#### M059-M01 — Calibration register has no usable frontend surface
+#### M059-M02 — M059 SPA and browser regression coverage is still missing
 
-Evidence: backend endpoints exist at `api/app/Modules/Quality/routes.php:25-35`, but `spa/src/routes/qualityRoutes.tsx:25-60` registers no calibration route, `spa/src/components/layout/Sidebar.tsx:422-454` has no calibration item, and the SPA has no calibration API client or page file.
+Evidence: the isolated backend suite now covers the service/API boundary, for example `api/tests/Feature/Quality/QualityAnalyticsBoundaryTest.php:21-30`, but no dedicated test file exists for `spa/src/pages/quality/calibration/`, `spa/src/pages/quality/capability/`, or `spa/src/pages/quality/dashboard.tsx`. The existing Quality SPA test only exercises the inspection-spec editor and mocks the capability API at `spa/src/pages/quality/inspection-specs/editor.test.tsx:5-34`; the existing Quality E2E file is for the separate forecast dashboard at `spa/e2e/dashboard-forecast-quality.spec.ts:1-13`. No calibration/capability M059 role smoke path was run during this audit.
 
-Impact: QC users can be granted `quality.calibration.view/manage` but cannot list equipment, register an instrument, update it, or record calibration through the product UI. This is a complete role-facing feature gap, not just navigation polish.
-
-#### M059-M02 — Analytics and capability boundary tests are missing
-
-Evidence: the existing Quality tests cover calibration service status/race behavior and one inspection-summary service path, but `rg` finds no test for `DefectParetoService::run()`, `inspectionsWithDefect()`, `CapabilityController`, `SpcService::computeForSpec()`, capability product/spec ownership, future-date rejection, or calibration HTTP permission/validation behavior.
-
-Impact: the broken aggregate, lifecycle-scope, and API-contract cases above can regress without a focused failure. Add feature tests at the route boundary and service tests for the calculation invariants before marking the module verified.
+Impact: the role/permission dependency defect, silent options failure, calibration state transitions, and defect-label mismatch can regress while backend tests remain green. Add page tests for loading/error/empty/data states and browser checks for QC, production-manager view-only behavior, and calibration manage actions.
 
 ### Incomplete
 
-#### M059-I01 — Changing calibration frequency leaves the next due date stale
+#### M059-I01 — Changing calibration frequency leaves rescheduling semantics undefined
 
-Evidence: `CalibrationService::update()` merges the existing row and calls `withDerived()` at `api/app/Modules/Quality/Services/CalibrationService.php:31-38`. `withDerived()` derives only `status`; it does not recompute `next_calibration_date` when `frequency_days` changes at `:96-109`.
+Evidence: `CalibrationService::update()` merges the stored row with the patch at `api/app/Modules/Quality/Services/CalibrationService.php:34-43`; `withDerived()` recalculates status from the existing/provided next date but never derives a new next date from a changed frequency at `:105-118`. The form exposes both frequency and next date for editing at `spa/src/pages/quality/calibration/form.tsx:118-129`.
 
-Impact: an operator can change a 365-day interval to 30 days while the register still displays the old next date. Decide whether frequency changes take effect from the last completed calibration or require an explicit next-date edit, then enforce and test that policy.
+Impact: changing a 365-day interval to 30 days may leave the old next due date in place. Decide whether a frequency change reschedules from the last completed calibration or requires an explicit next-date edit, then encode and test that policy.
 
-#### M059-I02 — Capability options and spec analytics are not scoped to active specs
+#### M059-I02 — Historical analytics policy for archived/inactive specifications is not consistent across capability surfaces
 
-Evidence: `CapabilityController::options()` selects every bilateral `InspectionSpecItem` and eager-loads the parent without an `is_active` constraint at `api/app/Modules/Quality/Controllers/CapabilityController.php:29-44`. `InspectionSpec` has both soft deletes and an `is_active` flag at `api/app/Modules/Quality/Models/InspectionSpec.php:25-36`, while `SpcService::computeForSpec()` only filters by parent ID at `api/app/Modules/Quality/Services/SpcService.php:123-130`.
+Evidence: capability options intentionally restrict parent specs to active, non-deleted records at `api/app/Modules/Quality/Controllers/CapabilityController.php:33-40`, but direct SPC reads are routed with `withTrashed()` at `api/app/Modules/Quality/routes.php:58-60`; `InspectionSpecController::spcData()` delegates to `SpcService::computeForSpec()` at `api/app/Modules/Quality/Controllers/InspectionSpecController.php:101-114`, which loads the spec with `withTrashed()` at `api/app/Modules/Quality/Services/SpcService.php:130-141`.
 
-Impact: archived/deactivated specification items can be offered to capability clients or queried directly, even though the normal product lookup uses only active specs. The intended historical-analytics policy needs to be made explicit and consistently enforced.
+Impact: a user can receive different answers depending on whether the same historical spec is reached through Capability Study or the spec detail SPC path. Choose whether archived data is a supported historical read, then align options, direct reads, permissions, and tests.
 
-#### M059-I03 — Invalid product filters silently become unfiltered analytics
+#### M059-I03 — Calibration update is transaction-wrapped but not protected against stale-snapshot overwrites
 
-Evidence: `AnalyticsController` accepts an unconstrained `product_id` and replaces an invalid hash with `null` at `api/app/Modules/Quality/Controllers/AnalyticsController.php:22-33,40-49,54-63`. The service applies the product predicate only when the value is non-empty at `api/app/Modules/Quality/Services/DefectParetoService.php:37-39,90-92,167-168`.
+Evidence: `CalibrationService::update()` fills from `$record->toArray()` and saves without re-reading or locking the authoritative row at `api/app/Modules/Quality/Services/CalibrationService.php:34-43`. The adjacent `recordCalibration()` path explicitly locks and re-reads the row at `:50-72` to prevent stale regression.
 
-Impact: a malformed or expired product filter can return company-wide results instead of a 422/404 or an empty result. Use the shared hash-filter contract or fail closed at the request boundary.
+Impact: two concurrent PATCH requests can each start from an old representation and the later save can overwrite fields changed by the first request. Use a lock or an optimistic-concurrency contract, and add a concurrent-update regression test.
+
+#### M059-I04 — Retired calibration records still expose a Record action with contradictory service semantics
+
+Evidence: the list renders Edit and Record actions for every manageable row, including `status=retired`, at `spa/src/pages/quality/calibration/index.tsx:71-91`. The service docblock says recording “resets status to active” at `api/app/Modules/Quality/Services/CalibrationService.php:46-48`, but `statusFor()` explicitly preserves `Retired` at `:128-134`; the record path still updates the last/next dates at `:69-72`.
+
+Impact: an operator can record a calibration on retired equipment, changing its history while it remains retired, with no clear reactivation decision. Reject recording retired instruments or provide an explicit reactivation flow, then align the UI, service comment, and tests.
 
 ### Polish
 
-#### M059-P01 — Quality dashboard silently hides pass-rate and open-NCR query failures
+#### M059-P05 — Quality defect Pareto tooltip reports defect counts as downtime minutes
 
-Evidence: `spa/src/pages/quality/dashboard.tsx:31-46` creates the pass-rate and open-NCR queries, but the cards at `:62-77` render `—` on any failure and provide no error or retry state. The Pareto query has an explicit retry state at `:80-89`, so the page is inconsistent.
+Evidence: the Quality dashboard maps `defect_count` into the generic chart’s `minutes` field while passing `valueLabel="Defects"` at `spa/src/pages/quality/dashboard.tsx:101-107`. The shared chart still names that bar “Downtime” and formats it with `formatMinutes()` at `spa/src/components/charts/DowntimeParetoChart.tsx:62-78`.
 
-Impact: a QC user cannot tell “zero/no data” from an unavailable KPI and has no recovery action for two of the three headline metrics.
+Impact: hovering a Quality defect bar can show values such as `1m` / “Downtime” instead of a defect count. Give the chart a semantic value formatter/label or use a Quality-specific chart presentation; do not change the shared component without checking its other consumers.
 
-#### M059-P02 — Capability and SPC panels do not communicate missing-data states
+#### M059-P06 — Calibration edit loading/error states do not use the standard query-state components
 
-Evidence: `SpcService` explicitly says the UI should convey “not enough data” where results are absent at `api/app/Modules/Quality/Services/SpcService.php:114-120`. The inspection detail page renders the SPC panel only when data is non-empty at `spa/src/pages/quality/inspections/detail.tsx:470-505`, and the capability page renders results only when `result` is truthy at `spa/src/pages/quality/capability/index.tsx:218-353`.
+Evidence: the edit form returns raw text-only `div` states at `spa/src/pages/quality/calibration/form.tsx:96-100`, while the list and capability pages provide structured skeleton/error/empty states at `spa/src/pages/quality/calibration/index.tsx:128-145` and `spa/src/pages/quality/capability/index.tsx:168-241`.
 
-Impact: users see an empty area rather than sample-count requirements, a no-data explanation, or a next action. This compounds M059-B07's successful-null contract problem.
-
-#### M059-P03 — The capability study is not discoverable from quality navigation
-
-Evidence: `/quality/capability` is registered at `spa/src/routes/qualityRoutes.tsx:58-60`, but the Quality sidebar section contains only inspection specs, inspections, NCRs, and traceability at `spa/src/components/layout/Sidebar.tsx:422-454`; there is no capability or calibration link.
-
-Impact: the capability screen is effectively a direct-URL feature, and the missing calibration screen has no navigational placeholder. Add discoverability when the calibration UI is implemented, using permission-derived visibility.
-
-#### M059-P04 — Documentation and E2E permission fixtures still advertise the removed COPQ surface
-
-Evidence: the COPQ snapshot table is explicitly removed by `api/database/migrations/0452_drop_copq_snapshots_table.php:8-18`, but `docs/PROCESS-FLOWS.md:1264-1269,1688`, `CLAUDE.md:646-661`, and `spa/e2e/helpers-extended.ts:94,110,192` still reference COPQ endpoints, cron, or `quality.copq.view`.
-
-Impact: operators and test authors can expect a route and permission that do not exist. This is a documentation/fixture drift finding; it is not treated as a request to reintroduce COPQ without a product decision.
-
-## Open questions
-
-- M059 metadata lists `production_manager` as a role, but the seeded role receives `quality.view`, `quality.inspections.view`, and `quality.ncr.view` rather than `quality.calibration.view` at `api/database/seeders/RolePermissionSeeder.php:530-541`. The browser role matrix also lists calibration for `qc_inspector` but not production manager at `docs/AUTO-BROWSER-TESTS.md:119-123`. Confirm whether production managers should see calibration or only analytics/capability.
-- The current code explicitly removed COPQ. Confirm whether the intended M059 end state is the post-scope-cut set (calibration, Pareto, summary, drill-down, Cp/Cpk) or whether a new COPQ product decision supersedes the removal.
-- The remaining `Not Started` dependency graph was cyclic during selection, and the first three Tier-3 candidates became locked by other sessions. M059 was claimed as the first subsequently available Tier-3 candidate; its dependency modules were read only.
-
-### COA verification has no owner (raised 2026-08-27; decision required, no option chosen)
-
-Found while repairing the coordinator-authorised `inventory/goods-receiving` test. Recorded here because the missing half is Quality's, not Inventory's.
-
-Evidence: `grn_items.coa_verified` is written exactly twice in the codebase, both as a hard-coded `false` — `api/app/Modules/Inventory/Services/GrnService.php:240` and `:437`. Receiver-supplied values are refused at `api/app/Modules/Inventory/Services/GrnService.php:140-144,378-382` and `['prohibited']` at `api/app/Modules/Inventory/Requests/StoreGrnRequest.php:60`, `api/app/Modules/Inventory/Requests/FinalizeGrnRequest.php:30`, `api/app/Modules/Inventory/Controllers/GoodsReceiptNoteController.php:170`. The Quality incoming-QC path never writes it: `api/app/Modules/Quality/Listeners/TriggerIncomingQC.php` creates per-line incoming inspections and `api/app/Modules/Quality/Services/InspectionService.php:203-265` records their verdict, with no reference to `coa_verified`. The flag is nonetheless published at `api/app/Modules/Inventory/Resources/GrnItemResource.php:38` and rendered in the GRN detail UI.
-
-Impact: the Chain 2 control "verify resin certs and moisture before accepting inventory" is half-closed. The certificate reference is captured, self-certification is correctly refused, and no one can record that the certificate was actually checked — so the field reads *unverified* on every received lot forever, including lots whose incoming inspection passed. The refusal is the right default (an unverifiable claim beats a false one), so this is a gap to close deliberately, not a regression to hot-fix.
-
-Options, with the trade-off that decides between them:
-
-1. **Make the COA a spec parameter on the incoming inspection.** Add a `functional` (or `visual`) parameter such as "COA present and conforming" to the item quality plan, and derive `coa_verified` from that measurement when `InspectionService::recordMeasurements()` completes the line's incoming inspection. Pro: one evidence trail, one authoriser (the QC inspector who signs the inspection), automatic NCR on failure via the existing tolerance/NCR path, no new permission. Con: `coa_verified` becomes derived state that duplicates a measurement row, and every resin item's quality plan must be amended or the flag stays false by omission — a silent partial rollout.
-2. **A dedicated Quality-owned transition.** A `POST /api/v1/quality/grn-items/{grnItem}/verify-coa` endpoint behind a new permission (e.g. `quality.coa.verify`), writing `coa_verified`, `coa_verified_by`, `coa_verified_at`. Pro: explicit, auditable, independently permissioned, and works for lots with no quality plan. Con: a second QC action to remember beside the inspection, and it needs new columns, a route, a UI surface, and an RBAC decision about which roles hold it.
-3. **Drop the flag from the contract.** Keep `coa_document_path` as captured evidence, remove `coa_verified` from `GrnItemResource` and the UI, and treat the passed incoming inspection as the sole record that the certificate was reviewed. Pro: no dead field pretending to be a control; smallest change. Con: loses the ability to state per-lot whether the certificate specifically (as opposed to the dimensional/moisture checks) was reviewed, which an IATF auditor may ask for by name.
-
-Not decided here: options 1 and 2 both answer "who may certify incoming material quality", which is outside an audit session's authority. Option 3 is a scope cut. All three need the same prerequisite answered first — whether COA review must be separately attributable from the incoming inspection verdict.
-
-### Observation — one error code covers two different refusals (no change made)
-
-`CapabilityController::capability()` raises `quality_capability_insufficient_samples` for both "fewer than the configured minimum readings" and "enough readings but zero measurable variation", because `SpcService::compute()` returns `null` for both (`api/app/Modules/Quality/Services/SpcService.php:86-95`, `api/app/Modules/Quality/Controllers/CapabilityController.php:94-99`). Zero variance across many readings is itself a meaningful signal — usually gauge resolution too coarse for the tolerance band, a real IATF MSA finding — but the operator is told to collect more samples, which will not help. Splitting into a second code (e.g. `quality_capability_zero_variance`) would make the SPA able to say something actionable. Left alone: it is a UX/wording change on an error contract the SPA already consumes, and the guard itself is correct. Both refusals are now pinned by tests (`api/tests/Feature/Quality/QualityAnalyticsBoundaryTest.php:104-133,206-259`), so the distinction can be introduced without losing coverage.
+Impact: the edit flow has weaker visual hierarchy, retry affordance, and accessibility consistency than the rest of the M059 surface. Use the shared skeleton/query-error primitives in the normal UI polish pass.
 
 ## Handoff recommendation
 
-Do not mark M059 verified yet. Fix the calculation/data-scope defects and define the calibration/capability API contracts first, then add the missing calibration UI and route-level tests. A fresh focused API suite plus SPA typecheck/build and role smoke coverage should be required for re-audit.
+Do not mark M059 verified and do not modify implementation in this session. The ordered plan is dominated by separate-recommended work: a cross-module RBAC/data-contract decision, calibration domain policy/concurrency, historical SPC policy, and missing browser/page coverage. The two small same-session candidates (options-query state and Pareto tooltip semantics) are intentionally deferred because the total plan is not small.
