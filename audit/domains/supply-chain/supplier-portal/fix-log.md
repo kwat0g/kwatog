@@ -421,3 +421,20 @@ Recovery verification passed:
 - No M047 source/test, dependency, shared-config, registry, or other-module file
   was changed. The next work is the separate implementation tranche recorded in
   `action-plan.md`.
+
+## M047-R005 — supplier public auth feature gate
+
+Implementation session: 2026-08-27
+
+- Claimed `supply-chain / supplier-portal` through `audit/scripts/claim-module.sh`.
+- `api/app/Modules/B2B/routes.php`: applied `feature:b2b_portals` alongside the
+  existing `throttle:auth` middleware on supplier login, logout, forgot-password,
+  and reset-password routes. No supplier auth contract or throttle behavior was
+  changed.
+- `api/tests/Feature/B2B/SupplierPortalAuthTest.php`: added focused disabled and
+  enabled-feature coverage for all four supplier public entry points. Existing
+  login authentication and throttle tests remain in the same suite.
+- Verification so far: the focused supplier auth plus password-reset suites pass
+  (**20 tests / 103 assertions**); both touched PHP files pass `php -l`, and
+  `git diff --check` passes. Pint still reports unrelated pre-existing style
+  differences elsewhere in these two files.

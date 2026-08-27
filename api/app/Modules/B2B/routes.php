@@ -19,10 +19,10 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('b2b/supplier')->group(function () {
     // Public — throttle:auth (5/min/ip|email) protects against credential
     // spraying. Logout shares the limiter to bound DoS on the token-revoke path.
-    Route::post('login', [SupplierAuthController::class, 'login'])->middleware('throttle:auth');
-    Route::post('logout', [SupplierAuthController::class, 'logout'])->middleware('throttle:auth');
-    Route::post('forgot-password', [SupplierAuthController::class, 'forgotPassword'])->middleware('throttle:auth');
-    Route::post('reset-password', [SupplierAuthController::class, 'resetPassword'])->middleware('throttle:auth');
+    Route::post('login', [SupplierAuthController::class, 'login'])->middleware(['throttle:auth', 'feature:b2b_portals']);
+    Route::post('logout', [SupplierAuthController::class, 'logout'])->middleware(['throttle:auth', 'feature:b2b_portals']);
+    Route::post('forgot-password', [SupplierAuthController::class, 'forgotPassword'])->middleware(['throttle:auth', 'feature:b2b_portals']);
+    Route::post('reset-password', [SupplierAuthController::class, 'resetPassword'])->middleware(['throttle:auth', 'feature:b2b_portals']);
 
     // Authenticated
     Route::middleware(['auth:supplier_portal', 'portal:supplier_portal', 'feature:b2b_portals', \App\Modules\B2B\Middleware\B2BTenancyScopeMiddleware::class])->group(function () {

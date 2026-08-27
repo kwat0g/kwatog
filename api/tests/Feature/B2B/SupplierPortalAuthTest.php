@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\B2B;
 
 use App\Common\Models\AuditLog;
+use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\B2B\Models\SupplierPortalUser;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -256,5 +257,70 @@ class SupplierPortalAuthTest extends TestCase
             'email'    => $user->email,
             'password' => $password,
         ])->assertStatus(422);
+    }
+
+    public function test_supplier_public_auth_routes_are_feature_gated(): void
+    {
+        $settings = app(SettingsService::class);
+        $settings->set('modules.b2b_portals', false, 'modules');
+
+        $routes = [
+            ['login', ['email' => 'supplier-feature-disabled+'.uniqid().'@example.test', 'password' => 'SupplierPass-1!']],
+            ['logout', []],
+            ['forgot-password', ['email' => 'unknown-supplier-feature-disabled+'.uniqid().'@example.test']],
+            ['reset-password', [
+                'token' => 'invalid-feature-disabled-token',
+                'password' => 'SupplierPass-1!',
+                'password_confirmation' => 'SupplierPass-1!',
+            ]],
+        ];
+
+        try {
+            foreach ($routes as [$route, $payload]) {
+                $this->clearAuthThrottle($payload['email'] ?? '');
+
+                $this->postJson('/api/v1/b2b/supplier/'.$route, $payload)
+                    ->assertStatus(403)
+                    ->assertJsonPath('code', 'feature_disabled');
+            }
+        } finally {
+            $settings->set('modules.b2b_portals', true, 'modules');
+        }
+    }
+
+    public function test_supplier_public_auth_routes_remain_reachable_when_feature_is_enabled(): void
+    {
+        $settings = app(SettingsService::class);
+        $settings->set('modules.b2b_portals', true, 'modules');
+        $user = $this->makeUser('SupplierPass-1!');
+
+        try {
+            $this->clearAuthThrottle($user->email);
+            $this->postJson('/api/v1/b2b/supplier/login', [
+                'email' => $user->email,
+                'password' => 'SupplierPass-1!',
+            ])->assertOk();
+
+            $this->clearAuthThrottle('');
+            $this->postJson('/api/v1/b2b/supplier/logout')
+                ->assertOk()
+                ->assertJsonPath('message', 'Logged out successfully.');
+
+            $unknownEmail = 'unknown-supplier-feature-enabled+'.uniqid().'@example.test';
+            $this->clearAuthThrottle($unknownEmail);
+            $this->postJson('/api/v1/b2b/supplier/forgot-password', [
+                'email' => $unknownEmail,
+            ])->assertOk();
+
+            $this->clearAuthThrottle('');
+            $this->postJson('/api/v1/b2b/supplier/reset-password', [
+                'token' => 'invalid-feature-enabled-token',
+                'password' => 'SupplierPass-1!',
+                'password_confirmation' => 'SupplierPass-1!',
+            ])->assertStatus(422)
+                ->assertJsonValidationErrorFor('token');
+        } finally {
+            $settings->set('modules.b2b_portals', true, 'modules');
+        }
     }
 }
