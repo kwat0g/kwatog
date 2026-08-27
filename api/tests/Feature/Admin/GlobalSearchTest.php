@@ -81,6 +81,40 @@ class GlobalSearchTest extends TestCase
             ->assertJsonValidationErrors('q');
     }
 
+    public function test_padded_one_character_query_is_rejected_after_trimming(): void
+    {
+        $user = $this->userWithPermissions(['search.global']);
+
+        $this->actingAs($user)->getJson('/api/v1/search?q='.urlencode(' a '))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('q');
+    }
+
+    public function test_whitespace_only_query_is_rejected_after_trimming(): void
+    {
+        $user = $this->userWithPermissions(['search.global']);
+
+        $this->actingAs($user)->getJson('/api/v1/search?q='.urlencode('   '))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('q');
+    }
+
+    public function test_valid_padded_query_is_normalized_for_search_and_response(): void
+    {
+        $employee = Employee::factory()->create(['last_name' => 'PaddedQuery']);
+        $admin = $this->admin();
+
+        $response = $this->actingAs($admin)
+            ->getJson('/api/v1/search?q='.urlencode('  PaddedQuery  '))
+            ->assertOk()
+            ->assertJsonPath('query', 'PaddedQuery');
+
+        $this->assertContains(
+            $employee->first_name.' '.$employee->last_name,
+            $this->labelsFor($response->json('data'), 'employee'),
+        );
+    }
+
     public function test_query_longer_than_the_bound_is_rejected(): void
     {
         $user = $this->userWithPermissions(['search.global']);

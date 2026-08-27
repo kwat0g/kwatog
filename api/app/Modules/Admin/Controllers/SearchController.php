@@ -15,12 +15,23 @@ class SearchController
 
     public function search(Request $request): JsonResponse
     {
-        $request->validate([
+        $query = $request->query('q');
+        if (is_string($query)) {
+            $query = trim($query);
+        }
+
+        // Validate the normalized query so direct API callers get the same
+        // minimum-length contract as the palette, which trims before querying.
+        $request->merge(['q' => $query]);
+        $validated = $request->validate([
             'q' => ['required', 'string', 'min:2', 'max:120'],
         ]);
+
+        $query = (string) $validated['q'];
+
         return response()->json([
-            'data'  => $this->service->search($request->user(), (string) $request->query('q')),
-            'query' => (string) $request->query('q'),
+            'data'  => $this->service->search($request->user(), $query),
+            'query' => $query,
         ]);
     }
 }

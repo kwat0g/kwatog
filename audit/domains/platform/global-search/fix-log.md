@@ -323,3 +323,32 @@ Claimed `platform / global-search` atomically with `audit/scripts/claim-module.s
 
 F09, F10, F12, F13, F14, F15, and F16 remain open and out of scope. Release status is
 `🔁 Needs Re-audit`.
+
+## Fix session: 2026-08-27 — M009-F12
+
+Claimed `platform / global-search` atomically with `audit/scripts/claim-module.sh`.
+
+### M009-F12 — normalized query validation
+
+`SearchController` now trims string query input before Laravel applies the `required`,
+`min:2`, and `max:120` rules, passes the validated normalized query to
+`GlobalSearchService`, and echoes that normalized value in the response. The service
+keeps its defensive trim for direct callers, while literal wildcard escaping, existing
+row scopes, and F11 middle-name matching remain unchanged. The palette already used the
+same trim-before-gate/request behavior; its focused test now covers padded one-character
+rejection and normalized valid padded requests.
+
+`api/tests/Feature/Admin/GlobalSearchTest.php` adds focused regressions for padded
+one-character and whitespace-only queries returning 422, plus a valid padded query that
+returns its matching employee and `query: "PaddedQuery"`.
+
+### Focused verification
+
+- `docker compose run --rm --no-deps -e DB_DATABASE=ogami_test_m009_f12 api php artisan test tests/Feature/Admin/GlobalSearchTest.php --no-coverage` — **PASS: 24 tests, 95 assertions**.
+- `docker compose run --rm --no-deps spa npm run test:run -- src/components/ui/CommandPalette.test.tsx` — **PASS: 10 tests**; existing React `act(...)` warnings only.
+- PHP lint for controller, service, and focused backend test — **PASS**.
+- Targeted SPA ESLint and `npm run typecheck` — **PASS**.
+- `git diff --check` — **PASS**.
+
+F09, F10, F13, F14, F15, and F16 remain open and out of scope; F11 remains complete.
+Release status: `🔁 Needs Re-audit`.

@@ -81,16 +81,28 @@ describe('CommandPalette search', () => {
     expect(screen.getByText('FRESH-abcd')).toBeInTheDocument();
   });
 
-  it('does not query until the term reaches two characters', async () => {
+  it('does not query until the trimmed term reaches two characters', async () => {
     const get = vi
       .spyOn(client, 'get')
       .mockResolvedValue({ data: { data: [], query: 'a' } } as never);
 
     const input = renderPalette();
-    fireEvent.change(input, { target: { value: 'a' } });
+    fireEvent.change(input, { target: { value: '  a  ' } });
     await wait(300);
 
     expect(get).not.toHaveBeenCalled();
+  });
+
+  it('sends a valid padded term in its normalized form', async () => {
+    const get = vi
+      .spyOn(client, 'get')
+      .mockResolvedValue({ data: { data: [], query: 'abcd' } } as never);
+
+    const input = renderPalette();
+    fireEvent.change(input, { target: { value: '  abcd  ' } });
+
+    await waitFor(() => expect(get).toHaveBeenCalledTimes(1));
+    expect((get.mock.calls[0][1] as { params: { q: string } }).params.q).toBe('abcd');
   });
 
   it('debounces typing into a single request', async () => {

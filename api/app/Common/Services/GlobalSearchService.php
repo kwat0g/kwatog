@@ -59,12 +59,14 @@ use Illuminate\Support\Facades\Schema;
  *
  * ## Matching semantics — M009-F04
  *
- * Input is matched as a LITERAL case-insensitive substring: `%` and `_` are
- * escaped by `SearchOperator::contains()`, so there is no user-facing wildcard
- * syntax to abuse. Results are ranked deterministically (exact identifier,
- * identifier prefix, exact name, name prefix, substring) and tie-broken on the
- * primary key, so an exact `PO-202604-0015` can never be crowded out of the
- * five-row window by coincidental substring hits.
+ * Input is normalized by trimming at the controller boundary and defensively
+ * again here for direct service callers, then matched as a LITERAL
+ * case-insensitive substring: `%` and `_` are escaped by
+ * `SearchOperator::contains()`, so there is no user-facing wildcard syntax to
+ * abuse. Results are ranked deterministically (exact identifier, identifier
+ * prefix, exact name, name prefix, substring) and tie-broken on the primary
+ * key, so an exact `PO-202604-0015` can never be crowded out of the five-row
+ * window by coincidental substring hits.
  *
  * ## Query budget — M009-F04
  *
@@ -99,10 +101,10 @@ class GlobalSearchService
     /** @return array<int, array{group:string, label:string, type:string, items:array<int, array<string,mixed>>}> */
     public function search(User $user, string $query, int $perGroup = 5): array
     {
-        $raw = trim($query);
-        if (mb_strlen($raw) < 2) return [];
+        $normalizedQuery = trim($query);
+        if (mb_strlen($normalizedQuery) < 2) return [];
 
-        $term = SearchOperator::contains($raw);
+        $term = SearchOperator::contains($normalizedQuery);
         $like = SearchOperator::like();
         $h    = app('hashids');
         $groups = [];
@@ -137,7 +139,7 @@ class GlobalSearchService
 
             $rows = $this->rank($q, 'employees.employee_no', [
                 'employees.last_name', 'employees.middle_name',
-            ], $raw)
+            ], $normalizedQuery)
                 ->limit($perGroup)->get();
 
             $groups[] = $this->wrap('Employees', 'employee', $rows->map(fn ($r) => [
@@ -159,7 +161,7 @@ class GlobalSearchService
                     ->where('sales_orders.so_number', $like, $term)
                     ->orWhere('customers.name', $like, $term));
 
-            $rows = $this->rank($q, 'sales_orders.so_number', 'customers.name', $raw)
+            $rows = $this->rank($q, 'sales_orders.so_number', 'customers.name', $normalizedQuery)
                 ->limit($perGroup)->get();
 
             $groups[] = $this->wrap('Sales Orders', 'sales_order', $rows->map(fn ($r) => [
@@ -199,7 +201,7 @@ class GlobalSearchService
                 deptRelation: 'purchaseRequest',
             );
 
-            $rows = $this->rank($q, 'purchase_orders.po_number', 'vendors.name', $raw)
+            $rows = $this->rank($q, 'purchase_orders.po_number', 'vendors.name', $normalizedQuery)
                 ->limit($perGroup)->get();
 
             $groups[] = $this->wrap('Purchase Orders', 'purchase_order', $rows->map(fn ($r) => [
@@ -225,7 +227,7 @@ class GlobalSearchService
                     ->orWhere('products.part_number', $like, $term)
                     ->orWhere('machines.name', $like, $term));
 
-            $rows = $this->rank($q, 'work_orders.wo_number', 'products.name', $raw)
+            $rows = $this->rank($q, 'work_orders.wo_number', 'products.name', $normalizedQuery)
                 ->limit($perGroup)->get();
 
             $groups[] = $this->wrap('Work Orders', 'work_order', $rows->map(fn ($r) => [
@@ -247,7 +249,7 @@ class GlobalSearchService
                     ->where('invoices.invoice_number', $like, $term)
                     ->orWhere('customers.name', $like, $term));
 
-            $rows = $this->rank($q, 'invoices.invoice_number', 'customers.name', $raw)
+            $rows = $this->rank($q, 'invoices.invoice_number', 'customers.name', $normalizedQuery)
                 ->limit($perGroup)->get();
 
             $groups[] = $this->wrap('Invoices', 'invoice', $rows->map(fn ($r) => [
@@ -270,7 +272,7 @@ class GlobalSearchService
                     ->where('bills.bill_number', $like, $term)
                     ->orWhere('vendors.name', $like, $term));
 
-            $rows = $this->rank($q, 'bills.bill_number', 'vendors.name', $raw)
+            $rows = $this->rank($q, 'bills.bill_number', 'vendors.name', $normalizedQuery)
                 ->limit($perGroup)->get();
 
             $groups[] = $this->wrap('Bills', 'bill', $rows->map(fn ($r) => [
@@ -291,7 +293,7 @@ class GlobalSearchService
                     ->where('products.part_number', $like, $term)
                     ->orWhere('products.name', $like, $term));
 
-            $rows = $this->rank($q, 'products.part_number', 'products.name', $raw)
+            $rows = $this->rank($q, 'products.part_number', 'products.name', $normalizedQuery)
                 ->limit($perGroup)->get();
 
             $groups[] = $this->wrap('Products', 'product', $rows->map(fn ($r) => [
@@ -311,7 +313,7 @@ class GlobalSearchService
                     ->where('items.code', $like, $term)
                     ->orWhere('items.name', $like, $term));
 
-            $rows = $this->rank($q, 'items.code', 'items.name', $raw)
+            $rows = $this->rank($q, 'items.code', 'items.name', $normalizedQuery)
                 ->limit($perGroup)->get();
 
             $groups[] = $this->wrap('Items', 'item', $rows->map(fn ($r) => [
@@ -342,7 +344,7 @@ class GlobalSearchService
                     ->where('customers.name', $like, $term)
                     ->orWhere('customers.contact_person', $like, $term));
 
-            $rows = $this->rank($q, 'customers.name', null, $raw)
+            $rows = $this->rank($q, 'customers.name', null, $normalizedQuery)
                 ->limit($perGroup)->get();
 
             $groups[] = $this->wrap('Customers', 'customer', $rows->map(fn ($r) => [
@@ -365,7 +367,7 @@ class GlobalSearchService
                     ->where('vendors.name', $like, $term)
                     ->orWhere('vendors.contact_person', $like, $term));
 
-            $rows = $this->rank($q, 'vendors.name', null, $raw)
+            $rows = $this->rank($q, 'vendors.name', null, $normalizedQuery)
                 ->limit($perGroup)->get();
 
             $groups[] = $this->wrap('Vendors', 'vendor', $rows->map(fn ($r) => [
@@ -387,7 +389,7 @@ class GlobalSearchService
                     ->where('non_conformance_reports.ncr_number', $like, $term)
                     ->orWhere('non_conformance_reports.defect_description', $like, $term));
 
-            $rows = $this->rank($q, 'non_conformance_reports.ncr_number', null, $raw)
+            $rows = $this->rank($q, 'non_conformance_reports.ncr_number', null, $normalizedQuery)
                 ->limit($perGroup)->get();
 
             $groups[] = $this->wrap('NCRs', 'ncr', $rows->map(fn ($r) => [
