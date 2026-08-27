@@ -1,18 +1,18 @@
 # Module Registry
 
-_Generated 2026-08-27 10:26 UTC by scripts/regenerate-registry.sh - do not edit by hand, edit each module's status.md instead._
+_Generated 2026-08-27 11:16 UTC by scripts/regenerate-registry.sh - do not edit by hand, edit each module's status.md instead._
 
 | ID | Domain | Module | Tier | Roles | Depends On | Status | Last Session | Locked? |
 |----|--------|--------|------|-------|-----------|--------|---------------|---------|
 | M034 | commercial | customer-complaints-8d | 3 | system_admin, customer-portal | sales-orders, inspections-certificates, ncr-capa, customer-product-pricing | 🔁 Needs Re-audit | 2026-08-27 | no |
-| M035 | commercial | customer-portal | 4 | customer-portal, system_admin, finance_officer | auth-session, sales-orders, accounts-receivable, deliveries-proof, customer-complaints-8d | 🔁 Needs Re-audit | 2026-08-26 | no |
+| M035 | commercial | customer-portal | 4 | customer-portal, system_admin, finance_officer | auth-session, sales-orders, accounts-receivable, deliveries-proof, customer-complaints-8d | 📋 Plan Ready | 2026-08-27 | no |
 | M032 | commercial | customer-product-pricing | 2 | system_admin | auth-session, rbac | 🔁 Needs Re-audit | 2026-08-24 | 🔒 yes |
-| M033 | commercial | sales-orders | 2 | system_admin, customer-portal | customer-product-pricing, auth-session, rbac | 🔁 Needs Re-audit | 2026-08-27 | no |
+| M033 | commercial | sales-orders | 2 | system_admin, customer-portal | customer-product-pricing, auth-session, rbac | 📋 Plan Ready | 2026-08-27 | no |
 | M027 | finance | accounts-payable | 2 | system_admin, finance_officer, purchasing_officer | chart-of-accounts-periods, journal-ledger, purchase-orders, goods-receiving | ✅ Verified | 2026-08-24 | no |
 | M028 | finance | accounts-receivable | 2 | system_admin, finance_officer, customer-portal | chart-of-accounts-periods, journal-ledger, customer-product-pricing, sales-orders, deliveries-proof | 🔁 Needs Re-audit | 2026-08-25 | 🔒 yes |
 | M030 | finance | budgeting | 2 | system_admin, finance_officer | chart-of-accounts-periods, journal-ledger, employee-master | ✅ Verified | 2026-08-24 | no |
-| M025 | finance | chart-of-accounts-periods | 2 | system_admin, finance_officer | auth-session, rbac | 🔁 Needs Re-audit | 2026-08-27 | no |
-| M029 | finance | financial-statements | 2 | system_admin, finance_officer | journal-ledger, accounts-payable, accounts-receivable | 🔁 Needs Re-audit | 2026-08-26 | no |
+| M025 | finance | chart-of-accounts-periods | 2 | system_admin, finance_officer | auth-session, rbac | 📋 Plan Ready | 2026-08-27 | no |
+| M029 | finance | financial-statements | 2 | system_admin, finance_officer | journal-ledger, accounts-payable, accounts-receivable | 📋 Plan Ready | 2026-08-27 | no |
 | M031 | finance | fixed-assets-depreciation | 2 | system_admin, finance_officer, production_manager, ppc_head, maintenance_tech | chart-of-accounts-periods, journal-ledger, employee-master, maintenance-machine-health | 🔁 Needs Re-audit — backend verified by execution (24 Assets tests green); pending: D-M031-1 disposal-month ledger reconciliation (P0 money decision), D-M031-2 = overnight decision #12 (JE created_by), F06/F11 product decisions, F07/F09/F10 + SPA half of F08 unverifiable while spa/node_modules is root-owned | 2026-08-27 | no |
 | M026 | finance | journal-ledger | 2 | system_admin, finance_officer | chart-of-accounts-periods, audit-activity | 🔁 Needs Re-audit | 2026-08-25 | 🔒 yes |
 | M041 | inventory | goods-receiving | 3 | system_admin, purchasing_officer, warehouse_staff | purchase-orders, inventory-master, inspections-certificates, accounts-payable | 🔁 Needs Re-audit | 2026-08-25 | 🔒 yes |
