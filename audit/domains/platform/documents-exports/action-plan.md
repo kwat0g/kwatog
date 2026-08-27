@@ -1,34 +1,69 @@
 # M011 — Documents & Exports action plan
 
-Status: 📋 Plan Ready  
-Audit date: 2026-08-24  
-Overall recommendation: separate-recommended
+Plan date: 2026-08-27
+Module: platform / documents-exports
+Gate result: **📋 Plan Ready — no fixes in this session**
 
-## Ordered work
+The plan is intentionally ordered by authorization/lifecycle risk. Each action
+is tagged with scope and whether it is suitable for the same audit session.
 
-| Priority | Finding | Scope | Session recommendation | Deliverable / acceptance evidence |
-|---|---|---|---|---|
-| P0 | M011-F01 authoritative export column contract | medium | separate-recommended | Every preview, download, saved preference, schedule, and background run rejects unknown or unauthorized columns; HR export cannot return TIN, government IDs, or bank-account fields without an explicit approved capability; negative tests pass. |
-| P1 | M011-F02 scheduled-export capability and replay authorization | medium | separate-recommended | Module permission, implementation, column policy, recipient policy, and stored-config revalidation are shared with direct exports; custom-role tests prove a schedule cannot bypass direct export permission. |
-| P1 | M011-F03 module registry/runner/UI alignment | medium | separate-recommended | Each advertised module has a registered column catalog, runner class, filters, permission, and feature test, or its UI/permission key is removed until implemented; inventory export has a working authenticated flow. |
-| P1 | M011-F05 official PDF vault integration | large | separate-recommended | Accounting, Purchasing, Quality, Supply Chain, CRM, and bulk company PDFs use the shared renderer/vault with correct entity/type/confidentiality metadata and central access tests; self-service certificates remain an explicit documented exception. |
-| P1 | M011-F04 scheduled-export create/edit UX | medium | separate-recommended | HR/inventory column selection can create and edit schedules with current filters, recipients, frequency/time, next-run feedback, archive/restore, and an authenticated browser test. |
-| P1 | M011-F09 security and lifecycle regression suite | medium | separate-recommended | Negative field/permission/owner tests, successful schedule execution, queue failure, missing blob, central document list, and PDF family tests run in CI; browser flows use a live API/SPA. |
-| P2 | M011-F06 entity-scoped document surface | medium | separate-recommended | Detail pages mount a guarded document list using a canonical entity-scoped endpoint; admin document enumeration remains separately permissioned; client URL contracts are accurate. |
-| P2 | M011-F07 resource bounds and durable attachments | medium | separate-recommended | Export row/byte limits and timeout behavior are explicit; large exports use chunked/disk-backed generation where possible; queued mail references a durable private artifact rather than embedding unbounded base64. |
-| P2 | M011-F08 retention and orphan reconciliation | medium | separate-recommended | Document-type retention is documented, dry-run/reconciliation reports missing/orphaned blobs, deletion is auditable and recoverability is understood, and the command is scheduled/monitored. |
-| P2 | M011-F10 renderer hardening | small | same-session only after semantic fixes | Dompdf PHP/JavaScript features are disabled unless justified by a reviewed template; configuration and escaping assertions are present. |
+1. **[large · separate-recommended] Resolve document ownership, permissions,
+   and retention.** Decide the owner/retention model for financial statements,
+   audit reports, and other report-like PDFs; complete the `DocumentType` →
+   permission matrix, including `packing_list` and `commercial_invoice`; then
+   route the remaining official PDFs through `PdfRenderService` and
+   `DocumentVaultService`. (M011-F05)
 
-## Suggested implementation sequence
+2. **[medium · separate-recommended] Decide and enforce scheduled-export
+   recipients.** Obtain the business policy for owner-only, organization,
+   approved-domain, or admin-approved recipients. Enforce it on create/update
+   and immediately before execution; audit rejected or changed schedules.
+   (M011-F11)
 
-1. Freeze the authoritative export-module contract: implementation class, permission, allowed columns/resolvers, filter schema, recipient policy, and resource limits. Apply it to direct and scheduled paths before adding more modules.
-2. Add the P0/P1 negative tests for sensitive columns, custom-role scheduling, invalid persisted columns, and missing runner implementations. Remove or finish unsupported UI/module keys.
-3. Add the scheduled-export create/edit UI and live browser flow, then add successful queue/next-run and mail-failure tests.
-4. Inventory all official PDF routes and migrate company records to the shared renderer/vault. Preserve and document the personal self-service exception separately.
-5. Connect the central document list to entity detail pages with an explicit scoped endpoint and access tests.
-6. Set resource limits, move large queued artifacts to private durable storage, define retention/reconciliation, and harden Dompdf after template review.
-7. Run the full relevant backend suites, SPA typecheck/unit/build gates, authenticated browser audit, production-like PDF smoke flows, migration rollback rehearsal, and an orphan/reconciliation report before moving M011 to Verified.
+3. **[medium · separate-recommended] Add typed filter contracts.** Register
+   value kind, allowed enum values, hash-ID validation, scalar limits, and
+   empty-value behavior for each module filter. Apply the same validation to
+   HTTP, persistence, and background execution; test malformed stored JSON.
+   (M011-F13)
 
-## Audit-session decision
+4. **[medium · separate-recommended] Correlate mail delivery outcomes.** Define
+   the meaning of `last_run_at`, pass schedule/attempt identity into the
+   mailable, and persist provider failure/retry state or a separate delivery
+   ledger. Add a queue-failure test that verifies the UI-visible result.
+   (M011-F12)
 
-No implementation fix is applied in this session. The findings include a high-severity data-exposure boundary, a cross-path authorization refactor, missing export implementations/UI, and a broad PDF lifecycle migration. The work is not predominantly small; an isolated same-session edit would leave the highest-risk paths unresolved.
+5. **[medium · separate-recommended] Make export generation resource-safe.**
+   Use chunk/cursor or disk-backed generation, avoid duplicate full-byte copies,
+   define request/worker timeouts, and expose actionable over-limit metrics.
+   Keep the existing row and artifact caps as defense-in-depth. (M011-F07)
+
+6. **[medium · separate-recommended] Complete vault lifecycle integrity.**
+   Approve per-type retention, prune superseded rows/blobs safely, make
+   scheduled-artifact retention observable, and verify stored SHA-256 digests
+   during reconciliation and delivery. Quarantine or alert on mismatch.
+   (M011-F08, M011-F16)
+
+7. **[medium · separate-recommended] Expand entity-scoped document discovery.**
+   Publish a guarded resolver and UI contract for the supported business
+   entities, or explicitly narrow the module. Mount it on intended detail pages
+   and add wrong-entity/wrong-department/unsupported-entity tests. (M011-F06)
+
+8. **[medium · separate-recommended] Close verification gaps.** Add statement,
+   ImpEx, checksum-mutation, recipient/filter, delivery-failure, and
+   capability-matrix tests. Install/pin Chromium in the E2E environment and run
+   `spa/e2e/scheduled-exports.spec.ts` against the supported stack. (M011-F09)
+
+9. **[small · separate-recommended] Make the scheduled-export page
+   capability-aware.** Hide or disable “New schedule” for a schedule-list-only
+   role, or load a permitted module catalog and let the user choose a module.
+   Keep the backend module-permission check as the authority. (M011-F14)
+
+10. **[small · same-session-ok] Align SPA document types.** Add
+    `packing_list` and `commercial_invoice` to the frontend `DocumentType` union
+    and add a fixture/type contract check. (M011-F15)
+
+## Session gate
+
+Only 1 of 10 actions is `same-session-ok`; 9 are `separate-recommended`, and
+the total scope includes a large cross-module decision. The majority/small-scope
+gate is not met, so no action is being implemented now.
