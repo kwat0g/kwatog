@@ -1,13 +1,14 @@
 # M025 — Chart of accounts and accounting periods action plan
 
 Audit date: 2026-08-27
-Disposition: **Plan Ready**
-Claim: agent-b / `finance/chart-of-accounts-periods`
+Disposition: **📋 Plan Ready**
+Claim: batch2-agent-d / `finance/chart-of-accounts-periods`
 
 The financial, authority, permission, and cross-module items are
-`separate-recommended`. Only the two contained low-risk items below were safe
-to complete in this audit session. The module remains Plan Ready because the
-remaining work is not a small same-session change.
+`separate-recommended`. The two contained low-risk items below were completed
+in the preceding implementation session and rechecked by batch2-agent-d. The
+module remains 📋 Plan Ready because the remaining work is not a small
+same-session change.
 
 ## Ordered actions
 
@@ -122,5 +123,21 @@ remaining work is not a small same-session change.
 Do not implement the remaining actions in this claimed session. F-001, F-003,
 F-004, F-005, F-007, F-009, and F-010 are separate-recommended because they
 change financial classification, permissions, shared authority, period
-semantics, or database contracts. Leave M025 at Plan Ready and re-audit after
-those decisions and changes land.
+semantics, or database contracts. Leave M025 at 📋 Plan Ready and re-audit
+after those decisions and changes land.
+
+## Current re-audit gate — batch2-agent-d
+
+- Rechecked the active findings against current source, current git diff, file
+  mtimes, and the prior audit artifacts before trusting prior status.
+- Re-ran the focused backend suite on the isolated PostgreSQL database
+  `ogami_test_m025_agent_d`: **30 tests / 94 assertions passed**, with five
+  PHPUnit deprecations and no assertion failures.
+- Re-ran the scoped SPA checks: focused COA/period tests **7 tests passed**,
+  scoped ESLint passed, typecheck passed, and the production build passed.
+  Full SPA lint still has four unrelated errors outside M025.
+- No production source files were changed. The temporary
+  `api/phpunit-m025-agent-d.xml` was removed before handoff.
+- The gate therefore remains **📋 Plan Ready**: all seven active actions are
+  separate-recommended and the total scope is not small, so no same-session
+  fix is authorized.

@@ -1,7 +1,34 @@
 # M025 — chart-of-accounts-periods fix log
 
-Audit date: 2026-08-25  
-Final disposition: Needs Re-audit
+Audit date: 2026-08-27
+Final disposition: **📋 Plan Ready**
+
+## 2026-08-27 — batch2-agent-d re-audit
+
+- Claimed the preferred `finance / chart-of-accounts-periods` target
+  atomically as M025. The fallback M004 was not used.
+- Re-read the fresh registry, prior audit report/action plan/fix log, current
+  git diff, and relevant source mtimes before trusting the prior status. The
+  coordinator-owned `audit/00-MODULE-REGISTRY.md` diff was preserved.
+- No production source or test files were changed in this session. There are
+  no before/after fix entries to claim. Prior F-011 and F-012 fixes were
+  rechecked, not re-attributed.
+- `migrate:fresh --force` completed on the private PostgreSQL database
+  `ogami_test_m025_agent_d`.
+- Focused backend PHPUnit: **30 tests / 94 assertions passed** on that DB;
+  five PHPUnit deprecations were reported and no assertion failed.
+- SPA focused COA/period tests: **7 tests passed**. Scoped ESLint and SPA
+  typecheck passed. The production build passed with the existing Vite
+  dynamic-import warning. Full SPA lint reported four unrelated errors and no
+  out-of-scope file was edited.
+- `git diff --check` passed. The temporary
+  `api/phpunit-m025-agent-d.xml` created by the harness was removed and
+  verified absent; it was not committed.
+- Gate result: the active findings are medium/large and
+  `separate-recommended`, so no same-session fix was authorized. Final status
+  is **📋 Plan Ready** pending coordinated implementation and re-audit.
+
+## Historical sessions
 
 ## Session ownership
 
@@ -618,5 +645,3 @@ is a source-only claim: every line has actual test output in this log.
 - Verification: `php -l` passed and
   `AccountingPeriodDuplicateRecoveryTest` passed (1 test, 3 assertions) on
   `DB_DATABASE=ogami_test_m025_agent_b`.
-
-

@@ -5,5 +5,5 @@ tier: 2
 roles: system_admin, finance_officer
 depends_on: auth-session, rbac
 surface: M
-status: 🔁 Needs Re-audit
+status: 📋 Plan Ready
 last_session: 2026-08-27

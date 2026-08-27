@@ -6,9 +6,9 @@
 - Surface: M
 - Dependencies: auth-session, rbac
 - Roles: system admin, finance officer
-- Status: Plan Ready
-- Claimed by: agent-b
-- Test database: `ogami_test_m025_agent_b`
+- Status: 📋 Plan Ready
+- Claimed by: batch2-agent-d
+- Test database: `ogami_test_m025_agent_d`
 
 ## Scope and disposition
 
@@ -18,7 +18,8 @@ module has working HashID resources, transaction-backed hierarchy and period
 writes, decimal-string balances, active-account posting guards, and
 PostgreSQL period locking.
 
-Two small, contained issues were fixed and verified in this session:
+Two small, contained issues were fixed in the preceding implementation session
+and were rechecked here:
 
 - the COA create/edit forms now mirror the backend code/type/balance/name
   contract;
@@ -28,8 +29,9 @@ Two small, contained issues were fixed and verified in this session:
 The remaining findings include financial classification, cross-module posting,
 permission-boundary, import-authority, period-model, schema, and acceptance
 decisions. They are therefore left Plan Ready for separate implementation and
-re-audit. No production financial logic, shared configuration, registry file,
-dependency module, or M034 was changed.
+re-audit. This session changed only M025 audit artifacts; no production
+financial logic, shared configuration, registry file, dependency module, or
+M034 was changed.
 
 ## Pass 1 — Discovery
 
@@ -181,7 +183,11 @@ dependency module, or M034 was changed.
 - Impact: the API's manage-only and deactivate-only combinations pass their
   direct authorization tests, but a custom role holding only either grant
   cannot use the corresponding page workflow. The row component advertises a
-  status-only action that the real route cannot reach.
+  status-only action that the real route cannot reach. The always-visible
+  ledger link at `spa/src/pages/accounting/coa/index.tsx:273-281` also points
+  to a route requiring `accounting.journal.view` at
+  `spa/src/routes/accountingRoutes.tsx:54-55`, so a COA-view-only user can be
+  sent to a forbidden page.
 - Recommendation: choose explicitly whether view is a prerequisite for manage
   and status grants. If independent grants are required, provide a deliberate
   read/status workflow and matching API guard; otherwise make the implication
@@ -222,8 +228,14 @@ dependency module, or M034 was changed.
   There is no focused assertion for `AccountController::tree()`'s wrapped
   response at `api/app/Modules/Accounting/Controllers/AccountController.php:27-31`,
   nor a complete route-level matrix for show/create/tree, validation, parent
-  status policy, and resource fields. The SPA grant test only renders a row,
-  not `accountingRoutes` or the sidebar.
+  status policy, and resource fields. In particular, `AccountService::tree()`
+  does not eager-load `parent` at
+  `api/app/Modules/Accounting/Services/AccountService.php:49-52,114-122`,
+  while `AccountResource` emits `parent_id` and `parent_code` only when that
+  relation is loaded at
+  `api/app/Modules/Accounting/Resources/AccountResource.php:32-33`. The SPA
+  type requires `parent_id`, so the tree/resource contract is not asserted.
+  The SPA grant test only renders a row, not `accountingRoutes` or the sidebar.
 - Impact: a service regression can leave the HTTP response shape, HashID
   serialization, FormRequest boundary, or real page authorization broken while
   the current tests remain green. Import metadata and cross-module typed
@@ -343,7 +355,7 @@ dependency module, or M034 was changed.
   use the centralized typed policy; F-001 still records its collision and
   cross-module residuals.
 
-## Verification
+## Historical verification from prior sessions
 
 All backend assertions below used `DB_DATABASE=ogami_test_m025_agent_b` inside
 the API container; the shared `ogami_test` database was not used.
@@ -364,6 +376,95 @@ the API container; the shared `ogami_test` database was not used.
 - The backend suite still prints existing PHPUnit doc-comment metadata
   deprecation warnings in unrelated CRM, Dashboard, Return Management, and
   Supply Chain tests; no assertion failed.
+
+## Current re-audit — batch2-agent-d
+
+### Discovery
+
+- The fresh registry identified M025 as an unlocked `🔁 Needs Re-audit` module;
+  the atomic claim returned `CLAIMED`. The fallback M004 was not attempted.
+- Before this session's audit-document edits, the only worktree change was the
+  coordinator-owned `audit/00-MODULE-REGISTRY.md`. Current source mtimes and
+  the existing report/action plan/fix log were inspected before relying on
+  prior status. The registry remains unmodified.
+- The current route/service boundary still separates COA view, metadata
+  management, status, and period-management permissions at
+  `api/app/Modules/Accounting/routes.php:20-39`, while the SPA route guards are
+  split at `spa/src/routes/accountingRoutes.tsx:47-55`.
+
+### Hardening
+
+The active findings remain classified as follows:
+
+- **F-001 — Broken, large, separate-recommended:** configured GL role
+  resolution can silently accept a conflicting code assignment through the
+  first `match` arm at
+  `api/app/Modules/Accounting/Services/AccountingAccountPolicyService.php:46-55`;
+  cross-module raw configured lookups remain outside this module boundary.
+- **F-003 — Incomplete, medium, separate-recommended:** the importer accepts
+  `is_active` at `api/app/Modules/Accounting/Imports/AccountImporter.php:64-75`,
+  but shared metadata omits it at
+  `api/app/Common/Services/Import/MasterDataImportService.php:57-74`, and the
+  import authority is not aligned with COA status authority at
+  `api/app/Modules/Admin/routes.php:193-205`.
+- **F-004 — Incomplete, medium, separate-recommended:** independent COA
+  grants do not yet provide a reachable end-to-end SPA workflow; manage-only
+  edit still fetches a view-protected account and the ledger link can target a
+  journal-view-protected route (`spa/src/pages/accounting/coa/edit.tsx:29-32`,
+  `spa/src/pages/accounting/coa/index.tsx:273-281`).
+- **F-005 — Incomplete, medium, separate-recommended:** service posting treats
+  absent rows as open at
+  `api/app/Modules/Accounting/Services/AccountingPeriodService.php:189-210`,
+  but the SPA Open filter renders persisted rows only at
+  `spa/src/pages/accounting/periods.tsx:84-100,117-186`.
+- **F-007 — Missing, large, separate-recommended:** focused service and
+  isolated row tests do not prove the HTTP/resource/real-route contract;
+  `AccountResource` conditionally omits parent fields unless `parent` is
+  eager-loaded at
+  `api/app/Modules/Accounting/Resources/AccountResource.php:32-33`, while
+  `AccountService::tree()` does not load that relation at
+  `api/app/Modules/Accounting/Services/AccountService.php:49-52`.
+- **F-009 — Incomplete, medium, separate-recommended:** internal period calls
+  can bypass the HTTP year/reason contract; the service checks only month at
+  `api/app/Modules/Accounting/Services/AccountingPeriodService.php:52-57,213-223`.
+- **F-010 — Missing, medium, separate-recommended:** enum-backed account
+  columns remain unconstrained strings in
+  `api/database/migrations/0038_create_accounts_table.php:20-32`; the current
+  lifecycle checks cover period status, not account type or normal balance, at
+  `api/database/migrations/2026_08_13_220000_add_remaining_lifecycle_status_checks.php:20-25`.
+
+### Polish and regression recheck
+
+- **F-011 — Incomplete, fixed + verified:** the create/edit form contract now
+  matches backend validation at
+  `spa/src/pages/accounting/coa/create.tsx:21-37` and
+  `spa/src/pages/accounting/coa/edit.tsx:18-21`.
+- **F-012 — Incomplete, fixed + verified:** the duplicate-period test resets
+  migration state after committed fixtures at
+  `api/tests/Feature/Accounting/AccountingPeriodDuplicateRecoveryTest.php:31-35`.
+
+### Current verification
+
+- `migrate:fresh --force` completed on the private PostgreSQL database
+  `ogami_test_m025_agent_d`.
+- The focused backend PHPUnit command ran against that database and passed
+  **30 tests / 94 assertions**. PHPUnit reported five existing deprecations;
+  no assertion failed.
+- SPA focused tests passed **2 files / 7 tests**. Scoped ESLint passed and the
+  SPA typecheck passed. The production build passed; Vite emitted its existing
+  dynamic-import `NotFound` warning.
+- Full SPA lint reported four errors in unrelated
+  `useChainProgress.tsx`, journal-entry edit, and quality-inspection create
+  files; these were not changed because they are outside M025.
+- `git diff --check` passed for the module artifacts. The temporary
+  `api/phpunit-m025-agent-d.xml` harness file is absent and is not tracked.
+
+### Gate decision
+
+The remaining plan is not small and its active items are all
+`separate-recommended`; the majority is not `same-session-ok`. No source fix
+was authorized by the gate. M025 remains **📋 Plan Ready** for coordinated
+implementation and re-audit.
 
 ## Decisions and deferred work
 
