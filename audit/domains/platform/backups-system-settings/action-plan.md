@@ -1,96 +1,98 @@
 # M012 — backups & system settings action plan
 
-Audit date: 2026-08-24  
-Disposition: Plan Ready
+Audit date: 2026-08-27
+Disposition: 📋 Plan Ready
 
-No production source fixes were applied. Restore safety, queue admission,
-artifact identity, production image compatibility, and settings governance
-cross the API, queue, database, Redis, filesystem, deployment, and operator
-surfaces.
+No production source fixes were applied in this re-audit. The current plan
+contains two small same-session-ok polish/governance items, but most work is
+cross-process recovery design or external evidence. The gate therefore does
+not permit implementation in this session.
 
 ## Ordered work
 
-1. **Make the production maintenance gate real — F-001**
+1. **Make restore failure and gate release fail-safe — F-003, F-011**
    - Scope: [large]
    - Session recommendation: [separate-recommended]
-   - Choose a shared cache/edge/drain design that survives a database restore,
-     stop or pause all writers/consumers, and prove every API process observes
-     the gate before DB replacement.
+   - Define automatic versus operator-led rollback, keep the shared maintenance
+     gate and queue held after rollback failure, check `up`/resume postconditions,
+     and cover DB, migration, files, worker-death, and failed-release paths.
 
-2. **Pin and prove the backup runtime — F-002, F-007**
+2. **Publish coherent backup pairs — F-006**
    - Scope: [large]
    - Session recommendation: [separate-recommended]
-   - Pin the production PostgreSQL client to 16, add an image smoke check, and
-     run the real scheduler/queue image against PostgreSQL 16. Retain the
-     production-like restore evidence and make the release gate truthful.
+   - Stage database and private-file artifacts per run, validate/upload both,
+     commit one manifest with pair identity and checksums, and quarantine
+     incomplete publications.
 
-3. **Define the restore state machine and rollback contract — F-003**
-   - Scope: [large]
-   - Session recommendation: [separate-recommended]
-   - Decide automatic rollback versus durable partial/rollback-required
-     recovery. Cover DB restore, migration failure, private-file failure,
-     worker death, maintenance-gate failure, health checks, and DB-only scope.
-
-4. **Build durable operation admission and recovery — F-004**
+3. **Fence operation leases and stale reconciliation — F-012**
    - Scope: [medium/large]
    - Session recommendation: [separate-recommended]
-   - Add an atomic singleton/idempotency boundary, shared bounded lock/lease,
-     heartbeats, stale reconciliation, after-commit/outbox dispatch, and
-     explicit retry/unblock behavior. Add PostgreSQL interleaving tests.
+   - Implement conditional lease claims/heartbeats/reaper updates using the
+     observed token, make queued-to-running one-shot, reject stale worker
+     writes, and add interleaving/replay tests.
 
-5. **Introduce committed backup manifests and integrity preflight — F-005, F-006**
-   - Scope: [medium/large]
-   - Session recommendation: [separate-recommended]
-   - Stage DB/files artifacts, validate both, publish one manifest, upload and
-     verify both remote objects, enforce size/checksum/kind at restore, and
-     quarantine incomplete pairs. Select manifests/IDs rather than free names.
-
-6. **Harden settings governance and auditability — F-008**
+4. **Make dispatch durable — F-004**
    - Scope: [medium]
    - Session recommendation: [separate-recommended]
-   - Replace permissive fallback validation with a catalog/schema, reject
-     unknown keys, add old/new immutable audit events and actor/correlation
-     metadata, and test security/module/financial setting boundaries.
+   - Add an outbox or idempotent dispatcher, bounded retry/receipt state, and
+     an operator-visible retry/unblock path for post-commit queue failures.
 
-7. **Repair recovery catalog and UI semantics — F-009**
+5. **Enforce committed manifest schema at every restore entry point — F-010**
    - Scope: [medium]
+   - Session recommendation: [separate-recommended]
+   - Require committed versioned manifests with complete kind/size/checksum/
+     remote-key identity for ID and filename resolution; reject or explicitly
+     migrate legacy completed rows; add the missing regression test.
+
+6. **Run target-like production recovery evidence — F-007**
+   - Scope: [large]
+   - Session recommendation: [separate-recommended]
+   - Use the built production image and isolated staging to prove API gate,
+     queue, scheduler, local/off-site artifacts, uploads, migration, rollback,
+     health, audit, timestamps, checksums, and RTO. Retain the signed log.
+
+7. **Require and transmit settings change reasons — F-013**
+   - Scope: [small]
    - Session recommendation: [same-session-ok]
-   - Add cursor pagination, local/remote/missing/checksum state, committed
-     manifest selection, and honest labels distinguishing archive validation
-     from a restore-tested recovery point.
+   - Add a reason field/validation to the admin editor, send it to the API, and
+     preserve the existing immutable audit record and redaction behavior.
 
-8. **Build the M012 acceptance suite**
+8. **Correct UI success/posture state — F-014**
+   - Scope: [small]
+   - Session recommendation: [same-session-ok]
+   - Set “Saved” only after mutation success, handle failed saves visibly, and
+     derive the recovery icon from the posture state.
+
+9. **Build the M012 acceptance suite**
    - Scope: [large]
    - Session recommendation: [separate-recommended]
-   - Cover multi-container maintenance, client/server version compatibility,
-     concurrent admission, stale worker recovery, remote head/checksum
-     failures, atomic pair publication, DB/file rollback, settings audit, and
-     the complete staging drill.
+   - Cover manifest compatibility, dispatch failure, lease interleavings,
+     pair publication, failed gate release, DB/file rollback, off-site
+     retrieval, settings reason/audit, SPA error states, and the full staging
+     drill.
 
 ## Re-audit acceptance gates
 
-- A restore blocks the live API and all writers before any destructive DB
-  action, and every process shares the same gate.
-- The actual production image publishes a valid PostgreSQL-16 dump and a
-  paired private-file archive through the scheduled path.
-- Any post-drop failure produces either an automatic verified rollback or a
-  durable, operator-visible rollback-required state with tested recovery.
-- At most one operation owns the backup/restore lease; crashed workers are
-  reclaimed safely and do not permanently block the surface.
-- Restore bytes match a committed manifest's checksum/size/kind, including
-  off-site objects; missing remote objects fail before maintenance.
-- Settings edits are catalog-valid, permission-appropriate, cache-consistent,
-  and immutably auditable.
-- The UI exposes all committed local/remote recovery points with availability
-  and integrity state, and never calls an archive restore-tested without
-  evidence.
+- Every API instance and writer observes the same maintenance gate before
+  destructive restore work, and a failed release cannot resume traffic.
+- A full backup publishes one committed database/private-file recovery point;
+  incomplete pairs are not restorable or presented as coherent snapshots.
+- Restore admission accepts only complete committed manifests and verifies
+  local/off-site bytes against their recorded identity before maintenance.
+- At most one worker owns a fenced operation lease; stale/replayed workers
+  cannot overwrite a newer owner or perform concurrent destructive work.
+- A post-commit dispatch failure is retried or operator-recoverable without a
+  permanently held singleton lock.
+- Settings edits are catalog-valid, permission-appropriate, reasoned, cached
+  consistently, and immutably auditable.
+- The UI does not display success or a green recovery posture when the server
+  reports an error, warning, or no restorable snapshot.
 - A retained target-like drill proves authenticated API, queue, scheduler,
-  uploads, migrations, rollback, and post-restore health.
+  uploads, migrations, rollback, audit, and post-restore health.
 
 ## Session decision
 
-Do not apply fixes in this audit session. F-001 through F-007 are release-
-impacting or cross-process recovery work; F-008 requires a settings governance
-decision; and F-009 depends on the manifest/catalog contract. The one small
-UI/catalog item is not a majority of safe same-session work. Keep M012 at Plan
-Ready and schedule an implementation pass followed by a fresh audit.
+Do not apply fixes in this audit session. Only F-013 and F-014 are tagged
+same-session-ok; the plan is neither a majority same-session-ok plan nor small
+in total scope. Keep M012 at 📋 Plan Ready, commit only the module audit
+artifacts, and schedule implementation plus a fresh re-audit.
