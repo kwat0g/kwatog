@@ -313,16 +313,21 @@ dedicated databases:
 | start (2026-08-26 morning) | 105 failed / 2268 passed |
 | after the first 8 modules | 65 failed / 2321 passed |
 | after wave 1 (4 agents) | 23 failed / 2420 passed |
-| after wave 2 (4 agents) | **4 failed / 2445 passed** |
+| after wave 2 (4 agents) | 4 failed / 2445 passed |
+| **final (wave 3)** | **3 failed / 2452 passed** (11,709 assertions) |
 
-**Three of the four remaining failures are your decisions above, deliberately left
-red because each is a true statement about production:**
-- `AccountsPayableHardeningTest` → decision 4
-- `EmployeeTrainingAssignTest` → decision 8
-- `PayrollMoneyFindingsRegressionTest` → decision 12
+**All three remaining failures are your decisions above.** Nothing else is red. Each
+is deliberately left failing because it is a true statement about production, and
+making it green would mean either conceding the defect or weakening the assertion:
 
-The fourth (`AssetDepreciationCommandTest`) was still being worked when this was
-written; see the git log for its outcome.
+- `AccountsPayableHardeningTest::test_supplier_resource_does_not_expose_internal_ap_controls`
+  → decision 4
+- `EmployeeTrainingAssignTest::test_training_lifecycle_rejects_recompletion_and_cancelling_completed_record`
+  → decision 8
+- `PayrollMoneyFindingsRegressionTest::test_p02_01_payroll_je_has_actor_and_audit_row`
+  → decision 12
+
+Decide those three and the suite goes green. Nothing else is in the way.
 
 ### Modules audited
 
