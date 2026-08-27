@@ -1,16 +1,38 @@
 # M031 — Fixed Assets & Depreciation audit report
 
-Audit date: 2026-08-24  
+Initial audit date: 2026-08-24
+Re-audit date: 2026-08-27
 Claim: `finance / fixed-assets-depreciation`  
 Registry tier: 2  
 Dependency exception: the remaining `Not Started` graph has no strict
 topological frontier; M028 is locked by another session and the remaining
 finance/procurement/operations modules form a cycle. M031 was selected as the
 first unlocked Tier-2 exception. Dependencies were read for context only.  
-Recommended status: `📋 Plan Ready`  
+Current recommended status: `📋 Plan Ready`
 Session recommendation: `separate-recommended`
 
-## Verdict
+## Current re-audit verdict
+
+The current checkout is backend-executable and the existing module suite is
+green: **24 tests / 115 assertions** on the private database
+`ogami_test_m031_agent_b`. The SPA toolchain also passes its current checks:
+**41 test files / 282 tests**, typecheck, and scoped ESLint. No asset-specific
+browser test exists, so source-level SPA fixes are not promoted to browser-
+verified status.
+
+Release is still not financially verified. The current code reproduces a P0
+disposal-month reconciliation defect: disposing an asset mid-month and then
+running that month's depreciation leaves a non-zero accumulated-depreciation
+credit in the GL. The live restore route also cannot bind a soft-deleted asset.
+Salvage values are not bounded by acquisition cost, and automated journal maker
+attribution is intentionally discarded at the Accounting boundary. F06/F11
+remain product-scope decisions. The gate is therefore `📋 Plan Ready`; no
+production code is changed in this re-audit.
+
+The original finding text below records the pre-fix state. The current states,
+new evidence, and open work are in the re-audit section at the end.
+
+## Initial audit verdict (2026-08-24)
 
 Production-readiness score: **45/100 — blocked for an unqualified financial
 release**.
@@ -25,7 +47,7 @@ transfer implementation is disconnected from its live HTTP/UI surface while
 still lacking an authoritative asset lock. The report is intentionally a plan
 handoff; no production code was changed in this session.
 
-## Discovery
+## Initial discovery (2026-08-24)
 
 ### Implemented surface
 
@@ -59,13 +81,13 @@ handoff; no production code was changed in this session.
 - Asset permissions are seeded separately for register, disposal, depreciation,
   and transfer actions: `api/database/seeders/RolePermissionSeeder.php:344-367`.
 
-## Findings
+## Initial findings and historical fix notes
 
 ### M031-F01 — Broken: asset financial calculations use binary floats instead of Money/centavos
 
-Priority: **P0**  
-Classification: **Broken**  
-Scope: **large**  
+Priority: **P0**
+Classification: **Broken**
+Scope: **large**
 Session recommendation: **separate-recommended**
 
 `Asset::getMonthlyDepreciationAttribute()` converts acquisition cost, salvage,
@@ -152,9 +174,9 @@ depreciation/disposal and schedule edit versus depreciation.
 
 ### M031-F04 — Incomplete: disposal date, proceeds, and reason lack a complete audit contract
 
-Priority: **P1**  
-Classification: **Incomplete**  
-Scope: **medium**  
+Priority: **P1**
+Classification: **Incomplete**
+Scope: **medium**
 Session recommendation: **separate-recommended**
 
 `DisposeAssetRequest` accepts any date and an optional `remarks` value
@@ -378,3 +400,148 @@ timeline and role-specific flows if the answer is yes.
 Next action: a dedicated fixed-assets financial-hardening session should
 implement F01-F04 with Money/period/accounting decisions and verify them against
 a live PostgreSQL test service before any `✅ Verified` status is considered.
+
+## Re-audit evidence and current findings — 2026-08-27
+
+### Verification performed
+
+- Current module diff: no M031 implementation or test changes are uncommitted;
+  the only pre-existing working-tree change is the coordinator's generated
+  registry timestamp in `audit/00-MODULE-REGISTRY.md`, which was not edited.
+- Backend: `vendor/bin/phpunit --no-configuration --bootstrap
+  vendor/autoload.php tests/Feature/Assets tests/Unit/Assets` → **24 passed,
+  115 assertions**, with `DB_DATABASE=ogami_test_m031_agent_b`.
+- Backend static checks: PHP lint passed for the Assets module and depreciation
+  commands; PHPStan reported `[OK] No errors`.
+- `php artisan route:list --path=assets` shows **9 live routes**, including
+  restore and no transfer route.
+- SPA: `npm run test:run` → **41 files / 282 tests passed**; `npm run
+  typecheck` and scoped ESLint for M031 sources passed. There is no
+  asset-specific browser/E2E test.
+- Pint remains non-green on the inherited module style baseline (**27 files,
+  20 issues**); no source was reformatted during this audit.
+
+### Current finding state
+
+| Finding | Classification | Current state |
+|---|---|---|
+| F01 money/centavo arithmetic | Broken | Fixed and verified by execution |
+| F02 period/order/retry identity | Broken | Fixed and verified by execution |
+| F03 lifecycle locking/immutability | Broken | Fixed and verified by execution |
+| F04 disposal date/reason contract | Incomplete | Fixed and verified; F13 closed the zero-line edge case |
+| F05 transfer custody race | Broken | Fixed and verified in service tests; surface remains hidden |
+| F06 transfer live surface | Missing | Deferred product decision |
+| F07 permission gates | Incomplete | Source aligned; role/browser acceptance is still missing |
+| F08 API/UI field contract | Incomplete | Backend/source aligned; browser/contract acceptance is still missing |
+| F09 QR rendering | Broken | Source fixed; browser acceptance is still missing |
+| F10 January/recovery UX | Polish | Source fixed; browser acceptance is still missing |
+| F11 acquisition/maintenance linkage | Missing | Deferred product decision |
+| F13 zero-proceeds disposal | Broken | Fixed and verified |
+| F14 HashID depreciation filter | Broken | Fixed and verified |
+| F15 disposal-month GL reconciliation | Broken | Open P0; measured below |
+| F16 automated journal maker attribution | Incomplete | Open cross-module decision; not fixed here |
+| F17 soft-deleted asset restore binding | Broken | Open P1; reproduced below |
+| F18 salvage value exceeds asset cost | Broken | Open P1 validation gap |
+| F19 documented QR label-sheet workflow | Missing | Open P2 product/documentation gap |
+
+### M031-F15 — Broken: disposal-month depreciation leaves the GL and register unreconciled
+
+Priority: **P0**
+Classification: **Broken**
+Scope: **large**
+Session recommendation: **separate-recommended**
+
+The monthly runner deliberately includes a disposed asset when
+`disposed_date >= periodStart` (`api/app/Modules/Assets/Services/DepreciationService.php:184-199`),
+while disposal reverses only the accumulated depreciation present at the time
+of disposal (`api/app/Modules/Assets/Services/AssetService.php:163-166,187-189`).
+On PostgreSQL, a ₱12,000 asset acquired 2026-01-01 and disposed for zero on
+2026-06-15 produced ₱1,200 accumulated in the register, but the disposal JE
+reversed ₱1,000 and the later June depreciation JE credited ₱200. The
+accumulated-depreciation account therefore retained a ₱200 credit for an asset
+already removed from PPE. Disposing after the June run instead reports a
+₱10,800 loss, so the reported result depends on operator/cron order.
+
+The supported disposal/acquisition-month policy must be chosen before code is
+changed: depreciate through the disposal month, exclude it, or make disposal
+reverse the full scheduled month. Then assert the disposed asset's contra
+account nets to zero and the register/GL loss agrees for both operation orders.
+
+### M031-F16 — Incomplete: automated journal maker attribution is discarded
+
+Priority: **P1**
+Classification: **Incomplete**
+Scope: **medium**
+Session recommendation: **separate-recommended**
+
+`DepreciationService` resolves an actor and passes it to the journal boundary
+(`api/app/Modules/Assets/Services/DepreciationService.php:103-110`), and disposal
+does the same (`api/app/Modules/Assets/Services/AssetService.php:209-216`).
+`JournalEntryService::create()` deliberately sets `created_by` to null for any
+source-linked entry (`api/app/Modules/Accounting/Services/JournalEntryService.php:126-140`).
+The current probe measured `created_by = NULL` and `posted_by = 1` for an actor
+1 depreciation/disposal path, so unattended financial postings cannot identify
+their maker. This is the shared Accounting decision #12 recorded in
+`audit/OVERNIGHT-2026-08-27.md:152-174`; it is a dependency blocker and is not
+modified in this module audit.
+
+### M031-F17 — Broken: the live restore endpoint cannot bind a soft-deleted asset
+
+Priority: **P1**
+Classification: **Broken**
+Scope: **small**
+Session recommendation: **same-session-ok**
+
+The route exposes `PATCH /assets/{asset}/restore` without `withTrashed()`
+(`api/app/Modules/Assets/routes.php:14-24`). `Asset` uses `SoftDeletes`
+(`api/app/Modules/Assets/Models/Asset.php:19-24`), and its default hash route
+binding queries without trashed rows (`api/app/Common/Traits/HasHashId.php:23-42`);
+only the separate `resolveSoftDeletableRouteBinding()` path includes them
+(`HasHashId.php:46-68`). A private-database probe soft-deleted an asset, then
+the default binding raised `ModelNotFoundException`, while the soft-deletable
+binding found it. The advertised restore operation is therefore unreachable
+for every deleted asset. Add route opt-in and a focused HTTP test in a future
+small implementation session.
+
+### M031-F18 — Broken: salvage value is not bounded by acquisition cost
+
+Priority: **P1**
+Classification: **Broken**
+Scope: **medium**
+Session recommendation: **separate-recommended**
+
+Both create and update validate salvage as a non-negative decimal but never
+compare it with acquisition cost (`api/app/Modules/Assets/Requests/StoreAssetRequest.php:36-40`,
+`api/app/Modules/Assets/Requests/UpdateAssetRequest.php:27-35`). The service
+also accepts the values without a business-rule guard
+(`api/app/Modules/Assets/Services/AssetService.php:57-76,82-120`). The model
+then clamps depreciable value to zero (`api/app/Modules/Assets/Models/Asset.php:79-82`),
+leaving a register whose salvage value exceeds its cost and whose schedule
+silently posts no depreciation. Define the invariant, enforce it on create and
+pre-history updates, and cover zero-cost, equal, greater-than-cost, and
+post-history cases.
+
+### M031-F19 — Missing: documented multi-row QR label workflow is absent
+
+Priority: **P2**
+Classification: **Missing**
+Scope: **medium**
+Session recommendation: **separate-recommended**
+
+The user manual promises **Print QR Labels** from a multi-row selection on the
+assets list (`docs/USER-MANUAL.md:251-254`). The live list has no selection or
+print action (`spa/src/pages/assets/index.tsx:44-54,71-123`); only the detail
+page's per-asset generated image exists (`spa/src/pages/assets/detail.tsx:217-245`).
+Either remove/update the documented promise or implement a permission-gated
+batch label workflow and browser coverage. This is separate from F09, which
+concerns the correctness of the existing detail QR.
+
+### Gate decision and next action
+
+The current plan has one `same-session-ok` item (F17) and the rest are
+`separate-recommended`; its total scope is not small. Per the audit gate, no
+production fix is applied. Release M031 as `📋 Plan Ready` and schedule a
+financial-hardening session for F15/F18, a shared Accounting decision for F16,
+and product decisions for F06/F11 before any transfer or maintenance surface is
+re-enabled. Browser acceptance for F07–F10 and the F19 QR-label decision remain
+required.

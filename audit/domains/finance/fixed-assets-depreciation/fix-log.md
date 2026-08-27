@@ -518,3 +518,27 @@ they are reported rather than changed.
   pending a product decision on cross-module asset, custodian, and maintenance
   ownership. Both are human-input blockers, so the module remains
   `🔁 Needs Re-audit`.
+
+## Re-audit verification — 2026-08-27
+
+- No production or test code was changed in this re-audit. The current module
+  diff is empty; the only working-tree change outside this module is the
+  coordinator's generated registry timestamp.
+- Backend execution on `DB_DATABASE=ogami_test_m031_agent_b` passed:
+  `tests/Feature/Assets tests/Unit/Assets` → **24 tests, 115 assertions**.
+  PHP lint and PHPStan also passed. Pint still reports the inherited module
+  baseline (27 files, 20 issues); it was not reformatted here.
+- SPA execution passed: `npm run test:run` → **41 files, 282 tests**;
+  `npm run typecheck` and scoped ESLint passed. No M031 browser/E2E test is
+  present, so F07–F10 remain browser-unverified.
+- The current disposal-month probe reproduced the open P0 decision: after
+  five prior months, disposing a ₱12,000 asset on 2026-06-15 for zero and then
+  running June leaves asset accumulated depreciation at `1200.00` while the
+  accumulated-depreciation account has net `-200.00` (account 1410).
+- The restore probe soft-deleted an asset and showed default hash binding raises
+  `ModelNotFoundException`, while `resolveSoftDeletableRouteBinding()` finds
+  it. The live route does not opt into trashed binding.
+- No fixes were applied because the ordered plan is majority
+  `separate-recommended` and exceeds the small-scope gate. Open work is
+  classified as F15 Broken, F16 Incomplete, F17 Broken, F18 Broken, and F19
+  Missing in `audit-report.md`.

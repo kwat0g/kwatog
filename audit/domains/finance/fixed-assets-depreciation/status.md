@@ -5,5 +5,5 @@ tier: 2
 roles: system_admin, finance_officer, production_manager, ppc_head, maintenance_tech
 depends_on: chart-of-accounts-periods, journal-ledger, employee-master, maintenance-machine-health
 surface: M
-status: 🔁 Needs Re-audit — backend verified by execution (24 Assets tests green); pending: D-M031-1 disposal-month ledger reconciliation (P0 money decision), D-M031-2 = overnight decision #12 (JE created_by), F06/F11 product decisions, F07/F09/F10 + SPA half of F08 unverifiable while spa/node_modules is root-owned
+status: 📋 Plan Ready — re-audit executed; 24 backend tests and 282 SPA tests green; open P0 disposal-month reconciliation, journal maker attribution, restore/salvage controls, F06/F11 decisions, browser acceptance, and QR-label workflow
 last_session: 2026-08-27
