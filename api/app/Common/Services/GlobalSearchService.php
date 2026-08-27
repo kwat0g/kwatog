@@ -113,11 +113,12 @@ class GlobalSearchService
                 ->leftJoin('departments', 'departments.id', '=', 'employees.department_id')
                 ->leftJoin('positions', 'positions.id', '=', 'employees.position_id')
                 ->select('employees.id', 'employees.employee_no', 'employees.first_name',
-                    'employees.last_name', 'employees.status',
+                    'employees.middle_name', 'employees.last_name', 'employees.status',
                     'departments.name as department_name', 'positions.title as position_title')
                 ->where(fn ($w) => $w
                     ->where('employees.employee_no', $like, $term)
                     ->orWhere('employees.first_name', $like, $term)
+                    ->orWhere('employees.middle_name', $like, $term)
                     ->orWhere('employees.last_name',  $like, $term));
 
             // The employee list's row scope, verbatim (EmployeeService::baseQuery).
@@ -134,7 +135,9 @@ class GlobalSearchService
                 selfId: $user->employee_id,
             );
 
-            $rows = $this->rank($q, 'employees.employee_no', 'employees.last_name', $raw)
+            $rows = $this->rank($q, 'employees.employee_no', [
+                'employees.last_name', 'employees.middle_name',
+            ], $raw)
                 ->limit($perGroup)->get();
 
             $groups[] = $this->wrap('Employees', 'employee', $rows->map(fn ($r) => [
@@ -412,14 +415,14 @@ class GlobalSearchService
      * prefix, 4 plain substring. Ties break on the identifier then the primary
      * key, so the window is stable across calls.
      *
-     * $idColumn/$nameColumn are code constants, never user input; the term is
+     * $idColumn/$nameColumns are code constants, never user input; the term is
      * bound. A NULL column yields NULL from `ILIKE`, which is not true, so it
      * falls through to the next arm and lands on ELSE.
      *
      * @param  Builder<*>  $q
      * @return Builder<*>
      */
-    private function rank(Builder $q, string $idColumn, ?string $nameColumn, string $raw): Builder
+    private function rank(Builder $q, string $idColumn, string|array|null $nameColumns, string $raw): Builder
     {
         $like   = SearchOperator::like();
         $exact  = SearchOperator::exact($raw);
@@ -427,11 +430,16 @@ class GlobalSearchService
 
         $arms     = ["WHEN {$idColumn} {$like} ? THEN 0", "WHEN {$idColumn} {$like} ? THEN 1"];
         $bindings = [$exact, $prefix];
+        $nameColumns = $nameColumns === null
+            ? []
+            : (is_array($nameColumns) ? $nameColumns : [$nameColumns]);
 
-        if ($nameColumn !== null) {
-            $arms[]     = "WHEN {$nameColumn} {$like} ? THEN 2";
-            $arms[]     = "WHEN {$nameColumn} {$like} ? THEN 3";
+        foreach ($nameColumns as $nameColumn) {
+            $arms[] = "WHEN {$nameColumn} {$like} ? THEN 2";
             $bindings[] = $exact;
+        }
+        foreach ($nameColumns as $nameColumn) {
+            $arms[] = "WHEN {$nameColumn} {$like} ? THEN 3";
             $bindings[] = $prefix;
         }
 

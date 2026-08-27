@@ -302,3 +302,24 @@ file says so explicitly rather than asserting a fabricated width.
 | `spa/src/stores/recentItemsStore.ts` | M — envelope schema fix, `ownerId` + `claim()`, auth subscription, threat-model comment |
 | `spa/src/stores/recentItemsStore.test.ts` | A — 6 tests |
 | `docs/USER-MANUAL.md` | M — global-search bullet: mobile trigger, literal matching, row scope, no archived records |
+
+## Fix session: 2026-08-27 — M009-F11
+
+Claimed `platform / global-search` atomically with `audit/scripts/claim-module.sh`.
+
+### M009-F11 — employee middle-name search
+
+- `api/app/Common/Services/GlobalSearchService.php` now selects and matches the qualified `employees.middle_name` column with the existing case-insensitive `SearchOperator::contains()` term, leaving the employee row scope and result mapping unchanged.
+- The relevance helper now accepts the existing name input plus `employees.middle_name`; its identifier/name ranking tiers, binding-based literal matching, and per-group limit remain intact.
+- `api/tests/Feature/Admin/GlobalSearchTest.php` adds a middle-name-only fixture with five substring decoys. The lower-case query must return the exact middle-name fixture first, within the existing five-row window, with the existing hash ID, label, URL, and no new `middle_name` response field.
+- Red/green evidence: the regression first returned zero items before the source change, then passed after the fix.
+
+### Focused verification
+
+- `DB_DATABASE=ogami_test_m009_impl` — `php artisan test tests/Feature/Admin/GlobalSearchTest.php --no-coverage`: **PASS — 21 tests, 86 assertions**.
+- PHP lint for the changed service and focused test: **PASS**.
+- `git diff --check`: **PASS**.
+- No SPA files changed; no SPA checks were run.
+
+F09, F10, F12, F13, F14, F15, and F16 remain open and out of scope. Release status is
+`🔁 Needs Re-audit`.

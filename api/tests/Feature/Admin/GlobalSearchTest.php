@@ -146,6 +146,41 @@ class GlobalSearchTest extends TestCase
         $this->assertCount(2, $labels);
     }
 
+    public function test_employee_search_matches_and_ranks_a_middle_name_only_fixture(): void
+    {
+        $admin = $this->admin();
+
+        // These decoys match only through a middle-name substring. Their
+        // employee numbers sort before the exact fixture, so relevance must
+        // promote the exact middle-name match into the five-row window.
+        foreach (range(1, 5) as $i) {
+            Employee::factory()->create([
+                'employee_no' => sprintf('OGM-90000%d', $i),
+                'first_name'  => "Decoy{$i}",
+                'middle_name' => "Nakamura {$i}",
+                'last_name'   => "Person{$i}",
+            ]);
+        }
+
+        $target = Employee::factory()->create([
+            'employee_no' => 'OGM-999999',
+            'first_name'  => 'Aiko',
+            'middle_name' => 'Nakamura',
+            'last_name'   => 'Target',
+        ]);
+
+        $items = $this->itemsFor(
+            $this->actingAs($admin)->getJson('/api/v1/search?q=nakamura')->assertOk()->json('data'),
+            'employee',
+        );
+
+        $this->assertCount(5, $items);
+        $this->assertSame($target->hash_id, $items[0]['id']);
+        $this->assertSame('Aiko Target', $items[0]['label']);
+        $this->assertSame('/hr/employees/'.$target->hash_id, $items[0]['url']);
+        $this->assertArrayNotHasKey('middle_name', $items[0]);
+    }
+
     public function test_department_head_cannot_search_purchase_orders_outside_their_scope(): void
     {
         $own   = Department::factory()->create();
