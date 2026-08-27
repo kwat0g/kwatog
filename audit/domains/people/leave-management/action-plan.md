@@ -1,35 +1,41 @@
-# M019 — People / Leave Management action plan
+# M019 — Leave Management Action Plan
 
-Status: 📋 Plan Ready  
-Audit date: 2026-08-24  
-Overall recommendation: separate-recommended
+Audit date: 2026-08-27
+Owner: people/leave-management
+Status: 📋 Plan Ready
+Database for verification: ogami_test_m019_agent_a
 
-## Ordered work
+## Gate decision
 
-| Priority | Finding | Scope | Session recommendation | Deliverable / acceptance evidence |
-|---|---|---|---|---|
-| P0 | M019-F01 decision department scope | medium | separate-recommended | HR/system-admin all-record policy and same-department department-head policy apply inside single/bulk approve/reject transactions; cross-department API tests fail closed. |
-| P0 | M019-F02 cancellation authorization | small-to-medium | separate-recommended | Owner-only self-service cancellation plus explicit HR/admin override; pending/approved cross-employee denial and audit actor tests pass. |
-| P0 | M019-F03 locked-payroll attendance mutability | medium | separate-recommended | Leave approval/cancel uses the authoritative finalized/disbursed/voided date guard; no locked attendance/balance side effect occurs. |
-| P1 | M019-F04 half-day and attendance rollback | medium | separate-recommended | AM/PM leave changes only the intended attendance representation; cancellation restores prior DTR lineage and never deletes unrelated punches. |
-| P1 | M019-F05 rollover retry idempotency | small-to-medium | separate-recommended | Rerunning January rollover after target-year consumption preserves used/remaining and carried days; concurrent/retry tests pass. |
-| P1 | M019-F06 cross-year balance allocation | small-to-medium | separate-recommended | Cross-year requests are rejected or split into year-specific balance allocations with approval/cancel symmetry. |
-| P1 | M019-F07 required documents | medium | separate-recommended | Required types cannot submit/approve without a server-owned attachment; storage authorization, retention, and SPA upload tests pass. |
-| P1 | M019-F08 active type/balance invariant | small-to-medium | separate-recommended | Inactive types and missing balance rows fail at submission with controlled copy; HR approval never turns a seeding gap into a 500. |
-| P1 | M019-F09 archive restore | small | same-session after P0 controls | Soft-deleted leave types bind with `withTrashed`, restore through a service transaction, and have archive→restore API coverage. |
-| P1 | M019-F10 hire-date proration | small-to-medium | separate-recommended | One authoritative balance initializer applies the intended mid-year proration exactly once and remains replay-safe. |
-| P1 | M019-F11 regression suite | medium | separate-recommended | PostgreSQL API/integration tests and writable-cache SPA/browser tests cover all authorization, payroll, rollover, document, restore, and UI contracts. |
+Do not implement in this session. Only one candidate is small and
+same-session-ok (M019-F20); the remaining work is predominantly
+separate-recommended medium/large work. The plan therefore fails the required
+majority same-session-ok and small-total-scope gate. No production code changes
+are authorized by this plan.
 
-## Suggested implementation sequence
+## Ordered actions
 
-1. Write the policy tests for same-department and cross-department decisions, owner/override cancellation, and self-approval before changing services.
-2. Add a shared leave decision/cancellation policy and authoritative row locks; apply it to single and bulk actions.
-3. Reuse one attendance/payroll-date mutability guard and define the canonical half-day representation plus prior-attendance restoration model.
-4. Repair rollover with a target-balance lock/preservation rule; test consumption between retries and missing-disposition recovery.
-5. Define cross-year semantics, required attachment storage/authorization, active-type filtering, and missing-balance recovery.
-6. Consolidate employee balance initialization so synchronous and queued paths cannot disagree on proration.
-7. Repair soft-delete restore, then run the complete PostgreSQL feature suite, PHP lint, SPA typecheck/lint/unit/build, and authenticated browser smoke paths.
+| Order | Finding | Action | Scope | Session | Acceptance evidence |
+| --- | --- | --- | --- | --- | --- |
+| 1 | M019-F10 | Agree ownership of hire-year proration with employee-master, then remove the synchronous full-balance race or make initialization idempotently apply the prorated result. | large | separate-recommended | A mid-year hire has exactly the documented prorated balance after synchronous and queued paths, with an idempotency regression test. |
+| 2 | M019-F15 | Define year-end payroll rounding and convert the year-end job to the repository exact-money representation; add cent-boundary tests. | medium | separate-recommended | Encashment uses exact decimal strings, documented rounding, and matches Payroll/FinalPay for adversarial salary and day values. |
+| 3 | M019-F13 | Fail closed when authoritative salary is absent or create an explicit recoverable pending disposition before balance mutation; cover monthly and semi-monthly employees. | large | separate-recommended | No-salary processing cannot erase days without a value or recovery record; the job is retry-safe and the focused regression suite proves it. |
+| 4 | M019-F14 | Add max_carryover_days and conversion_rate to leave-type validation, persistence, and resource output; enforce one conversion-rate invariant instead of silently clamping operator input. | medium | separate-recommended | Management API create/update/read round-trips both policies, UI values survive reload, and year-end consumption matches the returned configuration. |
+| 5 | M019-F17 | Centralize year validation for API, CLI, and UI and align the year-end copy with the actual eligible leave-type query. | small | separate-recommended | Invalid/non-supported years are rejected consistently, and UI copy is verified against the job's selection semantics. |
+| 6 | M019-F16 | Specify and implement calendar semantics for active employees, unique employee/day counting, AM/PM weighting, and Sunday/holiday treatment. | large | separate-recommended | Calendar headcount/present/on-leave values agree for terminated employees, one half-day, paired half-days, duplicate requests, Sundays, and holidays. |
+| 7 | M019-F21 | Reject leave ranges whose computed business-day total is zero, with a clear API/UI validation message. | small | separate-recommended | A Sunday-only submission cannot be created through API or SPA; valid business-day requests retain current behavior. |
+| 8 | M019-F18 | Preserve historical leave-type identity with soft-deleted relation loading or immutable snapshots, and make SPA consumers null-safe during migration. | medium | separate-recommended | Archived balances and requests remain readable in HR and self-service pages, with authorization and archive regression coverage. |
+| 9 | M019-F12 | Add an authorized document metadata/read/download action for reviewers without exposing private storage paths; render it on HR detail. | medium | separate-recommended | Authorized HR reviewers can inspect a required document, unauthorized users cannot, and missing documents remain explicit. |
+| 10 | M019-F19 | Choose either a registered owner-scoped self-service detail route/API or a safe list link, then update approved/rejected notification links and test navigation. | medium | separate-recommended | Approved and rejected employee notifications land on a working authorized page; HR notification links remain green. |
+| 11 | M019-F11 | Add focused regression tests for the contracts above and provision the missing Playwright Chromium/Firefox binaries before rerunning the selected browser suites. | medium | separate-recommended | Backend contract tests cover each fixed finding, and the 18 selected Playwright tests execute to application assertions on the unique test database/environment. |
+| 12 | M019-F20 | Hide or disable Edit for archived leave types, or make the control restore before editing. | small | same-session-ok | Archived rows have no action that submits to the normal update route; active rows retain Edit behavior. |
 
-## Audit-session decision
+## Verification constraints
 
-No implementation fix is applied in this session. The findings are not predominantly small: they cross authorization policy, payroll immutability, attendance data lineage, rollover accounting, document storage, employee lifecycle, and API/SPA regression coverage. A same-session patch would leave the highest-risk controls unresolved.
+- Use only DB_DATABASE=ogami_test_m019_agent_a for M019 tests.
+- Keep tests focused on M019; do not modify dependency modules as part of this
+  plan.
+- Do not edit audit/00-MODULE-REGISTRY.md; the coordinator regenerates it after
+  all cards finish.
+- Commit explicit module-owned files before release when implementation is
+  eventually authorized.
