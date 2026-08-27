@@ -63,6 +63,18 @@ class SalesOrderRouteCoverageTest extends TestCase
             ->assertJsonPath('data.incoterm', 'CIF');
 
         $this->actingAs($actor)
+            ->putJson("/api/v1/crm/sales-orders/{$so->hash_id}", [
+                ...$payload,
+                'delivery_terms' => null,
+                'incoterm' => null,
+                'notes' => null,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.delivery_terms', null)
+            ->assertJsonPath('data.incoterm', null)
+            ->assertJsonPath('data.notes', null);
+
+        $this->actingAs($actor)
             ->deleteJson("/api/v1/crm/sales-orders/{$so->hash_id}")
             ->assertNoContent();
         $this->assertNotNull(SalesOrder::withTrashed()->findOrFail($so->id)->deleted_at);
@@ -105,6 +117,26 @@ class SalesOrderRouteCoverageTest extends TestCase
 
         $response->assertUnprocessable()
             ->assertJsonValidationErrors(['items.0.delivery_date']);
+    }
+
+    public function test_list_route_rejects_malformed_filters_before_querying(): void
+    {
+        $actor = $this->actor('crm.sales_orders.view');
+
+        $this->actingAs($actor)
+            ->getJson('/api/v1/crm/sales-orders?date_from=not-a-date')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['date_from']);
+
+        $this->actingAs($actor)
+            ->getJson('/api/v1/crm/sales-orders?status=not-a-sales-order-status')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['status']);
+
+        $this->actingAs($actor)
+            ->getJson('/api/v1/crm/sales-orders?per_page=0')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['per_page']);
     }
 
     public function test_confirmation_rechecks_customer_activity_after_draft_creation(): void

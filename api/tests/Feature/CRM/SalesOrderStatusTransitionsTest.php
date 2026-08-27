@@ -26,6 +26,7 @@ use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -124,8 +125,8 @@ class SalesOrderStatusTransitionsTest extends TestCase
      * DeliveryService::create() does not require the SO to be in production,
      * so `confirmed → delivered` is a reachable, supported path.
      *
-     * @dataProvider forwardSkipProvider
      */
+    #[DataProvider('forwardSkipProvider')]
     public function test_forward_skips_are_permitted(
         SalesOrderStatus $from,
         string $method,
@@ -172,8 +173,8 @@ class SalesOrderStatusTransitionsTest extends TestCase
      * The other half of the same contract: forward-only must still mean no
      * going back, and no leaving a terminal state.
      *
-     * @dataProvider refusedTransitionProvider
      */
+    #[DataProvider('refusedTransitionProvider')]
     public function test_backwards_and_terminal_transitions_are_refused(
         SalesOrderStatus $from,
         string $method,

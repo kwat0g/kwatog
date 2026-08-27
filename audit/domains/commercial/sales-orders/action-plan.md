@@ -1,144 +1,107 @@
 # M033 — Sales Orders Action Plan
 
-Date: 2026-08-25  
-Source: current-source re-audit in `audit-report.md`
+Date: 2026-08-27
+Source: current-source discovery, hardening, and polish passes in `audit-report.md`
+Execution mode: one claimed module, unique test database `ogami_test_m033_agent_a`
 
-The module was re-audited because the previous report predates substantial uncommitted source changes. Items below are ordered by user impact and dependency. This session implements the module-contained items it can verify safely; items requiring MRP/shared-chain changes or a business decision remain explicitly pending.
+The inherited 2026-08-25/26 findings were rechecked against the current source.
+The contained fixes below are safe for this session. Cross-module behavior and
+policy-dependent behavior stay explicitly deferred.
 
-## 1. Restore the frontend compile and complete the internal edit form
+## 1. Preserve clearing of nullable draft fields — DONE
 
-- Findings: F-001, F-003, F-007
-- Scope: medium
-- Session recommendation: `same-session-ok`
-- Remove the literal escaping that makes the create page invalid TypeScript.
-- Add the incoterm selector to edit, using the same allowed values as create and preserving the update payload.
-- Add loading/empty/error/retry behavior to edit’s customer/product lookups, matching create.
-- Verify with SPA typecheck and diff whitespace checks.
+- Findings: F-016
+- Size: **small**
+- Session recommendation: **same-session-ok**
+- Change the update service to distinguish an omitted optional field from an
+  explicit `null`, and send explicit nulls from the edit form for cleared
+  delivery terms, incoterm, and notes.
+- Add route coverage proving all three fields can be cleared on a draft.
 
-## 2. Put restore and confirmation invariants behind the sales-order service
+## 2. Validate and bound sales-order list filters — DONE
 
-- Findings: F-002, F-004
-- Scope: medium
-- Session recommendation: `separate-recommended`
-- Move restore into a transactionally locked `SalesOrderService` method, enforce the module’s restore rule, and make the controller return structured business-rule errors.
-- At confirmation time, revalidate the customer and item product references as active before changing the order state.
-- Add focused verification for the new paths if the existing fixtures support it.
+- Findings: F-017
+- Size: **medium**
+- Session recommendation: **same-session-ok**
+- Add a sales-order list FormRequest for status, dates, pagination, search, and
+  archive visibility; reject malformed input with 422 before it reaches the
+  query builder.
+- Keep a service-side lower bound on `per_page` for non-HTTP callers.
+- Add route coverage for invalid dates, invalid status, and invalid page size.
 
-## 3. Preserve and expose customer-portal pagination
+## 3. Keep edit date constraints visible in the browser — DONE
 
-- Finding: F-006
-- Scope: medium
-- Session recommendation: `same-session-ok`
-- Return the full `PaginatedResponse<PortalSoSummary>` from the SPA adapter, pass page/status parameters, and render status filtering plus shared pagination controls.
-- Keep customer scoping and the existing backend paginator unchanged.
-- Verify with SPA typecheck and the existing customer-portal feature suite.
+- Findings: F-018
+- Size: **small**
+- Session recommendation: **same-session-ok**
+- Set the edit delivery-date input minimum to the current order date, matching
+  create and the server-side invariant. Retain backend validation as the
+  authority.
 
-## 4. Add direct sales-order route and invariant regression coverage
-
-- Finding: F-009
-- Scope: large
-- Session recommendation: `separate-recommended`
-- Add a direct feature matrix for create/update/delete/restore, incoterm round-trip, delivery-date ordering, active-reference confirmation, archived binding, cancellation downstream guards, stale write races, and portal pagination.
-- Include authorization assertions for each named lifecycle route and an assertion that the removed generic transition route is unavailable.
-- Run the focused and full relevant backend suites after the fixture/test additions.
-
-## 5. Close the queued-MRP cancellation race
+## 4. Close the queued-MRP cancellation race — DEFERRED
 
 - Finding: F-005
-- Scope: large
-- Session recommendation: `separate-recommended`
-- Coordinate with MRP to re-lock and re-read the sales order inside `runForSalesOrder` immediately before plan/work-order creation, and make cancellation/outbox behavior idempotent against the same race.
-- Add a deterministic concurrency test covering cancellation between MRP selection and execution.
-- This session does not modify MRP files because they are outside M033 scope.
+- Size: **large**
+- Session recommendation: **separate-recommended**
+- Coordinate with MRP to re-lock and re-read the sales order inside
+  `MrpEngineService::runForSalesOrder()` immediately before creating a plan or
+  work orders, then add a deterministic cancellation-interleaving test.
+- Do not modify MRP or job files during an M033 session.
 
-## 6. Reconcile cancelled-order chain semantics and historical timestamps
+## 5. Reconcile cancelled-order chain semantics — DEFERRED
 
 - Finding: F-008
-- Scope: large
-- Session recommendation: `separate-recommended`
-- Decide whether canonical cancellation should be `skipped`, `cancelled`, or a terminal closed state, then update shared `ChainDefinitions`/broadcast consumers and the sales-order projection together.
-- Define a backfill/reconciliation strategy for the nullable lifecycle timestamps added by `2026_08_25_100000_add_sales_order_lifecycle_timestamps.php`.
-- This session does not modify shared chain infrastructure or historical data outside M033.
+- Size: **large**
+- Session recommendation: **separate-recommended**
+- Choose a canonical cancelled state, update shared `ChainDefinitions` and all
+  consumers together, and keep the M033 projection aligned.
+- Preserve the completed historical timestamp backfill; validate it against
+  production audit history as part of the shared-chain change.
+- Do not modify shared chain infrastructure during this session.
 
-## 7. Resolve policy-dependent recovery and cancellation behavior
+## 6. Decide recovery and cancellation policy — OPEN DECISION
 
 - Findings: F-010, F-011
-- Scope: small
-- Session recommendation: `separate-recommended`
-- Confirm whether cancellation reason is mandatory for particular roles/statuses.
-- Confirm whether system administrators need an archived-order list and restore controls in the SPA, or whether the API is intentionally the recovery surface.
-- Only after the decision, update request validation, permissions, UI, and tests as one behavior change.
+- Size: **small** for the eventual contract change; **medium** if a new SPA
+  recovery surface is approved
+- Session recommendation: **separate-recommended**
+- Decide whether a cancellation reason is mandatory and whether restoring a
+  draft with inactive customer/product references is allowed.
+- Decide whether `system_admin` needs an archived-order list and restore action
+  in the SPA, or whether the API is intentionally the recovery surface.
+- After the decision, update request validation, service invariants, UI,
+  permissions, and tests as one contract change.
 
-## Session execution status — 2026-08-25
+## 7. Add real browser coverage for the M033 surfaces — DEFERRED
 
-- Completed items 1–3 within M033.
-- Item 4 is covered by SalesOrderRouteCoverageTest.php plus the existing lifecycle/chain/concurrency suites; the direct suite passed 9 tests/32 assertions.
-- Items 5–6 remain deferred because their correct fixes are in MRP/shared chain infrastructure outside this module.
-- Item 7 remains deferred pending the cancellation-reason and archive/restore UI decisions.
+- Finding: F-019
+- Size: **large**
+- Session recommendation: **separate-recommended**
+- Add browser coverage for create, edit, optional-field clearing, cancel,
+  archive/restore if approved, portal filtering/pagination, and the confirmation
+  failure/retry path. The current mock E2E spec covers only the list/confirm
+  slice of sales orders and then switches to invoices.
 
-## Session execution status — 2026-08-26 (resumed after crash)
+## 8. Revisit exact list total aggregation — DEFERRED POLISH
 
-Reclaimed a 7h-stale lock. The 2026-08-25 fix-log was already written, and its
-claims verify against the committed source, so items 1–4 really were done. But
-that session also made two coupled changes it logged **nowhere** — narrowing
-`ALLOWED_TRANSITIONS` to a strict linear chain while simultaneously changing
-`transitionOrFail()` from returning a `skipped` result to throwing — and those
-broke order-to-cash in 8 tests across two other modules.
+- Finding: F-020
+- Size: **small**
+- Session recommendation: **separate-recommended**
+- Decide whether the list KPI must be exact over serialized decimal money. If so,
+  use a decimal/string aggregation helper instead of JavaScript `Number`; the
+  persisted order totals are already BCMath-backed.
 
-### Item 0 (unplanned, highest severity) — restore the forward-only transition contract
+## 9. Remove PHPUnit data-provider deprecations — DONE
 
-- Finding: F-012. **Fixed.** Order-to-cash could not complete: confirming a
-  delivery for an order that never entered production threw and rolled the whole
-  confirmation back, and finalizing an invoice for a partially delivered order
-  rolled back a posted journal entry. Restored the forward-skip entries, kept the
-  louder throw, and added F-015 regression coverage so the table cannot be
-  silently narrowed again.
+- Finding: F-021
+- Size: **small**
+- Session recommendation: **same-session-ok**
+- Use PHPUnit attributes for the two status-transition data providers so the
+  focused suite remains warning-free on the PHPUnit 12 migration path.
 
-### Items 1–4 — already done before this session
+## Status
 
-Verified in the committed source, not taken on trust. Nothing re-fixed.
-
-### Item 5 — queued-MRP cancellation race
-
-- Finding: F-005. **Deferred on a hard scope constraint, not a risk label.**
-  The fix belongs in `MrpEngineService::runForSalesOrder()` and
-  `MRP\Listeners\QueueMrpOnSalesOrderConfirmed`, both outside this module.
-  Re-verified the race is still open (the method locks the prior plan but never
-  re-reads `$so->status`). There is no sales-order-side guard: the SO cannot know
-  a job is in flight. Route to the MRP module.
-
-### Item 6 — cancelled-chain semantics and historical timestamps
-
-- Finding: F-008. **Split. Historical half done, canonical half deferred.**
-  - Done: `2026_08_26_030000_backfill_sales_order_lifecycle_timestamps` recovers
-    the six lifecycle timestamps from `audit_logs` for orders that transitioned
-    before the columns existed. Truthful — no `updated_at` guessing; orders with
-    no audit trail stay NULL.
-  - Deferred: `ChainDefinitions` maps `cancelled → closed`, the last of nine
-    steps, so a cancelled order is broadcast as 9/9 complete. Correcting it means
-    a new terminal state in shared `app/Common/` chain infrastructure plus every
-    consumer. Not fixable from inside this module without spreading the wrong
-    answer.
-
-### Item 7 — policy-dependent behaviour
-
-- Findings: F-010, F-011. **Escalated as questions, not deferred work.** Both
-  need a human business decision before the contract changes; guessing would
-  either 422 existing integrations (mandatory cancellation reason) or invent an
-  admin surface and permission set nobody asked for. Written up in `fix-log.md`
-  under "Questions for the product/operations owner", along with a third question
-  raised by the F-012 fix (whether `partially_delivered → invoiced` should leave
-  the order looking fully invoiced).
-
-### Also fixed, outside the plan
-
-- F-013 — a stale assertion in `SalesOrderChainBridgeTest` demanding a work order
-  that the intentional, separately-logged B01 no-BOM policy no longer creates.
-- F-014 — `CustomerPortalService::salesOrderDetail()` returned 500 on every call
-  (enum cast to string). Portal sales-order surface, i.e. this module's declared
-  scope.
-
-### Status
-
-`🔁 Needs Re-audit` — item 5 and the canonical half of item 6 are genuinely out
-of module scope, and item 7 is blocked on a human decision.
+Contained items 1–3 and 9 are implemented and verified in this session. Items 4–5
+remain blocked by module boundaries, item 6 needs a product/operations decision,
+and items 7–8 are deferred follow-up work. Final module status remains
+`🔁 Needs Re-audit`.

@@ -305,3 +305,48 @@ The module was claimed after a fresh registry refresh. The previous report/plan 
 - F-008 — Cancelled-chain semantics and historical timestamp backfill need shared ChainDefinitions/broadcaster and migration coordination, outside M033 scope.
 - F-010 — Cancellation-reason requiredness is a product/compliance decision; current optional behavior was not changed.
 - F-011 — Whether system administrators need archive/restore UI is a product/operations decision; the API recovery path was hardened but no new UI action was invented.
+
+## 2026-08-27 session — M033 current re-audit
+
+The preferred `commercial/sales-orders` card was claimed as M033. Work remained
+inside the M033 source, test, and audit paths; the coordinator's generated
+registry and parallel agents' files were not modified. Verification used the
+unique database `ogami_test_m033_agent_a`.
+
+### Fixed
+
+- F-016 — `api/app/Modules/CRM/Services/SalesOrderService.php:446-462` now
+  preserves omitted optional fields while allowing explicit nulls to clear
+  delivery terms, incoterm, and notes. The edit payload sends those nulls at
+  `spa/src/pages/crm/sales-orders/edit.tsx:137-149`, and route coverage at
+  `api/tests/Feature/CRM/SalesOrderRouteCoverageTest.php:65-75` proves the
+  round trip.
+- F-017 — Added `ListSalesOrderRequest` at
+  `api/app/Modules/CRM/Requests/ListSalesOrderRequest.php:11-29`, wired through
+  `SalesOrderController.php:23-26`, and retained the service-side page-size
+  clamp at `SalesOrderService.php:292-295`. Invalid date/status/page-size
+  coverage is at `SalesOrderRouteCoverageTest.php:122-140`.
+- F-018 — Added the current order date as the edit delivery-date minimum at
+  `spa/src/pages/crm/sales-orders/edit.tsx:300-306`.
+- F-021 — Replaced deprecated PHPUnit docblock providers with attributes at
+  `api/tests/Feature/CRM/SalesOrderStatusTransitionsTest.php:129,177`.
+
+### Verification
+
+- M033 backend focus: 60 tests and 196 assertions passed with no PHPUnit
+  deprecation warnings.
+- Customer-portal sales-order focus: 5 tests and 10 assertions passed.
+- PHP syntax checks, scoped ESLint, and the CRM route-list check passed.
+- Full SPA typecheck reported only unrelated `spa/src/pages/assets/detail.tsx`
+  `qrcode` and implicit-`any` diagnostics; no M033 or portal diagnostics.
+
+### Deferred/open
+
+- F-005 remains a Broken queued-MRP cancellation race owned by MRP/job
+  coordination; no MRP file was changed.
+- F-008 remains an Incomplete cancelled-chain mismatch owned by shared chain
+  infrastructure; no `app/Common` file was changed.
+- F-010 and F-011 remain Incomplete policy decisions about cancellation
+  reasons and archive/restore recovery UX/invariants.
+- F-019 remains Missing browser coverage; F-020 remains deferred Polish for
+  exact decimal KPI aggregation.

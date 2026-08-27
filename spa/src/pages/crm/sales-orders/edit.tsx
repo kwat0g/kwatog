@@ -108,7 +108,7 @@ export default function EditSalesOrderPage() {
  },
  });
  const {
- register, control, handleSubmit, reset, setError,
+ register, control, handleSubmit, reset, setError, watch,
  formState: { errors, isSubmitting },
  } = form;
  const { fields, append, remove } = useFieldArray({ control, name: 'items' });
@@ -138,9 +138,9 @@ export default function EditSalesOrderPage() {
  customer_id: values.customer_id,
  date: values.date,
  payment_terms_days: values.payment_terms_days ? Number(values.payment_terms_days) : undefined,
- delivery_terms: values.delivery_terms || undefined,
- incoterm: values.incoterm ? values.incoterm as Incoterm : undefined,
- notes: values.notes || undefined,
+ delivery_terms: values.delivery_terms || null,
+ incoterm: values.incoterm ? values.incoterm as Incoterm : null,
+ notes: values.notes || null,
  items: values.items.map((i) => ({
  product_id: i.product_id,
  quantity: i.quantity,
@@ -299,6 +299,7 @@ export default function EditSalesOrderPage() {
  <Td align="right" mono>
  <Input
  type="date"
+ min={watch('date')}
  {...register(`items.${i}.delivery_date` as const)}
  error={errors.items?.[i]?.delivery_date?.message}
  className="font-mono"

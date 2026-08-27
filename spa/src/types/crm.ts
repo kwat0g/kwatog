@@ -144,9 +144,9 @@ export interface CreateSalesOrderData {
  customer_id: string;
  date: string;
  payment_terms_days?: number;
- delivery_terms?: string;
- incoterm?: Incoterm;
- notes?: string;
+ delivery_terms?: string | null;
+ incoterm?: Incoterm | null;
+ notes?: string | null;
  items: CreateSalesOrderItem[];
 }
 

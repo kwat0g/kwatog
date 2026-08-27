@@ -291,7 +291,7 @@ class SalesOrderService
 
         return $q->orderByDesc('date')
             ->orderByDesc('id')
-            ->paginate(min((int) ($filters['per_page'] ?? 25), 100));
+            ->paginate(min(max((int) ($filters['per_page'] ?? 25), 1), 100));
     }
 
     public function show(SalesOrder $so): SalesOrder
@@ -450,11 +450,15 @@ class SalesOrderService
                 'vat_amount'         => $vat,
                 'total_amount'       => $total,
                 'payment_terms_days' => $data['payment_terms_days'] ?? $lockedSo->payment_terms_days,
-                'delivery_terms'     => $data['delivery_terms'] ?? $lockedSo->delivery_terms,
+                'delivery_terms'     => array_key_exists('delivery_terms', $data)
+                    ? $data['delivery_terms']
+                    : $lockedSo->delivery_terms,
                 'incoterm'           => array_key_exists('incoterm', $data)
                     ? $data['incoterm']
                     : $lockedSo->incoterm?->value,
-                'notes'              => $data['notes'] ?? $lockedSo->notes,
+                'notes'              => array_key_exists('notes', $data)
+                    ? $data['notes']
+                    : $lockedSo->notes,
             ]);
 
             // Replace items wholesale (draft state — no FK ramifications yet).

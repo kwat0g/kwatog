@@ -7,12 +7,12 @@ namespace App\Modules\CRM\Controllers;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Requests\CancelSalesOrderRequest;
+use App\Modules\CRM\Requests\ListSalesOrderRequest;
 use App\Modules\CRM\Requests\StoreSalesOrderRequest;
 use App\Modules\CRM\Requests\UpdateSalesOrderRequest;
 use App\Modules\CRM\Resources\SalesOrderResource;
 use App\Modules\CRM\Services\SalesOrderService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use App\Common\Exceptions\BusinessRuleException;
 
@@ -20,9 +20,9 @@ class SalesOrderController
 {
     public function __construct(private readonly SalesOrderService $service) {}
 
-    public function index(Request $request): AnonymousResourceCollection
+    public function index(ListSalesOrderRequest $request): AnonymousResourceCollection
     {
-        return SalesOrderResource::collection($this->service->list($request->query()));
+        return SalesOrderResource::collection($this->service->list($request->validated()));
     }
 
     public function options(): JsonResponse
