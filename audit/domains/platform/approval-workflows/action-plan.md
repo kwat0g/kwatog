@@ -1,30 +1,80 @@
 # M005 — Approval workflows action plan
 
-Audit session: 2026-08-24  
+Audit session: 2026-08-27
+Claimed module: `platform/approval-workflows`
 Disposition: `📋 Plan Ready`
 
-The focused approval paths pass, but the open findings are majority `separate-recommended`. No production-code fixes were applied in this session.
+The focused normal paths are green, but the material findings are dominated by
+cross-module authorization/state contracts and scheduler concurrency. No product-code fix
+is safe to land in this session without first choosing those policies.
 
-## Ordered plan
+## Ordered actions
 
-1. `[large][separate-recommended]` Define the approval-attempt contract. Add a current-attempt/workflow-version identity to approval records or implement a single authoritative current-attempt query. Update `isFullyApproved`, `isRejected`, `chain`, board history, and printable signatures. Add rejected→resubmitted→approved and concurrent-submit regressions before changing downstream status transitions.
+1. `[large][separate-recommended]` Resolve R-02. Define one authoritative reachable-step
+   predicate for a workflow. Apply it to reminders, escalations, and auto-resolution so
+   only the next pending step is processed. Add a real two-step Leave/PR regression proving
+   future steps do not receive SLA stamps or decisions.
 
-2. `[medium][separate-recommended]` Make the board and dashboard worklist delegation-aware. Reuse the same active delegation/role-change rules as `ApprovalService`, and add tests proving a delegate sees, acts on, and loses access to the delegated queue when the window expires or the delegator changes role.
+2. `[large][separate-recommended]` Resolve R-03. Design the domain-aware auto-resolution
+   contract. Either route approve/reject through idempotent consumer lifecycle adapters with
+   outbox/events, or keep automatic decisions disabled until every active consumer supports
+   that contract. Prove source status, side effects, and audit attribution for Leave, Loan,
+   Purchasing, SalaryAdjustment, and ReturnManagement.
 
-3. `[large][separate-recommended]` Stamp workflow identity/version at submission and use it for escalation policy lookup. Add an ambiguity test with two workflow definitions sharing `step_order`/`role_slug`; verify the selected auto-resolve action and SLA belong to the submitted workflow.
+3. `[medium][separate-recommended]` Resolve R-04. Lock and re-read the approval row inside
+   the auto-decision transaction and require a conditional current-pending update. Add a
+   two-connection race test against human approve/reject.
 
-4. `[medium][separate-recommended]` Decide the board’s visibility policy for financial amounts, requester identity, remarks, actor identity, and links. Implement per-module/department scope or intentional masking as required, then cover employee, department-head, finance, HR, and system-admin responses.
+4. `[large][separate-recommended]` Resolve R-05. Choose the board's visibility model for
+   `awaiting_others` and recent history: per-module row scope, company-wide masked metadata,
+   or another explicit policy. Enforce it through per-type adapters, including Leave,
+   Loans, Purchasing, Payroll, and delegated users. Add employee/department-head/finance/
+   HR/admin privacy assertions.
 
-5. `[medium][separate-recommended]` Bound board and scheduler work. Add explicit pending/history limits or pagination, batch source rows per type, remove actioned-card N+1 queries, and convert reminder/escalation/auto-resolve scans to chunked or claimed work with retry/resume semantics. Add a large-volume query-count and memory regression.
+5. `[medium][separate-recommended]` Resolve R-06. Make delegated authority agree with
+   entity route middleware and row policies. Decide whether delegation grants temporary
+   module action permission or whether the board must hide cards that cannot be actioned;
+   provide a usable link/data contract. Add HTTP approve/reject tests for active, expired,
+   revoked, role-changed, and self-submitting delegates.
 
-6. `[small][separate-recommended]` Replace the escalation link map with the authoritative supported-type registry. Cover `EmployeeLoan`, `PayrollPeriod`, leave, PR, PO, and return links; keep unknown types on a deliberate safe fallback rather than concatenating a hash to an audit-log path.
+6. `[medium][separate-recommended]` Resolve R-07. Decide between explicit assignment and
+   role-audience notification. If role-based, resolve all active direct approvers and
+   active delegates, deduplicate recipients, and test reminder/escalation recipient sets.
 
-7. `[medium][separate-recommended]` Reconcile seeded workflow definitions with actual module ownership. Either wire the reserved definitions into their modules and board type map, or add an explicit reserved/inactive lifecycle and exclude them from runtime policy lookup. Resolve the payroll definition mismatch with the payroll maker-checker flow.
+7. `[medium][separate-recommended]` Resolve R-01. Extend the authoritative approval type
+   registry for ReturnManagement (and any other approved live consumer), then align source
+   table loading, row policy, controller validation, SPA types/routes, and escalation links.
+   Add a real return-request board and notification-link regression.
 
-8. `[small][separate-recommended]` Make automatic decisions auditable. Require a valid active automation principal or introduce a first-class system actor, and test missing/inactive/multiple actor-role configurations.
+8. `[medium][separate-recommended]` Resolve R-08. Decide whether PayrollPeriod belongs on
+   the shared approval board. Remove the phantom kind or implement an adapter for its
+   custom maker-checker lifecycle; ensure options and history match the decision.
 
-9. `[small][same-session-ok]` Improve SPA options failure handling, keep displayed counts consistent with returned card limits, add a history pagination affordance, and use terminal-action wording for actioned cards. This is safe in isolation but was not applied because the overall plan is not majority same-session-safe.
+9. `[small][separate-recommended]` Resolve R-09. Update `docs/SCHEMA.md` and the approval
+   pattern/audit docs with active workflow state, attempt/current identity, snapshot/version,
+   SLA fields, and delegation authority after the implementation contracts settle.
+
+10. `[medium][separate-recommended]` Resolve R-10. Add regression coverage for the chosen
+    implementations: active-step scheduler behavior, source lifecycle, two-connection
+    race, board row scope, delegated HTTP actions, recipient sets, registry parity, and
+    Payroll's chosen adapter/removal. Keep tests on a unique database per audit session.
+
+11. `[small][same-session-ok]` Resolve R-11. Pass an action/view mode into the SPA active
+    card so “Awaiting others” says “Open record to view” while “My action required” keeps
+    action wording. Add a focused rendering assertion. Deferred this session because the
+    overall plan is not majority same-session-safe.
+
+## Session decision
+
+No source or test fix was implemented. The only safe same-session item is the isolated SPA
+CTA polish, and it is subordinate to the unresolved board authorization and route contract.
+The inherited Purchasing F-011 remains deferred to that module's business-decision path and
+was not modified.
 
 ## Re-audit entry criteria
 
-Re-audit M005 after the attempt/version decision, delegation-aware board behavior, workflow-identity policy lookup, visibility policy, and bounded query design are implemented with focused regression coverage. The module can close only when automatic decisions have deterministic workflow attribution and actor attribution, and the board’s cross-module data contract is explicit.
+Re-audit M005 after the reachable-step, auto-resolution lifecycle/race, board visibility,
+delegation route, recipient, and registry/payroll decisions have landed with focused
+regressions. Close only when every active approval producer has an intentional board/link
+contract, automated decisions update domain state atomically, and the board cannot expose a
+row or offer an action that its caller cannot legitimately access.

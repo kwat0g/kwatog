@@ -1,105 +1,310 @@
 # M005 — Approval workflows audit report
 
-- Audit session: 2026-08-24
-- Domain/module: `platform/approval-workflows`
+- Audit session: 2026-08-27
+- Claimed card: `platform/approval-workflows` (M005)
+- Claim command: `bash audit/scripts/claim-module.sh platform approval-workflows`
 - Tier/surface: Tier 1 / M
 - Dependencies: `auth-session`, `rbac`, `audit-activity`
-- Roles: system admin, HR, Finance, Production, PPC, Purchasing, Warehouse, QC, Maintenance, Impex, department head, employee, driver
-- Prior disposition: `🔲 Not Started`
-- Current disposition: `📋 Plan Ready`
+- Inherited status: `🔁 Needs Re-audit`
+- Session disposition: `📋 Plan Ready`
 
-## Scope covered
+## Scope and evidence reviewed
 
-The audit covered the shared approval state machine and every current consumer found in the repository:
+This re-audit covered the inherited module audit artifacts, current implementation,
+consumers, tests, working-tree diff, and modification times. The implementation review
+included `ApprovalService`, `ApprovalBoardService`, `ApprovalEscalationService`, the
+approval/delegation models, signature builder, workflow/link registry, routes, scheduler,
+role/permission and workflow/settings seeders, and the Leave, Purchasing, Loans, Payroll,
+HR salary-adjustment, and ReturnManagement consumers. The SPA board API/types/page,
+dashboard worklist, focused API tests, inherited docs, and design-system requirements were
+also checked.
 
-- `ApprovalService`, `ApprovalBoardService`, `ApprovalEscalationService`, signature/PDF payload construction, approval models, delegation model/service, and the escalation command/schedule.
-- Approval-board routes, delegation routes, role/permission seeding, workflow/settings seed data, migrations, and the dashboard approval worklist.
-- Leave, purchasing, loans, salary-adjustment, return-management, and payroll integration points.
-- SPA board API/types/page, focused API tests, and design-system interaction expectations.
+The coordinator's generated `audit/00-MODULE-REGISTRY.md` change was present before this
+session and was not regenerated or edited. There was no source/test diff in this module at
+the start of the session; current mtimes show the common approval source and focused tests
+were last bulk-touched on 2026-08-26, while the inherited audit artifacts predate this
+session.
 
-## Discovery summary
+## Pass 1 — discovery
 
-The core service creates one row per configured workflow step and correctly uses decimal-string threshold comparisons (`api/app/Common/Services/ApprovalService.php:20-67`). Approve/reject operations run in transactions and lock the selected pending row (`api/app/Common/Services/ApprovalService.php:82-139`). Direct role checks, active delegation mutation authority, self-approval protection, threshold boundaries, and the normal multi-step purchase path are covered by the focused suite.
+The normal approval path is internally coherent for the cases covered by the inherited
+tests: submission snapshots the active workflow and stamps attempt/current/version fields
+(`api/app/Common/Services/ApprovalService.php:39-105`), decisions lock the current pending
+row (`api/app/Common/Services/ApprovalService.php:119-176`), and terminal helpers filter
+current rows (`api/app/Common/Services/ApprovalService.php:188-219`). The focused tests
+also confirm current-attempt resubmission behavior, threshold boundaries, delegation
+windows, and the bounded board path.
 
-The module also carries higher-risk cross-module behavior. Approval records are polymorphic and have no attempt/workflow-definition identity (`api/database/migrations/0010_create_approval_records_table.php:13-29`). The board is a read-only aggregator over leave, purchasing, loans, and payroll (`api/app/Common/Services/ApprovalBoardService.php:12-30`); the route and permission are intentionally cross-cutting (`api/routes/api.php:140-146`, `api/database/seeders/RolePermissionSeeder.php:772-789`). Scheduled reminders, escalations, and optional automatic approve/reject run every six hours (`api/routes/console.php:111-115`, `api/app/Console/Commands/RunApprovalEscalations.php:19-29`).
+Discovery found that the board registry is narrower than the live approval producer graph,
+and that the scheduler operates on row state rather than workflow-step reachability. The
+findings are detailed below under the pass where their primary risk appears.
 
-## Findings and disposition
+### R-01 — Missing: live return-request approvals are absent from the board/link registry
 
-### F-01 — Broken: resubmission history is retained but terminal state is not scoped to the current attempt
+ReturnManagement explicitly submits `return_request` records for the Admin and approval-board
+surfaces (`api/app/Modules/ReturnManagement/Services/ReturnRequestService.php:563-581`), and
+the workflow is active in the seeder (`api/database/seeders/WorkflowSeeder.php:159-179`).
+`ApprovalTypeRegistry::TYPES` contains only Leave, PurchaseRequest, PurchaseOrder,
+EmployeeLoan, and PayrollPeriod (`api/app/Common/Support/ApprovalTypeRegistry.php:19-61`),
+so `ReturnRequest` has no board kind, source-table metadata, permission boundary, or direct
+link. Unknown classes deliberately fall back to `/approvals`
+(`api/app/Common/Support/ApprovalTypeRegistry.php:112-116`), which is still unable to
+render an RMA because the controller and SPA accept only the five registered kinds
+(`api/app/Common/Controllers/ApprovalBoardController.php:24-30`,
+`spa/src/types/approvals.ts:1-5`).
 
-`ApprovalService::submit()` deliberately keeps approved/rejected rows and deletes only pending/skipped rows (`api/app/Common/Services/ApprovalService.php:43-66`). The same method says callers should treat the latest non-terminal row per step as authoritative, but `records()` orders only by `step_order` and does not model or select an attempt (`api/app/Common/Services/ApprovalService.php:142-169`). `isFullyApproved()` evaluates every historical row, while `isRejected()` returns true if any historical row is rejected (`api/app/Common/Services/ApprovalService.php:154-164`).
+This drops a live approval from `my_action`/history and makes escalation links for it land
+on a board that cannot show the record.
 
-Therefore, a rejected attempt that is submitted again can have a new fully approved set of rows while the service still reports `isRejected() === true` and `isFullyApproved() === false`. The printable signature builder also emits one row for every historical approval record, so a resubmitted step can appear twice (`api/app/Common/Support/ApprovalSignatureBuilder.php:27-30`, `78-89`). The existing resubmission test proves history is preserved and a new pending row exists, but does not assert terminal-state behavior (`api/tests/Unit/ApprovalServiceTest.php:283-333`).
+Classification: **Missing**.
 
-This can prevent downstream status transitions that rely on `isFullyApproved()`—for example purchasing, loans, salary adjustments, and returns (`api/app/Modules/Purchasing/Services/PurchaseRequestService.php:346-369`, `api/app/Modules/Loans/Services/LoanService.php:210-224`, `api/app/Modules/HR/Services/SalaryAdjustmentService.php:63-78`, `api/app/Modules/ReturnManagement/Services/ReturnRequestService.php:219-247`). The remediation needs an explicit current-attempt/version model or a rigorously enforced current-row query, plus PDF/board semantics and migration/regression coverage.
+Disposition: `[medium][separate-recommended]` — align the registry, per-module row policy,
+controller validation, SPA types/routes, escalation links, and ReturnManagement regression
+coverage as one cross-module contract.
 
-Disposition: `[large][separate-recommended]` — approval state and audit-history contract.
+## Pass 2 — hardening
 
-### F-02 — Broken: delegated approvers can act but cannot see the delegated inbox
+### R-02 — Broken: SLA sweeps process unreachable future steps
 
-The mutation path correctly accepts a delegate through `ApprovalDelegation::activeDelegatesFor()` (`api/app/Common/Services/ApprovalService.php:172-185`), and the feature test proves an employee with a department-head delegation can approve (`api/tests/Feature/Approvals/ApprovalDelegationTest.php:69-95`). The board’s `roleSlugsFor()` returns only the user’s direct role (`api/app/Common/Services/ApprovalBoardService.php:164-171`), then categorizes cards by direct equality (`api/app/Common/Services/ApprovalBoardService.php:118-127`).
+Submission creates every non-threshold workflow step as `pending`
+(`api/app/Common/Services/ApprovalService.php:85-103`), while normal decisions expose only
+the earliest pending step through `nextStep()` (`api/app/Common/Services/ApprovalService.php:193-195`).
+The reminder, escalation, and auto-resolve queries select every current pending row without
+requiring it to be the next reachable step
+(`api/app/Common/Services/ApprovalEscalationService.php:25-29`, `61-65`, `121-125`).
+The board deduplicates to the earliest row only for presentation
+(`api/app/Common/Services/ApprovalBoardService.php:108-115`); that does not constrain the
+scheduler.
 
-The dashboard worklist delegates to this same board service and its comments claim delegation-aware behavior (`api/app/Modules/Dashboard/Services/Analytics/ApprovalsWidgetAnalytics.php:19-24`, `46-69`), so the mismatch affects both `/approvals` and the dashboard tile. A delegate may be authorized at the record endpoint but have no “My action required” card or badge for that work.
+Runtime checks on `ogami_test_m005_agent_d` reproduced both effects. A newly submitted
+two-step Leave chain caused `runReminders()` to return `2` and stamp `reminder_sent_at`
+on both step 1 and step 2. When only step 2 was escalated, `runAutoResolve()` approved step
+2 while step 1 remained pending. A later reachable step can therefore consume its reminder,
+be escalated, or be auto-decided before its predecessor is approved.
 
-Disposition: `[medium][separate-recommended]` — shared authorization/read-model contract; add delegation-aware board and dashboard tests, including expiry and role-change cases.
+Classification: **Broken**.
 
-### F-03 — Broken: automatic resolution can choose the wrong workflow policy
+Disposition: `[large][separate-recommended]` — define an authoritative active-step query or
+state, apply it to every scheduler operation, and add multi-step reminder/escalation/
+auto-resolve regressions.
 
-`ApprovalEscalationService::resolvePolicyForRecord()` loads every workflow definition for every record and stops at the first definition whose `step_order` and `role_slug` match (`api/app/Common/Services/ApprovalEscalationService.php:153-192`). The implementation comment explicitly acknowledges that multiple workflow types can share the pair and that “the first matching workflow’s policy wins.” The approval-record schema stores neither `workflow_type` nor `workflow_definition_id` (`api/database/migrations/0010_create_approval_records_table.php:13-29`).
+### R-03 — Broken: automatic approval decisions do not advance the source lifecycle
 
-With automatic resolution enabled, the resulting action can be an approve, reject, or escalation decision from an unrelated workflow. The setting is currently seeded disabled, but it is a production-configurable automatic status transition (`api/database/seeders/SettingsSeeder.php:124-145`). Existing tests cover one unique matching definition and a default policy, not ambiguity across two workflows (`api/tests/Feature/Approval/ApprovalAutoResolveTest.php:149-180`).
+`autoResolveRecord()` writes the approval row and, for rejection, skips later approval rows,
+but never invokes the owning module's transition, side effects, or outbox/event path
+(`api/app/Common/Services/ApprovalEscalationService.php:274-292`). Normal Leave approval,
+for example, updates the request status, approver attribution, balance, attendance, and
+outbox event after the shared decision (`api/app/Modules/Leave/Services/LeaveRequestService.php:303-345`);
+Loans similarly transition the source to Active only after the chain is fully approved
+(`api/app/Modules/Loans/Services/LoanService.php:204-230`).
 
-Disposition: `[large][separate-recommended]` — stamp workflow identity/version at submission, resolve policy from that identity, and add an ambiguity/migration regression before enabling auto-resolve.
+The isolated runtime probe enabled the seeded auto-resolve setting for a Leave chain and
+observed: two approval rows `approved`, `isFullyApproved() === true`, but the LeaveRequest
+still at `pending_dept`. The same mismatch would strand rejection and skip downstream
+domain cleanup. The feature is disabled by default, but it is an exposed admin-configurable
+status transition (`api/database/seeders/SettingsSeeder.php:124-145`).
 
-### F-04 — Incomplete: the cross-module board has no explicit financial/payroll visibility boundary
+Classification: **Broken**.
 
-`approvals.board.view` is merged into every seeded role (`api/database/seeders/RolePermissionSeeder.php:772-789`). The board returns requester identity, amount/principal, summaries, action remarks, and actor information (`api/app/Common/Services/ApprovalBoardService.php:203-215`, `223-263`) for purchase requests/orders, employee loans, and payroll periods. The endpoint has only `auth:sanctum` plus that broad permission (`api/routes/api.php:140-146`); it does not apply per-module permissions, department scope, or a separate masking policy.
+Disposition: `[large][separate-recommended]` — design a domain-aware automation adapter or
+disable approve/reject auto-resolution until every supported consumer has an atomic,
+idempotent lifecycle hook and event/outbox behavior.
 
-This may be intentional for a company-wide approval worklist, but the current contract is not documented or tested against least-privilege expectations. In particular, “Awaiting others” and recent approved/rejected history can expose financial amounts and remarks to roles that do not hold the underlying module’s read permission. Product/security owners need to choose: company-wide metadata, role/department masking, or per-module authorization.
+### R-04 — Broken: auto-resolve can overwrite a human decision after the read
 
-Disposition: `[medium][separate-recommended]` — policy decision first, then backend and UI tests for allowed fields and links.
+`runAutoResolve()` loads stale candidate models in a chunk and later passes each model to
+`autoResolveRecord()` (`api/app/Common/Services/ApprovalEscalationService.php:120-139`).
+The transaction in `autoResolveRecord()` updates by model identity without re-locking or
+rechecking `action = pending` and `is_current = true`
+(`api/app/Common/Services/ApprovalEscalationService.php:274-281`). Human approve/reject
+does lock and re-read the pending row before writing
+(`api/app/Common/Services/ApprovalService.php:121-142`). If the human decision commits
+between the scheduler's query and its update, the scheduler can overwrite the terminal
+decision.
 
-### F-05 — Incomplete/operations: board and scheduled sweeps are unbounded and still perform per-card queries
+Classification: **Broken**.
 
-The board loads every pending row with no limit or pagination (`api/app/Common/Services/ApprovalBoardService.php:68-75`). Its “batch-load” loop still executes one source-table query per active approvable (`api/app/Common/Services/ApprovalBoardService.php:95-109`), and each actioned card performs another source-table query (`api/app/Common/Services/ApprovalBoardService.php:223-231`). Actioned history is capped at 200 before deduplication, while the response summary counts the uncapped arrays after filtering (`api/app/Common/Services/ApprovalBoardService.php:77-84`, `130-160`).
+Disposition: `[medium][separate-recommended]` — lock and re-read inside the auto-decision
+transaction, use a conditional current-pending update, and add a two-connection race test.
 
-The reminder, escalation, and auto-resolve jobs likewise call `get()` on all eligible approval rows (`api/app/Common/Services/ApprovalEscalationService.php:23-27`, `57-61`, `114-119`). `withoutOverlapping` prevents the normal scheduler from running two copies, but it does not bound memory or make a partially completed sweep resumable. A growing approval ledger can therefore cause slow board requests, query amplification, and long scheduled-job runtimes.
+### R-05 — Broken: the board bypasses module row-level visibility
 
-Disposition: `[medium][separate-recommended]` — define board pagination/limits and batch source loading; use chunking/claiming or a durable sweep cursor for scheduled work; add large-volume query/memory coverage.
+The board endpoint is intentionally cross-cutting and is granted to every seeded role
+(`api/routes/api.php:140-146`, `api/database/seeders/RolePermissionSeeder.php:835-840`,
+`879-883`). For each registered type, `userCanView()` accepts a broad module permission
+(`api/app/Common/Support/ApprovalTypeRegistry.php:101-109`), and the board then returns
+full cards for any matching permission without invoking the source module's row policy
+(`api/app/Common/Services/ApprovalBoardService.php:158-195`, `291-302`, `335-345`).
 
-### F-06 — Broken: escalation links do not cover the board’s loan and payroll types
+This conflicts with Leave's explicit row-level controller scope: `leave.view` is part of
+self-service permissions (`api/database/seeders/RolePermissionSeeder.php:775-789`), while
+the Leave show route permits only the request owner, the owner's department head, or HR
+(`api/app/Modules/Leave/Controllers/LeaveRequestController.php:65-82`).
 
-The board declares `EmployeeLoan` and `PayrollPeriod` as supported types (`api/app/Common/Services/ApprovalBoardService.php:34-41`), but escalation link mapping handles `LoanApplication` and has no payroll entry (`api/app/Common/Services/ApprovalEscalationService.php:250-263`). An `EmployeeLoan` or payroll approval notification therefore falls through to `/admin/audit-logs` and appends the hash without the entity route expected by the SPA. The fallback is especially misleading because the notification presents itself as an approval escalation.
+The isolated runtime check created a foreign Leave request and queried the board as an
+ordinary employee. The employee received an `awaiting_others` card containing the leave
+number, direct record link, and date-range summary, even though the Leave controller would
+reject that same foreign record. The same pattern affects financial history cards and
+remarks through the actioned-card path.
 
-Disposition: `[small][separate-recommended]` — make the shared type/link registry authoritative for notifications and add one link assertion per supported approvable type. Kept separate because the registry should be aligned with the visibility and board contract rather than patched in isolation.
+Classification: **Broken**.
 
-### F-07 — Missing/incomplete: seeded workflow definitions overstate what is wired into production paths
+Disposition: `[large][separate-recommended]` — choose and document the board's company-wide
+versus row-scoped policy, then enforce it with per-type policy adapters or deliberate
+masking and tests for employee, department head, finance, HR, and admin views.
 
-The seeder distinguishes enforced and reserved workflows and explicitly says reserved definitions must not be presented as working (`api/database/seeders/WorkflowSeeder.php:14-21`), but it still inserts all definitions with the same schema and no active/reserved state (`api/database/seeders/WorkflowSeeder.php:22-169`, `171-179`). Repository call-site discovery found `ApprovalService::submit()` for leave, purchasing, loans, salary adjustment, and returns, but no submit path for the reserved department-transfer, asset-disposal, separation-clearance, maintenance, 8D, work-order, or NCR definitions. Payroll is also seeded as a workflow while `PayrollPeriod` does not use `HasApprovalWorkflow` (`api/app/Modules/Payroll/Models/PayrollPeriod.php:19-22`), and the service call graph contains no payroll `ApprovalService::submit()`.
+### R-06 — Broken: delegated board cards can dead-end at the entity API
 
-This makes configuration/seed inspection suggest that more approval workflows are active than the application actually enforces. It also leaves the definitions visible to the auto-resolution scanner, which is already ambiguous by role/order. Either wire each workflow through its owning module and board/link map, or model reserved definitions explicitly and keep them out of runtime policy lookup.
+The shared service correctly grants authority to an active delegate
+(`api/app/Common/Services/ApprovalService.php:222-235`), and the board includes delegated
+role slugs (`api/app/Common/Services/ApprovalBoardService.php:229-241`). But a delegated
+user without the underlying module permission receives a redacted card whose link is back
+to `/approvals` (`api/app/Common/Services/ApprovalBoardService.php:275-287`). The actual
+Purchasing approve route still requires `purchasing.pr.approve`
+(`api/app/Modules/Purchasing/routes.php:19-37`), and the Leave action routes similarly
+require `leave.approve_dept` or `leave.approve_hr`
+(`api/app/Modules/Leave/routes.php:34-46`).
 
-Disposition: `[medium][separate-recommended]` — cross-module product/scope decision and seed/schema cleanup.
+The existing delegation test proves only a direct service call by an employee delegate
+(`api/tests/Feature/Approvals/ApprovalDelegationTest.php:69-95`); it does not prove that a
+delegate can follow the board card and complete the HTTP action. The resulting UI either
+loops back to the board or receives a route-level 403 despite the shared service granting
+the delegated authority.
 
-### F-08 — Incomplete: automatic decisions can be written without a responsible actor
+Classification: **Broken**.
 
-For `approve`/`reject`, the scheduler selects the first active user whose role is in `system.automation.actor_roles`, but it does not require one to exist before mutating the record (`api/app/Common/Services/ApprovalEscalationService.php:223-237`). The row can be marked approved or rejected with `approver_id = null` and only the generic remark “Auto-resolved by SLA policy.” The test fixture always creates a system-admin actor (`api/tests/Feature/Approval/ApprovalAutoResolveTest.php:21-31`), so the missing-actor path is not covered.
+Disposition: `[medium][separate-recommended]` — make delegated authority and module route/
+row policy agree, choose a safe delegated-card data contract, and add HTTP approve/reject
+tests for active, expired, revoked, and role-changed delegations.
 
-Disposition: `[small][separate-recommended]` — require a configured system actor or add a first-class system principal/audit attribution; test missing, inactive, and multi-role actor configuration before enabling the feature.
+### R-07 — Broken: SLA notifications reach only the first direct role holder
 
-### F-09 — Polish/incomplete: board filter/configuration failures and count semantics are not surfaced cleanly
+Approval decisions are role-based: any active user whose role matches may act, and active
+delegates may also act (`api/app/Common/Services/ApprovalService.php:222-235`). The board
+uses the same role/delegation set for every caller (`api/app/Common/Services/ApprovalBoardService.php:229-241`).
+The scheduler instead resolves one direct-role user with `orderBy('id')->first()` and never
+consults `ApprovalDelegation::activeDelegatesFor()`
+(`api/app/Common/Services/ApprovalEscalationService.php:302-313`); reminders send to that
+single user (`api/app/Common/Services/ApprovalEscalationService.php:31-45`). Escalations
+likewise start from only that one approver (`api/app/Common/Services/ApprovalEscalationService.php:67-87`).
 
-The SPA renders the board error state, but the options query has no error/loading handling and silently falls back to only the “All” filter (`spa/src/pages/approvals/index.tsx:56-72`). If options fail, the SLA countdown is also silently replaced by age-only chips. The API slices approved/rejected cards to 50 but reports the full pre-slice counts (`api/app/Common/Services/ApprovalBoardService.php:150-160`), so the UI chip can claim more cards than are displayed and offers no pagination affordance. Actioned cards also reuse “Open record to act” wording even though the card is already terminal (`spa/src/pages/approvals/index.tsx:307-341`).
+When a role has multiple eligible approvers, other direct approvers and all delegated
+covering users receive no reminder/escalation even though they can act on the row. This is
+an authority/notification mismatch, not merely a UI preference.
 
-The board otherwise follows the design-system requirements for keyboard-reachable interactive cards, visible focus rings, text-plus-colour status, and skeleton/empty/error states (`spa/src/pages/approvals/index.tsx:105-124`, `253-303`; `docs/DESIGN-SYSTEM.md:280-287`, `523-532`).
+Classification: **Broken**.
 
-Disposition: `[small][same-session-ok]` for the UI contract cleanup, but deferred because the overall finding set is majority `separate-recommended`.
+Disposition: `[medium][separate-recommended]` — either assign one explicit approver or
+notify the complete eligible audience, including active delegates, with deduplication and
+recipient-count tests.
+
+## Pass 3 — polish, documentation, and coverage
+
+### R-08 — Incomplete: Payroll is advertised as a board kind without a shared approval producer
+
+`ApprovalTypeRegistry` and the board controller expose `payroll`
+(`api/app/Common/Support/ApprovalTypeRegistry.php:53-60`,
+`api/app/Common/Controllers/ApprovalBoardController.php:24-30`), but the seeded Payroll
+workflow is inactive (`api/database/seeders/WorkflowSeeder.php:77-83`, `171-188`).
+`PayrollPeriod` does not use `HasApprovalWorkflow`
+(`api/app/Modules/Payroll/Models/PayrollPeriod.php:19-22`), and payroll period approval is
+a separate status/audit implementation (`api/app/Modules/Payroll/Services/PayrollPeriodService.php:937-1000`),
+not an `ApprovalService::submit()` producer. The options endpoint and SPA therefore offer a
+kind that normally has no `approval_records` rows and cannot represent the actual payroll
+maker-checker flow.
+
+Classification: **Incomplete**.
+
+Disposition: `[medium][separate-recommended]` — either remove payroll from the shared board
+or build an explicit adapter for the custom PayrollPeriod lifecycle; test the chosen contract.
+
+### R-09 — Incomplete: inherited schema documentation omits the current approval contract
+
+`docs/SCHEMA.md` still describes only the original workflow and approval columns
+(`docs/SCHEMA.md:42-46`). The current schema adds `is_active` to workflow definitions and
+attempt/current/workflow-definition/version/snapshot fields to approval records
+(`api/database/migrations/0476_harden_approval_workflow_identity.php:14-39`), plus reminder,
+escalation, and auto-resolution state represented by the model
+(`api/app/Common/Models/ApprovalRecord.php:16-35`). The docs also do not describe the
+delegation table/authority contract.
+
+Operators and future auditors following the inherited schema map can therefore miss the
+fields that determine current-attempt selection, workflow policy attribution, and SLA
+state.
+
+Classification: **Incomplete**.
+
+Disposition: `[small][separate-recommended]` — update the shared schema and approval-pattern
+docs in a documentation-focused session after the final active-step/board contract is
+chosen.
+
+### R-10 — Missing: focused tests do not lock the discovered cross-module invariants
+
+`ApprovalBoardTest` creates only synthetic PurchaseRequest rows and asserts broad access
+using another PurchaseRequest (`api/tests/Feature/Approvals/ApprovalBoardTest.php:34-96`);
+it has no Leave row-scope, RMA registry, Payroll adapter, or delegated HTTP-action case.
+`ApprovalAutoResolveTest` uses synthetic `TestApprovable` records and checks ledger actions
+(`api/tests/Feature/Approval/ApprovalAutoResolveTest.php:33-55`, `149-180`), but has no
+active-step ordering, source-lifecycle, concurrency, or scheduler-recipient assertion.
+`ApprovalDelegationTest` covers the shared service and delegation CRUD, not an entity action
+route (`api/tests/Feature/Approvals/ApprovalDelegationTest.php:69-95`, `185-224`). There is
+also no test reference to `ApprovalTypeRegistry` in the approval test set.
+
+The green baseline is therefore insufficient evidence for the security and state contracts
+above.
+
+Classification: **Missing**.
+
+Disposition: `[medium][separate-recommended]` — add regression tests alongside each chosen
+implementation, with at least one two-connection race and one real Leave/PR/RMA source
+lifecycle case.
+
+### R-11 — Polish: the “Awaiting others” card uses an action CTA
+
+The board renders `ActiveCard` for both “My action required” and “Awaiting others”
+(`spa/src/pages/approvals/index.tsx:148-186`), while the shared card footer always says
+“Open record to act” (`spa/src/pages/approvals/index.tsx:346-349`). A user viewing a row that
+must be decided by another role is given inaccurate action wording. Terminal cards already
+use distinct “Open record to view” language (`spa/src/pages/approvals/index.tsx:388-390`).
+
+Classification: **Polish**.
+
+Disposition: `[small][same-session-ok]` — pass a view/action mode to the card and add a
+focused rendering assertion. Deferred because the overall M005 plan is not majority
+same-session-safe.
+
+## Inherited findings re-audited as resolved
+
+The current source and focused tests confirm that the inherited attempt/version, board
+delegation classification, workflow snapshot policy lookup, bounded board/scheduler scans,
+actor requirement, and registered-type escalation-link fixes are present. Examples include
+current-row helpers (`api/app/Common/Services/ApprovalService.php:188-219`), workflow
+snapshot identity (`api/app/Common/Services/ApprovalService.php:78-103`), bounded board and
+chunked scheduler queries (`api/app/Common/Services/ApprovalBoardService.php:52-105`,
+`api/app/Common/Services/ApprovalEscalationService.php:21-147`), and the active-actor guard
+(`api/app/Common/Services/ApprovalEscalationService.php:261-281`). They are not repeated as
+open findings here.
+
+The inherited fix log's Purchasing F-011 remains a separate Purchasing/business decision
+about a dead department-head auto-approval branch. This session did not modify or claim that
+dependency.
 
 ## Verification
 
-- `docker compose run --rm api php artisan test --filter='ApprovalServiceTest|ApprovalAutoResolveTest|ApprovalDelegationTest|ApprovalThresholdBoundaryTest|ApprovalWorkflowTest|ApprovalsWidgetTest|ApprovalDelegationAuthorityTest'` — **PASS**, 52 tests / 133 assertions. PHPUnit emitted pre-existing doc-comment metadata deprecation warnings in unrelated tests.
-- `npm run typecheck` in `spa/` — **PASS**.
-- Targeted `npx eslint src/pages/approvals/index.tsx src/api/approvals.ts src/types/approvals.ts --report-unused-disable-directives --max-warnings 0` in `spa/` — **PASS**.
-- No source changes were made in this session; the approval-workflows directory contains audit artifacts only.
+All API commands below used `DB_DATABASE=ogami_test_m005_agent_d`; the shared `ogami_test`
+database was not used.
 
-The module is released as `📋 Plan Ready`: the normal paths pass focused tests, but the remaining issues affect approval state, delegation visibility, automated decisions, cross-module data access, and production-scale query behavior.
+- `migrate:fresh --seed --env=testing --force` — **PASS** on the isolated database.
+- Focused core suite (`ApprovalServiceTest`, `ApprovalAutoResolveTest`, `ApprovalBoardTest`,
+  `ApprovalDelegationTest`, `ApprovalDelegationAuthorityTest`) — **44 passed, 93 assertions**.
+- Focused consumer suite (`LeaveRequestVisibilityTest`, `LeaveRequestHardeningTest`,
+  `Purchasing/ApprovalWorkflowTest`, `ApprovalThresholdBoundaryTest`,
+  `Dashboard/ApprovalsWidgetTest`) — **33 passed, 119 assertions**.
+- Runtime probes on the same DB reproduced R-02, R-03, and R-05 as described above.
+- Approval PHP lint for all common approval/delegation classes — **PASS**.
+- SPA approval-file ESLint — **PASS**.
+- Full SPA `npm run typecheck` — **PASS**.
+
+No source or test fixes were implemented in this session. The module remains Plan Ready
+because the open work is dominated by cross-module authorization/state policy, scheduler
+semantics, and concurrency design.

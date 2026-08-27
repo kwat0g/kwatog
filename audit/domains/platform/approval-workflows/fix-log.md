@@ -212,3 +212,26 @@ unrelated tests on every run.
   plan's reasoning for keeping them separate.
 - **F-04 / F-07 policy confirmation** — product/security owner call, not an agent's.
 
+## Session 2026-08-27 — agent-d M005 re-audit (no product fixes)
+
+Claimed and audited the corrected registry path `platform/approval-workflows` (M005) with
+`bash audit/scripts/claim-module.sh platform approval-workflows`. The supplied isolated
+database was `ogami_test_m005_agent_d`; the shared `ogami_test` database was not used.
+
+Checks completed:
+
+- `migrate:fresh --seed --env=testing --force`: PASS.
+- Core approval/delegation suite (`ApprovalServiceTest`, `ApprovalAutoResolveTest`,
+  `ApprovalBoardTest`, `ApprovalDelegationTest`, `ApprovalDelegationAuthorityTest`): **44
+  passed, 93 assertions**.
+- Consumer suite (`LeaveRequestVisibilityTest`, `LeaveRequestHardeningTest`,
+  `Purchasing/ApprovalWorkflowTest`, `ApprovalThresholdBoundaryTest`,
+  `Dashboard/ApprovalsWidgetTest`): **33 passed, 119 assertions**.
+- Common approval/delegation PHP lint: PASS.
+- SPA approval-file ESLint and full `npm run typecheck`: PASS.
+- Runtime probes reproduced future-step SLA processing, auto-resolve source status drift,
+  and foreign Leave-card exposure; details and line evidence are in the current audit report.
+
+No source or test fix was completed, so there is no completed-fix entry or module commit for
+this session. Open work is recorded as R-01 through R-11 in `audit-report.md` and
+`action-plan.md`; the inherited Purchasing F-011 remains untouched and deferred.
