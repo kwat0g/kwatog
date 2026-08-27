@@ -352,3 +352,29 @@ returns its matching employee and `query: "PaddedQuery"`.
 
 F09, F10, F13, F14, F15, and F16 remain open and out of scope; F11 remains complete.
 Release status: `🔁 Needs Re-audit`.
+
+## Fix session: 2026-08-27 — M009-F15
+
+Claimed `platform / global-search` atomically with `audit/scripts/claim-module.sh`.
+
+### M009-F15 — CommandPalette focus trap
+
+`CommandPalette` now scopes keyboard focus to its `aria-modal` dialog. Tab and
+Shift+Tab wrap from the last and first focusable controls respectively, and an
+unexpected focus escape is redirected to the appropriate edge. The dialog has a
+programmatic focus fallback while Escape handling and opener focus restoration
+remain unchanged.
+
+Focused regressions cover forward wrapping, reverse wrapping, Escape close with
+opener restoration, and the existing open/close focus restoration behavior.
+
+### Focused verification
+
+- `audit/scripts/claim-module.sh platform global-search` — **PASS: CLAIMED**.
+- `docker compose run --rm --no-deps spa npm run test:run -- src/components/ui/CommandPalette.test.tsx` — **PASS: 13 tests**; existing React `act(...)` warnings only.
+- `docker compose run --rm --no-deps spa npx eslint src/components/ui/CommandPalette.tsx src/components/ui/CommandPalette.test.tsx --max-warnings 0` — **PASS**.
+- `docker compose run --rm --no-deps spa npm run typecheck` — **PASS**.
+- `git diff --check` — **PASS**.
+
+F09, F10, F13, F14, and F16 remain open and out of scope; F11 and F12 remain complete.
+Release status: `🔁 Needs Re-audit`.

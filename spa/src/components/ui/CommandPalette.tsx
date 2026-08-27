@@ -71,6 +71,16 @@ interface SearchResponse {
 /** Stable empty reference — a fresh `[]` per render would break the `sections` memo. */
 const NO_GROUPS: PaletteGroup[] = [];
 
+/** Standard keyboard-focusable descendants used by the palette focus trap. */
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function getFocusableElements(container: HTMLElement): HTMLElement[] {
+  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+    (element) => !element.closest('[hidden], [aria-hidden="true"]'),
+  );
+}
+
 const ICONS: Record<GroupType, IconType> = {
   employee: LuUser,
   sales_order: LuShoppingCart,
@@ -162,6 +172,7 @@ export function CommandPalette({ open, onClose }: Props) {
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   /** Whatever had focus when the palette opened, so it can be given back. */
   const openerRef = useRef<HTMLElement | null>(null);
 
@@ -368,7 +379,31 @@ export function CommandPalette({ open, onClose }: Props) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === 'Tab') {
+        const dialog = dialogRef.current;
+        if (!dialog) return;
+
+        const focusable = getFocusableElements(dialog);
+        if (focusable.length === 0) {
+          e.preventDefault();
+          dialog.focus();
+          return;
+        }
+
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        const active = document.activeElement;
+
+        if (e.shiftKey) {
+          if (active === first || !dialog.contains(active)) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else if (active === last || !dialog.contains(active)) {
+          e.preventDefault();
+          first.focus();
+        }
+      } else if (e.key === 'Escape') {
         e.preventDefault();
         onClose();
       } else if (e.key === 'ArrowDown') {
@@ -409,7 +444,9 @@ export function CommandPalette({ open, onClose }: Props) {
     >
       <div className="absolute inset-0 bg-black/30" />
       <div
+        ref={dialogRef}
         className="relative w-full max-w-2xl rounded-md border border-default bg-canvas shadow-menu overflow-hidden animate-slide-up"
+        tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2 px-3 py-2.5 border-b border-default">

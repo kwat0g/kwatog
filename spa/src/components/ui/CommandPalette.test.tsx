@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AxiosError, type AxiosResponse } from 'axios';
 import { client } from '@/api/client';
@@ -14,6 +15,15 @@ function group(label: string, itemLabel: string) {
     type: 'sales_order',
     items: [{ id: '1', label: itemLabel, sublabel: null, status: null, amount: null, url: '/x' }],
   };
+}
+
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function dialogFocusableElements(dialog: HTMLElement): HTMLElement[] {
+  return Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+    (element) => !element.closest('[hidden], [aria-hidden="true"]'),
+  );
 }
 
 function renderPalette() {
@@ -210,6 +220,50 @@ describe('CommandPalette failure states', () => {
 describe('CommandPalette focus handling', () => {
   beforeEach(() => vi.restoreAllMocks());
 
+  it('wraps forward Tab focus from the last control to the first', async () => {
+    vi.spyOn(client, 'get').mockResolvedValue({
+      data: { data: [group('Orders', 'ROW')], query: 'abcd' },
+    } as never);
+
+    const input = renderPalette();
+    await waitFor(() => expect(document.activeElement).toBe(input));
+    fireEvent.change(input, { target: { value: 'abcd' } });
+    await screen.findByText('ROW');
+
+    const dialog = screen.getByRole('dialog', { name: 'Global search' });
+    const focusable = dialogFocusableElements(dialog);
+    expect(focusable.length).toBeGreaterThan(1);
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    last.focus();
+    fireEvent.keyDown(last, { key: 'Tab' });
+
+    expect(document.activeElement).toBe(first);
+  });
+
+  it('wraps reverse Shift+Tab focus from the first control to the last', async () => {
+    vi.spyOn(client, 'get').mockResolvedValue({
+      data: { data: [group('Orders', 'ROW')], query: 'abcd' },
+    } as never);
+
+    const input = renderPalette();
+    await waitFor(() => expect(document.activeElement).toBe(input));
+    fireEvent.change(input, { target: { value: 'abcd' } });
+    await screen.findByText('ROW');
+
+    const dialog = screen.getByRole('dialog', { name: 'Global search' });
+    const focusable = dialogFocusableElements(dialog);
+    expect(focusable.length).toBeGreaterThan(1);
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    first.focus();
+    fireEvent.keyDown(first, { key: 'Tab', shiftKey: true });
+
+    expect(document.activeElement).toBe(last);
+  });
+
   it('gives focus back to whatever opened it', async () => {
     const opener = document.createElement('button');
     opener.textContent = 'Search…';
@@ -231,6 +285,37 @@ describe('CommandPalette focus handling', () => {
 
     rerender(tree(false));
     await waitFor(() => expect(document.activeElement).toBe(opener));
+
+    opener.remove();
+  });
+
+  it('closes with Escape and restores focus to the opener', async () => {
+    const opener = document.createElement('button');
+    opener.textContent = 'Search…';
+    document.body.appendChild(opener);
+    opener.focus();
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    function Harness() {
+      const [open, setOpen] = useState(true);
+      return (
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter>
+            <CommandPalette open={open} onClose={() => setOpen(false)} />
+          </MemoryRouter>
+        </QueryClientProvider>
+      );
+    }
+
+    render(<Harness />);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Search query')));
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Global search' })).not.toBeInTheDocument(),
+    );
+    expect(document.activeElement).toBe(opener);
 
     opener.remove();
   });
