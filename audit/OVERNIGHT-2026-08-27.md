@@ -9,11 +9,22 @@ Recovery snapshot if anything goes wrong: `git checkout wip-snapshot-2026-08-26`
 
 ---
 
-## READ THIS FIRST — 7 decisions only you can make
+## READ THIS FIRST — 15 decisions only you can make
 
-None of these are blocked on work. Each was deliberately left undecided because
-picking wrong moves money, changes who can see what, or trades away an integrity
-guarantee. Evidence for each is in the named module's `fix-log.md`.
+None of these are blocked on work — the code around them is done. Each was
+deliberately left undecided because picking wrong moves money, changes who can see
+what, or trades away an integrity guarantee. Evidence for each is in the named
+module's `fix-log.md`.
+
+**If you only read four, read these — all financial or IATF, and all measured:**
+- **13** — `coa_verified` can never be set true by anyone, including QC, while the UI
+  says "Pending Quality verification" forever. An IATF incoming-material control that
+  looks present and is not.
+- **11** — a balance sheet goes imbalanced the moment it is dated after its fiscal
+  year. Measured with a real ₱10,000 posting.
+- **12** — every machine-generated journal entry loses its maker.
+- **15** — the same asset disposal reports two different losses depending on cron
+  timing.
 
 1. **Audit immutability vs. user deletability.** `audit_logs.user_id` has an
    `ON DELETE SET NULL` FK, and `audit_logs` carries an `audit_logs_prevent_update`
@@ -372,3 +383,33 @@ portal all four failures turned out to be fixtures building `draft` rows the pol
 deliberately hides; the MRP money assertion was proven by adding one missing
 fixture field and watching all five original expected values pass unchanged; and one
 agent corrected a diagnosis I had given it rather than accepting it.
+
+---
+
+## Housekeeping left for you (deliberately not done unasked)
+
+**30 scratch test databases** remain, from many sessions across several days. None is
+`ogami` (your dev database) or `ogami_test` (the canonical one) — both untouched. I did
+not drop them because it is destructive and unauthorised, and two were explicitly left
+by agents for re-verification. `ogami_night3` holds the final verified suite state.
+
+To list and drop them when you are ready:
+```bash
+docker compose exec -T db psql -U ogami -d postgres -Atc \
+  "select datname from pg_database where datname like 'ogami%' and datname not in ('ogami','ogami_test') order by datname;"
+# then, per database you want gone:
+docker compose exec -T db psql -U ogami -d postgres -c "DROP DATABASE IF EXISTS <name>;"
+```
+
+**32 orphaned `.lock` directories** remain under `audit/domains/*/*/`, from sessions
+that crashed before tonight. They are now gitignored, so they are filesystem state
+only. `claim-module.sh` auto-reclaims a lock older than 6 hours, so they will clear
+themselves — or reclaim one deliberately with:
+```bash
+bash audit/scripts/claim-module.sh <domain> <module> 0
+```
+Every module worked tonight released its own lock correctly.
+
+**Nothing is pushed.** 47 commits sit on `audit/2026-08-26-five-modules`; `main` is
+untouched. Review at your pace, and `git checkout wip-snapshot-2026-08-26` recovers
+the pre-session tree if you need it.
