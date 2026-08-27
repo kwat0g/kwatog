@@ -1,34 +1,32 @@
 # M018 — Attendance & DTR action plan
 
-Status: 🔁 Needs Re-audit  
-Audit date: 2026-08-24  
+Status: 📋 Plan Ready
+Audit date: 2026-08-27
 Overall recommendation: separate-recommended
 
-## Ordered work
+## Ordered actions
 
-| Priority | Finding | Scope | Session recommendation | Deliverable / acceptance evidence |
-|---|---|---|---|---|
-| P0 | M018-F01 OT decision authorization | medium | separate-recommended | Approve, reject, and bulk approve enforce system-admin/HR versus same-department policy inside the service transaction; cross-department negative API tests pass. |
-| P0 | M018-F02 locked-payroll attendance mutability | medium | separate-recommended | Manual, paired-import, raw-import, delete, and restore paths share one finalized/disbursed/voided guard; locked-period tests prove no attendance or derived OT changes. |
-| P1 | M018-F09 authorization/lifecycle regression suite | medium | separate-recommended | PostgreSQL feature suite runs; cross-department, locked-period, restore, assignment-overlap, holiday-conflict, and concurrency cases are executable in CI. |
-| P1 | M018-F03 archive restore and holiday cache | small | same-session after P0 controls | All soft-deleted resources bind with `withTrashed`; restore invalidates holiday-year cache; archive→restore tests pass. |
-| P1 | M018-F04 attendance correction workflow | medium | separate-recommended | HR can inspect, add, edit, archive, and restore a DTR through a guarded SPA flow with audit context and locked-period errors. |
-| P1 | M018-F05 shift assignment overlap invariant | medium | separate-recommended | New assignments truncate or reject every intersecting interval; database/application invariant and concurrent writes are tested. |
-| P1 | M018-F06 holiday-date invariant | small-to-medium | separate-recommended | Same-date holiday behavior is explicitly defined, validated, deterministically cached, and covered for regular/special conflicts. |
-| P2 | M018-F07 merged shift-time validation | small | same-session after P0 controls | Partial shift updates cannot create equal start/end values; DTR rejects invalid schedules. |
-| P2 | M018-F08 raw-punch product path | small-to-medium | separate-recommended if contractual | Raw import is either explicitly exposed and tested end-to-end or clearly marked internal and removed from product claims. |
-| P2 | OT error-detail polish | small | same-session after backend hardening | Server validation/authorization reasons are surfaced in HR OT action toasts. |
+| Order | Finding | Scope | Session recommendation | Deliverable / acceptance evidence |
+|---:|---|---|---|---|
+| 1 | M018-F10 payroll membership/scope-drift fence | large | separate-recommended | Locked attendance writes consult immutable payroll employee membership/claims; moved-out and moved-in scoped employees are covered by transaction-safe tests. |
+| 2 | M018-F11 bulk OT unexpected-error disclosure | small | separate-recommended | Expected business failures remain actionable; unexpected failures are logged and returned with a stable safe reason; JSON never contains raw exception text. |
+| 3 | M018-F09 authorization/lifecycle/concurrency/browser coverage | large | separate-recommended | Cross-department OT denial, locked writes, restore, shift assignment, holiday, contention, correction UI, and authenticated browser tests run in CI. |
+| 4 | M018-F15 recurring holiday semantics | medium | separate-recommended | Recurring holidays apply across years with defined leap-day behavior and cache/DTR regression coverage. |
+| 5 | M018-F08 raw-punch product decision | medium | separate-recommended | Raw import is either exposed with an explicit tested contract and UI, or marked internal with product copy/tests no longer implying support. |
+| 6 | M018-F12 archived/inactive shift assignment validation | small | separate-recommended | Assignment writes reject trashed shifts and follow a documented inactive-shift rule; single and bulk tests pass. |
+| 7 | M018-F13 nullable correction fields | small | same-session-ok | SPA/API send explicit nulls when clearing shift, time-in, or time-out; correction tests prove persisted values are cleared. |
+| 8 | M018-F14 strict attendance date input | small | same-session-ok | Create input requires/normalizes `Y-m-d`; datetime-shaped values return validation errors rather than parse failures. |
+| 9 | M018-F16 cancellation notification wording/type | small | same-session-ok | Cancelled OT produces cancellation copy/type; approved and rejected notifications remain distinct. |
+| 10 | M018-F17 zero-minute auto-OT guard | small | same-session-ok | Exact shift-end attendance never creates a zero-hour OT request, even when the configured threshold is zero. |
 
-## Suggested implementation sequence
+## Gate application
 
-1. Write the policy tests first: department-head same-department success, cross-department approve/reject/bulk denial, HR/system-admin all-record behavior, and self-approval denial.
-2. Introduce a shared attendance-date mutability guard that uses the payroll period's authoritative locked semantics, and apply it to every attendance write path before DTR recomputation or OT detection.
-3. Repair soft-delete route binding and service-based restore, including holiday cache invalidation. Add archive/restore API tests before exposing the UI action.
-4. Build the correction workflow around the same guard and audit trail. Keep employee/date immutable on edit; use explicit shift and time validation; show locked-period and server validation messages.
-5. Fix assignment interval handling and holiday-date policy, then add database/application invariants and concurrency tests.
-6. Decide whether raw-punch import is a supported product capability. If yes, add an explicit endpoint/mode and browser path; if not, keep it internal and document the paired format honestly.
-7. Run the full backend feature suite, PHP lint, SPA typecheck/lint/unit/build, authenticated browser tests, and a production-like payroll/attendance smoke test before verification.
+The plan has four `same-session-ok` actions and six `separate-recommended` actions. The total plan is not small and the same-session-ok actions are not a majority, so the gate is **Plan Ready**: do not modify production code in this audit session.
 
-## Audit-session decision
+## Verification sequence for the next session
 
-This plan was resumed in a dedicated session and the backend controls, restore paths, correction workflow, assignment/holiday invariants, merged-time validation, and OT error reporting were implemented. The raw-punch product-surface decision and environment-dependent PostgreSQL/browser verification remain open, so the module is released as Needs Re-audit rather than Verified.
+1. Add the payroll-membership and bulk-error tests before implementation; preserve the existing locked-row transaction fence.
+2. Decide raw-punch and recurring-holiday contracts with the owning product/payroll stakeholders, then implement their selected behavior.
+3. Add the negative API, PostgreSQL contention, and authenticated browser coverage listed in F09.
+4. Apply the small correction/date/notification/threshold changes and run focused backend tests using a unique `DB_DATABASE`, SPA typecheck/lint/unit checks, and the browser smoke path.
+5. Commit explicit M018-owned files, recheck the generated registry is untouched, and release M018 only after all deferred findings have evidence.

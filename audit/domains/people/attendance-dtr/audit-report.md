@@ -1,167 +1,149 @@
-# M018 — Attendance & DTR audit report
+# M018 — Attendance & DTR re-audit report
 
-Audit date: 2026-08-24  
-Claim: people / attendance-dtr  
-Registry tier: 4  
-Status: 📋 Plan Ready  
+Audit date: 2026-08-27
+Claim: people / attendance-dtr (M018)
+Registry tier: 4
+Status: 📋 Plan Ready
 Session recommendation: separate-recommended
 
 ## Verdict
 
-Production-readiness score: **43/100 — not ready for an unqualified release**.
+The previous hardening work is present in the current tree: OT decision policy, payroll-date mutability checks, soft-delete restore binding, the correction modal, assignment overlap handling, the active-holiday invariant, and merged shift-time validation are all implemented. Focused backend and SPA checks pass against the agent-owned database.
 
-The DTR calculation core is coherent and well covered by pure unit tests, and the self-service read/request paths are visibly present. The release is blocked by two critical server-side controls: department heads can decide OT records outside their department when they obtain a record identifier, and manual/paired attendance writes do not share the finalized-payroll lock used by the raw-punch path. Restore endpoints for all three soft-deletable attendance resources are also unreachable, and the back-office SPA has no attendance correction workflow despite exposing correction APIs.
-
-The majority of remediation requires a coordinated authorization/data-integrity session and negative regression coverage, so no production-code fix was applied during this audit.
+M018 is not ready for Verified status. The re-audit found a payroll-lock scope-drift gap, raw exception leakage from bulk OT approval, an unreachable raw-punch capability, and correction/holiday/shift edge cases. The findings span payroll integrity, API security, product behavior, and missing concurrency/browser evidence; the gate therefore requires a separate hardening session and no production-code fix was applied here.
 
 ## Evidence checked
 
-- Refreshed the module registry, atomically claimed M018, reviewed the existing dirty worktree and recent commits, and confirmed the M018 scaffold and lock.
-- Attendance routes, controllers, form requests, resources, models, services, settings migrations, payroll-period status semantics, shift-assignment persistence, holiday caching, and the shared hash-ID/soft-delete binding trait.
-- SPA attendance, import, overtime, shift, holiday, self-service DTR/OT pages, API clients, route guards, role/permission mapping, mobile self-service E2E coverage, and OT bulk-action E2E coverage.
-- `php artisan test tests/Unit/DTRComputationServiceTest.php tests/Unit/AutoDetectOvertimeTest.php tests/Feature/Attendance` — the two unit suites passed: **32 tests / 60 assertions**. The 27 feature tests could not reach the database because PostgreSQL host `db` was unavailable (`could not translate host name "db"`).
-- `php -l` over all `api/app/Modules/Attendance` PHP files — passed.
-- `npm run typecheck` in `spa` — passed.
-- `npm run lint` in `spa` — passed.
-- Focused Playwright mobile run was attempted. Vite could not start because `spa/node_modules/.vite-temp` is root-owned and returned `EACCES`; no browser assertions ran.
-- No live authenticated API/SPA environment, representative production dataset, query plan, or payroll lock integration rehearsal was available.
+- Refreshed `audit/00-MODULE-REGISTRY.md`, atomically claimed `people/attendance-dtr`, and verified the M018 lock, target docs, implementation, tests, current diff, and mtimes. The only pre-existing uncommitted change is the coordinator's generated registry timestamp; it was not edited.
+- Reviewed Attendance routes/controllers/requests/resources/models/services, migrations, tests, SPA attendance/import/OT/shift/holiday/self-service surfaces, and relevant Payroll/HR/Auth dependencies for context only.
+- Created and used only `DB_DATABASE=ogami_test_m018_agent_d`; no `ogami_test` database was used.
+- Backend `tests/Feature/Attendance`: **33 tests, 113 assertions — OK**.
+- Backend `tests/Unit/DTRComputationServiceTest.php` and `tests/Unit/AutoDetectOvertimeTest.php`: **32 tests, 60 assertions — OK**.
+- `tests/Feature/Notifications/OvertimeNotificationTest.php`: **4 tests, 5 assertions — OK**.
+- Focused PHP syntax checks: passed. `git diff --check` on M018 files: clean.
+- SPA targeted ESLint for attendance sources with `--max-warnings 0`: passed. SPA `npm run typecheck`: passed. Vitest found no attendance-page test files, so it provided no page behavior coverage.
+- No production-code changes were made during this session; no fix-log entry was required.
 
-## Strengths
+## Remediated prior findings
 
-- The Attendance API is behind Sanctum plus the attendance feature middleware, and each write family has a permission gate (`api/app/Modules/Attendance/routes.php:11-40`).
-- DTR computation has explicit handling for shifts, grace minutes, holidays, rest days, undertime, approved OT, night differential, missing punches, and invalid non-night inversions (`api/app/Modules/Attendance/Services/DTRComputationService.php:43-101,137-223`). The pure calculation suite passed all 32 tests run.
-- Attendance has a database uniqueness invariant for one employee/date and a lifecycle status check; OT has an enum status check (`api/database/migrations/0024_create_attendances_table.php:13-39`; `api/database/migrations/2026_08_13_220000_add_remaining_lifecycle_status_checks.php:61-64`).
-- Auto-OT detection uses a transaction, row lock, a partial unique source index, and an outbox event to make biometric replays idempotent (`api/app/Modules/Attendance/Services/OvertimeService.php:46-140`; `api/database/migrations/2026_08_13_100000_add_auto_overtime_source_unique.php:20-49`).
-- Self-service OT resolves the employee from the authenticated session and never accepts an employee ID; cancellation and restore re-check ownership (`api/app/Modules/HR/Controllers/SelfServiceController.php:172-225,268-329`).
-- The SPA has visible loading/error/empty states for the attendance list and import summary, and a mobile DTR render test (`spa/src/pages/attendance/index.tsx:139-149`; `spa/src/pages/attendance/import.tsx:106-133`; `spa/e2e/mobile/self-service-mobile.spec.ts:105-118`).
+The earlier F01–F07 findings are not carried forward as current defects: the locked OT decision policy is in `api/app/Modules/Attendance/Services/OvertimeDecisionPolicy.php:21-58`; the shared attendance write fence is called by create/update/delete/restore/recompute and both import paths (`api/app/Modules/Attendance/Services/AttendanceDateMutabilityGuard.php:22-57`, `api/app/Modules/Attendance/Services/AttendanceService.php:92-156`, `api/app/Modules/Attendance/Services/DTRImportService.php:99-113,229-246`); restore routes opt into trashed binding (`api/app/Modules/Attendance/routes.php:18,30,39`); the correction UI is present (`spa/src/pages/attendance/index.tsx:60-137`); assignment replacement rejects future overlaps (`api/app/Modules/Attendance/Services/ShiftAssignmentService.php:75-113`); the active-date holiday index is present (`api/database/migrations/2026_08_25_210000_enforce_one_active_holiday_per_date.php:29-55`); and shift updates validate merged times (`api/app/Modules/Attendance/Services/ShiftService.php:39-58`). The focused tests above verify the available regression coverage, but do not replace the missing concurrency/browser checks below.
 
 ## Findings
 
-### M018-F01 — Broken/critical: OT approve/reject endpoints do not enforce department scope
+### M018-F08 — Missing: raw-punch import has no reachable product path
 
-Priority: **P0**  
-Scope: **medium**  
+Priority: **P2**
+Scope: **medium**
 Recommendation: **separate-recommended**
 
-The approve, reject, and bulk-approve routes require only the broad `attendance.ot.approve` permission (`api/app/Modules/Attendance/routes.php:42-51`). The approve/reject form requests repeat that permission check but do not inspect the target employee (`api/app/Modules/Attendance/Requests/ApproveOvertimeRequestRequest.php:9-20`; `api/app/Modules/Attendance/Requests/RejectOvertimeRequestRequest.php:9-20`). The controller passes the route-bound record straight to the service, and bulk approval decodes arbitrary record hashes before calling the same service (`api/app/Modules/Attendance/Controllers/OvertimeController.php:62-85,129-154`).
+`DTRImportService` implements raw biometric event parsing and sessionization (`api/app/Modules/Attendance/Services/DTRImportService.php:125-262`), but the only HTTP import action calls the paired-row importer (`api/app/Modules/Attendance/Controllers/AttendanceController.php:74-78`). The SPA upload page documents and submits only `employee_no, date, time_in, time_out` (`spa/src/pages/attendance/import.tsx:44-49,79-102`). There is no request mode, route, or UI path for `importRawPunches()`.
 
-The service locks the authoritative row and checks pending state plus self-approval, but neither `approve()` nor `reject()` checks the approver's department or an HR/admin all-record policy (`api/app/Modules/Attendance/Services/OvertimeService.php:203-238,272-295`). In contrast, list/show explicitly scope an OT approver to their own department (`api/app/Modules/Attendance/Services/OvertimeService.php:172-188`; `api/app/Modules/Attendance/Controllers/OvertimeController.php:41-59`). The seeded `department_head` role has `attendance.ot.approve` (`api/database/seeders/RolePermissionSeeder.php:670-688`), and the catalog defines that permission as the approval capability (`api/database/seeders/RolePermissionSeeder.php:89-97`).
+Action: decide whether raw biometric support is contractual. If yes, expose an explicit format/mode with row-level results, payroll-lock behavior, and browser coverage; otherwise label the service internal and remove any product implication that raw events are supported.
 
-Therefore a department head can approve or reject an out-of-department OT request if they obtain its hash ID, even though the list and detail surfaces hide it. This can change payroll inputs and is a server-side authorization bypass; hash IDs are identifiers, not authorization.
+### M018-F09 — Incomplete: high-risk authorization and lifecycle paths lack negative/concurrency coverage
 
-Action: centralize an actor-aware OT decision policy and invoke it inside the locked service transaction for single and bulk decisions. Permit system admin and explicitly defined HR/all-record roles; require same-department ownership for department heads; reject cross-department records before state mutation. Add negative feature tests for approve, reject, and bulk approve, including a same-department success and cross-department 403.
-
-### M018-F02 — Broken/critical: manual and paired-import attendance writes can mutate locked payroll dates
-
-Priority: **P0**  
-Scope: **medium**  
+Priority: **P1**
+Scope: **large**
 Recommendation: **separate-recommended**
 
-Manual create/update/delete write through `AttendanceService` without consulting `PayrollPeriod` (`api/app/Modules/Attendance/Services/AttendanceService.php:91-116`). The corresponding API writes are exposed directly by the attendance routes (`api/app/Modules/Attendance/routes.php:33-40`). The paired CSV importer also performs `firstOrNew`, recalculation, and save without a finalized-period check (`api/app/Modules/Attendance/Services/DTRImportService.php:24-121`).
+The current focused suites execute successfully, but the repository still lacks executable coverage for cross-department approve/reject/bulk denial, employee-scope changes after payroll computation, all archive/restore flows, archived-shift assignment, and concurrent payroll/attendance writes. The SPA has no attendance correction/restore browser test, and Vitest reports no page tests for `spa/src/pages/attendance`.
 
-The raw-punch path is the only attendance writer that snapshots payroll ranges and blocks finalized/disbursed dates (`api/app/Modules/Attendance/Services/DTRImportService.php:207-250,287-311`). Payroll semantics additionally define `voided` as locked (`api/app/Modules/Payroll/Enums/PayrollPeriodStatus.php:30-40`; `api/app/Modules/Payroll/Models/PayrollPeriod.php:139-147`), while the raw importer checks only finalized and disbursed statuses. The write paths therefore disagree about whether already-closed payroll attendance may change, and at least the manual and paired paths bypass the lock entirely.
+Action: add focused negative feature tests and database contention tests, then run an authenticated browser smoke path covering attendance correction, restore, OT decisions, import errors, and locked-period messaging.
 
-Action: create one shared attendance-date mutability guard covering finalized, disbursed, and voided periods, and call it from manual create/update/delete/restore plus both import paths before mutation. Define whether the sanctioned correction is payroll void/force-unlock or a controlled adjustment workflow; lock/recheck the period and attendance row in the same transaction. Add feature tests for every write path and for a period transitioning to locked during an import.
+### M018-F10 — Broken: payroll mutability guard authorizes against live employee scope instead of frozen payroll membership
 
-### M018-F03 — Broken/high: attendance, shift, and holiday restore routes cannot bind archived rows
-
-Priority: **P1**  
-Scope: **small**  
-Recommendation: **same-session only after authorization and payroll fixes**
-
-All three restore routes omit `->withTrashed()` (`api/app/Modules/Attendance/routes.php:18,30,39`), while Attendance, Shift, and Holiday use `SoftDeletes` (`api/app/Modules/Attendance/Models/Attendance.php:14-18`; `api/app/Modules/Attendance/Models/Shift.php:12-16`; `api/app/Modules/Attendance/Models/Holiday.php:12-16`). The shared hash-ID trait documents that soft-deleted binding is available only when the route opts in and otherwise uses a normal query excluding trashed rows (`api/app/Common/Traits/HasHashId.php:23-43,45-67`). The controller methods then call `restore()` only after binding (`api/app/Modules/Attendance/Controllers/AttendanceController.php:68-71`; `api/app/Modules/Attendance/Controllers/ShiftController.php:60-64`; `api/app/Modules/Attendance/Controllers/HolidayController.php:58-61`).
-
-Archived records consequently resolve to 404 instead of reaching the restore action. Holiday restore also bypasses the service's year-cache invalidation: delete busts the cache, but controller restore does not (`api/app/Modules/Attendance/Services/HolidayService.php:53-58,64-89`).
-
-Action: opt all three routes into soft-deleted binding, move restore through services, invalidate the affected holiday year, and add archive→restore API tests for each resource.
-
-### M018-F04 — Missing/high: no back-office attendance correction workflow is reachable from the SPA
-
-Priority: **P1**  
-Scope: **medium**  
+Priority: **P0**
+Scope: **large**
 Recommendation: **separate-recommended**
 
-The backend exposes manual attendance create/update/delete/restore operations and marks records as manual (`api/app/Modules/Attendance/routes.php:33-40`; `api/app/Modules/Attendance/Services/AttendanceService.php:91-116`). The SPA attendance page renders filters, a table, and import/shift/holiday navigation, but has no create action, row navigation, or row actions (`spa/src/pages/attendance/index.tsx:104-163`). The API client contains create/update/delete/restore methods, but no attendance page calls them (`spa/src/api/attendance/attendances.ts:32-50`).
+The guard locks overlapping periods and blocks finalized, disbursed, and voided periods, but decides applicability only from the employee's current department, employment type, and pay type (`api/app/Modules/Attendance/Services/AttendanceDateMutabilityGuard.php:31-46,61-86`). Payroll computes the scoped employee set using the same attributes as of the period end (`api/app/Modules/Payroll/Services/PayrollPeriodService.php:523-551`) and persists an employee/cycle claim inside the payroll transaction (`api/app/Modules/Payroll/Services/PayrollCalculatorService.php:291-303`; `api/app/Modules/Payroll/Models/PayrollCycleClaim.php:12-18`).
 
-HR/attendance users therefore have no supported UI path to correct a missing punch, add a manual DTR, inspect a record, or restore an archived row. Import is the only visible correction route, and its paired CSV contract is a poor substitute for targeted correction.
+For a scoped period, if an employee is paid and the employee is later moved to another department, pay type, or employment type, the live-attribute check can return false even though a payroll row/claim for that employee and cycle exists. Attendance for the locked date can then be edited, deleted, restored, or recomputed without the intended payroll fence. This is a payroll-integrity bypass, not merely a stale-list issue.
 
-Action: define the correction workflow and permissions, then add a detail/edit form with explicit employee/date immutability, finalized-period messaging, audit context, and archive/restore actions. Add browser coverage for validation, server errors, and the locked-period response.
+Action: make the write fence consult immutable payroll membership/employee claims (or persist a period membership snapshot) in addition to the period lock; test a paid employee moved out of scope, a moved-in employee, and a company-wide period inside the same transaction fence.
 
-### M018-F05 — Incomplete/high: shift assignment writes can create overlapping effective intervals
+### M018-F11 — Broken: bulk OT approval returns raw exception messages to the client
 
-Priority: **P1**  
-Scope: **medium**  
+Priority: **P1**
+Scope: **small**
 Recommendation: **separate-recommended**
 
-The assignment table has only employee/date and shift indexes; it has no interval-exclusion or overlap invariant (`api/database/migrations/0022_create_employee_shift_assignments_table.php:13-23`). Both assignment methods close only rows whose `end_date` is null, then insert the new interval (`api/app/Modules/Attendance/Services/ShiftAssignmentService.php:22-47,53-71`). An existing future or explicitly ended assignment can therefore overlap the new effective date. `current()` silently chooses the most recent effective date when overlaps exist (`api/app/Modules/Attendance/Services/ShiftAssignmentService.php:74-90`), masking ambiguous historical data rather than rejecting it.
+`bulkApprove()` catches every `Throwable` and places `$e->getMessage()` directly into the failed response (`api/app/Modules/Attendance/Services/OvertimeService.php:256-274`). The controller serializes those failure reasons without sanitization (`api/app/Modules/Attendance/Controllers/OvertimeController.php:141-158`). A database/query or unexpected runtime failure can therefore expose SQL, table names, or internal infrastructure details to the caller; only expected business-rule failures should become user-facing row reasons.
 
-Action: in one transaction, truncate or reject every existing interval that intersects the new interval, including future-ended rows. Add a database-level PostgreSQL exclusion constraint where supported, or a documented application invariant for other drivers, plus overlap and concurrent-assignment tests.
+Action: distinguish expected domain/validation failures from unexpected exceptions, return a stable safe message/code for the latter, and log the exception with the request/OT ID. Add a regression test that injects an unexpected exception and asserts no raw message reaches JSON.
 
-### M018-F06 — Incomplete/high: multiple holidays on one date collapse nondeterministically in DTR computation
+### M018-F12 — Incomplete: shift assignment accepts archived or inactive shift IDs
 
-Priority: **P1**  
-Scope: **small-to-medium**  
+Priority: **P2**
+Scope: **small**
 Recommendation: **separate-recommended**
 
-The holidays table permits multiple names on the same date because its unique key is `(date, name)`, not `date` (`api/database/migrations/0023_create_holidays_table.php:13-23`). `HolidayService::loadYear()` converts the collection into a date-keyed map with `mapWithKeys`, so a later row silently overwrites an earlier holiday, with no explicit ordering or conflict rule (`api/app/Modules/Attendance/Services/HolidayService.php:60-84`). `forDate()` then returns at most one holiday type to DTR (`api/app/Modules/Attendance/Services/HolidayService.php:60-73`).
+The assignment requests only decode the submitted hash (`api/app/Modules/Attendance/Requests/AssignEmployeeShiftRequest.php:18-33`; `api/app/Modules/Attendance/Requests/BulkAssignShiftRequest.php:18-37`), and the service passes the resulting integer straight into the assignment row (`api/app/Modules/Attendance/Services/ShiftAssignmentService.php:23-40,47-54,107-113`). `Shift` is soft-deletable (`api/app/Modules/Attendance/Models/Shift.php:14-16`), while `current()` resolves the assignment through a normal relation and can return null when the assigned shift is archived (`api/app/Modules/Attendance/Services/ShiftAssignmentService.php:61-72`).
 
-Regular versus special holiday selection can therefore change pay-rate computation when duplicate-date rows exist. The UI calendar can display several rows for one date, but the calculation engine cannot represent that ambiguity.
+A caller with a known old shift hash can create a valid-FK assignment to a trashed shift; DTR then loses the assigned shift and may fall back to another schedule. The same request path also permits a new assignment to an inactive shift without an explicit policy decision.
 
-Action: decide the domain invariant: one effective holiday type per date, or an explicit precedence/combination rule. Enforce it in validation and the database where possible, order the cache query deterministically, and add regular+special same-date tests.
+Action: resolve the shift inside the write transaction, reject trashed IDs, and define whether inactive shifts may be newly assigned. Add single/bulk tests for missing, trashed, inactive, and active shifts.
 
-### M018-F07 — Incomplete/medium: partial shift updates can admit equal start/end times
+### M018-F13 — Incomplete: correction form cannot clear an existing punch or shift
 
-Priority: **P2**  
-Scope: **small**  
-Recommendation: **same-session only after the separate hardening work**
+Priority: **P1**
+Scope: **small**
+Recommendation: **same-session-ok**
 
-Create validation rejects equal start/end values (`api/app/Modules/Attendance/Requests/StoreShiftRequest.php:23-35`), but update validation compares only submitted fields and the service performs no persisted-state invariant check (`api/app/Modules/Attendance/Requests/UpdateShiftRequest.php:24-37`; `api/app/Modules/Attendance/Services/ShiftService.php:38-51`). A PATCH that changes only `end_time` can therefore set it equal to the existing `start_time`. DTR defensively rolls a non-night end forward by a day (`api/app/Modules/Attendance/Services/DTRComputationService.php:137-145`), turning the invalid shift into a 24-hour schedule instead of rejecting it.
+The correction form maps empty controls to `undefined` for shift, time-in, and time-out (`spa/src/pages/attendance/index.tsx:99-117`). The API type also models those fields as optional strings rather than nullable values (`spa/src/api/attendance/attendances.ts:13-23`), while the backend explicitly supports `sometimes|nullable` for all three (`api/app/Modules/Attendance/Requests/UpdateAttendanceRequest.php:18-24`). JSON serialization omits `undefined`, so an edit that clears a bad punch or removes a shift sends no field and leaves the old value in place.
 
-Action: validate the merged existing/new times in the request or service and add a partial-update regression test.
+Action: model update fields as `string | null`, send null for an explicit clear, and add a UI/API regression test for clearing time-in, time-out, and shift.
 
-### M018-F08 — Missing/medium: raw-punch import is implemented but not reachable as a product path
+### M018-F14 — Incomplete: attendance date validation accepts values that are then concatenated as dates
 
-Priority: **P2**  
-Scope: **small-to-medium**  
-Recommendation: **separate-recommended if raw biometric support is contractual**
+Priority: **P2**
+Scope: **small**
+Recommendation: **same-session-ok**
 
-`DTRImportService` contains an additive raw-event importer and sessionizer (`api/app/Modules/Attendance/Services/DTRImportService.php:123-262`; `api/app/Modules/Attendance/Services/PunchSessionizer.php:9-127`), and raw import has feature tests. The only HTTP controller import action calls the paired `import()` method (`api/app/Modules/Attendance/Controllers/AttendanceController.php:74-78`), and the SPA upload page documents and submits only `employee_no, date, time_in, time_out` (`spa/src/pages/attendance/import.tsx:44-49,79-102`). No route, request mode, or UI path selects `importRawPunches()`.
+Create validation uses the broad `date` rule (`api/app/Modules/Attendance/Requests/StoreAttendanceRequest.php:18-28`), then concatenates the raw value with an `H:i` time (`api/app/Modules/Attendance/Requests/StoreAttendanceRequest.php:40-43`). A valid datetime string can pass the rule and produce an invalid compound value such as `2026-04-15 12:00:00 08:00:00`, causing a parse failure or ambiguous timestamp instead of a field validation response.
 
-Action: either remove/label the raw path as an internal service, or expose an explicit raw-punch import contract with format detection, validation, finalized-period behavior, result reporting, and browser coverage. Do not advertise raw biometric support until the path is reachable.
+Action: require `date_format:Y-m-d` for attendance date inputs or normalize to a date before combining times; add a malformed/date-time input regression test.
 
-### M018-F09 — Incomplete/high: security and lifecycle regression coverage does not match the risk
+### M018-F15 — Missing: recurring holidays are stored but ignored outside the source year
 
-Priority: **P1**  
-Scope: **medium**  
+Priority: **P1**
+Scope: **medium**
 Recommendation: **separate-recommended**
 
-The focused feature suites include auto-OT, OT lifecycle, and CSV import tests, but they could not execute because the configured PostgreSQL host `db` was unavailable. Existing tests do not cover cross-department approve/reject/bulk decisions, the three archive/restore routes, finalized-period protection on manual and paired writes, assignment overlaps, or duplicate-date holiday resolution. Browser coverage renders self-service DTR (`spa/e2e/mobile/self-service-mobile.spec.ts:105-118`) and tests OT bulk-action messaging (`spa/e2e/bulk-actions.spec.ts:304-381`), but there is no mobile OT test or attendance correction/restore flow.
+The API and UI expose `is_recurring` and label it “Recurs annually” (`api/app/Modules/Attendance/Requests/StoreHolidayRequest.php:25-32`; `spa/src/pages/attendance/holidays/index.tsx:337-364`). DTR lookup loads only rows whose stored date is in the requested year and keys them by the exact date (`api/app/Modules/Attendance/Services/HolidayService.php:78-104`). A recurring holiday created for 2026 therefore does not affect the same month/day in 2027, so holiday pay/rates silently disappear after one year.
 
-Action: add negative authorization and lifecycle tests before implementation is considered complete. Run them with a writable dependency cache, a live PostgreSQL test service, and an authenticated browser/API smoke path.
+Action: define recurrence semantics, including leap-day behavior, then expand recurring records during lookup or materialize yearly instances. Add DTR tests across years and cache invalidation tests.
+
+### M018-F16 — Polish: cancellation notification is presented as a rejection
+
+Priority: **P2**
+Scope: **small**
+Recommendation: **same-session-ok**
+
+Self-service and approver cancellation set the request to the rejected enum and emit `OvertimeRequestDecided(..., false)` (`api/app/Modules/Attendance/Services/OvertimeService.php:320-352`). The queued listener maps every false decision to “Rejected” and the `attendance.ot_rejected` notification type (`api/app/Modules/Attendance/Listeners/NotifyOnOvertimeDecided.php:16-34`). An employee who withdraws a request consequently receives a rejection notice rather than a cancellation/withdrawal notice.
+
+Action: carry an explicit decision reason/type in the event or emit a cancellation event, then add notification assertions for approved, rejected, and cancelled requests.
+
+### M018-F17 — Incomplete: zero-minute auto-OT threshold creates zero-hour requests
+
+Priority: **P2**
+Scope: **small**
+Recommendation: **same-session-ok**
+
+The auto-OT setting accepts a threshold of zero (`api/app/Modules/Attendance/Services/OvertimeService.php:56-60`). The detector only skips when `$extra < $threshold` and then rounds/creates the request (`api/app/Modules/Attendance/Services/OvertimeService.php:87-116`). With threshold `0`, an attendance ending exactly at shift end satisfies the condition and can create a `0.0`-hour pending OT request.
+
+Action: require positive extra minutes before creating an OT row, or enforce a strictly positive setting and document the behavior; add the exact-shift-end regression test.
 
 ## Polish pass
 
-- Attendance list and paired-import screens have loading, error, empty, retry, and import-summary states (`spa/src/pages/attendance/index.tsx:139-149`; `spa/src/pages/attendance/import.tsx:106-133`).
-- HR OT list approval/rejection failures are reduced to generic toasts (`spa/src/pages/attendance/overtime/index.tsx:55-74`), so server-side reasons such as a locked period or authorization failure are not shown. This is P2 polish after the backend contract is corrected.
-- No additional visual blocker was promoted above the authorization, payroll-integrity, restore, and workflow findings.
+- Attendance list and import have loading, error, empty, retry, and result states (`spa/src/pages/attendance/index.tsx:139-149`; `spa/src/pages/attendance/import.tsx:106-133`).
+- HR OT action errors are generally reduced to safe generic copy (`spa/src/pages/attendance/overtime/index.tsx:55-74`), but F11 must first establish the backend's safe error contract.
+- The HR OT list renders “New OT request” without a permission guard (`spa/src/pages/attendance/overtime/index.tsx:190-205`). Department-head users have approval visibility but not the create/edit permission in the seeded role map (`api/database/seeders/RolePermissionSeeder.php:89-100,670-688`), so the button can navigate them to an unauthorized form. This is low-risk UI polish and should be addressed with the OT permission work.
 
-## Production-audit assessment
+## Gate decision
 
-### Blockers / high-value risks
+No fix was applied. Only four of the ten ordered actions are `same-session-ok`, while the remaining actions require payroll/security/product decisions or larger regression work; the total scope is not small and the same-session-ok actions are not a majority.
 
-1. M018-F01 allows a department-scoped approver to mutate OT decisions outside their department.
-2. M018-F02 permits attendance changes to dates that payroll treats as locked, with inconsistent status coverage across import paths.
-3. M018-F03 makes archive recovery unavailable, while M018-F04 leaves manual DTR correction without a supported UI.
-4. M018-F09 leaves the critical authorization and lifecycle paths without executable negative regression coverage in this environment.
+## Next action
 
-### Evidence still missing
-
-- A live PostgreSQL run of the Attendance feature suite and new cross-department/locked-period tests.
-- Authenticated API proof that same-department OT approval succeeds while cross-department approve/reject/bulk requests fail.
-- Archive/restore fixtures for Attendance, Shift, and Holiday, including holiday cache refresh after restore.
-- Overlapping assignment and duplicate-date holiday fixtures against production-like data.
-- A live browser run with a writable Vite cache covering DTR, OT, import, correction, and mobile paths.
-
-### Next action
-
-Do not promote M018 to Verified. In a separate hardening session, first centralize OT decision authorization and the payroll-date mutability guard, then repair restore binding and define the attendance correction workflow. Add the negative regression suite before addressing interval/holiday invariants and raw-import/product polish.
+Keep M018 at 📋 Plan Ready. In a separate hardening session, first close the payroll membership fence and bulk-error disclosure, then decide the raw/recurring product contracts and add the negative/concurrency/browser evidence. The small correction/date/notification/threshold fixes can follow in the same or a later focused session after those contracts are settled.
