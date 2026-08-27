@@ -5,5 +5,5 @@ tier: 2
 roles: system_admin, finance_officer
 depends_on: journal-ledger, accounts-payable, accounts-receivable
 surface: M
-status: 🔁 Needs Re-audit
-last_session: 2026-08-26
+status: 📋 Plan Ready
+last_session: 2026-08-27
