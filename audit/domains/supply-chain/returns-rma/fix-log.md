@@ -440,6 +440,20 @@ Released `🔁 Needs Re-audit` — not because anything is broken, but because p
 7 are unimplemented pending the decisions above. Items 1, 2, 4, 5, 6, 8, 9, 10 and 11 are
 implemented and runtime-verified.
 
+## Re-audit session — 2026-08-27
+
+- Claim: `supply-chain/returns-rma` (M046), acquired with `audit/scripts/claim-module.sh`.
+- No production source changes were made. The existing implementation fixes were rechecked
+  with the focused Return Management/notification suite: **72 tests, 324 assertions passed**
+  using only `DB_DATABASE=ogami_test_m046_roll_c`.
+- PHP lint, focused RMA ESLint, and `git diff --check` passed. SPA typecheck still reports
+  only the unrelated `src/pages/assets/detail.tsx` missing `qrcode` module/implicit-any errors.
+- Current findings recorded in `audit-report.md`: RMA-014 source status checks are picker-only;
+  RMA-015 accepts quantity precision beyond `decimal(12,3)` (PostgreSQL rounds 1.0009 to 1.001);
+  RMA-016 source options stop at 100 documents per source type.
+- Status remains `📋 Plan Ready`; RMA-002/RMA-004/RMA-009 require business decisions and the
+  remaining implementation is separate-session work. No fix-log entry was needed for a source
+  fix because none was made.
 
 
 

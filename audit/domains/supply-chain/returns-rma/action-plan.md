@@ -1,5 +1,52 @@
 # Return Management (RMA) — Action Plan
 
+## Current re-audit plan
+
+The plan is ordered by money/stock risk and workflow dependency. It remains `📋 Plan Ready`:
+the unresolved work is predominantly separate-session work, and the first item requires a
+product/finance decision. No production source fix is approved by this session's gate.
+
+1. **Decide and implement customer credit/resolution semantics** — RMA-002, RMA-004
+   `[large] [separate-recommended]`
+   - Decide whether invoice-less SO/delivery and finance-only returns issue a credit note.
+   - Implement the chosen provenance rule consistently in validation, service, and UI.
+   - Implement/ref-link replacement and refund outcomes, or remove those choices and expose
+     an explicit pending-human state. Add financial regression coverage.
+
+2. **Enforce source-document lifecycle at the service boundary** — RMA-014
+   `[medium] [separate-recommended]`
+   - Recheck allowed invoice/SO/delivery/PO/GRN/bill statuses after hash-ID resolution,
+     under the existing row locks. Add direct-API tests for draft/cancelled sources.
+
+3. **Resolve the supplier incomplete-draft contract** — RMA-009
+   `[medium] [separate-recommended]`
+   - Either make missing source and provisional price explicit and non-reserving, or make
+     source-complete creation mandatory and remove the contradictory service promise.
+   - Cover API and SPA behavior at draft and submit boundaries.
+
+4. **Align received quantity validation with decimal storage** — RMA-015
+   `[small] [separate-recommended]`
+   - Require exactly the supported three decimal places before the scale-3 comparison and
+     persistence. Add a `1.0009` boundary regression test proving no rounded over-return.
+
+5. **Make source options pageable/searchable** — RMA-016
+   `[medium] [same-session-ok]`
+   - Replace each fixed latest-100 query with bounded pagination/search and add a UI flow
+     that preserves remaining-quantity and source-line provenance.
+
+6. **Add regression coverage for the remaining boundary contracts** — RMA-002, RMA-004,
+   RMA-009, RMA-014, RMA-015, RMA-016 `[medium] [separate-recommended]`
+   - Cover invoice-less/finance-only credit decisions, inert resolution handling, supplier
+     drafts, cancelled/draft source rejection, precision boundaries, and page boundaries.
+
+7. **Completion gate** `[small] [same-session-ok]`
+   - Mark M046 `✅ Verified` only after the decisions are recorded and the resulting focused
+     suite, feature/RBAC checks, PHP lint, and SPA module checks pass against
+     `DB_DATABASE=ogami_test_m046_roll_c`. The unrelated assets `qrcode` typecheck errors
+     remain outside M046.
+
+## Historical plan retained below
+
 The plan is ordered by workflow dependency and risk. This first-pass audit contains multiple financial, stock, Quality, lifecycle, and cross-module items, so the module remains `📋 Plan Ready`; no production source fixes are being rushed into this audit session.
 
 1. **Fix customer source-kind resolution and add source-path regression coverage.**

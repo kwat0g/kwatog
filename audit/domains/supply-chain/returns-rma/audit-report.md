@@ -1,19 +1,26 @@
 # Return Management (RMA) — Audit Report
 
 - Module: `supply-chain / returns-rma` (M046)
-- Audit date: 2026-08-25
-- Audit mode: fresh discovery → hardening → polish audit
+- Audit date: 2026-08-27
+- Audit mode: re-audit — discovery → hardening → polish
 - Status recommendation: `📋 Plan Ready`
 - Scope: Return Management API, its RMA migrations/models/services/listeners, the RMA SPA pages/API types, and the module's feature/permission entry points. Dependency modules were read for contracts only.
 
-> **2026-08-27 resolution pass.** Findings below are the original text, kept as the record.
-> Current state per finding — details and file:line in `fix-log.md`:
+> **2026-08-27 re-audit result.** The preferred M046 claim was acquired atomically. The
+> implementation, inherited docs, tests, git diff, and mtimes were inspected. Existing
+> implementation fixes were verified against the isolated required database; no production
+> source was changed in this session.
+>
+> Current state per finding — historical findings remain below for traceability:
 >
 > | finding | state |
 > |---|---|
 > | RMA-001, RMA-003 | fixed 2026-08-25, **runtime-verified 2026-08-27** (were never executed) |
 > | RMA-005, RMA-006, RMA-007, RMA-008, RMA-010, RMA-011, RMA-012, RMA-013 | fixed and verified 2026-08-27 |
 > | RMA-002, RMA-004, RMA-009 | **deferred — need a product/finance decision**, see "Deferred" in `fix-log.md` |
+> | RMA-014 | **incomplete — source lifecycle status is not rechecked server-side** |
+> | RMA-015 | **broken — receive validation accepts precision the storage contract rounds** |
+> | RMA-016 | **incomplete — source picker is capped at 100 documents per source type** |
 >
 > Two defects NOT in the original findings were found by finally running the suite, and are
 > the reason it mattered that no session had reached a database:
@@ -30,6 +37,92 @@
 > "highest + 1" convention silently skipped its own guards, because every `04xx_` file sorts
 > before every `2026_` file and the table it constrains is created by a timestamp migration.
 
+
+## Current re-audit findings
+
+### RMA-002 — Incomplete — Customer credit policy is undefined for invoice-less returns
+
+`dispose()` creates a customer credit note only when the root RMA has an `invoice_id`
+(`api/app/Modules/ReturnManagement/Services/ReturnRequestService.php:1015-1026`). The
+customer source paths also accept sales-order and delivery lines
+(`ReturnRequestService.php:279-315`), while the SPA deliberately omits invoice and order
+IDs for finance-only credits (`spa/src/pages/return-management/create.tsx:379-386`). Those
+returns can therefore reach disposition without any credit note, although
+`createCreditNote()` supports a nullable invoice link (`ReturnRequestService.php:1313-1370`).
+Finance/product must decide whether invoice provenance is mandatory or an invoice-less
+credit workflow is supported before this is changed.
+
+### RMA-004 — Missing — Replace and Refund resolutions remain inert
+
+The seeded resolution options include `replace`, `refund`, `credit_note`, `scrap`, and
+`return_to_vendor` (`api/database/migrations/0334_seed_return_option_settings.php:18-21`),
+and the request accepts arbitrary resolution strings
+(`api/app/Modules/ReturnManagement/Requests/StoreReturnRequestRequest.php:80-81`). The
+service has no customer replacement-work-order writer or refund settlement path; only the
+customer credit-note branch and supplier replacement-PO path execute downstream effects
+(`ReturnRequestService.php:1016-1029`). An operator can select Replace or Refund and
+complete an RMA without the selected outcome being performed or marked pending. This is a
+financial/product decision.
+
+### RMA-009 — Incomplete — Supplier incomplete-draft contract is inconsistent
+
+The service allows the no-source supplier-draft branch only when all PO/GRN/Bill IDs are
+absent (`api/app/Modules/ReturnManagement/Services/ReturnRequestService.php:318-325`),
+but still requires a unit price in `prepareLine()` (`ReturnRequestService.php:194-198`).
+The SPA requires a source line for non-finance supplier lines
+(`spa/src/pages/return-management/create.tsx:315-329`). Decide whether incomplete drafts
+are genuinely supported with a provisional price or whether source-complete creation is
+the contract.
+
+### RMA-014 — Incomplete — Source lifecycle status is enforced only by the picker
+
+`sourceOptions()` excludes draft/cancelled source documents, for example invoices and
+orders at `api/app/Modules/ReturnManagement/Controllers/ReturnRequestController.php:152-181`,
+and deliveries/GRNs/bills at `:197-203,255-286`. The authoritative resolver then loads
+invoice, SO, delivery, PO, GRN, and bill lines without corresponding status predicates
+(`api/app/Modules/ReturnManagement/Services/ReturnRequestService.php:256-332,345-353`).
+An API caller who already knows a valid hash ID can bypass the picker and submit lineage
+from a draft/cancelled source document. Add server-side lifecycle checks with focused
+tests; the picker is not an authorization boundary.
+
+### RMA-015 — Broken — Receive quantity precision exceeds the storage contract
+
+`ReceiveReturnRequest` validates only `numeric|min:0`
+(`api/app/Modules/ReturnManagement/Requests/ReceiveReturnRequest.php:33-39`) and compares
+at scale 3 (`:65-69`). The service then persists the raw string
+(`api/app/Modules/ReturnManagement/Services/ReturnRequestService.php:674-706`) into
+`return_request_items.returned_quantity`, which is `decimal(12,3)`
+(`api/database/migrations/0158_create_return_requests_table.php:89-94`). The isolated
+PostgreSQL check confirmed `1.0009::numeric(12,3)` becomes `1.001`, while the scale-3
+validator treats it as no greater than `1.000`. This can move or credit a rounded quantity
+above the requested amount. Align request validation with three-decimal precision and add
+a boundary test.
+
+### RMA-016 — Incomplete — Source selection is not scalable beyond 100 documents
+
+Each source query applies `limit(100)` with no cursor, page, or search parameter
+(`api/app/Modules/ReturnManagement/Controllers/ReturnRequestController.php:152-158,175-181,197-203,232-238,255-261,280-286`). The create page flattens the returned arrays directly into one selector
+(`spa/src/pages/return-management/create.tsx:280-343`). Customers or suppliers with more
+than 100 documents cannot select older valid source lines. Add server-side paging/search
+and a bounded UI flow.
+
+### Verification summary
+
+- Discovery: API lifecycle, source options, SPA create/detail/disposition/list, feature and
+  permission gates, migrations, inherited docs, and the eight M046 feature-test surfaces
+  were inspected. Dependencies were read for contracts only.
+- Hardening: `72 passed (324 assertions)` with
+  `DB_DATABASE=ogami_test_m046_roll_c`; PHP syntax checks and focused M046 ESLint passed.
+  The precision boundary above was checked directly in the same PostgreSQL test database.
+- Polish: focused RMA ESLint passed. SPA typecheck remains blocked only by unrelated
+  pre-existing `spa/src/pages/assets/detail.tsx` `qrcode` errors; no RMA typecheck error
+  appeared. `git diff --check` passed.
+
+The plan remains `📋 Plan Ready`: findings RMA-002/RMA-004/RMA-009 require business
+decisions, and the implementation work is predominantly separate-session work. No source
+fix was authorized by the plan gate in this session.
+
+## Historical baseline (retained for audit history)
 
 The previous report was not reused as a source-of-truth because the module files had substantial uncommitted changes after that report and the change was not recorded in `fix-log.md`. No production source file was changed during this audit session.
 
