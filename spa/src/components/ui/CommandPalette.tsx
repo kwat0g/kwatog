@@ -395,11 +395,11 @@ export function CommandPalette({ open, onClose }: Props) {
         const active = document.activeElement;
 
         if (e.shiftKey) {
-          if (active === first || !dialog.contains(active)) {
+          if (active === first || !dialog.contains(active) || !focusable.includes(active as HTMLElement)) {
             e.preventDefault();
             last.focus();
           }
-        } else if (active === last || !dialog.contains(active)) {
+        } else if (active === last || !dialog.contains(active) || !focusable.includes(active as HTMLElement)) {
           e.preventDefault();
           first.focus();
         }

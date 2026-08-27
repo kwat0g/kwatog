@@ -378,3 +378,30 @@ opener restoration, and the existing open/close focus restoration behavior.
 
 F09, F10, F13, F14, and F16 remain open and out of scope; F11 and F12 remain complete.
 Release status: `🔁 Needs Re-audit`.
+
+## Fix session: 2026-08-28 — M009-F15 browser follow-up
+
+The prior M009-F15 implementation added the document-level Tab/Shift+Tab loop
+and jsdom coverage. The audit acceptance also requires a browser/accessibility
+assertion, so `spa/e2e/command-palette.spec.ts` now opens the palette through
+the real desktop Search button and exercises native Playwright keyboard
+traversal.
+
+The browser spec asserts:
+
+- the real dialog is visible with `aria-modal="true"`;
+- native `page.keyboard.press('Tab')` traversal reaches the last control and
+  wraps to the first without leaving the dialog;
+- native `page.keyboard.press('Shift+Tab')` wraps from the first control back to
+  the last; and
+- native Escape removes the dialog and restores focus to the opener.
+
+### Focused verification
+
+- `npx playwright test e2e/command-palette.spec.ts --project=desktop-chromium --reporter=line --output=/tmp/ogami-m009-f15-playwright` — **PASS: 1 test (11.5s)** against the real Chromium browser. This pass occurred before the final Firefox-compatibility guard below.
+- `docker compose run --rm --no-deps spa npm run test:run -- src/components/ui/CommandPalette.test.tsx` — **PASS: 13 tests**; existing React `act(...)` warnings only.
+- `npx eslint e2e/command-palette.spec.ts --max-warnings 0` — **PASS**.
+- Firefox browser run — **BLOCKED by a genuine compatibility failure in the pre-guard implementation**: native Tab focused the dialog's `div[tabindex="-1"]` container instead of a focusable control. The minimal guard in `CommandPalette.tsx` now redirects that state to the correct boundary, but the post-patch browser rerun was intentionally stopped at the user's request before it could be verified.
+- `git diff --check` — **PASS** after the final source guard.
+
+Release remains `🔁 Needs Re-audit` because the final production guard still needs a focused browser rerun.
