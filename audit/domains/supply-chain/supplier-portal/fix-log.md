@@ -375,7 +375,7 @@ Known-failing, out of scope, itemised:
   claimed module; raised here so its owner inherits the finding rather than
   rediscovering it.
 
-## Release status (2026-08-27)
+## Historical release status (2026-08-27)
 
 All seven plan items are now applied **and executed**: the four known failures are
 fixed at the fixture layer (the scope was right; widening it would have leaked
@@ -385,6 +385,29 @@ P1 boundaries — cross-vendor invitation, credential lifecycle, resource allowl
 lock expiry, reset-token invalidation, exact money, content-addressed documents,
 schedule reconciliation, portal actor attribution — now have 33 new tests.
 
-Releasing as `🔁 Needs Re-audit` for one reason only: §14 needs an accounts-payable
-owner decision on whether a supplier may see the payment records applied to their
-own invoice. Nothing in this module is deferred, and no supplier-portal test fails.
+The prior execution session released as `🔁 Needs Re-audit` for one reason only:
+§14 needed an accounts-payable owner decision on whether a supplier may see the
+payment records applied to their own invoice. Nothing in the supplier implementation
+was deferred at that historical point, and no supplier-portal test failed.
+
+---
+
+## Recovery handoff (2026-08-27)
+
+This section supersedes the historical release status above. The replacement agent
+reclaimed the stale M047 lock through the required claim script, confirmed the
+current report/action-plan findings, and made no production-code changes. The
+current status is `📋 Plan Ready`, matching `audit-report.md`, `action-plan.md`, and
+`status.md`; current classifications, sizes, session recommendations, and
+file:line evidence remain in those artifacts.
+
+Recovery verification passed:
+
+- Focused supplier portal suite: 78 tests / 329 assertions on the unique
+  `ogami_test_m047_recovery_20260827` database.
+- Two-connection lockout harness: 4 tests / 24 assertions on the same database.
+- Reviewed supplier B2B PHP syntax, 25 supplier routes, SPA typecheck, and token
+  discipline (786 files) all passed.
+- No M047 source/test, dependency, shared-config, registry, or other-module file
+  was changed. The next work is the separate implementation tranche recorded in
+  `action-plan.md`.
