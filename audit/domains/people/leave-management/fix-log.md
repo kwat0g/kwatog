@@ -371,3 +371,13 @@ system requires. Only then is ✅ Verified defensible.
   module errors in `spa/src/pages/assets/detail.tsx`.
 
 Module status: 🔁 Needs Re-audit — M019-F20 is applied; the remaining open findings stay deferred.
+
+## Session 4 (2026-08-27) — M019-F21 zero-business-day leave rejection
+
+- Applied the server-side guard in `api/app/Modules/Leave/Services/LeaveRequestService.php` immediately after the existing business-day calculation. Full-day ranges with a computed total of zero now raise a typed 422 business-rule response before balance, overlap, approval, or persistence work can create a record.
+- Aligned both leave filing forms (`spa/src/pages/leaves/create.tsx` and `spa/src/pages/self-service/leave.tsx`) with the same Monday–Saturday estimate and added the matching full-day date-range validation message. Half-day behavior remains unchanged.
+- Added `api/tests/Feature/Leave/LeaveBusinessDayValidationTest.php` covering API rejection/no record for a Sunday-only range and the existing one-day pending behavior for a valid business day. Focused API verification: **2 passed / 0 failed (7 assertions)** on `DB_DATABASE=ogami_test_m019_f21`.
+- Extended verification: the complete `tests/Feature/Leave` suite passed **54/54 (447 assertions)** on the same database; targeted ESLint passed for both changed SPA forms; PHP lint passed for the changed service and regression.
+- SPA `npm run typecheck` remains blocked by the pre-existing unrelated `src/pages/assets/detail.tsx` missing `qrcode` module/type errors. No dependency change was made.
+
+M019-F21 is applied. M019-F10/F12–F19 remain deferred and are not part of this change; final status remains 🔁 Needs Re-audit.

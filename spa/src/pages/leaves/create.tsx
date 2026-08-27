@@ -21,6 +21,21 @@ import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
+
+// Keep the estimate aligned with LeaveRequestService::businessDaysInclusive.
+function businessDaysBetween(start: string, end: string): number {
+ const a = new Date(`${start}T00:00:00`);
+ const b = new Date(`${end}T00:00:00`);
+ if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime()) || b < a) return 0;
+
+ let count = 0;
+ for (let d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) {
+ if (d.getDay() !== 0) count++;
+ }
+
+ return count;
+}
+
 const schema = z.object({
  employee_id: z.string().min(1, 'Employee is required'),
  leave_type_id: z.string().min(1, 'Leave type is required'),
@@ -35,7 +50,15 @@ const schema = z.object({
  .refine((d) => d.half_day_period === 'none' || d.start_date === d.end_date,
  { message: 'Half-day leave must start and end on the same date.', path: ['half_day_period'] })
  .refine((d) => !d.start_date || !d.end_date || d.start_date.slice(0, 4) === d.end_date.slice(0, 4),
- { message: 'Submit separate leave requests for dates in different calendar years.', path: ['end_date'] });
+ { message: 'Submit separate leave requests for dates in different calendar years.', path: ['end_date'] })
+ .refine(
+  (d) => d.half_day_period !== 'none'
+   || !d.start_date
+   || !d.end_date
+   || d.end_date < d.start_date
+   || businessDaysBetween(d.start_date, d.end_date) > 0,
+  { message: 'A full-day leave range must include at least one business day (Monday–Saturday).', path: ['end_date'] },
+ );
 type FormValues = z.infer<typeof schema>;
 
 export default function CreateLeavePage() {
@@ -94,12 +117,7 @@ export default function CreateLeavePage() {
  if (halfDay === 'am' || halfDay === 'pm') {
  estimatedDays = 0.5;
  } else if (startDate && endDate) {
- const a = new Date(startDate); const b = new Date(endDate);
- if (b >= a) {
- for (let d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) {
- if (d.getDay() !== 0) estimatedDays++;
- }
- }
+ estimatedDays = businessDaysBetween(startDate, endDate);
  }
 
  const mutation = useMutation({

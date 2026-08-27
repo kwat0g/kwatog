@@ -201,6 +201,11 @@ class LeaveRequestService
                 $days = $halfDayPeriod !== null
                     ? 0.5
                     : $this->businessDaysInclusive($start, $end);
+                if ($days <= 0.0) {
+                    throw new BusinessRuleException(
+                        'A full-day leave range must include at least one business day (Monday–Saturday).',
+                    );
+                }
                 $year = $start->year;
 
                 $type = LeaveType::query()->whereKey($data['leave_type_id'])->first();

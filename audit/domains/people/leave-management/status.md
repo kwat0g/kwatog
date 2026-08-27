@@ -7,3 +7,4 @@ depends_on: employee-master, attendance-dtr, approval-workflows
 surface: M
 status: 🔁 Needs Re-audit
 last_session: 2026-08-27
+implementation: M019-F20 and M019-F21 applied; remaining findings remain deferred

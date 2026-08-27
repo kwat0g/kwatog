@@ -58,6 +58,18 @@ const schema = z
       message: 'Submit separate leave requests for dates in different calendar years.',
       path: ['end_date'],
     },
+  )
+  .refine(
+    (d) =>
+      d.half_day_period !== 'none' ||
+      !d.start_date ||
+      !d.end_date ||
+      d.end_date < d.start_date ||
+      businessDaysBetween(d.start_date, d.end_date) > 0,
+    {
+      message: 'A full-day leave range must include at least one business day (Monday–Saturday).',
+      path: ['end_date'],
+    },
   );
 
 type FormValues = z.infer<typeof schema>;
