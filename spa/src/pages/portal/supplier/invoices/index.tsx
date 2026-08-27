@@ -38,11 +38,9 @@ export default function SupplierInvoicesPage() {
     type: 'select',
     options: [
       { value: '', label: 'All' },
-      { value: 'draft', label: 'Draft' },
       { value: 'unpaid', label: 'Unpaid' },
       { value: 'partial', label: 'Partially paid' },
       { value: 'paid', label: 'Paid' },
-      { value: 'cancelled', label: 'Cancelled' },
     ],
   }];
 

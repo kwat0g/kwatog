@@ -438,3 +438,18 @@ Implementation session: 2026-08-27
   (**20 tests / 103 assertions**); both touched PHP files pass `php -l`, and
   `git diff --check` passes. Pint still reports unrelated pre-existing style
   differences elsewhere in these two files.
+
+## M047-R007 — supplier invoice status filter aligned
+
+Implementation session: 2026-08-27
+
+- Claimed `supply-chain / supplier-portal` through `audit/scripts/claim-module.sh`.
+- `spa/src/pages/portal/supplier/invoices/index.tsx`: removed the internal AP
+  `draft` and `cancelled` filter options while preserving the empty `All`
+  option and the supplier-visible API statuses `unpaid`, `partial`, and `paid`.
+- `spa/src/pages/portal/supplier/invoices/index.test.tsx`: added a focused UI
+  contract assertion that checks the rendered Status combobox values/labels and
+  confirms Draft and Cancelled are unavailable.
+- Verification: focused Vitest passed (**1 test**); targeted ESLint passed for the
+  changed page and regression test. The filter now exposes only the supplier-visible
+  statuses and keeps the `All` option.
