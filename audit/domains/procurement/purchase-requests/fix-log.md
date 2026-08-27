@@ -2,6 +2,16 @@
 
 Session: 2026-08-25 (audit + fixes), resumed 2026-08-26 (runtime verification)
 
+## Session 2026-08-27 — M036-F015
+
+### F-015 — Restore soft-deleted purchase requests through hash routes
+
+- Before: the purchase-request restore route did not opt into soft-deleted model binding, so a deleted PR's hash resolved to a 404 before `PurchaseRequestController::restore()` could clear `deleted_at`.
+- Fix: added `->withTrashed()` to the purchase-request restore route, matching the neighboring purchase-order restore route (`api/app/Modules/Purchasing/routes.php`).
+- Regression: `PurchaseRequestTest::test_deleted_purchase_request_can_be_restored_through_hash_route` archives a draft PR through `DELETE`, asserts it is soft-deleted, restores it through the hash `PATCH .../restore` route, and asserts `deleted_at` is cleared (`api/tests/Feature/Purchasing/PurchaseRequestTest.php`).
+- Red/green evidence: the new regression first failed with HTTP 404, then passed with 7 assertions using `DB_DATABASE=ogami_test_m036_impl`.
+- Scope guard: F-014, F-018, and all concurrency/policy actions were not changed.
+
 ## Session 2026-08-26 — resumed after crash
 
 The 2026-08-25 session applied items 1–9 below but could never run a test

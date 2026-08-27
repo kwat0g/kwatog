@@ -28,7 +28,7 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
     Route::post('/purchase-requests',      [PurchaseRequestController::class, 'store'])->middleware('permission:purchasing.pr.create');
     Route::put('/purchase-requests/{purchaseRequest}', [PurchaseRequestController::class, 'update'])->middleware('permission:purchasing.pr.create');
     Route::delete('/purchase-requests/{purchaseRequest}', [PurchaseRequestController::class, 'destroy'])->middleware('permission:purchasing.pr.create');
-    Route::patch('/purchase-requests/{purchaseRequest}/restore', [PurchaseRequestController::class, 'restore'])->middleware('permission:purchasing.pr.manage');
+    Route::patch('/purchase-requests/{purchaseRequest}/restore', [PurchaseRequestController::class, 'restore'])->middleware('permission:purchasing.pr.manage')->withTrashed();
 
     Route::patch('/purchase-requests/{purchaseRequest}/submit',  [PurchaseRequestController::class, 'submit'])->middleware('permission:purchasing.pr.create');
     Route::patch('/purchase-requests/{purchaseRequest}/acknowledge-budget', [PurchaseRequestController::class, 'acknowledgeBudget'])->middleware('permission:budgeting.approve');

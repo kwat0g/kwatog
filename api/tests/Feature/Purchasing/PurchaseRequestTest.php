@@ -131,6 +131,32 @@ class PurchaseRequestTest extends TestCase
                  ->assertJsonPath('data.status', 'pending');
     }
 
+    public function test_deleted_purchase_request_can_be_restored_through_hash_route(): void
+    {
+        $admin = $this->makeAdmin();
+
+        /** @var PurchaseRequestService $svc */
+        $svc = app(PurchaseRequestService::class);
+        $pr = $svc->create($this->validPayload(), $admin);
+
+        $this->actingAs($admin)
+            ->deleteJson("/api/v1/purchasing/purchase-requests/{$pr->hash_id}")
+            ->assertNoContent();
+
+        $this->assertSoftDeleted('purchase_requests', ['id' => $pr->id]);
+
+        $this->actingAs($admin)
+            ->patchJson("/api/v1/purchasing/purchase-requests/{$pr->hash_id}/restore")
+            ->assertOk()
+            ->assertJsonPath('message', 'Purchase request restored.');
+
+        $this->assertDatabaseHas('purchase_requests', [
+            'id' => $pr->id,
+            'deleted_at' => null,
+        ]);
+        $this->assertNull($pr->fresh()->deleted_at);
+    }
+
     public function test_approve_endpoint_rejects_wrong_role(): void
     {
         $admin = $this->makeAdmin();
