@@ -5,5 +5,5 @@ tier: 2
 roles: system_admin, customer-portal
 depends_on: customer-product-pricing, auth-session, rbac
 surface: L
-status: 🔁 Needs Re-audit
+status: 📋 Plan Ready
 last_session: 2026-08-27

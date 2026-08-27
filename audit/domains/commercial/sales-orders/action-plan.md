@@ -2,11 +2,11 @@
 
 Date: 2026-08-27
 Source: current-source discovery, hardening, and polish passes in `audit-report.md`
-Execution mode: one claimed module, unique test database `ogami_test_m033_agent_a`
+Execution mode: one claimed module, unique test database `ogami_test_m033_agent_c`
 
 The inherited 2026-08-25/26 findings were rechecked against the current source.
-The contained fixes below are safe for this session. Cross-module behavior and
-policy-dependent behavior stay explicitly deferred.
+Their contained fixes are already implemented and verified. The additions below
+are cross-surface or cross-module work and stay explicitly deferred.
 
 ## 1. Preserve clearing of nullable draft fields — DONE
 
@@ -101,7 +101,47 @@ policy-dependent behavior stay explicitly deferred.
 
 ## Status
 
-Contained items 1–3 and 9 are implemented and verified in this session. Items 4–5
-remain blocked by module boundaries, item 6 needs a product/operations decision,
-and items 7–8 are deferred follow-up work. Final module status remains
-`🔁 Needs Re-audit`.
+Contained items 1–3 and 9 are inherited implemented fixes and were reverified.
+Items 4–5 remain blocked by module boundaries, item 6 needs a product/operations
+decision, and items 7–8 are deferred follow-up work. The batch additions below
+are not same-session fixes. Final module status is `📋 Plan Ready`.
+
+## Batch2-agent-c additions
+
+### 10. Give customer-portal sales orders a dedicated safe contract — DEFERRED
+
+- Findings: F-022, F-023
+- Size: **large**
+- Session recommendation: **separate-recommended**
+- Add customer-safe summary/detail resources with the fields declared by
+  `PortalSoSummary`, `PortalSoDetail`, and `PortalSoItem`; map nested internal
+  item data to the portal shape and keep internal workflow, notes, and linked
+  operational fields out of customer responses.
+- Update the B2B order controller to use those resources for dashboard/list/detail
+  order payloads, then add API assertions for the exact allowlist and item shape.
+- Update the portal types/rendering only after the API contract is explicit, and
+  add a detail-page regression for product fields and totals.
+
+### 11. Reconcile cancelled outgoing-QC projection — DEFERRED
+
+- Finding: F-024
+- Size: **medium**
+- Session recommendation: **separate-recommended**
+- Choose whether a cancelled latest inspection is skipped, rejected, or signals
+  reinspection; implement that explicit state in the M033 chain projection and
+  add a cancelled-inspection regression alongside the existing four QC states.
+- Coordinate the choice with Quality and portal chain consumers before changing
+  the shared presentation contract.
+
+### 12. Use the actual MRP generation timestamp in the chain — DEFERRED
+
+- Finding: F-025
+- Size: **medium**
+- Session recommendation: **separate-recommended**
+- Keep the queued/active MRP date explicit and use `mrp_plans.generated_at`
+  once a plan exists instead of presenting `confirmed_at` as the planning date.
+- Add chain tests for queued and generated plans, coordinating with MRP's plan
+  lifecycle contract.
+
+The gate outcome for this batch is no source change: all four additions are
+separate-recommended and the aggregate scope is not small.

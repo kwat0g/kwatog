@@ -7,12 +7,12 @@ Registry ID: `M033`
 Tier: 2
 Roles: `system_admin`, `customer-portal`
 Dependencies: `customer-product-pricing`, `auth-session`, `rbac`
-Final status: `🔁 Needs Re-audit`
+Final status: `📋 Plan Ready`
 
 ## Audit context and evidence
 
 The preferred card `commercial/sales-orders` was claimed atomically as M033. The
-fallback M035 was not used. The generated registry entry was read at
+allowed fallback `finance/fixed-assets-depreciation` (M031) was not used. The generated registry entry was read at
 `audit/00-MODULE-REGISTRY.md:3,10`; the coordinator-owned registry diff was
 left untouched.
 
@@ -32,8 +32,9 @@ edit page at 2026-08-26 02:30:12 +0800, the CRM list page at 2026-08-20
 Parallel agents changed unrelated paths during the audit; those paths were not
 edited or staged here.
 
-All backend checks used the isolated database
-`ogami_test_m033_agent_a`; the shared `ogami_test` database was not used.
+The inherited session's checks used the isolated database
+`ogami_test_m033_agent_a`; this batch's backend checks used the isolated database
+`ogami_test_m033_agent_c`. The shared `ogami_test` database was not used.
 
 ## Discovery pass
 
@@ -240,4 +241,115 @@ hash-ID, design-token, or permission patterns beyond the findings above.
 The contained M033 fixes (F-016, F-017, F-018, and F-021) are implemented and
 verified. F-005 and F-008 require changes in MRP/shared chain ownership; F-010
 and F-011 require product/operations decisions; F-019 and F-020 are deferred
-follow-up work. The module therefore remains `🔁 Needs Re-audit`.
+follow-up work. This prior disposition is superseded by the batch re-audit below.
+
+## Batch2-agent-c re-audit — 2026-08-27
+
+The prior report, action plan, and fix log were inspected before trusting their
+status. At this batch's fixed point, HEAD was
+`fb9d308076224bd9081c4360a82f50d5e4e76024`; the current worktree contained the
+coordinator's generated registry edit and an unrelated parallel-agent file,
+with no M033 source diff. The M033 claim lock was held by this card throughout
+the review. The fallback was not attempted.
+
+### Discovery pass
+
+The re-audit covered the CRM routes/controller/requests/service/resources, the
+internal CRM SPA, the B2B order controller/service/resource boundary, customer
+portal types and detail page, relevant MRP/QC chain code, focused tests, and the
+documented order/chain contract. The CRM surface has the expected ten named
+routes with route permissions at `api/app/Modules/CRM/routes.php:50-62`; the
+customer portal order endpoints are separately scoped to the authenticated
+customer at `api/app/Modules/B2B/Services/CustomerPortalService.php:108-159`.
+
+#### F-022 — Broken: customer-portal sales-order item contract does not match the SPA
+
+The B2B list and detail endpoints return the internal
+`SalesOrderResource` at `api/app/Modules/B2B/Controllers/CustomerPortalController.php:70-93`.
+Its item collection nests product fields under `product` and names the line
+total `total` at `api/app/Modules/CRM/Resources/SalesOrderItemResource.php:14-27`.
+The portal contract instead declares top-level `part_number`, `name`, and
+`total_price` at `spa/src/types/b2b.ts:112-119`, and reads those missing keys in
+`spa/src/pages/portal/customer/orders/detail.tsx:80-87`. A customer viewing a
+detail therefore receives the wrong shape and can see empty part/description
+cells and an invalid total display. The existing child-relation test only
+checks relation IDs at `api/tests/Feature/B2B/CustomerPortalServiceTest.php:176-202`;
+it does not assert the item payload shape.
+
+#### F-023 — Broken: internal sales-order fields are exposed through customer-portal endpoints
+
+The same internal resource emits workflow controls and internal fields such as
+`next_statuses`, `is_editable`, `is_cancellable`, and `notes` at
+`api/app/Modules/CRM/Resources/SalesOrderResource.php:31-44`; when relations are
+loaded it also emits MRP, work-order, inspection, delivery, and invoice details
+at `api/app/Modules/CRM/Resources/SalesOrderResource.php:59-116`. The B2B
+dashboard and list wrap that resource at
+`api/app/Modules/B2B/Controllers/CustomerPortalController.php:53-82`, while
+detail explicitly loads child workflow relations at
+`api/app/Modules/B2B/Services/CustomerPortalService.php:126-150`. The CRM form
+labels notes as “Optional internal notes” at
+`spa/src/pages/crm/sales-orders/create.tsx:379-386`. This violates the portal
+safe-allowlist pattern already used by
+`api/app/Modules/B2B/Resources/CustomerPortalInvoiceResource.php:10-18` and
+requires a dedicated customer-safe order resource plus contract tests.
+
+### Hardening pass
+
+The transaction, row-lock, active-reference recheck, cancellation guard,
+permission, hash-ID, and decimal-string paths were rechecked. Focused CRM
+coverage passed, but the following state projection is inconsistent with the
+owning QC state machine.
+
+#### F-024 — Broken: cancelled outgoing inspection is projected as active forever
+
+The QC enum documents `cancelled` as “voided before completion” and treats it as
+terminal at `api/app/Modules/Quality/Enums/InspectionStatus.php:10-15,35-38`.
+The M033 chain helper nevertheless documents cancelled inspections as
+“in-flight” at `api/app/Modules/CRM/Services/SalesOrderService.php:893-898` and
+returns `active` for every status other than passed or failed at
+`api/app/Modules/CRM/Services/SalesOrderService.php:919-926`. After the latest
+outgoing inspection is cancelled, the sales-order chain consequently reports
+QC Outgoing as active instead of a terminal/skipped/reinspection state. The
+focused chain tests cover pending, in-progress, passed, and failed only at
+`api/tests/Feature/CRM/SalesOrderChainStageTest.php:35-113`, leaving this state
+unprotected. The desired terminal presentation needs an explicit QC/product
+decision, but the current projection is objectively incorrect for the declared
+enum semantics.
+
+### Polish pass
+
+#### F-025 — Incomplete: MRP chain date is confirmation time, not planning time
+
+The chain marks MRP as `active` while an order is confirmed but has no plan and
+as `done` once `mrp_plan_id` exists at
+`api/app/Modules/CRM/Services/SalesOrderService.php:848-854`. Regardless of
+that state, the displayed “MRP Planned” date is always `confirmed_at` at
+`api/app/Modules/CRM/Services/SalesOrderService.php:873-875`; the MRP plan has a
+separate required `generated_at` timestamp at
+`api/database/migrations/0086_create_mrp_plans_table.php:28-41`. A delayed or
+queued plan therefore presents order confirmation as the planning date, which
+is misleading in the chain history. The chain contract should choose an
+explicit queued/null date and use the generated timestamp after planning.
+
+### Verification for this batch
+
+- Focused M033 CRM suite on `ogami_test_m033_agent_c`: **44 tests, 144
+  assertions passed** (chain bridge/stage, route coverage, transitions, and
+  lifecycle concurrency).
+- Focused customer-portal sales-order slice on `ogami_test_m033_agent_c`:
+  **7 tests, 14 assertions passed**.
+- PHP syntax checks passed for the reviewed CRM/B2B implementation and focused
+  test files.
+- Scoped ESLint passed with `--max-warnings 0` for the reviewed M033 and portal
+  TypeScript files.
+- `docker compose exec -T api php artisan route:list --path=crm/sales-orders`
+  showed the expected ten routes.
+- `git diff --check` passed. No source fix was applied in this batch.
+
+### Batch disposition
+
+F-022 is a large portal contract/security change; F-023 is a large portal
+allowlist change; F-024 is a medium cross-module QC-chain change; and F-025 is
+a medium chain/MRP presentation change. Their majority is
+`separate-recommended`, and the total scope is not small, so the gate permits
+no same-session source fixes. Final status for this claim is `📋 Plan Ready`.
