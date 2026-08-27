@@ -1,79 +1,83 @@
 # M047 — supplier-portal action plan
 
-Date: 2026-08-25  
+Date: 2026-08-27
 Status: 📋 Plan Ready  
-Overall recommendation: separate implementation work; no production-code fixes in this audit session.
+Recommendation: separate implementation work; no production-code fixes in this audit session.
 
-The focused supplier-auth, tenancy, invoice, document, PPAP, migration, route, SPA typecheck, and token-discipline evidence is green. The remaining work changes a supplier data boundary, authentication state, credential lifecycle, finance arithmetic, and several API/UI contracts. Keep the work independently reviewable and preserve hash IDs, explicit tenant scopes, private storage, transaction/lock, Money, and RBAC conventions.
+The re-audit verified the prior tenancy, lifecycle, exact-money, document, schedule, audit, and SPA work with focused tests. The remaining findings below are ordered by supplier-boundary and security risk. Most require policy or ownership decisions across B2B, Accounting, Auth, Quality, and the supplier SPA.
 
-## Ordered fixes
+## Ordered actions
 
-### 1. M047-F001/F002 — Establish the supplier-visible purchase-order and finance resource contract
-
-- Classification/severity: Broken, P1
-- Scope: large; Purchasing state policy, B2B supplier DTOs/resources, Accounting supplier invoice/statement fields, relation loading, PDF contracts, tenant/role tests, and legacy response compatibility
-- Recommendation: separate session with Purchasing, Accounting, B2B, and Security owners
-- Define the portal-available PO states and whether received/closed history remains visible. Enforce the allowlist in the service, not only in SPA filters. Replace PurchaseOrderResource and BillResource with supplier-specific allowlists that exclude approval, budget, AP review/override, internal match URL, journal, and other internal workflow data. Keep supplier financial fields limited to the agreed business contract.
-- Acceptance: draft, approval-pending, cancelled, and other non-portal states are denied or excluded by direct API calls; approved/sent/receiving behavior is explicit; no internal approval, budget, variance, override, review, journal, or raw workflow fields appear in supplier responses; PO, invoice, PDF, dashboard, SOA, and SPA types agree.
-
-### 2. M047-F003/F004 — Harden portal lockout and password reset lifecycle
+### 1. M047-R001 — Filter purchase-order detail bills to the supplier-visible status policy
 
 - Classification/severity: Broken, P1
-- Scope: medium; B2bAuthService transaction/row locking, expired-lock reset semantics, reset-token invalidation, mail/retry behavior, audit events, rate-limit interaction, and concurrent feature tests
-- Recommendation: separate session with Auth and Security owners
-- Mirror the internal login state contract with a transaction and lockForUpdate. Reset the strike window after an expired lock according to policy, preserve five-strike behavior, and invalidate all prior reset tokens when a reset is requested or completed. Add concurrent bad-login, lock expiry, multiple-token, replay, and deactivated-user tests.
-- Acceptance: concurrent attempts cannot lose increments or bypass lockout; waiting out a lock restores normal login behavior; only the current reset flow can change the password; every old token is rejected after reset; token revocation and audit behavior remain deterministic.
+- Size: medium
+- Session: separate-recommended
+- Evidence: `api/app/Modules/B2B/Services/SupplierPortalService.php:173-180` loads every bill on an otherwise visible PO, while `api/app/Modules/B2B/Resources/SupplierPurchaseOrderResource.php:62-71` serializes every loaded bill. The invoice list applies the visible-bill allowlist at `api/app/Modules/B2B/Services/SupplierPortalService.php:556-560`; the existing test covers only `/invoices` at `api/tests/Feature/B2B/SupplierPortalServiceTest.php:500-515`.
+- Action: apply the same approved bill-status boundary to PO detail relations and add a regression fixture for draft and cancelled AP rows attached to a visible PO. Confirm whether historical paid rows remain supplier-visible with Accounting.
+- Acceptance: direct PO detail calls never return draft/cancelled/internal AP rows; list, detail, dashboard, PDF, and SPA contracts agree.
 
-### 3. M047-F005/F006 — Add safe supplier account membership and revocation operations
+### 2. M047-R002 — Enforce password expiry for supplier portal accounts
 
-- Classification/severity: Broken/Missing, P1
-- Scope: large; portal-user membership/conflict model, invitation policy, temporary-password delivery, internal RBAC/API, SPA operator page, deactivation and token revocation, resend/reactivation, audit events, and cross-vendor tests
-- Recommendation: separate session with B2B, IAM, and Security owners
-- Do not silently move a globally unique email between vendors. Choose either a vendor-membership model or an explicit conflict/one-vendor policy. Add list/detail, invite/resend, deactivate/reactivate, revoke all tokens, and audit history operations behind dedicated permissions. Do not return reusable temporary passwords in a normal API response; use the controlled invitation/reset delivery path.
-- Acceptance: an existing account cannot be reassigned without an explicit authorized workflow; operators can see active, pending-change, locked, and deactivated accounts; deactivation revokes access immediately; resend and reactivation are auditable; cross-vendor attempts are denied; SPA and API roles are tested.
+- Classification/severity: Missing, P1
+- Size: medium
+- Session: separate-recommended
+- Evidence: supplier authenticated routes omit `CheckPortalPasswordExpiry` at `api/app/Modules/B2B/routes.php:28-31`, while customer routes include it at `api/app/Modules/B2B/routes.php:90-94`. The middleware only reads `customer_portal` at `api/app/Modules/B2B/Middleware/CheckPortalPasswordExpiry.php:17-21`; supplier users already store `password_changed_at` at `api/app/Modules/B2B/Models/SupplierPortalUser.php:40-49`, and the configured policy is 90 days at `api/database/migrations/0292_seed_security_policy_settings.php:11-18`.
+- Action: extend the portal expiry policy to the supplier guard, preserve the me/change-password escape hatch, and add expired, current, and first-login supplier tests. Coordinate response semantics with the SPA.
+- Acceptance: an expired supplier password cannot access operational routes, changing it restores access, and lockout/reset/first-login behavior remains distinct and auditable.
 
-### 4. M047-F007 — Replace supplier finance float operations with Money arithmetic
+### 3. M047-R003 — Make supplier-invoice attachment cleanup transaction-aware
 
 - Classification/severity: Broken, P1
-- Scope: medium; dashboard aggregates, statement-of-account buckets, decimal serialization, invoice balance display, precision regression tests, and reconciliation examples
-- Recommendation: separate session with Accounting/Finance owners
-- Use Money string operations for every supplier-facing total and bucket. Keep database decimal values as canonical amounts and make rounding/scale explicit at the response boundary. Test values such as 0.10 + 0.20, many fractional lines, credits, partial payments, and large totals against BillService.
-- Acceptance: dashboard, SOA, invoice detail, and PDF totals reconcile exactly with accounting values; no float casts or number_format-based arithmetic remain in the portal service; precision tests pass for positive, partial, credit, and zero balances.
+- Size: medium
+- Session: separate-recommended
+- Evidence: `api/app/Modules/B2B/Services/SupplierPortalService.php:407-419` starts an outer cleanup `try` around the database transaction; the bill and attachment row are committed in `:474-512`; event dispatch and portal audit occur after commit at `:521-524`; the catch still deletes the stored path at `:527-531`.
+- Action: separate transaction rollback cleanup from post-commit notification/audit failures. Preserve a committed invoice file and document row, and add a failure-injection test for event/audit exceptions plus an orphan-file check.
+- Acceptance: any exception before commit removes provisional storage; any exception after commit does not delete a committed supplier invoice attachment or leave a misleading document row.
 
-### 5. M047-F008/F013 — Make shipping-document identity and access integrity explicit
+### 4. M047-R004 — Resolve the supplier authentication contract and complete the cookie-only migration
 
-- Classification/severity: Broken/Incomplete, P2
-- Scope: medium; content digest schema/index, dedupe/idempotency, storage transaction cleanup, supplier resource hash-ID contract, uploader relation/audit, download authorization, and migration/backfill
-- Recommendation: separate session with B2B, storage, and Security owners
-- Record a cryptographic content digest and use it with PO, document type, and intended idempotency semantics; filename and size remain metadata. Decide how revised documents are versioned. Replace raw PO/uploader integers in the portal resource and add referential or immutable actor integrity for uploaded_by. Preserve private download authorization and cleanup on all failure paths.
-- Acceptance: different content with the same name and size is stored as a distinct revision; exact retries are idempotent; cross-vendor downloads remain denied; supplier responses use the agreed opaque identifiers; orphan files and orphan uploader references are detectable.
+- Classification/severity: Incomplete, P1
+- Size: large
+- Session: separate-recommended
+- Evidence: the inherited security contract says HTTP-only cookie auth and “NEVER use Bearer tokens” at `CLAUDE.md:90-101`, and bootstrap repeats the cookie-only rule at `api/bootstrap/app.php:40-43`. Supplier auth still returns a token at `api/app/Modules/B2B/Controllers/SupplierAuthController.php:39-64`, the SPA sets `Authorization: Bearer` and writes `sessionStorage` at `spa/src/api/b2b/client.ts:14-24`, and the supplier client opts into persistence at `spa/src/api/b2b/supplier.ts:18`. The exception is documented in `api/config/auth.php:14-20`, so this is an unfinished migration/contract conflict rather than an untested cross-guard issue.
+- Action: Security/Auth owners must choose whether the supplier bearer exception remains supported. If migrating, move the supplier guard and SPA to the HTTP-only cookie/session contract, update CSRF/session handling, remove browser token persistence, and revise the portal runbooks/tests. If retaining the exception, explicitly amend the inherited policy and document compensating controls.
+- Acceptance: one authoritative auth contract exists; source, docs, browser tests, and guards agree; no accidental mixed-mode behavior remains.
 
-### 6. M047-F009/F010 — Define structured shipment and delivery-schedule contracts
+### 5. M047-R006 — Add a supplier-safe PPAP resource contract
 
 - Classification/severity: Incomplete, P2
-- Scope: large; shipment state schema, event/history or current-value policy, idempotency, receiving/logistics consumers, PO lifecycle validation, schedule line reconciliation, revisions, locking, and API/SPA tests
-- Recommendation: separate session with SupplyChain, Purchasing, Receiving, and B2B owners
-- Replace append-only shipment remarks with structured current state plus an auditable update history or event model. Validate allowed PO states and reconcile schedule lines to vendor-owned PO items and remaining quantities on the server. Decide whether duplicate month submissions are immutable, replaceable, or versioned. Keep transaction and lock boundaries around the authoritative rows.
-- Acceptance: current shipment values are queryable and retries do not duplicate state; invalid/cancelled/draft PO schedules are rejected; product and quantity mismatches are rejected; valid partial schedules reconcile; revision behavior and audit actor are explicit.
+- Size: medium
+- Session: separate-recommended
+- Evidence: `api/app/Modules/B2B/Controllers/SupplierPortalController.php:327-341` returns the generic Quality resource, and `api/app/Modules/B2B/Services/SupplierPortalService.php:720-734` eager-loads PPAP elements. That resource includes review/rejection/approval metadata at `api/app/Modules/Quality/Resources/PpapSubmissionResource.php:19-27,40-46`, while its element resource emits the raw private storage path at `api/app/Modules/Quality/Resources/PpapElementResource.php:14-21`. Existing coverage checks vendor filtering/status only at `api/tests/Feature/B2B/SupplierPpapViewTest.php:29-91`.
+- Action: keep Quality resources unchanged and add a B2B supplier-specific allowlist/resource. Define which PPAP status/review fields suppliers may see and replace `document_path` with an authorized download contract if documents are intended to be available. Add response-shape and private-path regression tests.
+- Acceptance: the supplier endpoint exposes only the approved PPAP contract, never raw storage paths or unapproved internal review fields, while vendor scoping remains intact.
 
-### 7. M047-F011/F012 — Complete SPA parity and portal actor auditability
+### 6. M047-R005 — Apply the B2B feature gate to supplier public auth routes
 
-- Classification/severity: Incomplete, P2
-- Scope: medium; typed paginator response, sortable/filterable tables, pagination footer, loading/error/empty states, server-derived action gating, shipment form fields, accessibility review, and portal-principal audit correlation
-- Recommendation: separate session after the API contracts in items 1 and 6
-- Preserve paginator metadata in the SPA client and implement the design-system table/pagination pattern for POs and invoices. Add bounded delivery/schedule loading or pagination. Derive acknowledgement, shipment, upload, and invoice actions from server-provided state/capabilities. Send all supported shipment fields. Store the supplier portal user/vendor identity and correlation ID alongside any system-user impersonation used for internal audit foreign keys.
-- Acceptance: large result sets are navigable and sortable; failures are visible and recoverable; the UI cannot offer an action outside the server contract; form fields match the API; audit history identifies the actual supplier principal for each mutation.
+- Classification/severity: Missing, P2
+- Size: small
+- Session: same-session-ok
+- Evidence: supplier login/logout/forgot/reset routes use only `throttle:auth` at `api/app/Modules/B2B/routes.php:19-25`, whereas customer public auth includes `feature:b2b_portals` at `api/app/Modules/B2B/routes.php:80-88` and supplier operational routes apply it at `:28-31`.
+- Action: add the feature middleware consistently to supplier public routes and cover disabled-feature behavior for login, logout, forgot, and reset.
+- Acceptance: disabling `b2b_portals` disables every supplier portal entry point, including unauthenticated auth endpoints.
+
+### 7. M047-R007 — Remove invoice status filters that the API deliberately hides
+
+- Classification/severity: Polish, P3
+- Size: small
+- Session: same-session-ok
+- Evidence: the SPA presents Draft and Cancelled filters at `spa/src/pages/portal/supplier/invoices/index.tsx:35-46`, but the server first restricts invoices to the visible statuses at `api/app/Modules/B2B/Services/SupplierPortalService.php:556-569`; selecting either option therefore returns an empty result by design.
+- Action: align the filter options with the supplier-visible status contract, or explicitly label internal statuses as unavailable. Add a small UI contract check if the filter list is maintained separately.
+- Acceptance: every selectable invoice filter can produce a meaningful supplier-visible result or is clearly unavailable.
 
 ## Session decision
 
-No production-code implementation is authorized in this audit session. Four P1 boundary/security/finance findings and three cross-module contract groups require policy and ownership decisions. Do not combine them into a small validation patch or mark the module Verified on the strength of the current focused tests.
+No production-code implementation is authorized in this session. Five actions are separate-recommended and include P1 supplier-data, authentication, and committed-file integrity risks; the two same-session items do not make the total scope small. The module remains 📋 Plan Ready.
 
-## Definition of done for the next implementation tranche
+## Verified in this session
 
-- Supplier API responses expose only the approved portal contract and only portal-available purchase orders; direct API calls cannot bypass the policy.
-- Lockout, password reset, invitation, deactivation, and token revocation behavior is serialized, replay-safe, auditable, and covered by concurrent/security tests.
-- Supplier finance totals use exact Money arithmetic and reconcile with Accounting.
-- Shipping documents are content-addressed/idempotent, privately downloadable, and returned with opaque, referentially sound identifiers.
-- Shipment and schedule states are structured, server-validated, idempotent, and useful to receiving/logistics consumers.
-- SPA lists are typed, paginated, state-gated, accessible, and error-aware; supplier mutation audit records preserve the portal actor.
-- Focused backend, SPA, browser, migration, worker, and live-container checks are documented and green before promotion beyond 📋 Plan Ready.
+- Supplier portal focused suite: 78 tests, 329 assertions, pass.
+- Two-connection login lockout harness: 4 tests, 24 assertions, pass.
+- Database used for all test commands: `ogami_test_m047_roll_d` only.
+- No dependency, shared config, registry, or other-module file was changed.

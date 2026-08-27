@@ -1,11 +1,13 @@
 # M047 — supplier-portal audit report
 
-Audit date: 2026-08-25  
-Status: 📋 Plan Ready  
+Audit date: 2026-08-27 (replacement-agent re-audit)
+Status: 📋 Plan Ready
 Claim: supply-chain / supplier-portal  
 Scope: supplier authentication and tenancy, purchase-order visibility and acknowledgement, shipment updates and shipping documents, supplier invoicing and statement of account, delivery schedules, supplier PPAP reads, internal portal invitations and access lifecycle, SPA/API parity, migrations, routes, permissions, and focused production-readiness checks.
 
-## Production readiness
+This report retains the 2026-08-25 baseline and historical findings below. The current re-audit disposition and findings in the final sections supersede that historical assessment where source changes have since landed.
+
+## Historical baseline (2026-08-25)
 
 Production audit: 42/100, risky. The portal has explicit supplier tenancy middleware, a separate portal guard, transaction-protected acknowledgement and invoice flows, useful focused tests, and all relevant migrations applied. It is not ready for broader production use because unapproved purchase orders and internal accounting fields cross the supplier boundary, portal lockout/reset and invitation lifecycle controls have security gaps, and money calculations use floating point in supplier-facing finance responses.
 
@@ -238,3 +240,130 @@ Evidence limits:
 ## Next action
 
 Start with the separate implementation tranche in action-plan.md: establish the supplier-visible PO/resource contract and portal auth/access lifecycle first, then repair financial arithmetic and the document/shipment/schedule contracts before completing SPA pagination and state-gated workflows. Keep the current tenancy, token cross-guard, invoice idempotency, and narrow delivery-resource tests while adding negative cross-vendor and security-regression coverage.
+
+---
+
+## Current re-audit disposition (2026-08-27)
+
+Status: 📋 Plan Ready
+Decision: no production-code fixes in this session. The prior implementation tranche is present and the focused supplier checks are green, but the findings below remain open. Five of seven ordered actions are separate-recommended; the total scope is not small and includes P1 security/data-integrity work. The current action order is in `action-plan.md`.
+
+### Discovery pass
+
+- The registry card is M047 / `supply-chain` / `supplier-portal`; the claim was acquired atomically and no fallback module was used.
+- Immediately before this recovery claim, the only worktree edits were the pre-existing M047 audit artifacts (`audit-report.md`, `action-plan.md`, and `status.md`); no M047 source or test file was dirty. The stale `unknown-session` lock was reclaimed only through `audit/scripts/claim-module.sh supply-chain supplier-portal 0`, and no other-module file was staged or modified by this recovery.
+- Target implementation, tests, inherited docs, dependencies, routes, migrations, current diff, and mtimes were read. `audit/00-MODULE-REGISTRY.md` was not edited.
+- Prior findings that are now covered by source commits/tests—supplier PO status filtering, supplier allowlist resources, lifecycle conflict/revocation, exact Money totals, document hashing/cleanup, schedule reconciliation, and portal actor audit—were treated as historical and re-checked rather than reopened.
+
+### Hardening pass findings
+
+#### M047-R001 — PO detail serializes non-supplier-visible AP bills
+
+Classification: Broken
+Priority: P1
+Plan: medium / separate-recommended
+
+Evidence:
+
+- `api/app/Modules/B2B/Services/SupplierPortalService.php:173-180` eager-loads the PO's `bills` relation with no supplier-visible status predicate.
+- `api/app/Modules/B2B/Resources/SupplierPurchaseOrderResource.php:62-71` maps every loaded bill into the supplier response.
+- The separate invoice list does apply the allowlist at `api/app/Modules/B2B/Services/SupplierPortalService.php:556-560`; its test only covers `/invoices` at `api/tests/Feature/B2B/SupplierPortalServiceTest.php:500-515`, not bills nested in PO detail.
+
+Impact: a visible PO can disclose draft/cancelled/internal AP rows through PO detail even when the invoice endpoint hides them. Direct API access must obey the same bill boundary as the list/detail contract.
+
+#### M047-R002 — Supplier password expiry is not enforced
+
+Classification: Missing
+Priority: P1
+Plan: medium / separate-recommended
+
+Evidence:
+
+- Supplier operational routes omit `CheckPortalPasswordExpiry` at `api/app/Modules/B2B/routes.php:28-31`; the customer group includes it at `api/app/Modules/B2B/routes.php:90-94`.
+- `api/app/Modules/B2B/Middleware/CheckPortalPasswordExpiry.php:17-21` only reads `customer_portal` and `CustomerPortalUser`.
+- Supplier accounts retain `password_changed_at` at `api/app/Modules/B2B/Models/SupplierPortalUser.php:40-49`, and the shared setting is 90 days at `api/database/migrations/0292_seed_security_policy_settings.php:11-18`; the inherited policy also requires password expiry at `CLAUDE.md:154-165`.
+
+Impact: a supplier can continue using an aged password after the shared expiry threshold. First-login `must_change_password` does not replace timed expiry, and no supplier expiry regression covers this route path.
+
+#### M047-R003 — Post-commit invoice failures can delete a committed attachment
+
+Classification: Broken
+Priority: P1
+Plan: medium / separate-recommended
+
+Evidence:
+
+- `api/app/Modules/B2B/Services/SupplierPortalService.php:407-419` wraps the transaction in an outer cleanup `try`.
+- The bill and `PortalShippingDocument` row are created inside the transaction at `:474-512`; event dispatch and portal audit happen after commit at `:521-524`.
+- The catch deletes `$storedPath` for any throwable at `:527-531`, including a post-commit event or audit failure.
+
+Impact: the database can retain a submitted bill and document row while the committed invoice file is removed. Cleanup must distinguish rollback failures from post-commit notification/audit failures.
+
+#### M047-R004 — Supplier authentication remains an undocumented-in-practice bearer exception to the canonical cookie contract
+
+Classification: Incomplete
+Priority: P1
+Plan: large / separate-recommended; owner decision required
+
+Evidence:
+
+- The inherited security rule requires HTTP-only cookie auth and forbids bearer tokens/browser auth storage at `CLAUDE.md:90-101`; bootstrap repeats “NEVER bearer tokens” at `api/bootstrap/app.php:40-43`.
+- Supplier login returns a token at `api/app/Modules/B2B/Controllers/SupplierAuthController.php:39-64`.
+- The shared portal client sets `Authorization: Bearer` and persists the token in `sessionStorage` at `spa/src/api/b2b/client.ts:14-24`; the supplier client enables that persistence at `spa/src/api/b2b/supplier.ts:18`.
+- `api/config/auth.php:14-20` documents that supplier remains token-based until migration, while portal runbooks still describe bearer auth. The repository therefore contains a deliberate exception without one authoritative current contract.
+
+Impact: the supplier portal does not meet the canonical XSS-resistant cookie posture, and mixed documentation can cause an unsafe partial migration. Security/Auth must decide whether to migrate or formally retain the exception before implementation.
+
+#### M047-R005 — Supplier public auth routes bypass the B2B feature gate
+
+Classification: Missing
+Priority: P2
+Plan: small / same-session-ok
+
+Evidence:
+
+- Supplier login/logout/forgot/reset use only `throttle:auth` at `api/app/Modules/B2B/routes.php:19-25`.
+- Customer public auth applies `feature:b2b_portals` at `api/app/Modules/B2B/routes.php:80-88`, and supplier operational routes apply it at `:28-31`.
+
+Impact: disabling the B2B portal feature can still leave supplier authentication and reset entry points reachable. The gate should cover the complete supplier portal surface.
+
+#### M047-R006 — Supplier PPAP reads use a generic resource with internal fields and a raw storage path
+
+Classification: Incomplete
+Priority: P2
+Plan: medium / separate-recommended
+
+Evidence:
+
+- `api/app/Modules/B2B/Controllers/SupplierPortalController.php:327-341` returns `Quality\Resources\PpapSubmissionResource` directly.
+- The service eager-loads PPAP elements at `api/app/Modules/B2B/Services/SupplierPortalService.php:720-734`.
+- The generic resource includes rejection/review/approval metadata at `api/app/Modules/Quality/Resources/PpapSubmissionResource.php:19-27,40-46`; its element resource exposes `document_path` at `api/app/Modules/Quality/Resources/PpapElementResource.php:14-21`.
+- Existing tests assert vendor filtering and status counts only at `api/tests/Feature/B2B/SupplierPpapViewTest.php:29-91`.
+
+Impact: the endpoint lacks a supplier-specific allowlist and can disclose internal review fields or private storage-path metadata. Quality resources are dependencies and were not modified.
+
+### Polish pass finding
+
+#### M047-R007 — Invoice filters offer statuses that the API deliberately hides
+
+Classification: Polish
+Priority: P3
+Plan: small / same-session-ok
+
+Evidence: the SPA offers Draft and Cancelled at `spa/src/pages/portal/supplier/invoices/index.tsx:35-46`, while the service restricts results to supplier-visible statuses at `api/app/Modules/B2B/Services/SupplierPortalService.php:556-569`. Selecting either option produces an empty result by design.
+
+Impact: the filter contract is confusing but not a data-boundary failure. Align the options after the API status policy is confirmed.
+
+### Verification
+
+- `docker compose exec -T -e DB_DATABASE=ogami_test_m047_roll_d api php -d memory_limit=768M artisan test tests/Feature/B2B/SupplierPortalAuthTest.php tests/Feature/B2B/SupplierPortalServiceTest.php tests/Feature/B2B/SupplierPortalAccessLifecycleTest.php tests/Feature/B2B/PortalPasswordResetTest.php tests/Feature/B2B/SupplierPpapViewTest.php tests/Feature/B2B/PortalTokenCrossGuardTest.php tests/Feature/B2B/PortalValidationTest.php` — 78 passed, 329 assertions.
+- `docker compose exec -T -e DB_DATABASE=ogami_test_m047_roll_d api php -d memory_limit=768M artisan test tests/Feature/B2B/LoginThresholdTwoConnectionHarnessTest.php` — 4 passed, 24 assertions.
+- PHP syntax checks passed for the reviewed supplier service, routes, middleware, auth/controller, and supplier PO resource files.
+- `docker compose exec -T -e DB_DATABASE=ogami_test_m047_roll_d api php artisan route:list --path=b2b/supplier --no-ansi` — 25 routes enumerated.
+- `docker compose exec -T spa npm run typecheck` — passed.
+- All test commands used `DB_DATABASE=ogami_test_m047_roll_d`; `ogami_test` was not used.
+- No source, dependency, shared config, registry, or other-module file was changed by this audit. No temporary audit file was created.
+
+### Current handoff
+
+The exact deferred blocker is the Security/Auth owner decision on the supplier bearer-token exception versus the inherited cookie-only policy; the PPAP field contract and supplier-visible AP bill status contract also need their owning-module decisions. These do not block audit completion, artifact commit, or claim release. Next action is a separate implementation session beginning with R001–R004, followed by the PPAP contract and the two small UI/route alignments.
