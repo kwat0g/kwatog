@@ -12,10 +12,12 @@ use App\Modules\Auth\Models\User;
 use App\Modules\Leave\Events\YearEndLeaveProcessingRequested;
 use App\Modules\Leave\Listeners\RunYearEndLeaveOnRequested;
 use App\Modules\Leave\Models\LeaveType;
+use App\Modules\Leave\Requests\ProcessYearEndLeaveRequest;
 use App\Modules\Leave\Services\YearEndLeaveProcessingService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class YearEndLeaveDurableHandoffTest extends TestCase
@@ -102,6 +104,42 @@ class YearEndLeaveDurableHandoffTest extends TestCase
 
         Queue::assertNothingPushed();
         $this->assertDatabaseCount('event_outbox', 0);
+    }
+
+    #[DataProvider('invalidYearInputs')]
+    public function test_api_rejects_malformed_and_out_of_range_years(mixed $year): void
+    {
+        $user = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+        ]);
+
+        $this->actingAs($user)
+            ->postJson('/api/v1/leaves/process-year-end', ['year' => $year])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('year')
+            ->assertJsonPath('errors.year.0', ProcessYearEndLeaveRequest::yearValidationMessage());
+
+        $this->assertDatabaseCount('event_outbox', 0);
+    }
+
+    #[DataProvider('invalidYearInputs')]
+    public function test_command_rejects_malformed_and_out_of_range_years_before_dispatch(mixed $year): void
+    {
+        $this->artisan('leave:process-year-end', ['year' => $year])
+            ->expectsOutput(ProcessYearEndLeaveRequest::yearValidationMessage())
+            ->assertExitCode(1);
+
+        $this->assertDatabaseCount('event_outbox', 0);
+    }
+
+    /** @return array<string, array{0: mixed}> */
+    public static function invalidYearInputs(): array
+    {
+        return [
+            'malformed text' => ['abc'],
+            'before supported range' => ['2019'],
+            'after supported range' => ['2100'],
+        ];
     }
 
     public function test_previous_year_option_targets_the_prior_calendar_year(): void

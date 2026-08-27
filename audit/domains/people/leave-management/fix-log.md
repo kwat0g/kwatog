@@ -381,3 +381,25 @@ Module status: 🔁 Needs Re-audit — M019-F20 is applied; the remaining open f
 - SPA `npm run typecheck` remains blocked by the pre-existing unrelated `src/pages/assets/detail.tsx` missing `qrcode` module/type errors. No dependency change was made.
 
 M019-F21 is applied. M019-F10/F12–F19 remain deferred and are not part of this change; final status remains 🔁 Needs Re-audit.
+
+## Session 5 (2026-08-27) — M019-F17 year-end validation and copy alignment
+
+- Centralized the supported year contract in `api/app/Modules/Leave/Requests/ProcessYearEndLeaveRequest.php`: years must be integer values from **2020 through 2099**, with shared normalization, validation, and error-message helpers. The optional API year now validates its current-year default as well.
+- Updated `api/app/Console/Commands/ProcessYearEndLeaveCommand.php` to reuse that request rule before reading automation-user settings or staging an outbox request. Malformed values such as `abc`, and years outside the supported range, now fail with a clear error and exit code 1.
+- Updated `spa/src/pages/leaves/year-end.tsx` to enforce the same bounds (`max=2099`), reject malformed/out-of-range values before mutation, and describe the actual job scope: all active leave types, with convertibility determining disposition rather than eligibility.
+- Added API/CLI regression cases for malformed, below-range, and above-range years in `api/tests/Feature/Leave/YearEndLeaveDurableHandoffTest.php`, plus a SPA regression for bounds, invalid-submit blocking, valid upper-bound submission, and active-leave-type copy in `spa/src/pages/leaves/year-end.test.tsx`.
+
+### Verification
+
+| Check | Result | Notes |
+|---|---|---|
+| Focused PostgreSQL backend | **PASS — 16 tests, 70 assertions** | `DB_DATABASE=ogami_test_m019_f17`; `YearEndLeaveDurableHandoffTest` and `YearEndLeaveReconciliationTest`. |
+| PHP syntax | **PASS** | Request, command, and focused Leave test. |
+| Laravel Pint | **PASS** | Three scoped PHP files. |
+| PHPStan | **PASS** | Two touched production PHP files; `--memory-limit=512M` was required because the container default is 128M. |
+| Focused SPA Vitest | **PASS — 1 test** | `src/pages/leaves/year-end.test.tsx`. |
+| Targeted SPA ESLint | **PASS** | Year-end page and focused test, `--max-warnings 0`. |
+| SPA typecheck | **PASS** | `npm run typecheck`. |
+| Diff check | **PASS** | `git diff --check`. |
+
+Module status remains 🔁 Needs Re-audit; no registry regeneration was performed.

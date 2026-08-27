@@ -7,6 +7,21 @@ import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { usePermission } from '@/hooks/usePermission';
 import toast from 'react-hot-toast';
 
+// Keep this mirror of ProcessYearEndLeaveRequest's canonical API contract in
+// the page boundary so the browser rejects the same years before submitting.
+const YEAR_END_MIN_YEAR = 2020;
+const YEAR_END_MAX_YEAR = 2099;
+const YEAR_END_YEAR_ERROR = `Enter a whole year from ${YEAR_END_MIN_YEAR} through ${YEAR_END_MAX_YEAR}.`;
+
+function parseSupportedYear(value: string): number | null {
+  if (!/^[+-]?(?:0|[1-9]\d*)$/.test(value)) return null;
+
+  const year = Number(value);
+  return Number.isSafeInteger(year) && year >= YEAR_END_MIN_YEAR && year <= YEAR_END_MAX_YEAR
+    ? year
+    : null;
+}
+
 /**
  * Year-end leave processing — rendered inside the "Year-End Leave" modal on the
  * Leave page (scope cut 2026-08-08: the standalone page was a 47-LOC one-button
@@ -28,8 +43,13 @@ export function YearEndLeaveModal({
   // here so the button is inert rather than failing after the click.
   const canRun = can('leave.types.manage');
   const [year, setYear] = useState(new Date().getFullYear().toString());
+  const selectedYear = parseSupportedYear(year);
   const mutation = useMutation({
-    mutationFn: () => leaveTypesApi.processYearEnd(parseInt(year)),
+    mutationFn: () => {
+      if (selectedYear === null) throw new Error(YEAR_END_YEAR_ERROR);
+
+      return leaveTypesApi.processYearEnd(selectedYear);
+    },
     onSuccess: (data) => {
       toast.success(data?.message ?? 'Year-end processing queued.');
       onSuccess?.();
@@ -42,15 +62,17 @@ export function YearEndLeaveModal({
     <Modal isOpen={open} onClose={onClose} size="sm" title="Year-End Leave Processing">
       <div className="space-y-3 py-2">
         <p className="text-sm text-muted">
-          Processes all leave types marked as year-end convertible. Unused days are
-          converted to cash, carried over, or forfeited based on each leave type's rules.
+          Processes all active leave types. Unused days are converted to cash for types
+          configured for year-end conversion; otherwise they are carried over or forfeited
+          based on each leave type's rules.
         </p>
         <Input
           label="Year"
           type="number"
-          min="2020"
-          max="2100"
+          min={YEAR_END_MIN_YEAR}
+          max={YEAR_END_MAX_YEAR}
           value={year}
+          error={selectedYear === null ? YEAR_END_YEAR_ERROR : undefined}
           onChange={(e) => setYear(e.target.value)}
         />
       </div>
@@ -61,7 +83,7 @@ export function YearEndLeaveModal({
         <Button
           variant="primary"
           onClick={() => mutation.mutate()}
-          disabled={!canRun || mutation.isPending}
+          disabled={!canRun || mutation.isPending || selectedYear === null}
           loading={mutation.isPending}
         >
           {mutation.isPending ? 'Queuing…' : 'Run year-end processing'}

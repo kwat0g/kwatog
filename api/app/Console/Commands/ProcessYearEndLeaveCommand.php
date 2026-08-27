@@ -6,6 +6,7 @@ namespace App\Console\Commands;
 
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
+use App\Modules\Leave\Requests\ProcessYearEndLeaveRequest;
 use App\Modules\Leave\Services\YearEndLeaveProcessingService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
@@ -37,9 +38,16 @@ class ProcessYearEndLeaveCommand extends Command
             return self::FAILURE;
         }
 
-        $year = $this->option('previous-year')
+        $requestedYear = $this->option('previous-year')
             ? Carbon::now()->subYear()->year
-            : (int) ($this->argument('year') ?: Carbon::now()->year);
+            : ($this->argument('year') ?? Carbon::now()->year);
+        $year = ProcessYearEndLeaveRequest::normalizeYear($requestedYear);
+
+        if ($year === null) {
+            $this->error(ProcessYearEndLeaveRequest::yearValidationMessage());
+
+            return self::FAILURE;
+        }
 
         /** @var User|null $systemUser */
         $systemEmail = $this->settings->requiredString('leave.year_end.automation_user_email');
