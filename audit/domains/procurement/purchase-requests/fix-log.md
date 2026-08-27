@@ -2,6 +2,17 @@
 
 Session: 2026-08-25 (audit + fixes), resumed 2026-08-26 (runtime verification)
 
+## Session 2026-08-27 — M036-F018
+
+### F-018 — Use exact Money comparison for conversion positivity gate
+
+- Scope: replace only the conversion listener's float cast in the estimated-unit-price positivity check; preserve manual-conversion fallback for null/zero values.
+- Regression: add focused Purchasing coverage for decimal/cent-boundary positive estimates and null/zero fallback.
+- Fix: `ConsolidatePurchaseOrders` now uses `Money::lte((string) $line->estimated_unit_price, Money::zero())` for the non-positive gate; the explicit null branch remains unchanged.
+- Regression: `ConsolidatePurchaseOrdersTest` covers the smallest positive cent (`0.01`) auto-conversion and preserves manual-required fallback for both null and `0.00` prices.
+- Verification: the focused conversion suite passed in the dedicated `ogami_test_m036_f018` database — 15 tests, 48 assertions.
+- Scope guard: F-014, F-019, and all concurrency/policy findings were not changed; remaining findings stay open and release will be **🔁 Needs Re-audit**.
+
 ## Session 2026-08-27 — M036-F015
 
 ### F-015 — Restore soft-deleted purchase requests through hash routes

@@ -117,6 +117,23 @@ class ConsolidatePurchaseOrdersTest extends TestCase
         $this->assertSame([$vendorA->id, $vendorB->id], $pos->pluck('vendor_id')->all());
     }
 
+    public function test_smallest_positive_cent_unit_price_is_auto_converted(): void
+    {
+        $vendor = $this->vendor();
+        $item = Item::factory()->create();
+        $pr = $this->makePr([[
+            'item_id'              => $item->id,
+            'suggested_vendor_id'  => $vendor->id,
+            'estimated_unit_price' => '0.01',
+        ]]);
+
+        event(new PurchaseRequestApproved($pr));
+
+        $po = PurchaseOrder::where('purchase_request_id', $pr->id)->first();
+        $this->assertNotNull($po, 'A positive one-cent estimate must remain eligible for auto-conversion.');
+        $this->assertSame('0.01', (string) $po->items()->firstOrFail()->unit_price);
+    }
+
     public function test_pr_with_a_line_missing_suggested_vendor_is_skipped_whole(): void
     {
         $vendorA = $this->vendor();
@@ -152,6 +169,25 @@ class ConsolidatePurchaseOrdersTest extends TestCase
             'item_id'             => $item->id,
             'suggested_vendor_id' => $vendorA->id,
             'estimated_unit_price' => null,
+        ]]);
+
+        event(new PurchaseRequestApproved($pr));
+
+        $this->assertSame(0, PurchaseOrder::where('purchase_request_id', $pr->id)->count());
+        $fresh = $pr->fresh();
+        $this->assertSame(PurchaseRequestStatus::Approved, $fresh->status);
+        $this->assertSame(PurchaseRequestConversionStatus::ManualRequired, $fresh->po_conversion_status);
+        $this->assertStringContainsString('unit price', (string) $fresh->po_conversion_note);
+    }
+
+    public function test_pr_with_a_zero_unit_price_is_skipped_whole(): void
+    {
+        $vendor = $this->vendor();
+        $item = Item::factory()->create();
+        $pr = $this->makePr([[
+            'item_id'              => $item->id,
+            'suggested_vendor_id'  => $vendor->id,
+            'estimated_unit_price' => '0.00',
         ]]);
 
         event(new PurchaseRequestApproved($pr));

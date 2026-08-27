@@ -9,6 +9,7 @@ use App\Common\Services\ChainListenerRunService;
 use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
 use App\Common\Services\SystemActorService;
+use App\Common\Support\Money;
 use App\Modules\Auth\Models\User;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Events\PurchaseRequestApproved;
@@ -104,7 +105,7 @@ class ConsolidatePurchaseOrders implements ShouldQueue
                 $this->recordManualConversionOutcome($pr, 'Some line items have no preferred supplier — assign one and convert manually.');
                 return;
             }
-            if ($line->estimated_unit_price === null || (float) $line->estimated_unit_price <= 0) {
+            if ($line->estimated_unit_price === null || Money::lte((string) $line->estimated_unit_price, Money::zero())) {
                 Log::info('ConsolidatePurchaseOrders: line has no unit price, skipping whole PR', [
                     'pr_id' => $pr->id,
                     'pr_item_id' => $line->id,
