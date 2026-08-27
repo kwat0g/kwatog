@@ -425,3 +425,45 @@ database `ogami_test_m034_20260827`: 62 tests and 205 assertions passed with
 Laravel Pint still reports pre-existing
 formatting drift in several legacy files; no unrelated formatter rewrite was
 included. Two-worker concurrency and browser/e2e evidence remain deferred.
+
+# Execution session — 2026-08-27 (batch3-agent-a)
+
+## Claim and scope
+
+- Atomically claimed the preferred module with
+  `audit/scripts/claim-module.sh commercial customer-complaints-8d`.
+- Preferred M034 was claimed successfully; fallback M019 was not used.
+- The generated registry was read but not edited. The only pre-existing
+  worktree modification remains `audit/00-MODULE-REGISTRY.md`.
+
+## Re-audit findings
+
+- **M034-R04:** still Missing/P2 — `investigating` and `cancelled` remain
+  unreachable, while both internal and portal options publish the dead enum
+  cases. Deferred for product/quality policy.
+- **M034-R05:** still Incomplete/P2 — all internal complaint reads, mutations,
+  finalization, lifecycle, retry, and PDF routes share
+  `crm.complaints.manage`. Deferred for the RBAC owner's action matrix.
+- **M034-R11:** Incomplete/P2 — internal complaint list query parameters are
+  passed from raw `$request->query()` without the enum, shape, length, and
+  pagination validation already present on the portal list boundary.
+- **M034-R12:** Missing/P2 — `Complaint8DReport` has no `HasAuditLog`; D-field
+  edits and finalization have no durable child-record audit history. Deferred
+  for audit/redaction policy and focused tests.
+
+## Gate and changes
+
+The plan is `📋 Plan Ready`. Only R11 is a small `same-session-ok` action;
+R04, R05, and R12 are `separate-recommended`, so the plan is not a majority
+same-session-ok small plan. No implementation fixes were applied and no source,
+test, migration, registry, or dependency files were changed in this session.
+
+## Verification
+
+- Focused Docker feature sweep: **55 passed / 180 assertions / 0 failures** on
+  `DB_DATABASE=ogami_test_m034_agent_a2`.
+- PHP lint passed for the current M034 CRM/B2B implementation files.
+- SPA `tsc --noEmit` and scoped ESLint passed for the complaint pages, APIs,
+  and types.
+- `git diff --check` passed.
+- Multi-worker concurrency and browser/e2e evidence remain deferred.

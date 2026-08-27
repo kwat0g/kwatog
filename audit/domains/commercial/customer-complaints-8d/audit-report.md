@@ -1,27 +1,25 @@
 # M034 — Customer complaints / 8D re-audit report
 
 Audit date: 2026-08-27
-Status: 🔁 Needs Re-audit  
+Status: 📋 Plan Ready
 Scope: current shared worktree for the customer-complaints-8d module only
 
 ## Re-audit decision
 
-The 2026-08-25 report was stale for this session. Since its recorded HEAD,
-the shared worktree contains substantial M034 changes in the CRM service,
-portal service/resources/controllers, complaint requests, complaint SPA pages,
-tests, and retention/index migrations. The findings below are based on the
-current files, not on the earlier snapshot.
+The current snapshot was rechecked against the fresh registry, the current
+module docs, implementation, tests, git diff, and mtimes. The previously
+recorded M034 fixes are present in the current HEAD; this session did not
+change implementation code.
 
 The former P1 stale-write, lifecycle-gate, portal-disclosure, PDF-publication,
-and provenance findings are addressed in the current implementation. This
-session also re-ran the SLA delivery accounting coverage and fixed three
-additional complaint-path contract defects. Cancellation/investigation
-semantics and permission granularity remain policy questions and are
-intentionally not guessed.
+and provenance findings are addressed in the current implementation. The
+current focused sweep re-ran the SLA delivery accounting and complaint/portal
+contract coverage. Cancellation/investigation semantics and permission
+granularity remain policy questions and are intentionally not guessed.
 
 ## Findings
 
-### M034-R01 — P1, Incomplete at re-audit; fixed this session: SLA delivery ledger
+### M034-R01 — P1, Incomplete at re-audit; fixed and verified: SLA delivery ledger
 
 The original gap was the complaint JSON marker being the only durable claim
 record. It is now addressed by
@@ -40,7 +38,7 @@ no-recipient cases in
 `api/tests/Feature/CRM/Complaint8dSlaTest.php:66-219`. They executed against
 the isolated M034 database in the 2026-08-27 sweep.
 
-### M034-R02 — P2, Incomplete at re-audit; fixed this session: cancelled portal order
+### M034-R02 — P2, Incomplete at re-audit; fixed and verified: cancelled portal order
 
 The request validator now checks the owned order status and returns a field
 validation error for `cancelled` at
@@ -50,7 +48,7 @@ The authoritative CRM transaction-time check remains at
 API regression is at
 `api/tests/Feature/B2B/CustomerPortalServiceTest.php:414-440`.
 
-### M034-R03 — P2, Broken at re-audit; fixed this session: portal audit action
+### M034-R03 — P2, Broken at re-audit; fixed and verified: portal audit action
 
 Portal complaint creation now writes the stable action
 `customer.complaint.submitted` at
@@ -66,7 +64,11 @@ Evidence: `api/app/Modules/CRM/Enums/ComplaintStatus.php:8-18` defines both
 resolve/close operations. No investigation or cancellation route exists in
 `api/app/Modules/CRM/routes.php:64-84`, and the current complaint detail action
 surface only exposes quality-gated resolve/close actions at
-`spa/src/pages/crm/complaints/detail.tsx:217-231`.
+`spa/src/pages/crm/complaints/detail.tsx:217-231`. Both the internal options
+endpoint at `api/app/Modules/CRM/Controllers/ComplaintController.php:44-55`
+and the customer portal options endpoint at
+`api/app/Modules/B2B/Controllers/CustomerPortalController.php:239-253`
+publish every enum case, including the unreachable cancelled filter.
 
 Impact: staff cannot mark a complaint as actively investigating, and duplicate
 or misfiled complaints cannot be corrected through an auditable first-class
@@ -95,7 +97,7 @@ Action: define the role/action matrix with the RBAC owner, then add permissions,
 route gates, UI checks, and matrix tests in a dedicated authorization session.
 Deferred pending that decision.
 
-### M034-R08 — Broken, P1 at re-audit; fixed this session: complaint update email rendering
+### M034-R08 — Broken, P1 at re-audit; fixed and verified: complaint update email rendering
 
 Before this session, the queued customer-update path called `label()` on the
 `ComplaintStatus` and shared `NcrSeverity` enum casts even though neither enum
@@ -113,7 +115,7 @@ covers valid-email rendering and missing-email fallback delivery. This was a
 small same-session fix because it stayed within the complaint notification
 surface and did not alter the shared Quality enum.
 
-### M034-R09 — Incomplete, P2 at re-audit; fixed this session: invalid customer filter broadened results
+### M034-R09 — Incomplete, P2 at re-audit; fixed and verified: invalid customer filter broadened results
 
 The internal list controller previously decoded an invalid `customer_id` hash
 to `null`, while `ComplaintService::list` skipped empty customer filters. A
@@ -124,7 +126,7 @@ The boundary is now fail-closed at
 empty result set. The internal permission gate limits exposure, but the prior
 behavior was still an incorrect query-boundary contract.
 
-### M034-R10 — Incomplete, P2 at re-audit; fixed this session: NCR list/UI contract drift
+### M034-R10 — Incomplete, P2 at re-audit; fixed and verified: NCR list/UI contract drift
 
 The list query selected only NCR `id`, number, and status at
 `ComplaintService.php:70-77`, while `CustomerComplaintResource` advertised
@@ -134,6 +136,42 @@ the resource exposes disposition, and the internal SPA type and completion gate
 check the same field at `spa/src/types/crm.ts:201` and
 `spa/src/pages/crm/complaints/detail.tsx:149-152`. The API contract regression
 is covered at `ComplaintSourceValidationTest.php:141-169`.
+
+### M034-R11 — Incomplete, P2: internal complaint list query boundary is unvalidated
+
+`api/app/Modules/CRM/Controllers/ComplaintController.php:30-42` passes the
+raw query array directly to `ComplaintService::list`. Unlike the customer
+portal list boundary at
+`api/app/Modules/B2B/Controllers/CustomerPortalController.php:222-237`, the
+internal endpoint validates none of `status`, `severity`, `search`,
+`customer_id`, or `per_page`. The service then casts `customer_id` and
+`per_page` and feeds status/severity/search directly into query construction at
+`api/app/Modules/CRM/Services/ComplaintService.php:68-88`.
+
+Impact: malformed or array-shaped query parameters can reach unsafe casts and
+pagination/query binding instead of receiving a stable 422 response; scalar
+unknown enum values also silently produce an empty result. Add a dedicated
+list request contract and regression cases for invalid enum, bounds, and
+array-shaped inputs. Deferred to the next implementation session because the
+current gate does not authorize a partial hardening change.
+
+### M034-R12 — Missing, P2: 8D authoring and finalization have no child-record audit trail
+
+`api/app/Modules/CRM/Models/Complaint8DReport.php:7-17` uses only
+`HasFactory` and `HasHashId`; unlike its parent
+`api/app/Modules/CRM/Models/CustomerComplaint.php:7-25`, it does not use
+`HasAuditLog`. The authoring and finalization writes target the child model at
+`api/app/Modules/CRM/Services/ComplaintService.php:177-209` and `:211-257`.
+Therefore D1-D8 revisions and the finalization update do not create durable
+`audit_logs` rows. `finalized_by`/`finalized_at` retain the latest finalizer,
+but cannot reconstruct who changed each quality-record field or its prior
+values.
+
+Impact: the formal 8D record is immutable after finalization but its
+pre-finalization authorship/revision history is not auditable. Define the
+audit/redaction policy, add the observer or an explicit domain audit event,
+and cover create, edit, finalize, and post-finalize rejection in focused tests.
+This is separate-recommended because it changes quality-record audit behavior.
 
 ## Prior findings rechecked
 
@@ -174,18 +212,17 @@ is covered at `ComplaintSourceValidationTest.php:141-169`.
 
 ## Verification and evidence gaps
 
-PHP lint passed for the changed M034 PHP files and `git diff --check` passed.
-The focused Docker feature sweep ran on the isolated database
-`ogami_test_m034_20260827`:
+PHP lint passed for the current M034 PHP files and `git diff --check` passed.
+This batch's focused Docker feature sweep ran on the isolated database
+`ogami_test_m034_agent_a2`:
 
-    62 passed, 205 assertions, 0 failures
+    55 passed, 180 assertions, 0 failures
 
 This includes the SLA, lifecycle, NCR handoff, recurrence, source-validation,
 email, and customer-portal complaint tests. The SPA typecheck and scoped ESLint
-for the changed complaint page/types also passed. Laravel Pint remains
-non-clean on pre-existing formatting drift in several touched legacy files;
-the new email test itself is clean, and no unrelated formatter rewrite was
-included.
+for the complaint pages/types also passed. Laravel Pint remains non-clean on
+pre-existing formatting drift in several touched legacy files; no unrelated
+formatter rewrite was included.
 
 Concurrency tests for 8D writes, lifecycle transitions, and SLA workers should
 still be run in a dedicated multi-connection/worker environment. Browser/e2e
@@ -194,7 +231,9 @@ this session.
 
 ## Release decision
 
-M034 cannot be marked Verified in this session. The actionable fixes below are
-contained in M034 scope and can be applied now; cancellation and RBAC remain
-genuine human-decision blockers. Release as `🔁 Needs Re-audit` with explicit
-pending items in the fix log.
+M034 cannot be marked Verified in this session. R04 and R05 require human
+policy decisions, R12 changes quality-record audit behavior, and R11 needs a
+separate request-contract hardening pass. The plan is not a majority
+same-session-ok small plan, so no implementation fixes are applied. Release
+as `📋 Plan Ready` with the deferred work recorded in the action plan and fix
+log.

@@ -1,119 +1,95 @@
 # M034 — Customer complaints / 8D re-audit action plan
 
 Date: 2026-08-27
-Status: 🔁 Needs Re-audit  
-Plan basis: current worktree after the 2026-08-24 report
+Status: 📋 Plan Ready
+Plan basis: current worktree and batch3-agent-a re-audit
 
-The earlier plan's P1 integrity and portal-boundary work is present in the
-current code. R01-R03 and the three additional executable findings R08-R10 are
-fixed and verified; R04-R05 require explicit policy decisions and are not
-guessed.
+The previously recorded integrity, portal-boundary, SLA, email, source-filter,
+and NCR-contract fixes are present and verified. R04-R05 remain policy
+decisions; R11-R12 are current hardening findings.
 
-## Ordered implementation plan
+## Ordered pending actions
 
-### 1. M034-R01 — Add durable SLA delivery records — completed
-
-- Classification/severity: Incomplete, P1
-- Scope: medium/large; CRM model, migration, escalation service, tests
-- Session recommendation: separate-recommended
-- Add a unique complaint/tier delivery ledger with pending/sent status,
-  idempotency key, attempt count, recipient count, timestamps, and last error.
-  Keep the complaint row lock and transaction. A failed notification insert
-  must roll back the claim and leave a retryable pending record; no active
-  recipient must not consume the tier.
-- Implemented in the M034 CRM model, migration, and escalation service.
-- Regression assertions cover sequential replay, simulated failure, and
-  no-recipient retry. The focused sweep ran on the isolated M034 database;
-  two-worker concurrency remains a dedicated follow-up.
-
-### 2. M034-R02 — Reject cancelled portal source orders early — completed
-
-- Classification/severity: Incomplete, P2
-- Scope: small; portal request validator and negative test
-- Session recommendation: same-session-ok
-- Rejects a cancelled order as a validation error while retaining the
-  authoritative CRM service-side lock/re-check for races. Negative API test
-  added.
-
-### 3. M034-R03 — Normalize the portal complaint audit action — completed
-
-- Classification/severity: Broken, P2
-- Scope: small; portal service and contract test
-- Session recommendation: same-session-ok
-- Uses the stable `customer.complaint.submitted` identifier consistently with
-  the portal contract test.
-
-### 4. M034-R04 — Decide lifecycle policy and implement or retire unused states
+### 1. M034-R04 — Decide lifecycle policy and implement or retire unused states
 
 - Classification/severity: Missing, P2
-- Scope: small/medium; lifecycle, audit field, permission, UI, and tests
+- Scope: medium/large
 - Session recommendation: separate-recommended
-- Requires a product/quality decision about whether investigation should be an
-  explicit transition and whether a complaint can be cancelled, why, who may
-  do it, and what the customer portal should display. This session defers the
-  item pending that decision.
+- Decide whether investigation is an explicit transition and whether complaint
+  cancellation is permitted, including reasons, actors, NCR behavior, and
+  customer-visible behavior. Then implement the authorized workflow or retire
+  the unreachable enum/options/SPA branches.
 
-### 5. M034-R05 — Split internal complaint permissions if required
+### 2. M034-R05 — Define and implement internal complaint permissions
 
 - Classification/severity: Incomplete, P2
-- Scope: medium; RBAC seeder, routes, UI gates, and matrix tests
+- Scope: medium
 - Session recommendation: separate-recommended
-- Requires an explicit role/action matrix for view, create/update, 8D
-  finalize, lifecycle, NCR retry, and PDF. This session defers the item
-  pending RBAC-owner input.
+- Define view, create/update, 8D edit, 8D finalize, lifecycle, NCR retry, and
+  PDF permissions with the RBAC owner. Apply the approved matrix to API routes,
+  SPA gates, seeded roles, and authorization tests.
 
-### 6. M034-R08 — Repair complaint update email rendering — completed
+### 3. M034-R12 — Add an auditable 8D child-record history
 
-- Classification/severity: Broken, P1
-- Scope: small; complaint listener, mailable view, and regression tests
-- Session recommendation: same-session-ok
-- Replaced invalid `label()` calls on the complaint status and shared severity
-  enums with value-based `Str::headline` formatting. Both the valid-email
-  mailable render and missing-email internal fallback are covered by
-  `ComplaintEmailTest`.
+- Classification/severity: Missing, P2
+- Scope: medium
+- Session recommendation: separate-recommended
+- Decide whether `HasAuditLog` is sufficient for the D-field content and
+  finalization event, confirm redaction/retention requirements, then add the
+  durable audit trail and tests for create, edit, finalize, and immutable
+  post-finalization behavior.
 
-### 7. M034-R09 — Fail closed on invalid internal customer filters — completed
-
-- Classification/severity: Incomplete, P2
-- Scope: small; internal list controller and API regression test
-- Session recommendation: same-session-ok
-- An invalid supplied customer hash now becomes an impossible filter instead of
-  being decoded to `null` and silently broadening the list.
-
-### 8. M034-R10 — Align the NCR list/UI completion contract — completed
+### 4. M034-R11 — Validate internal complaint list query parameters
 
 - Classification/severity: Incomplete, P2
-- Scope: small; CRM list projection/resource and complaint detail type/gate
+- Scope: small
 - Session recommendation: same-session-ok
-- List responses now select and expose NCR severity/disposition, while the
-  internal lifecycle affordance checks the disposition required by the server.
+- Validate status/severity enums, customer hash, search length, and
+  `per_page` bounds/shape before calling the service; preserve fail-closed
+  behavior for invalid customer hashes and return stable 422 responses.
 
-## Already addressed and requiring regression verification
+## Completed findings and regression evidence
 
-- R01-R03 and R08-R10: focused assertions executed successfully on the
-  isolated M034 database.
-- F01/F03: authoritative complaint/report locks and lifecycle transition matrix.
-- F02: finalized-8D plus closed/dispositioned-NCR completion gate.
-- F04/F07: customer-safe portal resource, finalized-only portal report, and
-  finalized-only internal PDF.
-- F06: request-boundary and transaction-time source/assignee validation.
-- F10/F11: searchable source selectors, explicit portal product contract, and
-  bounded portal complaint history.
-- F12: restrictive complaint/customer foreign key migration and regression test.
+The following actions are complete in the current implementation. Their tags
+remain for traceability; they are not candidates for another same-session fix.
+
+| Finding | Classification | Scope | Session recommendation | Result |
+|---|---|---|---|---|
+| R01 durable SLA delivery records | Incomplete, P1 | medium/large | separate-recommended | fixed and verified |
+| R02 reject cancelled portal source orders | Incomplete, P2 | small | same-session-ok | fixed and verified |
+| R03 normalize portal complaint audit action | Broken, P2 | small | same-session-ok | fixed and verified |
+| R08 repair complaint update email rendering | Broken, P1 | small | same-session-ok | fixed and verified |
+| R09 fail closed on invalid internal customer filters | Incomplete, P2 | small | same-session-ok | fixed and verified |
+| R10 align NCR list/UI completion contract | Incomplete, P2 | small | same-session-ok | fixed and verified |
+
+Earlier F01/F03 authoritative locks, F02 quality completion gating, F04/F07
+safe publication/PDF gates, F06 source and assignee validation, F10/F11 source
+and history contracts, and F12 retention protection are also present and
+covered by the current focused tests.
+
+## Gate decision
+
+The final status is `📋 Plan Ready`. Of the four pending actions, only R11 is
+tagged `same-session-ok`; R04, R05, and R12 are `separate-recommended`, and the
+total scope is not a small majority-same-session plan. No implementation fixes
+were applied in this session.
 
 ## Verification constraint
 
-The focused feature suite passed on isolated PostgreSQL database
-`ogami_test_m034_20260827`: 62 tests and 205 assertions. SPA typecheck and
-scoped ESLint also passed. A full browser/e2e run and multi-worker concurrency
-run remain outside this session. Laravel Pint is not clean on pre-existing
-formatting drift in several legacy files touched by the module; no unrelated
-formatter rewrite was included.
+The focused Docker feature suite passed on isolated PostgreSQL database
+`ogami_test_m034_agent_a2`: **55 tests and 180 assertions**. PHP lint,
+`git diff --check`, SPA typecheck, and scoped ESLint for the complaint pages,
+APIs, and types also passed. A full browser/e2e run and multi-worker
+concurrency run remain outside this session. Laravel Pint remains non-clean on
+pre-existing formatting drift in several legacy files; no unrelated formatter
+rewrite was included.
 
 ## Definition of done for the next release
 
-- SLA delivery ledger is atomic, retryable, and covered by failure/retry tests;
-  multi-worker concurrency still needs a dedicated environment.
-- Cancellation and RBAC decisions are documented and either implemented or
+- Lifecycle and RBAC decisions are documented and either implemented or
   removed from the public contract.
-- The focused CRM/B2B suite and browser flows pass on a clean database.
+- 8D field/finalization audit history is implemented with the approved
+  redaction and retention policy.
+- Internal complaint list parameters return a stable validated contract.
+- Focused CRM/B2B tests, browser flows, and a dedicated multi-worker
+  concurrency run pass on clean isolated environments.
