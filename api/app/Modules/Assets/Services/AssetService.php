@@ -171,18 +171,39 @@ class AssetService
             $lossAcct  = Account::where('code', $this->settings->requiredString('accounting.accounts.asset_disposal_loss_code'))->firstOrFail();
             $gainAcct  = Account::where('code', $this->settings->requiredString('accounting.accounts.asset_disposal_gain_code'))->firstOrFail();
 
-            $lines = [
-                ['account_id' => $cashAcct->id,  'debit' => $disposalAmount, 'credit' => Money::zero(), 'description' => 'Disposal proceeds'],
-                ['account_id' => $accumAcct->id, 'debit' => $accumulated, 'credit' => Money::zero(), 'description' => 'Reverse accumulated depreciation'],
-            ];
+            // Only non-zero lines are journalised. JournalEntryService rejects a
+            // line whose debit and credit are both zero, so emitting the cash or
+            // accumulated-depreciation line unconditionally made two ordinary
+            // disposals impossible: a zero-proceeds scrapping (the common case
+            // for a worn-out mold or written-off machine, and explicitly allowed
+            // by DisposeAssetRequest's `min:0`), and the disposal of an asset
+            // that has not been depreciated yet. Dropping a zero line changes no
+            // balance — it carries no accounting information — and the entry
+            // stays balanced because acquisition cost is credited either way.
+            $lines = [];
+            if (Money::gt($disposalAmount, Money::zero())) {
+                $lines[] = ['account_id' => $cashAcct->id, 'debit' => $disposalAmount, 'credit' => Money::zero(), 'description' => 'Disposal proceeds'];
+            }
+            if (Money::gt($accumulated, Money::zero())) {
+                $lines[] = ['account_id' => $accumAcct->id, 'debit' => $accumulated, 'credit' => Money::zero(), 'description' => 'Reverse accumulated depreciation'];
+            }
             if (Money::lt($disposalAmount, $bookValue)) {
                 $loss = Money::sub($bookValue, $disposalAmount);
                 $lines[] = ['account_id' => $lossAcct->id, 'debit' => $loss, 'credit' => Money::zero(), 'description' => 'Loss on disposal'];
             }
-            $lines[] = ['account_id' => $assetAcct->id, 'debit' => Money::zero(), 'credit' => $cost, 'description' => 'Remove asset at cost'];
+            if (Money::gt($cost, Money::zero())) {
+                $lines[] = ['account_id' => $assetAcct->id, 'debit' => Money::zero(), 'credit' => $cost, 'description' => 'Remove asset at cost'];
+            }
             if (Money::gt($disposalAmount, $bookValue)) {
                 $gain = Money::sub($disposalAmount, $bookValue);
                 $lines[] = ['account_id' => $gainAcct->id, 'debit' => Money::zero(), 'credit' => $gain, 'description' => 'Gain on disposal'];
+            }
+            if ($lines === []) {
+                // Reachable only for a zero-cost, zero-proceeds, never-depreciated
+                // asset (StoreAssetRequest allows acquisition_cost 0). There is no
+                // entry to post, and silently disposing without one would leave the
+                // register and the ledger telling different stories.
+                throw new BusinessRuleException('This asset has no cost, proceeds or accumulated depreciation to journalise; correct its acquisition cost before disposal.');
             }
 
             $je = $this->journals->create([

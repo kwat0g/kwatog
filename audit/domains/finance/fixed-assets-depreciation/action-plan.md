@@ -33,7 +33,30 @@ Overall recommendation: `separate-recommended`
 5. Align F07/F08 and repair F09/F10, followed by role-matrix, browser, migration,
    and GL reconciliation checks.
 
-## Audit-session decision
+## Post-execution addendum — 2026-08-27
+
+The 2026-08-24/25 sessions wrote F01–F05 and F07–F10 but never ran them
+(`migrate:fresh` was broken repo-wide). This session executed the module for the
+first time. Full detail and evidence in `fix-log.md`.
+
+- **Closed by execution:** F01, F02, F03, F05 verified; F04 verified and extended.
+- **New, fixed:** F13 — every zero-proceeds disposal (scrapping) was impossible,
+  because `dispose()` emitted zero-amount journal lines. F14 — the depreciation
+  history filter cast a HashID to `int`, answering an empty page.
+- **Still source-only:** F07, F09, F10 and the SPA half of F08 — no SPA tooling can
+  run while `spa/node_modules` is root-owned.
+- **Open decisions, in priority order for the next session:**
+  1. `D-M031-1` (P0, money) — a mid-month disposal leaves the accumulated
+     depreciation contra-account non-zero for a removed asset, and the reported
+     loss differs by one month's depreciation depending on whether the operator
+     disposes before or after the monthly cron. Three costed options; measured
+     numbers in `fix-log.md`.
+  2. `D-M031-2` — depreciation and disposal journals lose `created_by`. This is
+     decision #12 in `audit/OVERNIGHT-2026-08-27.md`; do not fix it here in
+     isolation.
+  3. F06, F11 — unchanged product-scope decisions.
+
+## Audit-session decision — 2026-08-24
 
 No implementation fix is applied in this session. The majority of findings are
 financial, state-machine/lifecycle, permission, or cross-module changes. A

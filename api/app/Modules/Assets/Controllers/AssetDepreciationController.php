@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Modules\Assets\Controllers;
 
+use App\Common\Support\HashId;
 use App\Modules\Assets\Models\AssetDepreciation;
 use App\Modules\Assets\Services\DepreciationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class AssetDepreciationController
 {
@@ -17,7 +19,19 @@ class AssetDepreciationController
     {
         $q = AssetDepreciation::query()->with(['asset:id,asset_code,name', 'journalEntry:id']);
         if ($request->filled('asset_id')) {
-            $q->where('asset_id', (int) $request->input('asset_id'));
+            // `asset_id` is a HashID like every other identifier we publish —
+            // `spa/src/api/assets.ts` types it `string`. Casting it with `(int)`
+            // silently produced `where asset_id = 0`, so a caller asking for one
+            // asset's history got an empty page with HTTP 200 instead of either
+            // its rows or an error. A filter that cannot be honoured must say so
+            // rather than answer a different question.
+            $assetId = HashId::decode((string) $request->input('asset_id'));
+            if ($assetId === null) {
+                throw ValidationException::withMessages([
+                    'asset_id' => 'The asset filter must be a valid asset identifier.',
+                ]);
+            }
+            $q->where('asset_id', $assetId);
         }
         if ($request->filled('year')) {
             $q->where('period_year', (int) $request->input('year'));

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Assets;
 
+use App\Common\Services\SystemActorService;
 use App\Modules\Assets\Enums\AssetStatus;
 use App\Modules\Assets\Models\Asset;
 use App\Modules\Auth\Models\User;
@@ -32,6 +33,31 @@ class AssetDepreciationCommandTest extends TestCase
 
     public function test_backfill_reports_missing_automation_actor_instead_of_succeeding(): void
     {
+        // Establish the premise instead of assuming an empty `users` table.
+        //
+        // RbacConcurrencyTest declares `protected array $connectionsToTransact = []`
+        // (tests/Feature/Admin/RbacConcurrencyTest.php:31), which turns
+        // RefreshDatabase's per-test transaction OFF for that class because its
+        // forked children need to see the fixtures on a second connection. Its
+        // cleanup does not delete the ACTIVE system_admin rows it committed, and
+        // it does not reset RefreshDatabaseState, so those users survive for the
+        // rest of the PHPUnit process. `tests/Feature/Admin` sorts before
+        // `tests/Feature/Assets`, so in a full-suite run
+        // SystemActorService::resolve() found a leaked actor here: the guard under
+        // test was never reached and the command correctly returned SUCCESS for a
+        // run that genuinely had an actor. Reproduced with
+        // `--filter='RbacConcurrencyTest|AssetDepreciationCommandTest'`.
+        //
+        // "No automation actor exists" is this test's whole premise, so it is owned
+        // here rather than inherited from suite ordering. The write runs inside
+        // this test's own transaction and is rolled back.
+        User::query()->update(['is_active' => false]);
+
+        $this->assertNull(
+            app(SystemActorService::class)->resolve(),
+            'Precondition: no eligible automation actor may exist.',
+        );
+
         $this->artisan('assets:run-monthly-depreciation', ['--year' => 2026, '--month' => 1])
             ->expectsOutput('Asset depreciation cannot run without an automation actor.')
             ->assertExitCode(1);
