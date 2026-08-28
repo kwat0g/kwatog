@@ -542,3 +542,24 @@ they are reported rather than changed.
   `separate-recommended` and exceeds the small-scope gate. Open work is
   classified as F15 Broken, F16 Incomplete, F17 Broken, F18 Broken, and F19
   Missing in `audit-report.md`.
+
+## M031-F17 — Restore soft-deleted assets by published hash — 2026-08-28
+
+- Before: `PATCH /api/v1/assets/{asset}/restore` used the default route binding,
+  so `HasHashId` excluded the soft-deleted asset before `AssetController::restore`
+  could run.
+- After: the restore route opts into the established soft-deletable binding
+  convention with `->withTrashed()` while retaining the existing
+  `permission:assets.delete` middleware (`api/app/Modules/Assets/routes.php:21-24`).
+  No transfer, salvage, disposal, or other asset route was changed.
+- Regression: `AssetRestoreRouteTest` creates and soft-deletes an asset, proves an
+  employee receives HTTP 403 and the row remains archived, then proves a
+  finance officer restores the same record through its published `hash_id`
+  (`api/tests/Feature/Assets/AssetRestoreRouteTest.php:18-54`).
+- Verification:
+  - `docker compose run --rm --no-deps -e DB_DATABASE=ogami_test_m031_f17_20260828 api php artisan test tests/Feature/Assets/AssetRestoreRouteTest.php --no-coverage` — **PASS: 1 test, 5 assertions** on the disposable PostgreSQL database.
+  - `docker compose run --rm --no-deps api sh -lc 'php -l app/Modules/Assets/routes.php && php -l tests/Feature/Assets/AssetRestoreRouteTest.php'` — **PASS: both files have no syntax errors**.
+  - `docker compose run --rm --no-deps api ./vendor/bin/pint --test tests/Feature/Assets/AssetRestoreRouteTest.php` — **PASS**.
+  - `docker compose run --rm --no-deps api ./vendor/bin/pint --test app/Modules/Assets/routes.php` — **FAIL: inherited `method_argument_space` alignment in the existing route file**; unrelated route whitespace was intentionally preserved.
+  - `docker compose run --rm --no-deps api ./vendor/bin/phpstan analyse app/Modules/Assets/routes.php tests/Feature/Assets/AssetRestoreRouteTest.php --memory-limit=1G` — **PASS: no errors**.
+  - `git diff --check` — **PASS**.
