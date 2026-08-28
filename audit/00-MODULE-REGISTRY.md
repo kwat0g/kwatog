@@ -1,6 +1,6 @@
 # Module Registry
 
-_Generated 2026-08-27 18:25 UTC by scripts/regenerate-registry.sh - do not edit by hand, edit each module's status.md instead._
+_Generated 2026-08-28 10:44 UTC by scripts/regenerate-registry.sh - do not edit by hand, edit each module's status.md instead._
 
 | ID | Domain | Module | Tier | Roles | Depends On | Status | Last Session | Locked? |
 |----|--------|--------|------|-------|-----------|--------|---------------|---------|
@@ -13,7 +13,7 @@ _Generated 2026-08-27 18:25 UTC by scripts/regenerate-registry.sh - do not edit 
 | M030 | finance | budgeting | 2 | system_admin, finance_officer | chart-of-accounts-periods, journal-ledger, employee-master | ✅ Verified | 2026-08-24 | no |
 | M025 | finance | chart-of-accounts-periods | 2 | system_admin, finance_officer | auth-session, rbac | 📋 Plan Ready | 2026-08-27 | no |
 | M029 | finance | financial-statements | 2 | system_admin, finance_officer | journal-ledger, accounts-payable, accounts-receivable | 📋 Plan Ready | 2026-08-27 | no |
-| M031 | finance | fixed-assets-depreciation | 2 | system_admin, finance_officer, production_manager, ppc_head, maintenance_tech | chart-of-accounts-periods, journal-ledger, employee-master, maintenance-machine-health | 📋 Plan Ready — re-audit executed; 24 backend tests and 282 SPA tests green; open P0 disposal-month reconciliation, journal maker attribution, restore/salvage controls, F06/F11 decisions, browser acceptance, and QR-label workflow | 2026-08-27 | no |
+| M031 | finance | fixed-assets-depreciation | 2 | system_admin, finance_officer, production_manager, ppc_head, maintenance_tech | chart-of-accounts-periods, journal-ledger, employee-master, maintenance-machine-health | 🔁 Needs Re-audit | 2026-08-28 | no |
 | M026 | finance | journal-ledger | 2 | system_admin, finance_officer | chart-of-accounts-periods, audit-activity | 🔁 Needs Re-audit | 2026-08-25 | 🔒 yes |
 | M041 | inventory | goods-receiving | 3 | system_admin, purchasing_officer, warehouse_staff | purchase-orders, inventory-master, inspections-certificates, accounts-payable | 🔁 Needs Re-audit | 2026-08-25 | 🔒 yes |
 | M039 | inventory | inventory-master | 3 | system_admin, production_manager, purchasing_officer, warehouse_staff, qc_inspector | auth-session, rbac | ✅ Verified | 2026-08-25 | no |
@@ -25,7 +25,7 @@ _Generated 2026-08-27 18:25 UTC by scripts/regenerate-registry.sh - do not edit 
 | M053 | manufacturing | maintenance-machine-health | 3 | system_admin, maintenance_tech, production_manager, ppc_head | fixed-assets-depreciation, production-work-orders, inventory-master, employee-master | 🔁 Needs Re-audit | 2026-08-25 | 🔒 yes |
 | M052 | manufacturing | production-routings | 3 | system_admin, production_manager, ppc_head | customer-product-pricing, inventory-master, quality-inspection-specifications | ✅ Verified | 2026-08-25 | no |
 | M051 | manufacturing | production-work-orders | 3 | system_admin, production_manager, ppc_head | sales-orders, bom-mrp-planning, material-issues-reservations, inspections-certificates, employee-master | 🔁 Needs Re-audit | 2026-08-25 | 🔒 yes |
-| M018 | people | attendance-dtr | 4 | system_admin, hr_officer, finance_officer, production_manager, ppc_head, purchasing_officer, warehouse_staff, qc_inspector, maintenance_tech, impex_officer, department_head, employee, driver | employee-master | 📋 Plan Ready | 2026-08-27 | no |
+| M018 | people | attendance-dtr | 4 | system_admin, hr_officer, finance_officer, production_manager, ppc_head, purchasing_officer, warehouse_staff, qc_inspector, maintenance_tech, impex_officer, department_head, employee, driver | employee-master | 🔁 Needs Re-audit | 2026-08-28 | no |
 | M014 | people | employee-master | 1 | system_admin, hr_officer, department_head | auth-session, rbac | Plan Ready | 2026-08-27 | no |
 | M024 | people | employee-self-service | 4 | system_admin, hr_officer, finance_officer, production_manager, ppc_head, purchasing_officer, warehouse_staff, qc_inspector, maintenance_tech, impex_officer, department_head, employee, driver | auth-session, employee-master, attendance-dtr, leave-management, loans-cash-advances, payroll-period-processing, notifications | 🔁 Needs Re-audit | 2026-08-25 | 🔒 yes |
 | M019 | people | leave-management | 4 | system_admin, hr_officer, finance_officer, production_manager, ppc_head, purchasing_officer, warehouse_staff, qc_inspector, maintenance_tech, impex_officer, department_head, employee, driver | employee-master, attendance-dtr, approval-workflows | 🔁 Needs Re-audit | 2026-08-27 | no |
