@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { LuUpload, LuClock, LuSun, LuPlus, LuArchiveRestore, LuTrash2, LuPencil } from '@/lib/icons';
-import { attendancesApi, type AttendanceListParams, type CreateAttendanceData } from '@/api/attendance/attendances';
+import { attendancesApi, type AttendanceListParams, type CreateAttendanceData, type UpdateAttendanceData } from '@/api/attendance/attendances';
 import { departmentsApi } from '@/api/hr/departments';
 import { employeesApi } from '@/api/hr/employees';
 import { shiftsApi } from '@/api/attendance/shifts';
@@ -108,13 +108,14 @@ function AttendanceCorrectionModal({
     remarks: values.remarks || undefined,
    };
    if (attendance) {
-    return attendancesApi.update(attendance.id, {
-     shift_id: payload.shift_id,
-     time_in: payload.time_in,
-     time_out: payload.time_out,
+    const correction: UpdateAttendanceData = {
+     shift_id: values.shift_id || null,
+     time_in: values.time_in || null,
+     time_out: values.time_out || null,
      is_rest_day: payload.is_rest_day,
      remarks: payload.remarks,
-    });
+    };
+    return attendancesApi.update(attendance.id, correction);
    }
    return attendancesApi.create(payload);
   },

@@ -299,3 +299,72 @@ export. If they emit raw punches, A is required for the module to work at all on
 real hardware and B would be a latent gap. Recommend confirming the device export
 format before choosing.
 
+## M018-F13 — explicit clearing of correction fields — 2026-08-28
+
+Claimed first with:
+
+```text
+audit/scripts/claim-module.sh people attendance-dtr
+```
+
+Result: `CLAIMED`.
+
+The edit form now maps empty shift, time-in, and time-out controls to explicit
+`null` values, while create requests retain their existing `undefined` omission
+behavior. `UpdateAttendanceData` models those three correction fields as
+`string | null` when present. The focused UI regression exercises an existing
+attendance, clears all three controls, and checks both the update payload and its
+JSON serialization contain all three keys as `null`.
+
+### TDD evidence
+
+RED, before the production change:
+
+```text
+cd spa
+npm run test:run -- src/pages/attendance/index.test.tsx
+```
+
+Result: **1 test failed** as intended. The update call contained
+`shift_id: undefined`, `time_in: undefined`, and `time_out: undefined`; JSON
+serialization omitted those keys.
+
+GREEN, after the production change:
+
+```text
+cd spa
+npm run test:run -- src/pages/attendance/index.test.tsx
+```
+
+Result: **1 test passed**.
+
+### Verification
+
+```text
+cd spa
+npx eslint src/pages/attendance/index.tsx src/pages/attendance/index.test.tsx src/api/attendance/attendances.ts --max-warnings 0
+```
+
+Result: **PASS**, exit 0.
+
+```text
+cd spa
+npm run typecheck
+```
+
+Result: **PASS**, exit 0.
+
+```text
+cd api
+php -l app/Modules/Attendance/Requests/UpdateAttendanceRequest.php
+```
+
+Result: **PASS** — no syntax errors detected. No backend feature test was
+needed because no backend production code changed; the existing request already
+accepts `sometimes|nullable` for all three fields.
+
+```text
+git diff --check -- spa/src/api/attendance/attendances.ts spa/src/pages/attendance/index.tsx spa/src/pages/attendance/index.test.tsx
+```
+
+Result: **PASS**.

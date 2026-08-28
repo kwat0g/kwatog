@@ -20,7 +20,13 @@ export interface CreateAttendanceData {
  remarks?: string;
 }
 
-export type UpdateAttendanceData = Partial<Omit<CreateAttendanceData, 'employee_id' | 'date'>>;
+export interface UpdateAttendanceData {
+ shift_id?: string | null;
+ time_in?: string | null;
+ time_out?: string | null;
+ is_rest_day?: boolean;
+ remarks?: string;
+}
 
 export interface ImportResult {
  total: number;
