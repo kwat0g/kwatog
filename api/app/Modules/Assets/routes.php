@@ -12,21 +12,21 @@ use Illuminate\Support\Facades\Route;
  */
 
 Route::middleware(['auth:sanctum', 'feature:assets'])->prefix('assets')->group(function () {
-    Route::get('/options',             [AssetController::class, 'options'])->middleware('permission:assets.view');
-    Route::get('/',                 [AssetController::class, 'index'])->middleware('permission:assets.view');
-    Route::post('/',                [AssetController::class, 'store'])->middleware('permission:assets.create');
-    Route::get('/{asset}',          [AssetController::class, 'show'])->middleware('permission:assets.view');
-    Route::put('/{asset}',          [AssetController::class, 'update'])->middleware('permission:assets.update');
-    Route::delete('/{asset}',       [AssetController::class, 'destroy'])->middleware('permission:assets.delete');
+    Route::get('/options', [AssetController::class, 'options'])->middleware('permission:assets.view');
+    Route::get('/', [AssetController::class, 'index'])->middleware('permission:assets.view');
+    Route::post('/', [AssetController::class, 'store'])->middleware('permission:assets.create');
+    Route::get('/{asset}', [AssetController::class, 'show'])->middleware('permission:assets.view');
+    Route::put('/{asset}', [AssetController::class, 'update'])->middleware('permission:assets.update');
+    Route::delete('/{asset}', [AssetController::class, 'destroy'])->middleware('permission:assets.delete');
     Route::patch('/{asset}/restore', [AssetController::class, 'restore'])
         ->middleware('permission:assets.delete')
         ->withTrashed();
     Route::post('/{asset}/dispose', [AssetController::class, 'dispose'])->middleware('permission:assets.dispose');
-    Route::get('/{asset}/qr',       [AssetController::class, 'qrPayload'])->middleware('permission:assets.view');
+    Route::get('/{asset}/qr', [AssetController::class, 'qrPayload'])->middleware('permission:assets.view');
 });
 
 Route::middleware(['auth:sanctum', 'feature:assets'])->prefix('asset-depreciations')->group(function () {
-    Route::get('/',     [AssetDepreciationController::class, 'index'])->middleware('permission:assets.depreciation.view');
+    Route::get('/', [AssetDepreciationController::class, 'index'])->middleware('permission:assets.depreciation.view');
     Route::post('/run', [AssetDepreciationController::class, 'runMonth'])->middleware('permission:assets.depreciation.run');
 });
 
