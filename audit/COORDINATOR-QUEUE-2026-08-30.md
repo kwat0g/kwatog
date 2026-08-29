@@ -22,11 +22,12 @@ Rules the coordinator holds and agents never touch:
 - **No browser has run in this pipeline.** Four agents have reported Chromium/Playwright binaries absent with no X server. Every SPA claim so far is source- or jsdom-level; installing Chromium is the only thing that closes the browser-acceptance findings accumulating across modules.
 - **P0 CROSS-MODULE, needs an owner: `App\Modules\HR\Services\UserProvisioningService::deactivateForEmployee()` (`:82-104`) has NO last-admin guard**, across 4 call paths — one of them the *unattended* clearance listener (`DeactivateAccountOnClearanceComplete.php:54`). Measured from M003: an `hr_officer` deactivation returned 204 and left **0 active administrators**. M003 correctly refused to fix another module's file, and notes it wants a *shared* guard rather than a copied one. Assign with `people/employee-master` (M014) or `people/onboarding` (M015), whichever owns that service.
 - `api/tests/Feature/Accounting/AccountingPeriodDuplicateRecoveryTest.php:39` calls `DB::commit()` with no `RefreshDatabaseState::$migrated` reset — same class of suite-poisoning defect M003 just fixed in `RbacConcurrencyTest`. Accounting's to own.
+- **CROSS-MODULE, needs an owner: the supplier portal writes its bearer token to `sessionStorage`** (`spa/src/api/b2b/client.ts:14-38`), which CLAUDE.md forbids outright ("NEVER store auth in localStorage/sessionStorage"). The fix is to flip the `supplier_portal` guard from `sanctum` to `session` as `customer_portal` already is — so it spans B2B + auth config, and `supply-chain/supplier-portal` has already released. Needs re-assignment.
 - **Sanctum abilities are not enforced anywhere on the supplier portal** — tokens mint with no ability list (defaults `['*']`) and no route uses the `ability` middleware. That is "no abilities model", not "attached but unenforced".
 
 
 Corrections established by sessions — these OVERRIDE the doc, pass them to every agent:
-1. **`EdgeSystemUserResolver` and `auth:edge_device` do NOT exist.** The working helper is **`App\Common\Services\SystemUserResolver::impersonate()`**. A portal write under `auth:supplier_portal` was empirically verified to write audit rows with no FK violation — so the hazard CLAUDE.md describes is real but its named remedy is wrong. `config/auth.php` declares only `web`, `supplier_portal`, `customer_portal`.
+1. **`EdgeSystemUserResolver` and `auth:edge_device` do NOT exist.** The working helper is **`App\Common\Services\SystemUserResolver::impersonate()`**. **TWO independent sessions failed to reproduce the `audit_logs` FK violation** that section warns about — treat the whole section as obsolete rather than a hazard to design around. `config/auth.php` declares only `web`, `supplier_portal`, `customer_portal`.
 2. Migration max confirmed **0478** on 2026-08-30; the figure goes stale, re-confirm with `ls api/database/migrations | grep -E '^04' | sort | tail -3`.
 3. `docs/PATTERNS.md:262-268` — the canonical service template carries an unvalidated `direction` → `orderBy()` that 500s. Do not copy the bug when copying the template.
 4. CLAUDE.md says the approval chain is "4 levels"; Leave implements exactly 2 and its code/seeder/enum agree. Verify the seeder, not the sentence.
@@ -37,6 +38,8 @@ Test-harness traps that have burned sessions in this pipeline — worth repeatin
 - `assertStringNotContainsString('a/b', $response->getContent())` is **unsound** — `json_encode` escapes `/` as `\/`.
 - `APP_TIMEZONE=Asia/Manila`: a suite was red exactly one day in seven because a fixture assumed a weekday. Check the day of week before assuming a code bug.
 - `RbacConcurrencyTest` commits active `system_admin` rows that survive the PHPUnit process without resetting `RefreshDatabaseState::$migrated`, silently disarming any later test whose premise is "no active system admin". A permission test that passes suspiciously should be re-run alone.
+- **Do NOT use `php artisan serve` for live HTTP probes.** It passes an env allow-list to its `php -S` child, so `-e DB_DATABASE=…` is **silently dropped** and every request hits the dev `ogami` database. One session found this only after writing 2 `login_history` rows and 1 session row into dev. Use `php -S` with an explicit router, or stay inside PHPUnit.
+- `APP_TIMEZONE=Asia/Manila` but containers are UTC, so back-dating a timestamp with SQL `now()` skews **8 hours**. Go through Carbon / the app clock. No auth defect came from this (all comparisons use Carbon) but raw SQL on those columns is wrong.
 - Agents must **delete their own scratch probes** before releasing. `api/probe_seed.php`, `api/probe_check.php`, `api/tests/Feature/Admin/ZzUserAdminProbeTest.php` were all left behind.
 
 ---
@@ -49,13 +52,13 @@ existing `fix-log.md` / `git diff` before trusting its status.
 
 | # | Tier | ID | Module | State |
 |---|---|---|---|---|
-| 1 | 1 | M001 | platform/auth-session | **in flight** |
+| 1 | 1 | M001 | platform/auth-session | done |
 | 2 | 1 | M003 | platform/user-administration | done |
 | 3 | 2 | M026 | finance/journal-ledger | **in flight** |
 | 4 | 2 | M028 | finance/accounts-receivable | queued — HOLD while M026 journal-ledger is in flight; AR posts through JournalEntryService, which that session is editing |
 | 5 | 2 | M032 | commercial/customer-product-pricing | **in flight** |
-| 6 | 2 | M020 | people/loans-cash-advances | queued |
-| 7 | 2 | M021 | people/payroll-period-processing | queued |
+| 6 | 2 | M020 | people/loans-cash-advances | **in flight** |
+| 7 | 2 | M021 | people/payroll-period-processing | queued — HOLD while M026 journal-ledger is in flight (payroll posts to GL) |
 | 8 | 2 | M023 | people/separation-final-pay | queued |
 | 9 | 3 | M037 | procurement/purchase-orders | queued |
 | 10 | 3 | M038 | procurement/supplier-performance | queued |
@@ -110,9 +113,9 @@ fresh discovery pass.
 
 | ID | Module | Launched |
 |---|---|---|
-| M001 | platform/auth-session | 2026-08-30 |
 | M026 | finance/journal-ledger | 2026-08-30 |
 | M032 | commercial/customer-product-pricing | 2026-08-30 |
+| M020 | people/loans-cash-advances | 2026-08-30 |
 
 ## Completed this pipeline
 
@@ -126,6 +129,7 @@ fresh discovery pass.
 | M019 | people/leave-management | 🔁 Needs Re-audit | P0: cancelling an approved request after year-end resurrects already-encashed credits. 2 fixed (incl. a suite red 1 day in 7). |
 | M047 | supply-chain/supplier-portal | 🔁 Needs Re-audit | 3 stacked defects in one method, each hiding the next — two supplier PO-detail panels had never displayed. Cross-tenant: 21/25 routes probed, no leak. |
 | M003 | platform/user-administration | 🔁 Needs Re-audit | Prior session's 9 fixes were all already committed; 9/9 no longer reproduce. 16-row escalation matrix all refused. P0 found in HR's UserProvisioningService (cross-module). |
+| M001 | platform/auth-session | 🔁 Needs Re-audit | Idle session timeout was opt-out via a client-supplied `Authorization` header — fixed. Login + reset timing oracles and an ip\|email-keyed limiter deferred (locking out 200+ employees is the failure mode). 59-row control checklist in audit-report.md. |
 
 
 ## Held out deliberately
