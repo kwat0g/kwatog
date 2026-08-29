@@ -108,7 +108,7 @@ export default function CreateLeavePage() {
  enabled: !!employeeId || !isAdmin,
  });
 
- const selectedBalance = balances.find((b) => b.leave_type.id === leaveTypeId);
+ const selectedBalance = balances.find((b) => b.leave_type?.id === leaveTypeId);
 
  const halfDay = watch('half_day_period');
 
@@ -181,7 +181,7 @@ export default function CreateLeavePage() {
  </div>
  {selectedBalance && (
  <div className="mt-3 p-3 bg-surface border border-default rounded-md text-sm">
- <div className="text-2xs uppercase tracking-wider text-muted mb-1">{selectedBalance.leave_type.code} balance</div>
+ <div className="text-2xs uppercase tracking-wider text-muted mb-1">{selectedBalance.leave_type?.code ?? 'Archived type'} balance</div>
  <div className="flex items-baseline gap-3">
  <span className="font-mono tabular-nums text-2xl font-medium">{selectedBalance.remaining}</span>
  <span className="text-xs text-muted">of {selectedBalance.total_credits} days remaining</span>

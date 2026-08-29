@@ -24,13 +24,12 @@ use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class LeaveRequestHardeningTest extends TestCase
 {
-    use RefreshDatabase;
+    use BusinessDayFixtures, RefreshDatabase;
 
     private LeaveType $vacation;
 
@@ -60,16 +59,6 @@ class LeaveRequestHardeningTest extends TestCase
     private function employee(int $departmentId): Employee
     {
         return Employee::factory()->create(['department_id' => $departmentId]);
-    }
-
-    private function workDate(int $days = 14): string
-    {
-        $date = Carbon::now()->addDays($days)->startOfDay();
-        while ($date->isSunday()) {
-            $date = $date->addDay();
-        }
-
-        return $date->toDateString();
     }
 
     private function balance(Employee $employee, LeaveType $type, float $credits = 10.0): void

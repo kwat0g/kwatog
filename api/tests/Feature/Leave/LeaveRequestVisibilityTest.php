@@ -40,7 +40,7 @@ use Tests\TestCase;
  */
 class LeaveRequestVisibilityTest extends TestCase
 {
-    use RefreshDatabase;
+    use BusinessDayFixtures, RefreshDatabase;
 
     private LeaveType $type;
 
@@ -226,8 +226,8 @@ class LeaveRequestVisibilityTest extends TestCase
         $payload = fn (Employee $for): array => [
             'employee_id' => $for->hash_id,
             'leave_type_id' => $this->type->hash_id,
-            'start_date' => now()->addWeek()->toDateString(),
-            'end_date' => now()->addWeek()->toDateString(),
+            'start_date' => $this->workDate(),
+            'end_date' => $this->workDate(),
             'reason' => 'Filed by someone else',
         ];
 

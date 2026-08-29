@@ -24,7 +24,7 @@ use Tests\TestCase;
 
 class LeaveRequestBulkApproveTest extends TestCase
 {
-    use RefreshDatabase;
+    use BusinessDayFixtures, RefreshDatabase;
 
     /**
      * Stand in for `EmployeeService::create()`, which seeds one balance row per
@@ -73,7 +73,7 @@ class LeaveRequestBulkApproveTest extends TestCase
 
         $emp  = Employee::factory()->create(['department_id' => $department->id]);
         $type = LeaveType::query()->first();
-        $date = now()->addWeek()->toDateString();
+        $date = $this->workDate();
         $this->balanceFor($emp, $type);
 
         // r1: properly submitted -> PendingDept with approval records.
@@ -129,7 +129,7 @@ class LeaveRequestBulkApproveTest extends TestCase
         $department = Department::query()->firstOrFail();
         $emp  = Employee::factory()->create(['department_id' => $department->id]);
         $type = LeaveType::query()->first();
-        $date = now()->addWeek()->toDateString();
+        $date = $this->workDate();
         $this->balanceFor($emp, $type);
 
         // The approver IS the requester: `LeaveRequest::approvalSubmitterId()`
@@ -179,7 +179,7 @@ class LeaveRequestBulkApproveTest extends TestCase
         $department = Department::query()->firstOrFail();
         $emp  = Employee::factory()->create(['department_id' => $department->id]);
         $type = LeaveType::query()->first();
-        $date = now()->addWeek()->toDateString();
+        $date = $this->workDate();
 
         $svc = app(LeaveRequestService::class);
         $this->balanceFor($emp, $type);
@@ -242,13 +242,13 @@ class LeaveRequestBulkApproveTest extends TestCase
         $this->balanceFor($emp, $type);
 
         $r1 = $svc->submit($emp->id, [
-            'start_date'    => now()->addWeek()->toDateString(),
-            'end_date'      => now()->addWeek()->toDateString(),
+            'start_date'    => $this->workDate(),
+            'end_date'      => $this->workDate(),
             'leave_type_id' => $type->id,
         ]);
         $r2 = $svc->submit($emp->id, [
-            'start_date'    => now()->addWeeks(2)->toDateString(),
-            'end_date'      => now()->addWeeks(2)->toDateString(),
+            'start_date'    => $this->workDate(21),
+            'end_date'      => $this->workDate(21),
             'leave_type_id' => $type->id,
         ]);
 

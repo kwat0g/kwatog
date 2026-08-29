@@ -13,19 +13,20 @@ use Database\Seeders\LeaveTypeSeeder;
 use Database\Seeders\PositionSeeder;
 use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 use Tests\TestCase;
 
 class HalfDayLeaveOverlapTest extends TestCase
 {
-    use RefreshDatabase;
+    use BusinessDayFixtures, RefreshDatabase;
 
     public function test_am_then_pm_on_same_day_do_not_collide(): void
     {
         [$emp, $type] = $this->makeFixtures();
         $svc = app(LeaveRequestService::class);
-        $date = now()->addWeek()->toDateString();
+        $date = $this->workDate();
 
         $svc->submit($emp->id, [
             'start_date'      => $date,
@@ -49,7 +50,7 @@ class HalfDayLeaveOverlapTest extends TestCase
     {
         [$emp, $type] = $this->makeFixtures();
         $svc = app(LeaveRequestService::class);
-        $date = now()->addWeek()->toDateString();
+        $date = $this->workDate();
 
         $svc->submit($emp->id, [
             'start_date'      => $date,
@@ -71,7 +72,7 @@ class HalfDayLeaveOverlapTest extends TestCase
     {
         [$emp, $type] = $this->makeFixtures();
         $svc = app(LeaveRequestService::class);
-        $date = now()->addWeek()->toDateString();
+        $date = $this->workDate();
 
         $svc->submit($emp->id, [
             'start_date'    => $date,
@@ -92,8 +93,8 @@ class HalfDayLeaveOverlapTest extends TestCase
     {
         [$emp, $type] = $this->makeFixtures();
         $svc = app(LeaveRequestService::class);
-        $start = now()->addWeek()->toDateString();
-        $end   = now()->addWeek()->addDay()->toDateString();
+        $start = $this->workDate();
+        $end   = Carbon::parse($start)->addDay()->toDateString();
 
         $this->expectException(\InvalidArgumentException::class);
         $svc->submit($emp->id, [
@@ -111,8 +112,8 @@ class HalfDayLeaveOverlapTest extends TestCase
         DB::enableQueryLog();
 
         app(LeaveRequestService::class)->submit($emp->id, [
-            'start_date' => now()->addWeek()->toDateString(),
-            'end_date' => now()->addWeek()->toDateString(),
+            'start_date' => $this->workDate(),
+            'end_date' => $this->workDate(),
             'leave_type_id' => $type->id,
         ]);
 

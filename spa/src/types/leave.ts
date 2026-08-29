@@ -35,7 +35,12 @@ export type UpdateLeaveTypeData = Partial<CreateLeaveTypeData>;
 export interface EmployeeLeaveBalance {
  id: string;
  employee_id: string;
- leave_type: { id: string; code: string; name: string };
+ /**
+  * Absent — not null — when the leave type has been archived:
+  * EmployeeLeaveBalanceResource uses whenLoaded(), which drops the key when
+  * the eager-loaded relation resolves to null. See audit M019-F18/F27.
+  */
+ leave_type?: { id: string; code: string; name: string } | null;
  year: number;
  total_credits: string;
  used: string;

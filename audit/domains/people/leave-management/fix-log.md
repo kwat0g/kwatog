@@ -440,3 +440,107 @@ Module status remains 🔁 Needs Re-audit; no registry regeneration was performe
 
 No unrelated files, `status.md`, or the audit registry were changed. Claim released
 as 🔁 Needs Re-audit after the focused commit.
+
+## Session 7 (2026-08-30) — re-audit: M019-F24 and the M019-F27 SPA half
+
+Two contained items were implemented. Everything else on the plan was left alone;
+see `action-plan.md` for why each remaining item is `separate-recommended`.
+
+### M019-F24 — the Leave suite was red one day in seven
+
+**Before.** `a2deee8c` added the zero-business-day guard at
+`api/app/Modules/Leave/Services/LeaveRequestService.php:204-208`. Six fixtures
+built their dates as `now()->addWeek()`, which preserves today's weekday, so on a
+Sunday the guard refused them. Measured on `ogami_test_leave`, same commit, only
+the clock differing:
+
+| `APP_TIMEZONE` | local date | `php artisan test tests/Feature/Leave` |
+|---|---|---|
+| `Asia/Manila` (project default) | 2026-08-30 **Sunday** | **7 failed / 68 passed**, 500 assertions |
+| `UTC` | 2026-08-29 Saturday | **75 passed / 0 failed**, 523 assertions |
+
+The seven: `HalfDayLeaveOverlapTest` ×2, `LeaveRequestBulkApproveTest` ×4,
+`LeaveRequestVisibilityTest::test_only_hr_or_admin_may_file_for_another_employee`.
+Every one failed with the same `BusinessRuleException` from
+`LeaveRequestService.php:205` — not one assertion failure about behaviour.
+
+**After.** The Sunday-skipping helper already existed as a private method on
+`LeaveRequestHardeningTest` (which is why that file's ten tests were the only ones
+unaffected). It is now one definition in a trait instead of a copy per file:
+
+- **new** `api/tests/Feature/Leave/BusinessDayFixtures.php` — `workDate(int $days = 14): string`,
+  `now()->addDays($days)` moved forward off Sunday.
+- `api/tests/Feature/Leave/LeaveRequestHardeningTest.php` — `use BusinessDayFixtures`;
+  the private `workDate()` copy and the now-unused `Illuminate\Support\Carbon`
+  import removed. Call sites unchanged.
+- `api/tests/Feature/Leave/HalfDayLeaveOverlapTest.php` — `use BusinessDayFixtures`;
+  five `now()->addWeek()->toDateString()` → `$this->workDate()`. The multi-date
+  half-day case now builds its end date as `Carbon::parse($start)->addDay()`,
+  so the range stays a range regardless of weekday; `Illuminate\Support\Carbon`
+  imported for it.
+- `api/tests/Feature/Leave/LeaveRequestBulkApproveTest.php` — `use BusinessDayFixtures`;
+  four `now()->addWeek()` → `$this->workDate()`, and the second date in the search
+  test `now()->addWeeks(2)` → `$this->workDate(21)`.
+- `api/tests/Feature/Leave/LeaveRequestVisibilityTest.php` — `use BusinessDayFixtures`;
+  the HTTP payload's `now()->addWeek()` → `$this->workDate()`. The one remaining
+  `now()->addWeek()` in `seedOneRequestEach()` is deliberate: it builds rows with
+  the factory, never through `submit()`, so the guard cannot reach it and touching
+  it would only churn a passing matrix.
+
+No production code was changed for this finding.
+
+### M019-F27 — archiving a leave type crashed the filing form and HR detail
+
+**Before.** `EmployeeLeaveBalanceResource:19-23` uses `whenLoaded('leaveType', …)`,
+which returns `MissingValue` when the eager-loaded relation resolves to null. So
+archiving a type does not yield `leave_type: null` (as the 2026-08-27 report
+recorded) — it **omits the key**. Measured:
+
+    [PROBE F] before={"id":"G6ONoVpjvd","code":"VL","name":"Vacation Leave"} after="ABSENT"
+
+`spa/src/types/leave.ts:38` declared `leave_type` non-nullable, so six sites
+dereferenced it unguarded. Reproduced in a DOM render:
+`TypeError: Cannot read properties of undefined (reading 'id')`.
+
+**After** — six guards plus the type correction, no contract change:
+
+| file:line (before) | before | after |
+|---|---|---|
+| `spa/src/types/leave.ts:38` | `leave_type: { … };` | `leave_type?: { … } \| null;` with a comment naming the `whenLoaded()` cause |
+| `spa/src/pages/leaves/detail.tsx:162` | `b.leave_type.id === req.leave_type?.id` | `!!req.leave_type && b.leave_type?.id === req.leave_type.id` — two absent types must not compare equal and mark the wrong row current |
+| `spa/src/pages/leaves/detail.tsx:169` | `{b.leave_type.code}` | `{b.leave_type?.code ?? 'Archived type'}` |
+| `spa/src/pages/leaves/create.tsx:111` | `b.leave_type.id === leaveTypeId` | `b.leave_type?.id === leaveTypeId` |
+| `spa/src/pages/leaves/create.tsx:184` | `{selectedBalance.leave_type.code} balance` | `{selectedBalance.leave_type?.code ?? 'Archived type'} balance` |
+| `spa/src/pages/self-service/leave.tsx:159` | `.map((b) => [b.leave_type.id, b])` | `.filter((b) => !!b.leave_type).map(…)` — an unlabelled row cannot key the map at all |
+| `spa/src/pages/self-service/leave.tsx:328` | `{selectedBalance.leave_type.name}` | `{selectedBalance.leave_type?.name ?? 'Archived leave type'}` |
+
+`spa/src/types/self-service.ts` was deliberately **not** changed — it belongs to
+the self-service module, and optional chaining on a declared-non-optional property
+is safe here because the ESLint config enables no type-checked rule
+(`no-unnecessary-condition` is absent).
+
+This is only the defensive half. The API-contract half — retaining an immutable
+historical label, or loading soft-deleted relations — is **M019-F18** and stays
+deferred; it decides what the response should *say*, which a null-guard cannot.
+
+**Regression coverage.** New `spa/src/pages/leaves/detail.test.tsx` renders the
+balance panel with one key-absent row and one live row.
+
+Confirmed the test fails against unmodified source, not just passes against the
+fix. `spa/src/pages/leaves/detail.tsx` was temporarily reverted to its pre-fix
+form, the test re-run, then restored and the restore proven:
+
+    TypeError: Cannot read properties of undefined (reading 'id')
+    Test Files  1 failed (1)
+    Tests  1 failed (1)
+    === restoring ===
+    src/pages/leaves/detail.tsx: OK        # sha256sum -c against the pre-revert hash
+
+### Verification
+
+| check | result | exact command |
+|---|---|---|
+| Leave suite BEFORE, project default clock (Sunday) | **7 failed / 68 passed**, 500 assertions | `docker compose run --rm --no-deps -e DB_DATABASE=ogami_test_leave api php artisan test tests/Feature/Leave --no-coverage` |
+| Leave suite AFTER, same command, same Sunday clock | see below | same |
+| SPA Vitest, new test | see below | `docker compose run --rm --no-deps spa npm run test:run -- src/pages/leaves/detail.test.tsx` |
+| Same test against pre-fix `detail.tsx` | **1 failed** with the predicted `TypeError` | as above, after a proven-reverted temporary edit |

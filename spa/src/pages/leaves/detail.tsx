@@ -159,14 +159,14 @@ export default function LeaveDetailPage() {
  ) : (
  <dl className="space-y-3 text-sm">
  {balances.map((b) => {
- const isCurrent = b.leave_type.id === req.leave_type?.id;
+ const isCurrent = !!req.leave_type && b.leave_type?.id === req.leave_type.id;
  const remaining = parseFloat(b.remaining);
  const total = parseFloat(b.total_credits) || 1;
  const pct = Math.min(100, (remaining / total) * 100);
  return (
  <div key={b.id} className={isCurrent ? 'p-2 -mx-2 rounded-md bg-subtle' : undefined}>
  <div className="flex items-baseline justify-between gap-2">
- <dt className="text-xs text-muted font-medium">{b.leave_type.code}</dt>
+ <dt className="text-xs text-muted font-medium">{b.leave_type?.code ?? 'Archived type'}</dt>
  <dd className="font-mono tabular-nums">
  {b.remaining}
  <span className="text-xs text-muted"> / {b.total_credits} days</span>

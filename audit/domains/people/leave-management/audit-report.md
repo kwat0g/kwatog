@@ -263,6 +263,23 @@ submission can therefore create a pending/approved zero-day leave record,
 depending on workflow state, instead of being rejected as a non-working date.
 This should be covered alongside the calendar's non-working-day contract.
 
+### M019-F29 — Incomplete / P2 — the zero-business-day guard exempts half-days, so a Sunday half-day is still accepted
+
+`LeaveRequestService.php:201-208` computes `$days = $halfDayPeriod !== null ? 0.5 :
+businessDaysInclusive(...)`, then refuses only `$days <= 0.0`. A half-day request
+is therefore never measured against the business-day calendar at all: an `am` or
+`pm` request dated on a Sunday yields `0.5`, passes the guard, and is created.
+
+It then debits 0.5 credits on approval (`LeaveRequestService.php:349`) while
+`markAttendance()` skips the date entirely (`LeaveRequestService.php:504-506`), so
+the balance moves and no attendance record acknowledges it.
+
+This is visible in the suite rather than hidden: `HalfDayLeaveOverlapTest::test_am_then_pm_on_same_day_do_not_collide`
+passed on the Sunday run precisely because half-days bypass the guard, while its
+full-day sibling in the same file failed. Not fixed here — it changes a validation
+rule that governs a balance debit, which the gate puts in the
+`separate-recommended` bucket.
+
 ## Polish pass
 
 The scoped ESLint and typecheck are clean, and current detail/list screens
@@ -286,3 +303,412 @@ the year-end/calendar money contracts, then implement the ordered actions in
 action-plan.md, add focused regression tests, install/provision the required
 Playwright browsers in the test environment, and rerun the blocked browser
 checks.
+
+---
+
+# Re-audit — 2026-08-30
+
+Agent: batch5 (parallel session, 3 of 3)
+Claimed module: M019 (people/leave-management) — `claim-module.sh people leave-management` → **CLAIMED**
+Database used for verification: `ogami_test_leave` (created for this session, dropped at the end)
+Prior status on entry: 🔁 Needs Re-audit
+Final status released: 🔁 Needs Re-audit
+
+## What changed since the 2026-08-27 report
+
+Three commits landed on this module after that report was written, and the report
+was never updated to reflect them:
+
+| commit | closes |
+|---|---|
+| `a2deee8c fix(leave): reject zero-business-day ranges` | M019-F21 |
+| `9e7a1b12 fix(leave): align year-end year validation` | M019-F17 |
+| `4b22e26e fix(leave): enforce year-end validation contract` | M019-F17 (contract follow-up) |
+
+`f0c69a23 Fix archived leave type management actions` closes M019-F20.
+
+So **F17, F20 and F21 are implemented**, and the fix-log's sessions 3–6 describe
+them accurately. The working tree was clean on entry (`git status --short` empty).
+Everything below was re-measured against that state, not inferred from the log.
+
+## Re-verification of the previously open findings
+
+Each was re-run, not re-read. Probe output is quoted verbatim from
+`tests/Feature/Leave/M019ReauditProbeTest.php` (a temporary probe, removed before
+release; the two findings it justified fixing now carry permanent coverage).
+
+| finding | still reproduces? | evidence |
+|---|---|---|
+| F10 hire-date proration bypassed | **YES**, and worse than reported | see M019-F28 below |
+| F11 coverage gaps | **YES** | no test exists for `show` row-scope, document read, carryover round-trip, calendar semantics; Playwright browsers still absent |
+| F12 documents are write-only | **YES** | `grep -rn 'has_document' spa/src` → only `spa/src/types/leave.ts:58`, a type declaration. No page renders it, no route serves the file. |
+| F13 no-salary encashment destroys days | **YES** | `[PROBE H] {"days_converted":"5.0","cash_value":"0.00","adjustment_id":null,"remaining":"0.0"}` |
+| F14 carryover/conversion not a round-trip | **YES** | `[PROBE E] response has max_carryover_days key: false \| stored db value: NULL` |
+| F16 calendar counts rows, not coverage | **YES**, with sharper numbers | `[PROBE G] {"headcount":2,"approved_count":2,"present_count":0,"on_leave_rows":2}` |
+| F17 year-end validation drift | **CLOSED** | `9e7a1b12`, `4b22e26e`; `api/resources/contracts/leave-year-end-validation.json` is the shared source |
+| F18 archived types break historical reads | **YES**, and it is a crash, not a null | see M019-F27 below |
+| F19 notification link is unrouted | **YES** | `api/app/Modules/Leave/Listeners/NotifyOnLeaveApproved.php:29` and `NotifyOnLeaveRejected.php:67` emit `/self-service/leaves/{hash_id}`; `spa/src/routes/selfServiceRoutes.tsx:37-38` registers only `/self-service/leave` and `/self-service/leaves`, so `spa/src/App.tsx:97` `path="*"` serves NotFound |
+| F20 archived Edit action | **CLOSED** | `f0c69a23` |
+| F21 zero-business-day range | **CLOSED** in production code, but it introduced M019-F24 |
+
+## What is sound — measured, so it is not re-litigated
+
+These are negative results. They were probed by execution because the assignment
+named them as the module's highest-risk surfaces.
+
+**Balance arithmetic cannot be driven negative by concurrent approval.** Two
+independent PostgreSQL backends (pcntl fork, separate connection), two distinct
+non-overlapping requests of 2.0 days each against a 2.0-day balance. The parent
+held the balance row with `lockForUpdate`, the child queued behind it:
+
+    [PROBE B] child=child:App\Modules\Leave\Exceptions\InsufficientLeaveBalanceException|Insufficient leave balance (0.0 remaining; 2 requested).
+    [PROBE B] final used=2.0 remaining=0.0 total=2.0
+    [PROBE B] statuses r1=approved r2=pending_hr
+
+`LeaveBalanceService::consume()` (`api/app/Modules/Leave/Services/LeaveBalanceService.php:28-53`)
+locks the row inside the transaction and recomputes `remaining` from
+`total_credits - used` rather than decrementing, so the value is derived and
+self-healing. `InsufficientLeaveBalanceException extends BusinessRuleException`
+(`api/app/Modules/Leave/Exceptions/InsufficientLeaveBalanceException.php:9`), so
+the loser gets a 422 with authored copy, not a 500.
+
+**The approval state machine refuses every illegal transition.** All eight probes
+were refused with the correct typed exception:
+
+    [PROBE J4] cross-department approveDept: ForbiddenActionException — Department heads may only decide leave requests for their own department.
+    [PROBE J5] self-approval: ForbiddenActionException — You cannot act on a record you submitted.
+    [PROBE J6] out-of-order approveHR: BusinessRuleException — Only requests pending HR approval can be approved here.
+    [PROBE J7] approveDept again: BusinessRuleException — Only requests pending department head approval can be approved here.
+    [PROBE J7] approveHR again: BusinessRuleException — Only requests pending HR approval can be approved here.
+    [PROBE J7] reject an approved row: BusinessRuleException — Only pending requests can be rejected.
+    [PROBE J8] head moved to another department: ForbiddenActionException — Department heads may only decide leave requests for their own department.
+
+**Row-level filtering is server-side and holds for `employee` and `driver`.**
+
+    [PROBE J1] employee → other's request detail: HTTP 403
+    [PROBE J2] driver → other's request detail: HTTP 403
+    [PROBE J3] employee → other's balances: HTTP 403
+
+`LeaveRequestController::show()` (`api/app/Modules/Leave/Controllers/LeaveRequestController.php:65-91`)
+carries its own scope ladder rather than relying on the `permission:leave.view`
+middleware, which every one of the 13 roles holds via
+`RolePermissionSeeder::selfService()` (`api/database/seeders/RolePermissionSeeder.php:786-787`).
+`LeaveRequestService::list()` delegates to the shared `DepartmentScope`
+(`api/app/Modules/Leave/Services/LeaveRequestService.php:153-162`).
+
+**A cancelled request releases exactly what it reserved; a rejected one reserves
+nothing to release.** The balance is consumed only in `approveHR()`
+(`LeaveRequestService.php:349`) and restored only when the prior status was
+`Approved` (`LeaveRequestService.php:457,464-468`). `reject()` never touches the
+balance, correctly, because nothing is held at submission — submission only
+*checks* (`LeaveRequestService.php:231-244`). Double-cancel is refused
+(`LeaveRequestService.php:454-456`). The one case where release is wrong is
+M019-F22 below, and it is not a double-release: it is a release into a year whose
+balance was already settled.
+
+**`LR-YYYYMM-NNNN` is correct and monthly-reset.**
+
+    [PROBE I] LR-202608-0001, LR-202608-0002, LR-202608-0003
+    [PROBE I] sequence row: {"id":5,"document_type":"leave_request","prefix":"LR","year":2026,"month":8,"last_number":3}
+
+## Hardening pass — new findings
+
+### M019-F22 — Broken / P0 — cancelling an approved request after year-end resurrects credits that were already encashed and paid
+
+`api/app/Modules/Leave/Services/LeaveBalanceService.php:69-70` restores by
+recomputing `remaining = total_credits - max(0, used - days)`. That is correct
+while `used` reflects only consumption. `ProcessYearEndLeave` breaks the premise:
+at `api/app/Modules/Leave/Jobs/ProcessYearEndLeave.php:140-141` it sets
+`used = total_credits` and `remaining = 0` to mark the year settled. A later
+cancellation of an approved request from that year therefore *reduces* `used` and
+hands the days back.
+
+Measured on `ogami_test_leave`. 10 credits, one 1-day request approved
+(used 1.0, remaining 9.0), year-end run for the same year with
+`is_convertible_year_end = true, conversion_rate = 1.00`, which encashed the
+9.0 remaining days into an **approved** `PayrollAdjustment` the next payroll run
+pays. HR then cancelled the approved request:
+
+    [PROBE A] encashed_days=9.0 post_cancel used=9.0 remaining=1.0 total=10.0
+
+The employee has been paid cash for the whole 9.0-day remainder **and** now holds
+1.0 leave day in that same year. `EmployeeLeaveBalance` has no "closed" flag and
+`restore()` has no year-end awareness, so nothing refuses this. The resurrected
+credit is spendable: `submit()` only requires a balance row for the request's year
+(`LeaveRequestService.php:231-241`) and the request window allows backdating by
+`leave.request.past_window_days`.
+
+Cross-module: the cash already left through `PayrollAdjustment`
+(`ProcessYearEndLeave.php:224-246`), so correcting this is a payroll-visible
+decision, not a local one.
+
+### M019-F23 — Broken / P1 — a declared holiday inside a leave range is debited as a leave day, and its attendance premium is overwritten
+
+`LeaveRequestService::businessDaysInclusive()`
+(`api/app/Modules/Leave/Services/LeaveRequestService.php:474-483`) excludes only
+Sunday. It never reads `holidays`. `markAttendance()`
+(`LeaveRequestService.php:496-563`) loops the same Sunday-only rule and, at
+`LeaveRequestService.php:538-550`, force-writes `day_type_rate => 1.00` over
+whatever the row held — while leaving `holiday_type` untouched.
+
+Measured: a Mon–Wed range with a **regular holiday** on the Tuesday, and a
+pre-existing attendance row for that Tuesday carrying
+`status=holiday, holiday_type=regular, day_type_rate=2.00`:
+
+    [PROBE C] range=2026-09-28..2026-09-30 holiday=2026-09-29 days_debited=3.0
+    [PROBE C] holiday attendance after approval: status=on_leave holiday_type='regular' day_type_rate=1.00
+
+Two distinct consequences:
+
+1. The employee is debited 3.0 leave credits for a range containing a day nobody
+   was scheduled to work.
+2. The attendance row now carries the contradictory pair
+   `holiday_type='regular'` with `day_type_rate=1.00`. That row is payroll input.
+   The snapshot at `LeaveRequestService.php:521-527` does restore `2.00` on
+   cancellation, so the premium is recoverable — but `approved` is the state
+   payroll computes from, so an uncancelled leave over a holiday is computed at
+   the wrong rate.
+
+Attribution: the holiday table is Attendance's (`api/app/Modules/Attendance/Models/Holiday.php`)
+and the rate consumer is Payroll. The **defect** is Leave's: Leave is the writer
+that discards the premium. Not fixed here — it changes a computed pay figure.
+
+Related, and attributed to Attendance rather than fixed here: `holidays.is_recurring`
+exists (`api/app/Modules/Attendance/Models/Holiday.php:18`) but is only meaningful
+within the stored year, so once leave's business-day math *does* consume holidays
+it inherits that limitation.
+
+### M019-F24 — Broken / P1 — the Leave regression suite is red one day in seven
+
+`a2deee8c` added the zero-business-day guard at
+`api/app/Modules/Leave/Services/LeaveRequestService.php:204-208`. Six fixtures
+across three test files build their dates as `now()->addWeek()`, which preserves
+the weekday, so every one of them lands on a Sunday when the suite runs on a
+Sunday and is refused by the new guard.
+
+Measured on the same database, same commit, differing only in clock:
+
+| `APP_TIMEZONE` | local date | result |
+|---|---|---|
+| `Asia/Manila` (project default, `api/config/app.php:15`) | 2026-08-30 **Sunday** | **7 failed / 68 passed**, 500 assertions |
+| `UTC` | 2026-08-29 Saturday | **75 passed / 0 failed**, 523 assertions |
+
+The seven: `HalfDayLeaveOverlapTest` ×2, `LeaveRequestBulkApproveTest` ×4,
+`LeaveRequestVisibilityTest::test_only_hr_or_admin_may_file_for_another_employee`.
+All seven fail with the same `BusinessRuleException` from
+`LeaveRequestService.php:205`; none is an assertion failure about behaviour.
+
+This is a fixture defect, not a production one, and the correct pattern already
+exists in this module: `LeaveRequestHardeningTest::workDate()`
+(`api/tests/Feature/Leave/LeaveRequestHardeningTest.php:66-73`) skips Sundays,
+which is why that file's 10 tests are unaffected. The affected files already guard
+the *year* boundary (`LeaveRequestBulkApproveTest.php:37-41`) but not the weekday.
+
+**Fixed in this session** — see fix-log.
+
+### M019-F25 — Incomplete / P1 — a vacant department-head seat wedges every leave request in that department
+
+`ApprovalService::approve()`/`reject()` require the actor's role slug to equal the
+step's `role_slug` (`api/app/Common/Services/ApprovalService.php:133-135,160-162`),
+and step 1 of `leave_request` is `department_head`
+(`api/database/seeders/WorkflowSeeder.php:26-29`). `hasPermission` short-circuits
+for `system_admin`, so `assertDepartmentDecisionScope`
+(`LeaveRequestService.php:644-663`) lets HR and admin through — but ApprovalService
+then refuses them, because neither holds the *role*:
+
+    [PROBE D] hr_officer  approveDept: ForbiddenActionException — Only users with role 'department_head' can approve this step.
+    [PROBE D] hr_officer  reject:      ForbiddenActionException — Only users with role 'department_head' can reject this step.
+    [PROBE D] system_admin approveDept: ForbiddenActionException — Only users with role 'department_head' can approve this step.
+    [PROBE D] system_admin reject:      ForbiddenActionException — Only users with role 'department_head' can reject this step.
+
+The request stays `pending_dept` with no one able to decide it. This is not
+hypothetical: `[PROBE J8]` shows a department head who *moves department* also
+loses the ability to decide requests they were mid-chain on, correctly and
+fail-closed — which is exactly how the seat becomes vacant.
+
+Two escapes exist and neither is reachable by an operator:
+
+- `ApprovalDelegation` — `admin.delegations.manage_any` lets an admin delegate a
+  separated head's authority (`api/app/Modules/Admin/Services/ApprovalDelegationService.php:51-60`,
+  routes at `api/app/Modules/Admin/routes.php:238-242`). **There is no SPA surface
+  at all**: `grep -rln delegation spa/src` returns nothing. API-only.
+- HR override-`cancel` (`LeaveRequestService.php:450-452`). This works, but it is
+  the wrong semantic — it records no `rejection_reason` and attributes the action
+  to a cancellation rather than a decision.
+
+Attribution: the wedge is produced by Leave's workflow definition plus the shared
+`ApprovalService`; the missing UI is Admin's. Reported, not fixed — it is an RBAC
+and state-machine change.
+
+### M019-F26 — Broken / P1 — a `conversion_rate` above 1.0 is accepted, stored, and then silently overridden at payout
+
+`StoreLeaveTypeRequest.php:36` and `UpdateLeaveTypeRequest.php:38` allow
+`conversion_rate` up to `9.99`. `ProcessYearEndLeave.php:105` clamps it with
+`max(0.0, min(1.0, …))`. The operator's configured policy is therefore discarded
+on the path that produces cash.
+
+Measured: created a type through the management API with `conversion_rate: 2.50`,
+then ran year-end against a 10.0-day balance and a ₱22,000 monthly salary:
+
+    [PROBE E2] stored conversion_rate=2.50 days_converted=10.0 cash=10000.00
+
+The stored value is `2.50`; the payout used `1.0`. Nothing warns, and nothing in
+the response or the SPA reveals that the configured rate is unreachable. This is
+the same defect family as F14 (`max_carryover_days` silently discarded) but on a
+money-producing path, which is why it is recorded separately. Not fixed — it
+changes a computed pay figure and needs a stated invariant, not a guess about
+whether >1.0 means "unreachable" or "a premium".
+
+### M019-F27 — Broken / P1 — F18's consumer side is a hard crash, not a null
+
+The 2026-08-27 report described the archived-type case as
+`leave_type: null`. Measured, it is worse: `EmployeeLeaveBalanceResource:19-23`
+uses `whenLoaded('leaveType', …)`, which returns `MissingValue` when the relation
+is loaded-but-null, so the key is **omitted from the payload entirely**:
+
+    [PROBE F] before={"id":"G6ONoVpjvd","code":"VL","name":"Vacation Leave"} after="ABSENT"
+
+`spa/src/types/leave.ts:38` declares `EmployeeLeaveBalance.leave_type` as
+non-nullable, so no consumer guards it. Six sites dereference it directly:
+
+- `spa/src/pages/leaves/detail.tsx:162` — `b.leave_type.id`
+- `spa/src/pages/leaves/detail.tsx:169` — `b.leave_type.code`
+- `spa/src/pages/leaves/create.tsx:111` — `b.leave_type.id`
+- `spa/src/pages/leaves/create.tsx:184` — `selectedBalance.leave_type.code`
+- `spa/src/pages/self-service/leave.tsx:159` — `b.leave_type.id`
+- `spa/src/pages/self-service/leave.tsx:328` — `selectedBalance.leave_type.name`
+
+Archiving a single leave type therefore throws in the leave filing form and the
+HR detail page for every employee holding a balance in that type. The payload
+shape was proved by execution, and the crash was then **observed** in a DOM
+render: `spa/src/pages/leaves/detail.test.tsx` against the pre-fix
+`detail.tsx` produces
+
+    TypeError: Cannot read properties of undefined (reading 'id')
+
+`spa/src/pages/leaves/index.tsx:217,413` and
+`spa/src/pages/self-service/leave.tsx:98` already use `?.` with an em-dash
+fallback, which is the pattern the six sites are missing.
+
+**The SPA null-safety half is fixed in this session** — see fix-log. The API
+contract half (retain an immutable historical label, or load soft-deleted
+relations) is F18 and remains deferred: it is a response-contract decision.
+
+### M019-F28 — Incomplete / P1 — F10 is two defects, not one
+
+Re-reading `api/app/Modules/HR/Services/EmployeeService.php:224-240` against
+`api/app/Modules/HR/Listeners/InitializeLeaveBalances.php:37-68` confirms the
+reported race and adds a second, distinct fault:
+
+1. As reported: the synchronous path writes `total_credits = default_balance` with
+   `updateOrInsert`; the queued listener writes the prorated figure with
+   `insertOrIgnore`, which cannot replace the existing row. A mid-year hire keeps
+   full-year credits.
+2. **Not previously reported:** the two paths key different years. The
+   synchronous path uses `now()->year` (`EmployeeService.php:225`); the listener
+   uses `date_hired->year` (`InitializeLeaveBalances.php:38-39`). An employee
+   recorded with a `date_hired` in a prior calendar year therefore ends up with
+   **two** balance rows — full credits for the current year and prorated credits
+   for the hire year — rather than one wrong row.
+
+Both are employee-master behaviour. Not touched, per scope.
+
+## Polish pass
+
+- No hardcoded colours in the module:
+  `grep -rnE '#[0-9a-fA-F]{3,8}\b|rgb\(|bg-(red|green|blue|…)-[0-9]'` over
+  `spa/src/pages/leaves`, `spa/src/api/leave`, `spa/src/types/leave.ts` → no hits.
+- The actionable polish items are the six unguarded `leave_type` dereferences in
+  M019-F27 (fixed) and the missing document-review control in F12 (deferred —
+  it needs a route that does not exist).
+- F20's archived-Edit fix is present and covered by
+  `spa/src/pages/leaves/types.test.tsx`.
+
+## Questions needing a human decision
+
+1. **Is a holiday inside a leave range a leave day?** (M019-F23.) Current code
+   debits it. Philippine practice generally pays the holiday as a holiday and
+   does not consume a leave credit. Whichever way this is answered changes a
+   balance figure, so it is not mine to decide.
+2. **What does `conversion_rate > 1.0` mean?** (M019-F26.) Either the validation
+   should refuse it, or the year-end clamp should stop overriding it. The two
+   readings pay different amounts.
+3. **What should cancelling an approved request in a dispositioned year do?**
+   (M019-F22.) Refuse the cancellation, cancel without restoring, or restore and
+   claw back the encashment. All three are defensible; all three move money.
+4. **Should the leave workflow be 2 steps or 4?** `CLAUDE.md` states
+   "Approval chain: Staff → Dept Head → Manager → Officer → VP (4 levels)".
+   Leave implements exactly 2 (`WorkflowSeeder.php:26-29`, and
+   `LeaveRequestStatus` has exactly two pending states). Code, seeder and enum
+   agree with each other, so this reads as a deliberate exception to the general
+   rule rather than a defect — but the doc and the code disagree.
+5. **Who may download a required supporting document, and for how long is it
+   kept?** (F12, carried forward unanswered from session 2.)
+6. **Should advance cross-year filing be possible?** (Carried forward from
+   session 2's open questions; unchanged.)
+
+## Verification evidence
+
+| check | result | exact command |
+|---|---|---|
+| Leave suite BEFORE, project default clock | **7 failed / 68 passed**, 500 assertions | `docker compose run --rm --no-deps -e DB_DATABASE=ogami_test_leave api php artisan test tests/Feature/Leave --no-coverage` |
+| Leave suite, clock shifted off Sunday | **75 passed / 0 failed**, 523 assertions | same, plus `-e APP_TIMEZONE=UTC` |
+| Re-audit probes | 10 probes, all reported above | `… api php artisan test tests/Feature/Leave/M019ReauditProbeTest.php --no-coverage` |
+| Two-connection balance race | PASS, no negative balance | PROBE B, pcntl fork + separate PostgreSQL connection |
+
+Not verified, stated plainly:
+
+- **No browser was run.** Playwright's Chromium/Firefox binaries are still absent
+  from the container (F11), so `e2e/chain-leave.spec.ts` was not executed. The
+  M019-F27 crash is asserted from the measured payload shape, not observed in a
+  browser.
+- **No production-like payroll dataset.** M019-F22's downstream effect
+  (an encashment adjustment applied by a real payroll run) was not rehearsed
+  end-to-end; the adjustment row's existence and approval state were verified,
+  its application was not.
+- Vitest was run only for the file changed in this session, not the SPA suite.
+
+## Fixes applied in this session
+
+Two contained items only; see `fix-log.md` for the file:line before/after and
+`action-plan.md` for why nothing else was eligible.
+
+- **M019-F24** — fixed. `tests/Feature/Leave` now passes on the project default
+  clock on a Sunday: **75 passed / 0 failed, 523 assertions**, the same count the
+  UTC baseline produced. New shared trait
+  `api/tests/Feature/Leave/BusinessDayFixtures.php`; four test files moved onto it.
+- **M019-F27 (SPA half)** — fixed. Six unguarded `leave_type` dereferences guarded,
+  `spa/src/types/leave.ts` corrected to `leave_type?: … | null`, and
+  `spa/src/pages/leaves/detail.test.tsx` added. The test was confirmed to **fail**
+  against unmodified `detail.tsx` with the predicted `TypeError`, and the temporary
+  revert used to prove that was verified restored with `sha256sum -c` → `OK`.
+
+### Final verification
+
+| check | result | command |
+|---|---|---|
+| `tests/Feature/Leave` AFTER, project default clock (Asia/Manila, Sunday) | **75 passed / 0 failed**, 523 assertions | `docker compose run --rm --no-deps -e DB_DATABASE=ogami_test_leave api php artisan test tests/Feature/Leave --no-coverage` |
+| `php -l` on the 5 changed/added PHP files | **PASS** | in-container loop |
+| PHPStan on the same 5 files | **PASS — no errors** | `./vendor/bin/phpstan analyse … --memory-limit=1G` |
+| Laravel Pint on the same 5 files | 2 issues, **both proven inherited** | see below |
+| SPA ESLint on the 5 changed/added SPA files | **PASS**, `--max-warnings 0` | `npx eslint … --max-warnings 0` |
+| SPA `npm run typecheck` | **PASS** — the previously reported `qrcode` blocker is gone | `tsc --noEmit` |
+| SPA Vitest, `src/pages/leaves` | **3 files / 4 tests passed** | `npm run test:run -- src/pages/leaves` |
+
+Pint inheritance proof — the same two files fail with the same rule sets before
+and after my changes, so no pre-existing style was pulled into the diff:
+
+    # HEAD extracts (git show HEAD:api/tests/Feature/Leave/<f>.php)
+    FAIL  4 files, 2 style issues
+    ⨯ HalfDayLeaveOverlapTest.php      binary_operator_spa…
+    ⨯ LeaveRequestBulkApproveTest.php  class_definitio…
+
+    # working tree, after this session
+    FAIL  5 files, 2 style issues
+    ⨯ tests/Feature/Leave/HalfDayLeaveOverlapTest.php     binary_operator_spaces
+    ⨯ tests/Feature/Leave/LeaveRequestBulkApproveTest.php class_definition, fun…
+
+`LeaveRequestVisibilityTest.php` and `LeaveRequestHardeningTest.php` were Pint-clean
+at HEAD and remain clean; the new `BusinessDayFixtures.php` is clean.
+
+The scratch database `ogami_test_leave` was dropped after these runs.
