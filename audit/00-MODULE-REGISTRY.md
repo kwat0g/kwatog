@@ -1,6 +1,6 @@
 # Module Registry
 
-_Generated 2026-08-28 10:44 UTC by scripts/regenerate-registry.sh - do not edit by hand, edit each module's status.md instead._
+_Generated 2026-08-29 20:10 UTC by scripts/regenerate-registry.sh - do not edit by hand, edit each module's status.md instead._
 
 | ID | Domain | Module | Tier | Roles | Depends On | Status | Last Session | Locked? |
 |----|--------|--------|------|-------|-----------|--------|---------------|---------|
@@ -13,7 +13,7 @@ _Generated 2026-08-28 10:44 UTC by scripts/regenerate-registry.sh - do not edit 
 | M030 | finance | budgeting | 2 | system_admin, finance_officer | chart-of-accounts-periods, journal-ledger, employee-master | ✅ Verified | 2026-08-24 | no |
 | M025 | finance | chart-of-accounts-periods | 2 | system_admin, finance_officer | auth-session, rbac | 📋 Plan Ready | 2026-08-27 | no |
 | M029 | finance | financial-statements | 2 | system_admin, finance_officer | journal-ledger, accounts-payable, accounts-receivable | 📋 Plan Ready | 2026-08-27 | no |
-| M031 | finance | fixed-assets-depreciation | 2 | system_admin, finance_officer, production_manager, ppc_head, maintenance_tech | chart-of-accounts-periods, journal-ledger, employee-master, maintenance-machine-health | 🔁 Needs Re-audit | 2026-08-28 | no |
+| M031 | finance | fixed-assets-depreciation | 2 | system_admin, finance_officer, production_manager, ppc_head, maintenance_tech | chart-of-accounts-periods, journal-ledger, employee-master, maintenance-machine-health | 🔁 Needs Re-audit | 2026-08-29 | no |
 | M026 | finance | journal-ledger | 2 | system_admin, finance_officer | chart-of-accounts-periods, audit-activity | 🔁 Needs Re-audit | 2026-08-25 | 🔒 yes |
 | M041 | inventory | goods-receiving | 3 | system_admin, purchasing_officer, warehouse_staff | purchase-orders, inventory-master, inspections-certificates, accounts-payable | 🔁 Needs Re-audit | 2026-08-25 | 🔒 yes |
 | M039 | inventory | inventory-master | 3 | system_admin, production_manager, purchasing_officer, warehouse_staff, qc_inspector | auth-session, rbac | ✅ Verified | 2026-08-25 | no |
@@ -54,8 +54,8 @@ _Generated 2026-08-28 10:44 UTC by scripts/regenerate-registry.sh - do not edit 
 | M038 | procurement | supplier-performance | 3 | system_admin, finance_officer, purchasing_officer | purchase-orders, goods-receiving, inspections-certificates | 🔁 Needs Re-audit | 2026-08-25 | 🔒 yes |
 | M060 | public | corporate-site-contact | 4 | Public, system_admin | — | 🔁 Needs Re-audit | 2026-08-25 | 🔒 yes |
 | M059 | quality | calibration-quality-analytics | 3 | system_admin, qc_inspector, production_manager | inspections-certificates, ncr-capa, maintenance-machine-health | 🔁 Needs Re-audit | 2026-08-27 | no |
-| M055 | quality | inspection-specifications | 3 | system_admin, qc_inspector | customer-product-pricing, production-routings, inventory-master | ✅ Verified | 2026-08-25 | no |
 | M056 | quality | inspections-certificates | 3 | system_admin, qc_inspector, production_manager | inspection-specifications, goods-receiving, production-work-orders, deliveries-proof, returns-rma | 🔁 Needs Re-audit | 2026-08-25 | 🔒 yes |
+| M055 | quality | inspection-specifications | 3 | system_admin, qc_inspector | customer-product-pricing, production-routings, inventory-master | ✅ Verified | 2026-08-25 | no |
 | M054 | quality | material-review-board | 3 | system_admin, warehouse_staff, qc_inspector | goods-receiving, inspections-certificates, warehouse-stock-control, returns-rma | 🔁 Needs Re-audit | 2026-08-25 | 🔒 yes |
 | M057 | quality | ncr-capa | 3 | system_admin, qc_inspector, production_manager | inspections-certificates, customer-complaints-8d, maintenance-machine-health, production-work-orders | 🔁 Needs Re-audit | 2026-08-25 | 🔒 yes |
 | M058 | quality | traceability-ppap | 3 | system_admin, qc_inspector, supplier-portal | inspections-certificates, ncr-capa, deliveries-proof, supplier-portal, customer-product-pricing | 🔁 Needs Re-audit | 2026-08-25 | 🔒 yes |

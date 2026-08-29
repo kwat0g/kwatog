@@ -6,4 +6,4 @@ roles: system_admin, finance_officer, production_manager, ppc_head, maintenance_
 depends_on: chart-of-accounts-periods, journal-ledger, employee-master, maintenance-machine-health
 surface: M
 status: 🔁 Needs Re-audit
-last_session: 2026-08-28
+last_session: 2026-08-29
