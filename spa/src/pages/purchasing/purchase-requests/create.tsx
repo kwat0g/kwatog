@@ -58,7 +58,7 @@ export default function CreatePurchaseRequestPage() {
     queryFn: () => itemsApi.list({ per_page: 200, is_active: 'true' }),
   });
 
-    const form = useForm<V>({
+  const form = useForm<V>({
     resolver: zodResolver(schema),
     defaultValues: {
       priority: '',
@@ -219,127 +219,127 @@ export default function CreatePurchaseRequestPage() {
             <div className="text-xs text-danger-fg mb-2">{errors.items.root.message}</div>
           )}
           <div className="overflow-x-auto">
-          <table className={tableCls}>
-            <thead>
-              <tr className={theadTrCls}>
-                <Th>Item</Th>
-                <Th>Description</Th>
-                <Th align="right">Qty</Th>
-                <Th>Unit</Th>
-                <Th align="right">Est. unit price</Th>
-                <Th align="right">Total</Th>
-                <Th />
-              </tr>
-            </thead>
-            <tbody>
-              {fields.map((f, i) => (
-                <tr key={f.id} className={cn(trCls, 'align-top')}>
-                  <Td>
-                    <Select
-                      fieldSize="sm"
-                      containerClassName="w-32"
-                      className="font-mono"
-                      aria-label="Item"
-                      value={watched[i]?.item_id ?? ''}
-                      onChange={(e) => onLineItemChange(i, e.target.value)}
-                    >
-                      <option value="">— ad hoc —</option>
-                      {items.data?.data?.map((it) => (
-                        <option key={it.id} value={it.id}>
-                          {it.code} — {it.name}
-                        </option>
-                      ))}
-                    </Select>
-                  </Td>
-                  <Td>
-                    <Input
-                      fieldSize="sm"
-                      aria-label="Description"
-                      {...register(`items.${i}.description` as const)}
-                      readOnly={!!watched[i]?.item_id}
-                      title={
-                        watched[i]?.item_id
-                          ? 'Description is copied from the selected item'
-                          : 'Editable for ad-hoc lines only'
-                      }
-                      error={errors.items?.[i]?.description?.message}
-                    />
-                  </Td>
-                  <Td align="right" mono>
-                    <Input
-                      fieldSize="sm"
-                      containerClassName="w-20 inline-flex"
-                      className="text-right font-mono tabular-nums"
-                      aria-label="Quantity"
-                      {...numberInputProps()}
-                      {...register(`items.${i}.quantity` as const)}
-                      error={errors.items?.[i]?.quantity?.message}
-                    />
-                  </Td>
-                  <Td>
-                    <Input
-                      fieldSize="sm"
-                      containerClassName="w-16"
-                      aria-label="Unit"
-                      value={watched[i]?.unit ?? ''}
-                      onChange={(e) => setValue(`items.${i}.unit`, e.target.value)}
-                      readOnly={!!watched[i]?.item_id}
-                      title={
-                        watched[i]?.item_id
-                          ? 'Unit is copied from the selected item'
-                          : 'Editable for ad-hoc lines only'
-                      }
-                    />
-                  </Td>
-                  <Td align="right" mono>
-                    <Input
-                      fieldSize="sm"
-                      containerClassName="w-24 inline-flex"
-                      className="text-right font-mono tabular-nums"
-                      aria-label="Estimated unit price"
-                      {...numberInputProps()}
-                      {...register(`items.${i}.estimated_unit_price` as const)}
-                      readOnly={!!watched[i]?.item_id}
-                      title={
-                        watched[i]?.item_id
-                          ? 'Est. price is copied from the item standard cost'
-                          : 'Editable for ad-hoc lines only'
-                      }
-                    />
-                  </Td>
-                  <Td align="right" mono>
-                    {(
-                      Number(watched[i]?.quantity || 0) *
-                      Number(watched[i]?.estimated_unit_price || 0)
-                    ).toFixed(2)}
-                  </Td>
-                  <Td align="right" mono>
-                    {fields.length > 1 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        iconOnly
-                        icon={<LuTrash2 size={12} />}
-                        onClick={() => remove(i)}
-                        aria-label="Remove line"
-                        className="text-muted hover:text-danger-fg"
-                      />
-                    )}
-                  </Td>
+            <table className={tableCls}>
+              <thead>
+                <tr className={theadTrCls}>
+                  <Th>Item</Th>
+                  <Th>Description</Th>
+                  <Th align="right">Qty</Th>
+                  <Th>Unit</Th>
+                  <Th align="right">Est. unit price</Th>
+                  <Th align="right">Total</Th>
+                  <Th />
                 </tr>
-              ))}
-              <tr className={cn(trCls, 'font-medium')}>
-                <Td align="right" mono className="uppercase text-2xs tracking-wider" colSpan={5}>
-                  Estimated total
-                </Td>
-                <Td align="right" mono>
-                  {formatPeso(total)}
-                </Td>
-                <Td />
-              </tr>
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {fields.map((f, i) => (
+                  <tr key={f.id} className={cn(trCls, 'align-top')}>
+                    <Td>
+                      <Select
+                        fieldSize="sm"
+                        containerClassName="w-32"
+                        className="font-mono"
+                        aria-label="Item"
+                        value={watched[i]?.item_id ?? ''}
+                        onChange={(e) => onLineItemChange(i, e.target.value)}
+                      >
+                        <option value="">— ad hoc —</option>
+                        {items.data?.data?.map((it) => (
+                          <option key={it.id} value={it.id}>
+                            {it.code} — {it.name}
+                          </option>
+                        ))}
+                      </Select>
+                    </Td>
+                    <Td>
+                      <Input
+                        fieldSize="sm"
+                        aria-label="Description"
+                        {...register(`items.${i}.description` as const)}
+                        readOnly={!!watched[i]?.item_id}
+                        title={
+                          watched[i]?.item_id
+                            ? 'Description is copied from the selected item'
+                            : 'Editable for ad-hoc lines only'
+                        }
+                        error={errors.items?.[i]?.description?.message}
+                      />
+                    </Td>
+                    <Td align="right" mono>
+                      <Input
+                        fieldSize="sm"
+                        containerClassName="w-20 inline-flex"
+                        className="text-right font-mono tabular-nums"
+                        aria-label="Quantity"
+                        {...numberInputProps()}
+                        {...register(`items.${i}.quantity` as const)}
+                        error={errors.items?.[i]?.quantity?.message}
+                      />
+                    </Td>
+                    <Td>
+                      <Input
+                        fieldSize="sm"
+                        containerClassName="w-16"
+                        aria-label="Unit"
+                        value={watched[i]?.unit ?? ''}
+                        onChange={(e) => setValue(`items.${i}.unit`, e.target.value)}
+                        readOnly={!!watched[i]?.item_id}
+                        title={
+                          watched[i]?.item_id
+                            ? 'Unit is copied from the selected item'
+                            : 'Editable for ad-hoc lines only'
+                        }
+                      />
+                    </Td>
+                    <Td align="right" mono>
+                      <Input
+                        fieldSize="sm"
+                        containerClassName="w-24 inline-flex"
+                        className="text-right font-mono tabular-nums"
+                        aria-label="Estimated unit price"
+                        {...numberInputProps()}
+                        {...register(`items.${i}.estimated_unit_price` as const)}
+                        readOnly={!!watched[i]?.item_id}
+                        title={
+                          watched[i]?.item_id
+                            ? 'Est. price is copied from the item standard cost'
+                            : 'Editable for ad-hoc lines only'
+                        }
+                      />
+                    </Td>
+                    <Td align="right" mono>
+                      {(
+                        Number(watched[i]?.quantity || 0) *
+                        Number(watched[i]?.estimated_unit_price || 0)
+                      ).toFixed(2)}
+                    </Td>
+                    <Td align="right" mono>
+                      {fields.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          iconOnly
+                          icon={<LuTrash2 size={12} />}
+                          onClick={() => remove(i)}
+                          aria-label="Remove line"
+                          className="text-muted hover:text-danger-fg"
+                        />
+                      )}
+                    </Td>
+                  </tr>
+                ))}
+                <tr className={cn(trCls, 'font-medium')}>
+                  <Td align="right" mono className="uppercase text-2xs tracking-wider" colSpan={5}>
+                    Estimated total
+                  </Td>
+                  <Td align="right" mono>
+                    {formatPeso(total)}
+                  </Td>
+                  <Td />
+                </tr>
+              </tbody>
+            </table>
           </div>
         </Panel>
         <FormActions>
