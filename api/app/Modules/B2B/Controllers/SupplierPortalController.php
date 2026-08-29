@@ -17,6 +17,7 @@ use App\Modules\B2B\Requests\Supplier\UploadShippingDocumentsRequest;
 use App\Modules\B2B\Resources\DeliveryScheduleResource;
 use App\Modules\B2B\Resources\PortalShippingDocumentResource;
 use App\Modules\B2B\Resources\SupplierDeliveryResource;
+use App\Modules\B2B\Resources\SupplierPpapSubmissionResource;
 use App\Modules\B2B\Services\SupplierPortalService;
 use App\Modules\B2B\Services\SupplierPortalPdfService;
 use App\Modules\Purchasing\Models\PurchaseOrder;
@@ -337,7 +338,7 @@ class SupplierPortalController extends Controller
         ]);
 
         return response()->json([
-            'data' => \App\Modules\Quality\Resources\PpapSubmissionResource::collection($paginator),
+            'data' => SupplierPpapSubmissionResource::collection($paginator),
         ]);
     }
 }

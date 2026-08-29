@@ -81,3 +81,133 @@ No production-code implementation is authorized in this session. Five actions ar
 - Two-connection login lockout harness: 4 tests, 24 assertions, pass.
 - Database used for all test commands: `ogami_test_m047_roll_d` only.
 - No dependency, shared config, registry, or other-module file was changed.
+
+---
+
+# Action plan — revision 2026-08-30
+
+Status: `🔁 Needs Re-audit`
+Prior plan items 6 (M047-R005) and 7 (M047-R007) are **closed** by commits
+`2e260491` and `7e47f752`; item 3 (M047-R003) is closed by `f971118f`. All three
+were verified against source, not taken on trust.
+
+Items 1 (M047-R001) and 5 (M047-R006, storage-path half) are **done this session**.
+What remains is ordered below.
+
+## Done this session
+
+### ✅ M047-R008 + M047-R001 — PO detail relations and the bill allowlist
+
+- Broken, P1. Scope: small. **Reclassified `same-session-ok`** from the prior
+  plan's `medium / separate-recommended`, and the reclassification is the point:
+  R001 turned out to be *latent* behind a worse defect (the eager loads omitted
+  the `purchase_order_id` foreign key, so both relations always resolved empty),
+  and behind that a third — a fatal `(string) $enum` in dead code. Judged on
+  containment: one `load()` array and one deleted loop in one method, no state
+  machine, no Money arithmetic, no permission or guard change. Fixing R001 alone
+  would have been *wrong* — it had to land with R008 or PO detail would have
+  started 500ing. Details and before/after in `fix-log.md` §16.
+
+### ✅ M047-R006 (partial) — supplier PPAP storage-path leak
+
+- Incomplete, P2. Scope: small. **Reclassified `same-session-ok`** for the
+  security half only: two new B2B-owned resource classes plus one controller line,
+  with Quality's resources untouched. Judged on containment — it adds an allowlist
+  in this module rather than editing a dependency. The *wider field allowlist*
+  remains an owner question (below). `fix-log.md` §17.
+
+## Ordered remaining actions
+
+### 1. M047-R002 — enforce password expiry for supplier portal accounts
+
+- Classification/severity: Missing, P1
+- Size: medium
+- Session: **`separate-recommended`**
+- Evidence: measured, not inferred — supplier HTTP 200 with a 150-day-old password
+  against a 90-day policy, customer HTTP 403 `password_expired` for the identical
+  age (`fix-log.md` §18). `CheckPortalPasswordExpiry.php:19-20` reads only
+  `customer_portal`; `routes.php:28` omits the middleware from the supplier group.
+- Why not this session: it changes an **authentication gate on an externally
+  facing portal**, which the session criteria call out directly. Concretely, the
+  supplier SPA has no handler for the `password_expired` code, so enabling the
+  gate without the client work would hard-brick an expired supplier with no route
+  to change their password. The API and SPA halves must land together.
+- Action: generalise the middleware to resolve either portal guard (or add a
+  supplier sibling), add it to the supplier authenticated group, keep `me` and
+  `change-password` reachable exactly as the customer path does, and add a
+  `password_expired` handler to the supplier SPA client. Tests: expired, current,
+  and first-login supplier accounts, plus the escape-hatch routes.
+- Acceptance: an expired supplier password cannot reach operational routes,
+  changing it restores access, and `must_change_password` stays a distinct signal
+  from timed expiry.
+
+### 2. M047-R004 — resolve the supplier authentication contract
+
+- Classification/severity: Incomplete, P1
+- Size: large
+- Session: **`separate-recommended`; owner decision required first**
+- Evidence: `config/auth.php:14-20` keeps `supplier_portal` on `sanctum` while
+  `:22-25` now has `customer_portal` on `session`, so the customer half of the
+  migration is complete and the supplier half is not. Supplier login returns a
+  token (`SupplierAuthController.php:39-64`); the SPA sets `Authorization: Bearer`
+  and persists it in `sessionStorage` (`spa/src/api/b2b/client.ts:14-24`). CLAUDE.md
+  forbids both.
+- Action: Security/Auth decides migrate vs. formally retain. If migrating, the
+  customer portal is now the worked example to follow.
+- Acceptance: one authoritative contract; source, docs, guards and tests agree.
+
+### 3. M047-R009 — make `can_submit_invoice` agree with the server rule
+
+- Classification/severity: Incomplete, P2
+- Size: small
+- Session: `same-session-ok`
+- Evidence: `SupplierPurchaseOrderResource:37` gates on PO status only;
+  `SupplierPortalService.php:462-470` also requires an accepted GRN, so the SPA
+  offers an action the server refuses with 422. The prior fix-log §11 claimed this
+  gating existed; it does not.
+- Action: publish accepted-GRN presence in the capability on **both** the list and
+  detail paths — the list currently has only `withCount('goodsReceiptNotes')`
+  (unfiltered by status), so it needs a status-constrained count. Add a test that
+  the capability is false when no accepted GRN exists and that the button-visible
+  case actually succeeds.
+- Acceptance: every action the capability advertises succeeds; no 422 reachable
+  from an enabled control.
+
+### 4. M047-R006 (remainder) — ratify the supplier PPAP field contract
+
+- Classification/severity: Incomplete, P2
+- Size: small once decided
+- Session: `separate-recommended` (needs the Quality owner)
+- Action: confirm or amend the allowlist now shipping in
+  `SupplierPpapSubmissionResource`, and decide whether a supplier PPAP document
+  download route should exist. If yes, add it with an ownership check and replace
+  `has_document` with a download URL.
+- Acceptance: the contract is a recorded decision rather than an auditor's
+  judgement.
+
+### 5. M047-R010 — resolve the PPAP endpoint with no client
+
+- Classification/severity: Missing, P3
+- Size: medium (build) or small (remove)
+- Session: `same-session-ok` either way
+- Evidence: no PPAP type, API function, page or nav entry anywhere in `spa/`.
+- Action: build the supplier PPAP list page against the new resource, or delete the
+  route and its service method. Do not leave it as-is.
+
+### 6. M047-R011 — `HashIdFilter` raw-integer shortcut (NOT this module)
+
+- Classification/severity: Incomplete, P3 · **report only, do not fix here**
+- Evidence: `api/app/Common/Support/HashIdFilter.php:19-21` accepts any digit
+  string in every environment, while `HasHashId::resolveRouteBinding` gates the
+  same shortcut behind `environment('testing')`. Shared `App\Common\Support`.
+- Action: hand to the shared-support / `platform/auth-session` owner. No supplier
+  leak results — every consumer here is tenant-scoped and the drill asserts it.
+
+## Session decision
+
+Fixed the three contained defects (R008, R001, R006-security) and deferred the two
+that touch an auth guard or the auth contract. That split follows the stated
+criteria: R008/R001/R006 are containment-scoped additions of a missing boundary
+inside this module; R002 and R004 change authentication behaviour for an external
+principal and need coordinated SPA/owner work. Released `🔁 Needs Re-audit`
+because items 1–5 remain open.

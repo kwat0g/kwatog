@@ -367,3 +367,306 @@ Impact: the filter contract is confusing but not a data-boundary failure. Align 
 ### Current handoff
 
 The exact deferred blocker is the Security/Auth owner decision on the supplier bearer-token exception versus the inherited cookie-only policy; the PPAP field contract and supplier-visible AP bill status contract also need their owning-module decisions. These do not block audit completion, artifact commit, or claim release. Next action is a separate implementation session beginning with R001–R004, followed by the PPAP contract and the two small UI/route alignments.
+
+---
+
+## Re-audit + fix session (2026-08-30)
+
+Status released: `🔁 Needs Re-audit`
+Claim: `audit/scripts/claim-module.sh supply-chain supplier-portal` → **CLAIMED**
+(a fresh lock, not an orphan reclaim). Working tree clean on entry.
+Baseline before any change: focused supplier suite **83 passed / 353 assertions**.
+
+Decision: fixed three contained defects (one of them new and more serious than
+anything in the prior plan); deferred M047-R002 and M047-R004 as
+`separate-recommended`. Reasoning for each reclassification is in `action-plan.md`.
+
+### What the two intervening commits actually did
+
+Both were verified against source rather than trusted:
+
+- `2e260491` — real. `feature:b2b_portals` is now on all four supplier public
+  auth routes (`api/app/Modules/B2B/routes.php:22-25`). **M047-R005 closed.**
+- `7e47f752` — real. The `draft`/`cancelled` options are gone from the supplier
+  invoice filter. **M047-R007 closed.**
+- `f971118f` / M047-R003 — real. The cleanup `catch` in `submitInvoice` wraps only
+  `DB::transaction` (`api/app/Modules/B2B/Services/SupplierPortalService.php:520-528`);
+  event dispatch and portal audit sit outside it at `:530-533`. **Closed.**
+
+### Cross-tenant isolation — measured by real HTTP requests
+
+New drill: `api/tests/Feature/B2B/SupplierPortalCrossTenantTest.php`, 19 tests.
+Two suppliers each get a vendor, portal user, `sent` PO with a line, bill,
+accepted GRN, shipping document with real stored bytes, delivery schedule and a
+PPAP submission with an element. Supplier A is then pointed at every one of
+Supplier B's identifiers.
+
+**Finding: no cross-tenant leak on any route probed.** Both layers hold —
+`B2BTenancyScopeMiddleware`'s vendor global scope refuses the route binding (404,
+`api/app/Modules/B2B/Middleware/B2BTenancyScopeMiddleware.php:42-59`), and every
+service method re-checks `vendor_id` after binding (403). `HasHashId::resolveRouteBinding`
+uses `$this->newQuery()` (`api/app/Common/Traits/HasHashId.php:42`), which applies
+global scopes — that is *why* the binding refuses. Refusal bodies were also
+asserted not to echo the victim's `po_number`/`bill_number` or a raw `"id":<pk>`,
+so a refusal is not an existence oracle.
+
+Routes probed for tenancy (25 supplier routes total; `route:list --path=b2b/supplier`):
+
+| route | probe | result |
+|---|---|---|
+| `GET dashboard` | counts + recent PO/invoice fragments | scoped |
+| `GET purchase-orders` | exact top-level id set | scoped |
+| `GET purchase-orders/{po}` | B's hash | refused |
+| `GET purchase-orders/{po}/pdf` | B's hash | refused |
+| `POST purchase-orders/{po}/acknowledge` | B's hash | refused, B's row unchanged |
+| `POST purchase-orders/{po}/shipment-update` | B's hash | refused, no `supplier_shipments` row |
+| `POST purchase-orders/{po}/shipping-documents` | B's hash + file | refused, no row, no stored file |
+| `GET purchase-orders/{po}/shipping-documents` | own + B's | scoped |
+| `POST purchase-orders/{po}/submit-invoice` | B's hash | refused, no extra `Bill` |
+| `GET shipping-documents/{id}/download` | B's document hash | refused, bytes not disclosed |
+| `GET invoices` | exact top-level id set | scoped |
+| `GET invoices/{invoice}` | B's hash | refused |
+| `GET invoices/{invoice}/pdf` | B's hash | refused |
+| `GET deliveries` | exact top-level id set | scoped |
+| `GET statement-of-account` | vendor name, open bills, exact total | scoped |
+| `GET delivery-schedules` | exact top-level id set | scoped |
+| `POST delivery-schedules` | B's PO in body; own PO + B's line | both 422, nothing persisted |
+| `GET ppap-submissions` | exact top-level id set | scoped |
+| `POST login` / `POST forgot-password` | enumeration + throttle | see below |
+| `GET portal-access/suppliers`, `POST …/{vendor}/invite` | supplier token → internal admin | 401 |
+
+**Routes NOT covered for tenancy, and why:** `GET me`, `POST change-password`,
+`POST logout` (single-principal, no cross-tenant identifier in the request);
+`GET purchase-orders/shipping-documents/options` (static enum list, no tenant
+data). `POST reset-password` was not driven end-to-end with a live token in this
+drill — token invalidation is already covered by
+`api/tests/Feature/B2B/PortalPasswordResetTest.php`.
+
+### Files, downloads, auth surface — measured
+
+- Uploads get randomised names under `portal/shipping-docs/<po>/` on the `local`
+  disk (outside the web root) and are served only through the controller.
+- A `../../evil.pdf` client filename never becomes a storage path: Symfony's
+  `UploadedFile::getName()` strips separators before `getClientOriginalName()`.
+- Traversal / garbage in `shipping-documents/{id}/download` is refused.
+- **Server-side MIME validation is real** (`mimes:pdf,jpg,jpeg,png` sniffs content
+  via finfo). A first version of this assertion used `UploadedFile::fake()` and
+  reported a bypass that does not exist — `Illuminate\Http\Testing\File::getMimeType()`
+  returns `MimeType::from($name)`, derived from the *filename*. Rewritten against
+  a real `Illuminate\Http\UploadedFile`, the PHP payload named `.pdf` is correctly
+  422'd. Recorded because the naive version is a convincing false positive.
+- **The CLAUDE.md audit-guard hazard does not reproduce.** A portal
+  acknowledgement writes `PurchaseOrder` (a `HasAuditLog` model) under
+  `auth:supplier_portal` and both the `supplier_po.ack` portal row
+  (`user_id = null`, `actor_type = supplier_portal`) and a `HasAuditLog` row whose
+  `user_id` resolves to a real `users` record are written. No FK violation. The
+  working remedy is `App\Common\Services\SystemUserResolver::impersonate()`
+  (`api/app/Common/Services/SystemUserResolver.php:68-79`) — **not** the
+  `EdgeSystemUserResolver` / `auth:edge_device` CLAUDE.md prescribes, neither of
+  which exists. Note `storeDeliverySchedule` does *not* impersonate and does not
+  need to: no model it writes uses `HasAuditLog`.
+- Login enumeration: identical status and identical `errors.email` for a known vs
+  unknown address; `forgot-password` returns one fixed message either way.
+  Throttling fires within 8 attempts (`throttle:auth`). Response *timing* was not
+  measured — see open questions.
+
+### Findings
+
+#### M047-R008 — PO detail dropped every GRN and bill (NEW)
+
+Classification: **Broken** · Priority P1 · **Fixed this session**
+
+Three defects were stacked in `purchaseOrderDetail()`, each concealing the next.
+Found because the M047-R001 regression fixture returned **0** bills, not the 3 the
+leak predicted. Direct probe of the eager load:
+
+```
+DB rows                                     -> bills=1 grns=1
+load([bills, goodsReceiptNotes])            -> bills=1 grns=1
+load([...:id,<cols> without the FK])        -> bills=0 grns=0
+load([...:id,purchase_order_id,<cols>])     -> bills=1 grns=1
+HTTP GET po detail                          -> bills=0 goods_receipt_notes=0
+```
+
+1. `api/app/Modules/B2B/Services/SupplierPortalService.php:176-177` (before) read
+   `'goodsReceiptNotes:id,grn_number,received_date,status'` and
+   `'bills:id,bill_number,…'`. `HasMany::match()` keys children by the foreign
+   key, so omitting `purchase_order_id` from the select made every row
+   unmatchable. The relation was still *loaded*, so `whenLoaded` emitted
+   `bills: []` and `goods_receipt_notes: []` unconditionally. The SPA renders both
+   panels only when non-empty
+   (`spa/src/pages/portal/supplier/purchase-orders/detail.tsx:417,441`), so two
+   sections of the supplier PO detail page had **never once displayed**.
+2. `:200-205` (before) then ran `BillStatus::tryFrom((string) $bill->status)` — a
+   fatal `Error: Object of class …BillStatus could not be converted to string`,
+   since `Bill::$casts` maps `status` to the enum
+   (`api/app/Modules/Accounting/Models/Bill.php:45`). Unreachable only because (1)
+   guaranteed an empty collection; repairing (1) alone made PO detail a **500 for
+   every PO that has a bill**, which is what the first fix run produced.
+3. M047-R001's missing predicate (below) would then have started leaking.
+
+#### M047-R001 — PO detail serialized non-supplier-visible AP bills
+
+Classification: **Broken** · Priority P1 · **Fixed this session**
+
+Real but **latent**, which the prior report could not have known: the leak could
+not fire while M047-R008(1) held. The prior evidence (no status predicate on the
+`bills` eager load; `SupplierPurchaseOrderResource:62-71` mapping every loaded
+bill) was correct as source reading. Fixed together with R008 — fixing either
+alone is wrong.
+
+#### M047-R006 — supplier PPAP read used the internal Quality resource
+
+Classification: **Incomplete** · Priority P2 · **Storage-path leak fixed; field
+allowlist still an owner question**
+
+Measured before the fix: `ppap/private/vault/control-plan-secret.pdf` was present
+in the supplier response, from `api/app/Modules/Quality/Resources/PpapElementResource.php:20`.
+Fixed with B2B-owned allowlists (`SupplierPpapSubmissionResource`,
+`SupplierPpapElementResource`); Quality's resources unchanged.
+
+#### M047-R002 — supplier password expiry is not enforced
+
+Classification: **Missing** · Priority P1 · **Deferred, `separate-recommended`**
+
+Confirmed by measurement, not inference:
+
+```
+security.password_expiry_days = 90
+SUPPLIER  dashboard, password 150 days old => HTTP 200
+SUPPLIER  purchase-orders, same           => HTTP 200
+CUSTOMER  dashboard, password 150 days old => HTTP 403  code=password_expired
+```
+
+One policy, two guards, one enforcing it.
+`api/app/Modules/B2B/Middleware/CheckPortalPasswordExpiry.php:19-20` reads only
+`customer_portal`/`CustomerPortalUser`; the supplier group omits the middleware
+(`api/app/Modules/B2B/routes.php:28`).
+
+#### M047-R004 — supplier bearer-token exception to the cookie-only contract
+
+Classification: **Incomplete** · Priority P1 · **Deferred, owner decision**
+
+Unchanged and still an explicit, documented divergence. Note the contrast has
+sharpened: `api/config/auth.php:22-25` now shows `customer_portal` on the
+`session` driver while `supplier_portal:14-20` remains `sanctum`. So the customer
+half of the migration is done and the supplier half is not.
+
+#### M047-R009 — `can_submit_invoice` over-promises against the server rule (NEW)
+
+Classification: **Incomplete** · Priority P2 · Not fixed
+
+`SupplierPurchaseOrderResource:37` derives `can_submit_invoice` from PO status
+alone, but `submitInvoice` additionally requires an accepted GRN
+(`SupplierPortalService.php:462-470`). So the SPA shows the invoice action and the
+server answers 422 "Supplier invoices for stock items require an accepted goods
+receipt." Aggravated by R008: until this session the supplier could not even see
+whether a GRN existed, because `goods_receipt_notes` was always empty. The prior
+fix-log §11 claimed "accepted-GRN gating for invoice submission" was implemented
+in the capability — it is not in the resource.
+
+#### M047-R010 — the supplier PPAP route has no SPA client at all (NEW)
+
+Classification: **Missing** · Priority P3 · Not fixed
+
+`GET /b2b/supplier/ppap-submissions` is a live, tested, tenant-scoped endpoint
+with **no** consumer: no `ppap` type in `spa/src/types/b2b.ts`, nothing in
+`spa/src/api/b2b/supplier.ts`, no page under `spa/src/pages/portal/supplier/`,
+and no nav entry. Same "fixed route with no caller" shape seen in
+`procurement/purchase-requests`. Either build the page or drop the route; a
+maintained endpoint nobody calls is a standing cost.
+
+#### M047-R011 — `HashIdFilter` accepts raw integers in every environment (NEW)
+
+Classification: **Incomplete** · Priority P3 · **Out of module — report only**
+
+`api/app/Common/Support/HashIdFilter.php:19-21` returns `(int) $str` for any
+digit string, unconditionally. `HasHashId::resolveRouteBinding` gates the same
+shortcut behind `app()->environment('testing')`
+(`api/app/Common/Traits/HasHashId.php:33`) precisely so "staging pentests surface
+the same enumeration surface as prod" — `HashIdFilter` does not, so
+`shipping-documents/2/download` and a raw `purchase_order_id: 2` are accepted in
+production. **No leak results here**: every supplier consumer of `HashIdFilter` is
+tenant-scoped, and that is asserted in the drill. But ID obfuscation stops being a
+layer. Shared `App\Common\Support` — not this module's to change.
+
+Related, same class: HashIDs are salted **globally**, not per model
+(`api/config/hashids.php:8`), so `encode(2)` is the identical string for a
+`PurchaseOrder` and a `DeliverySchedule` with pk 2 (verified: `GqkbAVwxd1`). A
+hash is therefore a type-free identifier. This also broke an early version of the
+drill, where `assertJsonMissing(['id' => …])` matched a *nested* `purchase_order.id`
+and reported a leak that was not there — the drill now compares exact top-level id
+sets. Worth knowing before writing any ID-based assertion in this codebase.
+
+### Verification
+
+All commands used `DB_DATABASE=ogami_test_sup`; `ogami_test` was never touched.
+Containers: only `db` and `redis` were already up and neither was restarted.
+
+- Baseline, before changes — focused supplier suite (`SupplierPortalServiceTest`,
+  `SupplierPortalAuthTest`, `SupplierPortalAccessLifecycleTest`,
+  `PortalPasswordResetTest`, `SupplierPpapViewTest`, `PortalTokenCrossGuardTest`,
+  `PortalValidationTest`): **83 passed / 353 assertions**.
+- After changes — whole `tests/Feature/B2B` folder: **145 passed / 655 assertions,
+  0 failed**. (The two `CustomerPortalServiceTest` failures a prior session
+  itemised as pre-existing are now green; not my change.)
+- New regressions confirmed failing against **unmodified** source:
+  `test_purchase_order_detail_returns_its_grn_and_bill_relations` failed first as
+  `actual size 0 matches expected size 1`, then — after fixing the FK omission
+  only — as `Expected response status code [200] but received 500`;
+  `test_supplier_ppap_response_never_exposes_the_private_document_path` failed as
+  `Failed asserting that an array does not have the key 'document_path'`.
+- Dependency regression, `--filter='PurchaseOrder|AccountsPayableHardening|Ppap'`:
+  **41 passed, 1 failed** — `AccountsPayableHardeningTest > supplier bill
+  resource…`, which is **pre-existing and outside this module**. Confirmed not
+  mine: `git diff --name-only HEAD -- api/app/Modules/Accounting api/tests/Feature/Accounting`
+  is empty. It is the same failure the prior fix-log §14 raised for the AP owner.
+- `php -l`: clean on all 7 changed/added PHP files.
+- `phpstan analyse` on all 4 changed/added app files: **[OK] No errors**.
+- `pint --test`: the 3 new files **PASS**. The 3 pre-existing files still fail, and
+  this was **proved inherited** by running Pint on the `git show HEAD:` extracts
+  and diffing rule lists — `SupplierPortalService.php` and
+  `SupplierPortalServiceTest.php` report byte-identical rule sets to HEAD, and
+  `SupplierPortalController.php` reports one rule *fewer* than HEAD
+  (`fully_qualified_strict_types` cleared by replacing an inline FQN with an
+  import). No pre-existing style was reformatted into this diff.
+- `route:list --path=b2b/supplier`: 25 routes, unchanged by this session.
+
+### Not verified — stated plainly
+
+- No browser-driven authenticated supplier journey; the SPA claims about the two
+  dead PO-detail panels are read from
+  `spa/src/pages/portal/supplier/purchase-orders/detail.tsx:417,441` and from the
+  API response shape, not from a rendered page.
+- Login **timing** was not measured, only status codes and message bodies, so
+  timing-based user enumeration is untested either way.
+- Sanctum **abilities are not enforced anywhere on this portal**: tokens are minted
+  with no ability list (`B2bAuthService.php:131` → `createToken($tokenName)`, which
+  defaults to `['*']`) and no supplier route uses the `ability` middleware. This is
+  "no abilities model" rather than "abilities attached but unenforced"; the drill
+  asserts scope-based isolation instead, which is what actually gates access here.
+- The frontend polish pass against `docs/DESIGN-SYSTEM.md` was **not** repeated;
+  the prior session's SPA pagination/state work was taken as given and only the
+  two contract mismatches above (R009, R010) were examined.
+- Concurrency was not re-driven; `LoginThresholdTwoConnectionHarnessTest` is the
+  existing two-connection coverage and passes in the folder run.
+
+### Open questions for a human
+
+1. **PPAP field allowlist (Quality owner).** Is
+   `SupplierPpapSubmissionResource` the intended supplier contract? Keeping
+   `rejection_reason` / `reviewed_at` / `approved_at` / `expires_at` / `revision`
+   and dropping `submitter` / `approver` / `document_path` is my judgement, not a
+   recorded decision. Should suppliers get a PPAP document download route, which
+   is the only thing that would make a path-like field legitimate?
+2. **M047-R004 (Security/Auth owner).** Migrate the supplier guard to the cookie
+   contract now that `customer_portal` already is, or formally amend the policy and
+   record compensating controls? Unblocking this is a prerequisite for closing the
+   module.
+3. **Supplier payment visibility (AP owner).** Still open from the prior session's
+   §14, and still failing: may a supplier see the payment records applied to its
+   own invoice? `SupplierPortalService::invoiceDetail()` eager-loads `payments`,
+   which is what `AccountsPayableHardeningTest:229` asserts against.
+4. **M047-R011 (shared-support owner).** Should `HashIdFilter::decode` gate its
+   raw-integer shortcut behind the testing environment, as `HasHashId` already
+   does? Harmless in this module; the question is repo-wide.

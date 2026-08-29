@@ -173,18 +173,38 @@ class SupplierPortalService
         $purchaseOrder->load([
             'vendor:id,name,contact_person,email,phone,address',
             'items.item:id,code,name,unit_of_measure',
-            'goodsReceiptNotes:id,grn_number,received_date,status',
-            'bills:id,bill_number,total_amount,amount_paid,balance,status,due_date',
+            // HasMany eager loads are matched to their parent by the foreign
+            // key, so `purchase_order_id` MUST be in the select list. These two
+            // were written as `'bills:id,bill_number,…'` without it, and
+            // HasMany::match() then found no dictionary key for any row and
+            // discarded every one — so the supplier PO detail response always
+            // carried `bills: []` and `goods_receipt_notes: []` no matter what
+            // existed, and the SPA's two panels (which render only when the
+            // array is non-empty) had never once displayed.
+            'goodsReceiptNotes' => static fn ($query) => $query
+                ->select(['id', 'purchase_order_id', 'grn_number', 'received_date', 'status'])
+                ->orderBy('id'),
+            // Restoring the rows above re-arms a boundary that was previously
+            // masked by the same bug: `bills` had no status predicate, so the
+            // internal draft/cancelled AP workflow rows the /invoices endpoint
+            // deliberately hides would have crossed here instead. Both endpoints
+            // now read the one allowlist.
+            'bills' => fn ($query) => $query
+                ->select(['id', 'purchase_order_id', 'bill_number', 'total_amount', 'amount_paid', 'balance', 'status', 'due_date'])
+                ->whereIn('status', $this->supplierVisibleBillStatusValues())
+                ->orderBy('id'),
             'purchaseRequest:id,pr_number',
             'supplierShipment',
         ]);
 
-        $purchaseOrder->bills->each(function ($bill): void {
-            $bill->setAttribute(
-                'status_label',
-                BillStatus::tryFrom((string) $bill->status)?->label() ?? (string) $bill->status,
-            );
-        });
+        // The `status_label` this used to setAttribute() here is already derived
+        // by SupplierPurchaseOrderResource from the BillStatus enum, and the
+        // resource builds an explicit array, so the attribute never reached the
+        // response. Worse, `Bill::$casts` maps `status` to BillStatus, so its
+        // `(string) $bill->status` was a fatal `Error: Object of class
+        // BillStatus could not be converted to string` — invisible only because
+        // the `bills` relation above always resolved empty. Deleted rather than
+        // repaired: the one live derivation belongs in the resource.
 
         return $purchaseOrder;
     }

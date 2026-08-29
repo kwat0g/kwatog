@@ -453,3 +453,169 @@ Implementation session: 2026-08-27
 - Verification: focused Vitest passed (**1 test**); targeted ESLint passed for the
   changed page and regression test. The filter now exposes only the supplier-visible
   statuses and keeps the `All` option.
+
+---
+
+# Re-audit + fix session: 2026-08-30
+
+Claimed `supply-chain / supplier-portal` via `audit/scripts/claim-module.sh`
+(result: CLAIMED — the lock this session took was not an orphan reclaim).
+Baseline on entry, working tree clean, focused supplier suite
+**83 passed / 353 assertions**.
+
+Verified first that the two commits since the last audit landed what they
+claimed: `2e260491` did add `feature:b2b_portals` to all four supplier public
+auth routes (`api/app/Modules/B2B/routes.php:22-25`), closing M047-R005, and
+`7e47f752` did remove the `draft`/`cancelled` options from the supplier invoice
+filter, closing M047-R007. M047-R003 is also genuinely fixed — the cleanup
+`catch` in `submitInvoice` now wraps only `DB::transaction`
+(`api/app/Modules/B2B/Services/SupplierPortalService.php:520-528`) with the
+event dispatch and portal audit outside it at `:530-533`.
+
+## 15. Cross-tenant isolation drill — measured, not reasoned about
+
+New file `api/tests/Feature/B2B/SupplierPortalCrossTenantTest.php` (19 tests).
+Two suppliers are each given a vendor, portal user, sent PO with a line, bill,
+accepted GRN, shipping document with real stored bytes, delivery schedule, and a
+PPAP submission with an element; Supplier A is then pointed at every one of
+Supplier B's identifiers on every route that takes one.
+
+**Result: no cross-tenant leak found on any probed route.** Both defences hold —
+`B2BTenancyScopeMiddleware`'s vendor global scope refuses the route binding
+(404), and each service method re-checks `vendor_id` after binding (403). The
+drill additionally asserts that a refusal body never echoes the victim's
+`po_number`/`bill_number` nor a raw integer `"id":<pk>`, so the refusal is not an
+existence oracle.
+
+Also measured and passing: uploads get randomised names under
+`portal/shipping-docs/<po>/` on the `local` disk (outside the web root), a
+`../../evil.pdf` client filename never becomes a storage path, and traversal or
+garbage values in `shipping-documents/{id}/download` are refused.
+
+Two notes on making these honest rather than merely green:
+
+- The MIME assertion deliberately does **not** use `UploadedFile::fake()`.
+  `Illuminate\Http\Testing\File::getMimeType()` returns
+  `MimeType::from($name)` — derived from the *filename* — so a fake named
+  `payload.pdf` reports `application/pdf` whatever its bytes are. Written that
+  way the test reported a MIME-validation bypass that does not exist. Rewritten
+  against a real `Illuminate\Http\UploadedFile`, which inherits Symfony's
+  finfo-sniffing `getMimeType()` (the production path), the PHP payload is
+  correctly rejected 422. **Server-side MIME validation is real.**
+- `assertStringNotContainsString('a/b', $response->getContent())` is unsound:
+  `json_encode` escapes `/` as `\/`, so the check passes even when the path is
+  present. The PPAP path assertion compares against
+  `json_encode($response->json(), JSON_UNESCAPED_SLASHES)` instead.
+
+`api/tests/Feature/B2B/SupplierPortalCrossTenantTest.php` also settles the
+CLAUDE.md audit-guard hazard empirically: a portal acknowledgement (which writes
+`PurchaseOrder`, a `HasAuditLog` model, under `auth:supplier_portal`) both
+succeeds and writes its rows — the `supplier_po.ack` portal row with
+`user_id = null` / `actor_type = supplier_portal`, and a `HasAuditLog` row whose
+`user_id` resolves to a real `users` record. No FK violation. The remedy is
+`App\Common\Services\SystemUserResolver::impersonate()`, **not** the
+`EdgeSystemUserResolver` CLAUDE.md names, which does not exist.
+
+## 16. NEW — PO detail dropped every GRN and bill (three defects, each hiding the next)
+
+Found while building the R001 regression fixture: the test failed with **0**
+bills rather than the 3 the leak predicted. Probing the eager load directly
+(temporary probe, since deleted) produced the decisive evidence:
+
+```
+[PROBE] DB rows                                     -> bills=1 grns=1
+[PROBE] load([bills, goodsReceiptNotes])            -> bills=1 grns=1
+[PROBE] load([...:id,<cols> without the FK])        -> bills=0 grns=0
+[PROBE] load([...:id,purchase_order_id,<cols>])     -> bills=1 grns=1
+[PROBE] HTTP GET po detail                          -> bills=0 goods_receipt_notes=0
+```
+
+Three defects were stacked in `purchaseOrderDetail()`, and each one concealed
+the one below it:
+
+1. **Broken, P1 — the relations always resolved empty.**
+   `api/app/Modules/B2B/Services/SupplierPortalService.php:176-177` (before) read
+   `'goodsReceiptNotes:id,grn_number,received_date,status'` and
+   `'bills:id,bill_number,total_amount,amount_paid,balance,status,due_date'`.
+   `HasMany::match()` keys children by the foreign key, so omitting
+   `purchase_order_id` from the select made every row unmatchable and discarded.
+   `SupplierPurchaseOrderResource` uses `whenLoaded`, so the relation *was*
+   loaded and the response shipped `bills: []` / `goods_receipt_notes: []`
+   unconditionally. The SPA renders both panels only when the array is non-empty
+   (`spa/src/pages/portal/supplier/purchase-orders/detail.tsx:417,441`), so two
+   sections of the supplier PO detail page had **never once displayed**.
+   After: both are constrained closures that select the FK and `orderBy('id')`.
+
+2. **Broken, P1 — a fatal `Error` behind the empty collection.**
+   `:200-205` (before) ran `$purchaseOrder->bills->each(...)` doing
+   `BillStatus::tryFrom((string) $bill->status)`. `Bill::$casts` maps `status` to
+   `BillStatus` (`api/app/Modules/Accounting/Models/Bill.php:45`), so casting the
+   enum to string is `Error: Object of class ...BillStatus could not be converted
+   to string`. Unreachable only because defect 1 guaranteed an empty collection —
+   repairing 1 alone turned PO detail into a **500 for every PO that has a bill**,
+   which is exactly what the first fix run produced. Verbatim, at
+   `SupplierPortalService.php:203`. Deleted rather than repaired: the loop's
+   `status_label` never reached the response anyway, because
+   `SupplierPurchaseOrderResource:69` builds an explicit array and derives
+   `status_label` from the enum itself.
+
+3. **M047-R001, Broken, P1 — the missing supplier-visible bill predicate.**
+   Real but latent: the leak the prior audit reported could not actually fire
+   while defect 1 held. Repairing 1 without it would have activated it. Now the
+   `bills` closure applies `whereIn('status', $this->supplierVisibleBillStatusValues())`,
+   so PO detail and `/invoices` read the one allowlist.
+
+Regression: `api/tests/Feature/B2B/SupplierPortalServiceTest.php` —
+`test_purchase_order_detail_returns_its_grn_and_bill_relations` pins all three
+(GRN present, 200 not 500, `status_label` correct, draft/cancelled absent).
+**Confirmed failing against unmodified source**: first as
+`Failed asserting that actual size 0 matches expected size 1` (defect 1), then
+after fixing 1 as `Expected response status code [200] but received 500`
+(defect 2).
+
+## 17. M047-R006 — supplier-safe PPAP contract (partial: the storage-path leak)
+
+`GET /b2b/supplier/ppap-submissions` returned `Quality\Resources\PpapSubmissionResource`
+directly, whose element resource emits `document_path` — the raw private storage
+path of the uploaded PPAP evidence (`api/app/Modules/Quality/Resources/PpapElementResource.php:20`).
+Measured before the fix: the path `ppap/private/vault/control-plan-secret.pdf`
+was present in the supplier response.
+
+- New `api/app/Modules/B2B/Resources/SupplierPpapSubmissionResource.php` and
+  `SupplierPpapElementResource.php`: B2B-owned allowlists over the same models.
+  `document_path` is replaced with a boolean `has_document` (there is no supplier
+  PPAP download route, so the path had no client use); the internal `submitter`
+  and `approver` identities are dropped. `rejection_reason`, `reviewed_at`,
+  `approved_at`, `expires_at` and `revision` are kept — the supplier is the party
+  that must act on a rejection of its own submission.
+- `api/app/Modules/B2B/Controllers/SupplierPortalController.php:340` now returns
+  the B2B resource. **Quality's resources were not modified** — they are a
+  dependency of this module.
+- Regression: `api/tests/Feature/B2B/SupplierPpapViewTest.php` —
+  `test_supplier_ppap_response_never_exposes_the_private_document_path`.
+  **Confirmed failing against unmodified source**:
+  `Failed asserting that an array does not have the key 'document_path'`.
+- Still open for the Quality owner: whether the wider field allowlist above is
+  the intended supplier PPAP contract, and whether suppliers should get a
+  download route at all. Recorded as a question, not guessed at.
+
+## 18. Deferred, with measured evidence — M047-R002 supplier password expiry
+
+Not fixed. Measured with a temporary probe (since deleted), which settles it:
+
+```
+[PROBE] security.password_expiry_days = 90
+[PROBE] SUPPLIER dashboard, password 150 days old  => HTTP 200
+[PROBE] SUPPLIER purchase-orders, same            => HTTP 200
+[PROBE] CUSTOMER dashboard, password 150 days old => HTTP 403  code=password_expired
+```
+
+One policy, two guards, only one enforcing it. `CheckPortalPasswordExpiry` reads
+`customer_portal`/`CustomerPortalUser` only
+(`api/app/Modules/B2B/Middleware/CheckPortalPasswordExpiry.php:19-20`) and the
+supplier route group omits it (`api/app/Modules/B2B/routes.php:28`).
+
+Deferred deliberately: it changes an authentication gate on an externally facing
+portal, and the supplier SPA has no handler for the `password_expired` code, so
+turning the gate on without the client work would hard-brick an expired supplier
+with no route to change their password. `separate-recommended`.

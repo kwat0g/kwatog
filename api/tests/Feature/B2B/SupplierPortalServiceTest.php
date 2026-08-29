@@ -698,6 +698,63 @@ class SupplierPortalServiceTest extends TestCase
             ->assertJsonCount(1, 'data');
     }
 
+    public function test_purchase_order_detail_returns_its_grn_and_bill_relations(): void
+    {
+        // Regression for a three-deep stack of defects that hid each other:
+        //   1. `bills`/`goodsReceiptNotes` were eager-loaded with a column list
+        //      that omitted `purchase_order_id`. HasMany::match() keys children
+        //      by that FK, so every row was discarded and both relations always
+        //      resolved EMPTY — the SPA's Deliveries and Invoices panels render
+        //      only when the array is non-empty, so neither had ever displayed.
+        //   2. A `->each()` loop then did `(string) $bill->status` on a value
+        //      cast to the BillStatus enum — a fatal Error, unreachable only
+        //      because (1) guaranteed the collection was empty.
+        //   3. `bills` had no supplier-visible status predicate, so repairing
+        //      (1) alone would have started leaking internal AP workflow rows.
+        // This test pins all three: the relations populate, the response is 200,
+        // and only supplier-visible bills appear.
+        $vendor = Vendor::factory()->create();
+        $user = $this->makePortalUser($vendor);
+        $po = $this->makePo($vendor, 'sent');
+        $this->makePoItem($po);
+
+        $visible = $this->createBill($vendor->id);
+        $visible->forceFill(['purchase_order_id' => $po->id])->save();
+
+        $draft = $this->createBill($vendor->id);
+        $draft->forceFill(['purchase_order_id' => $po->id, 'status' => 'draft'])->save();
+
+        $cancelled = $this->createBill($vendor->id);
+        $cancelled->forceFill(['purchase_order_id' => $po->id, 'status' => 'cancelled'])->save();
+
+        $grn = GoodsReceiptNote::factory()->create([
+            'vendor_id' => $vendor->id,
+            'purchase_order_id' => $po->id,
+            'status' => 'accepted',
+        ]);
+
+        $this->actAs($user);
+
+        $data = $this->getJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}")
+            ->assertOk()
+            ->json('data');
+
+        // (1) the relations actually populate
+        $this->assertCount(1, $data['goods_receipt_notes'], 'PO detail dropped every GRN.');
+        $this->assertSame($grn->hash_id, $data['goods_receipt_notes'][0]['id']);
+        $this->assertSame($grn->grn_number, $data['goods_receipt_notes'][0]['grn_number']);
+
+        // (2) + (3) supplier-visible bills only, and no fatal on serialization
+        $bills = $data['bills'];
+        $this->assertCount(1, $bills, 'PO detail must apply the supplier-visible bill allowlist.');
+        $this->assertSame($visible->hash_id, $bills[0]['id']);
+        $this->assertSame('unpaid', $bills[0]['status']);
+        $this->assertSame('Unpaid', $bills[0]['status_label']);
+        $numbers = array_column($bills, 'bill_number');
+        $this->assertNotContains($draft->bill_number, $numbers);
+        $this->assertNotContains($cancelled->bill_number, $numbers);
+    }
+
     public function test_supplier_purchase_order_response_omits_internal_workflow_fields(): void
     {
         $vendor = Vendor::factory()->create();
