@@ -8,8 +8,17 @@ Rules the coordinator holds and agents never touch:
 - Each agent gets exactly one assigned module and must not wander. LOCKED → report back, do not pick another.
 - Each agent uses its own test database. `RefreshDatabase` runs `migrate:fresh`; two suites on one database tear the schema out from under each other. The tell is hundreds of failures with zero assertion failures among them.
 - `db` and `redis` stay up for the whole pipeline. No agent restarts them.
-- Commit as ONE invocation: `git commit -m "…" -- <paths>`. The index is shared state, so `git add` then `git commit` is a race — that is how 8 attendance files landed under a quality commit message on 2026-08-30 (`32d91307`, recorded in `cb493487`).
-- A lint-staged Prettier pre-commit hook reformats neighbouring modules' SPA files. Agents report that dirt; the coordinator cleans it.
+- Commit as ONE invocation: `git commit -m "…" -- <paths>`. The index is shared state, so `git add` then `git commit` is a race — that is how 8 attendance files landed under a quality commit message on 2026-08-30 (`32d91307`, recorded in `cb493487`). Caveat: pathspec commit **rejects untracked files**, so new files need an adjacent `git add <newfile>`.
+- **There is NO pre-commit hook in this tree** — verified 2026-08-30: `core.hooksPath` points at an empty `.git/hooks`, no `.husky`, no lint-staged config. An earlier coordinator briefing claimed a lint-staged Prettier hook; that was wrong. Dirty SPA files come from an agent running a formatter itself, so agents must not run one across files they did not change. Note `spa/src/stores/recentItemsStore.ts`, `Topbar.tsx`, `CommandPalette.tsx` and `e2e/command-palette.spec.ts` are committed Prettier-dirty — if a hook is ever installed, the next touch yields a whole-file whitespace diff.
+
+## Coordinator to-do, raised by agents, owned by nobody yet
+
+- `docker rm ogami-meili` — an orphan container labelled to this Compose project makes **every** `docker compose` command in the repo print an orphan warning. Meilisearch is not used, not required, and referenced nowhere in code or compose; global search is pure Postgres `ILIKE`.
+- `release-module.sh` stamps `last_session` in UTC, so a release at 06:xx local (+08:00) records the previous day. Cosmetic but it makes the registry look a day stale.
+- `App\Common\Services\DocumentSequenceService::generate()` has an insert-then-reselect path that may race two concurrent first-of-month callers. Shared `Common` service, so no module session will own it. Needs a home.
+- `docs/PATTERNS.md:262-268` — fix the `direction` → `orderBy()` bug at the source, or every service copied from the template keeps inheriting a 500.
+- **CLAUDE.md says the approval chain is "4 levels (Staff → Dept Head → Manager → Officer → VP)". Leave implements exactly 2** (`WorkflowSeeder.php:26-29`, two pending enum states) and code/seeder/enum agree, so it reads as deliberate. Either the doc or the seeder is wrong; decide once, centrally, because every approval-bearing module is audited against that sentence.
+
 
 Known-stale CLAUDE.md spots, passed to every agent:
 1. `EdgeSystemUserResolver` and the `auth:edge_device` guard **do not exist**. `config/auth.php` declares only `web`, `supplier_portal`, `customer_portal`.
@@ -26,8 +35,8 @@ existing `fix-log.md` / `git diff` before trusting its status.
 
 | # | Tier | ID | Module | State |
 |---|---|---|---|---|
-| 1 | 1 | M001 | platform/auth-session | queued |
-| 2 | 1 | M003 | platform/user-administration | queued |
+| 1 | 1 | M001 | platform/auth-session | **in flight** |
+| 2 | 1 | M003 | platform/user-administration | **in flight** |
 | 3 | 2 | M026 | finance/journal-ledger | queued |
 | 4 | 2 | M028 | finance/accounts-receivable | queued |
 | 5 | 2 | M032 | commercial/customer-product-pricing | queued |
@@ -87,9 +96,9 @@ fresh discovery pass.
 
 | ID | Module | Launched |
 |---|---|---|
-| M019 | people/leave-management | 2026-08-30 |
-| M009 | platform/global-search | 2026-08-30 |
 | M047 | supply-chain/supplier-portal | 2026-08-30 |
+| M001 | platform/auth-session | 2026-08-30 |
+| M003 | platform/user-administration | 2026-08-30 |
 
 ## Completed this pipeline
 
@@ -99,6 +108,9 @@ fresh discovery pass.
 | M036 | procurement/purchase-requests | 🔁 Needs Re-audit | 5 fixed incl. draft lock-then-guard race. 4 pricing questions open. |
 | M059 | quality/calibration-quality-analytics | 🔁 Needs Re-audit | Calibration PATCH answered 500 in every non-production env. 6 fixed. |
 | M018 | people/attendance-dtr | 🔁 Needs Re-audit | 3 fixed. Extended-shift OT pays nothing — open question. |
+| M009 | platform/global-search | 🔁 Needs Re-audit | Switched-off modules were still searchable — fixed. 13×11 permission matrix executed, 0 leaks. F17 handed to purchase-orders. |
+| M019 | people/leave-management | 🔁 Needs Re-audit | P0: cancelling an approved request after year-end resurrects already-encashed credits. 2 fixed (incl. a suite red 1 day in 7). |
+
 
 ## Held out deliberately
 
