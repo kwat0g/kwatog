@@ -382,9 +382,19 @@ export default function CreatePurchaseRequestPage() {
             <>
               The PR will enter the approval workflow immediately. Edits are not allowed once
               submitted.
-              {pendingDraft.priority === 'critical' && (
+              {/* The previous copy promised that critical priority "bypasses some
+                  approval steps and notifies VP directly". Both halves were false
+                  under every configuration: submit sends no notifications at all,
+                  and the department-head skip is gated on the
+                  purchasing.urgent_skip_limit setting, which ships as 0 (skip
+                  disabled). Urgent and critical are treated identically by
+                  PurchaseRequestService::isUrgentPriority(), so the notice shows
+                  for both. */}
+              {(pendingDraft.priority === 'urgent' || pendingDraft.priority === 'critical') && (
                 <span className="block mt-1 text-warning-fg">
-                  Critical priority bypasses some approval steps and notifies VP directly.
+                  Urgent and critical requests are flagged for priority handling. The
+                  department-head step is skipped only when the total is within the configured
+                  urgent-skip limit — otherwise the full approval chain still applies.
                 </span>
               )}
             </>

@@ -1,5 +1,139 @@
 # M036 Fix Log
 
+## Session 2026-08-30 — re-audit (M036-F016, F-017, F-014, F-024, F-025)
+
+### F-016 + F-017 — lock-then-guard `delete()` and `update()`
+
+Classification: **Broken** (both), P2. Reclassified from `separate-recommended` to
+`same-session-ok`; the justification is in `action-plan.md` item C1 — the change adds no
+transition and removes none, it makes an existing draft guard read the authoritative locked
+row, exactly as `submit()`, `approve()`, `reject()` and `cancel()` in the same class already do.
+
+- **Red first.** New `api/tests/Feature/Purchasing/PrDraftMutationStaleGuardRaceTest.php`
+  (75 + 100) holds two model instances read while the PR was `draft`, commits the
+  `draft → pending` transition on one, then drives `delete()` / `update()` from the stale one.
+  Against unmodified source: **2 failed (4 assertions)** —
+  `update() accepted a stale draft instance after submit committed.` and the delete equivalent.
+  The test file follows the shape of the pre-existing `PrCancelStaleGuardRaceTest`.
+
+- **Before** — `api/app/Modules/Purchasing/Services/PurchaseRequestService.php:541-550` (HEAD~):
+  ```php
+  public function delete(PurchaseRequest $pr, ?User $by = null): void
+  {
+      if ($by !== null && ! $this->access->canManageDraft($by, $pr)) { throw new ForbiddenActionException(...); }
+      if ($pr->status !== PurchaseRequestStatus::Draft) { throw new BusinessRuleException('Only draft PRs can be deleted.'); }
+      $pr->delete();                       // ← no transaction, no lock, stale $pr
+  }
+  ```
+  and `:176` (HEAD~): `return DB::transaction(function () use ($pr, $data) {` — the transaction
+  opened *after* the status guard had already been decided on `$pr`, then replaced every line
+  item inside it.
+
+- **After** — `delete()` at `:556-580` and `update()` at `:173-208`: each now re-reads the row
+  with `PurchaseRequest::query()->lockForUpdate()->findOrFail($pr->getKey())` **inside** its
+  transaction and re-runs the draft-status guard plus `canManageDraft()` against that locked
+  row before writing. `update()` also re-runs `canAssignDepartment()` on the locked row, and
+  every write in its body now targets `$locked` rather than the caller's instance —
+  `$locked->update([...])` (`:189`), `$locked->items()->forceDelete()` (`:210`),
+  `'purchase_request_id' => $locked->id` (`:217`), `return $this->show($locked->fresh())` (`:236`).
+  The pre-transaction checks are retained as a cheap fast refusal, matching `submit()`.
+
+- Why each one mattered, recorded in the code comments so the next reader does not have to
+  re-derive it: a stale `delete()` soft-deleted a **pending** PR, leaving `is_current` approval
+  records attached to a row no list query returns (approvers keep a badge count for a PR
+  nobody can open); a stale `update()` replaced the lines **after** `totalEstimatedAmount()`
+  had already been fed to `BudgetEnforcementService::assess()` and the approval threshold, so
+  the chain would be approving an amount the lines no longer produce.
+
+- **Green:** `PrDraftMutationStaleGuardRaceTest` + `PrCancelStaleGuardRaceTest` —
+  **3 passed (11 assertions)**, `DB_DATABASE=ogami_test_pr`.
+
+### F-014 — Correct the urgent/critical submit-confirmation copy
+
+Classification: **Polish**, P2. Reclassified from `same-session-ok after policy confirmation`
+to `same-session-ok`: the copy was false under *every* configuration, so removing it needs no
+policy answer. Evidence chain in `audit-report.md` under F-014 — the short version:
+`ApprovalService` sends **no notifications at all**, so nothing can make "notifies VP directly"
+true; `purchasing.urgent_skip_limit` ships as `0` and `submitUrgent()` gates the skip on
+`Money::gt($limit, '0')`, so out of the box **no step is skipped**; and the VP step is the one
+the threshold gate *skips* below ₱50,000, not one that is notified.
+
+- Before — `spa/src/pages/purchasing/purchase-requests/create.tsx:385-389`:
+  ```tsx
+  {pendingDraft.priority === 'critical' && (
+    <span className="block mt-1 text-warning-fg">
+      Critical priority bypasses some approval steps and notifies VP directly.
+    </span>
+  )}
+  ```
+- After — `create.tsx:383-399`: the notice now fires for **urgent or critical** (the service
+  treats them identically via `isUrgentPriority()`, so an `urgent` requester previously saw
+  nothing) and states only the mechanism that exists: "Urgent and critical requests are flagged
+  for priority handling. The department-head step is skipped only when the total is within the
+  configured urgent-skip limit — otherwise the full approval chain still applies." That stays
+  true whether the cap is `0` or positive. A comment records why the old sentence was wrong so
+  it is not reintroduced.
+- No behaviour changed — copy only.
+
+### F-024 — SPA typed a HashID as a number
+
+Classification: **Polish**, P3.
+
+- Before — `spa/src/types/purchasing.ts:80`: `template: { id: number; name: string } | null;`
+- After: `template: { id: string; name: string } | null;` — the resource has always returned an
+  encoded string, and CLAUDE.md requires `id` to always be a `string` (a HashID). Nothing reads
+  `template.id` (`detail.tsx:237` reads only `template?.name`), so the change is inert at
+  runtime and closes a type lie.
+
+### F-025 — Template hash bypassed the model's own accessor
+
+Classification: **Polish**, P3.
+
+- Before — `api/app/Modules/Purchasing/Resources/PurchaseRequestResource.php:59`:
+  `'id' => app('hashids')->encode((int) $this->template->id),`
+- After — `:58-64`: `'id' => $this->template->hash_id,`. `PurchaseRequestTemplate` already uses
+  `HasHashId` (`PurchaseRequestTemplate.php:17`) and every other id in this resource uses the
+  accessor; hand-encoding here is what made the client type it as a number.
+
+### Verification — session 2026-08-30
+
+All on the dedicated database `ogami_test_pr`, never the shared `ogami_test`:
+
+- `tests/Feature/Purchasing` in full: **119 passed (423 assertions)**, 0 failed, 160.9s.
+  (114 at the 2026-08-26 baseline, +1 from F-015, +2 from F-018, +2 new here.)
+- PR-adjacent suites outside this module's directory, i.e. every other test file that
+  references `PurchaseRequestService` or the PR routes —
+  `tests/Feature/Approvals/ApprovalDelegationTest.php`,
+  `tests/Feature/Notifications/LowStockNotificationTest.php`,
+  `tests/Feature/Common/ApprovalRefusalRenderingTest.php`: **19 passed (40 assertions)**, 0 failed.
+- `php -l` clean on all three changed/added PHP files.
+- PHPStan on `PurchaseRequestService.php`, `PurchaseRequestResource.php` and the new test:
+  **`[OK] No errors`**.
+- Pint: the new test file **passes**. The two pre-existing PHP files still fail, and that is
+  **inherited, not introduced** — `git show HEAD:api/<path>` copies of both were extracted to
+  `/tmp/pintbase/` and fail with the *identical* fixer lists
+  (`PurchaseRequestService.php`: control_structure_braces, concat_space, unary_operator_spaces,
+  braces_position, statement_indentation, not_operator_with_successor_space,
+  single_line_empty_body, blank_line_before_statement, binary_operator_spaces, phpdoc_align;
+  `PurchaseRequestResource.php`: ordered_imports, binary_operator_spaces). Pre-existing style
+  was deliberately not reformatted into this diff.
+- SPA: `npm run typecheck` clean; `npx eslint src/pages/purchasing/purchase-requests/create.tsx
+  src/types/purchasing.ts --max-warnings 0` clean; `vitest run
+  src/pages/purchasing/purchase-requests/detail.test.ts` — **2 passed**.
+- **Not verified:** F-019. No browser run — no X server for Chrome DevTools, and per CLAUDE.md
+  a Lightpanda `getBoundingClientRect` is a fabricated number, so a pass there would assert
+  nothing. No visual claim is made.
+
+### Deferred this session — nine items
+
+F-004, F-010+F-026, F-011, F-013, F-019, F-020, F-022, F-023, F-027. Each is gated on an owner
+decision, a cross-module coordination, an RBAC surface, a browser environment, or new frontend
+work; the reasons are itemised per item in `action-plan.md`. Three questions still need a human
+answer and are restated there: the missing-estimate contract (F-004), whether the 2026-08-08
+template scope cut stands (F-010), and whether a catalog line's price is enforced or an
+estimate (F-011).
+
+
 Session: 2026-08-25 (audit + fixes), resumed 2026-08-26 (runtime verification)
 
 ## Session 2026-08-27 — M036-F018

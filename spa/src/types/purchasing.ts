@@ -77,7 +77,7 @@ export interface PurchaseRequest {
  };
  requester: { id: string; name: string } | null;
  department: { id: string; name: string; code: string } | null;
- template: { id: number; name: string } | null;
+ template: { id: string; name: string } | null;
  items?: PurchaseRequestItem[];
  approval_records?: ApprovalRecord[]; purchase_orders?: Array<{
   id: string; po_number: string; status: PurchaseOrderStatus; status_label?: string;

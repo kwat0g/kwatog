@@ -56,7 +56,10 @@ class PurchaseRequestResource extends JsonResource
                 'code' => $this->department->code,
             ] : null),
             'template'                => $this->whenLoaded('template', fn () => $this->template ? [
-                'id'   => app('hashids')->encode((int) $this->template->id),
+                // The model uses HasHashId, so use its accessor — every other id
+                // in this resource does, and encoding by hand here made the
+                // client type it as a number (spa/src/types/purchasing.ts).
+                'id'   => $this->template->hash_id,
                 'name' => $this->template->name,
             ] : null),
             'items'                   => PurchaseRequestItemResource::collection($this->whenLoaded('items')),

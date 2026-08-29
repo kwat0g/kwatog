@@ -173,29 +173,48 @@ class PurchaseRequestService
         if ($pr->status !== PurchaseRequestStatus::Draft) {
             throw new BusinessRuleException('Only draft PRs can be edited.');
         }
-        return DB::transaction(function () use ($pr, $data) {
-            $pr->update([
-                'reason'    => $data['reason']   ?? $pr->reason,
+        return DB::transaction(function () use ($pr, $data, $by) {
+            // Lock-then-guard, same shape as submit()/approve()/reject()/cancel().
+            // The pre-transaction checks above are a fast, cheap refusal; this is
+            // the authoritative one. Without it an editor holding a draft instance
+            // that submit() has since advanced would replace every line item AFTER
+            // totalEstimatedAmount() had been fed to the budget gate and the
+            // approval threshold, so the chain would be approving an amount the
+            // lines no longer produce.
+            $locked = PurchaseRequest::query()->lockForUpdate()->findOrFail($pr->getKey());
+            if ($locked->status !== PurchaseRequestStatus::Draft) {
+                throw new BusinessRuleException('Only draft PRs can be edited.');
+            }
+            if ($by !== null && ! $this->access->canManageDraft($by, $locked)) {
+                throw new ForbiddenActionException('You do not have permission to edit this purchase request.');
+            }
+            if ($by !== null && array_key_exists('department_id', $data)
+                && ! $this->access->canAssignDepartment($by, $locked, $data['department_id'] !== null ? (int) $data['department_id'] : null)) {
+                throw new ForbiddenActionException('You cannot assign this purchase request to that department.');
+            }
+
+            $locked->update([
+                'reason'    => $data['reason']   ?? $locked->reason,
                 'priority'  => array_key_exists('priority', $data)
                     ? $this->priorityValue($data['priority'])
-                    : $pr->priority,
+                    : $locked->priority,
                 ...array_key_exists('priority', $data)
                     ? ['is_urgent' => $this->isUrgentPriority($this->priorityValue($data['priority']))]
                     : [],
-                'date'      => $data['date']     ?? $pr->date,
+                'date'      => $data['date']     ?? $locked->date,
                 ...array_key_exists('department_id', $data)
                     ? ['department_id' => $data['department_id']]
                     : [],
             ]);
             if (isset($data['items'])) {
-                $pr->items()->forceDelete();
+                $locked->items()->forceDelete();
                 foreach ($data['items'] as $row) {
                     $itemId = ! empty($row['item_id'])
                         ? (HashIdFilter::decode($row['item_id'], Item::class) ?? (int) $row['item_id'])
                         : null;
                     $item = $itemId ? Item::find($itemId) : null;
                     PurchaseRequestItem::create([
-                        'purchase_request_id'  => $pr->id,
+                        'purchase_request_id'  => $locked->id,
                         'item_id'              => $itemId,
                         'description'          => trim((string) ($row['description'] ?? '')) !== ''
                             ? (string) $row['description']
@@ -214,7 +233,7 @@ class PurchaseRequestService
                     ]);
                 }
             }
-            return $this->show($pr->fresh());
+            return $this->show($locked->fresh());
         });
     }
 
@@ -546,7 +565,22 @@ class PurchaseRequestService
         if ($pr->status !== PurchaseRequestStatus::Draft) {
             throw new BusinessRuleException('Only draft PRs can be deleted.');
         }
-        $pr->delete();
+
+        DB::transaction(function () use ($pr, $by): void {
+            // Lock-then-guard, same shape as submit()/approve()/reject()/cancel().
+            // A caller holding a draft instance that submit() has since advanced
+            // would otherwise soft-delete a *pending* request, leaving its
+            // is_current approval records pointing at a row no list query returns
+            // — approvers keep a badge count for a PR nobody can open.
+            $locked = PurchaseRequest::query()->lockForUpdate()->findOrFail($pr->getKey());
+            if ($locked->status !== PurchaseRequestStatus::Draft) {
+                throw new BusinessRuleException('Only draft PRs can be deleted.');
+            }
+            if ($by !== null && ! $this->access->canManageDraft($by, $locked)) {
+                throw new ForbiddenActionException('You do not have permission to delete this purchase request.');
+            }
+            $locked->delete();
+        });
     }
 
     private function priorityValue(mixed $priority): string
