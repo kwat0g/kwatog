@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Tests\Feature\Admin;
 
 use App\Common\Services\SettingsService;
+use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
@@ -18,6 +20,7 @@ use App\Modules\Inventory\Models\Item;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseRequest;
+use App\Modules\Quality\Models\NonConformanceReport;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -474,8 +477,229 @@ class GlobalSearchTest extends TestCase
     }
 
     // ------------------------------------------------------------------
+    // M009-F09 — a disabled module's records are not searchable
+    // ------------------------------------------------------------------
+
+    /**
+     * Group type => the module toggle(s) that own it, mirroring
+     * GlobalSearchService::GROUP_FEATURES. Duplicated on purpose: if the service
+     * map is edited without a reason, this table disagrees and the tests below
+     * fail, which is the point. ANY-of — `customer` is reachable under either
+     * Accounting or the delegated CRM route.
+     */
+    private const GROUP_FEATURES = [
+        'employee'       => ['hr'],
+        'sales_order'    => ['crm'],
+        'purchase_order' => ['purchasing'],
+        'work_order'     => ['production'],
+        'invoice'        => ['accounting'],
+        'bill'           => ['accounting'],
+        'product'        => ['crm'],
+        'item'           => ['inventory'],
+        'customer'       => ['accounting', 'crm'],
+        'vendor'         => ['accounting'],
+        'ncr'            => ['quality'],
+    ];
+
+    private const OWNING_FEATURES = ['hr', 'crm', 'purchasing', 'production', 'accounting', 'inventory', 'quality'];
+
+    public function test_switching_a_module_off_hides_exactly_its_own_search_groups(): void
+    {
+        $admin = $this->admin();
+        $this->seedOnePerGroup(Department::factory()->create(), $admin);
+        $settings = app(SettingsService::class);
+
+        foreach (self::OWNING_FEATURES as $off) {
+            foreach (self::OWNING_FEATURES as $f) {
+                $settings->set("modules.{$f}", $f !== $off, 'modules');
+            }
+            $settings->flushCache();
+
+            // With only $off disabled, a group survives iff ANY owner is still on.
+            $expected = array_keys(array_filter(
+                self::GROUP_FEATURES,
+                fn (array $owners) => $owners !== [$off],
+            ));
+            $actual = array_map(
+                fn ($g) => $g['type'],
+                $this->actingAs($admin)->getJson('/api/v1/search?q='.self::MARKER)->assertOk()->json('data'),
+            );
+
+            $this->assertEqualsCanonicalizing(
+                $expected,
+                $actual,
+                "With modules.{$off} disabled, the searchable groups are wrong.",
+            );
+        }
+    }
+
+    public function test_every_module_off_leaves_a_system_admin_with_no_searchable_records(): void
+    {
+        // The permission gate cannot catch this: hasPermission() short-circuits
+        // to true for system_admin, so the feature gate is the only thing
+        // standing between a fully switched-off system and eleven result groups.
+        $admin = $this->admin();
+        $this->seedOnePerGroup(Department::factory()->create(), $admin);
+
+        $settings = app(SettingsService::class);
+        foreach (self::OWNING_FEATURES as $f) {
+            $settings->set("modules.{$f}", false, 'modules');
+        }
+        $settings->flushCache();
+
+        $this->actingAs($admin)->getJson('/api/v1/search?q='.self::MARKER)
+            ->assertOk()
+            ->assertJsonPath('data', []);
+    }
+
+    public function test_customers_remain_searchable_while_either_owning_module_is_enabled(): void
+    {
+        $admin = $this->admin();
+        $this->seedOnePerGroup(Department::factory()->create(), $admin);
+        $settings = app(SettingsService::class);
+
+        foreach ([['accounting' => false, 'crm' => true], ['accounting' => true, 'crm' => false]] as $combo) {
+            foreach ($combo as $f => $on) {
+                $settings->set("modules.{$f}", $on, 'modules');
+            }
+            $settings->flushCache();
+
+            $this->assertNotEmpty(
+                $this->itemsFor($this->actingAs($admin)->getJson('/api/v1/search?q='.self::MARKER)->assertOk()->json('data'), 'customer'),
+                'Customers are reachable under both Accounting and the delegated CRM route, so one toggle must not hide them: '.json_encode($combo),
+            );
+        }
+
+        // Only when BOTH owners are off does the group disappear.
+        $settings->set('modules.accounting', false, 'modules');
+        $settings->set('modules.crm', false, 'modules');
+        $settings->flushCache();
+
+        $this->assertSame(
+            [],
+            $this->itemsFor($this->actingAs($admin)->getJson('/api/v1/search?q='.self::MARKER)->assertOk()->json('data'), 'customer'),
+        );
+    }
+
+    // ------------------------------------------------------------------
+    // Permission matrix — search.global opens the endpoint, nothing else
+    // ------------------------------------------------------------------
+
+    /**
+     * Every seeded role × every searchable group, measured through HTTP.
+     *
+     * `search.global` is ONE permission held by seven roles, and this endpoint
+     * queries eleven tables. The failure mode it exists to prevent is a group
+     * added later without a permission check, which would be invisible to every
+     * other test here: they all assert one group at a time. This asserts the
+     * whole row — a caller sees a group if and only if it holds that group's
+     * gate — for each seeded role, against fixtures deliberately placed IN the
+     * caller's row scope so the permission dimension is the only variable.
+     */
+    public function test_no_seeded_role_sees_a_group_it_lacks_the_permission_for(): void
+    {
+        $gates = [
+            'employee'       => 'hr.employees.view',
+            'sales_order'    => 'crm.sales_orders.view',
+            'purchase_order' => 'purchasing.view',
+            'work_order'     => 'production.work_orders.view',
+            'invoice'        => 'accounting.invoices.view',
+            'bill'           => 'accounting.bills.view',
+            'product'        => 'crm.products.view',
+            'item'           => 'inventory.view',
+            'customer'       => 'accounting.customers.view',
+            'vendor'         => 'accounting.vendors.view',
+            'ncr'            => 'quality.ncr.view',
+        ];
+        $this->assertSame(
+            array_keys(self::GROUP_FEATURES),
+            array_keys($gates),
+            'A searchable group was added or removed without updating this matrix.',
+        );
+
+        $department = Department::factory()->create();
+        $checked = 0;
+
+        foreach (Role::query()->orderBy('slug')->pluck('slug') as $slug) {
+            $user = User::factory()->create([
+                'role_id'     => Role::query()->where('slug', $slug)->value('id'),
+                'employee_id' => Employee::factory()->create(['department_id' => $department->id])->id,
+            ]);
+            $this->seedOnePerGroup($department, $user);
+
+            $response = $this->actingAs($user)->getJson('/api/v1/search?q='.self::MARKER);
+            $checked++;
+
+            if (! $user->hasPermission('search.global')) {
+                $response->assertForbidden();
+            } else {
+                $expected = array_keys(array_filter($gates, fn ($gate) => $user->hasPermission($gate)));
+                $this->assertEqualsCanonicalizing(
+                    $expected,
+                    array_map(fn ($g) => $g['type'], $response->assertOk()->json('data')),
+                    "Role {$slug} sees a different group set than its grants allow.",
+                );
+            }
+        }
+
+        // Guard against the seeder shrinking and the loop silently asserting nothing.
+        $this->assertGreaterThanOrEqual(13, $checked);
+    }
+
+    public function test_global_search_permission_alone_opens_no_module(): void
+    {
+        // maintenance_tech is the live example: it holds search.global and not
+        // one of the eleven gates, so its record search is legitimately empty.
+        $bare = $this->userWithPermissions(['search.global']);
+        $this->seedOnePerGroup(Department::factory()->create(), $bare);
+
+        $this->actingAs($bare)->getJson('/api/v1/search?q='.self::MARKER)
+            ->assertOk()
+            ->assertJsonPath('data', []);
+    }
+
+    // ------------------------------------------------------------------
     // Helpers
     // ------------------------------------------------------------------
+
+    private const MARKER = 'Zenkoku';
+
+    private int $fixtureRun = 0;
+
+    /**
+     * One record per searchable group, all matching self::MARKER, all inside
+     * $author's row scope (same department, authored by them) so a row-scope
+     * miss cannot be mistaken for a permission miss.
+     */
+    private function seedOnePerGroup(Department $department, User $author): void
+    {
+        $k = ++$this->fixtureRun;
+        $marker = self::MARKER;
+
+        Employee::factory()->create(['department_id' => $department->id, 'last_name' => $marker]);
+
+        // Counterparties named WITHOUT the marker: a transaction must be found
+        // through its own identifier, not through a joined name, or the groups
+        // stop being independent.
+        $customer = Customer::factory()->create(['name' => "Counterparty C{$k}"]);
+        $vendor   = Vendor::factory()->create(['name' => "Counterparty V{$k}"]);
+
+        SalesOrder::factory()->create(['so_number' => "SO-{$marker}{$k}", 'customer_id' => $customer->id]);
+        PurchaseOrder::factory()->create([
+            'po_number'           => "PO-{$marker}{$k}",
+            'vendor_id'           => $vendor->id,
+            'purchase_request_id' => PurchaseRequest::factory()->create(['department_id' => $department->id])->id,
+            'created_by'          => $author->id,
+        ]);
+        WorkOrder::factory()->create(['wo_number' => "WO-{$marker}{$k}"]);
+        Invoice::factory()->create(['invoice_number' => "INV-{$marker}{$k}", 'customer_id' => $customer->id]);
+        Bill::factory()->create(['bill_number' => "BL-{$marker}{$k}", 'vendor_id' => $vendor->id]);
+        Product::factory()->create(['name' => "{$marker} bushing {$k}"]);
+        Item::factory()->create(['name' => "{$marker} resin {$k}"]);
+        Customer::factory()->create(['name' => "{$marker} Motors {$k}"]);
+        Vendor::factory()->create(['name' => "{$marker} Supply {$k}"]);
+        NonConformanceReport::factory()->create(['ncr_number' => "NCR-{$marker}{$k}"]);
+    }
 
     private function admin(): User
     {

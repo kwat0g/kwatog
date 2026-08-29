@@ -88,6 +88,31 @@ use Illuminate\Support\Facades\Schema;
  * Adding a group widens the per-request database cost for every caller who
  * holds its permission — raise the constant deliberately, and keep
  * `GlobalSearchTest` in step.
+ *
+ * ## Module feature toggles — M009-F09
+ *
+ * A permission is not the only gate a module has. Every module route group also
+ * carries `feature:<slug>` (`CheckFeature`), so switching a module off in
+ * Settings makes its whole HTTP surface answer 403 `feature_disabled`, and the
+ * SPA hides its navigation for the same reason — `isNavItemVisible` drops any
+ * nav item whose `feature` is off, ahead of even the system_admin bypass
+ * (`spa/src/components/layout/Sidebar.tsx:781-796`).
+ *
+ * Search used to check only `feature:search` on its own route and then ask
+ * nothing further. Measured with all seven owning toggles off, a system_admin
+ * search still returned all eleven groups — so the ⌘K palette hid the
+ * "Employees" *page* while still listing employee *records*, in the same
+ * dropdown. That inconsistency is what makes this a defect rather than a design
+ * choice: a disabled module is supposed to be unreachable, and search was the
+ * one door left open.
+ *
+ * `GROUP_FEATURES` therefore maps every group to the module(s) that own its
+ * destination, and a group is skipped when none of them is enabled. `customer`
+ * lists two because customers really are reachable under either toggle — the
+ * Accounting routes (`api/app/Modules/Accounting/routes.php:20`) and a
+ * delegated CRM route (`api/app/Modules/CRM/routes.php:17-20`) serve the same
+ * controller behind the same permission. Gating it on `accounting` alone would
+ * hide a record whose detail page still opens.
  */
 class GlobalSearchService
 {
@@ -97,6 +122,33 @@ class GlobalSearchService
      * a twelfth group is a deliberate widening of every caller's request budget.
      */
     public const MAX_SOURCE_QUERIES = 11;
+
+    /**
+     * Group type => the module toggle(s) that own its records — M009-F09.
+     *
+     * ANY-of, not all-of: a group survives while at least one owning module is
+     * enabled, because that is the condition under which its detail route still
+     * answers. Keep this in step with the `feature:` middleware on the owning
+     * module's route group; a group added without an entry here is a group that
+     * outlives its module being switched off.
+     *
+     * @var array<string, array<int, string>>
+     */
+    private const GROUP_FEATURES = [
+        'employee'       => ['hr'],
+        'sales_order'    => ['crm'],
+        'purchase_order' => ['purchasing'],
+        'work_order'     => ['production'],
+        'invoice'        => ['accounting'],
+        'bill'           => ['accounting'],
+        'product'        => ['crm'],
+        'item'           => ['inventory'],
+        'customer'       => ['accounting', 'crm'],
+        'vendor'         => ['accounting'],
+        'ncr'            => ['quality'],
+    ];
+
+    public function __construct(private readonly SettingsService $settings) {}
 
     /** @return array<int, array{group:string, label:string, type:string, items:array<int, array<string,mixed>>}> */
     public function search(User $user, string $query, int $perGroup = 5): array
@@ -108,9 +160,10 @@ class GlobalSearchService
         $like = SearchOperator::like();
         $h    = app('hashids');
         $groups = [];
+        $enabled = [];
 
         // Employees -------------------------------------------------------------
-        if ($user->hasPermission('hr.employees.view') && Schema::hasTable('employees')) {
+        if ($this->moduleEnabled('employee', $enabled) && $user->hasPermission('hr.employees.view') && Schema::hasTable('employees')) {
             $q = Employee::query()
                 ->leftJoin('departments', 'departments.id', '=', 'employees.department_id')
                 ->leftJoin('positions', 'positions.id', '=', 'employees.position_id')
@@ -152,7 +205,7 @@ class GlobalSearchService
         }
 
         // Sales orders ----------------------------------------------------------
-        if ($user->hasPermission('crm.sales_orders.view') && Schema::hasTable('sales_orders')) {
+        if ($this->moduleEnabled('sales_order', $enabled) && $user->hasPermission('crm.sales_orders.view') && Schema::hasTable('sales_orders')) {
             $q = SalesOrder::query()
                 ->leftJoin('customers', 'customers.id', '=', 'sales_orders.customer_id')
                 ->select('sales_orders.id', 'sales_orders.so_number', 'sales_orders.status',
@@ -175,7 +228,7 @@ class GlobalSearchService
         }
 
         // Purchase orders -------------------------------------------------------
-        if ($user->hasPermission('purchasing.view') && Schema::hasTable('purchase_orders')) {
+        if ($this->moduleEnabled('purchase_order', $enabled) && $user->hasPermission('purchasing.view') && Schema::hasTable('purchase_orders')) {
             $q = PurchaseOrder::query()
                 ->leftJoin('vendors', 'vendors.id', '=', 'purchase_orders.vendor_id')
                 ->select('purchase_orders.id', 'purchase_orders.po_number', 'purchase_orders.status',
@@ -215,7 +268,7 @@ class GlobalSearchService
         }
 
         // Work orders -----------------------------------------------------------
-        if ($user->hasPermission('production.work_orders.view') && Schema::hasTable('work_orders')) {
+        if ($this->moduleEnabled('work_order', $enabled) && $user->hasPermission('production.work_orders.view') && Schema::hasTable('work_orders')) {
             $q = WorkOrder::query()
                 ->leftJoin('products', 'products.id', '=', 'work_orders.product_id')
                 ->leftJoin('machines', 'machines.id', '=', 'work_orders.machine_id')
@@ -240,7 +293,7 @@ class GlobalSearchService
         }
 
         // Invoices --------------------------------------------------------------
-        if ($user->hasPermission('accounting.invoices.view') && Schema::hasTable('invoices')) {
+        if ($this->moduleEnabled('invoice', $enabled) && $user->hasPermission('accounting.invoices.view') && Schema::hasTable('invoices')) {
             $q = Invoice::query()
                 ->leftJoin('customers', 'customers.id', '=', 'invoices.customer_id')
                 ->select('invoices.id', 'invoices.invoice_number', 'invoices.status',
@@ -263,7 +316,7 @@ class GlobalSearchService
         }
 
         // Bills -----------------------------------------------------------------
-        if ($user->hasPermission('accounting.bills.view') && Schema::hasTable('bills')) {
+        if ($this->moduleEnabled('bill', $enabled) && $user->hasPermission('accounting.bills.view') && Schema::hasTable('bills')) {
             $q = Bill::query()
                 ->leftJoin('vendors', 'vendors.id', '=', 'bills.vendor_id')
                 ->select('bills.id', 'bills.bill_number', 'bills.status',
@@ -286,7 +339,7 @@ class GlobalSearchService
         }
 
         // Products --------------------------------------------------------------
-        if ($user->hasPermission('crm.products.view') && Schema::hasTable('products')) {
+        if ($this->moduleEnabled('product', $enabled) && $user->hasPermission('crm.products.view') && Schema::hasTable('products')) {
             $q = Product::query()
                 ->select('products.id', 'products.part_number', 'products.name')
                 ->where(fn ($w) => $w
@@ -306,7 +359,7 @@ class GlobalSearchService
         }
 
         // Items (inventory) -----------------------------------------------------
-        if ($user->hasPermission('inventory.view') && Schema::hasTable('items')) {
+        if ($this->moduleEnabled('item', $enabled) && $user->hasPermission('inventory.view') && Schema::hasTable('items')) {
             $q = Item::query()
                 ->select('items.id', 'items.code', 'items.name', 'items.item_type')
                 ->where(fn ($w) => $w
@@ -337,7 +390,7 @@ class GlobalSearchService
         // plaintext leak. Either way it has no business in a search result.)
         // `code` is the correct fallback: a non-sensitive business identifier
         // CustomerResource already returns unmasked.
-        if ($user->hasPermission('accounting.customers.view') && Schema::hasTable('customers')) {
+        if ($this->moduleEnabled('customer', $enabled) && $user->hasPermission('accounting.customers.view') && Schema::hasTable('customers')) {
             $q = Customer::query()
                 ->select('customers.id', 'customers.name', 'customers.code', 'customers.contact_person')
                 ->where(fn ($w) => $w
@@ -360,7 +413,7 @@ class GlobalSearchService
         // See the customers note: `tin` is not selected. Vendors have no
         // non-sensitive code column, so an empty `contact_person` simply yields
         // no sublabel.
-        if ($user->hasPermission('accounting.vendors.view') && Schema::hasTable('vendors')) {
+        if ($this->moduleEnabled('vendor', $enabled) && $user->hasPermission('accounting.vendors.view') && Schema::hasTable('vendors')) {
             $q = Vendor::query()
                 ->select('vendors.id', 'vendors.name', 'vendors.contact_person')
                 ->where(fn ($w) => $w
@@ -380,7 +433,7 @@ class GlobalSearchService
         }
 
         // NCRs ------------------------------------------------------------------
-        if ($user->hasPermission('quality.ncr.view') && Schema::hasTable('non_conformance_reports')) {
+        if ($this->moduleEnabled('ncr', $enabled) && $user->hasPermission('quality.ncr.view') && Schema::hasTable('non_conformance_reports')) {
             $q = NonConformanceReport::query()
                 ->select('non_conformance_reports.id', 'non_conformance_reports.ncr_number',
                     'non_conformance_reports.status', 'non_conformance_reports.severity',
@@ -402,6 +455,39 @@ class GlobalSearchService
         }
 
         return array_values(array_filter($groups, fn ($g) => count($g['items']) > 0));
+    }
+
+    /**
+     * Is at least one module that owns $group switched on? — M009-F09
+     *
+     * Asks the same question `CheckFeature` asks, but deliberately NOT with the
+     * same failure mode. `CheckFeature` reads `requiredBool()`, which throws
+     * when the toggle row is absent — correct for a module's own routes, where a
+     * missing toggle means the module is unusable. Here that would let one
+     * missing row take down a cross-module endpoint that has ten other healthy
+     * groups, so only an explicit `false` suppresses a group. Every one of the
+     * twenty-two toggles is seeded (`SettingsSeeder`), so the ambiguous case is
+     * a misconfiguration the owning module's own routes already surface loudly —
+     * and treating it as "enabled" keeps this change a pure narrowing: nothing
+     * that was visible before becomes invisible unless an operator turned the
+     * module off on purpose.
+     *
+     * $resolved memoizes per request. Reads are Redis-cached inside
+     * SettingsService, but a group is checked before its permission, so without
+     * this an `accounting` caller would pay for the same key three times.
+     *
+     * @param  array<string, bool>  $resolved
+     */
+    private function moduleEnabled(string $group, array &$resolved): bool
+    {
+        foreach (self::GROUP_FEATURES[$group] as $feature) {
+            $resolved[$feature] ??= $this->settings->get("modules.{$feature}") !== false;
+            if ($resolved[$feature]) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

@@ -6,4 +6,4 @@ roles: system_admin, hr_officer, finance_officer, production_manager, ppc_head, 
 depends_on: auth-session, rbac
 surface: S
 status: 🔁 Needs Re-audit
-last_session: 2026-08-27
+last_session: 2026-08-29

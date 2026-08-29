@@ -256,3 +256,359 @@ In a separate hardening session, implement the per-group feature gate and same-u
 invalidation first, add negative tests, then resolve the archive/latency contract before
 taking the small API and accessibility improvements. Re-audit M009 only after those tests
 and a representative performance/browser check are available.
+
+---
+
+# Re-audit — 2026-08-30
+
+Claim: `audit/scripts/claim-module.sh platform global-search` → `CLAIMED`
+Registry tier: 4 · Prior status: `🔁 Needs Re-audit` (2026-08-27)
+Database used for verification: `ogami_test_search` only (created, used, dropped).
+`ogami_test` was never touched. `regenerate-registry.sh` was not run.
+
+## What changed since the last audit
+
+The working tree was clean for every module file. Four commits had landed and are
+all real work, not phantom entries:
+
+| commit | effect |
+|---|---|
+| `e0530b33 fix(global-search): include employee middle names` | closes **M009-F11** |
+| `e72c3315 fix: M009-F12 normalize global search query` | closes **M009-F12** |
+| `5cd6e7e5 fix(global-search): trap command palette focus` | closes **M009-F15** (jsdom) |
+| `6e932ad9`, `44f6e1b3 test(global-search): … browser focus` | closes **M009-F15** (Chromium + Firefox) |
+
+Baseline before any change this session:
+`php artisan test tests/Feature/Admin/GlobalSearchTest.php` → **24 passed, 95 assertions**.
+
+## The permission matrix, executed
+
+The defining risk for this module is one searchable entity out of eleven losing its
+authorization check. That was **measured**, not reasoned about: a probe created one
+matching record per group, all inside the caller's row scope, then issued a real
+`GET /api/v1/search` as **every one of the thirteen seeded roles** and compared the
+returned group set against the permissions that role actually holds.
+
+`search.global` is a single permission (`api/database/seeders/RolePermissionSeeder.php:413`)
+held by seven roles. Holding it must not imply reading any table.
+
+| role | `search.global` | groups granted | groups returned | mismatch |
+|---|---|---|---|---|
+| system_admin | Y (wildcard) | all 11 | all 11 | none |
+| hr_officer | Y | employee | employee | none |
+| finance_officer | Y | invoice, bill, customer, vendor | same | none |
+| production_manager | Y | purchase_order, work_order, item, ncr | same | none |
+| ppc_head | Y | work_order | work_order | none |
+| department_head | Y | employee, purchase_order | same | none |
+| maintenance_tech | Y | **(none)** | **(none)** | none |
+| purchasing_officer | n | — | **HTTP 403** | none |
+| qc_inspector | n | — | **HTTP 403** | none |
+| warehouse_staff | n | — | **HTTP 403** | none |
+| impex_officer | n | — | **HTTP 403** | none |
+| employee | n | — | **HTTP 403** | none |
+| driver | n | — | **HTTP 403** | none |
+
+**Zero mismatches across 13 roles × 11 entities. No entity is uncovered.** Every one of
+the eleven was exercised with a live fixture; none was skipped. The permission dimension
+of this module is sound, and is now locked by
+`test_no_seeded_role_sees_a_group_it_lacks_the_permission_for`.
+
+Corollaries also measured:
+
+- `search.global` alone returns `data: []` — it opens the endpoint and nothing else.
+  `maintenance_tech` is the live instance of that (see F17 below).
+- The `employee` role cannot reach the endpoint at all (403), so "an employee surfacing
+  another employee's records" is not reachable. For the roles that *can* search,
+  employee rows are department-scoped: out-of-scope fixtures in another department
+  returned nothing for `department_head`.
+- Row scoping is entirely server-side (`GlobalSearchService.php:130-138`, `:193-202`).
+  No client input selects the scope.
+
+## Snippet, id and injection surface, executed
+
+Full `system_admin` payload for a fixture in every group was dumped and inspected:
+
+```
+employee => {"id":"q0zw8Gb7no","label":"Liliane Zenkoku","sublabel":"OGM-562356 · sit et · Recruiter", …}
+customer => {"id":"29awRBwjWx","label":"Zenkoku Motors 1","sublabel":"Waino Armstrong","status":null, …}
+```
+
+- **No masked field leaks through a snippet.** No `tin`, no `sss_no`/`philhealth_no`/
+  `pagibig_no`/`bank_account_no`, no ciphertext (`eyJpdiI6`), no salary field appears in
+  any `label`, `sublabel`, `status` or `amount`. The employee sublabel is employee number
+  · department · position. NCR emits `Severity: low`, never the searched
+  `defect_description`.
+- **No raw integer ids anywhere** — every `id` and every `url` is a HashID, in all eleven
+  groups. Error bodies carry no ids either (403 `feature_disabled`, 422 validation).
+- **No `DB::raw()` with user input.** The one raw fragment is
+  `orderByRaw('CASE … END', $bindings)` (`GlobalSearchService.php:448`); the column names
+  are code constants and the term is a **binding**. There is no `to_tsquery`/`plainto_tsquery`
+  anywhere, so the unbalanced-syntax crash class does not exist here.
+- **`LIKE` metacharacters are escaped** (`SearchOperator::escape()`,
+  `api/app/Common/Support/SearchOperator.php:54-61`): `%%` and `a_` return `[]` while a
+  literal `A_C` still matches. Backslash is escaped first, so `\` cannot break out.
+- Length and rate bounds hold: `min:2` / `max:120` after trimming
+  (`api/app/Modules/Admin/Controllers/SearchController.php:18-30`), `throttle:30,1`
+  (`api/app/Modules/Admin/routes.php:146`). A 120-character term returned 200 in 27.9 ms.
+
+## Search engine: pure PostgreSQL; the Meilisearch container is an orphan
+
+- `ogami-meili` (`getmeili/meilisearch:v1.10`) exists in Docker, `Exited (143) 10 days ago`.
+- It is **not a service in `docker-compose.yml`** (services: api, spa, nginx, db, redis,
+  reverb, queue) and there is **no `meili`/`scout`/`Searchable` reference** anywhere in
+  `api/app`, `api/config`, `composer.json`, `composer.lock` or `spa/src`. It was removed by
+  `b9b9e627 chore: remove Meilisearch, which indexed nothing`.
+- **The engine is therefore not required and cannot degrade — there is nothing to be
+  absent.** Search is Postgres `ILIKE`, always. There is no silent-zero-results-when-the-
+  engine-is-down failure mode, because there is no engine.
+- The container is nevertheless still registered against this Compose project, so
+  **every `docker compose` command in this repo prints
+  `Found orphan containers ([ogami-meili])`** — a standing false signal. See F20.
+
+## Findings
+
+Prior findings **M009-F11, F12, F15 are CLOSED** and were re-verified green this session.
+**M009-F09 is FIXED this session** (see `fix-log.md`). F10, F13, F14, F16 remain open,
+with F10 re-rated on evidence. Four new findings.
+
+### M009-F09 — Broken: per-module feature flags were bypassed — **FIXED this session**
+
+Priority: **P1** · Scope: **small** (as executed) · Status: **fixed, red/green proven**
+
+Reproduced by execution before fixing: with `modules.hr`, `modules.crm`,
+`modules.purchasing`, `modules.production`, `modules.accounting`, `modules.inventory` and
+`modules.quality` **all set to `false`**, a `system_admin` search still returned
+**all eleven groups**:
+
+```
+===== ALL MODULE FLAGS OFF (modules.search still on) =====
+  groups returned: employee,sales_order,purchase_order,work_order,invoice,bill,
+                   product,item,customer,vendor,ncr
+```
+
+What makes this a defect rather than a design choice is an inconsistency *inside the same
+dropdown*: `isNavItemVisible` drops any nav item whose `feature` is off, ahead of even the
+system_admin bypass (`spa/src/components/layout/Sidebar.tsx:786`), and the palette builds
+its "Pages" section from exactly that function (`spa/src/components/ui/CommandPalette.tsx:264-266`).
+So ⌘K hid the **Employees page** while still listing **employee records**. Meanwhile every
+module's own routes answer 403 `feature_disabled` (`api/app/Common/Middleware/CheckFeature.php:21-33`),
+e.g. `feature:hr` at `api/app/Modules/HR/routes.php:25`.
+
+Fixed by a `GROUP_FEATURES` map plus a per-group gate — see `fix-log.md` for the
+before/after and the red/green evidence.
+
+### M009-F10 — Incomplete: same-user recents survive permission/module revocation
+
+Priority: **P2** (re-rated down from P1) · Scope: **medium** · Session: **separate-recommended**
+
+Still reproduces by reading: `usePermissionSync` refreshes the auth store on
+`permission.override.changed` and `ModuleToggled` (`spa/src/hooks/usePermissionSync.tsx:32-42`),
+but `recentItemsStore.claim()` compares only `ownerId`, so a same-user claim keeps every
+item (`spa/src/stores/recentItemsStore.ts:127-128`), and the palette renders and re-copies
+those labels unchecked (`spa/src/components/ui/CommandPalette.tsx:281-289`, `:363-371`).
+
+**Re-rated to P2, with the reasoning stated so it can be disagreed with.** The prior report
+called this P1 alongside F09. The cross-*principal* case — the next person on a shared plant
+terminal — is already closed by the `ownerId` + `claim()` work (`recentItemsStore.ts:127-128`,
+`:145-152`). What remains is the *same* user still seeing identifiers **they were authorized
+to see minutes earlier**. That is a stale-cache defect and a real one, but it is not a
+disclosure to a new principal, which is what P1 is for here.
+
+### M009-F13 — Incomplete: query budget is documented, not enforced; no production plan
+
+Priority: **P2** · Scope: **large** · Session: **separate-recommended**
+
+Still open, and the documented figure is now shown to understate reality. `MAX_SOURCE_QUERIES = 11`
+is explicitly a comment, not a guard (`GlobalSearchService.php:119-124`), and the class
+docblock claims "22 queries" for a system_admin. Measured end-to-end through HTTP on
+`ogami_test_search`:
+
+| caller | queries | of which catalog/`information_schema` probes | wall |
+|---|---:|---:|---:|
+| system_admin (11 groups) | **30** | **14** | 109.4 ms (cold) |
+| department_head (2 groups) | **26** | **10** | 22.2 ms |
+| system_admin, 120-char term | — | — | 27.9 ms |
+
+The docblock counts only the service's own SELECTs; the request budget is larger because
+`Schema::hasTable()` issues a catalog query per group on every request and `DepartmentScope`
+adds an employee lookup. Note `department_head` pays 26 queries to search **two** groups —
+the per-request floor is not proportional to what the caller can see. The trigram/full-text
+index and a production-sized plan remain deferred for the reasons already recorded
+(`CREATE EXTENSION` rights, eleven tables owned by other modules, dev data with single-digit
+row counts).
+
+### M009-F14 — Incomplete: archived related records are still an index term — **now measured**
+
+Priority: **P2** · Scope: **medium** · Session: **separate-recommended**
+
+The prior report inferred this from the `leftJoin`s. It is now measured, and it is two
+distinct behaviours, not one:
+
+```
+PO-GHOST     live parent found=YES  sublabel="Ghostvendor Polymers"   (vendor soft-deleted)
+SO-GHOST     live parent found=YES  sublabel="Ghostcust Motors"       (customer soft-deleted)
+INV-GHOST    live parent found=YES  sublabel="Ghostcust Motors"
+WO-GHOST     live parent found=YES  sublabel="Ghostpart bushing"      (product soft-deleted)
+Ghostvendor  searching an ARCHIVED relation name reaches the live purchase_order: YES
+Ghostcust    searching an ARCHIVED relation name reaches the live sales_order:    YES
+Ghostpart    searching an ARCHIVED relation name reaches the live work_order:     YES
+```
+
+1. An archived counterparty's **name is still rendered** as a live transaction's sublabel.
+   Arguably correct — a PO's historical vendor is part of the record.
+2. An archived counterparty's name is **still a searchable term**: typing an archived
+   vendor's name reaches live POs. That contradicts `docs/USER-MANUAL.md`'s "no archived
+   records" claim in spirit, since the archived name is still indexed, and it is the part
+   that needs a product decision (see the question at the end of this section).
+
+Joins are at `GlobalSearchService.php:180`, `:157`, `:220-221`, `:245`, `:272`; `Vendor` and
+`Customer` both use `SoftDeletes` (`api/app/Modules/Accounting/Models/Vendor.php:13-17`,
+`Customer.php:13-17`).
+
+### M009-F16 — Polish: `SearchOperator` advertises cross-driver escaping it does not do on SQLite
+
+Priority: **P3** · Scope: **small** · Session: **separate-recommended** · unchanged
+
+`SearchOperator` presents itself as cross-driver (`api/app/Common/Support/SearchOperator.php:9-15`)
+but `escape()` returns raw input on SQLite (`:56-58`), so `%`/`_` would be live wildcards
+there. Not a production-path defect — app and `phpunit` both run on PostgreSQL, verified this
+session — but a portability contract that would silently reintroduce F04.
+
+### M009-F17 — Incomplete (NEW): search is broader than the PO list for `production_manager`
+
+Priority: **P1** · Scope: **medium** · Session: **separate-recommended — cross-module**
+
+`GlobalSearchService.php:187-202` states it re-expresses "the purchase-order list's row
+scope (`PurchaseOrderService::list`) … through the shared helper", and the prior fix log
+records that equivalence as "Verified equivalent against the seeds". **It is no longer
+equivalent.** Search resolves the department tier from the *permission* `purchasing.pr.approve`;
+`PurchaseOrderService::list()` resolves it from the *role slug* `department_head`
+(`api/app/Modules/Purchasing/Services/PurchaseOrderService.php:96-104`).
+
+`production_manager` gained `purchasing.pr.approve` in a later change — it is step 2 of the
+seeded `purchase_request` chain (`RolePermissionSeeder`, the M036 comment) — but is not
+slugged `department_head`. Measured on one fixture: a PO **in the caller's department,
+authored by another user**, searched and listed as the same role:
+
+```
+role                 pr.approve po.approve | in SEARCH | in PO LIST
+department_head      Y          n          | YES       | YES        (aligned)
+production_manager   Y          n          | YES       | no         ← search is broader
+purchasing_officer   Y          Y          | HTTP 403  | YES        (no search.global)
+impex_officer        n          n          | HTTP 403  | no
+```
+
+So global search hands `production_manager` a PO number, vendor name, status and **amount**
+for a record its own list page hides — the exact defect class M009-F01 was opened to close,
+reintroduced by drift in the seeder rather than in this file.
+
+**The fix does not belong here.** No permission distinguishes `department_head` from
+`production_manager`, so narrowing search to match the list would require the role-slug
+branch CLAUDE.md forbids. The convention-compliant repair is for `PurchaseOrderService::list()`
+to adopt `DepartmentScope` — which *widens the list to match search* and removes the
+role-slug coupling. **Handed off to `procurement/purchase-orders`.** Until then, treat
+`production_manager`'s PO reach as department-wide and reconcile the list, not search.
+
+### M009-F18 — Incomplete (NEW): the palette's keyboard list is invisible to assistive tech
+
+Priority: **P2** · Scope: **small/medium** · Session: **separate-recommended**
+
+The palette is `role="dialog" aria-modal="true" aria-label="Global search"` with an
+`aria-label`led input (`spa/src/components/ui/CommandPalette.tsx:440-442`, `:460`) — and
+that is the entire ARIA surface. Arrow keys move `activeIndex`, which changes a **visual**
+highlight (`bg-elevated`, `:556`) on a row that never receives DOM focus; focus stays in the
+input. Consequently:
+
+- no `role="listbox"`/`role="option"` on the `<ul>`/rows (`:543-584`);
+- no `aria-activedescendant` on the input, so a screen reader announces nothing as the
+  user arrows through results;
+- no `role="combobox"`/`aria-expanded`/`aria-controls` on the input;
+- no `aria-live` region, so "N results", "No results for …" (`:514-524`) and the failure
+  block (`:480-512`) are silent.
+
+This is the module's primary surface and its keyboard affordance is advertised in the
+footer ("↑↓ navigate"). WCAG 4.1.2 / 1.3.1. Deliberately **not** fixed in this session: it
+changes focus and announcement semantics in the same handler that `5cd6e7e5`/`44f6e1b3`
+just landed and browser-verified, so it deserves its own browser run rather than riding
+along on a backend fix.
+
+### M009-F19 — Polish (NEW): `search.global` is withheld from the roles most likely to need it
+
+Priority: **P3** · Scope: **small** · Session: **separate-recommended — question, not a defect**
+
+Measured: four operational roles get **403 on every search** because they hold no
+`search.global` — `purchasing_officer`, `qc_inspector`, `warehouse_staff`, `impex_officer`.
+`purchasing_officer` in particular holds `purchasing.*`, `accounting.vendors.view` and
+`accounting.bills.view`, i.e. it is the role with the most identifiers to look up (PO
+numbers, vendor names) and the one that cannot look any of them up.
+
+Conversely `maintenance_tech` **does** hold `search.global` (`RolePermissionSeeder.php:709`)
+but holds none of the eleven gates, so its record search is permanently `data: []` while
+the ⌘K trigger, the "type at least 2 characters to search records (SO-, PO-, WO-, INV-,
+NCR-, any name)" hint (`CommandPalette.tsx:470-477`) and the "No results for …" empty state
+all promise otherwise. Neither is a leak; both are grant-table shape, which is
+`platform/rbac`'s to decide. **Question for a human, recorded below.**
+
+### M009-F20 — Polish (NEW): the orphan `ogami-meili` container emits a warning on every command
+
+Priority: **P3** · Scope: **small** · Session: **same-session-ok, but not this module's file**
+
+`ogami-meili` is still labelled as belonging to this Compose project, so **every**
+`docker compose …` invocation in this repo prints
+`Found orphan containers ([ogami-meili]) for this project`. It appeared on all ~15
+invocations this session. A warning that is always present is a warning nobody reads, and
+this one sits in front of every developer command in the repo. One-line remedy
+(`docker rm ogami-meili`), but it is host state rather than a repo file, so it is recorded
+rather than executed here.
+
+Related, and cheap: the module toggle's own label reads **"Full-text search across all
+modules"** (`api/database/seeders/SettingsSeeder.php:436` region, `'search' => ['Global Search', …]`).
+There is no full-text search — it is a literal `ILIKE` substring match, deliberately so
+(F04). The Settings screen therefore describes a capability the system does not have.
+
+## Verification
+
+| Check | Result | Notes |
+|---|---|---|
+| Baseline `GlobalSearchTest` before any change | **PASS — 24 tests, 95 assertions** | `ogami_test_search` |
+| `GlobalSearchTest` after the F09 fix | **PASS — 29 tests, 142 assertions** | +5 tests, +47 assertions |
+| Red proof: 3 new feature-flag tests vs `git show HEAD:` source | **3 failed, 2 passed** | the 3 flag tests fail without the fix; the 2 matrix tests pass either way (they are a lock, not a repro) |
+| Source restored after the red run | **PASS** | `sha256sum -c` OK + `diff -q` byte-identical |
+| `php -l` service + test | **PASS** | |
+| `phpstan analyse` (level per `phpstan.neon`) on both changed files | **PASS — no errors** | |
+| `pint --test` on both changed files | **FAIL — inherited** | proven: see `fix-log.md`, rule-list comparison against the `HEAD` extract |
+| Role × entity matrix, 13 roles × 11 entities, real HTTP | **PASS — 0 mismatches** | table above |
+| Feature-flag bypass probe | **DEFECT REPRODUCED** | 11/11 groups returned with 7 flags off |
+| Archived-relation probe | **DEFECT REPRODUCED** | table under F14 |
+| PO search-vs-list window probe | **DEFECT REPRODUCED** | table under F17 |
+| Query/latency measurement | **recorded** | 30 queries / 14 catalog probes for a system_admin |
+| Meilisearch dependency audit | **PASS — no dependency** | no service, no package, no code reference |
+| `git diff --check` | **PASS** | |
+| SPA typecheck / vitest / ESLint | **NOT RUN — no SPA file was changed** | the fix is server-side only; see the declined item in `fix-log.md` |
+| Chromium browser walk of the palette | **NOT RUN** | no SPA file changed, so there is nothing new to see. The existing `spa/e2e/command-palette.spec.ts` was verified against real Chromium + Firefox at `44f6e1b3` and is untouched. **No new visual or focus claim is made in this session.** |
+| Production-sized query plan | **NOT RUN** | F13; dev data is single-digit rows per transaction table |
+
+## Questions needing a human decision
+
+1. **F14** — should an archived customer/vendor/product's *name* remain a searchable term
+   that reaches its live transactions? Three options: keep it (historical accuracy), drop
+   the joined predicate (the name stops being an index term but stays as a label), or drop
+   both label and predicate. This is the owning modules' call, not search's.
+2. **F19a** — is withholding `search.global` from `purchasing_officer`, `qc_inspector`,
+   `warehouse_staff` and `impex_officer` intended, or an omission?
+3. **F19b** — should `maintenance_tech` keep `search.global` with no searchable entity, or
+   should the palette suppress the record-search affordance for a caller that holds no
+   entity gate?
+4. **F17** — confirm the intended PO visibility for `production_manager`: department-wide
+   (adopt `DepartmentScope` in `PurchaseOrderService::list()`) or author-only (then the
+   *permission* model needs a distinct grant, since the role slug cannot be used).
+
+## What could NOT be verified
+
+- **No browser/visual verification was performed this session.** `nginx` and `spa` are
+  stopped and two other audit sessions share this host; I changed no SPA file, so I ran
+  none and make no claim about rendering, layout or focus visibility.
+- **Latency and query plans at production scale.** Every number above comes from a
+  single-digit-row dev dataset; they bound nothing about production.
+- **The `2026_08_*` migration set was not exercised beyond what `RefreshDatabase` runs**
+  for this test path; no migration was added or renamed.

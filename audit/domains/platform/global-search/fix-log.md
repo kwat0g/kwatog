@@ -405,3 +405,183 @@ The browser spec asserts:
 - `git diff --check` — **PASS** after the final browser-test adjustment.
 
 Release remains `🔁 Needs Re-audit`; the browser follow-up is fully verified.
+
+## Fix session: 2026-08-30 — re-audit + M009-F09
+
+Claimed `platform / global-search` atomically with `audit/scripts/claim-module.sh` → `CLAIMED`.
+Working tree was clean for every module file before starting. `regenerate-registry.sh` was
+not run. Database: `ogami_test_search` (created, used, **dropped** at the end);
+`ogami_test` was never touched.
+
+### M009-F09 — per-module feature toggles were bypassed by global search — FIXED
+
+**Reproduced by execution first.** With `modules.hr`, `modules.crm`, `modules.purchasing`,
+`modules.production`, `modules.accounting`, `modules.inventory` and `modules.quality` all
+set to `false`, a `system_admin` search returned **all eleven groups**. The permission gate
+cannot catch this: `User::hasPermission()` short-circuits to `true` for `system_admin`, so
+the feature gate is the only thing between a fully switched-off system and eleven groups of
+records.
+
+The decisive evidence that this is a bug and not a design choice is an inconsistency inside
+one dropdown: `isNavItemVisible` drops any nav item whose `feature` is off — ahead of even
+the system_admin bypass (`spa/src/components/layout/Sidebar.tsx:786`) — and the palette
+builds its "Pages" section from that same function
+(`spa/src/components/ui/CommandPalette.tsx:264-266`). ⌘K therefore hid the **Employees
+page** while still listing **employee records**.
+
+#### `api/app/Common/Services/GlobalSearchService.php`
+
+| | before | after |
+|---|---|---|
+| class deps | no constructor | `public function __construct(private readonly SettingsService $settings) {}` (`:151`) |
+| group→module map | none | `private const GROUP_FEATURES` — 11 entries (`:137-149`) |
+| gate per group | `if ($user->hasPermission('hr.employees.view') && Schema::hasTable('employees'))` | `if ($this->moduleEnabled('employee', $enabled) && $user->hasPermission('hr.employees.view') && Schema::hasTable('employees'))` |
+| helper | none | `private function moduleEnabled(string $group, array &$resolved): bool` (`:487-499`) |
+
+- All **eleven** guards rewritten the same way (`grep -c moduleEnabled` = 12: eleven call
+  sites plus the declaration). The feature check is placed **first** in the `&&` chain so a
+  disabled module costs neither a permission lookup nor a `Schema::hasTable` catalog query.
+- `GROUP_FEATURES` is **ANY-of**, and `customer` is the reason: customers are genuinely
+  reachable under either toggle — `api/app/Modules/Accounting/routes.php:20` (`feature:accounting`)
+  and a delegated CRM route at `api/app/Modules/CRM/routes.php:17-20` (`feature:crm`) serve
+  the same controller behind the same permission. Gating it on `accounting` alone would hide
+  a record whose detail page still opens. Verified by test, both directions.
+- **The missing-setting failure mode is deliberate and documented at `:475-486`.**
+  `CheckFeature` reads `requiredBool()` and throws when the row is absent — right for a
+  module's own routes, where the module is unusable. Here that would let one absent row take
+  down a cross-module endpoint with ten healthy groups, so **only an explicit `false`
+  suppresses a group** (`$this->settings->get("modules.{$feature}") !== false`). All
+  twenty-two toggles are seeded (`api/database/seeders/SettingsSeeder.php` module list), so
+  the ambiguous case is a misconfiguration the owning module's own routes already surface
+  loudly — and treating it as "enabled" makes this change a **pure narrowing**: at seeded
+  defaults, behaviour is byte-for-byte what it was. That is why the 24 pre-existing tests
+  passed unchanged.
+- `$resolved` memoizes per request. `SettingsService` caches in Redis, but the feature check
+  runs before the permission check, so without memoization an accounting-only caller would
+  read `modules.accounting` three times per search.
+- The class docblock gained a `## Module feature toggles — M009-F09` section recording the
+  measurement and the ANY-of reasoning (`:92-115`).
+
+#### `api/tests/Feature/Admin/GlobalSearchTest.php` — +5 tests
+
+| test | what it pins |
+|---|---|
+| `test_switching_a_module_off_hides_exactly_its_own_search_groups` | seven toggles, one at a time; asserts the **exact** surviving group set each time, so an over-broad gate fails as loudly as a missing one |
+| `test_every_module_off_leaves_a_system_admin_with_no_searchable_records` | the `system_admin` case the permission gate structurally cannot cover |
+| `test_customers_remain_searchable_while_either_owning_module_is_enabled` | the ANY-of semantics, both directions, plus the both-off case |
+| `test_no_seeded_role_sees_a_group_it_lacks_the_permission_for` | **13 seeded roles × 11 entities through real HTTP**; a group added later without a permission check fails here. Roles lacking `search.global` must 403. `assertGreaterThanOrEqual(13, $checked)` stops the loop silently asserting nothing if the seeder shrinks |
+| `test_global_search_permission_alone_opens_no_module` | `search.global` returns `data: []` on its own |
+
+- A private `GROUP_FEATURES` copy lives in the test (`:487-499`) as a deliberate duplicate:
+  edit the service map without a reason and the test table disagrees.
+- `seedOnePerGroup()` places one matching record per group **inside** the caller's row scope
+  (same department, authored by them) so a row-scope miss can never be misread as a
+  permission miss, and names counterparties **without** the marker so a transaction is only
+  ever found through its own identifier.
+
+#### Red/green evidence
+
+| | result |
+|---|---|
+| Baseline, before any change | **PASS — 24 tests, 95 assertions** |
+| After the fix | **PASS — 29 tests, 142 assertions** |
+| 5 new tests against `git show HEAD:` source (fix reverted) | **3 failed, 2 passed** |
+
+The three failures are exactly the three feature-flag tests
+(`switching a module off…`, `every module off…`, `customers remain searchable…`) — they
+cannot pass without the gate. The two matrix tests **passed against unmodified source**, and
+that is stated rather than glossed: they are a regression lock on behaviour that is already
+correct, not a reproduction of a bug. Source restored and proven identical:
+`sha256sum -c` OK **and** `diff -q` byte-identical.
+
+#### Declined, with reasoning
+
+The prior action plan asked for a **defensive client-side feature filter** in
+`CommandPalette.tsx`. Not done, on purpose. It would put a second copy of the group→module
+map in a second language, where drift **over**-hides — the palette would suppress a group
+the server legitimately returned, which is a harder failure to notice than the one being
+fixed. The server is now the single gate, it is tested per-flag, and the palette already
+renders exactly what the server permits. No SPA file was changed, so no SPA check was run
+and no visual claim is made.
+
+### Verification performed
+
+| Check | Result | Notes |
+|---|---|---|
+| `php -l` service + test | **PASS** | |
+| `phpstan analyse` both changed files `--memory-limit=1G` | **PASS — no errors** | |
+| `php artisan test tests/Feature/Admin/GlobalSearchTest.php --no-coverage` | **PASS — 29 tests, 142 assertions, 38.4s** | `ogami_test_search`; never `ogami_test` |
+| Red run vs `HEAD` source | **3 failed, 2 passed** (expected) | see table above |
+| Restore after red run | **PASS** | `sha256sum -c` + `diff -q` |
+| `pint --test` both files | **FAIL — proven inherited** | see below |
+| `git diff --check` | **PASS** | |
+| SPA typecheck / vitest / ESLint | **not run** | zero SPA files changed |
+| Chromium browser walk | **not run** | zero SPA files changed; `nginx`/`spa` stopped and the host is shared. `spa/e2e/command-palette.spec.ts` is untouched and was verified against real Chromium + Firefox at `44f6e1b3`. **No new visual or focus claim is made.** |
+
+#### Pint: proven inherited, not introduced
+
+Both files fail Pint at `HEAD` and after the change. Rule lists compared by extracting
+`git show HEAD:` into `/tmp/m009head` and running the same Pint binary over both:
+
+```
+HEAD  app/Common/Services/GlobalSearchService.php  method_argument_space, control_structure_braces,
+                                                   braces_position, statement_indentation,
+                                                   blank_line_before_statement, binary_operator_spaces
+MINE  app/Common/Services/GlobalSearchService.php  … same list …
+HEAD  tests/Feature/Admin/GlobalSearchTest.php     binary_operator_spaces
+MINE  tests/Feature/Admin/GlobalSearchTest.php     unary_operator_spaces,
+                                                   not_operator_with_successor_space,
+                                                   binary_operator_spaces
+```
+
+Every hunk Pint would apply to my additions is `binary_operator_spaces` — the aligned `=>`
+in `GROUP_FEATURES` and the aligned `'key' => value` in the fixtures, which is the house
+style of both files at `HEAD` (`$like   =`, `'id'       =>`, `$own   =`). Left alone per
+CLAUDE.md: pre-existing style is not reformatted into an audit diff.
+`unary_operator_spaces` / `not_operator_with_successor_space` appear in the rule list only
+because the file now contains a `!` for those fixers to run over; they produce **no diff
+hunk** — `if (! $user->hasPermission(…))` is already the style Pint wants. One genuinely new
+violation *was* introduced and *was* fixed rather than excused: Pint wanted a blank line
+before a `continue;` in the matrix loop, so the loop was restructured to an `if`/`else` and
+`blank_line_before_statement` disappeared from the list.
+
+### Environment notes
+
+- `api`, `spa`, `nginx`, `reverb` and `queue` were all stopped; `db` and `redis` were up and
+  shared with two other audit sessions and were **not** restarted. All backend work ran via
+  `docker compose run --rm --no-deps api`, which never touches the shared containers.
+- The api container's working directory is `/var/www`, not `/var/www/html`.
+- **`ogami-meili` is an orphan container** still labelled against this Compose project, so
+  every `docker compose` invocation printed `Found orphan containers ([ogami-meili])`. Not
+  removed here — it is host state, not a repo file. Recorded as M009-F20.
+- **No pre-commit hook is installed in this working tree** (`core.hooksPath` →
+  `.git/hooks`, which contains no non-sample hooks; there is no `.husky/`, no root
+  `package.json`, no lint-staged config). So the session brief's warning about a
+  lint-staged Prettier hook reformatting other modules' SPA files did not apply — and
+  nothing was auto-reformatted. Worth knowing: `spa/src/stores/recentItemsStore.ts`,
+  `spa/src/components/layout/Topbar.tsx`, `spa/src/components/ui/CommandPalette.tsx` and
+  `spa/e2e/command-palette.spec.ts` are all committed **Prettier-dirty** (the first two with
+  one-space indentation), so if that hook is ever installed, the next touch of any of them
+  produces a whole-file whitespace diff.
+
+### Files changed by this session
+
+| File | Change |
+|---|---|
+| `api/app/Common/Services/GlobalSearchService.php` | M — `SettingsService` injection, `GROUP_FEATURES`, `moduleEnabled()`, all 11 group guards, docblock section |
+| `api/tests/Feature/Admin/GlobalSearchTest.php` | M — +5 tests (24→29, 95→142 assertions), `seedOnePerGroup()` fixture helper, 3 imports |
+| `audit/domains/platform/global-search/audit-report.md` | M — appended the dated 2026-08-30 re-audit; no prior history deleted |
+| `audit/domains/platform/global-search/action-plan.md` | M — rewritten around what is now open |
+| `audit/domains/platform/global-search/fix-log.md` | M — this section |
+| `audit/domains/platform/global-search/status.md` | M — release status |
+
+A temporary probe (`api/tests/Feature/Admin/M009MatrixProbeTest.php`) produced the matrix,
+feature-flag, archived-relation, PO-window and query-budget measurements. It was **deleted**
+after its findings were folded into the permanent tests and the report; `ogami_test_search`
+was dropped.
+
+### Open after this session
+
+M009-F10, F13, F14, F16 (carried) and F17, F18, F19, F20 (new). F17 is the remaining P1 and
+its fix belongs to `procurement/purchase-orders`, not here. Release status:
+`🔁 Needs Re-audit`.
