@@ -18,12 +18,24 @@ Rules the coordinator holds and agents never touch:
 - `App\Common\Services\DocumentSequenceService::generate()` has an insert-then-reselect path that may race two concurrent first-of-month callers. Shared `Common` service, so no module session will own it. Needs a home.
 - `docs/PATTERNS.md:262-268` — fix the `direction` → `orderBy()` bug at the source, or every service copied from the template keeps inheriting a 500.
 - **CLAUDE.md says the approval chain is "4 levels (Staff → Dept Head → Manager → Officer → VP)". Leave implements exactly 2** (`WorkflowSeeder.php:26-29`, two pending enum states) and code/seeder/enum agree, so it reads as deliberate. Either the doc or the seeder is wrong; decide once, centrally, because every approval-bearing module is audited against that sentence.
+- **`AccountsPayableHardeningTest` has one pre-existing failure**, seen from the supplier-portal session's dependency run and confirmed not attributable to it. It belongs to `accounts-payable`, which is marked `✅ Verified` — so either that verification was optimistic or something regressed since. Confirm before trusting the status.
+- **No browser has run in this pipeline.** Four agents have reported Chromium/Playwright binaries absent with no X server. Every SPA claim so far is source- or jsdom-level; installing Chromium is the only thing that closes the browser-acceptance findings accumulating across modules.
+- **Sanctum abilities are not enforced anywhere on the supplier portal** — tokens mint with no ability list (defaults `['*']`) and no route uses the `ability` middleware. That is "no abilities model", not "attached but unenforced".
 
 
-Known-stale CLAUDE.md spots, passed to every agent:
-1. `EdgeSystemUserResolver` and the `auth:edge_device` guard **do not exist**. `config/auth.php` declares only `web`, `supplier_portal`, `customer_portal`.
-2. The migration-max figure goes stale as sessions land. Confirm with `ls api/database/migrations | grep -E '^04' | sort | tail -3`.
+Corrections established by sessions — these OVERRIDE the doc, pass them to every agent:
+1. **`EdgeSystemUserResolver` and `auth:edge_device` do NOT exist.** The working helper is **`App\Common\Services\SystemUserResolver::impersonate()`**. A portal write under `auth:supplier_portal` was empirically verified to write audit rows with no FK violation — so the hazard CLAUDE.md describes is real but its named remedy is wrong. `config/auth.php` declares only `web`, `supplier_portal`, `customer_portal`.
+2. Migration max confirmed **0478** on 2026-08-30; the figure goes stale, re-confirm with `ls api/database/migrations | grep -E '^04' | sort | tail -3`.
 3. `docs/PATTERNS.md:262-268` — the canonical service template carries an unvalidated `direction` → `orderBy()` that 500s. Do not copy the bug when copying the template.
+4. CLAUDE.md says the approval chain is "4 levels"; Leave implements exactly 2 and its code/seeder/enum agree. Verify the seeder, not the sentence.
+5. `HashIdFilter::decode` accepts raw integers in **every** environment while `HasHashId` gates that shortcut behind `environment('testing')` — a raw int may work where a HashID is expected.
+
+Test-harness traps that have burned sessions in this pipeline — worth repeating in every prompt:
+- `UploadedFile::fake()->getMimeType()` derives from the **filename**, not the bytes, so a fake named `payload.pdf` reports `application/pdf` whatever it contains. A MIME-validation test built on `fake()` proves nothing; use a real `Illuminate\Http\UploadedFile` (Symfony finfo). One session nearly filed a false-positive bypass this way.
+- `assertStringNotContainsString('a/b', $response->getContent())` is **unsound** — `json_encode` escapes `/` as `\/`.
+- `APP_TIMEZONE=Asia/Manila`: a suite was red exactly one day in seven because a fixture assumed a weekday. Check the day of week before assuming a code bug.
+- `RbacConcurrencyTest` commits active `system_admin` rows that survive the PHPUnit process without resetting `RefreshDatabaseState::$migrated`, silently disarming any later test whose premise is "no active system admin". A permission test that passes suspiciously should be re-run alone.
+- Agents must **delete their own scratch probes** before releasing. `api/probe_seed.php`, `api/probe_check.php`, `api/tests/Feature/Admin/ZzUserAdminProbeTest.php` were all left behind.
 
 ---
 
@@ -37,7 +49,7 @@ existing `fix-log.md` / `git diff` before trusting its status.
 |---|---|---|---|---|
 | 1 | 1 | M001 | platform/auth-session | **in flight** |
 | 2 | 1 | M003 | platform/user-administration | **in flight** |
-| 3 | 2 | M026 | finance/journal-ledger | queued |
+| 3 | 2 | M026 | finance/journal-ledger | **in flight** |
 | 4 | 2 | M028 | finance/accounts-receivable | queued |
 | 5 | 2 | M032 | commercial/customer-product-pricing | queued |
 | 6 | 2 | M020 | people/loans-cash-advances | queued |
@@ -96,9 +108,9 @@ fresh discovery pass.
 
 | ID | Module | Launched |
 |---|---|---|
-| M047 | supply-chain/supplier-portal | 2026-08-30 |
 | M001 | platform/auth-session | 2026-08-30 |
 | M003 | platform/user-administration | 2026-08-30 |
+| M026 | finance/journal-ledger | 2026-08-30 |
 
 ## Completed this pipeline
 
@@ -110,6 +122,7 @@ fresh discovery pass.
 | M018 | people/attendance-dtr | 🔁 Needs Re-audit | 3 fixed. Extended-shift OT pays nothing — open question. |
 | M009 | platform/global-search | 🔁 Needs Re-audit | Switched-off modules were still searchable — fixed. 13×11 permission matrix executed, 0 leaks. F17 handed to purchase-orders. |
 | M019 | people/leave-management | 🔁 Needs Re-audit | P0: cancelling an approved request after year-end resurrects already-encashed credits. 2 fixed (incl. a suite red 1 day in 7). |
+| M047 | supply-chain/supplier-portal | 🔁 Needs Re-audit | 3 stacked defects in one method, each hiding the next — two supplier PO-detail panels had never displayed. Cross-tenant: 21/25 routes probed, no leak. |
 
 
 ## Held out deliberately
