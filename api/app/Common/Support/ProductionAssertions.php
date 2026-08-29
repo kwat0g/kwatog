@@ -40,6 +40,16 @@ class ProductionAssertions
             $errors[] = 'SERVER_NAME must identify the real production host.';
         }
 
+        // The whole authentication model is a cookie the browser must never send
+        // over plaintext HTTP. config/session.php defaults `secure` to true, but
+        // every dev template ships SESSION_SECURE_COOKIE=false, so a deployment
+        // seeded from one of those would silently serve the session cookie
+        // without the Secure attribute — and nothing else in the stack would
+        // notice. Assert it here alongside the other dev-default guards.
+        if (config('session.secure') !== true) {
+            $errors[] = 'SESSION_SECURE_COOKIE must be true in production so the session cookie is never sent over plaintext HTTP.';
+        }
+
         if (! empty($errors)) {
             throw new RuntimeException('Production boot blocked: '.implode(' ', $errors));
         }

@@ -26,6 +26,10 @@ class ProductionAssertionsTest extends TestCase
         config()->set('hashids.connections.main.salt', 'real-random-salt-1234567890abcdef');
         config()->set('app.key', 'base64:'.base64_encode(random_bytes(32)));
         config()->set('app.server_name', 'erp.ogami.test');
+        // Set explicitly rather than relying on the ambient test env: the
+        // assertion below must fail for the right reason, not because
+        // SESSION_SECURE_COOKIE happened to be unset.
+        config()->set('session.secure', true);
     }
 
     public function test_no_throw_in_local_environment_even_with_dev_defaults(): void
@@ -142,6 +146,23 @@ class ProductionAssertionsTest extends TestCase
         ProductionAssertions::assertSafeOrFail();
     }
 
+    /**
+     * M001 re-audit — every dev env template ships SESSION_SECURE_COOKIE=false,
+     * so a production deployment seeded from one would serve the whole
+     * cookie-based auth model over plaintext HTTP with nothing objecting.
+     */
+    public function test_throws_when_session_cookie_is_not_secure_in_production(): void
+    {
+        $this->asProduction();
+        $this->setSafeDefaults();
+        config()->set('session.secure', false);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessageMatches('/SESSION_SECURE_COOKIE/');
+
+        ProductionAssertions::assertSafeOrFail();
+    }
+
     public function test_aggregates_multiple_failures_into_one_message(): void
     {
         $this->asProduction();
@@ -149,6 +170,7 @@ class ProductionAssertionsTest extends TestCase
         config()->set('hashids.connections.main.salt', 'change_me');
         config()->set('app.key', '');
         config()->set('app.server_name', 'localhost');
+        config()->set('session.secure', false);
 
         try {
             ProductionAssertions::assertSafeOrFail();
@@ -158,6 +180,7 @@ class ProductionAssertionsTest extends TestCase
             $this->assertStringContainsString('HASHIDS_SALT', $e->getMessage());
             $this->assertStringContainsString('APP_KEY', $e->getMessage());
             $this->assertStringContainsString('SERVER_NAME', $e->getMessage());
+            $this->assertStringContainsString('SESSION_SECURE_COOKIE', $e->getMessage());
         }
     }
 }

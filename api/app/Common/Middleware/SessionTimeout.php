@@ -23,18 +23,29 @@ class SessionTimeout
 
     public function handle(Request $request, Closure $next): Response
     {
-        // Portal clients authenticate with a bearer token and their own
-        // guards. Idle-session bookkeeping is only for the cookie-backed
-        // internal SPA session; applying it to a portal token would reject
-        // an otherwise valid portal request as an internal-user mismatch.
-        if ($request->bearerToken()) {
-            return $next($request);
-        }
-
         // This middleware is also appended to the API group so security policy
         // cannot be accidentally omitted from a new module route. Public,
         // portal, and edge-device routes use different principals/policies.
         if (! $this->usesInternalSanctumGuard($request)) {
+            return $next($request);
+        }
+
+        // Portal clients authenticate with a bearer token and their own guards.
+        // Idle-session bookkeeping is only for the cookie-backed internal SPA
+        // session; applying it to a portal principal would reject an otherwise
+        // valid portal request as an internal-user mismatch, and those models
+        // have no `last_activity` column to stamp.
+        //
+        // The skip keys off the RESOLVED PRINCIPAL, never off the mere presence
+        // of an Authorization header. The header is entirely client-controlled,
+        // so `if ($request->bearerToken())` alone let any cookie-authenticated
+        // internal user opt out of the idle timeout indefinitely by sending
+        // `Authorization: Bearer <anything>` — measured during the M001
+        // re-audit as 25 min idle on a 15 min policy returning 200 with the
+        // header and 401 without it. `$request->user()` resolves the default
+        // `web` session guard, so a genuine portal token (which the web guard
+        // cannot resolve) still short-circuits here exactly as before.
+        if ($request->bearerToken() && ! ($request->user() instanceof User)) {
             return $next($request);
         }
 
