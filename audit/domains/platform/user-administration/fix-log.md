@@ -139,3 +139,155 @@ mid-run; the backend and static verification gates are green.
 ## Interrupted-session recovery
 
 The parallel implementation worker terminated before completing Step 8. Preserve the existing fixes and the inconclusive browser gate, but keep this module at Needs Re-audit until the current worktree and the action plan are rechecked and the remaining verification is recorded.
+
+---
+
+## Re-audit pass: 2026-08-30
+
+Release status: `🔁 Needs Re-audit`
+
+Context correction for the note above: the interrupted 2026-08-25 session did
+**not** leave work stranded. All nine items were already committed (swept into
+`167de85e`), and re-measurement on 2026-08-30 confirms 9 of 9 no longer
+reproduce. This pass therefore did not re-implement anything; it measured, added
+a regression lock, and fixed the two genuinely contained items it found. The
+remaining nine new findings are gated in `action-plan.md` — see that file for how
+Tier 1 cross-module risk was weighted.
+
+### R1. `RbacConcurrencyTest` committed an ACTIVE `system_admin` that disarmed later tests — UA-I09
+
+- **Before** — `api/tests/Feature/Admin/RbacConcurrencyTest.php` set
+  `protected array $connectionsToTransact = []` (`:31`) to make its fixtures
+  visible across a `pcntl_fork`, so every row it wrote was COMMITTED, and it never
+  reset `RefreshDatabaseState::$migrated`. `cleanupConcurrencyFixtures()` (`:283`)
+  cannot delete its `users` rows — they are referenced by `audit_logs`, which
+  carries an append-only trigger (`SQLSTATE[P0001] Audit logs are immutable.`,
+  measured while writing the probe) — so an active `system_admin`
+  (`concurrency-admin-…@test.local`) survived for the rest of the PHPUnit process.
+
+  Measured directly, on a fresh database:
+
+  ```
+  $ php artisan test tests/Feature/Admin/RbacConcurrencyTest.php
+    Tests: 2 passed (13 assertions)
+  $ psql -d ogami_test_useradm -c 'SELECT u.id,u.email,u.is_active,r.slug FROM users u LEFT JOIN roles r ON r.id=u.role_id'
+    1 | concurrency-admin-6a93632171b86@test.local  | t | system_admin
+    2 | concurrency-target-6a936321739ce@test.local | t | concurrency_employee_…
+  ```
+
+  Because the class sorts before every `User*` class in `tests/Feature/Admin`, any
+  later test whose premise is "no active system administrator" passed for the
+  wrong reason. `UserAdministrationHardeningTest:57-73` documents and works around
+  it; it also caused a false failure in the Assets module.
+
+- **After** — added `tearDownAfterClass()` at
+  `api/tests/Feature/Admin/RbacConcurrencyTest.php:51-91` (plus the
+  `RefreshDatabaseState` import at `:16`), so the next `RefreshDatabase` class
+  re-runs `migrate:fresh` and the committed rows go at the schema level instead of
+  fighting the audit trigger. Same remedy as
+  `api/tests/Feature/Accounting/AccountingPeriodPostingConcurrencyTest.php:61-66`.
+  The docblock records why deleting the rows is not an option.
+
+- **Verification — red before, green after, in the order that was red.** The new
+  `UserAdministrationEscalationTest::test_last_active_system_admin_survives_every_admin_module_verb`
+  asserts the premise instead of forcing it, so it is the drift guard for this
+  defect. Against unmodified source:
+
+  ```
+  $ php artisan test tests/Feature/Admin/RbacConcurrencyTest.php \
+                     tests/Feature/Admin/UserAdministrationEscalationTest.php
+   FAILED  UserAdministrationEscalationTest > last active system admin survives…
+   Premise: exactly one ACTIVE system administrator must exist. A committed row
+   from another test class (see RbacConcurrencyTest) silently disarms this assertion.
+   Failed asserting that 2 is identical to 1.
+    Tests: 2 failed, 11 passed (99 assertions)
+  ```
+
+  Same two files, same order, after the fix:
+
+  ```
+    Tests: 13 passed (117 assertions)
+  ```
+
+- **`UserAdministrationHardeningTest` workaround rechecked, kept, comment
+  corrected.** The pre-emptive
+  `User::query()->where('role_id',$systemRoleId)->update(['is_active'=>false])`
+  at `:73` is now redundant for an `Admin`-directory run, but it is what makes
+  that test's premise self-owned rather than dependent on another class's
+  teardown, so removing it would trade a real guarantee for tidiness. Its comment
+  claimed `cleanupConcurrencyFixtures()` simply "does not delete the users rows",
+  which understates the situation (it *cannot*), and described the leak as
+  outstanding. Rewritten at `:57-79` to state that the leak is fixed at source,
+  why the write is retained anyway, and that
+  `UserAdministrationEscalationTest` is the class that fails loudly if the leak
+  returns.
+
+- Related, **reported not fixed** (belongs to Accounting):
+  `api/tests/Feature/Accounting/AccountingPeriodDuplicateRecoveryTest.php:39`
+  calls `DB::commit()` with no `RefreshDatabaseState::$migrated` reset either.
+
+### R2. `LuUser` still reached the screen on the empty users list — UA-P04
+
+- **Before** — `spa/src/lib/emptyStateCopy.ts:335`:
+  `actionLabel: 'Add First LuUser'`, under the `'/admin/users'` key. The
+  2026-08-25 pass fixed the three page files and missed the shared registry, so
+  the icon identifier was still rendered as the primary call-to-action button —
+  but only when the list has zero rows, which is why it survived a visual check.
+  `ListEmptyState.tsx:60-64` renders `copy.actionLabel` verbatim;
+  `spa/src/pages/admin/users/index.tsx:212` mounts it for the empty case.
+- **After** — `actionLabel: 'Add First User'`.
+- **Verification** — `npm run typecheck` clean;
+  `npx eslint src/lib/emptyStateCopy.ts --max-warnings 0` clean.
+- Deliberately **not** touched: `header: 'LuUser'` at
+  `spa/src/pages/admin/sessions.tsx:24` is on `/admin/sessions`, outside this
+  module.
+
+### R3. Regression lock added
+
+`api/tests/Feature/Admin/UserAdministrationEscalationTest.php` (new, 13 tests /
+117 assertions) pins the measurements from this pass so the closed escalation
+paths cannot silently reopen:
+
+- every path a delegated `admin.users.manage` holder could take toward
+  `system_admin` (create / role / bulk-role / self-role / self-lateral), plus
+  every verb against an existing administrator including `profile`
+- per-user overrides staying system-admin-only even for a holder of
+  `admin.users.manage_permissions`
+- four non-privileged roles refused on the read surface
+- every last-administrator verb the Admin module exposes, **premise asserted**
+- role revocation and override revocation biting on the next request
+- a soft-deleted user failing to authenticate
+- no raw integer id in list payloads, detail payloads, or 404 bodies
+- `sort`/`direction` whitelisting — the `docs/PATTERNS.md:262-268` bug
+- actor + IP + user agent + reason on all six audited lifecycle mutations
+- admin reset forcing a change, clearing the lock, and writing the superseded
+  hash to `password_history`
+
+**Honesty label:** exactly **1 of the 13** goes red against unmodified source
+(the last-administrator premise test, shown above). The other 12 pass either
+way — they are regression locks over already-correct behaviour, not proofs of a
+bug, and are labelled as such rather than presented as fixes.
+
+### Verification record — 2026-08-30
+
+Isolated database `ogami_test_useradm` (created and dropped by this session);
+`db` and `redis` were already up and were not restarted.
+
+- PASS — `tests/Feature/Admin` (whole directory, to prove the `migrate:fresh`
+  reset in R1 breaks nothing downstream): **149 tests, 614 assertions.**
+- PASS — `php -l` on all three changed PHP files.
+- PASS — `phpstan analyse` on the changed PHP files: no errors.
+- PASS — `pint --test` on `UserAdministrationEscalationTest.php` and
+  `UserAdministrationHardeningTest.php`.
+- INHERITED, proven — `pint --test RbacConcurrencyTest.php` fails on
+  `single_quote, unary_operator_spaces, not_operator_with_successor_space,
+  ordered_imports`. Running Pint against the `git show HEAD:` extract of that
+  file returns the **identical** fixer list, so this pass introduced no new
+  violation and the file was not reformatted.
+- PASS — `npm run typecheck`; `npx eslint src/lib/emptyStateCopy.ts --max-warnings 0`.
+- NOT RUN — `npm run audit:role-permissions`. Still the standing blocker on
+  `✅ Verified`; it needs the Nginx/SPA stack, which is intentionally down for
+  this pipeline.
+- Throwaway probe files (`ZzUserAdminProbeTest.php`,
+  `ZzLastAdminRaceProbeTest.php`) were used for the measurements in the audit
+  report and deleted; `git status` confirms neither remains.

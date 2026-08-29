@@ -13,6 +13,7 @@ use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -57,6 +58,38 @@ class RbacConcurrencyTest extends TestCase
             DB::setDefaultConnection($this->originalDefaultConnection);
             parent::tearDown();
         }
+    }
+
+    /**
+     * `$connectionsToTransact = []` turns RefreshDatabase's per-test
+     * transaction OFF for this class, because the forked worker uses a second
+     * PDO connection and could not otherwise see the fixtures. Everything this
+     * class writes is therefore COMMITTED and outlives the test.
+     *
+     * cleanupConcurrencyFixtures() cannot fully undo that: the `users` rows it
+     * creates are referenced by `audit_logs`, which carries an append-only
+     * trigger, so deleting them raises "Audit logs are immutable." An ACTIVE
+     * `system_admin` ("concurrency-admin-…@test.local") consequently survives
+     * for the rest of the PHPUnit process.
+     *
+     * That row is not inert. This class sorts before every `User*` class in
+     * tests/Feature/Admin, so any later test whose premise is "no active system
+     * administrator" or "no eligible automation actor" was silently disarmed by
+     * it — the guard under test simply never fired, and the test passed for the
+     * wrong reason. It has done this twice: UserAdministrationHardeningTest
+     * carries a workaround for it, and it produced a false failure in the
+     * Assets module.
+     *
+     * Resetting RefreshDatabaseState::$migrated makes the NEXT RefreshDatabase
+     * class run `migrate:fresh` again, which drops the committed rows at the
+     * schema level instead of fighting the audit trigger. Same remedy as
+     * AccountingPeriodPostingConcurrencyTest.
+     */
+    public static function tearDownAfterClass(): void
+    {
+        RefreshDatabaseState::$migrated = false;
+
+        parent::tearDownAfterClass();
     }
 
     public function test_concurrent_first_override_sets_have_one_create_and_one_update(): void

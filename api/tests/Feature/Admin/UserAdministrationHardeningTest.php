@@ -59,17 +59,24 @@ class UserAdministrationHardeningTest extends TestCase
         // RbacConcurrencyTest declares `protected array $connectionsToTransact = []`,
         // which switches RefreshDatabase's per-test transaction OFF for that class
         // (it forks, so its fixtures must be visible to a second connection). Its
-        // cleanupConcurrencyFixtures() deletes notifications, overrides and
-        // role_permissions but not the `users` rows, so an ACTIVE system_admin
-        // ("concurrency-admin-…@test.local") stays committed for the rest of the
-        // PHPUnit process. It sorts before this class in tests/Feature/Admin, so in
-        // a full-suite run this test saw two active system admins — where
+        // cleanupConcurrencyFixtures() cannot delete the `users` rows — they are
+        // referenced by append-only `audit_logs` — so an ACTIVE system_admin
+        // ("concurrency-admin-…@test.local") used to stay committed for the rest of
+        // the PHPUnit process. It sorts before this class in tests/Feature/Admin, so
+        // in a full-suite run this test saw two active system admins — where
         // deactivating one is correctly ALLOWED — and the guard never fired.
         //
-        // That is a defect in the fixture, not in the guard, but "the LAST active
-        // system admin" is this test's whole premise and must be owned here: any
-        // future committed row would silently disarm the assertion again. The write
-        // below runs inside this test's own transaction and is rolled back.
+        // That leak is now fixed at source: RbacConcurrencyTest resets
+        // RefreshDatabaseState::$migrated in tearDownAfterClass, so the next
+        // RefreshDatabase class re-runs migrate:fresh and drops the committed rows.
+        // The write below is KEPT anyway, because "the LAST active system admin" is
+        // this test's whole premise and must be owned here rather than depending on
+        // the teardown discipline of unrelated classes: any future committed row
+        // would silently disarm the assertion again. It runs inside this test's own
+        // transaction and is rolled back.
+        //
+        // UserAdministrationEscalationTest deliberately does NOT do this — it
+        // asserts the premise instead, so it fails loudly if the leak returns.
         User::query()->where('role_id', $systemRoleId)->update(['is_active' => false]);
 
         $actor = $this->systemAdmin(['is_active' => false]);

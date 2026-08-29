@@ -220,3 +220,314 @@ UA-I03.
   `http://localhost/login` (13 browser checks, 13 connection-refused failures).
 
 No production code was changed in this audit.
+
+---
+
+# Re-audit — 2026-08-30 (Asia/Manila)
+
+Status recommendation: `🔁 Needs Re-audit`
+
+Lock was an orphan from 2026-08-25 (106h) → **RECLAIMED**. The crashed session
+had left a **fully written** `fix-log.md` and **committed** code: all nine
+planned items are in the tree, swept into `167de85e` ("remaining uncommitted
+work from ~50 crashed audit sessions"). Nothing was stranded uncommitted.
+
+Method: this pass measured the privilege boundary with real HTTP requests
+through the full middleware stack (`postJson`/`patchJson` against
+`/api/v1/admin/*`) as six distinct actors, plus a real cookie-session login for
+the session-invalidation probes and a two-process `pcntl_fork` harness for the
+last-admin race. Findings below cite what was measured, not what was read.
+
+## Re-verification of the prior findings — 9 of 9 confirmed FIXED
+
+Each was re-attempted against the running stack; none reproduces.
+
+| id | prior finding | measured now |
+|---|---|---|
+| UA-B01 | delegated manager can assign `system_admin` | 403 on all four write paths (create / role / bulk-role / self-role) |
+| UA-B02 | self / last-admin lockout unguarded | 403 self-verbs, 422 peer-verbs, race-safe (see UA-I08) |
+| UA-B03 | password-reset mail failure leaves unusable account | reset returns the one-time credential; `Hash::check` confirms it is the stored credential |
+| UA-B04 | override restore cannot bind trashed rows | route has `withTrashed()`; covered by `UserPermissionOverrideTest` |
+| UA-I01 | lifecycle mutations not audited | all six actions write `audit_logs` with actor + IP + user agent + reason |
+| UA-I02 | hashed FKs not validated | 422 + field error for stale/undecodable `role_id`, `department_id`, `sort`, `direction` |
+| UA-I04 | two conflicting override policies | `RequireSystemAdmin` middleware + permission on the whole override group |
+| UA-I05 | role change without confirmation/reason | `reason` is `required|min:5`; SPA opens a confirm modal |
+| UA-I06 | no profile-correction path | `PATCH /admin/users/{user}/profile` + UI form, audited |
+
+`docs/PATTERNS.md:262-268`'s unvalidated `direction` → `orderBy()` bug is **not**
+present here: `ListUsersRequest.php:27-28` whitelists both `sort` and
+`direction` with `Rule::in`.
+
+## Escalation matrix as executed
+
+Actor `delegate` = a custom role holding **only** `admin.users.manage` (the
+dynamic-RBAC path UA-B01 warned about; in `RolePermissionSeeder` only
+`system_admin` holds that permission today, via the `'*'` wildcard at
+`api/database/seeders/RolePermissionSeeder.php:470-474`).
+
+| # | actor → attempted privilege change | measured |
+|---|---|---|
+| E01 | delegate → create user with `role_id=system_admin` | **403** "Only a system administrator may assign the system administrator role." |
+| E02 | delegate → change another user's role to `system_admin` | **403** same |
+| E03 | delegate → bulk-role another user to `system_admin` | **403** same |
+| E04 | delegate → change **own** role to `system_admin` | **403** same |
+| E05 | delegate → change **own** role to `finance_officer` | **403** "You cannot change your own role." |
+| E06 | delegate → grant **itself** a permission override | **403** "Only system administrators may manage permission overrides." |
+| E07 | delegate → reset a `system_admin`'s password | **403** "Only a system administrator may manage a system administrator account." |
+| E08 | delegate → strip `system_admin` role from an administrator | **403** same |
+| E09 | delegate → deactivate a `system_admin` | **403** same |
+| E10 | delegate → create account with `role_id=finance_officer` | **201, `temp_password` echoed (36 chars)** → see UA-B06 |
+| E11 | delegate → reset an existing `finance_officer`'s password | **200, `temp_password` echoed in the response body** → see UA-B06 |
+| E12 | `hr_officer` → `GET /admin/users` | 403 |
+| E13 | `employee` / `finance_officer` / `production_manager` → `GET /admin/users` | 403 |
+| E14 | delegate → edit its **own** name + login email | **200 — allowed** → see UA-M03 |
+| E15 | delegate holding `admin.users.manage_permissions` (not `system_admin`) → grant an override | 403 (route middleware wins over the named permission) |
+| E16 | **inactive** delegate with live session state → `GET /admin/users` | **200** → see UA-M01 |
+| E17 | `system_admin` → edit another `system_admin`'s profile | 200 (intended) |
+
+### Last-admin verbs (premise: exactly one ACTIVE `system_admin`)
+
+| verb | actor | measured |
+|---|---|---|
+| deactivate (self) | the last admin | **403** "You cannot deactivate your own account." |
+| role-strip (self) | the last admin | **403** "You cannot change your own role." |
+| deactivate (peer-driven) | an inactive `system_admin` peer | **422** "At least one active system administrator must remain." |
+| role-strip (peer-driven) | same | **422** same |
+| bulk role-strip | same | **422** same |
+| soft-delete | same | **405** — `DELETE /admin/users/{user}` is not routed (see UA-M02) |
+| force-lock | same | **404** — no lock route exists; lockout is login-driven only |
+| lockout via failed logins | unauthenticated attacker | **`locked_until` set 15 min ahead after 5 attempts** (see UA-I10) |
+| admin password reset | peer | 200, `must_change_password=true` — recoverable, not a lockout |
+| **HR account deactivation** | `hr_officer` | **204 → 0 active system administrators** (see UA-B05) |
+
+### Race safety of the last-admin check
+
+Measured with two OS processes on separate PDO connections, both demoting the
+other's administrator at a socket barrier (2 active administrators → both
+attempt to leave 1):
+
+```
+RACE parent  => ok
+RACE child   => error:Illuminate\Database\QueryException: SQLSTATE[40P01]: Deadlock detected
+RACE remaining active system_admins => 1
+```
+
+The invariant **holds** — it is not a count read outside the transaction.
+`assertAtLeastOneActiveSystemAdminRemains()` takes `lockForUpdate()` over the
+active-administrator set (`UserAdminService.php:578-582`) inside the same
+transaction as the write. The loser is serialised by a PostgreSQL deadlock
+rather than a clean wait, which is a response-quality defect (UA-I08), not a
+safety one.
+
+## New findings
+
+### Broken
+
+#### UA-B05 — an `hr_officer` can deactivate the last system administrator (P0, cross-module)
+
+`UserProvisioningService::deactivateForEmployee()` flips `is_active=false` and
+revokes sessions with **no last-admin guard**
+(`api/app/Modules/HR/Services/UserProvisioningService.php:82-104`). The
+`UserAdminService` guard is therefore bypassable entirely.
+
+Measured: with exactly one ACTIVE `system_admin` (linked to an employee record),
+an `hr_officer` called `POST /api/v1/hr/employees/{employee}/deactivate-account`
+→ **204**, and the system was left with **0 active administrators**. Nobody can
+then reactivate the account, because `admin.users.manage` is held only by
+`system_admin`.
+
+Four reachable call paths:
+
+- `api/app/Modules/HR/Controllers/EmployeeAccountController.php:56` — permission
+  `hr.employees.deactivate_account`, held by `hr_officer`.
+- `api/app/Modules/HR/Services/EmployeeService.php:344` — employee archive,
+  permission `hr.employees.delete`.
+- `api/app/Modules/HR/Listeners/DeactivateAccountOnClearanceComplete.php:54` —
+  fires on clearance completion, i.e. **no operator at all**.
+- direct service calls.
+
+The last path is the worst: completing a separation clearance for whoever holds
+the sole administrator account locks the company out of its own ERP with no
+confirmation prompt anywhere.
+
+**Not fixed here — the code is outside this module's scope** (`api/app/Modules/HR/`).
+The invariant belongs to user administration, so the fix wants a shared guard
+(e.g. extracting `assertAtLeastOneActiveSystemAdminRemains` into a service both
+modules call) rather than a copy-paste of the check.
+
+#### UA-B06 — `admin.users.manage` is effective account takeover of every non-administrator
+
+`PATCH /admin/users/{user}/reset-password` returns the new plaintext credential
+in the response body (`UserAdminController.php:133-142`), and
+`assertCanManageTarget()` only protects `system_admin` targets
+(`UserAdminService.php:561-569`). There is no comparison of the target role's
+authority against the actor's.
+
+Measured (E11): a delegate holding only `admin.users.manage` reset an existing
+`finance_officer`'s password and received the plaintext in the 200 body. Since
+`must_change_password` is then `true` and the delegate knows the temporary
+password, it can complete the change itself and hold `finance_officer` authority
+(payroll approve / finalize / void). E10 is the same escalation via creation
+rather than reset.
+
+Returning the credential is a deliberate fix for UA-B03, and admin-initiated
+reset is a normal capability — the defect is that it is **unbounded by role
+authority**. Under the current seed only `system_admin` holds the permission, so
+this is latent; it becomes live the moment the permission is delegated, which is
+exactly the scenario UA-B01 was raised for. **Question for a human:** should
+`admin.users.manage` be restricted to targets whose role permissions are a
+subset of the actor's, or should the plaintext return be replaced by a
+one-time-link/out-of-band delivery?
+
+### Missing
+
+#### UA-M01 — `is_active` is never re-checked on an authenticated request
+
+No middleware on the internal session stack tests `is_active`.
+`EnsurePortalGuard.php:55` does it, but only for the `customer_portal` and
+`supplier_portal` guards. The **only** control that stops a deactivated internal
+user is the physical `DB::table('sessions')->where('user_id', …)->delete()` in
+`UserAdminService.php:227`.
+
+That makes a single line load-bearing for a security property:
+
+- it is a silent no-op under any `SESSION_DRIVER` other than `database`, and the
+  driver is env-configurable (`api/config/session.php:6`); the test suite itself
+  runs `array` (`api/phpunit.xml:255`), which is how this went unmeasured.
+- any future code path that sets `is_active=false` without deleting sessions
+  grants continued full access, and nothing fails to say so.
+
+Measured under a forced `SESSION_DRIVER=database`: the session row **is** deleted
+(1 → 0 rows), and login is correctly refused afterwards (422, `is_active` is
+checked at `AuthService.php:125`). But with the session state still resolvable
+the deactivated user's request returned **200** — i.e. nothing downstream of the
+row deletion objects. **Caveat, stated plainly:** the surviving-session half of
+that measurement is partly a test-harness artifact (Laravel's test session store
+outlives the row deletion), so the *exploitability* of a stale cookie in
+production was NOT proven. What IS proven is the absence of any `is_active`
+gate — a defence-in-depth gap regardless.
+
+By contrast, soft-delete **is** immediate (401 on the next request), because the
+Eloquent user provider excludes trashed rows on every `retrieveById`.
+
+#### UA-M02 — no soft-delete / restore surface for users at all
+
+`User` uses `SoftDeletes` (`api/app/Modules/Auth/Models/User.php:18`) but the
+Admin module exposes no destroy or restore route: `DELETE /admin/users/{user}`
+measured **405**. The list query is a plain `User::query()`
+(`UserAdminService.php:90`), so it excludes trashed rows.
+
+Consequence: a user soft-deleted by any other path is invisible **and
+unrecoverable** from Admin › Users. The design intent looks like
+"deactivate, never delete" — `EmployeeService::delete()` deactivates rather than
+deletes the linked account — which is defensible. **Question for a human:**
+confirm that users are intentionally never deleted; if so the `SoftDeletes` trait
+on `User` is a trap worth documenting, and if not this surface is missing.
+
+#### UA-M03 — `updateProfile` has no self-target guard
+
+`changeRole` (`UserAdminService.php:280-282`) and `deactivate` (`:215-217`)
+both refuse self-targeting; `updateProfile` (`:460-487`) does not. Measured
+(E14): a delegate changed its own display name **and its own login email** to a
+value it chose, with no re-authentication and no notification to the account
+owner.
+
+This is not an escalation on its own (the unique index blocks stealing another
+user's address) but it is an unreviewed change to an authentication identifier
+from inside an administrative surface, and it is inconsistent with the two
+sibling verbs. **Question:** is self-correction of one's own name/email
+intended here, or should it route through the account/profile surface?
+
+### Incomplete
+
+#### UA-I08 — the last-admin race resolves as a 500, not a 409
+
+Measured above: the losing transaction raises `SQLSTATE[40P01]` and surfaces as
+an unhandled `QueryException`. `ForbiddenActionException` and
+`BusinessRuleException` map cleanly to 403/422; a deadlock does not, so a
+correctly-refused security operation reports itself as a server fault. Lock
+ordering (lock the administrator set before the individual target, or order the
+set lock deterministically) or a deadlock retry/translation would fix it.
+
+#### UA-I09 — `RbacConcurrencyTest` commits an ACTIVE `system_admin` that disarms later tests — **FIXED THIS SESSION**
+
+Confirmed reproducing, then fixed. See `fix-log.md` §R1.
+
+#### UA-I10 — the sole administrator can be locked out by an unauthenticated attacker (cross-module)
+
+Measured: 7 failed logins against the last administrator's email set
+`locked_until` 15 minutes ahead (`failed_login_attempts` capped at 5,
+`is_active` untouched). Only a holder of `admin.users.manage` can call
+`PATCH /{user}/unlock`, and that is the locked account itself. The lock expires
+on its own, so this is a 15-minute-window DoS rather than a permanent lockout —
+but it is repeatable, and `throttle:auth` keys on IP + email, so a rotating-IP
+attacker can sustain it. Belongs to `auth-session`; reported, not fixed.
+
+#### UA-I11 — a role-less user cannot be given a first role
+
+`spa/src/pages/admin/users/detail.tsx:84` sends `expected_role_id: ''` when the
+target has no role; `ChangeUserRoleRequest.php:20,34-38` requires a decodable
+hash and aborts 422 "Invalid expected_role_id." `users.role_id` is nullable, so
+the state is reachable. Fixing it means deciding what optimistic concurrency
+means against a null baseline — a contract change, not a typo.
+
+### Polish
+
+#### UA-P03 — the 404 body names the internal model FQCN
+
+With `APP_DEBUG=false`, `GET /admin/users/{valid-hash-no-row}` returns
+`{"message":"No query results for model [App\\Modules\\Auth\\Models\\User]."}`,
+whereas an undecodable hash returns `{"message":""}`. So the two cases are
+distinguishable and the internal namespace leaks.
+
+**No raw integer id appears anywhere** — not in list payloads, not in detail
+payloads, not in 404 bodies (asserted by regex in the new test). The
+`{"id":42,...}` oracle shape found in other modules is **not** present here.
+This is Laravel's default `ModelNotFoundException` → `NotFoundHttpException`
+message and affects every module's route binding, so it is a cross-cutting item
+rather than an M003 defect. The empty `{"message":""}` is also a poor client
+experience.
+
+#### UA-P04 — UA-P01 is only partly fixed: `LuUser` still reaches the screen
+
+- `spa/src/lib/emptyStateCopy.ts:335` — `actionLabel: 'Add First LuUser'` under
+  the `'/admin/users'` key, rendered as the primary CTA on the **empty** users
+  list (`ListEmptyState.tsx:60-64`, mounted at `index.tsx:212`). The prior pass
+  fixed the three page files and missed the registry, so the string only shows
+  up when the list has zero rows. **Fixed this session** — see `fix-log.md` §R2.
+- `spa/src/pages/admin/sessions.tsx:24` — `header: 'LuUser'` on a DataTable
+  column. Different page (`/admin/sessions`), outside this module; reported.
+
+#### UA-P05 — the legacy hub is now unreachable dead code
+
+`/admin/users-roles` redirects to `/admin/users`
+(`spa/src/routes/dashboardRoutes.tsx:110`), which closed UA-I07, but
+`spa/src/pages/admin/users-roles.tsx` still exists and nothing imports or routes
+to it. Its own four tab links point back at `/admin/users-roles?tab=…`, which
+the redirect swallows, so it could not function even if remounted.
+
+#### UA-P06 — options-error copy omits the status filter
+
+`spa/src/pages/admin/users/index.tsx:188` says "Role and department filters are
+unavailable", but the status options come from the same query (`:87`) and empty
+out too.
+
+## Verification
+
+- Targeted backend suite on an isolated database (`ogami_test_useradm`):
+  **`tests/Feature/Admin` — 149 passed, 614 assertions.**
+- New regression lock `UserAdministrationEscalationTest`: 13 tests, 117
+  assertions; **1 test proven red** against unmodified source (see fix log).
+- `php -l`, `phpstan analyse` (no errors), `pint --test` on changed PHP files.
+- `npm run typecheck`, `npx eslint` on the changed SPA file.
+- Race safety measured with a real two-process fork harness.
+- **Not verified:** the browser role-permission audit
+  (`npm run audit:role-permissions`) was left inconclusive by the prior session
+  and was not re-attempted — the Nginx/SPA containers are intentionally down for
+  this pipeline (only `db` and `redis` run). This remains the standing blocker on
+  `✅ Verified`.
+- **Not verified:** production exploitability of a stale session cookie after
+  deactivation (UA-M01) — see the caveat in that finding.
+- Dependency note: `auth-session` (M001) was being audited concurrently and
+  `api/app/Common/Middleware/SessionTimeout.php` changed underneath this session.
+  Nothing under it was modified here.
