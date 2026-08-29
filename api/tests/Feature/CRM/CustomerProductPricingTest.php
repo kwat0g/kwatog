@@ -248,6 +248,49 @@ class CustomerProductPricingTest extends TestCase
         ]);
     }
 
+    /**
+     * The inverted-window backstop in assertNoOverlap() must compare dates, not
+     * raw strings. A partial update that sends only `effective_from` skips the
+     * FormRequest's `after_or_equal` comparison, so the service guard is the
+     * only thing standing between the caller and an impossible window — and a
+     * non-ISO date string sorts wrong against an ISO one ('1' < '2'), which let
+     * `12/01/2026` past a guard that correctly refused `2026-12-01`.
+     *
+     * An impossible window can never satisfy resolve(), so persisting one
+     * silently removes every price for that customer/product.
+     */
+    public function test_inverted_window_is_refused_whatever_date_format_the_caller_uses(): void
+    {
+        [$customer, $product] = $this->references();
+
+        foreach (['2026-12-01', '12/01/2026', '01-Dec-2026', 'December 1, 2026'] as $format) {
+            $agreement = app(PriceAgreementService::class)->create([
+                'customer_id' => $customer->id,
+                'product_id' => $product->id,
+                'price' => '10.00',
+                'effective_from' => '2026-01-01',
+                'effective_to' => '2026-03-31',
+                'pricing_method' => PricingMethod::Flat->value,
+            ]);
+
+            $this->actingAs($this->actor('crm.price_agreements.manage'))
+                ->putJson("/api/v1/crm/price-agreements/{$agreement->hash_id}", [
+                    'effective_from' => $format,
+                ])
+                ->assertUnprocessable()
+                ->assertJsonValidationErrors(['effective_to']);
+
+            $stored = PriceAgreement::findOrFail($agreement->id);
+            $this->assertTrue(
+                $stored->effective_from->lessThanOrEqualTo($stored->effective_to),
+                "Format {$format} persisted an inverted window: "
+                    . $stored->effective_from->toDateString() . ' .. ' . $stored->effective_to->toDateString(),
+            );
+
+            $agreement->forceDelete();
+        }
+    }
+
     public function test_agreement_search_matches_product_and_customer_names(): void
     {
         [$customer, $product] = $this->references(customerName: 'Searchable Customer', productName: 'Searchable Product');

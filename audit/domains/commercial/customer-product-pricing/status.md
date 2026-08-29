@@ -6,4 +6,4 @@ roles: system_admin
 depends_on: auth-session, rbac
 surface: L
 status: 🔁 Needs Re-audit
-last_session: 2026-08-24
+last_session: 2026-08-29

@@ -99,3 +99,165 @@ F-007 and F-015 remain pending and are the only unresolved plan items. F-007
 requires Accounting/GL ownership confirmation before exposing
 `revenue_account_id`; F-015 requires product-owner confirmation of the
 non-admin CRM role matrix. Final disposition remains `Needs Re-audit`.
+
+## Re-audit session — 2026-08-30
+
+M032 was **RECLAIMED** from an orphaned lock (107h old, owner
+`codex-coordinator-blocker-quarantine`, claimed 2026-08-25T11:51:42Z).
+
+**Predecessor state established before planning anything:** the crashed
+session's work was already **committed**, in `167de85e chore: remaining
+uncommitted work from ~50 crashed audit sessions`. `git status` for
+`api/app/Modules/CRM`, `spa/src/pages/crm`, `spa/src/api/crm`,
+`spa/src/types/crm.ts` and `api/tests/Feature/CRM` was clean at session start,
+and this log was fully written rather than a blank scaffold. So there was
+nothing to recover — this session re-measured the claimed fixes and audited
+fresh. **13 of the 15 prior findings are genuinely fixed; 2 still reproduce**
+(F-007 → R-004 and F-015 → R-008, both previously deferred pending a human
+decision, both still needing one). See the dated re-audit section of
+`audit-report.md` for the per-finding re-measurement table and the full
+invariant table.
+
+### Fixed
+
+**R-002 — the inverted-window backstop compared raw date strings, so a non-ISO
+bound persisted an impossible price window.**
+
+- File: `api/app/Modules/CRM/Services/PriceAgreementService.php`
+- Before (`:207-224`, `assertNoOverlap()` opened directly on the comparison):
+
+  ```php
+  private function assertNoOverlap(
+      int $productId,
+      int $customerId,
+      string $from,
+      string $to,
+      ?int $exceptId = null,
+  ): void {
+      if ($from > $to) {
+  ```
+
+- After (`:207-236`, plus `use Carbon\CarbonImmutable;` at `:17`):
+
+  ```php
+  ): void {
+      // Normalise to Y-m-d BEFORE comparing. Both FormRequests accept `date`,
+      // not `date_format:Y-m-d`, so either bound can arrive in any format
+      // strtotime() understands. A raw string comparison then sorts a non-ISO
+      // bound wrongly against an ISO one — '12/01/2026' < '2026-03-31' because
+      // '1' < '2' — so the guard below silently passed and an impossible
+      // window was persisted. ...
+      $from = CarbonImmutable::parse($from)->toDateString();
+      $to = CarbonImmutable::parse($to)->toDateString();
+
+      if ($from > $to) {
+  ```
+
+- Why it was reachable: `UpdatePriceAgreementRequest` marks both dates
+  `sometimes`, so a partial update sending only `effective_from` skips
+  `after_or_equal:effective_from` entirely and this service backstop is the only
+  remaining check — as its own comment at `:216-220` already noted.
+- Measured before: `PUT /api/v1/crm/price-agreements/{id}` with
+  `{"effective_from": "12/01/2026"}` over a stored `2026-01-01 .. 2026-03-31`
+  returned **200 OK** and persisted `2026-12-01 .. 2026-03-31`. The identical
+  request as `2026-12-01` was correctly refused with 422 — the defect was purely
+  the string comparison.
+- Impact of the old behaviour: nothing satisfies
+  `effective_from <= d AND effective_to >= d` inside an inverted window, so
+  `resolve()` never matched it and that customer/product silently lost **every**
+  price. The only symptom was a 422 "No active price agreement" on the next
+  sales order, pointing at the product rather than the corrupt window.
+- Containment: the fix rejects nothing that was previously accepted. It closes a
+  formatting loophole in a guard that already refused the same window in ISO
+  form, and it also stops the `whereDate()` bindings relying on the server's
+  `DateStyle` to interpret an ambiguous bound. No price changes.
+- Regression lock: `api/tests/Feature/CRM/CustomerProductPricingTest.php:258-297`
+  — `test_inverted_window_is_refused_whatever_date_format_the_caller_uses`,
+  looping four date shapes (`2026-12-01`, `12/01/2026`, `01-Dec-2026`,
+  `December 1, 2026`) and asserting both the 422 and that the stored window is
+  never inverted. **Confirmed RED against unmodified source**: it failed with
+  "Expected response status code [422] but received 200" at the assertion, after
+  5 passing assertions (the ISO case passes, then `12/01/2026` slips through) —
+  so it genuinely exercises the defect and is not a lock that would pass either
+  way.
+
+### Deferred — see the 2026-08-30 action plan for ordering and rationale
+
+- **R-001** (Broken, money) — a tiered agreement charges the lowest tier's bulk
+  price below the first threshold while the SPA labels `price` "Fallback price"
+  and states it applies there. Measured end-to-end: a real sales order for
+  quantity 1 with tiers from `min_qty` 10 and `price` ₱99.99 persisted
+  `unit_price = 12.00` — ₱87.99/unit under the stated price. **Not fixed
+  deliberately**: both candidate one-line fixes bill different amounts, so this
+  needs the commercial owner, and this session must never unilaterally change
+  what a customer is charged.
+- **R-003** (Missing) — no database-level overlap guarantee; `resolve()` returned
+  ₱80.00 vs ₱100.00 for the same customer/product/date depending purely on
+  insertion order when two overlapping rows share an `effective_from`. Write
+  paths are closed and the row lock is real (verified with two `psql` sessions),
+  but `PriceAgreementSeeder.php:71` bypasses the service and pre-existing rows
+  were never reconciled. Needs a migration plus a data decision.
+- **R-004** (Missing, carried F-007) — `revenue_account_id` still unreachable.
+  Needs Accounting/GL ownership.
+- **R-005** (Incomplete) — `is_currently_active` is date-only, so an agreement
+  whose product or customer is archived reads Active on three surfaces while
+  `resolve()` refuses it.
+- **R-006** (Incomplete) — `pricing_method: flat` on a tiered agreement is a 422
+  naming a field the caller did not send. SPA-unreachable; API only. Deferred
+  because succeeding changes the agreement's effective price.
+- **R-007** (Incomplete/question) — `effective_to` is NOT NULL, so no open-ended
+  window exists and a lapsed window hard-blocks every new order with no expiry
+  warning anywhere.
+- **R-008** (Incomplete, carried F-015) — no role but `system_admin` reaches
+  `crm.price_agreements.*`; `docs/USER-MANUAL.md:166-172` implies otherwise.
+- **R-009** (Polish) — no tier price monotonicity check; `[10 → ₱10.00,
+  100 → ₱50.00]` accepted.
+- **R-010, R-011, R-012** (Polish) — archived-agreement deep link 404s;
+  view-only row click lands on a 403 route; seeded prices are float literals.
+- **R-013** (Polish, not this module's) — `HashIdFilter::decode` accepts raw
+  integers in every environment, so `?customer_id=<int>` filters the list.
+
+### Verification
+
+- Module suite in the isolated database `ogami_test_pricing`:
+  `docker compose run --rm -e DB_DATABASE=ogami_test_pricing api php artisan test tests/Feature/CRM/CustomerProductPricingTest.php --no-coverage`
+  → **13 passed, 61 assertions**. Baseline before this session: 12 passed, 45
+  assertions.
+- Whole CRM feature suite, same isolated database: **95 passed, 306 assertions**.
+  No regressions from the change.
+- `php -l` clean on both changed files.
+- `phpstan analyse app/Modules/CRM/Services/PriceAgreementService.php tests/Feature/CRM/CustomerProductPricingTest.php --memory-limit=1G`
+  → **[OK] No errors**.
+- `pint --test` fails on both changed files, with fixer lists **byte-identical**
+  to the same files extracted from `HEAD` via `git show` and re-tested
+  (`PriceAgreementService.php`: `new_with_parentheses, control_structure_braces,
+  method_chaining_indentation, unary_operator_spaces, braces_position,
+  statement_indentation, not_operator_with_successor_space,
+  blank_line_before_statement, binary_operator_spaces, phpdoc_align`;
+  `CustomerProductPricingTest.php`: `concat_space`). Inherited at HEAD, not
+  introduced here. No formatter was run in write mode.
+- Row-lock serialization checked outside the harness with two concurrent `psql`
+  sessions: the second was cancelled by `statement_timeout` with
+  `while locking tuple (0,8) in relation "products"`.
+- Live exposure to R-003 checked against the dev database: **0 overlapping
+  agreements across 15 rows**.
+- SPA checks not run — no SPA file was changed in this session.
+- Two scratch probe test classes (`ZzPricingProbeTest`, `ZzPricingProbe2Test`)
+  produced the invariant measurements and were **deleted** before release;
+  `git status` for `api/tests/Feature/CRM` shows only
+  `CustomerProductPricingTest.php`.
+- Probe database `ogami_test_pricing` dropped after the final run.
+
+### Could not verify
+
+- A genuine two-process race on `PriceAgreementService::create()`. `RefreshDatabase`
+  holds its rows inside an uncommitted transaction that a second connection
+  cannot see, so a second connection's `SELECT ... FOR UPDATE` matches zero rows
+  and returns instantly — a first attempt appeared to report "no lock" for
+  exactly that reason and was discarded as a probe artifact rather than written
+  up as a finding. The lock *statement* was instead proven to block with two real
+  `psql` sessions, which is what the serialization claim rests on. The residual
+  risk is writers that never take the lock at all, which is R-003.
+
+Final disposition: **🔁 Needs Re-audit** — R-002 fixed and verified; R-001,
+R-003 through R-013 deferred, several pending owner decisions.

@@ -14,6 +14,7 @@ use App\Modules\CRM\Enums\PricingMethod;
 use App\Modules\CRM\Exceptions\NoPriceAgreementException;
 use App\Modules\CRM\Models\PriceAgreement;
 use App\Modules\CRM\Models\Product;
+use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
@@ -211,6 +212,18 @@ class PriceAgreementService
         string $to,
         ?int $exceptId = null,
     ): void {
+        // Normalise to Y-m-d BEFORE comparing. Both FormRequests accept `date`,
+        // not `date_format:Y-m-d`, so either bound can arrive in any format
+        // strtotime() understands. A raw string comparison then sorts a non-ISO
+        // bound wrongly against an ISO one — '12/01/2026' < '2026-03-31' because
+        // '1' < '2' — so the guard below silently passed and an impossible
+        // window was persisted. Nothing can ever satisfy resolve() inside an
+        // inverted window, so that quietly removed every price for the pair.
+        // Normalising also stops the whereDate() bindings depending on the
+        // server's DateStyle to interpret an ambiguous bound.
+        $from = CarbonImmutable::parse($from)->toDateString();
+        $to = CarbonImmutable::parse($to)->toDateString();
+
         if ($from > $to) {
             // Keyed to effective_to because that is where both FormRequests put
             // the same rule (`after_or_equal:effective_from`), so the operator
