@@ -6,4 +6,4 @@ roles: supplier-portal, system_admin, finance_officer
 depends_on: auth-session, purchase-orders, import-shipments-customs, accounts-payable, traceability-ppap
 surface: L
 status: 🔁 Needs Re-audit
-last_session: 2026-08-27
+last_session: 2026-08-29
