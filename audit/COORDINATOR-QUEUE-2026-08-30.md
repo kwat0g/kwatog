@@ -20,6 +20,8 @@ Rules the coordinator holds and agents never touch:
 - **CLAUDE.md says the approval chain is "4 levels (Staff → Dept Head → Manager → Officer → VP)". Leave implements exactly 2** (`WorkflowSeeder.php:26-29`, two pending enum states) and code/seeder/enum agree, so it reads as deliberate. Either the doc or the seeder is wrong; decide once, centrally, because every approval-bearing module is audited against that sentence.
 - **`AccountsPayableHardeningTest` has one pre-existing failure**, seen from the supplier-portal session's dependency run and confirmed not attributable to it. It belongs to `accounts-payable`, which is marked `✅ Verified` — so either that verification was optimistic or something regressed since. Confirm before trusting the status.
 - **No browser has run in this pipeline.** Four agents have reported Chromium/Playwright binaries absent with no X server. Every SPA claim so far is source- or jsdom-level; installing Chromium is the only thing that closes the browser-acceptance findings accumulating across modules.
+- **P0 CROSS-MODULE, needs an owner: `App\Modules\HR\Services\UserProvisioningService::deactivateForEmployee()` (`:82-104`) has NO last-admin guard**, across 4 call paths — one of them the *unattended* clearance listener (`DeactivateAccountOnClearanceComplete.php:54`). Measured from M003: an `hr_officer` deactivation returned 204 and left **0 active administrators**. M003 correctly refused to fix another module's file, and notes it wants a *shared* guard rather than a copied one. Assign with `people/employee-master` (M014) or `people/onboarding` (M015), whichever owns that service.
+- `api/tests/Feature/Accounting/AccountingPeriodDuplicateRecoveryTest.php:39` calls `DB::commit()` with no `RefreshDatabaseState::$migrated` reset — same class of suite-poisoning defect M003 just fixed in `RbacConcurrencyTest`. Accounting's to own.
 - **Sanctum abilities are not enforced anywhere on the supplier portal** — tokens mint with no ability list (defaults `['*']`) and no route uses the `ability` middleware. That is "no abilities model", not "attached but unenforced".
 
 
@@ -48,10 +50,10 @@ existing `fix-log.md` / `git diff` before trusting its status.
 | # | Tier | ID | Module | State |
 |---|---|---|---|---|
 | 1 | 1 | M001 | platform/auth-session | **in flight** |
-| 2 | 1 | M003 | platform/user-administration | **in flight** |
+| 2 | 1 | M003 | platform/user-administration | done |
 | 3 | 2 | M026 | finance/journal-ledger | **in flight** |
-| 4 | 2 | M028 | finance/accounts-receivable | queued |
-| 5 | 2 | M032 | commercial/customer-product-pricing | queued |
+| 4 | 2 | M028 | finance/accounts-receivable | queued — HOLD while M026 journal-ledger is in flight; AR posts through JournalEntryService, which that session is editing |
+| 5 | 2 | M032 | commercial/customer-product-pricing | **in flight** |
 | 6 | 2 | M020 | people/loans-cash-advances | queued |
 | 7 | 2 | M021 | people/payroll-period-processing | queued |
 | 8 | 2 | M023 | people/separation-final-pay | queued |
@@ -109,8 +111,8 @@ fresh discovery pass.
 | ID | Module | Launched |
 |---|---|---|
 | M001 | platform/auth-session | 2026-08-30 |
-| M003 | platform/user-administration | 2026-08-30 |
 | M026 | finance/journal-ledger | 2026-08-30 |
+| M032 | commercial/customer-product-pricing | 2026-08-30 |
 
 ## Completed this pipeline
 
@@ -123,6 +125,7 @@ fresh discovery pass.
 | M009 | platform/global-search | 🔁 Needs Re-audit | Switched-off modules were still searchable — fixed. 13×11 permission matrix executed, 0 leaks. F17 handed to purchase-orders. |
 | M019 | people/leave-management | 🔁 Needs Re-audit | P0: cancelling an approved request after year-end resurrects already-encashed credits. 2 fixed (incl. a suite red 1 day in 7). |
 | M047 | supply-chain/supplier-portal | 🔁 Needs Re-audit | 3 stacked defects in one method, each hiding the next — two supplier PO-detail panels had never displayed. Cross-tenant: 21/25 routes probed, no leak. |
+| M003 | platform/user-administration | 🔁 Needs Re-audit | Prior session's 9 fixes were all already committed; 9/9 no longer reproduce. 16-row escalation matrix all refused. P0 found in HR's UserProvisioningService (cross-module). |
 
 
 ## Held out deliberately
