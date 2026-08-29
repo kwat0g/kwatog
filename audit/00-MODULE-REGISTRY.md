@@ -1,6 +1,6 @@
 # Module Registry
 
-_Generated 2026-08-29 20:10 UTC by scripts/regenerate-registry.sh - do not edit by hand, edit each module's status.md instead._
+_Generated 2026-08-29 21:55 UTC by scripts/regenerate-registry.sh - do not edit by hand, edit each module's status.md instead._
 
 | ID | Domain | Module | Tier | Roles | Depends On | Status | Last Session | Locked? |
 |----|--------|--------|------|-------|-----------|--------|---------------|---------|
@@ -25,7 +25,7 @@ _Generated 2026-08-29 20:10 UTC by scripts/regenerate-registry.sh - do not edit 
 | M053 | manufacturing | maintenance-machine-health | 3 | system_admin, maintenance_tech, production_manager, ppc_head | fixed-assets-depreciation, production-work-orders, inventory-master, employee-master | 🔁 Needs Re-audit | 2026-08-25 | 🔒 yes |
 | M052 | manufacturing | production-routings | 3 | system_admin, production_manager, ppc_head | customer-product-pricing, inventory-master, quality-inspection-specifications | ✅ Verified | 2026-08-25 | no |
 | M051 | manufacturing | production-work-orders | 3 | system_admin, production_manager, ppc_head | sales-orders, bom-mrp-planning, material-issues-reservations, inspections-certificates, employee-master | 🔁 Needs Re-audit | 2026-08-25 | 🔒 yes |
-| M018 | people | attendance-dtr | 4 | system_admin, hr_officer, finance_officer, production_manager, ppc_head, purchasing_officer, warehouse_staff, qc_inspector, maintenance_tech, impex_officer, department_head, employee, driver | employee-master | 🔁 Needs Re-audit | 2026-08-28 | no |
+| M018 | people | attendance-dtr | 4 | system_admin, hr_officer, finance_officer, production_manager, ppc_head, purchasing_officer, warehouse_staff, qc_inspector, maintenance_tech, impex_officer, department_head, employee, driver | employee-master | 🔁 Needs Re-audit | 2026-08-29 | no |
 | M014 | people | employee-master | 1 | system_admin, hr_officer, department_head | auth-session, rbac | Plan Ready | 2026-08-27 | no |
 | M024 | people | employee-self-service | 4 | system_admin, hr_officer, finance_officer, production_manager, ppc_head, purchasing_officer, warehouse_staff, qc_inspector, maintenance_tech, impex_officer, department_head, employee, driver | auth-session, employee-master, attendance-dtr, leave-management, loans-cash-advances, payroll-period-processing, notifications | 🔁 Needs Re-audit | 2026-08-25 | 🔒 yes |
 | M019 | people | leave-management | 4 | system_admin, hr_officer, finance_officer, production_manager, ppc_head, purchasing_officer, warehouse_staff, qc_inspector, maintenance_tech, impex_officer, department_head, employee, driver | employee-master, attendance-dtr, approval-workflows | 🔁 Needs Re-audit | 2026-08-27 | no |
@@ -50,10 +50,10 @@ _Generated 2026-08-29 20:10 UTC by scripts/regenerate-registry.sh - do not edit 
 | M002 | platform | rbac | 1 | system_admin | auth-session | ✅ Verified | 2026-08-24 | no |
 | M003 | platform | user-administration | 1 | system_admin | auth-session, rbac | 🔁 Needs Re-audit | 2026-08-24 | 🔒 yes |
 | M037 | procurement | purchase-orders | 3 | system_admin, purchasing_officer, supplier-portal | purchase-requests, supplier-performance, accounts-payable, approval-workflows | 🔁 Needs Re-audit | 2026-08-25 | 🔒 yes |
-| M036 | procurement | purchase-requests | 3 | system_admin, purchasing_officer, department_head | inventory-master, employee-master, approval-workflows, demand-forecasting | 🔁 Needs Re-audit | 2026-08-27 | no |
+| M036 | procurement | purchase-requests | 3 | system_admin, purchasing_officer, department_head | inventory-master, employee-master, approval-workflows, demand-forecasting | 🔁 Needs Re-audit | 2026-08-29 | no |
 | M038 | procurement | supplier-performance | 3 | system_admin, finance_officer, purchasing_officer | purchase-orders, goods-receiving, inspections-certificates | 🔁 Needs Re-audit | 2026-08-25 | 🔒 yes |
 | M060 | public | corporate-site-contact | 4 | Public, system_admin | — | 🔁 Needs Re-audit | 2026-08-25 | 🔒 yes |
-| M059 | quality | calibration-quality-analytics | 3 | system_admin, qc_inspector, production_manager | inspections-certificates, ncr-capa, maintenance-machine-health | 🔁 Needs Re-audit | 2026-08-27 | no |
+| M059 | quality | calibration-quality-analytics | 3 | system_admin, qc_inspector, production_manager | inspections-certificates, ncr-capa, maintenance-machine-health | 🔁 Needs Re-audit | 2026-08-29 | no |
 | M056 | quality | inspections-certificates | 3 | system_admin, qc_inspector, production_manager | inspection-specifications, goods-receiving, production-work-orders, deliveries-proof, returns-rma | 🔁 Needs Re-audit | 2026-08-25 | 🔒 yes |
 | M055 | quality | inspection-specifications | 3 | system_admin, qc_inspector | customer-product-pricing, production-routings, inventory-master | ✅ Verified | 2026-08-25 | no |
 | M054 | quality | material-review-board | 3 | system_admin, warehouse_staff, qc_inspector | goods-receiving, inspections-certificates, warehouse-stock-control, returns-rma | 🔁 Needs Re-audit | 2026-08-25 | 🔒 yes |
