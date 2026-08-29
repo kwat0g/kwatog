@@ -1,123 +1,124 @@
 import {
- ComposedChart,
- Bar,
- Line,
- XAxis,
- YAxis,
- CartesianGrid,
- Tooltip,
- ResponsiveContainer,
+  ComposedChart,
+  Bar,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
 } from 'recharts';
 
 export interface ParetoEntry {
- category: string;
- minutes: number;
- cumulative_pct: number;
+  category: string;
+  minutes: number;
+  cumulative_pct: number;
 }
 
 interface Props {
- data: ParetoEntry[];
- height?: number;
- /**
-  * Semantic name for the bar series. Defaults to downtime minutes, which is
-  * what the field is called and how it is formatted. Consumers charting
-  * something else (defect counts, reject quantities) pass their own label and
-  * get plain integers in the axis, the legend key and the tooltip — without it
-  * a Quality defect count rendered as "Downtime: 1m".
-  */
- valueLabel?: string;
+  data: ParetoEntry[];
+  height?: number;
+  /**
+   * Semantic name for the bar series. Defaults to downtime minutes, which is
+   * what the field is called and how it is formatted. Consumers charting
+   * something else (defect counts, reject quantities) pass their own label and
+   * get plain integers in the axis, the legend key and the tooltip — without it
+   * a Quality defect count rendered as "Downtime: 1m".
+   */
+  valueLabel?: string;
 }
 
 function formatMinutes(m: number): string {
- if (m >= 60) return `${Math.floor(m / 60)}h ${m % 60}m`;
- return `${m}m`;
+  if (m >= 60) return `${Math.floor(m / 60)}h ${m % 60}m`;
+  return `${m}m`;
 }
 
 export function DowntimeParetoChart({ data, height = 260, valueLabel }: Props) {
- if (data.length === 0) return null;
+  if (data.length === 0) return null;
 
- const seriesName = valueLabel ?? 'Downtime';
- const formatValue = valueLabel ? String : formatMinutes;
+  const seriesName = valueLabel ?? 'Downtime';
+  const formatValue = valueLabel ? String : formatMinutes;
 
- const label = (cat: string) =>
- cat.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  const label = (cat: string) => cat.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
- return (
- <ResponsiveContainer width="100%" height={height}>
- <ComposedChart data={data} margin={{ top: 8, right: 40, left: 0, bottom: 40 }}>
- <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
- <XAxis
- dataKey="category"
- tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
- tickFormatter={label}
- angle={-30}
- textAnchor="end"
- interval={0}
- height={56}
- />
- <YAxis
- yAxisId="left"
- tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
- tickFormatter={formatValue}
- width={56}
- />
- <YAxis
- yAxisId="right"
- orientation="right"
- unit="%"
- domain={[0, 100]}
- tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
- width={40}
- />
- <Tooltip
- contentStyle={{
- background: 'var(--bg-elevated)',
- border: '1px solid var(--border-default)',
- borderRadius: 'var(--radius-md)',
- fontSize: 12,
- }}
- formatter={(value: number, name: string) =>
- name === seriesName ? [formatValue(value), seriesName] : [`${value.toFixed(1)}%`, 'Cumulative']
- }
- labelFormatter={label}
- />
- <Bar
- yAxisId="left"
- dataKey="minutes"
- name={seriesName}
- fill="var(--danger)"
- radius={[3, 3, 0, 0]}
- maxBarSize={48}
- />
- <Line
- yAxisId="right"
- type="monotone"
- dataKey="cumulative_pct"
- name="Cumulative %"
- stroke="var(--warning)"
- dot={{ r: 3 }}
- strokeWidth={2}
- activeDot={{ r: 4 }}
- />
- </ComposedChart>
- </ResponsiveContainer>
- );
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <ComposedChart data={data} margin={{ top: 8, right: 40, left: 0, bottom: 40 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
+        <XAxis
+          dataKey="category"
+          tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
+          tickFormatter={label}
+          angle={-30}
+          textAnchor="end"
+          interval={0}
+          height={56}
+        />
+        <YAxis
+          yAxisId="left"
+          tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
+          tickFormatter={formatValue}
+          width={56}
+        />
+        <YAxis
+          yAxisId="right"
+          orientation="right"
+          unit="%"
+          domain={[0, 100]}
+          tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
+          width={40}
+        />
+        <Tooltip
+          contentStyle={{
+            background: 'var(--bg-elevated)',
+            border: '1px solid var(--border-default)',
+            borderRadius: 'var(--radius-md)',
+            fontSize: 12,
+          }}
+          formatter={(value: number, name: string) =>
+            name === seriesName
+              ? [formatValue(value), seriesName]
+              : [`${value.toFixed(1)}%`, 'Cumulative']
+          }
+          labelFormatter={label}
+        />
+        <Bar
+          yAxisId="left"
+          dataKey="minutes"
+          name={seriesName}
+          fill="var(--danger)"
+          radius={[3, 3, 0, 0]}
+          maxBarSize={48}
+        />
+        <Line
+          yAxisId="right"
+          type="monotone"
+          dataKey="cumulative_pct"
+          name="Cumulative %"
+          stroke="var(--warning)"
+          dot={{ r: 3 }}
+          strokeWidth={2}
+          activeDot={{ r: 4 }}
+        />
+      </ComposedChart>
+    </ResponsiveContainer>
+  );
 }
 
 /** Derive sorted Pareto data from category_breakdown array */
 // eslint-disable-next-line react-refresh/only-export-components
 export function buildParetoData(
- breakdown: Array<{ category: string; minutes: number }>,
+  breakdown: Array<{ category: string; minutes: number }>,
 ): ParetoEntry[] {
- const sorted = [...breakdown].sort((a, b) => b.minutes - a.minutes);
- const total = sorted.reduce((s, r) => s + r.minutes, 0);
- let cum = 0;
- return sorted.map((r) => {
- cum += r.minutes;
- return {
- category: r.category,
- minutes: r.minutes,
- cumulative_pct: total > 0 ? (cum / total) * 100 : 0,
- };
- });
+  const sorted = [...breakdown].sort((a, b) => b.minutes - a.minutes);
+  const total = sorted.reduce((s, r) => s + r.minutes, 0);
+  let cum = 0;
+  return sorted.map((r) => {
+    cum += r.minutes;
+    return {
+      category: r.category,
+      minutes: r.minutes,
+      cumulative_pct: total > 0 ? (cum / total) * 100 : 0,
+    };
+  });
 }
