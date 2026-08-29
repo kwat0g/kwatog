@@ -368,3 +368,156 @@ git diff --check -- spa/src/api/attendance/attendances.ts spa/src/pages/attendan
 ```
 
 Result: **PASS**.
+
+## Re-audit session — 2026-08-30
+
+Claimed with `audit/scripts/claim-module.sh people attendance-dtr` → `CLAIMED`.
+Private database `ogami_test_dtr`; `ogami_test` was never touched.
+
+Three fixes applied, all of one theme: **a well-formed operator action was
+reaching the client as an unhandled fault instead of an actionable message.**
+Nothing here changes a computed pay figure, a state machine, or a permission —
+those items are deferred, see `action-plan.md`.
+
+### M018-F18 — an archived attendance day broke every re-write and published the SQL
+
+`attendances_employee_id_date_unique` is a plain `UNIQUE CONSTRAINT` on
+`(employee_id, date)` — verified live with `\d attendances` — and is **not**
+partial on `deleted_at IS NULL`, even though `0444_add_soft_deletes_to_all_tables`
+added `deleted_at` to the table. An archived row therefore still owns that
+employee-day, while the default Eloquent scope hides it from every reader.
+
+Measured before the fix (probe run, since deleted):
+
+```text
+[PROBE 1] re-import after archive:
+{"total":1,"imported":0,"skipped":1,"errors":[{"row":2,"message":
+"SQLSTATE[23505]: Unique violation: 7 ERROR:  duplicate key value violates unique
+constraint \"attendances_employee_id_date_unique\" ... (Connection: pgsql, Host: db,
+Port: 5432, Database: ogami_test_dtr, SQL: insert into \"attendances\"
+(\"employee_id\", \"date\", \"time_in\", ...) values (1, 2026-04-15 00:00:00, ...))"}]}
+
+[PROBE 1b] Illuminate\Database\UniqueConstraintViolationException: SQLSTATE[23505] ...
+```
+
+So the biometric re-import of any archived day reported an opaque `skipped` and
+handed the browser the full INSERT statement — table, column list, bound values,
+host, port and database name. The manual create path raised
+`UniqueConstraintViolationException`, which `bootstrap/app.php` does not map, so
+it reached the client as a 500. Archiving is an action the SPA exposes on the
+attendance list (added by M018-F04), so this is a routine sequence.
+
+- `api/app/Modules/Attendance/Services/DTRImportService.php:281-297` — new
+  `openDayRecord()` resolves the day through `withTrashed()` with
+  `lockForUpdate()` inside the caller's transaction and refuses an archived day
+  with a `BusinessRuleException` naming the remedy. Called from both import
+  loops (`:105`, `:230`), replacing the two `Attendance::query()->where(...)`
+  lookups that could not see a trashed row.
+- The archived row is deliberately **not** resurrected. Un-archiving a day has
+  payroll consequences and must stay an explicit HR decision, not a side effect
+  of dropping a file on the importer. `Leave` already reads this table through
+  `withTrashed()` for the same reason
+  (`api/app/Modules/Leave/Services/LeaveRequestService.php:513`).
+- `api/app/Modules/Attendance/Services/DTRImportService.php:310-341` — new
+  `rowMessage()` replaces the two bare `$e->getMessage()` calls (`:116`, `:244`).
+  Operator-actionable throws pass through unchanged (`RuntimeException` row
+  control flow, `BusinessRuleException` payroll locks, the DTR engine's
+  `InvalidArgumentException` inverted-punch refusal — the last of which
+  `PairedCsvImportTest:131` asserts on, so it had to keep flowing). A Carbon
+  format fault becomes a format hint. Anything else is `Log::error`-ed with its
+  class and message and replaced with a stable sentence — the skipped count and
+  the log still show the fault, the client no longer gets the statement.
+- `api/app/Modules/Attendance/Services/DTRImportService.php:348-353` — new
+  `isDayUniqueViolation()` recognises this one constraint by name so an
+  unrelated unique failure is still reported as internal rather than mislabelled
+  as a duplicate day. Mirrors the existing
+  `OvertimeService::isAutoSourceUniqueViolation()` (`OvertimeService.php:143-150`).
+  This covers the residual race where two concurrent imports both find no row.
+- `api/app/Modules/Attendance/Services/AttendanceService.php:128-143` — new
+  `assertDayNotArchived()`, called from `create()` at `:104` inside the existing
+  transaction, after the payroll fence. Throws `BusinessRuleException` → 422.
+- `api/app/Modules/Attendance/Services/AttendanceService.php:7` — imports
+  `BusinessRuleException`.
+
+Before: archived day → opaque `skipped` + full SQL in JSON; manual create → 500.
+After: both paths return one sentence naming the archived record and the remedy;
+an unarchived existing day still updates in place, unchanged.
+
+### M018-F23 — an arbitrary `direction` 500-ed the attendance list
+
+`api/app/Modules/Attendance/Services/AttendanceService.php:83-95` whitelisted
+`sort` but passed `direction` straight into `orderBy()`. Laravel's
+`Query\Builder::orderBy()` throws `InvalidArgumentException: Order direction must
+be "asc" or "desc".` — measured as `[PROBE 10]`. Now lower-cased and
+whitelisted, falling back to `desc`.
+
+Note the root is upstream of this module: the service template in
+`docs/PATTERNS.md:262-268` has the same unvalidated `$sortDir`. Reported, not
+fixed here — it is outside module scope.
+
+### M018-F14 — a datetime-shaped `date` produced a parse fault, not a 422
+
+`api/app/Modules/Attendance/Requests/StoreAttendanceRequest.php:28` used the
+broad `date` rule, and `validatedData()` at `:47-52` concatenates the raw value
+with an `H:i` time. Measured:
+
+```text
+[PROBE 7] StoreAttendanceRequest would build time_in = '2026-04-15 12:00:00 08:00:00'
+[PROBE 7] Carbon threw Carbon\Exceptions\InvalidFormatException:
+          Failed to parse time string ... Double time specification
+```
+
+Now `date_format:Y-m-d` with a message at `:37-42`. The column is a `date` and
+the SPA sends `<input type="date">`, so no accepted input is lost.
+
+### Verification
+
+New regression suite
+`api/tests/Feature/Attendance/AttendanceArchivedDayAndInputHardeningTest.php`
+(6 tests) covers: paired re-import of an archived day (asserting the message
+contains neither `SQLSTATE`, nor `insert into`, nor the constraint name), raw-punch
+re-import of an archived day, manual create over an archived day raising
+`BusinessRuleException`, an **unarchived** existing day still updating in place
+(the no-regression case), the arbitrary sort direction, and the date rule.
+
+```text
+docker compose run --rm -e DB_DATABASE=ogami_test_dtr api \
+  php artisan test tests/Feature/Attendance/AttendanceArchivedDayAndInputHardeningTest.php --no-coverage
+→ Tests: 6 passed (21 assertions)
+
+docker compose run --rm -e DB_DATABASE=ogami_test_dtr api \
+  php artisan test tests/Feature/Attendance tests/Unit/DTRComputationServiceTest.php \
+  tests/Unit/AutoDetectOvertimeTest.php tests/Feature/Notifications/OvertimeNotificationTest.php --no-coverage
+→ Tests: 75 passed (199 assertions)     [was 69 before; +6 new, 0 regressions]
+
+docker compose run --rm api ./vendor/bin/phpstan analyse app/Modules/Attendance --memory-limit=1G
+→ [OK] No errors   (43 files)
+
+php -l on all four changed files → No syntax errors detected
+git diff --check on module paths   → clean
+```
+
+Pint: the three modified files still fail, and every failing rule is **inherited**.
+Proven by extracting the `git show HEAD:api/<path>` copy of each into a scratch
+directory and running `pint --test -v` on both, then comparing rule lists:
+
+| file | HEAD rules | after this session |
+|---|---|---|
+| `StoreAttendanceRequest.php` | control_structure_braces, braces_position, statement_indentation, not_operator_with_successor_space, blank_line_before_statement, binary_operator_spaces | **identical** |
+| `AttendanceService.php` | …+ fully_qualified_strict_types, method_chaining_indentation, unary_operator_spaces, single_line_empty_body, ordered_imports, binary_operator_spaces | same set **minus** binary_operator_spaces |
+| `DTRImportService.php` | class_attributes_separation, new_with_parentheses, control_structure_braces, unary_operator_spaces, braces_position, statement_indentation, not_operator_with_successor_space, single_line_empty_body, blank_line_before_statement, binary_operator_spaces | same set **minus** class_attributes_separation |
+| new test file | — | **passes, exit 0** |
+
+No rule appears in a modified file that is not already in that file's HEAD copy.
+Two rules I did briefly introduce were removed rather than shipped: importing
+`RuntimeException`/`InvalidArgumentException` turned the file's four
+**pre-existing** `throw new \RuntimeException` lines into
+`fully_qualified_strict_types` violations, so those references were left fully
+qualified and only `Carbon\Exceptions\InvalidFormatException` is imported.
+No pre-existing formatting was rewritten into this diff.
+
+### Not fixed here
+
+Everything else in `action-plan.md`. The temporary probe suite used to gather the
+measurements above was deleted; its outputs are quoted verbatim in
+`audit-report.md` so the evidence survives without a test that asserts defects.

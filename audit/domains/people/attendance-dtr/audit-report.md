@@ -147,3 +147,502 @@ No fix was applied. Only four of the ten ordered actions are `same-session-ok`, 
 ## Next action
 
 Keep M018 at 📋 Plan Ready. In a separate hardening session, first close the payroll membership fence and bulk-error disclosure, then decide the raw/recurring product contracts and add the negative/concurrency/browser evidence. The small correction/date/notification/threshold fixes can follow in the same or a later focused session after those contracts are settled.
+
+---
+
+# M018 — Attendance & DTR re-audit (2026-08-30)
+
+Audit date: 2026-08-30
+Claim: `audit/scripts/claim-module.sh people attendance-dtr` → **CLAIMED**
+Registry tier: 4 · Prior status: 🔁 Needs Re-audit
+Released as: 🔁 Needs Re-audit
+Overall recommendation: **separate-recommended**
+
+## Verdict
+
+The 2026-08-27 plan is still substantially open. Nine of its ten items were
+re-tested **by execution**; eight still reproduce, one (F13) is fixed and
+committed as `7311f052`. This session additionally found eight defects the prior
+audits missed, two of which change money — including a business rule from
+CLAUDE.md that the engine does not implement at all and that an existing test
+pins the wrong way round.
+
+Three contained fixes were applied (one theme: an unhandled fault reaching the
+client instead of an actionable message). Everything touching pay, state
+machines, permissions or product contracts is deferred with a plan.
+
+## What was measured, and how
+
+- Private database `ogami_test_dtr` (`CREATE DATABASE ogami_test_dtr OWNER ogami`).
+  `ogami_test` was never used. Only `db` and `redis` were running and neither was
+  restarted; the API ran via `docker compose run --rm api`.
+- A temporary probe suite was written that **passes when the defect is present**,
+  so the run output is the evidence rather than a claim. It was deleted after the
+  measurements were taken; every number below is quoted verbatim from its run.
+- Live schema was inspected directly (`psql \d attendances`), and live
+  `role_permissions` / `settings` rows were queried rather than inferred from
+  seeder source.
+- Final suite: **75 tests, 199 assertions, 0 failures** across
+  `tests/Feature/Attendance`, `tests/Unit/DTRComputationServiceTest.php`,
+  `tests/Unit/AutoDetectOvertimeTest.php` and
+  `tests/Feature/Notifications/OvertimeNotificationTest.php`.
+  PHPStan on `app/Modules/Attendance`: **[OK] No errors** (43 files).
+
+### Not verified — stated plainly
+
+- **No browser/Playwright run.** The SPA pass below is source-level only
+  (file:line reads plus `npm run typecheck` / targeted ESLint). Pixel rendering,
+  focus order and the correction modal's live behaviour remain unproven, as in
+  the two prior sessions.
+- **No two-connection contention test.** The row locks in
+  `AttendanceDateMutabilityGuard`, `OvertimeService` and `ShiftAssignmentService`
+  are still only exercised single-threaded. F09 stays open on that count.
+- **The `auth:edge_device` / `EdgeSystemUserResolver` hazard could not be
+  verified because it does not exist in this repo.** `config/auth.php:9-25`
+  declares only `web`, `supplier_portal` and `customer_portal`; there is no
+  `App\Modules\Edge` namespace and `grep -rln EdgeSystemUserResolver api/app`
+  returns nothing. No attendance write path runs under a non-web guard, so the
+  `HasAuditLog` FK hazard described in CLAUDE.md has no live surface in this
+  module. This is a note for the coordinator: that CLAUDE.md section references
+  classes that are absent from the tree.
+
+## Status of the prior plan, re-tested
+
+| Prior finding | Re-test | Evidence |
+|---|---|---|
+| **F10** payroll membership / scope drift | **REPRODUCES** | probe 8, below |
+| **F11** bulk-OT raw exception disclosure | **REPRODUCES** | probe 9, below |
+| **F12** archived / inactive shift assignable | **REPRODUCES** | probes 4, 4b |
+| **F13** nullable correction fields | **FIXED** in `7311f052`; `spa/src/api/attendance/attendances.ts` models the three fields `string \| null`, `spa/src/pages/attendance/index.test.tsx` asserts the JSON carries all three keys as `null`. Not re-opened. |
+| **F14** loose attendance date rule | **REPRODUCED, then FIXED this session** | probe 7 |
+| **F15** recurring holidays ignored outside their year | **REPRODUCES** | probe 3 |
+| **F16** cancellation presented as rejection | **REPRODUCES** (source-confirmed; deeper than wording — see below) |
+| **F17** zero-minute auto-OT threshold | **Open but unreachable today.** `attendance.auto_ot_detect.threshold_minutes` is live-seeded to `30`, so the `$extra < $threshold` guard at `OvertimeService.php:91` cannot admit a zero-minute request unless an admin sets the setting to 0. Genuine guard gap, P3. |
+| **F08** raw-punch product surface | **Still unreachable.** `importRawPunches()` has no route, no controller action and no SPA affordance; `spa/src/pages/attendance/import.tsx:46` documents only `employee_no, date, time_in, time_out` and `ImportAttendanceRequest.php:18-20` accepts no `mode`. Still a product decision. |
+| **F09** negative / concurrency / browser coverage | **Partially closed.** Backend coverage now runs (75 green). Contention and browser evidence still absent. |
+
+## Findings — new this session
+
+### M018-F18 — Broken (P1): an archived attendance day breaks every re-write of that employee-day and publishes the SQL statement
+
+**FIXED this session.**
+
+`\d attendances` on the live database:
+
+```text
+"attendances_employee_id_date_unique" UNIQUE CONSTRAINT, btree (employee_id, date)
+"attendances_deleted_at_index" btree (deleted_at)
+```
+
+The constraint is plain, **not** partial on `deleted_at IS NULL`, even though
+`0444_add_soft_deletes_to_all_tables.php:26` added `deleted_at` to this table. An
+archived row therefore still owns that employee-day, while the default Eloquent
+scope hides it from every reader — so
+`api/app/Modules/Attendance/Services/DTRImportService.php:101-106,231-236` (before
+the fix) saw nothing, built a fresh row, and the INSERT died with SQLSTATE 23505.
+Both per-row catches then put `$e->getMessage()` into the response.
+
+```text
+[PROBE 1] re-import after archive:
+{"total":1,"imported":0,"skipped":1,"errors":[{"row":2,"message":
+"SQLSTATE[23505]: Unique violation: 7 ERROR:  duplicate key value violates unique
+constraint \"attendances_employee_id_date_unique\"\nDETAIL:  Key (employee_id, date)=
+(1, 2026-04-15) already exists. (Connection: pgsql, Host: db, Port: 5432, Database:
+ogami_test_dtr, SQL: insert into \"attendances\" (\"employee_id\", \"date\",
+\"time_in\", \"time_out\", \"is_manual_entry\", \"shift_id\", \"regular_hours\", ...)
+values (1, 2026-04-15 00:00:00, 2026-04-15 06:05:00, ...) returning \"id\")"}]}
+
+[PROBE 1b] Illuminate\Database\UniqueConstraintViolationException: SQLSTATE[23505] ...
+```
+
+Two defects in one: the biometric re-import of any archived day fails with an
+opaque `skipped`, and the client receives the whole INSERT statement with table,
+column list, bound values, host, port and database name. The manual create path
+(`AttendanceService.php:96` before the fix) raised
+`UniqueConstraintViolationException`, unmapped, so a 500.
+
+Archiving is an action the SPA exposes on the attendance list — added by M018-F04
+in this same module — so this is an ordinary operator sequence. The repo already
+treats this class of leak as a defect: commit `9fde7dfb` is titled *"a SQL fault
+was reaching the browser as a 422, with the statement in it."* And the sibling
+writer to this table already gets it right:
+`api/app/Modules/Leave/Services/LeaveRequestService.php:513` reads it through
+`Attendance::withTrashed()`.
+
+### M018-F19 — Broken (P1, money): extended-shift auto-OT ignores both the 4-hour maximum and the 30-minute minimum
+
+`api/app/Modules/Attendance/Services/DTRComputationService.php:210-213`:
+
+```php
+if ($shift['is_extended']) {
+    $autoOtHours = $shift['auto_ot_hours'] ?? 0.0;
+    $autoOtMin   = (int) round($autoOtHours * 60);
+    $otMin = min($excess, $autoOtMin);
+}
+```
+
+The cap is `auto_ot_hours` alone. It never consults
+`attendance.ot.maximum_minutes` (live value **240**) or
+`attendance.ot.minimum_minutes` (live value **30**) — both of which the sibling
+`hasApprovedOt` branch at `:214-220` does honour.
+`StoreShiftRequest.php:33` and `UpdateShiftRequest.php:35` allow `auto_ot_hours`
+up to **8**.
+
+```text
+[PROBE 2]  extended auto_ot_hours=8 → overtime_hours=8
+[PROBE 2b] extended 10-min excess   → overtime_hours=0.17
+```
+
+CLAUDE.md: *"OT: Min 30min, Max 4hrs."* Both bounds are bypassed on this path.
+`overtime_hours` is the only OT pay driver
+(`api/app/Modules/Payroll/Services/PayrollCalculatorService.php:463-470`), so both
+figures go straight into pay. Money — deferred.
+
+### M018-F20 — QUESTION for a human (money): the seeded 6AM–6PM extended shift produces ZERO overtime
+
+CLAUDE.md states *"Extended shift (6AM–6PM) = auto-OT"*.
+`api/database/seeders/ShiftSeeder.php:16` seeds exactly that shift:
+`Extended Day, 06:00–18:00, break 30, is_extended=true, auto_ot_hours=4.0`.
+
+`DTRComputationService.php:201-213` derives OT from `excess`, which is worked
+minutes **outside** `[shiftStart, shiftEnd]`. For this shift `shiftEnd = 18:00`,
+so an employee working exactly 06:00–18:00 has `excess = 0` and `otMin = 0`:
+11.5 regular hours, 0 OT.
+
+`api/tests/Unit/DTRComputationServiceTest.php:252-263` asserts precisely this —
+under the name **`test_extended_shift_full_pays_auto_ot`**, which says the
+opposite of what it asserts. The misnamed green test is why three prior audits
+did not see this.
+
+The pay consequence is not cosmetic. Basic pay is **flat per cutoff**, and
+`regular_hours` only drives `days_worked` and the holiday premium
+(`PayrollCalculatorService.php:437-460`); it is never paid hourly. So an employee
+on the Extended Day shift who works 11.5 hours is paid **identically** to one who
+works 7.5 hours on the Day Shift. The four extra hours earn nothing at all.
+
+Two readings are possible and they disagree about pay, so this is **not decided
+here**:
+
+- **A — CLAUDE.md is the spec.** The 6AM–6PM shift should book the normal 8 hours
+  as regular and auto-approve the balance as OT (≈3.5 h at 1.25×). Then the
+  `is_extended` branch must measure excess against a *normal-day* length, not
+  against `shift_end`, and the misnamed test is asserting a defect.
+- **B — the code is the spec.** `is_extended` means "the scheduled day is
+  genuinely 12 hours and is all regular time", `auto_ot_hours` caps only work
+  past 18:00, and CLAUDE.md's one-liner is loose shorthand. Then the fix is to
+  rename the test and correct CLAUDE.md.
+
+Evidence needed: what Philippine Ogami actually pays someone rostered 6AM–6PM.
+Under Philippine labour law, work beyond 8 hours a day is overtime regardless of
+how the shift is labelled, which favours A — but that is a legal reading, not a
+measurement of what this company does, and it changes every extended-shift
+payslip. **A human must choose before any code moves.**
+
+### M018-F21 — Broken (P2): the biometric import creates attendance for separated employees
+
+`DTRImportService.php:72-75` (paired) and `:216-220` (raw) resolve the employee by
+`employee_no` with no check of `employees.status`, `date_hired`, or
+`clearances.separation_date`.
+
+```text
+[PROBE 5] separated-employee import: {"total":1,"imported":1,"skipped":0,"errors":[]}
+```
+
+The probe set `status='resigned'` and the row imported cleanly. A biometric export
+containing a stale badge — or a badge reissued to a new hire — silently manufactures
+attendance for someone who has left. Payroll consumes `attendances` for whoever is
+in the scoped employee set, and `FinalPayService::lastSalaryProRated()` reads
+`payroll.basic_pay` verbatim, so this has a path to money. Deferred: the correct
+policy (refuse? import and flag? bound by `date_hired`…`separation_date`?) is an
+HR decision.
+
+### M018-F22 — Broken (P2): bulk-approve returns raw integer primary keys and confirms row existence
+
+`api/app/Modules/Attendance/Services/OvertimeService.php:265,270` build
+`['id' => $id, 'reason' => …]` from the **decoded integer**;
+`OvertimeController.php:156` serializes it unchanged.
+
+```text
+[PROBE 6] failed rows:
+[{"id":1,"reason":"Only pending overtime requests can be approved."},
+ {"id":999999,"reason":"Not found."}]
+```
+
+Violates the project-wide rule that no API response exposes an integer id — and
+the differing reason for a non-existent integer versus a real one is an existence
+oracle over the whole table.
+
+Same method, second defect: `OvertimeController.php:141-145` decodes the
+submitted hashes and `->filter()`s out anything undecodable **silently**, so a
+batch of five ids where two are malformed reports `"3 approved, 0 failed."` The
+caller is never told two of its items were dropped — the same silent-partial-batch
+class that commits `0189e571` and `70328ac3` already fixed elsewhere on this
+endpoint.
+
+### M018-F23 — Incomplete (P3): an arbitrary sort direction 500-ed the attendance list
+
+**FIXED this session.**
+
+`AttendanceService.php:83-87` whitelisted `sort` but not `direction`.
+
+```text
+[PROBE 10] InvalidArgumentException: Order direction must be "asc" or "desc".
+```
+
+Not injection — the value is not interpolated — but `GET
+/api/v1/attendance/attendances?direction=x` was a 500 on a list endpoint.
+
+**Root is upstream of this module:** the service template in
+`docs/PATTERNS.md:262-268` contains the same `$sortDir = $filters['direction'] ??
+'desc'` passed straight to `orderBy()`, so every service copied from it inherits
+this. Reported to the coordinator; not fixed here (out of scope).
+
+### M024-F24 — Incomplete (P3): the raw importer parses a `direction` column and then discards it
+
+`DTRImportService.php:180,187` read `direction` and `PunchSessionizer.php:47`
+carries it into the cleaned punch list — and `pairForEmployee()` (`:71-128`) never
+reads it. Pairing is purely first-timestamp/last-timestamp. A device that
+distinguishes IN from OUT has that information silently thrown away, so a file
+whose first event of the day is a legitimate OUT books it as `time_in`.
+
+### M018-F25 — Incomplete (P2): the approvable OT ceiling (8 h) is double the payable ceiling (4 h), silently
+
+Three different caps govern one field:
+
+| path | setting | live value |
+|---|---|---|
+| HR create (`StoreOvertimeRequestRequest.php:31`) and the SPA form via `OvertimeService::options():409` | `attendance.ot.admin_max_hours` | **8** |
+| self-service create (`api/app/Modules/HR/Controllers/SelfServiceController.php:366`) | `attendance.ot.request_max_hours` | **4** |
+| what the DTR actually pays (`DTRComputationService.php:216-218`) | `attendance.ot.maximum_minutes` | **240 (4 h)** |
+
+So HR can create *and approve* an 8-hour overtime request, and payroll pays 4
+hours, with no warning at any point. Either the create bound is wrong or the DTR
+cap is — a policy call with a pay consequence. Deferred.
+
+### M018-F26 — Incomplete (P2): there is no `Cancelled` overtime state, only rejection wearing its clothes
+
+Broader than the prior F16 wording note. `OvertimeStatus` has exactly three cases
+— `Pending`, `Approved`, `Rejected`
+(`api/app/Modules/Attendance/Enums/OvertimeStatus.php:9-11`). `cancel()` writes
+`Rejected` and emits `OvertimeRequestDecided(..., false)`
+(`OvertimeService.php:342-351`), and
+`NotifyOnOvertimeDecided.php:26-27` maps every false decision to `"Rejected"` and
+`attendance.ot_rejected`.
+
+Consequences: an employee who withdraws their own request is told *"Your OT
+request … was Rejected"*; and because the enum has no fourth case, a list filtered
+`status=rejected` (`OvertimeService.php:169`) returns withdrawals mixed in with
+real refusals. Distinguishing them requires reading `cancelled_at`. Adding an
+enum case changes a state machine and the `attendance.ot_rejected` notification
+contract — deferred.
+
+## Findings re-confirmed with fresh evidence
+
+### M018-F10 — Broken (P0): the payroll write fence authorizes against LIVE employee attributes, so a transfer unlocks a paid day
+
+`AttendanceDateMutabilityGuard.php:61-87` decides whether a period applies to an
+employee from the employee's **current** `department_id`, `employment_type` and
+`pay_type`. Payroll froze a different set: it computed scope as of the period end
+(`PayrollPeriodService.php:523-551`) and persisted an employee/cycle claim inside
+the payroll transaction (`PayrollCalculatorService.php:291-303`,
+`PayrollCycleClaim.php:12-18`).
+
+Reproduced end to end:
+
+```text
+[PROBE 8] in-scope edit correctly refused: Attendance for 2026-04-10 is locked by
+          payroll period 2026-04-01–2026-04-15 (finalized). Void or correct the
+          payroll period before changing this record.
+[PROBE 8] AFTER TRANSFER the locked day was EDITABLE — payroll fence bypassed
+```
+
+Same employee, same finalized department-scoped period, same date. The only thing
+that changed between the two attempts was `employees.department_id`. A transferred
+employee's already-paid attendance becomes editable, deletable, restorable and
+recomputable. This is a payroll-integrity bypass, not a stale-list nuisance, and
+it applies to every scoped period. **P0, deferred — the fix must consult frozen
+payroll membership, which is cross-module.**
+
+### M018-F11 — Broken (P1): bulk-approve returns internal exception messages verbatim
+
+`OvertimeService.php:269-271` catches every `Throwable` and puts
+`$e->getMessage()` in the response. Proven with a non-business exception —
+an inverted punch makes the DTR engine throw from inside `approve()`:
+
+```text
+[PROBE 9] failed: [{"id":1,"reason":"Time out (2026-04-15 06:00:00) must be after
+                    time in (2026-04-15 14:00:00)."}]
+```
+
+That particular message is harmless; the point is that the filter admits anything.
+A `QueryException` on the same path yields exactly what probe 1 showed for the
+identical `catch (Throwable) → getMessage()` pattern in the import service: the
+full SQL statement. Deferred — the fix must define a safe-reason contract that
+`spa/src/pages/attendance/overtime/index.tsx` reads.
+
+### M018-F12 — Incomplete (P2): archived and inactive shifts are assignable
+
+`AssignEmployeeShiftRequest.php:26-33` and `BulkAssignShiftRequest.php:29-37` only
+decode the hash; `ShiftAssignmentService.php:23-54,107-113` puts the integer into
+the assignment row without resolving the `Shift`.
+
+```text
+[PROBE 4]  assignment to trashed shift accepted; current() = null
+[PROBE 4b] inactive shift assigned; current() = Probe Off 4e9e is_active=false
+```
+
+A trashed shift produces a valid-FK assignment that `current()`
+(`ShiftAssignmentService.php:61-72`, a normal relation) resolves to **null**, so
+`DTRComputationService.php:48-53` silently falls back to the default shift — the
+employee is computed against a schedule nobody assigned. An inactive shift is
+accepted and used as-is.
+
+The SPA makes this reachable rather than theoretical:
+`spa/src/pages/attendance/shifts/assign.tsx:34-38` calls
+`shiftsApi.list({ per_page: 100 })` with **no** `is_active` and no `trashed`
+filter and maps every row into an `<option>` at `:89` — while
+`spa/src/pages/attendance/index.tsx:209` does pass `{ is_active: true }` for its
+shift select. Deferred (needs an explicit inactive-shift policy).
+
+### M018-F15 — Missing (P1): `is_recurring` is stored, displayed, and never applied
+
+`HolidayService.php:94-105` loads only rows whose stored date falls in the
+requested year and keys them by the exact date. `is_recurring` appears in
+`Models/Holiday.php:18,23`, both requests, and `HolidayResource.php:20` — and in
+no date-resolution code anywhere.
+
+```text
+[PROBE 3] 2027-06-12 lookup for a recurring 2026 holiday: null
+```
+
+The SPA promises the opposite in three places:
+`spa/src/pages/attendance/holidays/index.tsx:204` (a `Recurring: Yes` chip),
+`:235` (`Annually`), `:364` (`<Switch label="Recurs annually">`). Holiday pay and
+`day_type_rate` therefore vanish for every recurring holiday after one year.
+Deferred — needs recurrence semantics including leap day, plus cache invalidation.
+
+## Polish pass — SPA (source-level; no browser run)
+
+Routes: all eight pages are `React.lazy` (`spa/src/routes/hrRoutes.tsx:22-29`) and
+all sit under `ModuleGuard module="attendance"` (`:103`) with a `PermissionGuard`.
+
+**Design system — two violations of the opaque-surface rule** (`docs/DESIGN-SYSTEM.md`
+forbids translucency; Tailwind colours here are `color-mix(… <alpha-value> …)`,
+`spa/tailwind.config.ts:22-33`, so a `/N` suffix really does composite alpha):
+- `spa/src/pages/attendance/index.tsx:143` — `bg-danger/10`; should be `bg-danger-bg`.
+- `spa/src/pages/attendance/holidays/index.tsx:309` — `bg-current opacity-70`.
+
+No hardcoded hex, `rgb(`, or Tailwind default-palette classes in any of the eight
+files. No `backdrop-blur`.
+
+**Permission gating — one live dead end.**
+`spa/src/pages/attendance/overtime/index.tsx:203-205` renders **"New OT request"
+with no `can()` wrapper**, unlike every other action on that page (`:161`, `:190`,
+`:262-269`, all gated on `attendance.ot.approve`). Live grants (queried, not
+inferred):
+
+```text
+department_head | attendance.ot.approve
+department_head | attendance.view
+hr_officer      | attendance.edit, attendance.import, attendance.ot.approve,
+                  attendance.ot.create, attendance.shifts.manage, attendance.holidays.manage
+```
+
+A department head reaches that list (its guard is `attendance.ot.approve`,
+`hrRoutes.tsx:126`), clicks the button, and lands on a route guarded by
+`attendance.edit` (`:130`) which they do not hold → 403. Separately, that route
+guard and the API disagree: the route checks `attendance.edit` while
+`POST /attendance/overtime-requests` requires `attendance.ot.create`
+(`routes.php:44`). Both are held by `hr_officer`, so nothing breaks today, but the
+guard does not name the permission it is guarding. `attendance.ot.create` is
+referenced **nowhere** in the SPA.
+
+All other in-page actions are correctly gated (attendance list `:309,:314,:319,:324,:352,:367`;
+shifts `:117,:148,:192`; holidays `:100,:120,:237`; OT detail `:75-76,:93,:99`).
+`import.tsx` and `shifts/assign.tsx` are ungated in-page but their whole routes
+sit behind `attendance.import` / `attendance.shifts.manage`, matching the backend.
+
+**Page states.** All four list pages implement loading / error+retry / empty /
+data. **None implements the fifth (stale) state**: `grep -rn
+"isFetching|isPlaceholderData|isRefetching" spa/src/pages/attendance/` returns
+zero hits — only `placeholderData` (the no-flash half) is set
+(`index.tsx:195`, `shifts/index.tsx:60`, `holidays/index.tsx:55`,
+`overtime/index.tsx:45`). `docs/PATTERNS.md:1522-1546` requires a stale
+affordance. Also `overtime/index.tsx:250` is the only empty state with no
+`action` prop.
+
+**Other polish**
+- `spa/src/pages/attendance/import.tsx:20-28` — the import mutation has both
+  toasts but **no `queryClient.invalidateQueries`** (the file imports only
+  `useMutation`), so the attendance list stays stale after a successful import.
+  Every other mutation in the module invalidates correctly.
+- `spa/src/pages/attendance/shifts/index.tsx:40` — the Zod schema for
+  `auto_ot_hours` is `z.string().optional().or(z.literal(''))`: no `coerce`, no
+  numeric check, no `max`. `:260` then does `Number(...)`. Only the server's
+  `max:8` stops anything — and per F19 that bound is itself wrong.
+- `font-mono` without `tabular-nums`: `index.tsx:250`;
+  `overtime/index.tsx:151,353`; `holidays/index.tsx:225`;
+  `overtime/detail.tsx:214`; `import.tsx:122`. No mono at all on numeric content:
+  `shifts/index.tsx:106,186` (`Auto-OT {n}h`), `import.tsx:69` (file size),
+  `overtime/detail.tsx:141-147`, `holidays/index.tsx:307` (calendar days).
+  `shifts/index.tsx:114` and `overtime/index.tsx:187` print `data.meta.total`
+  without `formatInt`, which `index.tsx:306` does use.
+
+## Fixes applied this session
+
+Three, all one theme — a well-formed operator action reaching the client as an
+unhandled fault. None changes a pay figure, a state machine, or a permission.
+See `fix-log.md` for before/after and full verification output.
+
+| Finding | Change |
+|---|---|
+| **F18** | `DTRImportService::openDayRecord()` (`:281-297`) reads the day `withTrashed()` under `lockForUpdate()` and refuses an archived day with a `BusinessRuleException` naming the remedy; `rowMessage()` (`:310-341`) replaces both bare `$e->getMessage()` calls, passing operator-actionable throws through and logging + masking everything else; `isDayUniqueViolation()` (`:348-353`) covers the residual concurrent-INSERT race. `AttendanceService::assertDayNotArchived()` (`:128-143`) turns the manual-create 500 into a 422. The archived row is **not** auto-restored — that stays an explicit HR decision. |
+| **F23** | `AttendanceService::list()` (`:83-95`) lower-cases and whitelists `direction`, falling back to `desc`. |
+| **F14** | `StoreAttendanceRequest` (`:28`, `:37-42`) requires `date_format:Y-m-d` with a message. |
+
+New suite `api/tests/Feature/Attendance/AttendanceArchivedDayAndInputHardeningTest.php`
+— 6 tests, 21 assertions, including an explicit assertion that the import message
+contains neither `SQLSTATE` nor `insert into` nor the constraint name, and a
+no-regression case proving an **unarchived** existing day still updates in place.
+
+## Gate decision
+
+Fifteen open items; three fixed. Of the twelve remaining, **nine are
+`separate-recommended`** — F10 and F19 and F25 touch money, F26 changes a state
+machine, F22 and the OT-button gap touch permissions/RBAC, F20 needs a human
+policy decision, and F08/F15/F21 are product contracts. The
+`same-session-ok` items are a clear minority, so the gate is **not** "fix now".
+
+Per the escape hatch, the three items fixed are genuinely contained, share one
+root cause and one theme, and were fixed together because splitting them would
+have left the SQL-disclosure half of F18 open while its sibling paths were
+touched. Everything gated was left alone.
+
+Released as **🔁 Needs Re-audit** — not `📋 Plan Ready`, because production code
+did change and a re-audit must confirm the three fixes in place alongside the
+twelve open items.
+
+## Questions needing a human decision
+
+1. **M018-F20 — what does Philippine Ogami pay someone rostered 6AM–6PM?**
+   Today: 11.5 regular hours, zero OT, and because basic pay is flat per cutoff
+   that is the same money as a 7.5-hour day shift. Options A and B above disagree
+   about every extended-shift payslip. Not decided here.
+2. **M018-F25 — is the OT ceiling 4 hours or 8?** HR can approve 8; payroll pays
+   4. One of the two numbers is wrong.
+3. **M018-F21 — what should the importer do with a punch for a separated
+   employee?** Refuse, import-and-flag, or bound by
+   `date_hired`…`clearances.separation_date`?
+4. **M018-F08 — what do the FCIE Dasmariñas biometric terminals actually
+   export?** Still the deciding fact for whether `importRawPunches()` is exposed
+   or documented as internal. Unchanged from the 2026-08-27 write-up.
+5. **M018-F15 — recurrence semantics**, including 29 February.
+
+## Note for the coordinator (outside this module, not touched)
+
+- `docs/PATTERNS.md:262-268` — the canonical service template passes an
+  unvalidated `direction` into `orderBy()`. Every service copied from it inherits
+  the 500 fixed here as F23.
+- CLAUDE.md's "HasAuditLog + custom guards" section prescribes
+  `App\Modules\Edge\Services\EdgeSystemUserResolver`, which **does not exist** in
+  the tree, and an `auth:edge_device` guard that is not in `config/auth.php`.

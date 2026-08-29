@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace App\Modules\Attendance\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Attendance\Models\Attendance;
 use App\Modules\HR\Models\Employee;
+use Carbon\Exceptions\InvalidFormatException;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class DTRImportService
@@ -98,12 +102,7 @@ class DTRImportService
 
                 DB::transaction(function () use ($employeeId, $date, $tIn, $tOut) {
                     $this->mutability->assertMutable($employeeId, $date);
-                    $a = Attendance::query()
-                        ->where('employee_id', $employeeId)
-                        ->where('date', $date)
-                        ->lockForUpdate()
-                        ->first()
-                        ?? new Attendance(['employee_id' => $employeeId, 'date' => $date]);
+                    $a = $this->openDayRecord($employeeId, $date);
                     $a->time_in = $tIn;
                     $a->time_out = $tOut;
                     $a->is_manual_entry = false;
@@ -114,7 +113,7 @@ class DTRImportService
                 $imported++;
             } catch (Throwable $e) {
                 $skipped++;
-                $errors[] = ['row' => $rowNum, 'message' => $e->getMessage()];
+                $errors[] = ['row' => $rowNum, 'message' => $this->rowMessage($e, $rowNum)];
             }
         }
         fclose($stream);
@@ -228,12 +227,7 @@ class DTRImportService
 
                 DB::transaction(function () use ($employeeId, $date, $day) {
                     $this->mutability->assertMutable($employeeId, $date);
-                    $a = Attendance::query()
-                        ->where('employee_id', $employeeId)
-                        ->where('date', $date)
-                        ->lockForUpdate()
-                        ->first()
-                        ?? new Attendance(['employee_id' => $employeeId, 'date' => $date]);
+                    $a = $this->openDayRecord($employeeId, $date);
                     $a->time_in  = $day['time_in'];
                     $a->time_out = $day['time_out'];
                     $a->is_manual_entry = false;
@@ -247,7 +241,7 @@ class DTRImportService
                 $imported++;
             } catch (Throwable $e) {
                 $skipped++;
-                $errors[] = ['row' => 0, 'message' => $e->getMessage()];
+                $errors[] = ['row' => 0, 'message' => $this->rowMessage($e, 0)];
             }
         }
 
@@ -261,4 +255,100 @@ class DTRImportService
         ];
     }
 
+    /**
+     * Resolve the row both import paths are about to write, looking THROUGH the
+     * soft delete.
+     *
+     * `attendances_employee_id_date_unique` is a plain UNIQUE constraint on
+     * (employee_id, date) — it is NOT partial on `deleted_at IS NULL` — so an
+     * ARCHIVED row still occupies that employee-day. The default Eloquent scope
+     * hides it, so the previous `Attendance::query()->where(...)->first()`
+     * returned null, the caller built a fresh row, and the INSERT died with
+     * SQLSTATE 23505. Both per-row catches then published `$e->getMessage()`,
+     * which on a QueryException is the entire INSERT statement — table name,
+     * column list and every bound value — into the API response.
+     *
+     * The archived row is deliberately NOT resurrected here. Un-archiving a day
+     * is an HR correction with payroll consequences; it must not be a silent
+     * side effect of dropping a biometric file on the importer. Refuse the day
+     * with a sentence that names the actual remedy instead.
+     *
+     * The lock is taken inside the caller's transaction, so a concurrent import
+     * of the same day serializes behind it once a row exists. Two imports that
+     * both find nothing still race to INSERT; that loser is handled by
+     * rowMessage() rather than being allowed to leak SQL.
+     */
+    private function openDayRecord(int $employeeId, string $date): Attendance
+    {
+        $existing = Attendance::withTrashed()
+            ->where('employee_id', $employeeId)
+            ->where('date', $date)
+            ->lockForUpdate()
+            ->first();
+
+        if ($existing !== null && $existing->trashed()) {
+            throw new BusinessRuleException(
+                "An archived attendance record already exists for {$date}. "
+                .'Restore that record before importing this day.',
+            );
+        }
+
+        return $existing ?? new Attendance(['employee_id' => $employeeId, 'date' => $date]);
+    }
+
+    /**
+     * Per-row error text for the import result.
+     *
+     * The per-row catch is deliberately broad — one bad line must not fail the
+     * whole file — but that also swallows database and programmer faults, and
+     * `QueryException::getMessage()` is the full SQL statement with its
+     * bindings. Anything the operator can act on passes through unchanged;
+     * anything else is logged with its class and message and replaced with a
+     * stable sentence, so a fault is still visible in the skipped count and in
+     * the log without publishing schema internals to the client.
+     */
+    private function rowMessage(Throwable $e, int $rowNum): string
+    {
+        // Row-level control flow (\RuntimeException), payroll-lock refusals and
+        // openDayRecord() (BusinessRuleException, a RuntimeException subclass),
+        // and the DTR engine's inverted-punch refusal (InvalidArgumentException)
+        // are all actionable and already phrased for an operator.
+        // Referenced fully qualified to match the \RuntimeException throws already
+        // in this file; importing them would make those pre-existing lines a Pint
+        // fully_qualified_strict_types violation inside an unrelated diff.
+        if ($e instanceof \RuntimeException || $e instanceof \InvalidArgumentException) {
+            return $e->getMessage();
+        }
+
+        if ($e instanceof InvalidFormatException) {
+            return 'Could not read the date or time in this row. Use YYYY-MM-DD and HH:MM.';
+        }
+
+        if ($e instanceof QueryException && $this->isDayUniqueViolation($e)) {
+            return 'An attendance record already exists for this employee and date. '
+                .'It may be archived — restore or remove it before importing this day.';
+        }
+
+        Log::error('Attendance import row failed', [
+            'row' => $rowNum,
+            'exception' => $e::class,
+            'message' => $e->getMessage(),
+        ]);
+
+        return 'This row could not be imported because of an internal error. '
+            .'It has been logged for review.';
+    }
+
+    /**
+     * Recognise the (employee_id, date) uniqueness backstop specifically, so an
+     * unrelated constraint failure is still reported as an internal error
+     * rather than being mislabelled as a duplicate day. Mirrors
+     * OvertimeService::isAutoSourceUniqueViolation().
+     */
+    private function isDayUniqueViolation(QueryException $e): bool
+    {
+        return in_array((string) $e->getCode(), ['23000', '23505'], true)
+            && (str_contains($e->getMessage(), 'attendances_employee_id_date_unique')
+                || str_contains($e->getMessage(), 'attendances.employee_id, attendances.date'));
+    }
 }

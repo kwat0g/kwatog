@@ -48,7 +48,7 @@ passed `StoreCalibrationRecordRequest::rules()` and persisted as
 After, in two places because neither alone is sufficient:
 - `api/app/Modules/Quality/Requests/StoreCalibrationRecordRequest.php:26-31` —
   `last_calibration_date` gains `before_or_equal:today`.
-- `api/app/Modules/Quality/Services/CalibrationService.php:151-179`
+- `api/app/Modules/Quality/Services/CalibrationService.php:186-203`
   (`assertDateOrder()`) — the ordering invariant is checked against the **merged**
   pair, because a PATCH may supply only the next date and the FormRequest cannot
   see the stored last date. Both violations map to one correctable input, so they

@@ -205,7 +205,7 @@ and `CalibrationService::create()` persisted it as
 `last=2030-01-01 next=2020-01-01 status=overdue` — an instrument calibrated in
 2030 whose next due date is 2020. The sibling `recordCalibration()` path already
 rejected future dates (`RecordCalibrationRequest.php:19`,
-`CalibrationService.php:58-60`), proving the invariant was enforced
+`CalibrationService.php:97-99`), proving the invariant was enforced
 inconsistently across two writers on the same column.
 
 **Fixed** this session. See `fix-log.md`.
@@ -222,7 +222,7 @@ Re-confirmed against seeder source, line by line:
   `quality.specs.view` (`api/app/Modules/Quality/routes.php:62-63`) —
   `spa/src/pages/quality/capability/index.tsx:105-115`.
 - `qc_inspector` gets `$this->module('quality')` (so `quality.specs.view` ✓) but
-  **no** `crm.products.view` — `api/database/seeders/RolePermissionSeeder.php:681-697`.
+  **no** `crm.products.view` — `api/database/seeders/RolePermissionSeeder.php:682-697`.
 - `production_manager` gets only `quality.view`, `quality.inspections.view`,
   `quality.ncr.view` — **neither** `quality.specs.view` nor `crm.products.view`
   — `api/database/seeders/RolePermissionSeeder.php:577`.
@@ -317,8 +317,8 @@ of it, matching the pattern `recordCalibration()` already used. Covered by
 The list renders Edit and Record for every manageable row including
 `status=retired` (`spa/src/pages/quality/calibration/index.tsx:71-93`). The
 service docblock says recording "resets status to active"
-(`api/app/Modules/Quality/Services/CalibrationService.php:46-49`) while
-`statusFor()` explicitly preserves `Retired` (`:158-162`) — yet the record path
+(`api/app/Modules/Quality/Services/CalibrationService.php:85-89`) while
+`statusFor()` explicitly preserves `Retired` (`:212-218`) — yet the record path
 still advances `last_calibration_date` and `next_calibration_date`. So an
 operator can rewrite the calibration history of an instrument that is out of
 service, and the register keeps calling it retired.
@@ -364,9 +364,9 @@ current instruments. The command does not report how many rows it scanned, which
 is the one number that separates the two.
 
 Separately, `recomputeStatuses()` saves row by row outside any transaction
-(`api/app/Modules/Quality/Services/CalibrationService.php:118-137`) and
+(`api/app/Modules/Quality/Services/CalibrationService.php:123-142`) and
 `statusFor()` throws `BusinessRuleException` if the
-`quality.calibration.due_window_days` setting is missing or negative (`:173-177`).
+`quality.calibration.due_window_days` setting is missing or negative (`:227-230`).
 That throw is *not* swallowed — good, and deliberately unlike the 8D ledger — but
 it aborts mid-chunk, leaving the register partially recomputed with no record of
 how far it got. Add a scanned count to the summary and either wrap the sweep or
