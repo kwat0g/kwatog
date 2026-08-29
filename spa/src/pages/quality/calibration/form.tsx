@@ -12,11 +12,17 @@ import { FormActions } from '@/components/ui/FormActions';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { Input } from '@/components/ui/Input';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { QueryErrorState } from '@/components/ui/QueryErrorState';
 import { Select } from '@/components/ui/Select';
+import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { Textarea } from '@/components/ui/Textarea';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { useFormSafety } from '@/hooks/useFormSafety';
 
+const today = () => new Date().toISOString().slice(0, 10);
+
+// Mirrors StoreCalibrationRecordRequest + CalibrationService::assertDateOrder.
+// ISO `YYYY-MM-DD` strings compare correctly lexicographically.
 const schema = z.object({
  equipment_code: z.string().min(1, 'Equipment code is required').max(50),
  name: z.string().min(1, 'Name is required').max(150),
@@ -27,7 +33,18 @@ const schema = z.object({
  status: z.enum(['active', 'retired']),
  responsible: z.string().max(100).optional().or(z.literal('')),
  remarks: z.string().max(2000).optional().or(z.literal('')),
-});
+})
+ .refine((v) => !v.last_calibration_date || v.last_calibration_date <= today(), {
+  path: ['last_calibration_date'],
+  message: 'The last calibration date cannot be in the future.',
+ })
+ .refine(
+  (v) => !v.last_calibration_date || !v.next_calibration_date || v.next_calibration_date >= v.last_calibration_date,
+  {
+   path: ['next_calibration_date'],
+   message: 'The next calibration date cannot be earlier than the last calibration date.',
+  },
+ );
 
 type FormValues = z.infer<typeof schema>;
 
@@ -94,10 +111,24 @@ export default function CalibrationFormPage() {
  const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  if (isEdit && detail.isLoading) {
-  return <div className="px-5 py-8 text-sm text-muted">Loading calibration instrument…</div>;
+  return (
+   <div>
+    <PageHeader title="Edit calibration instrument" backTo="/quality/calibration" backLabel="Calibration register" />
+    <div className="max-w-3xl mx-auto px-5 py-4">
+     <SkeletonBlock className="h-72" />
+    </div>
+   </div>
+  );
  }
  if (isEdit && detail.isError) {
-  return <div className="px-5 py-8 text-sm text-danger-fg">Could not load this calibration instrument. Return to the register and try again.</div>;
+  return (
+   <div>
+    <PageHeader title="Edit calibration instrument" backTo="/quality/calibration" backLabel="Calibration register" />
+    <div className="max-w-3xl mx-auto px-5 py-4">
+     <QueryErrorState subject="this calibration instrument" onRetry={() => void detail.refetch()} />
+    </div>
+   </div>
+  );
  }
 
  return (
@@ -118,7 +149,7 @@ export default function CalibrationFormPage() {
     <fieldset className="mb-6">
      <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Calibration schedule</legend>
      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-      <Input label="Last calibrated" type="date" {...register('last_calibration_date')} error={errors.last_calibration_date?.message} />
+      <Input label="Last calibrated" type="date" max={today()} {...register('last_calibration_date')} error={errors.last_calibration_date?.message} />
       <Input label="Next due" type="date" {...register('next_calibration_date')} error={errors.next_calibration_date?.message} />
       <Input label="Frequency (days)" type="number" {...register('frequency_days')} error={errors.frequency_days?.message} required />
      </div>

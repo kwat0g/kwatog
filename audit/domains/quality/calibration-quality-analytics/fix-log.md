@@ -1,5 +1,171 @@
 # M059 — Fix Log
 
+## 2026-08-30 — re-audit session (own DB `ogami_test_cqa`)
+
+### M059-B11 — fixed. Every calibration PATCH answered HTTP 500.
+
+`CalibrationService::update()` rebuilt its patch as
+`$record->fill($this->withDerived(array_merge($record->toArray(), $data)))`
+(`api/app/Modules/Quality/Services/CalibrationService.php:39`, pre-edit).
+`toArray()` carries `id`, `created_at` and `updated_at`, and
+`AppServiceProvider` turns on `Model::preventSilentlyDiscardingAttributes(! isProduction())`
+at `api/app/Providers/AppServiceProvider.php:238` — so `fill()` **refused**
+those keys instead of dropping them, and the plainest possible edit raised
+`MassAssignmentException: Add fillable property [updated_at, created_at, id]`.
+
+Reproduced end-to-end before the fix: `PATCH /api/v1/quality/calibration/{id}`
+with `{equipment_code, name, frequency_days}` → **500**. The whole PATCH path had
+**zero test coverage anywhere in `api/tests`** (`grep -rn 'patchJson|putJson' api/tests/Feature/Quality/Calibration*.php`
+returned nothing), which is why a 100%-dead write path stayed green. The SPA edit
+form at `spa/src/pages/quality/calibration/form.tsx` therefore could not save in
+any non-production environment, i.e. in every environment this project is
+demonstrated in. In production the guard is off and the keys are silently
+dropped, so the defect is invisible there — the failure mode is inverted.
+
+After: `update()` re-reads the row under `lockForUpdate()`, applies only
+`array_intersect_key($data, array_flip($locked->getFillable()))`, and derives
+status explicitly — `api/app/Modules/Quality/Services/CalibrationService.php:34-90`.
+Covered by `test_patch_updates_a_calibration_record` at
+`api/tests/Feature/Quality/CalibrationBoundaryTest.php:76-108`.
+
+### M059-I03 — fixed by the same rewrite (stale-snapshot overwrite).
+
+Before: `update()` started from the representation the request arrived with, so
+of two concurrent PATCHes the later silently reverted the earlier one's fields.
+After: the locked re-read is the authority and the request is a patch on top of
+it. Covered by `test_patch_does_not_resurrect_a_stale_snapshot_of_untouched_fields`
+at `api/tests/Feature/Quality/CalibrationBoundaryTest.php:110-143` — a competing
+writer's `responsible` survives a PATCH that only sets `location`.
+
+### M059-B10 — fixed. The register accepted an impossible history.
+
+Reproduced before the fix on `ogami_test_cqa`:
+`create(['last_calibration_date' => '2030-01-01', 'next_calibration_date' => '2020-01-01', 'frequency_days' => 365])`
+passed `StoreCalibrationRecordRequest::rules()` and persisted as
+`last=2030-01-01 next=2020-01-01 status=overdue` — an instrument calibrated in
+2030 whose next due date is 2020.
+
+After, in two places because neither alone is sufficient:
+- `api/app/Modules/Quality/Requests/StoreCalibrationRecordRequest.php:26-31` —
+  `last_calibration_date` gains `before_or_equal:today`.
+- `api/app/Modules/Quality/Services/CalibrationService.php:151-179`
+  (`assertDateOrder()`) — the ordering invariant is checked against the **merged**
+  pair, because a PATCH may supply only the next date and the FormRequest cannot
+  see the stored last date. Both violations map to one correctable input, so they
+  raise `ValidationException::withMessages()` (field-level 422), not
+  `BusinessRuleException`.
+  On update the check is gated on the patch actually touching a date, so a row
+  that predates this guard stays repairable field by field rather than becoming
+  permanently unsaveable.
+
+`frequency_days` was deliberately **not** made to re-derive `next_calibration_date`
+— that is M059-I01 and remains an undecided policy question.
+
+Covered by `test_future_last_calibration_date_is_rejected_on_create`,
+`test_next_calibration_date_before_last_is_rejected` and
+`test_patch_supplying_only_the_next_date_is_checked_against_the_stored_last_date`
+at `api/tests/Feature/Quality/CalibrationBoundaryTest.php:145-193`.
+
+Refactor carried along: `withDerived()`'s inline status/date coercion moved into
+`requestedStatus()` and `asDateString()` so `create()` and `update()` read the
+same value the same way.
+
+Verification: `CalibrationBoundaryTest` + `CalibrationRegisterTest` +
+`CalibrationBackdatedRecordRaceTest` — **16 passed / 43 assertions** on
+`ogami_test_cqa`. `php -l` clean on all three changed files.
+
+### M059-P05 — fixed. The defect Pareto reported defect counts as downtime minutes.
+
+Before: the shared chart hard-coded `name="Downtime"` on the bar and its tooltip
+formatter matched on that literal, so it ran `formatMinutes()` over whatever the
+`minutes` field held. The Quality dashboard feeds `defect_count` into that field
+(`spa/src/pages/quality/dashboard.tsx:51-57`), so hovering a bar with 1 defect
+read **"Downtime: 1m"**. The `valueLabel` prop existed but only reached the left
+Y-axis tick formatter.
+
+After: `spa/src/components/charts/DowntimeParetoChart.tsx:18-45,62-81` derives
+`seriesName` and `formatValue` from `valueLabel` once and uses them in the axis,
+the series name and the tooltip. The Quality dashboard now reads
+"Defects: 1".
+
+Shared-component blast radius checked, not assumed: the only other consumer is
+`spa/src/pages/maintenance/downtime/index.tsx:327`, which passes **no**
+`valueLabel`, so `seriesName` falls back to `'Downtime'` and `formatValue` to
+`formatMinutes` — bit-identical behaviour. `npx vitest run src/components`
+(15 files / 73 tests) and the full SPA typecheck both pass.
+
+### M059-P06 — fixed. Calibration edit loading/error used raw text divs.
+
+Before: `spa/src/pages/quality/calibration/form.tsx:96-101` returned bare
+`<div className="px-5 py-8 text-sm …">` strings with no page header, no
+skeleton, and **no retry affordance** — the user's only recovery was to navigate
+away, which is exactly what the copy told them to do.
+
+After: both states keep the `PageHeader` (so the back link survives a failure)
+and use the shared primitives — `SkeletonBlock` for loading and
+`QueryErrorState` with `onRetry={detail.refetch}` for the error. Covered by
+`spa/src/pages/quality/calibration/form.test.tsx:44-56`, which clicks the retry
+button and asserts a second fetch.
+
+### M059-P07 (new) — fixed. Two defects in the "Total defects" KPI tile.
+
+`spa/src/pages/quality/dashboard.tsx:74-78`:
+1. On a failed Pareto query the tile rendered `'—'`, which is exactly what it
+   renders for "no defects" — a failure read as a clean quality window. This is
+   the same defect M059-P01 fixed for the pass-rate and open-NCR tiles and
+   missed here. Now `'Unavailable'` + `'Retry below'`, matching its two
+   neighbours; the retry itself already exists in the panel beneath.
+2. The helper said **"across top 10 parameters"**, but `total_defects` is the
+   *ungrouped* denominator over every failed measurement in the window — that
+   was the whole point of the M059-B01 fix at
+   `api/app/Modules/Quality/Services/DefectParetoService.php:112`. With more than
+   ten defective parameters the number legitimately exceeds the sum of the ten
+   rows shown, so the label made a correct figure look like an arithmetic bug.
+   Now "failed measurements in the window".
+
+### Calibration form now mirrors the new backend rules
+
+`spa/src/pages/quality/calibration/form.tsx:20-45,140` adds `max={today()}` to
+the "Last calibrated" picker and two Zod refinements mirroring
+`StoreCalibrationRecordRequest` + `CalibrationService::assertDateOrder()`.
+
+Measured, not assumed: `max` makes the input `rangeOverflow`, so native form
+validation blocks submission before React Hook Form runs — verified in jsdom
+(`validity.rangeOverflow === true`, `form.checkValidity() === false`). The Zod
+refine is therefore defence-in-depth for a value that arrives without a change
+event (a draft restored by `useFormSafety`), and the server remains
+authoritative. The test asserts what actually happens — the out-of-range value
+never reaches `calibrationApi.create` — rather than asserting a Zod message that
+the native layer prevents from ever rendering.
+
+Verification (SPA): `form.test.tsx` + `capability/index.test.tsx` +
+`inspection-specs/editor.test.tsx` — **7 passed**; `src/components` —
+**73 passed**; `npx tsc --noEmit` — **exit 0, zero diagnostics** (this clears the
+prior session's outstanding typecheck gate, which had failed for an OOM reason,
+not a code reason); `npx eslint --max-warnings 0` clean over all six changed SPA
+files plus the maintenance chart consumer.
+
+Verification (backend, final combined run on `ogami_test_cqa`):
+`CalibrationBoundaryTest`, `CalibrationRegisterTest`,
+`CalibrationBackdatedRecordRaceTest`, `QualityAnalyticsBoundaryTest`,
+`QualityInspectionSummaryTest`, `SpcServiceTest` —
+**33 passed / 100 assertions**. PHPStan clean on the three changed backend
+files. Pint fails on `CalibrationService.php` and
+`StoreCalibrationRecordRequest.php` — **proven inherited**: the
+`git show HEAD:` copies of both files fail with the identical fixer lists, so
+no new violation was introduced and pre-existing style was deliberately not
+reformatted into this diff.
+
+### Deliberately NOT fixed here
+
+B08 (capability cross-module RBAC), I01 (frequency rescheduling policy),
+I02 (archived-spec SPC policy), I04 (recording on retired equipment),
+M03 (no calibration seed data), M04 (no overdue-calibration notification),
+I05 (unscoped `spec_items` payload) and I06 (ambiguous command summary) are all
+recorded in `audit-report.md` with reproduction evidence and left to a separate
+session — see `action-plan.md` for why each is gated.
+
+
 ## 2026-08-27 — M059-B09 fixed
 
 - **M059-B09 — fixed.** The capability page now tracks the options query as a

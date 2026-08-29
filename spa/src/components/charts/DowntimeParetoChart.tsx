@@ -18,6 +18,13 @@ export interface ParetoEntry {
 interface Props {
  data: ParetoEntry[];
  height?: number;
+ /**
+  * Semantic name for the bar series. Defaults to downtime minutes, which is
+  * what the field is called and how it is formatted. Consumers charting
+  * something else (defect counts, reject quantities) pass their own label and
+  * get plain integers in the axis, the legend key and the tooltip — without it
+  * a Quality defect count rendered as "Downtime: 1m".
+  */
  valueLabel?: string;
 }
 
@@ -28,6 +35,9 @@ function formatMinutes(m: number): string {
 
 export function DowntimeParetoChart({ data, height = 260, valueLabel }: Props) {
  if (data.length === 0) return null;
+
+ const seriesName = valueLabel ?? 'Downtime';
+ const formatValue = valueLabel ? String : formatMinutes;
 
  const label = (cat: string) =>
  cat.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -48,7 +58,7 @@ export function DowntimeParetoChart({ data, height = 260, valueLabel }: Props) {
  <YAxis
  yAxisId="left"
  tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
- tickFormatter={valueLabel ? String : formatMinutes}
+ tickFormatter={formatValue}
  width={56}
  />
  <YAxis
@@ -67,14 +77,14 @@ export function DowntimeParetoChart({ data, height = 260, valueLabel }: Props) {
  fontSize: 12,
  }}
  formatter={(value: number, name: string) =>
- name === 'Downtime' ? [formatMinutes(value), 'Downtime'] : [`${value.toFixed(1)}%`, 'Cumulative']
+ name === seriesName ? [formatValue(value), seriesName] : [`${value.toFixed(1)}%`, 'Cumulative']
  }
  labelFormatter={label}
  />
  <Bar
  yAxisId="left"
  dataKey="minutes"
- name="Downtime"
+ name={seriesName}
  fill="var(--danger)"
  radius={[3, 3, 0, 0]}
  maxBarSize={48}

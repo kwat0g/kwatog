@@ -73,8 +73,8 @@ export default function QualityDashboardPage() {
  />
  <StatCard
  label="Total defects"
- value={pareto.isLoading ? '—' : pareto.data?.total_defects != null ? String(pareto.data.total_defects) : '—'}
- helper="across top 10 parameters"
+ value={pareto.isLoading ? '—' : pareto.isError ? 'Unavailable' : pareto.data?.total_defects != null ? String(pareto.data.total_defects) : '—'}
+ helper={pareto.isError ? 'Retry below' : 'failed measurements in the window'}
  />
  </div>
 

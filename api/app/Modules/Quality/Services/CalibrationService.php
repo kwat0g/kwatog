@@ -10,6 +10,7 @@ use App\Modules\Quality\Enums\CalibrationStatus;
 use App\Modules\Quality\Models\CalibrationRecord;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /**
  * OGAMI-016 — calibration register management + due/overdue evaluation.
@@ -21,6 +22,10 @@ class CalibrationService
     public function create(array $data): CalibrationRecord
     {
         $this->assertFrequencyIsPresentWhenSupplied($data);
+        $this->assertDateOrder(
+            $this->asDateString($data['last_calibration_date'] ?? null),
+            $this->asDateString($data['next_calibration_date'] ?? null),
+        );
 
         return DB::transaction(function () use ($data) {
             $record = new CalibrationRecord();
@@ -36,10 +41,44 @@ class CalibrationService
         $this->assertFrequencyIsPresentWhenSupplied($data);
 
         return DB::transaction(function () use ($record, $data) {
-            $record->fill($this->withDerived(array_merge($record->toArray(), $data)));
-            $record->save();
+            // Lock-then-patch, for two reasons.
+            //
+            // 1. Concurrency: the previous implementation re-filled the model
+            //    from the representation the request arrived with, so the later
+            //    of two concurrent PATCHes silently reverted the earlier one's
+            //    fields. Re-reading under a row lock makes the stored row the
+            //    authority and the request a patch on top of it.
+            // 2. Correctness: that merge went through `$record->toArray()`,
+            //    which carries `id`, `created_at` and `updated_at`. Under
+            //    `Model::preventSilentlyDiscardingAttributes()` — on in every
+            //    non-production environment — `fill()` refuses those outright,
+            //    so every PATCH raised MassAssignmentException and the edit
+            //    screen answered 500. Only the validated patch keys are applied
+            //    now.
+            $locked = CalibrationRecord::query()->lockForUpdate()->findOrFail($record->getKey());
 
-            return $record->fresh();
+            $patch = array_intersect_key($data, array_flip($locked->getFillable()));
+            unset($patch['status']);
+            $locked->fill($patch);
+
+            // A patch may supply one half of the pair, so the invariant is
+            // checked against the merged result, not against the input. An
+            // untouched schedule is left alone: a row that predates this guard
+            // must stay repairable field by field.
+            if (array_key_exists('last_calibration_date', $data) || array_key_exists('next_calibration_date', $data)) {
+                $this->assertDateOrder(
+                    $locked->last_calibration_date?->toDateString(),
+                    $locked->next_calibration_date?->toDateString(),
+                );
+            }
+
+            $locked->status = $this->statusFor(
+                $locked->next_calibration_date?->toDateString(),
+                $this->requestedStatus($data) ?? $locked->status,
+            );
+            $locked->save();
+
+            return $locked->fresh();
         });
     }
 
@@ -105,17 +144,62 @@ class CalibrationService
     private function withDerived(array $data): array
     {
         // Preserve an explicit Retired status; otherwise derive from dates.
-        $current = isset($data['status'])
-            ? (is_string($data['status']) ? CalibrationStatus::from($data['status']) : $data['status'])
-            : null;
+        $current = $this->requestedStatus($data);
 
         if ($current !== CalibrationStatus::Retired) {
-            $next = $data['next_calibration_date'] ?? null;
-            $next = $next instanceof \DateTimeInterface ? $next->format('Y-m-d') : $next;
+            $next = $this->asDateString($data['next_calibration_date'] ?? null);
             $data['status'] = $this->statusFor($next, $current ?? CalibrationStatus::Active)->value;
         }
 
         return $data;
+    }
+
+    private function requestedStatus(array $data): ?CalibrationStatus
+    {
+        $status = $data['status'] ?? null;
+        if ($status === null) {
+            return null;
+        }
+
+        return $status instanceof CalibrationStatus ? $status : CalibrationStatus::from((string) $status);
+    }
+
+    private function asDateString(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return $value instanceof \DateTimeInterface
+            ? $value->format('Y-m-d')
+            : CarbonImmutable::parse((string) $value)->toDateString();
+    }
+
+    /**
+     * A register entry claims a history and a schedule. Neither may be
+     * impossible: an instrument cannot have been calibrated in the future, and
+     * its next due date cannot precede the calibration it is measured from.
+     *
+     * Both map to one correctable input, so they surface as field-level 422s
+     * rather than as a BusinessRuleException.
+     */
+    private function assertDateOrder(?string $last, ?string $next): void
+    {
+        if ($last !== null && CarbonImmutable::parse($last)->startOfDay()->gt(CarbonImmutable::today())) {
+            throw ValidationException::withMessages([
+                'last_calibration_date' => ['The last calibration date cannot be in the future.'],
+            ]);
+        }
+
+        if ($last === null || $next === null) {
+            return;
+        }
+
+        if (CarbonImmutable::parse($next)->startOfDay()->lt(CarbonImmutable::parse($last)->startOfDay())) {
+            throw ValidationException::withMessages([
+                'next_calibration_date' => ['The next calibration date cannot be earlier than the last calibration date.'],
+            ]);
+        }
     }
 
     private function assertFrequencyIsPresentWhenSupplied(array $data): void

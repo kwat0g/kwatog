@@ -23,7 +23,11 @@ class StoreCalibrationRecordRequest extends FormRequest
             'equipment_code'        => ['required', 'string', 'max:50', Rule::unique('calibration_records', 'equipment_code')->ignore($id)],
             'name'                  => ['required', 'string', 'max:150'],
             'location'              => ['nullable', 'string', 'max:100'],
-            'last_calibration_date' => ['nullable', 'date'],
+            // An instrument cannot have been calibrated in the future. The
+            // date-order invariant against the *stored* last date lives in
+            // CalibrationService, because a PATCH may supply only one half of
+            // the pair and the request cannot see the other half.
+            'last_calibration_date' => ['nullable', 'date', 'before_or_equal:today'],
             'next_calibration_date' => ['nullable', 'date'],
             // Omitted means "keep the current value" on PATCH or the database
             // default on INSERT. An explicit null must fail before it reaches
