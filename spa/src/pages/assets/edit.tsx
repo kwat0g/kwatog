@@ -1,4 +1,5 @@
 /** Edit the non-financial identity and custody fields of an asset. */
+import { useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -18,8 +19,9 @@ import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
+import { salvageExceedsCost, salvageIsUnchanged } from './salvageBound';
 
-const schema = z.object({
+const baseSchema = z.object({
   name: z.string().min(1, 'Name is required').max(200),
   description: z.string().max(5000).optional().or(z.literal('')),
   department_id: z.string().optional().or(z.literal('')),
@@ -27,7 +29,25 @@ const schema = z.object({
   salvage_value: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Enter an amount with up to 2 decimals.').optional().or(z.literal('')),
   location: z.string().max(100).optional().or(z.literal('')),
 });
-type FormValues = z.infer<typeof schema>;
+type FormValues = z.infer<typeof baseSchema>;
+
+/**
+ * Mirrors UpdateAssetRequest::withValidator(): salvage cannot exceed the stored
+ * acquisition cost, but an *unchanged* value that already breaks the bound is
+ * allowed through so a pre-existing bad row stays editable. Acquisition cost is
+ * not a field on this form, so the bound is built from the loaded asset.
+ */
+const buildSchema = (acquisitionCost?: string, storedSalvage?: string) =>
+  baseSchema.superRefine((values, ctx) => {
+    if (salvageIsUnchanged(values.salvage_value, storedSalvage)) return;
+    if (salvageExceedsCost(values.salvage_value, acquisitionCost)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['salvage_value'],
+        message: `Salvage value cannot exceed the acquisition cost of ${acquisitionCost}.`,
+      });
+    }
+  });
 
 export default function EditAssetPage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -44,6 +64,11 @@ export default function EditAssetPage() {
     queryFn: () => departmentsApi.list({ per_page: 200 }),
     staleTime: 300_000,
   });
+
+  const schema = useMemo(
+    () => buildSchema(data?.acquisition_cost, data?.salvage_value),
+    [data?.acquisition_cost, data?.salvage_value],
+  );
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),

@@ -18,6 +18,7 @@ import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
 import type { AssetCategory, DepreciationMethod } from '@/types/assets';
+import { SALVAGE_OVER_COST_MESSAGE, salvageExceedsCost } from './salvageBound';
 
 const money = z.string().regex(/^\d+(\.\d{1,2})?$/, 'Enter an amount with up to 2 decimals.');
 
@@ -36,6 +37,14 @@ const schema = z.object({
   insurance_provider: z.string().max(150).optional().or(z.literal('')),
   insurance_expiry: z.string().optional().or(z.literal('')),
   insured_value: money.optional().or(z.literal('')),
+}).superRefine((values, ctx) => {
+  if (salvageExceedsCost(values.salvage_value, values.acquisition_cost)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['salvage_value'],
+      message: SALVAGE_OVER_COST_MESSAGE,
+    });
+  }
 });
 type FormValues = z.infer<typeof schema>;
 

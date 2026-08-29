@@ -51,12 +51,24 @@ class AssetService
 
     public function show(Asset $asset): Asset
     {
-        return $asset->load(['department:id,name,code', 'depreciations']);
+        // `depreciations.journalEntry` is eager-loaded because AssetResource
+        // publishes each row's journal hash. Resolving it per row cost one
+        // `select * from journal_entries` per month of history — measured 6
+        // extra queries for 6 rows, so a five-year asset paid 60 on every
+        // detail load. `AssetDepreciationController::index` already loads the
+        // relation this way.
+        return $asset->load(['department:id,name,code', 'depreciations.journalEntry:id']);
     }
 
     public function create(array $data): Asset
     {
         return DB::transaction(function () use ($data) {
+            $salvage = $data['salvage_value'] ?? Money::zero();
+            if ($salvage === null || trim((string) $salvage) === '') {
+                $salvage = Money::zero();
+            }
+            $this->assertSalvageWithinCost((string) $salvage, (string) $data['acquisition_cost']);
+
             $asset = Asset::create([
                 'asset_code'        => $this->sequences->generate('asset'),
                 'name'              => $data['name'],
@@ -67,7 +79,7 @@ class AssetService
                 'acquisition_cost'  => $data['acquisition_cost'],
                 'useful_life_years' => (int) $data['useful_life_years'],
                 'depreciation_method' => $data['depreciation_method'] ?? \App\Modules\Assets\Enums\DepreciationMethod::StraightLine->value,
-                'salvage_value'     => $data['salvage_value'] ?? Money::zero(),
+                'salvage_value'     => $salvage,
                 'status'            => AssetStatus::Active->value,
                 'location'          => $data['location'] ?? null,
                 'insurance_policy_no' => $data['insurance_policy_no'] ?? null,
@@ -115,10 +127,42 @@ class AssetService
                 && ($changes['salvage_value'] === null || trim((string) $changes['salvage_value']) === '')) {
                 $changes['salvage_value'] = Money::zero();
             }
+            // Only a *change* has to satisfy the residual-value bound. An
+            // unchanged value that already breaks it is left alone: acquisition
+            // cost is not updatable and salvage freezes once history exists, so
+            // rejecting the resubmitted value would make the row un-editable
+            // entirely. See UpdateAssetRequest::withValidator().
+            if (array_key_exists('salvage_value', $changes)
+                && Money::cmp((string) $changes['salvage_value'], (string) $locked->salvage_value) !== 0) {
+                $this->assertSalvageWithinCost(
+                    (string) $changes['salvage_value'],
+                    (string) $locked->acquisition_cost,
+                );
+            }
             $locked->fill($changes);
             $locked->save();
             return $locked->fresh();
         });
+    }
+
+    /**
+     * Salvage value is residual value: it cannot exceed acquisition cost.
+     *
+     * Enforced here as well as in the FormRequests so the invariant holds for
+     * every caller (commands, jobs, seeders), not just HTTP. Over the bound,
+     * `Asset::getMonthlyDepreciationAttribute()` clamps the depreciable base to
+     * zero, so the asset would be accepted and then never depreciate — a
+     * missing expense that raises nothing.
+     */
+    private function assertSalvageWithinCost(string $salvage, string $acquisitionCost): void
+    {
+        if (Money::gt($salvage, $acquisitionCost)) {
+            throw new BusinessRuleException(sprintf(
+                'Salvage value %s cannot exceed the acquisition cost %s.',
+                Money::round2($salvage),
+                Money::round2($acquisitionCost),
+            ));
+        }
     }
 
     /**

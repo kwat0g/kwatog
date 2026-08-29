@@ -545,3 +545,63 @@ financial-hardening session for F15/F18, a shared Accounting decision for F16,
 and product decisions for F06/F11 before any transfer or maintenance surface is
 re-enabled. Browser acceptance for F07–F10 and the F19 QR-label decision remain
 required.
+
+---
+
+## Re-audit — 2026-08-30
+
+Scope: this module only. Dependency modules (`journal-ledger`,
+`chart-of-accounts-periods`, `employee-master`, `maintenance-machine-health`)
+were read for context and not modified.
+
+### Carried-forward findings, re-verified
+
+| Finding | State on 2026-08-30 | Evidence |
+|---|---|---|
+| F17 restore binding | **Closed** | `->withTrashed()` present at `api/app/Modules/Assets/routes.php:21-23`; `AssetRestoreRouteTest` passes. Committed in `2ce9d03b`/`0d38d4c5`. |
+| F15 disposal-month GL reconciliation | Open, unchanged | `DepreciationService::assetsInServiceFor()` still keeps a disposed asset in service for `disposed_date >= periodStart` (`api/app/Modules/Assets/Services/DepreciationService.php:184-200`) while `AssetService::dispose()` reverses accumulated depreciation as of the disposal instant (`AssetService.php:196-199`). **Needs a policy decision, not a code change** — all three options move a reported money figure. |
+| F16 journal maker attribution | Open, unchanged | Shared Accounting decision #12; not this module's to take. |
+| F18 salvage bound | **Closed this session** | Reproduced first, then fixed — see below. |
+| F06 transfer surface | Open, unchanged | Route group still commented out (`routes.php:33-47`); service + model retained. Product decision. |
+| F11 acquisition/maintenance linkage | Open, unchanged | Product decision. |
+| F19 QR label-sheet workflow | Open, unchanged | Product/documentation decision. |
+| F07–F10 browser acceptance | Open, unchanged | No Playwright spec exists for `/assets*`. Vitest and typecheck pass, but neither measures layout or permission-gated rendering. |
+
+Pre-fix measurement for F18, on a private database (`ogami_test_m031_0830`):
+an asset with `acquisition_cost = 12000.00` and `salvage_value = 20000.00` saved
+without complaint, and `monthly_depreciation` returned `0.00` for **both**
+`straight_line` and `declining_balance`. The register therefore accepts an asset
+that will never depreciate, and nothing raises.
+
+### M031-F20 — Polish: asset detail resolved one journal entry per history row
+
+Priority: **P2**
+Classification: **Polish** (efficiency)
+Scope: **small**
+Session recommendation: **same-session-ok**
+
+`AssetResource` published each depreciation row's journal hash with
+`JournalEntry::find($d->journal_entry_id)` inside the `map`. Because that is a
+fresh query rather than a lazy relation access, `Model::preventLazyLoading()`
+(`api/app/Providers/AppServiceProvider.php:237`) never saw it, so the N+1 was
+invisible to the guard that exists to catch exactly this.
+
+Measured: `AssetService::show()` on an asset with 6 depreciation rows issued 7
+queries — 1 for the rows and **6 separate `select * from journal_entries`**. A
+five-year asset carries 60 rows, so the detail endpoint paid 60 extra round
+trips per load. `AssetDepreciationController::index` already eager-loads the
+same relation (`api/app/Modules/Assets/Controllers/AssetDepreciationController.php:20`),
+so this was an inconsistency inside one module rather than a missing convention.
+
+### Questions for the coordinator (not guessed at)
+
+1. **F15 disposal-month policy.** Three defensible conventions, each changing a
+   reported figure (loss ₱11,000 vs ₱10,800 on the measured fixture). This is a
+   finance policy call, so it is left open rather than decided in an audit.
+2. **`AssetController::restore()` reports success for an asset that was never
+   trashed.** With `->withTrashed()` the binding now also matches a live asset;
+   `$asset->restore()` is then a no-op but the response is still
+   `200 {"message":"Asset restored."}` (`api/app/Modules/Assets/Controllers/AssetController.php:74-78`).
+   Harmless to data, misleading to an operator. Intentional idempotence, or
+   should a live asset be a 422? Not changed — it is a one-line behaviour change
+   with a test asserting the current message.

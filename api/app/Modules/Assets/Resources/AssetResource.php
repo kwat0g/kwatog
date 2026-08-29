@@ -53,7 +53,7 @@ class AssetResource extends JsonResource
                 'period_month'        => (int) $d->period_month,
                 'depreciation_amount' => (string) $d->depreciation_amount,
                 'accumulated_after'   => (string) $d->accumulated_after,
-                'journal_entry_id'    => $d->journal_entry_id ? \App\Modules\Accounting\Models\JournalEntry::find($d->journal_entry_id)?->hash_id : null,
+                'journal_entry_id'    => $d->journalEntry?->hash_id,
                 'created_at'          => optional($d->created_at)?->toISOString(),
             ])),
             'created_at'               => optional($this->created_at)?->toISOString(),

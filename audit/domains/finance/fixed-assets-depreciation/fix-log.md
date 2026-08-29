@@ -563,3 +563,140 @@ they are reported rather than changed.
   - `docker compose run --rm --no-deps api ./vendor/bin/pint --test app/Modules/Assets/routes.php` — **FAIL: inherited `method_argument_space` alignment in the existing route file**; unrelated route whitespace was intentionally preserved.
   - `docker compose run --rm --no-deps api ./vendor/bin/phpstan analyse app/Modules/Assets/routes.php tests/Feature/Assets/AssetRestoreRouteTest.php --memory-limit=1G` — **PASS: no errors**.
   - `git diff --check` — **PASS**.
+
+## Re-audit session — 2026-08-30
+
+Database: `ogami_test_m031_0830`, created for this session alone, so no other
+suite could `migrate:fresh` underneath it.
+
+### M031-F18 — salvage value is now bounded by acquisition cost (fixed)
+
+**Before (measured, not inferred).** `acquisition_cost = 12000.00` with
+`salvage_value = 20000.00` was accepted by create and update. Neither request
+compared the two fields (`StoreAssetRequest.php:40`, `UpdateAssetRequest.php:34`
+at `HEAD`), and the service had no guard. `Asset::getMonthlyDepreciationAttribute()`
+then clamps the depreciable base to zero, so the probe returned
+`monthly=0.00` for `straight_line` **and** `declining_balance`: an asset in the
+register that will never depreciate, with no expense, no schedule rows, and
+nothing raised.
+
+**After.**
+
+- `api/app/Modules/Assets/Requests/StoreAssetRequest.php:50-79` — `withValidator()`
+  adds a `salvage_value` error when salvage exceeds `acquisition_cost`. Keyed to
+  the field (not thrown from the service) so the form highlights the input the
+  operator can correct — the guidance in `BusinessRuleException`'s own docblock.
+  A non-numeric value on either side short-circuits, so the field's own rule
+  owns that error instead of reporting it twice.
+- `api/app/Modules/Assets/Requests/UpdateAssetRequest.php:39-76` — same bound,
+  compared against the stored `acquisition_cost` because this form cannot change
+  it. An **unchanged** value is deliberately allowed through even when it already
+  breaks the bound: acquisition cost is not editable here and salvage freezes
+  once depreciation history exists, so rejecting the resubmitted value would
+  leave a pre-existing bad row permanently un-editable — its name and department
+  included. Any *change* must satisfy the bound, so such a row can only move
+  toward legality.
+- `api/app/Modules/Assets/Services/AssetService.php:64-70,126-137,150-169` —
+  `assertSalvageWithinCost()` enforces the same invariant for non-HTTP callers
+  (commands, jobs, seeders) and throws `BusinessRuleException`. `create()` also
+  now writes the normalised `$salvage` rather than the raw input.
+
+**Regression** (`api/tests/Feature/Assets/AssetSalvageValueBoundTest.php`, 7
+tests / 17 assertions): create rejects over-cost with a 422 on `salvage_value`
+and writes no row; create accepts equal (asserting `monthly_depreciation` is
+`0.00`, a stated schedule rather than a silent one) and below (`160.00`); the
+absent-salvage default still yields `0.00`/`200.00`; update rejects raising
+salvage past cost and leaves the stored value untouched; an existing over-cost
+row **with** depreciation history stays renameable; and both service entry
+points throw with the exact message.
+
+### M031-F20 — asset detail no longer resolves one journal per history row (fixed)
+
+**Before (measured).** `AssetService::show()` on an asset with 6 depreciation
+rows issued 7 queries: 1 for the rows plus **6** `select * from journal_entries`,
+one per row, from `JournalEntry::find()` inside `AssetResource`'s map. Because
+that is a fresh query and not a lazy relation access,
+`Model::preventLazyLoading()` never flagged it.
+
+**After.**
+
+- `api/app/Modules/Assets/Services/AssetService.php:52-59` — loads
+  `depreciations.journalEntry:id`, matching what
+  `AssetDepreciationController::index` already did.
+- `api/app/Modules/Assets/Resources/AssetResource.php:56` — reads
+  `$d->journalEntry?->hash_id`. Semantics are unchanged: `JournalEntry` uses
+  `SoftDeletes`, so the eager load applies the same global scope `find()` did.
+
+**Regression** (`api/tests/Feature/Assets/AssetDetailEagerLoadTest.php`, 1 test /
+3 assertions): builds 6 months of history against real `journal_entries` rows,
+then asserts exactly **one** query mentioning `journal_entries` during
+`show()` + serialisation. The count, not just the output, is pinned — the output
+was always correct, which is why the N+1 survived this long.
+
+Side effect worth knowing: any future path that loads `depreciations` without
+`journalEntry` will now raise `LazyLoadingViolationException` outside production
+instead of silently issuing N queries. That is the intended failure mode.
+
+### SPA mirror
+
+- `spa/src/pages/assets/salvageBound.ts` (new) — `centavos()`,
+  `salvageExceedsCost()`, `salvageIsUnchanged()`. Extracted rather than inlined
+  twice, following `spa/src/pages/accounting/implicitOpenCurrentPeriod.ts`.
+  Amounts are compared as centavo `BigInt`s, never `parseFloat` — decimals
+  arrive from the API as strings and must stay strings.
+- `spa/src/pages/assets/create.tsx:24-49` — object-level `superRefine` keyed to
+  `salvage_value`.
+- `spa/src/pages/assets/edit.tsx:23-53,66-69` — the schema is built per-render
+  from the loaded asset (`useMemo`) because acquisition cost is not a form field,
+  and reproduces the unchanged-value carve-out.
+- `spa/src/pages/assets/salvageBound.test.ts` (new, 5 tests) — exact centavo
+  parsing, trailing-zero equivalence (`20000` == `20000.00`), strict-greater
+  rejection, and the not-comparable cases that must raise nothing (blank field,
+  and `acquisitionCost === undefined` on the edit form's first render).
+
+### Verification
+
+Backend, on `ogami_test_m031_0830`:
+
+```
+php artisan test tests/Feature/Assets tests/Unit/Assets
+  → 33 passed (145 assertions)      [baseline before this session: 25 / 120]
+php artisan test tests/Feature/Common/BusinessRuleRenderingTest.php
+  → 8 passed (18 assertions)        [the only test outside tests/Feature/Assets
+                                     that calls /api/v1/assets]
+php -l on all 6 changed/added PHP files                            → clean
+phpstan analyse app/Modules/Assets + both new tests                → [OK] No errors
+pint --test on both new test files                                 → PASS
+```
+
+Frontend:
+
+```
+npm run typecheck                          → clean
+npx eslint src/pages/assets/               → clean
+npm run test:run                           → 47 files, 297 tests passed
+                                             [baseline: 46 files, 292 tests]
+```
+
+Pint on the four changed source files still **FAILS**, and every reported hunk is
+the inherited baseline (`binary_operator_spaces` `=>` alignment,
+`fully_qualified_strict_types`, `ordered_imports`). Proven rather than asserted:
+the `git show HEAD:` copies of all four fail Pint identically, and diffing
+Pint's output against the working copies shows no requested change inside any
+line this session added — only the two pre-aligned array lines that were edited
+in place. Reformatting was left out of this diff deliberately, as in the
+2026-08-27 session.
+
+### Not fixed, and why
+
+- **F15** (P0) — needs a finance policy decision; all three options change a
+  reported figure. Raised as question 1 in `audit-report.md`.
+- **F16** — shared Accounting decision #12, cross-module.
+- **F06 / F11 / F19** — product decisions.
+- **F07–F10** — require a Playwright spec for `/assets*`; none exists. Vitest
+  and typecheck cannot substitute, because layout and permission-gated rendering
+  are exactly what they do not measure (and per `CLAUDE.md`, Lightpanda cannot
+  either — no layout engine).
+- **`restore()` reporting success for a live asset** — one-line behaviour change
+  with an existing test asserting the current message; raised as question 2
+  rather than changed unilaterally.
