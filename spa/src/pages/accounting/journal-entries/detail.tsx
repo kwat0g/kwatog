@@ -96,7 +96,10 @@ export default function JournalEntryDetailPage() {
  backLabel="Journal Entries"
  actions={
  <div className="flex gap-1.5">
- <Button variant="secondary" size="sm" icon={<LuPrinter size={14} />} onClick={() => void downloadAuthenticatedFile(journalEntriesApi.pdfUrl(je.id), { openInNewTab: true, errorMessage: 'Failed to generate journal entry PDF.' })}>Print</Button>
+ {/* The PDF route is not withTrashed(), so Print 404s on an archived entry. */}
+ {!isArchived && (
+  <Button variant="secondary" size="sm" icon={<LuPrinter size={14} />} onClick={() => void downloadAuthenticatedFile(journalEntriesApi.pdfUrl(je.id), { openInNewTab: true, errorMessage: 'Failed to generate journal entry PDF.' })}>Print</Button>
+ )}
  {isDraft && !isArchived && can('accounting.journal.create') && (
  <Button variant="secondary" size="sm" icon={<LuPencil size={14} />} onClick={() => navigate(`/accounting/journal-entries/${je.id}/edit`)}>
  Edit
@@ -157,8 +160,12 @@ export default function JournalEntryDetailPage() {
  {l.account ? <span><span className="font-mono text-muted">{l.account.code}</span> · {l.account.name}</span> : '—'}
  </Td>
  <Td className="text-muted">{l.description ?? '—'}</Td>
- <Td align="right" mono>{Number(l.debit) > 0 ? formatPeso(l.debit) : ''}</Td>
- <Td align="right" mono>{Number(l.credit) > 0 ? formatPeso(l.credit) : ''}</Td>
+ {/* String compare, never Number(): a decimal arrives as a string and parsing it
+     into a JS float reintroduces the error decimal(15,2) exists to prevent.
+     JournalEntryLineResource casts decimal:2, so zero is always exactly
+     '0.00' — the same idiom edit.tsx already uses to seed its form. */}
+ <Td align="right" mono>{l.debit !== '0.00' ? formatPeso(l.debit) : ''}</Td>
+ <Td align="right" mono>{l.credit !== '0.00' ? formatPeso(l.credit) : ''}</Td>
  </tr>
  ))}
  <tr className={totalsTrCls}>

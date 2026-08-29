@@ -118,7 +118,7 @@ export default function JournalEntriesPage() {
  {isLoading && !data && <SkeletonTable columns={6} rows={8} />}
  {isError && <EmptyState icon="alert-circle" title="Failed to load journal entries" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />}
  {data && data.data.length === 0 && (
- <ListEmptyState />
+ <ListEmptyState searchTerm={filters.search} />
  )}
  {data && data.data.length > 0 && (
   <div className="px-5 py-4"><DataTable

@@ -268,11 +268,20 @@ class JournalEntryService
             // Keep the same header → lines → accounts order for draft archive
             // operations. Account activity is irrelevant to deletion, so this
             // locks existing account rows without applying the posting guard.
+            //
+            // The lines are LOCKED BUT NOT DELETED. JournalEntryLine has no
+            // SoftDeletes trait, so deleting them here was a hard DELETE while
+            // restore() only ever restores the header — an archived draft came
+            // back as a header still claiming its total with nothing behind it,
+            // un-postable and advertised at full value in the journal list.
+            // Keeping them is safe because every aggregate that joins
+            // journal_entry_lines filters its parent to status='posted'
+            // (TrialBalanceService, BalanceSheetService, IncomeStatementService,
+            // AccountService, BudgetConsumptionService and the dashboard
+            // queries), so a draft's lines are already counted by nothing; the
+            // header's deleted_at is what hides the entry.
             $oldLines = $this->lockLines($lockedJe->id);
             $this->lockAccountRows($oldLines);
-            foreach ($oldLines as $oldLine) {
-                $oldLine->delete();
-            }
             $lockedJe->delete();
         });
     }

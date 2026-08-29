@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Models;
 
+use App\Common\Support\HashId;
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Accounting\Enums\JournalEntryStatus;
@@ -85,20 +86,48 @@ class JournalEntry extends Model
     }
 
     /**
-     * Best-effort human label for the linked source record (used by the API resource).
+     * Human label for the linked source record, used by the API resource.
+     *
+     * The identifier is HASHED. This used to interpolate `$this->reference_id`
+     * directly — "Bill #123", "Reversal of JE #21" — one key below the same
+     * resource's carefully hashed `reference_id`, so a single response handed a
+     * client both halves of the mapping and the obfuscation bought nothing.
+     * `class_basename` is applied for the same reason the raw id was removed:
+     * two allow-listed reference types are literal model class names
+     * (Asset::class, Clearance::class), and a finance officer was shown
+     * "App\Modules\Assets\Models\Asset #123".
+     *
+     * A hash is not a document number, which is what an operator actually wants
+     * here — resolving each source family to its own number needs a per-family
+     * eager-load and is tracked separately. This method's contract is only that
+     * it never leaks an internal identifier.
      */
     public function referenceLabel(): ?string
     {
-        if (! $this->reference_type) return null;
-        return match ($this->reference_type) {
-            'payroll_period'           => "Payroll Period #{$this->reference_id}",
-            'bill'                     => "Bill #{$this->reference_id}",
-            'bill_payment'             => "Bill Payment #{$this->reference_id}",
-            'invoice'                  => "Invoice #{$this->reference_id}",
-            'collection'               => "Collection #{$this->reference_id}",
-            'journal_entry_reversal'   => "Reversal of JE #{$this->reference_id}",
-            default                    => ucfirst(str_replace('_', ' ', $this->reference_type))
-                                           . " #{$this->reference_id}",
+        if (! $this->reference_type) {
+            return null;
+        }
+
+        $noun = match ($this->reference_type) {
+            'payroll_period'         => 'Payroll Period',
+            'bill'                   => 'Bill',
+            'bill_payment'           => 'Bill Payment',
+            'invoice'                => 'Invoice',
+            'collection'             => 'Collection',
+            'credit_note'            => 'Credit Note',
+            'journal_entry_reversal' => 'Reversal of JE',
+            default                  => ucfirst(str_replace(
+                '_', ' ', class_basename($this->reference_type),
+            )),
         };
+
+        // Types such as `asset_depreciation` and `opening` are allow-listed with
+        // a null id by design, so the noun stands alone rather than trailing a
+        // dangling separator.
+        if ($this->reference_id === null) {
+            return $noun;
+        }
+
+        return $noun.' '.HashId::encode((int) $this->reference_id);
     }
 }

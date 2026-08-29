@@ -13,8 +13,14 @@ class UpdateJournalEntryRequest extends FormRequest
         return $this->user()?->hasPermission('accounting.journal.create') ?? false;
     }
 
+    /** Same centavo contract as {@see StoreJournalEntryRequest::rules()}. */
     public function rules(): array
     {
+        $amount = [
+            'nullable', 'numeric', 'decimal:0,2', 'min:0',
+            'max:'.StoreJournalEntryRequest::MAX_LINE_AMOUNT,
+        ];
+
         return [
             'date'                => ['sometimes', 'date'],
             'description'         => ['sometimes', 'string', 'max:500'],
@@ -23,8 +29,8 @@ class UpdateJournalEntryRequest extends FormRequest
             'reference_id'        => ['prohibited'],
             'lines'               => ['required', 'array', 'min:2'],
             'lines.*.account_id'  => ['required', 'string'],
-            'lines.*.debit'       => ['nullable', 'numeric', 'min:0'],
-            'lines.*.credit'      => ['nullable', 'numeric', 'min:0'],
+            'lines.*.debit'       => $amount,
+            'lines.*.credit'      => $amount,
             'lines.*.description' => ['nullable', 'string', 'max:200'],
         ];
     }

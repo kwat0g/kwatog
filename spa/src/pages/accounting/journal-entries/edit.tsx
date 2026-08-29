@@ -76,12 +76,12 @@ export default function EditJournalEntryPage() {
  });
  const { register, control, handleSubmit, setError, watch, formState: { errors } } = form;
  const { fields, append, remove } = useFieldArray({ control, name: 'lines' });
- const lines = watch('lines') ?? [];
+ const lines = watch('lines');
 
  const totals = useMemo(() => {
   let debit = 0n;
   let credit = 0n;
-  for (const line of lines) {
+  for (const line of lines ?? []) {
    debit += toCents(line.debit);
    credit += toCents(line.credit);
   }
