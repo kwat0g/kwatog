@@ -521,3 +521,34 @@ No pre-existing formatting was rewritten into this diff.
 Everything else in `action-plan.md`. The temporary probe suite used to gather the
 measurements above was deleted; its outputs are quoted verbatim in
 `audit-report.md` so the evidence survives without a test that asserts defects.
+
+### Where this session's diff actually lives — read before `git log --grep`
+
+The M018 changes above were staged with explicit paths and were about to be
+committed as `fix(attendance): …`. Between the `git add` and the `git commit`, a
+concurrent audit session on the same shared working tree ran a `git commit`
+without path arguments, which committed **everything in the index** — including
+all eight M018 files.
+
+So this session's entire diff is inside:
+
+```text
+32d91307 docs(audit): correct M059 line citations after the fix shifted them
+```
+
+whose message describes a different module (M059 quality/calibration). **Nothing
+was lost** — verified against `git show HEAD:` for each file: `openDayRecord`,
+`rowMessage`, `isDayUniqueViolation`, `assertDayNotArchived`,
+`date_format:Y-m-d`, and all six tests in
+`AttendanceArchivedDayAndInputHardeningTest` are present in `HEAD`. The other
+session's two uncommitted `spa/src/**/purchasing` files were **not** swept in by
+this session; they were left unstaged.
+
+History was deliberately **not** rewritten. An amend or rebase on a branch with
+two other live sessions attached is the destructive operation, and the content is
+correct where it is. Recorded here instead so a future `git log --grep=attendance`
+does not conclude the work was never committed.
+
+Lesson for the protocol: on a shared tree, `git add` and `git commit` must be a
+single command invocation, because the index is shared state and any concurrent
+pathless `git commit` claims it.
