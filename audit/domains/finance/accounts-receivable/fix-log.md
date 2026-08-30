@@ -107,3 +107,161 @@ recommended.
 - The only two failures were the known CSV-header expectation mismatch in `AgingReportTest` and `FinancialStatementBoundaryTest`: the shared controller emits valid quoted fields such as `"Row Type"` through `fputcsv()`, while the dirty tests assert unquoted headers. The financial-statement implementation/test pair was not changed because it is outside this module's owned fix scope.
 - F04 remains deferred because prebill maker/checker separation, credit-limit treatment, and compensating evidence require a business decision. F07 remains deferred because cancellation/reissue must reconcile CRM sales-order state and delivery allocation outside this module. F08/F09 residuals remain deferred pending a first-class effective-posting/reversal event model and explicit backdating/timezone policy. F11 remains deferred pending an authorized credit-note void/reversal contract coordinated with journal-ledger. F12 residuals remain deferred pending receipt correction/void and failed-issuance/outbox-recovery policy.
 - Because those plan items remain genuinely pending, M028 is released as `🔁 Needs Re-audit`; the plan is not complete and the next session should resume with the deferred decisions/designs rather than re-auditing fixed controls.
+
+## Re-audit session — 2026-08-30
+
+Claimed M028 with `claim-module.sh`; the 2026-08-25 lock was 107h stale →
+**RECLAIMED**. Established first that this was a **verification, not a recovery**:
+the "dirty worktree" implementation described above was committed in
+`167de85e chore: remaining uncommitted work from ~50 crashed audit sessions`
+(2026-08-26 02:32). Every file the prior log claims exists and is tracked, and the
+tree was clean of AR changes at claim time. Prior fixes were then re-measured by
+probe rather than accepted from the log.
+
+Discovery ran against a dedicated database (`ogami_test_ar`), never shared
+`ogami_test`. A scratch probe (`ZzArInvariantProbeTest`) measured 27 AR invariants;
+its useful cases were promoted into a permanent regression test and the probe was
+deleted before release.
+
+### Fixed and verified
+
+- **M028-F18 (Broken/P0) — `credit_limit = 0.00` was a hard 500 on the customer
+  list and detail.**
+  `api/app/Modules/Accounting/Resources/CustomerResource.php:19-31`.
+  *Before:* `$creditAvail = $creditLimit !== '0' ? … : null;` and
+  `$creditWarning = … && ((float) $creditUsed / (float) $creditLimit) >= $warningRatio;`
+  — the `decimal:2` cast renders a stored `0.00` as `'0.00'`, which is not `'0'`,
+  so the guard passed and `:28` divided by zero.
+  *After:* `$hasLimit = ! Money::isZero($creditLimit);` gates both, and the ratio
+  test is restated as `Money::gte($creditUsed, Money::mul($creditLimit, number_format($warningRatio, 6, '.', '')))`
+  — no division at all, exact peso arithmetic, and `number_format` keeps a small
+  float out of BCMath as scientific notation. This also closes the backend half of
+  M028-F37 (float money).
+  *Measured before:* `DivisionByZeroError: Division by zero`; `GET /api/v1/customers?per_page=5` → 500.
+  *Measured after:* `200`, `credit_used "500.00"`, `credit_available null`, `credit_warning false`.
+
+- **M028-F23 (Broken/P1) — AR aging 500'd once any customer with invoices was
+  archived**, taking down both the CFO monthly report and the finance dashboard
+  (which calls `aging()` on every load).
+  `api/app/Modules/Accounting/Services/InvoiceService.php:461-469` and `:525-526`.
+  *Before:* `->with('customer:id,name')` plus `$inv->customer->hash_id` /
+  `->name`. `customers` soft-deletes while `invoices` does not, and
+  `invoices.customer_id` is NOT NULL behind a RESTRICT FK, so the relation
+  resolved to `null`.
+  *After:* `->with(['customer' => static fn ($q) => $q->withTrashed()->select(['id', 'name'])])`
+  and `$inv->customer?->hash_id` / `?->name ?? '(deleted customer)'`. The
+  receivable is still owed, so the row stays in the report.
+  *Measured before:* `ErrorException: Attempt to read property "hash_id" on null`;
+  `GET /accounting/statements/ar-aging` → 500.
+  *Measured after:* `total=1000.00`, 1 customer row, HTTP 200.
+
+- **M028-F24 (Broken/P1) — `1e3`/`1e17` on any AR money field was a 500, and
+  `1.999` was accepted and silently stored as `2.00`.** Follows the precedent
+  `journal-ledger` set on `StoreJournalEntryRequest` hours earlier; AR never
+  reaches that FormRequest because `InvoiceService`/`CreditNoteService` build
+  their own GL lines and call `JournalEntryService::create()` directly.
+  - `api/app/Modules/Accounting/Requests/StoreInvoiceRequest.php:11-16,41-42,64-70`
+    — added `MAX_AMOUNT`/`MAX_QUANTITY`; `items.*.quantity`
+    `numeric|min:0.01` → `numeric|decimal:0,2|min:0.01|max:9999999999.99`
+    (the column is `decimal(12,2)`, not (15,2)); `items.*.unit_price` and
+    `senior_pwd_discount` `numeric|min:0` → `+ decimal:0,2|max:9999999999999.99`.
+  - `api/app/Modules/Accounting/Requests/StoreCollectionRequest.php:11-14,38`
+    — `amount` `numeric|min:0.01` → `+ decimal:0,2|max:…`.
+  - `api/app/Modules/Accounting/Requests/StoreCreditNoteRequest.php:11-15,39`
+    — `lines.*.amount` `numeric|gt:0` → `+ decimal:0,2|max:…`.
+  - `api/app/Modules/Accounting/Requests/ApplyCreditNoteRequest.php:9-13,22`
+    — `amount` `numeric|gt:0` → `+ decimal:0,2|max:…`.
+  *Measured before, via HTTP `POST /api/v1/invoices`:* `1.999` → **201** with
+  `subtotal 2.00`; `1e3` → **500** (`ValueError: bccomp(): Argument #1 ($num1) is
+  not well-formed`); `1e17` → **500**; `99999999999999999.99` → **500**
+  (`SQLSTATE[22003]`).
+  *Measured after:* all four → **422** with the error mapped to
+  `items.0.unit_price`; no invoice row created. Same shapes verified on the
+  collection and credit-note endpoints.
+  *Known consequence, documented in the FormRequest docblocks:* the AR SPA forms
+  use `z.coerce.number()` with no precision refinement, so a three-decimal entry
+  now surfaces as a mapped 422 instead of a silent round. Adding the client-side
+  `.refine()` is action-plan item 12.
+
+  The `1e3` ValueError is still reachable by a **direct service caller** (e.g. the
+  delivery→invoice handoff at `DeliveryService.php:1164`, which bypasses the
+  FormRequest). The request boundary is now closed; the service boundary is not.
+  Recorded, not fixed — it needs the F36 quantity-precision decision anyway.
+
+### Written and reverted
+
+- **M028-F19 (Broken/P1) — a credit note's header may name another customer's
+  invoice.** The guard was implemented in
+  `CreditNoteService::assertParty()` and **reverted**: it made 3 tests in
+  `tests/Feature/ReturnManagement/CustomerReturnRestockOnDisposeTest.php` go red,
+  because that fixture calls `$this->customer()` twice and `customer()` at `:57`
+  mints a **new** row per call, so it builds an RMA whose invoice belongs to a
+  different customer. `ReturnRequestService::creditNoteFor():1362-1364` forwards
+  both ids with no cross-check of its own. Fixing either is outside this module's
+  scope, so the guard is deferred to action-plan item 5 and its exact intent is
+  preserved in the `assertParty()` docblock.
+  *Revert proven:* stripping comment lines from
+  `git diff HEAD -- api/app/Modules/Accounting/Services/CreditNoteService.php`
+  yields an **empty diff** — zero code change from HEAD.
+
+### Test added
+
+`api/tests/Feature/Accounting/AccountsReceivableHardeningTest.php` — 9 cases,
+100 assertions.
+
+**Confirmed red against unmodified source.** The six changed source files were
+temporarily replaced with their `git show HEAD:` versions, the suite re-run, and
+the files restored — the restore verified with `sha256sum -c`, all 6 **OK**.
+
+- **7 of 9 go red at HEAD**, with exactly the claimed errors: `DivisionByZeroError`;
+  `Failed asserting that 500 is identical to 200` (×2);
+  `Attempt to read property "hash_id" on null`;
+  `Failed asserting that 201 is identical to 422` (×2, over-precision accepted);
+  `Failed asserting that 200 is identical to 422`.
+- **2 are pass-either-way regression locks**, labelled as such in the file
+  docblock: `aging buckets are exact and non overlapping at every boundary` and
+  `payment application cannot drive a balance negative`. They passed before the
+  audit and are pinned so the bucket edges and the overpayment guard cannot drift.
+
+### Verification record
+
+- `php -l` clean on all 7 changed files plus the new test.
+- **PHPStan: `[OK] No errors`** on all 7 changed files (`--memory-limit=1G`).
+- **Pint: all 7 files fail, and all 7 fail identically at HEAD — inherited, not
+  introduced.** Proven, not asserted: the HEAD versions were extracted to a
+  scratch directory and Pint run against them (same 7 files, same leading rule
+  each). Then Pint was run in *fix* mode against a copy of the current files and
+  the resulting diff inspected line by line — every objection is
+  `binary_operator_spaces` on the repo's aligned-`=>` array style (plus
+  pre-existing `fully_qualified_strict_types`, `control_structure_braces`,
+  `new_with_parentheses`), and the only lines of mine that appear are ones where I
+  matched the surrounding block's existing alignment. No new violation class.
+  Not "fixed" — de-aligning would reformat the files and bury the change.
+- **Final suite: 177 passed, 0 failed (881 assertions)** on `ogami_test_ar`, over
+  `AccountsReceivableHardeningTest`, `InvoiceCollectionTest`,
+  `InvoiceDraftNumberingTest`, `InvoiceBirFieldsTest`, `CreditNoteTest`,
+  `CreditNoteDoubleFinalizeRaceTest`, `AgingReportTest`,
+  `HistoricalReceivablesTest`, `StatementServicesTest`,
+  `FinancialStatementBoundaryTest`, `RunArDunningCommandTest`,
+  `BillServiceTest`, all of `tests/Feature/ReturnManagement/`,
+  `CustomerPortalServiceTest` and `GlobalSearchTest`.
+- `AgingReportTest` and `FinancialStatementBoundaryTest` — logged across four
+  prior sessions as a "known CSV-header expectation mismatch" — now **pass**. That
+  problem is gone; it should stop being carried forward.
+- `AccountsPayableHardeningTest` "supplier resource does not expose internal ap
+  controls" fails at HEAD and is **not attributable to this session** (confirmed
+  with `git diff --name-only HEAD`: no supplier resource touched). Third session
+  to confirm. Not fixed — AP's.
+- No SPA file was edited (see the action-plan note on the Prettier hook).
+  `spa/src/pages/leaves/detail.test.tsx` and `spa/src/lib/__tests__/money.test.ts`
+  were dirty in the tree from other live sessions and were **not touched**.
+- Scratch probe and scratch Pint directories deleted; `ogami_test_ar` dropped.
+
+### Status
+
+`🔁 Needs Re-audit`. Four contained defects are closed, but the plan is dominated
+by items that change a customer-facing peso figure (F20, F21, F22), need a schema
+column plus a backfill policy (F20b), create money movement (F25), or need a
+coordinated change in another module (F19). Those were not guessed at. Seven
+findings still reproduce and are recorded with measured figures in
+`audit-report.md`.

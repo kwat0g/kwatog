@@ -180,3 +180,475 @@ Action: add the relationship/eager-load contract and a query-count regression te
 ## Release decision
 
 No production-code fixes were applied. The majority of the plan is financial state-machine integrity, authorization/separation-of-duties, period control, historical reporting, receipt integration, or cross-module/customer-boundary work. Applying the small restore, balance-list, and N+1 fixes alone would leave the primary risks unresolved. M028 is released as 📋 Plan Ready with the ordered action plan below. The refreshed registry currently shows M034 customer-complaints-8d as the first visible Not Started entry, but it is locked; the next session must rerun the registry, skip any locks, and claim the highest eligible dependency-safe module atomically.
+
+---
+
+# Re-audit — 2026-08-30
+
+Status: 🔁 Needs Re-audit
+Prior lock: orphaned 2026-08-25 (107h), RECLAIMED.
+
+## What the crashed session left
+
+**Case B — the work was committed, not lost.** The 2026-08-25 fix-log describes a
+large "dirty worktree" implementation. That worktree was swept into
+`167de85e chore: remaining uncommitted work from ~50 crashed audit sessions`
+(2026-08-26 02:32). Every file that log claims exists and is tracked:
+`PostingAccountResolver.php`, `StatementAsOfRequest.php`,
+`CustomerPortalInvoiceResource.php`,
+`2026_08_25_120000_harden_accounts_receivable_controls.php`,
+`HistoricalReceivablesTest.php`. The tree is clean of AR changes at claim time.
+So this pass is verification, not recovery.
+
+**Prior fixes verified by probe, not by reading the log.** Of the 13 findings the
+2026-08-25 session claimed fixed, these were re-measured as holding: F01 (stale
+draft update refused), F02 (account classification), F03 (collection replay with
+an idempotency key), F05 (source-chain party binding), F06 (cancellation period
+guard — now fires), F08 (aging as-of), F10 (credit-note target state), F12
+(OR issued per collection, unique), F13 (portal status + resource boundary), F14
+(strict `as_of`, export gate), F15/F16/F17. Two previously-reported problems have
+also gone away: `AgingReportTest` and `FinancialStatementBoundaryTest` — logged
+across four sessions as a "known CSV-header expectation mismatch" — now pass.
+
+**Open findings that still reproduce: 7 of the re-audit's 22, plus 4 new P0/P1
+defects the prior passes did not reach.** F04, F07, F11 and the F08/F09
+residuals remain open as previously described and are not restated below except
+where new measurement changes them.
+
+## Method
+
+Every figure below was measured against real PostgreSQL rows on a dedicated
+database (`ogami_test_ar`), never the shared `ogami_test`. GL control-account
+balances are read from `journal_entry_lines` joined to posted, non-archived
+`journal_entries`, resolving the AR code from settings
+(`accounting.accounts.ar_code` = `1100`) rather than hardcoding it.
+
+---
+
+## BROKEN
+
+### M028-F18 — P0: `credit_limit = 0.00` is a hard 500 on the customer list and detail — FIXED
+
+`api/app/Modules/Accounting/Resources/CustomerResource.php:23-28`.
+`$creditLimit = (string) ($this->credit_limit ?? '0')` then guards the ratio with
+`$creditLimit !== '0'`. The model's `decimal:2` cast
+(`api/app/Modules/Accounting/Models/Customer.php:32`) renders a stored `0.00` as
+the string `'0.00'`, which is not `'0'` — so the guard passes and `:28` evaluates
+`(float) $creditUsed / (float) '0.00'`.
+
+Measured: `DivisionByZeroError: Division by zero`, both from the resource
+directly and from `GET /api/v1/customers?per_page=5`.
+
+`credit_limit = 0` is reachable and meaningful: `StoreCustomerRequest.php:26`
+allows `min:0`, `CustomerImporter.php:48-58` stores a CSV `"0"`, and zero is the
+documented *"no limit is enforced"* convention
+(`api/app/Modules/CRM/Services/SalesOrderService.php:99`). `credit_used` is
+attached on every list (`CustomerService.php:24-26`) and every show
+(`CustomerController.php:33`), so one such customer with at least one invoice
+took down the entire AR customer list.
+
+### M028-F19 — P1: a credit note's header links another customer's invoice — DEFERRED
+
+`api/app/Modules/Accounting/Services/CreditNoteService.php:132-135` decodes
+`customer_id` and `invoice_id` independently; `assertParty()` checks only that a
+party is present.
+
+Measured: a credit note created with `customer_id = A` and `invoice_id` belonging
+to `B` was **accepted**. Money cannot cross — `apply():243-245` re-checks the
+party — but `CreditNoteResource.php:41` then serialises B's `invoice_number` onto
+A's credit note, which is a cross-tenant metadata disclosure and a false audit
+link.
+
+The guard was written and **reverted** in this session. `ReturnRequestService::
+creditNoteFor()` (`api/app/Modules/ReturnManagement/Services/ReturnRequestService.php:1362-1364`)
+forwards `$rma->customer_id` and `$rma->invoice_id` with no cross-check of its
+own, and `tests/Feature/ReturnManagement/CustomerReturnRestockOnDisposeTest.php`
+at `:135,:155,:205,:238` calls `$this->customer()` twice — and `customer()` at
+`:57` is `Customer::create(...)`, minting a **new** row per call — so the fixture
+builds an RMA whose invoice belongs to a different customer, and 3 of its tests
+went red. Landing this needs a coordinated return-management change. The revert
+is proven comment-only: stripping comment lines from
+`git diff HEAD -- CreditNoteService.php` yields an empty diff.
+
+### M028-F20 — P0: the statement of account reports three different receivable figures for the same rows — DEFERRED
+
+One customer, one ₱1,000.00 invoice, one ₱200.00 cash collection, one ₱300.00
+applied credit note. Ledger truth: `invoices.balance = ₱500.00`.
+
+| as_of | `closing_balance` | `total_outstanding` | AR aging total |
+|---|---|---|---|
+| 2026-04-30 | **₱800.00** | **₱800.00** | **₱800.00** |
+| 2026-08-30 (today) | **₱800.00** | ₱500.00 | ₱500.00 |
+
+Two independent defects produce this:
+
+**(a) `closing_balance` never subtracts a credit note — at any as-of.**
+`StatementOfAccountService::buildTransactions()` (`:97-181`) emits only
+`invoice`, `cancellation` and `payment` events. Measured
+`txn_types=invoice,payment`. So the running ledger a customer reads is overstated
+by every applied credit, permanently. Note this also means `closing_balance`
+(₱800.00) and `total_outstanding` (₱500.00) contradict each other **inside one
+response payload** — the header/lines divergence class.
+
+**(b) every historical aging excludes credit applications entirely.**
+`credit_note_applications` has **no business-date column** — only
+`created_at` (`api/database/migrations/0268_create_credit_notes_tables.php:58-68`,
+never altered). Both `StatementOfAccountService::computeAging():219` and
+`InvoiceService::aging():491` filter it with `->where('created_at', '<=', $cutoff)`.
+`created_at` is the wall-clock insert time, so **any as-of earlier than the moment
+the row was written silently reverts to the pre-credit figure.** Measured
+`credit_note_applications.created_at = 2026-08-30 07:56:14` against an as-of of
+2026-04-30 — ₱300.00 of credit vanished. A month-end AR aging is correct when run
+that month and wrong when re-run later for the same cutoff.
+
+### M028-F21 — P0: two credit notes drive the GL AR control account negative — DEFERRED
+
+`CreditNoteService::create()` validates line amounts `> 0` (`:119`) but never
+compares the credit-note total to the invoice named in `invoice_id`, and nothing
+prevents a second credit note for the same invoice.
+
+Measured:
+- a credit note of **₱99,999.00** was accepted against a **₱1,000.00** invoice;
+- **two** ₱1,000.00 credit notes were finalized against one ₱1,000.00 invoice,
+  leaving **GL AR control balance = −₱1,000.00**.
+
+`apply()` caps each application at the invoice balance (`:255-257`), so the
+*subledger* cannot go negative — but the GL moved at `finalize()`
+(`buildGlLines():345` credits AR for the full total), which `apply()` never
+revisits. A negative receivable in the general ledger, created entirely through
+AR endpoints, with no guard and no void path to undo it (F11).
+
+### M028-F22 — P0: a credit note charges 12% VAT against a VAT-exempt invoice — DEFERRED
+
+`CreditNoteService.php:111`:
+`$isVatable = (bool) ($data['is_vatable'] ?? $this->taxPolicy->isVatRegistered());`
+The credit note never inherits the invoice's `vat_classification`, and
+`StoreCreditNoteRequest.php:24` makes `is_vatable` optional.
+
+Measured: invoice `vat_classification=vat_exempt`, `vat_amount=0.00`,
+`total=1000.00` → credit note `is_vatable=true`, `vat_amount=120.00`,
+`total=1120.00`. `buildGlLines():342-344` then debits VAT Output ₱120.00 that was
+never collected, and the credit total exceeds the invoice total. BIR exposure.
+
+### M028-F23 — P1: AR aging 500s once any customer with invoices is archived — FIXED
+
+`InvoiceService::aging()` read `$inv->customer->hash_id`. `customers` soft-deletes
+(`Customer.php:17`) while `invoices` does not, and `invoices.customer_id` is NOT
+NULL behind a RESTRICT FK — so under the default scope the relation resolves to
+`null`.
+
+Measured: `ErrorException: Attempt to read property "hash_id" on null`, and
+`GET /api/v1/accounting/statements/ar-aging` → 500. This is the CFO monthly
+deliverable (`routes.php:130`) **and** the finance dashboard, which calls
+`aging()` on every load. One archived customer took both down.
+
+### M028-F24 — P1: `1e3`/`1e17` on any AR money field is a 500, and `1.999` was silently rounded up — FIXED
+
+`StoreInvoiceRequest.php:52,54` (`items.*.quantity`, `items.*.unit_price`), `:41`
+(`senior_pwd_discount`), `StoreCollectionRequest.php:23` (`amount`),
+`StoreCreditNoteRequest.php:37` and `ApplyCreditNoteRequest.php:19` (`amount`)
+all used bare `numeric` with no `max` and no `decimal:0,2`.
+
+Measured through `POST /api/v1/invoices`:
+
+| input | before | cause |
+|---|---|---|
+| `1.999` | **201**, stored `subtotal 2.00` | `Money::round2()` applied silently |
+| `1e3` | **500** | `ValueError: bccomp(): Argument #1 ($num1) is not well-formed` |
+| `1e17` | **500** | same |
+| `99999999999999999.99` | **500** | `SQLSTATE[22003]` numeric field overflow |
+
+This is the exact class `journal-ledger` closed on `StoreJournalEntryRequest`
+hours earlier — but AR never reaches that FormRequest: `InvoiceService` and
+`CreditNoteService` build their own GL lines and call
+`JournalEntryService::create()` directly, so the hardening did not cover AR.
+
+---
+
+## MISSING
+
+### M028-F25 — P1: no AR collection void/reversal path exists at all, while AP has one
+
+Measured route inventory: the only AR collection route is
+`POST api/v1/invoices/{invoice}/collections`. AP has
+`POST /bills/{bill}/payments/{payment}/void`
+(`api/app/Modules/Accounting/routes.php:90-91`, permission
+`accounting.bills.void_payment`).
+
+A mis-keyed or mis-applied customer payment cannot be reversed, and
+`InvoiceService::cancel():331-333` refuses to cancel an invoice with any
+`amount_paid` — so the invoice is permanently frozen carrying the wrong money.
+**The brief's "payment reversed → balance restores exactly" invariant is not
+merely failing; the path does not exist**, so it cannot be tested.
+
+### M028-F26 — P1: no unapplied-credit and no multi-invoice payment concept; the GL and every AR report disagree
+
+Measured with one finalized-but-unapplied ₱400.00 credit note:
+
+| surface | figure |
+|---|---|
+| GL AR control (posted lines) | **₱600.00** |
+| AR aging total | **₱1,000.00** |
+| SOA `total_outstanding` | **₱1,000.00** |
+| `credit_notes.balance` (unapplied) | ₱400.00 |
+
+Nothing in AR surfaces `credit_notes.balance` in an aging or a statement, so the
+control account and the subledger reports differ by the unapplied credit with no
+reconciling line anywhere.
+
+Separately, a collection is strictly per-invoice, so one customer cheque covering
+three invoices must be entered as three unlinked collections, and there is no
+customer-deposit / cash-on-account concept. The brief's "split payment where the
+total does not match" invariant is therefore **N/A — the endpoint does not
+exist.**
+
+### M028-F27 — P1: `credit_note_applications` has no idempotency key, no unique constraint, no `amount > 0` CHECK and no `invoice_id` XOR `bill_id` CHECK
+
+Created once at `0268_create_credit_notes_tables.php:58-68` and never altered;
+the only index is a non-unique `credit_note_id` (`:67`). Double-apply prevention
+is entirely the pessimistic lock at `CreditNoteService.php:224`. The sibling AR
+hardening migration added exactly this class of guard for
+`collections.idempotency_key` and `official_receipts.collection_id`
+(`2026_08_25_120000:14,18`) but skipped this table.
+
+Honest scope: **I could not produce a double-apply through the service — the lock
+holds.** This is defence-in-depth against any other writer, not a reproduced
+defect.
+
+### M028-F28 — P1: collections have no dedupe unless the caller volunteers an idempotency key, and no caller does
+
+Measured: two identical collections (same invoice, same ₱400.00, same date, same
+method, same cash account) were both accepted → 2 rows, `amount_paid = 800.00`.
+With `idempotency_key` supplied, the replay correctly returned the original → 1
+row.
+
+`StoreCollectionRequest.php:26` makes the key `nullable`, and no client sends one
+(`spa/src/api/accounting/invoices.ts:28`,
+`spa/src/pages/accounting/invoices/detail.tsx:90`). F03's fix is real but
+**switched off in production use.**
+
+### M028-F29 — P1: official receipts have no HTTP or serialization surface
+
+An `OfficialReceipt` is created for every collection
+(`InvoiceService.php:434`) with a unique `collection_id`
+(`2026_08_25_120000:18`), and `InvoiceService.php:399,453` eager-load it — but
+`CollectionResource.php:12-32` never serialises it, there is no route, and
+`grep or_number spa/src` is empty. A statutory BIR document reaches the customer
+only by email (`CustomerOfficialReceiptMail.php`), and the eager-load is wasted
+work. `OfficialReceiptService::issueForInvoice():74-92` remains callable with an
+arbitrary amount, no collection link, no replay guard and no period check — but
+has no HTTP route, so it is reachable only from code.
+
+### M028-F30 — P1: the internal statement of account is dead — no client, no UI, no test
+
+`GET /api/v1/customers/{customer}/statement-of-account` (`routes.php:105-106`)
+has no method on `customersApi` (`spa/src/api/accounting/customers.ts:9-22`) and
+no entry point on `spa/src/pages/accounting/customers/detail.tsx` (which has
+"New invoice" at `:124` and "Edit" at `:134`). Only the *portal* consumes an SOA
+— so the F20 divergence above is currently visible to **customers but not to
+finance.**
+
+### M028-F31 — P2: dead surfaces in both directions
+
+- `customersApi.delete` and `customersApi.restore`
+  (`spa/src/api/accounting/customers.ts:18-21`) have zero call sites — the entire
+  customer soft-delete lifecycle is unreachable from the UI, unlike
+  journal-entries which wires both (`journal-entries/detail.tsx:60,69`).
+- `invoicesApi.update` (`spa/src/api/accounting/invoices.ts:21-22`) has zero call
+  sites and there is no invoice-edit route in `accountingRoutes.tsx:91-96`, so
+  `PUT /invoices/{invoice}` and its `accounting.invoices.update` permission are
+  exercised only by cancel.
+- `spa/e2e/ux-hardening-visual.spec.ts:55` mocks `**/api/v1/accounting/invoices/*`,
+  a path that does not exist (real: `/api/v1/invoices/{invoice}`) — a dead
+  interceptor that never matches.
+- No e2e coverage anywhere for collections recording, credit-note apply,
+  `/customers` CRUD, `ar-aging`, or `b2b/customer/invoices*`.
+
+---
+
+## INCOMPLETE
+
+### M028-F32 — P1: credit-note apply moves the AR subledger inside a closed period — QUESTION
+
+Measured: with 2026-03 closed, `apply()` **succeeded**. It posts no GL entry by
+design (`CreditNoteService.php:206-211`), so `assertPostingAllowed` is never
+called — but it does change `invoices.amount_paid`, `balance` and `status`, i.e.
+the AR subledger for a closed month, which then reconciles against a frozen GL.
+Whether that is acceptable depends on whether the "no GL entry" design is meant
+to exempt application from period control. **Needs a human decision.**
+
+### M028-F33 — P1: invoice cancellation reverses at `now()`, not in the invoice's period
+
+`InvoiceService::cancel():342-347` passes `now()` as the reversal date. Measured:
+with the current month closed, cancelling an April invoice was refused —
+`Accounting period 2026-08 is closed ... dated 2026-08-30`. So the period guard
+*does* fire (an improvement on the original F06 report, which found none), but
+the consequences are that (a) a historical invoice cannot be cancelled at all
+while the current month is closed, and (b) when it is open, the commercial
+correction lands in today's period rather than the invoice's.
+
+This is the same reversal-date policy question `journal-ledger` left open. **Not
+this module's decision** — recorded here only as the AR-side consequence.
+
+### M028-F34 — P2: two different aging bucket contracts for the same receivables
+
+`InvoiceService::aging()` yields five buckets
+(`current/d1_30/d31_60/d61_90/d91_plus`); `StatementOfAccountService::
+computeAging():247-253` yields four (`current/d30_days/d60_days/d90_plus`) where
+the key `d90_plus` actually holds **61+ days**. The enum label is honest —
+`StatementAgingBucket::Days90Plus => '61+ Days'` — but the key reads as 90+, and
+a customer's portal statement cannot be tied bucket-by-bucket to the internal
+report.
+
+Measured: a 70-day-overdue ₱700.00 invoice sits in AR aging `d61_90` and in SOA
+`d90_plus`. Totals reconcile (₱700.00 = ₱700.00).
+
+### M028-F35 — P2: `opening_balance` and the transaction list describe different periods
+
+`StatementOfAccountService.php:50` accumulates every transaction strictly before
+the as-of **day** into `opening_balance`, while `transactions` (`:64`) lists every
+transaction ever up to the as-of **date**. So
+`opening_balance + Σ(listed transactions) ≠ closing_balance`: the statement shows
+a one-day opening against a lifetime ledger.
+
+### M028-F36 — P2: `invoice_items.quantity` is 2dp but `delivery_items.quantity` is 3dp, and the finalize check truncates while create rounds — QUESTION
+
+`invoice_items.quantity` is `decimal(12,2)`
+(`0049_create_invoice_items_table.php:19`); `delivery_items.quantity` is
+`decimal(14,3)` (`0097_create_delivery_items_table.php:25`).
+`InvoiceService::normalizeItems():593` applies `Money::round2()` (half-up), then
+`assertInvoiceMatchesConfirmedDelivery():634` compares with
+`bccomp(..., 2)` (which **truncates**).
+
+Arithmetic proof (not an end-to-end chain run — labelled as such):
+
+| delivered (3dp) | stored on invoice (2dp) | `bccomp` scale 2 | outcome |
+|---|---|---|---|
+| `1.005` | `1.01` | 1 | **MISMATCH — invoice cannot be finalized** |
+| `1.015` | `1.02` | 1 | **MISMATCH — invoice cannot be finalized** |
+| `1.004` | `1.00` | 0 | match, but the customer is billed for 1.00 |
+| `2.500` | `2.50` | 0 | match |
+
+So a `.xx5` delivered quantity produces a permanently un-finalizable standard
+invoice, and a `.xx4` one silently under-bills. Needs a decision on whether
+invoice lines should carry 3dp or deliveries should be constrained to 2dp.
+
+---
+
+## POLISH
+
+### M028-F37 — float arithmetic on money
+
+- `api/app/Modules/Accounting/Resources/CustomerResource.php:28` —
+  `((float) $creditUsed / (float) $creditLimit)`. **FIXED** (this was also the
+  F18 crash site); restated as `used >= limit × ratio` in exact peso arithmetic,
+  so there is no division at all.
+- `spa/src/pages/accounting/invoices/index.tsx:47` —
+  `sum + Number(invoice.balance ?? 0)` for the displayed "Outstanding Balance"
+  stat card. Scope is honestly disclosed (`helper="in current view"`), and an
+  exact-cent helper already exists at
+  `spa/src/pages/accounting/journal-entries/money.ts`. **Not fixed** — see the
+  action plan for why the SPA was left untouched.
+- `spa/src/pages/accounting/invoices/create.tsx:86-88` and
+  `credit-notes/index.tsx:150-152` — float subtotal/VAT previews (the server
+  recomputes; lower risk).
+- `spa/src/pages/accounting/customers/form.tsx:53` —
+  `Number(existing.credit_limit)` round-trips a money value through a JS float.
+
+### M028-F38 — `/ar-aging` has no `/export` twin while `/ap-aging/export` exists
+
+`routes.php:130-132`, and `spa/src/api/accounting/statements.ts:19-22` bypasses
+the dedicated boundary for both by using `?format=csv`. **Not an access hole** —
+`authorizeExport():178-183` gates `format=csv` on `accounting.statements.export`,
+which is verified working (`FinancialStatementBoundaryTest` passes). Route
+symmetry only.
+
+### M028-F39 — `CustomerService::creditUsed():51-56` returns `(string) sum('balance')`
+
+Yields `"0"` (not `"0.00"`) for a customer with no open invoices, while
+`list()`'s `withSum` yields `null` — two different "no exposure" representations
+feeding the same resource field.
+
+### M028-F40 — stale docblock
+
+`CustomerController.php:65-67` documents
+`GET /api/v1/accounting/customers/{customer}/statement-of-account`; the real
+route has no `accounting/` prefix (`routes.php:105`).
+
+---
+
+## Outside this module — reported, not touched
+
+- **`api/app/Modules/CRM/routes.php:25`** —
+  `PATCH /crm/customers/{customer}/restore` is missing `->withTrashed()`. Since
+  `CustomerController@restore` (`CustomerController.php:59-63`) only ever acts on
+  a soft-deleted row, the route **404s for every valid target**. Its Accounting
+  twin (`routes.php:102-104`) and both CRM siblings (`:33-35`, `:43-45`) all have
+  it. CRM's file.
+- Customer CRUD is duplicated at `/api/v1/customers/*` (`feature:accounting`) and
+  `/api/v1/crm/customers/*` (`feature:crm`) against the same controller, so
+  disabling one feature flag does not close the write surface.
+- `ReturnRequestService::store()` (`:92`, `:137`) accepts `invoice_id` and
+  `customer_id` independently with no cross-check, and
+  `CustomerReturnRestockOnDisposeTest` `:135,:155,:205,:238` builds an RMA whose
+  invoice belongs to a different customer (see F19). Return-management's.
+- Shared Accounting decision #12 (`created_by` discarded on source-linked
+  entries, making maker-checker silently inert): the **AR consequence** is that
+  *every* AR GL entry is source-linked (`reference_type` = `invoice` /
+  `collection` / `credit_note`), so **no AR posting is ever maker-checker gated.**
+  Reported; not decided here.
+- `tests/Feature/Accounting/AccountsPayableHardeningTest` "supplier resource does
+  not expose internal ap controls" fails at HEAD and is **not attributable to
+  this session** — confirmed with `git diff --name-only HEAD` (this session
+  touched no supplier resource). Third session to confirm it.
+- `tests/Feature/Accounting/AccountingPeriodDuplicateRecoveryTest:39` still lacks
+  the `RefreshDatabaseState::$migrated` reset. Accounting's; reported, not fixed.
+
+---
+
+## Invariants executed
+
+| Invariant | Result | Probe |
+|---|---|---|
+| Overpayment refused | **HOLDS** | ₱1,500 on a ₱1,000 invoice → refused, balance unchanged at ₱1,000.00 |
+| Payment on a settled invoice | **HOLDS** | ₱0.01 after full settlement → refused ("status is paid") |
+| Split payment across invoices, total mismatched | **N/A — no such endpoint** | collections are strictly per-invoice; no on-account cash (F26) |
+| Two concurrent payments, same invoice | **HOLDS** | two connections + `pcntl_fork`; loser blocked on the row lock, then refused with the recomputed balance. `sum(collections) == amount_paid`, balance never negative |
+| Payment applied twice | **FAILS without a key** | two identical ₱400 collections both accepted → 2 rows (F28). With `idempotency_key`: 1 row |
+| Payment reversed/voided restores exactly | **UNTESTABLE — path absent** | no AR collection void route exists (F25) |
+| Balance == SQL-computed | **HOLDS** | 3 partial payments → stored ₱550.00 == `total − Σcollections − Σcredit_applications` |
+| Soft-delete consistent across every aggregate | **N/A by schema — verified** | no AR document table has `deleted_at`; only `customers` does. Confirmed across all migrations |
+| …but an archived customer breaks aging | **FAILED → FIXED** | `Attempt to read property "hash_id" on null` → 500 (F23) |
+| Aging boundary exactness | **HOLDS** | 30→`d1_30`, 31→`d31_60`, 60→`d31_60`, 61→`d61_90`, 90→`d61_90`, 91→`d91_plus`; exactly one bucket at every edge |
+| Aging buckets sum to total | **HOLDS** | asserted at all 8 boundary as-ofs |
+| "as of" honoured | **HOLDS for collections, FAILS for credits** | a 2026-05-10 payment does not reduce a 2026-05-01 as-of. But credit applications are filtered on `created_at`, so any past as-of drops them (F20b) |
+| VAT rounding | **HOLDS** | half-up; `total == subtotal + vat` at 0.04/0.05/1.04/33.33/1000.04 |
+| VAT basis | on the total, not per line | 3×₱0.04 → VAT ₱0.01 (per-line would be ₱0.00). Defined and consistent |
+| VAT-exempt / zero-rated handled | **FAILS on credit notes** | ₱120.00 VAT charged against a VAT-exempt invoice (F22) |
+| Credit limit counts outstanding AR, inside the transaction | **partial** | `creditUsed` sums open-invoice balances (correct basis), but enforcement lives only in `SalesOrderService::checkCreditLimit` — a prebill invoice bypasses it entirely. Resource crashed at limit 0.00 (F18) |
+| Posted-invoice immutability | **HOLDS** | update after finalize → "Only draft invoices can be edited"; total unchanged |
+| Credit note balanced | **HOLDS** | finalize posts a balanced VAT-reversing entry |
+| Credit note linked both ways | **FAILS** | header may name another customer's invoice (F19) |
+| Credit note capped to the invoice | **FAILS** | ₱99,999 accepted against a ₱1,000 invoice (F21) |
+| Credit note not issued twice | **FAILS** | two ₱1,000 credit notes on one ₱1,000 invoice → GL AR **−₱1,000.00** (F21) |
+| Closed period — invoice finalize | **HOLDS** | `ClosedPeriodException` |
+| Closed period — collection | **HOLDS** | refused on `collection_date`, not on today |
+| Closed period — cancel/reversal | **HOLDS** (with F33 caveat) | refused; reversal date is `now()` |
+| Closed period — credit-note finalize | **HOLDS** | `ClosedPeriodException` |
+| Closed period — credit-note apply | **FAILS / question** | accepted; subledger moves in a closed month (F32) |
+| Closed period — scheduled poster | **N/A** | `ArDunningService` writes no money; notification only |
+| Portal cross-tenant — invoice detail | **HOLDS** | 403, no leak |
+| Portal cross-tenant — invoice PDF | **HOLDS** | 404, no leak |
+| Portal cross-tenant — invoice list | **HOLDS** | victim's invoice number absent |
+| Portal cross-tenant — statement | **HOLDS** | victim's invoice number absent |
+| Refusal bodies leak nothing | **HOLDS** | no invoice number, amount, or raw PK in any 403/404 body |
+| HashIDs everywhere | **HOLDS** | every AR resource emits `hash_id`; no raw integer PK in any payload or error body |
+| Money discipline | **1 backend float FIXED, 4 SPA floats reported** | F37 |
+| `decimal(15,2)` on money columns | **HOLDS** | all 18 AR money columns compliant |
+
+**Not tested, and why:** payment reversal (no path exists — F25); multi-invoice
+payment allocation (no endpoint — F26); the end-to-end delivery→invoice chain for
+F36 (proved arithmetically instead, and labelled as such); browser/e2e validation
+of any AR screen (no Chromium run in this session — Lightpanda cannot measure
+layout and the AR pages have no e2e coverage to run anyway); production
+permission matrix and queue-worker behaviour.

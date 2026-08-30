@@ -10,6 +10,9 @@ use Illuminate\Validation\Rule;
 
 class StoreCreditNoteRequest extends FormRequest
 {
+    /** `credit_note_lines.amount` is decimal(15,2). */
+    public const MAX_LINE_AMOUNT = '9999999999999.99';
+
     public function authorize(): bool
     {
         return $this->user()?->hasPermission('accounting.credit_notes.manage') ?? false;
@@ -31,7 +34,11 @@ class StoreCreditNoteRequest extends FormRequest
             'lines'                => ['required', 'array', 'min:1'],
             'lines.*.account_id'   => ['required', 'string'],
             'lines.*.description'  => ['required', 'string', 'max:200'],
-            'lines.*.amount'       => ['required', 'numeric', 'gt:0'],
+            // Centavo contract — see StoreInvoiceRequest for the three measured
+            // behaviours bare 'numeric' left in place. CreditNoteService builds
+            // its own GL lines and calls JournalEntryService::create() directly,
+            // so the StoreJournalEntryRequest hardening never covered this path.
+            'lines.*.amount'       => ['required', 'numeric', 'decimal:0,2', 'gt:0', 'max:'.self::MAX_LINE_AMOUNT],
         ];
     }
 }

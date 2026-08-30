@@ -22,10 +22,23 @@ class CustomerResource extends JsonResource
         $creditUsedRaw = $attrs['credit_used'] ?? null;
         $creditLimit  = (string) ($this->credit_limit ?? '0');
         $creditUsed   = (string) ($creditUsedRaw ?? '0');
-        $creditAvail  = $creditLimit !== '0' ? Money::sub($creditLimit, $creditUsed) : null;
+
+        // A zero limit means "no limit is enforced" (SalesOrderService::
+        // checkCreditLimit). This used to be detected with `!== '0'`, but the
+        // model's decimal:2 cast renders a stored 0.00 as the string '0.00',
+        // which is not '0' — so the guard passed and the ratio below divided by
+        // zero. DivisionByZeroError is a 500, and `credit_used` is attached on
+        // every list and show, so one customer with credit_limit = 0.00 and at
+        // least one invoice took down GET /customers entirely. Compare as money.
+        $hasLimit     = ! Money::isZero($creditLimit);
+        $creditAvail  = $hasLimit ? Money::sub($creditLimit, $creditUsed) : null;
         $warningRatio = app(SettingsService::class)->requiredFloat('accounting.customer_credit.warning_ratio', 0, 1);
-        $creditWarning = $creditUsedRaw !== null && $creditLimit !== '0'
-            && ((float) $creditUsed / (float) $creditLimit) >= $warningRatio;
+        // used/limit >= ratio, restated as used >= limit*ratio so there is no
+        // division at all and the threshold stays exact peso arithmetic.
+        // number_format pins the ratio to a decimal string: a small float like
+        // 1.0E-5 stringifies to scientific notation, which BCMath rejects.
+        $creditWarning = $creditUsedRaw !== null && $hasLimit
+            && Money::gte($creditUsed, Money::mul($creditLimit, number_format($warningRatio, 6, '.', '')));
 
         return [
             'id'                 => $this->hash_id,

@@ -361,6 +361,27 @@ class CreditNoteService
         return $lines;
     }
 
+    /**
+     * The header must name one party.
+     *
+     * AUDIT 2026-08-30 (M028-F19, deferred): the header's source-document link
+     * is NOT bound to that party. `create()` decodes `customer_id` and
+     * `invoice_id` independently, so a credit note for customer A can reference
+     * customer B's invoice; `CreditNoteResource:41` then serialises B's
+     * `invoice_number` onto A's credit note. Money cannot cross — `apply()`
+     * re-checks the party at :243/:277 — but this is a cross-tenant metadata
+     * disclosure and a false audit link. Measured accepted.
+     *
+     * The guard was implemented and reverted in that session: it is correct, but
+     * `ReturnRequestService::creditNoteFor()` (:1362-1364) forwards
+     * `$rma->customer_id` and `$rma->invoice_id` with no cross-check of its own,
+     * and `tests/Feature/ReturnManagement/CustomerReturnRestockOnDisposeTest.php`
+     * :135,:155,:205,:238 call `$this->customer()` twice — and `customer()` (:57)
+     * mints a NEW row per call — so the fixture builds an RMA whose invoice
+     * belongs to a different customer and 3 of its tests went red. Landing this
+     * needs a coordinated return-management change, which is out of this
+     * module's scope. See action-plan item 5.
+     */
     private function assertParty(CreditNote $cn): void
     {
         if ($cn->type === CreditNoteType::Customer && ! $cn->customer_id) {

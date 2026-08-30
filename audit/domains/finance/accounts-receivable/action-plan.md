@@ -151,3 +151,189 @@ No production-code implementation is authorized by this audit session because th
 - Historical aging and statements are verified against hand-calculated fixtures at multiple as-of dates.
 - Portal resources/PDFs are explicitly allowlisted and tested for status and field redaction.
 - Migration/backfill, rollback, deployment order, and cross-module coordination are documented before release.
+
+---
+
+# Ordered plan — re-audit 2026-08-30
+
+Four items were fixed in-session (items 1–4 below, marked **DONE**). The rest are
+ordered by money risk. `separate-recommended` dominates, and the reason is
+consistent: almost every remaining item **changes a peso figure a customer is
+shown or owed**, or needs a schema column plus a backfill decision, or cannot land
+without a coordinated change in another module.
+
+## DONE this session — `same-session-ok`
+
+### 1. F18 — `credit_limit = 0.00` is a 500 on the customer list · Scope: small · DONE
+Deterministic crash; the fix refuses nothing and changes no peso figure — it only
+stops dividing by zero. `credit_available` and `credit_warning` now correctly read
+"no limit enforced", matching `SalesOrderService::checkCreditLimit`'s convention.
+
+### 2. F23 — AR aging 500s on an archived customer · Scope: small · DONE
+Eager-load the customer `withTrashed()` and null-coalesce the label. Containment:
+the report previously **threw**, so there was no figure to change; the receivable
+was already inside the bucket totals. Restores a report and the finance dashboard.
+
+### 3. F24 — money fields accept `1e3`/`1e17` (500) and silently round `1.999` · Scope: small · DONE
+Missing guards that refuse impossible input, judged on containment. Follows the
+precedent `journal-ledger` set on `StoreJournalEntryRequest` hours earlier, for
+the same column type. Turns three 500s into mapped 422s.
+
+**Caveat to carry forward:** unlike the journal-entry form, the AR SPA forms use
+`z.coerce.number()` with no precision refinement
+(`invoices/create.tsx:31,33`, `invoices/detail.tsx:38`,
+`credit-notes/index.tsx:42`, `credit-notes/detail.tsx:40`), so a three-decimal
+entry now surfaces as a server 422 rather than being caught client-side. See
+item 12.
+
+### 4. F37 (backend half) — float division on money · Scope: small · DONE
+Folded into item 1: `used/limit >= ratio` restated as `used >= limit × ratio` in
+exact peso arithmetic, so there is no division at all.
+
+---
+
+## Written and reverted — needs a coordinated change
+
+### 5. F19 — credit-note header links another customer's invoice · Scope: small (AR) + small (returns) · `separate-recommended`
+The AR guard is written, correct, and **reverted**; the revert is proven
+comment-only. It cannot land alone because
+`ReturnRequestService::creditNoteFor()` forwards an RMA's `customer_id` and
+`invoice_id` with no cross-check, and
+`tests/Feature/ReturnManagement/CustomerReturnRestockOnDisposeTest.php`
+`:135,:155,:205,:238` calls `$this->customer()` twice — `customer()` mints a new
+row per call — so 3 of its tests go red on a genuinely inconsistent fixture.
+
+Land as one change with return-management: fix the 4 fixture call sites to reuse
+one customer, decide whether `ReturnRequestService::store()` should bind
+`invoice_id` to `customer_id` itself, then restore the AR guard (the docblock at
+`CreditNoteService::assertParty()` carries the exact code intent).
+
+---
+
+## P0 money correctness — `separate-recommended`
+
+### 6. F20 — the statement of account reports three different receivable figures · Scope: large · `separate-recommended`
+Two sub-items, both of which change a figure a customer reads:
+
+**6a. `closing_balance` never subtracts a credit note.** Add credit-note and
+credit-note-application events to `buildTransactions()`. This restates a
+customer-facing running balance (measured ₱800.00 → ₱500.00), so it needs sign-off
+before it ships, not a unilateral edit.
+
+**6b. `credit_note_applications` has no business date.** Requires a migration
+adding an application/effective date, a backfill policy for existing rows
+(`created_at`? the credit note's `date`? the invoice's?), and then switching
+`StatementOfAccountService::computeAging():219` and `InvoiceService::aging():491`
+off `created_at`. Must be **timestamp-named and dated after
+`2026_08_30_100000_guard_archived_journal_entry_posting.php`** if it touches
+anything that migration created; otherwise the numeric prefix is fine — but
+confirm with
+`ls api/database/migrations | grep -E '^04' | sort | tail -3` first.
+
+### 7. F21 — two credit notes drive GL AR negative · Scope: medium · `separate-recommended` + **QUESTION**
+Measured **−₱1,000.00** in the AR control account. The guard is easy; the *rule* is
+not, and the rule is a business decision:
+- Is `credit_notes.invoice_id` a **binding** cap or a **reference**? It is
+  nullable, and a volume rebate legitimately exceeds one invoice.
+- Should the cap be "Σ non-void credit notes naming this invoice ≤ its total", and
+  what makes a credit note "non-void" before F11 (void lifecycle) exists?
+
+Sequence after F11: without a void path, a wrongly-capped or wrongly-issued credit
+note cannot be corrected, so adding the cap first can strand real money.
+
+### 8. F22 — credit note charges 12% VAT against a VAT-exempt invoice · Scope: small · `separate-recommended` + **QUESTION**
+The narrow fix is contained: when `invoice_id` is present and `is_vatable` was not
+explicitly supplied, inherit the invoice's `vat_classification` instead of the
+company default. But it **changes the credited amount** (measured ₱1,120.00 →
+₱1,000.00) and needs a decision on the fallback for credit notes with no
+`invoice_id`, plus whether `zero_rated` behaves like `vat_exempt` here. Highest
+value-per-line of everything deferred, and BIR-relevant.
+
+### 9. F25 — no AR collection void/reversal path · Scope: medium · `separate-recommended`
+Mirror `BillController::voidPayment` (`routes.php:90-91`) for collections: void
+under the invoice lock, reverse the cash JE with an explicit controlled date,
+restore `amount_paid`/`balance`/`status`, void the linked OR, and assert the
+period. This creates money movement, so it is not a containment-only change.
+
+### 10. F26 — no unapplied-credit visibility, no multi-invoice payment · Scope: large · `separate-recommended`
+Measured GL AR ₱600.00 against AR aging ₱1,000.00. Needs a decision on whether
+unapplied credits appear as a negative aging line, a separate "unapplied credits"
+total, or a customer-deposit document. The multi-invoice allocation half is a new
+document type.
+
+---
+
+## P1 defence-in-depth and reporting — `separate-recommended`
+
+### 11. F27 — `credit_note_applications` has no constraints · Scope: small · `separate-recommended`
+Unique/idempotency key, `amount > 0` CHECK, `invoice_id` XOR `bill_id` CHECK.
+Judged on containment this is close to `same-session-ok` — it closes a race
+without changing correct behaviour. It is deferred only because **no double-apply
+could be reproduced** (the lock at `CreditNoteService.php:224` holds), so it is not
+urgent, and because it is naturally one migration with item 6b.
+
+### 12. F28 — collections dedupe is switched off in practice · Scope: small · `separate-recommended`
+The server guard works; no client sends a key. Make the SPA mint one per submit
+(`spa/src/pages/accounting/invoices/detail.tsx:90`) — and while in that file, add
+the `.refine()` precision guard the F24 caveat calls for. SPA-only, but see the
+note below on why no `.tsx` was touched this session.
+
+### 13. F32 — credit-note apply inside a closed period · Scope: small · **QUESTION**
+Measured accepted. Decide whether "no GL entry" exempts application from period
+control. One line either way once decided.
+
+### 14. F33 — cancellation reverses at `now()` · Scope: small · **BLOCKED, not ours**
+The AR-side consequence of `journal-ledger`'s open reversal-date policy. Do not
+decide here.
+
+### 15. F36 — 3dp deliveries vs 2dp invoice lines · Scope: medium · **QUESTION**
+A `.xx5` delivered quantity makes a standard invoice permanently un-finalizable;
+a `.xx4` one silently under-bills. Decide whether `invoice_items.quantity` becomes
+`decimal(12,3)` or deliveries are constrained to 2dp. Either way it is a migration
+plus a change to the `bccomp` scale at
+`InvoiceService::assertInvoiceMatchesConfirmedDelivery():634`.
+
+### 16. F29 — official receipts have no HTTP or serialization surface · Scope: medium · `separate-recommended`
+Serialise `or_number` on `CollectionResource`, add a read route and a PDF, and
+either wire `issueForInvoice` to a controlled path or delete it. Includes the F12
+residual (receipt void/correction policy).
+
+### 17. F30 — the internal statement of account is dead · Scope: small · `separate-recommended`
+Add `customersApi.statementOfAccount` and an entry point on the customer detail
+page. **Sequence after item 6** — wiring finance up to a statement that overstates
+by every applied credit would ship the F20 defect to a new audience.
+
+### 18. F31 — dead client methods and a dead e2e interceptor · Scope: small · `separate-recommended`
+Wire or remove `customersApi.delete`/`.restore` and `invoicesApi.update`; fix the
+`**/api/v1/accounting/invoices/*` mock at
+`spa/e2e/ux-hardening-visual.spec.ts:55`. Requires a product call on whether
+customers should be archivable from the UI at all.
+
+---
+
+## Carried forward unchanged from the original plan
+
+F04 (prebill maker/checker separation — **and note that a prebill invoice bypasses
+the only credit-limit checkpoint entirely**), F07 (cancellation/reissue vs
+terminal SalesOrder `invoiced`), F11 (credit-note void/reversal lifecycle — a
+prerequisite for item 7), and the F08/F09 residual first-class posting/reversal
+event model (now partly restated as item 6b, which is its concrete first step).
+
+---
+
+## Polish — `separate-recommended`, low value
+
+19. F34 — reconcile the two aging bucket contracts (`d90_plus` holds 61+).
+20. F35 — `opening_balance` describes one day against a lifetime ledger.
+21. F37 (SPA half) — 4 float-money sites.
+22. F38 — add `/ar-aging/export` for symmetry with `/ap-aging/export`.
+23. F39 — `creditUsed()` returns `"0"` where `withSum` returns `null`.
+24. F40 — stale docblock on `CustomerController::statementOfAccount`.
+
+**Why no `.tsx` was touched this session.** The `PostToolUse` Prettier hook on
+`Edit|Write` has been measured reformatting SPA files far beyond the edit (605
+changed lines for a 5-line edit) and even files it was not pointed at. Every
+remaining SPA item here is cosmetic or a client-side convenience, and none of the
+measured money defects live in the SPA — so the reformat risk was not worth
+taking. Items 12, 17, 18 and 21 should be done together in one deliberate SPA
+pass with `git diff --stat` checked after each edit.

@@ -459,7 +459,14 @@ class InvoiceService
         $asOf = ($asOf ?? now())->copy();
         $cutoff = $asOf->copy()->endOfDay();
         $rows = Invoice::query()
-            ->with('customer:id,name')
+            // withTrashed: `customers` soft-deletes, `invoices` does not, and
+            // `invoices.customer_id` is NOT NULL behind a RESTRICT FK. Under the
+            // default scope an archived customer resolved to null and the
+            // `$inv->customer->hash_id` read below raised "Attempt to read
+            // property on null" — a 500 on the AR aging report AND on the
+            // finance dashboard, which calls aging() on every load. The
+            // receivable is still owed, so the row belongs in the report.
+            ->with(['customer' => static fn ($q) => $q->withTrashed()->select(['id', 'name'])])
             ->whereDate('date', '<=', $asOf->toDateString())
             ->where(function ($query) use ($cutoff): void {
                 $query
@@ -522,8 +529,8 @@ class InvoiceService
             $cid = $inv->customer_id;
             if (! isset($byCustomer[$cid])) {
                 $byCustomer[$cid] = [
-                    'customer_id'   => $inv->customer->hash_id,
-                    'customer_name' => $inv->customer->name,
+                    'customer_id'   => $inv->customer?->hash_id,
+                    'customer_name' => $inv->customer?->name ?? '(deleted customer)',
                     'current'       => '0.00',
                     'd1_30'         => '0.00',
                     'd31_60'        => '0.00',
