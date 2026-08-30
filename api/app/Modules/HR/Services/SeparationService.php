@@ -8,6 +8,7 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
+use App\Common\Support\HashIdFilter;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Enums\ClearanceStatus;
 use App\Modules\HR\Enums\EmployeeStatus;
@@ -21,6 +22,7 @@ use App\Modules\HR\Models\EmploymentHistory;
 use App\Modules\HR\Support\EmployeeStateMachine;
 use App\Modules\Loans\Models\EmployeeLoan;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -50,10 +52,43 @@ class SeparationService
             'employee.department:id,name,code',
             'employee.position:id,title',
         ]);
-        foreach (['status', 'separation_reason', 'employee_id'] as $f) {
+        foreach (['status', 'separation_reason'] as $f) {
             if (! empty($filters[$f])) $q->where($f, $filters[$f]);
         }
-        return $q->orderByDesc('id')->paginate(min((int) ($filters['per_page'] ?? 20), 100));
+
+        // The SPA sends a HashID here. Passing it straight into a WHERE against
+        // a bigint column is a 22P02 invalid-input error, so decode first and
+        // skip the clause when the value cannot be resolved.
+        if (! empty($filters['employee_id'])) {
+            $employeeId = HashIdFilter::decode($filters['employee_id'], Employee::class);
+            if ($employeeId === null) {
+                $q->whereRaw('1 = 0');
+            } else {
+                $q->where('employee_id', $employeeId);
+            }
+        }
+
+        // The list page ships a Search box that sent `search` to an endpoint
+        // which ignored it, so the control silently did nothing.
+        if (! empty($filters['search']) && is_string($filters['search'])) {
+            $term = '%'.str_replace(['%', '_'], ['\%', '\_'], trim($filters['search'])).'%';
+            $q->where(function ($sub) use ($term) {
+                $sub->where('clearance_no', 'ilike', $term)
+                    ->orWhereHas('employee', function ($emp) use ($term) {
+                        $emp->where('employee_no', 'ilike', $term)
+                            ->orWhere('first_name', 'ilike', $term)
+                            ->orWhere('last_name', 'ilike', $term)
+                            ->orWhereRaw("(first_name || ' ' || last_name) ilike ?", [$term]);
+                    });
+            });
+        }
+
+        // paginate(0) returns every row and a negative value throws, so an
+        // unvalidated page size was both a contract and a load problem.
+        $perPage = (int) ($filters['per_page'] ?? 20);
+        $perPage = max(1, min($perPage, 100));
+
+        return $q->orderByDesc('id')->paginate($perPage);
     }
 
     public function show(Clearance $clearance): Clearance
@@ -84,6 +119,23 @@ class SeparationService
 
             if (in_array($lockedEmployee->status?->value, ['resigned', 'terminated', 'retired'], true)) {
                 throw new BusinessRuleException('Employee is already separated.');
+            }
+
+            // clearances.separation_date is load-bearing outside this module:
+            // PayrollCalculatorService::employedDayFraction() reads the EARLIEST
+            // separation date on record and prorates basic pay by the days it
+            // covers. A date before the hire date makes that window empty, so
+            // the fraction collapses to 0.0000 and every later cutoff pays zero
+            // basic pay — and because no cancel/correct transition exists, a
+            // mistyped year could not be walked back through the API.
+            $separationDate = Carbon::parse((string) $data['separation_date'])->startOfDay();
+            $hireDate = $lockedEmployee->date_hired;
+
+            if ($hireDate && $separationDate->lt($hireDate->copy()->startOfDay())) {
+                throw new BusinessRuleException(
+                    'Separation date '.$separationDate->toDateString().' precedes the hire date '
+                    .$hireDate->toDateString().'. The separation was not initiated.'
+                );
             }
 
             $hasOpenClearance = Clearance::query()
@@ -119,6 +171,7 @@ class SeparationService
                 'clearance_items'   => $items,
                 'status'            => ClearanceStatus::InProgress->value,
                 'initiated_by'      => $by->id,
+                'remarks'           => $data['remarks'] ?? null,
             ]);
 
             $fromStatus = $lockedEmployee->status instanceof EmployeeStatus
@@ -130,11 +183,15 @@ class SeparationService
                 'employee_id'    => $lockedEmployee->id,
                 'change_type'    => EmploymentChangeType::Separated->value,
                 'from_value'     => ['status' => $fromStatus],
-                'to_value'       => json_encode([
+                // EmploymentHistory casts both value columns to 'array'.
+                // json_encode()-ing first double-encodes, so the row reads back
+                // as a JSON *string* while from_value reads back as an array —
+                // and EmploymentHistoryResource masks assuming array shape.
+                'to_value'       => [
                     'separation_date'   => (string) $data['separation_date'],
                     'separation_reason' => $reason->value,
                     'status'            => 'in_progress',
-                ]),
+                ],
                 'effective_date' => $data['separation_date'],
                 'remarks'        => ($data['remarks'] ?? null)
                     ?: 'Separation initiated. Clearance '.$clearance->clearance_no.'.',
@@ -157,16 +214,7 @@ class SeparationService
     /** @return array<int, array{department:string,item_key:string,label:string}> */
     private function configuredChecklist(): array
     {
-        $items = $this->settings->get('hr.separation.clearance_checklist');
-        if (! is_array($items) || $items === []) {
-            throw new BusinessRuleException('Separation clearance checklist is not configured. Configure hr.separation.clearance_checklist before initiating a separation.');
-        }
-        foreach ($items as $item) {
-            if (! is_array($item) || ! isset($item['department'], $item['item_key'], $item['label'])) {
-                throw new BusinessRuleException('Separation clearance checklist contains an invalid item.');
-            }
-        }
-        return array_values($items);
+        return self::validateChecklist($this->settings->get('hr.separation.clearance_checklist'));
     }
 
     /**
@@ -178,15 +226,51 @@ class SeparationService
      */
     public static function defaultChecklist(): array
     {
-        $items = app(SettingsService::class)->get('hr.separation.clearance_checklist');
+        return self::validateChecklist(app(SettingsService::class)->get('hr.separation.clearance_checklist'));
+    }
+
+    /**
+     * One validator for both readers.
+     *
+     * item_key uniqueness is a completion invariant, not cosmetics. signItem()
+     * matches the FIRST row with a given key and treats an already-cleared
+     * match as a replayed no-op, so a duplicated key leaves the later row
+     * permanently pending. Completion requires EVERY row cleared, so the
+     * clearance can never reach `completed`, can never be finalized, and the
+     * employee can never be separated or paid final pay — with no cancel
+     * transition to escape. Blank keys/labels/departments are unroutable and
+     * unrenderable for the same reason.
+     *
+     * @return array<int, array{department:string,item_key:string,label:string}>
+     */
+    private static function validateChecklist(mixed $items): array
+    {
         if (! is_array($items) || $items === []) {
-            throw new BusinessRuleException('Separation clearance checklist is not configured. Configure hr.separation.clearance_checklist before using the checklist.');
+            throw new BusinessRuleException('Separation clearance checklist is not configured. Configure hr.separation.clearance_checklist before initiating a separation.');
         }
 
+        $seen = [];
         foreach ($items as $item) {
             if (! is_array($item) || ! isset($item['department'], $item['item_key'], $item['label'])) {
                 throw new BusinessRuleException('Separation clearance checklist contains an invalid item.');
             }
+
+            foreach (['department', 'item_key', 'label'] as $field) {
+                if (! is_string($item[$field]) || trim($item[$field]) === '') {
+                    throw new BusinessRuleException(
+                        "Separation clearance checklist has an item with a blank or non-string {$field}."
+                    );
+                }
+            }
+
+            $key = $item['item_key'];
+            if (isset($seen[$key])) {
+                throw new BusinessRuleException(
+                    "Separation clearance checklist has a duplicate item_key '{$key}'. "
+                    .'Duplicate keys produce a clearance that can never be completed.'
+                );
+            }
+            $seen[$key] = true;
         }
 
         return array_values($items);
@@ -345,12 +429,12 @@ class SeparationService
                 'employee_id'    => $employee->id,
                 'change_type'    => EmploymentChangeType::Separated->value,
                 'from_value'     => ['status' => $fromStatus],
-                'to_value'       => json_encode([
+                'to_value'       => [
                     'separation_date'   => optional($lockedClearance->separation_date)?->toDateString(),
                     'separation_reason' => $reason->value,
                     'final_pay_amount'  => (string) $lockedClearance->final_pay_amount,
                     'status'            => 'finalized',
-                ]),
+                ],
                 'effective_date' => $lockedClearance->separation_date,
                 'remarks'        => 'Separation finalized. Final pay '.app(\App\Common\Services\CurrencyDisplayService::class)->format($lockedClearance->final_pay_amount).'.',
                 'approved_by'    => $by->id,

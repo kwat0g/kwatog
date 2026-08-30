@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\HR\Resources;
 
 use App\Modules\Accounting\Models\JournalEntry;
+use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Clearance;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -42,7 +43,7 @@ class ClearanceResource extends JsonResource
             ] : null),
             'separation_date'     => optional($this->separation_date)?->toDateString(),
             'separation_reason'   => $this->separation_reason instanceof \BackedEnum ? $this->separation_reason->value : $this->separation_reason,
-            'clearance_items'     => $this->clearance_items ?? [],
+            'clearance_items'     => $this->clearanceItems(),
             'cleared_count'       => $cleared,
             'items_total'         => $total,
             'progress_pct'        => $total > 0 ? (int) round(($cleared / $total) * 100) : 0,
@@ -66,5 +67,43 @@ class ClearanceResource extends JsonResource
             'created_at'          => optional($this->created_at)?->toISOString(),
             'updated_at'          => optional($this->updated_at)?->toISOString(),
         ];
+    }
+
+    /**
+     * The checklist is stored as a JSON document holding the signer's raw user
+     * PK. Emitting it verbatim published an internal integer ID, which every
+     * other identifier in this payload is deliberately hashed to avoid. The SPA
+     * renders only `signed_at`, so the signer is exposed as a HashID plus a
+     * display name instead.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function clearanceItems(): array
+    {
+        $items = $this->clearance_items ?? [];
+        if ($items === []) {
+            return [];
+        }
+
+        $signerIds = collect($items)
+            ->pluck('signed_by')
+            ->filter(fn ($id) => is_numeric($id))
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->all();
+
+        $signers = $signerIds === []
+            ? collect()
+            : User::query()->whereIn('id', $signerIds)->get(['id', 'name'])->keyBy('id');
+
+        return array_map(function ($item) use ($signers) {
+            $rawId = $item['signed_by'] ?? null;
+            $signer = is_numeric($rawId) ? $signers->get((int) $rawId) : null;
+
+            $item['signed_by'] = $signer?->hash_id;
+            $item['signed_by_name'] = $signer?->name;
+
+            return $item;
+        }, $items);
     }
 }

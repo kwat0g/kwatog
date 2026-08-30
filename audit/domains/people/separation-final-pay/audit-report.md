@@ -328,3 +328,286 @@ preserved. The remaining plan is predominantly large and
 `separate-recommended` because it changes lifecycle transitions, permissions/
 RBAC, financial deduction policy, notifications, and recovery behavior. M023 is
 released as 📋 Plan Ready with the ordered action plan in `action-plan.md`.
+
+---
+
+# M023 re-audit — 2026-08-30
+
+Status: 🔁 Needs Re-audit
+Prior history above is preserved. Database: isolated `ogami_test_sep`.
+
+## What the reclaimed lock actually contained
+
+The lock was a 108h orphan from 2026-08-25. Unlike four other modules in this
+pipeline, where an orphan lock meant *completed and committed* work, this one
+meant **plan-only**: `git log` over the module paths shows the last touch was the
+sweep commit `167de85e`, and it carried exactly one M023 file
+(`SeparationService.php`, +17/-6 — the canonical POST initiation wiring). No
+other module file changed since `411e42ff` / `79a5184c`. The fix-log's claim of
+"no production-code fixes" is therefore accurate.
+
+Critically, **the four earlier sessions never measured anything**: their own notes
+record "34 failures and 0 assertions" from a shared, concurrently-resetting test
+database, and no product evidence. All 13 prior findings still reproduce. This
+session measured them, and found **five further defects**, four of which move
+money.
+
+## Newly measured findings
+
+### M023-F014 — P0, Broken: an already-paid 13th month is paid a second time
+
+- Classification: Broken
+- Tags: [small fix] [separate-recommended — changes what a leaver is paid]
+- Evidence: `FinalPayService::proRatedThirteenthMonth()` at
+  `api/app/Modules/HR/Services/FinalPayService.php:379-403` reads the accrual for
+  the separation year and returns `accrued_amount` without consulting
+  `thirteenth_month_accruals.is_paid`. That column exists and is authoritative —
+  `ThirteenthMonthService.php:64` and `:107` skip a paid accrual, and `:433-452`
+  sets it only on the finalized payment path, exactly as CLAUDE.md describes.
+- Measurement: accrual `accrued_amount=10000.00, is_paid=true, paid_date=2026-05-01`
+  → `pro_rated_13th_month` = **`10000.00`**, identical to the `is_paid=false` case.
+  An employee who received their 13th month in the December run and separates the
+  following May is paid it again in full.
+- Note the asymmetry: because `accrue()` freezes a paid accrual, "already paid"
+  really does mean nothing further is owed, so the correct figure is zero.
+
+### M023-F015 — P0, Broken: last salary is paid twice for a committed payroll period
+
+- Classification: Broken
+- Tags: [small fix] [separate-recommended — changes what a leaver is paid]
+- Evidence: `FinalPayService::lastSalaryProRated()` at `FinalPayService.php:277-303`
+  selects the period containing the separation date excluding only `Voided`, then
+  returns zero only when the status is `Disbursed`. `PayrollPeriodStatus::isLocked()`
+  (`api/app/Modules/Payroll/Enums/PayrollPeriodStatus.php:38-41`) treats
+  `Finalized` as money-committed alongside `Disbursed`; CLAUDE.md's "never unlock
+  finalized" says the same. Final pay also creates no `payroll_cycle_claims` row,
+  so it sits entirely outside the no-double-pay guard.
+- Measurement, one employee, one ₱3,125.00 computed payroll row, by period status:
+
+  | period status | `last_salary_pro_rated` | correct? |
+  |---|---|---|
+  | draft | 3125.00 | ok (period will not pay) |
+  | computed | 3125.00 | ok |
+  | approved | 3125.00 | **double** — a checker has signed off |
+  | finalized | 3125.00 | **double** — locked, committed |
+  | disbursed | 0.00 | ok |
+  | voided | 0.00 | **lost** — never paid, and final pay declines to cover it |
+
+  Both directions are wrong: `finalized`/`approved` pay ₱3,125 twice, `voided`
+  drops it entirely (recoverable only if a replacement run happens to cover the
+  employee).
+- Second, independent inconsistency: for the *same* employee and separation date,
+  the payroll-row path returned `3125.00` (half-basic × calendar-day fraction)
+  while the DTR fallback path returned **`4545.45`** (monthly ÷ 22 work-days × 5
+  day-equivalents) — a ₱1,420.45 spread decided purely by whether payroll happened
+  to have computed a row.
+
+### M023-F016 — P0, Broken: leave conversion is uncapped and never debits the balance
+
+- Classification: Broken
+- Tags: [medium] [separate-recommended — changes what a leaver is paid]
+- Evidence: `FinalPayService::unusedConvertibleLeaveValue()` at
+  `FinalPayService.php:331-341` computes `SUM(remaining * lt.conversion_rate)` and
+  multiplies by the daily rate. The year-end path clamps the same rate:
+  `api/app/Modules/Leave/Jobs/ProcessYearEndLeave.php:105` —
+  `max(0.0, min(1.0, (float) $lt->conversion_rate))`. `conversion_rate` is
+  validated to `max:9.99` (`StoreLeaveTypeRequest.php:36`) on a `decimal(3,2)`
+  column. Nothing anywhere debits the balance after a separation payout.
+- Measurement, 5.0-day balance, ₱1,000.00/day, verified through a *successful*
+  finalize (HTTP 200):
+
+  | `conversion_rate` | leave value paid | `remaining` after finalize |
+  |---|---|---|
+  | 1.00 | 5,000.00 | **5.0** |
+  | 2.00 | 10,000.00 | **5.0** |
+  | 9.99 | **49,950.00** | **5.0** |
+
+  So the payout can exceed the entitlement ~10×, and the balance survives
+  finalization intact — available to be encashed again at year-end.
+- **Inherited leave finding does reach a final-pay figure** (measured end to end):
+  with the balance correctly zeroed after a year-end encashment, final pay values
+  the leave at `0.00`. Calling `LeaveBalanceService::restore()` — which
+  `LeaveRequestService::cancel()` at `LeaveRequestService.php:464-467` invokes
+  unconditionally for any approved request, with no check that the year was
+  already encashed — restores `remaining` to `9.0`, and final pay then pays
+  **`9000.00`** for days already encashed and paid. The leave-side fix is not
+  ours; the reportable gap on our side is that final pay trusts `remaining`
+  verbatim and never debits it.
+
+### M023-F017 — P0, Broken: an out-of-range separation date is accepted and zeroes payroll irrecoverably
+
+- Classification: Broken → **FIXED this session (pre-hire half)**
+- Evidence/measurement: `POST /hr/employees/{e}/separation` with
+  `separation_date=2020-06-15` on an employee hired `2024-01-01` returned **201**;
+  `separation_date=2035-01-01` also returned **201**. With the 2020 date on record,
+  `PayrollCalculatorService::employedDayFraction()` measured **`0.0000`** for a
+  normal 2026-05-16..31 cutoff (it takes the EARLIEST `separation_date`, so the
+  employment window is empty). Every later cutoff pays zero basic pay, and no
+  cancel/correct transition exists to undo it.
+- Fixed: the pre-hire case is now refused in `initiate()`. A future-dated
+  separation is still allowed, because notice periods make that normal.
+- **Open question:** the far-future case (2035) is still accepted. Any upper bound
+  is a policy number, not a derivable invariant — see the questions section.
+
+### M023-F018 — P1, Broken: a zero-value final pay can never be finalized
+
+- Classification: Broken
+- Tags: [medium] [separate-recommended — touches GL]
+- Evidence: `FinalPayService::postJournalEntry()` at `FinalPayService.php:243-257`
+  always emits the salaries debit line, and skips the cash credit line only when
+  `net = 0`. When `gross_plus` is also `0.00`, every line is zero and the journal
+  validator refuses the entry.
+- Measurement: an employee owed nothing (breakdown all `0.00`) → `PATCH .../finalize`
+  = **422 "Each line must have exactly one of debit or credit greater than zero."**
+  The clearance is left at `completed` with no way forward and no cancel route.
+  Together with R-002 this makes **two** classes of employee impossible to separate.
+
+## Prior findings — re-measured
+
+| # | verdict | measurement |
+|---|---|---|
+| F001 cross-department signing | **reproduces** | a `department_head` signed a `Finance` item → **200** |
+| F002 maker-checker absent | **reproduces** | compute + finalize share `hr.separation.finalize`; one admin did both |
+| F003 no cancel/restart/blocked recovery | **reproduces** | only 6 clearance routes exist; `ClearanceStatus::Cancelled` unreachable |
+| F004 loan deadlock (= R-002) | **reproduces** | see below |
+| F005 mutable final-pay evidence | reproduces (read-only) | deductions re-read and overwritten at post time |
+| F006 checklist can be uncompletable | **reproduces** | `["dup:cleared","dup:pending",…]`, stuck `in_progress` → **FIXED** |
+| F007 history array contract | **reproduces** | `to_value` reads back `string`, `from_value` `array` → **FIXED** |
+| F008 remarks not persisted | **reproduces** | `remarks = NULL`, absent from response → **FIXED** |
+| F009 notification recipients/link | reproduces (read-only) | setting holds only `hr_officer`, `finance_officer` |
+| F010 list contract | **reproduces** | search ignored; `per_page` 0/-5/abc → 200; HashID `employee_id` → **`SQLSTATE[22P02]`** → **FIXED** |
+| F011 raw signer PK + per-row JE query | **reproduces** | `"signed_by":30` in payload → **FIXED** (leak); N+1 JE query remains |
+| F012 SPA lifecycle/status gaps | reproduces | `completed → 'info'`, design system says `success` |
+| F013 legacy permission/request | reproduces | `hr.employees.separate` + `SeparateEmployeeRequest` still present, route gone |
+
+## R-002 — independently confirmed (handoff from `loans-cash-advances`)
+
+Verified without relying on the loans session's account:
+
+- `SeparationService::finalize()` at `SeparationService.php:314-331` refuses while
+  any `employee_loans` row has `status IN (active,pending) AND balance > 0`.
+- `FinalPayService::loanBalances()` at `FinalPayService.php:405-412` sums **the
+  same statuses**. Gate and recovery are therefore mutually exclusive: whenever the
+  deduction would be non-zero the gate refuses, and whenever the gate passes the
+  deduction is zero. The credit line at `FinalPayService.php:246-248` is
+  unreachable for an outstanding loan.
+- Measured: `compute()` reported `less_loan_balance = 5000.00` — the operator is
+  *shown* the deduction — then `PATCH .../finalize` returned **422**, and the loan
+  balance was still **5000.00**. The 422 text instructs the operator to "confirm
+  deduction in the final pay breakdown"; the six existing clearance routes contain
+  no such action.
+- Three dead artifacts of the intended workflow exist: `LoanPaymentType::FinalPay`
+  (`api/app/Modules/Loans/Enums/LoanPaymentType.php:11`, referenced nowhere but its
+  own definition), and `employee_loans.is_final_pay_deduction`
+  (`0029_create_employee_loans_table.php:30`) which is in `$fillable`, `$casts` and
+  `EmployeeLoanResource.php:39` but is **never read as a decision** by any service.
+  The schema anticipated final-pay recovery; the code refuses instead.
+- `ClearanceLoanBlockTest.php` asserts the current behaviour and was left
+  untouched, because this session did not change it.
+
+## Invariants executed
+
+| invariant | measured result | probe |
+|---|---|---|
+| last salary prorated exactly once | **FAIL** — twice for `approved`/`finalized`; lost for `voided` | compute() across all 6 period statuses |
+| mid-cutoff separation date honoured | **PASS** — 4545.45 for 5 pre-separation DTR days; a post-separation day excluded | DTR fallback path |
+| no double-proration | **PASS** — reads already-prorated `payroll.basic_pay` verbatim; does not re-prorate | payroll-row path |
+| finalize twice refused | **PASS** — 422 "already finalized"; exactly **1** JE | two sequential finalizes after a 200 |
+| finalize incomplete clearance refused | **PASS** — 422 "All clearance items must be signed" | finalize an `in_progress` clearance |
+| reopen after finalize refused | **PASS** — recompute 422 "closed clearance"; sign 422 "Clearance is closed" | post-finalize mutations |
+| delete a finalized clearance | **PASS (vacuous)** — 405, no route exists | DELETE |
+| separate an already-separated employee | **PASS** — 422 "Employee is already separated" | POST on a `resigned` employee |
+| separation before hire refused | **was FAIL (201)** → **PASS after FIX-1** | POST with 2020 date, hired 2024 |
+| future separation refused | **accepted (201)** — intentional for notice periods; *far*-future unbounded | POST with 2035 date |
+| total equals sum of components exactly | **PASS unclamped** (BCMath exact); **FAIL clamped** | see below |
+| 13th month neither double-paid nor lost | **FAIL** — `is_paid=true` still paid 10000.00 | accrual with `is_paid` both ways |
+| leave conversion capped at balance | **FAIL** — 49,950.00 paid on a 5-day balance at rate 9.99 | rates 1.00 / 2.00 / 9.99 |
+| leave conversion debits the balance | **FAIL** — `remaining` = 5.0 after a successful finalize | post-finalize balance read |
+| closed-period refusal | **PASS** — 422 with a clear message; clearance stayed `completed`, `journal_entry_id` NULL | closed 2026-05, finalize |
+| journal balances and equals the rows | **PASS** — debit 8333.33 = credit 8333.33; debit = `gross_plus`, credit = `net`; JE date = separation date | finalize + line sums |
+| loan recovery reachable (R-002) | **FAIL** — unreachable by construction | above |
+| last-admin reachability from the listener | **FAIL** — active `system_admin` **1 → 0** | listener invoked directly |
+| permission gate per endpoint | **PASS** — `employee` role got **403 on all 7**, list and options included | per-endpoint sweep |
+| row scope for `employee` | **PASS (vacuous)** — the role holds no `hr.separation.*` permission, so no row is reachable | as above |
+| raw-id-free error bodies | **PASS** — 422 bodies carry no integer PK | not-found item key |
+| raw-id-free success bodies | **was FAIL** (`"signed_by":30`) → **PASS after FIX-6** | sign then show |
+
+Clamped-total detail: with `gross_plus=0.00` and `gross_less=99999.00`, `net`
+clamps to `0.00` while `gross_plus − gross_less = −99999.00`. The ₱99,999
+un-recovered deduction is recorded **nowhere** in the breakdown — the JE quietly
+recovers only `min(plus, less)` (`FinalPayService.php:239-241`) and the remainder
+stays on the books with no audit field naming it. An auditor reading the breakdown
+cannot see that anything was left unrecovered.
+
+## Account deactivation on clearance — reachability confirmed
+
+`DeactivateAccountOnClearanceComplete.php:54` calls
+`UserProvisioningService::deactivateForEmployee()`, which at
+`api/app/Modules/HR/Services/UserProvisioningService.php:82-104` performs
+`$user->update(['is_active' => false])` with **no last-administrator guard**.
+Measured: with exactly one active `system_admin` linked to a separating employee,
+invoking the listener took active administrators from **1 → 0**. This listener is
+an *unattended*, queued path — no operator confirms it. The service is HR's file
+and was **not modified**; reported only, per scope.
+
+## Money discipline
+
+Clean overall. `Money` BCMath decimal strings throughout `FinalPayService`;
+`Money::INNER` used for intermediate precision; no `(float)` or `round()` on money
+in this module's PHP. The two SQL aggregates
+(`SUM(remaining * conversion_rate)`, `SUM(quantity * replacement_unit_cost)`)
+operate on PostgreSQL `numeric`, so they are exact. The SPA has **no** `Number()`,
+`parseFloat` or `toFixed` on money in this module. `ClearanceResource`'s
+`progress_pct` uses float `round()`, but it is a percentage, not money.
+
+The float that *does* matter is outside this module:
+`ProcessYearEndLeave.php:105` casts `conversion_rate` to float and `round()`s
+days — the divergence behind F016.
+
+## Dead surfaces — both directions
+
+**None.** All six backend clearance routes have a client caller in
+`spa/src/api/separations.ts`, and both pages are routed
+(`spa/src/routes/hrRoutes.tsx:179,181`). The one half-dead surface was the
+`search` parameter the SPA sent and the API ignored — now implemented (FIX-5).
+Dead *code* rather than dead surface: `SeparateEmployeeRequest` +
+`hr.employees.separate` (F013), `LoanPaymentType::FinalPay`, and
+`employee_loans.is_final_pay_deduction`.
+
+## Questions requiring a human decision
+
+1. **Loan recovery on separation (R-002).** What should happen to an outstanding
+   loan when an employee leaves? Options are characterised in `action-plan.md`;
+   none was implemented.
+2. **13th month already paid (F014).** Confirm that "already paid" means zero is
+   owed in final pay. The evidence says yes, but it reduces a leaver's payment by
+   the full accrual, so it needs sign-off.
+3. **Last salary for `approved`/`finalized`/`voided` periods (F015).** Which
+   payroll statuses mean "payroll will pay this, so final pay must not"? And
+   should a `voided` last period be covered by final pay or by a replacement run?
+4. **Leave conversion rate (F016).** Should separation use the same 1.0 clamp as
+   year-end, or is a >1.0 rate a deliberate separation benefit? And should a
+   separation payout debit the balance?
+5. **Far-future separation dates (F017).** What upper bound is acceptable — a
+   fixed window, or a configurable `hr.separation.max_days_ahead`?
+6. **Zero-value final pay (F018).** Skip the journal entry, post a zero-value
+   memo entry, or require a cancel transition instead?
+7. **Checklist ownership and maker-checker (F001/F002).** Unresolved since the
+   first audit; still the gate on items 1-3 of the plan.
+
+## Could not verify
+
+- **No authenticated browser journey.** Per-department signing, Finance
+  finalization, and the SPA's rendering of cancelled/blocked states and server
+  error text were not exercised in a real browser. Chromium is required for that
+  (the SPA suite measures layout), and no login server was run.
+- **No production data scan** for existing duplicate checklist keys or
+  double-encoded `employment_history.to_value` rows. FIX-4 corrects new writes
+  only; the size of the existing population is unknown.
+- **Two-connection concurrency** for compute-vs-finalize races was not re-run;
+  `RefreshDatabase` hides uncommitted rows from a second connection, so a naive
+  probe reports a false "no lock". The existing
+  `SeparationLifecycleConcurrencyTest` passes but covers initiation replay only.
+- **`PayrollCalculatorService` is owned by a live session** and changed under this
+  audit. F015's period-status table was measured against the tree as of this
+  session; re-confirm after that session lands.
