@@ -20,6 +20,7 @@ Rules the coordinator holds and agents never touch:
 - **CLAUDE.md says the approval chain is "4 levels (Staff → Dept Head → Manager → Officer → VP)". Leave implements exactly 2** (`WorkflowSeeder.php:26-29`, two pending enum states) and code/seeder/enum agree, so it reads as deliberate. Either the doc or the seeder is wrong; decide once, centrally, because every approval-bearing module is audited against that sentence.
 - **`AccountsPayableHardeningTest` has one pre-existing failure**, seen from the supplier-portal session's dependency run and confirmed not attributable to it. It belongs to `accounts-payable`, which is marked `✅ Verified` — so either that verification was optimistic or something regressed since. Confirm before trusting the status.
 - **No browser has run in this pipeline.** Four agents have reported Chromium/Playwright binaries absent with no X server. Every SPA claim so far is source- or jsdom-level; installing Chromium is the only thing that closes the browser-acceptance findings accumulating across modules.
+- **CONFIRMED: a harness `PostToolUse` hook reformats UI files.** `.claude/settings.local.json` runs the `impeccable` skill's `hook.mjs` on `Edit|Write|MultiEdit`. A session measured it Prettier-reformatting its two `.tsx` files (605/343 lines for a 5-line change) **and `spa/src/lib/emptyStateCopy.ts`, which it never touched**. This — not agents running formatters by hand — is the real cause of the neighbouring-module SPA dirt seen all pipeline. The earlier queue note blaming agents was wrong. Restoring the untouched file from HEAD was safe **only because its owning module had already committed** its one-word fix, which is precisely why Step 7b is not ceremony. The repo is broadly not Prettier-clean (28 accounting files fail at HEAD), so accepting a reformat makes files outliers; running Prettier repo-wide is a separate decision.
 - **P0 CROSS-MODULE, needs an owner: `App\Modules\HR\Services\UserProvisioningService::deactivateForEmployee()` (`:82-104`) has NO last-admin guard**, across 4 call paths — one of them the *unattended* clearance listener (`DeactivateAccountOnClearanceComplete.php:54`). Measured from M003: an `hr_officer` deactivation returned 204 and left **0 active administrators**. M003 correctly refused to fix another module's file, and notes it wants a *shared* guard rather than a copied one. Assign with `people/employee-master` (M014) or `people/onboarding` (M015), whichever owns that service.
 - `api/tests/Feature/Accounting/AccountingPeriodDuplicateRecoveryTest.php:39` calls `DB::commit()` with no `RefreshDatabaseState::$migrated` reset — same class of suite-poisoning defect M003 just fixed in `RbacConcurrencyTest`. Accounting's to own.
 - **CROSS-MODULE, needs an owner: the supplier portal writes its bearer token to `sessionStorage`** (`spa/src/api/b2b/client.ts:14-38`), which CLAUDE.md forbids outright ("NEVER store auth in localStorage/sessionStorage"). The fix is to flip the `supplier_portal` guard from `sanctum` to `session` as `customer_portal` already is — so it spans B2B + auth config, and `supply-chain/supplier-portal` has already released. Needs re-assignment.
@@ -54,12 +55,12 @@ existing `fix-log.md` / `git diff` before trusting its status.
 |---|---|---|---|---|
 | 1 | 1 | M001 | platform/auth-session | done |
 | 2 | 1 | M003 | platform/user-administration | done |
-| 3 | 2 | M026 | finance/journal-ledger | **in flight** |
-| 4 | 2 | M028 | finance/accounts-receivable | queued — HOLD while M026 journal-ledger is in flight; AR posts through JournalEntryService, which that session is editing |
-| 5 | 2 | M032 | commercial/customer-product-pricing | **in flight** |
-| 6 | 2 | M020 | people/loans-cash-advances | **in flight** |
-| 7 | 2 | M021 | people/payroll-period-processing | queued — HOLD while M026 journal-ledger is in flight (payroll posts to GL) |
-| 8 | 2 | M023 | people/separation-final-pay | queued |
+| 3 | 2 | M026 | finance/journal-ledger | done |
+| 4 | 2 | M028 | finance/accounts-receivable | **in flight** (hold lifted — M026 released) |
+| 5 | 2 | M032 | commercial/customer-product-pricing | done |
+| 6 | 2 | M020 | people/loans-cash-advances | done |
+| 7 | 2 | M021 | people/payroll-period-processing | **in flight** (hold lifted — M026 released) |
+| 8 | 2 | M023 | people/separation-final-pay | **in flight** |
 | 9 | 3 | M037 | procurement/purchase-orders | queued |
 | 10 | 3 | M038 | procurement/supplier-performance | queued |
 | 11 | 3 | M041 | inventory/goods-receiving | queued |
@@ -113,9 +114,9 @@ fresh discovery pass.
 
 | ID | Module | Launched |
 |---|---|---|
-| M026 | finance/journal-ledger | 2026-08-30 |
-| M032 | commercial/customer-product-pricing | 2026-08-30 |
-| M020 | people/loans-cash-advances | 2026-08-30 |
+| M028 | finance/accounts-receivable | 2026-08-30 |
+| M021 | people/payroll-period-processing | 2026-08-30 |
+| M023 | people/separation-final-pay | 2026-08-30 |
 
 ## Completed this pipeline
 
@@ -129,6 +130,9 @@ fresh discovery pass.
 | M019 | people/leave-management | 🔁 Needs Re-audit | P0: cancelling an approved request after year-end resurrects already-encashed credits. 2 fixed (incl. a suite red 1 day in 7). |
 | M047 | supply-chain/supplier-portal | 🔁 Needs Re-audit | 3 stacked defects in one method, each hiding the next — two supplier PO-detail panels had never displayed. Cross-tenant: 21/25 routes probed, no leak. |
 | M003 | platform/user-administration | 🔁 Needs Re-audit | Prior session's 9 fixes were all already committed; 9/9 no longer reproduce. 16-row escalation matrix all refused. P0 found in HR's UserProvisioningService (cross-module). |
+| M026 | finance/journal-ledger | 🔁 Needs Re-audit | 7 RED→15 GREEN. Archive/restore produced a phantom header claiming ₱100 with 0 lines; a raw writer could archive-then-promote past the trigger; `numeric` amounts let `1.999`→`2.00` and `1e17`→500. Decision #12 fully characterised, 4 options, nothing applied. |
+| M032 | commercial/customer-product-pricing | 🔁 Needs Re-audit | Date **strings** compared, so `12/01/2026` vs `2026-03-31` persisted an impossible window that permanently unprices a customer/product — fixed. Below-lowest-tier price contradicts the UI by 8x — open question. |
+| M020 | people/loans-cash-advances | 🔁 Needs Re-audit | No company loan can EVER be disbursed (workflow step 2 role holds no `loans.*`). A borrower can never be separated. 4 contained fixes. |
 | M001 | platform/auth-session | 🔁 Needs Re-audit | Idle session timeout was opt-out via a client-supplied `Authorization` header — fixed. Login + reset timing oracles and an ip\|email-keyed limiter deferred (locking out 200+ employees is the failure mode). 59-row control checklist in audit-report.md. |
 
 
