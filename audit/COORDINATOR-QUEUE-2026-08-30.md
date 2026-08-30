@@ -3,6 +3,10 @@
 Started 2026-08-30. Owner: coordinator session (not a module session).
 **Discipline: max 3 agents in flight. On each completion, launch exactly one replacement from the top of the queue.**
 
+**Scheduling rule learned 2026-08-30:** do not run two modules that share a Laravel module directory concurrently. `supplier-performance` and `goods-receiving` both live in / write to `api/app/Modules/Purchasing/`, so they wait while `purchase-orders` is live. Same reason AR and payroll waited for `journal-ledger`. Deviating from queue order for this is correct; record the reason in the table.
+
+**Verification rule learned 2026-08-30 (the most important one):** a `fix-log.md` full of confident verification claims can be worthless. Four `separation-final-pay` sessions wrote them from runs that produced *"34 failures and 0 assertions"* — the signature of two suites sharing one database. Every agent must be told to re-measure by probe and to check whether a prior claim came from a run that actually executed.
+
 Rules the coordinator holds and agents never touch:
 - Only the coordinator runs `audit/scripts/regenerate-registry.sh`, once per batch when all in-flight agents have finished. It truncates then appends row-by-row, so a concurrent reader sees a partial table.
 - Each agent gets exactly one assigned module and must not wander. LOCKED → report back, do not pick another.
@@ -62,13 +66,13 @@ existing `fix-log.md` / `git diff` before trusting its status.
 | 5 | 2 | M032 | commercial/customer-product-pricing | done |
 | 6 | 2 | M020 | people/loans-cash-advances | done |
 | 7 | 2 | M021 | people/payroll-period-processing | **in flight** (hold lifted — M026 released) |
-| 8 | 2 | M023 | people/separation-final-pay | **in flight** |
+| 8 | 2 | M023 | people/separation-final-pay | done |
 | 9 | 3 | M037 | procurement/purchase-orders | **in flight** |
-| 10 | 3 | M038 | procurement/supplier-performance | queued |
+| 10 | 3 | M038 | procurement/supplier-performance | queued — HOLD while M037 purchase-orders is in flight; both live in api/app/Modules/Purchasing/ |
 | 11 | 3 | M041 | inventory/goods-receiving | queued |
 | 12 | 3 | M040 | inventory/warehouse-stock-control | queued |
 | 13 | 3 | M042 | inventory/material-issues-reservations | queued |
-| 14 | 3 | M056 | quality/inspections-certificates | queued |
+| 14 | 3 | M056 | quality/inspections-certificates | **in flight** (taken out of order — M038/M041 collide with live M037 in Purchasing) |
 | 15 | 3 | M057 | quality/ncr-capa | queued |
 | 16 | 3 | M054 | quality/material-review-board | queued |
 | 17 | 3 | M058 | quality/traceability-ppap | queued |
@@ -117,8 +121,8 @@ fresh discovery pass.
 | ID | Module | Launched |
 |---|---|---|
 | M021 | people/payroll-period-processing | 2026-08-30 |
-| M023 | people/separation-final-pay | 2026-08-30 |
 | M037 | procurement/purchase-orders | 2026-08-30 |
+| M056 | quality/inspections-certificates | 2026-08-30 |
 
 ## Completed this pipeline
 
@@ -136,6 +140,7 @@ fresh discovery pass.
 | M032 | commercial/customer-product-pricing | 🔁 Needs Re-audit | Date **strings** compared, so `12/01/2026` vs `2026-03-31` persisted an impossible window that permanently unprices a customer/product — fixed. Below-lowest-tier price contradicts the UI by 8x — open question. |
 | M020 | people/loans-cash-advances | 🔁 Needs Re-audit | No company loan can EVER be disbursed (workflow step 2 role holds no `loans.*`). A borrower can never be separated. 4 contained fixes. |
 | M028 | finance/accounts-receivable | 🔁 Needs Re-audit | Statement reported ₱800/₱800/₱500 for the SAME rows; two credit notes drove GL AR to −₱1,000; 12% VAT charged on a VAT-exempt invoice. 3 fixed (all 500s), 7 of 9 new tests red at HEAD. No AR payment void exists at all. |
+| M023 | people/separation-final-pay | 🔁 Needs Re-audit | **Prior 4 sessions never measured anything** — their verification came from a shared DB reporting "34 failures / 0 assertions". All 13 findings reproduced, +5 new. 13th month and last salary each paid TWICE; leave conversion uncapped and never debited. 6 contained fixes, 10 of 12 tests red at HEAD. |
 | M001 | platform/auth-session | 🔁 Needs Re-audit | Idle session timeout was opt-out via a client-supplied `Authorization` header — fixed. Login + reset timing oracles and an ip\|email-keyed limiter deferred (locking out 200+ employees is the failure mode). 59-row control checklist in audit-report.md. |
 
 
