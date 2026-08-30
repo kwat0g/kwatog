@@ -10,6 +10,8 @@ Started 2026-08-30. Owner: coordinator session (not a module session).
 Rules the coordinator holds and agents never touch:
 - Only the coordinator runs `audit/scripts/regenerate-registry.sh`, once per batch when all in-flight agents have finished. It truncates then appends row-by-row, so a concurrent reader sees a partial table.
 - Each agent gets exactly one assigned module and must not wander. LOCKED → report back, do not pick another.
+- **VERIFY `docker compose ps` BEFORE ANY PROBE.** The real cause of four sessions' "0 assertions" was found 2026-08-30: **every container in the compose project had been stopped**, so `SQLSTATE[08006] host "db" could not be resolved` read as a broken test bootstrap. Every agent must run `docker compose ps` + a `select 1;` first, start only `db`+`redis` if needed, and quote a real numeric baseline before changing anything.
+- **Instruct every agent to commit incrementally and log as it goes.** Three agents were killed mid-flight by quota on 2026-08-30; the two that had saved logging and committing for the end lost everything they had discovered.
 - Each agent uses its own test database. `RefreshDatabase` runs `migrate:fresh`; two suites on one database tear the schema out from under each other. The tell is hundreds of failures with zero assertion failures among them.
 - `db` and `redis` stay up for the whole pipeline. No agent restarts them.
 - Commit as ONE invocation: `git commit -m "…" -- <paths>`. The index is shared state, so `git add` then `git commit` is a race — that is how 8 attendance files landed under a quality commit message on 2026-08-30 (`32d91307`, recorded in `cb493487`). Caveat: pathspec commit **rejects untracked files**, so new files need an adjacent `git add <newfile>`.
@@ -69,15 +71,15 @@ existing `fix-log.md` / `git diff` before trusting its status.
 | 7 | 2 | M021 | people/payroll-period-processing | done |
 | 8 | 2 | M023 | people/separation-final-pay | done |
 | 9 | 3 | M037 | procurement/purchase-orders | done (work committed in `dd120ef0`; died at the release step only) |
-| 10 | 3 | M038 | procurement/supplier-performance | queued (hold lifted — M037 released) |
+| 10 | 3 | M038 | procurement/supplier-performance | **in flight** |
 | 11 | 3 | M041 | inventory/goods-receiving | queued |
 | 12 | 3 | M040 | inventory/warehouse-stock-control | queued |
 | 13 | 3 | M042 | inventory/material-issues-reservations | queued |
-| 14 | 3 | M056 | quality/inspections-certificates | **RE-QUEUE — aborted mid-discovery, quota. No docs, no changes. One lead in fix-log.** |
+| 14 | 3 | M056 | quality/inspections-certificates | done |
 | 15 | 3 | M057 | quality/ncr-capa | queued |
 | 16 | 3 | M054 | quality/material-review-board | queued |
 | 17 | 3 | M058 | quality/traceability-ppap | queued |
-| 18 | 3 | M051 | manufacturing/production-work-orders | **RE-QUEUE — aborted mid-discovery, quota. No docs, no changes. One lead in fix-log.** |
+| 18 | 3 | M051 | manufacturing/production-work-orders | **in flight** (re-launched after quota abort) |
 | 19 | 3 | M050 | manufacturing/capacity-scheduling | queued |
 | 20 | 3 | M053 | manufacturing/maintenance-machine-health | queued |
 | 21 | 3 | M048 | manufacturing/demand-forecasting | queued |
@@ -119,16 +121,16 @@ fresh discovery pass.
 
 ## In flight
 
-**NONE — pipeline HALTED 2026-08-30 on API quota exhaustion.**
+Quota restored and the pipeline resumed 2026-08-30 via a **single-agent probe**
+(M056) rather than three at once — the cheap way to test a budget stop. It
+completed, so the other two slots were refilled.
 
-All three concurrent agents died within 30 seconds of each other on
-`403 pre-consume quota failed` (`user quota: ~$0.39–0.69, need: ~$0.63–0.90`).
-This is an account-level budget stop, not a code failure, so **relaunching will
-fail identically until quota is restored.** Do not spawn replacements first —
-verify quota, then resume from the table above.
+| ID | Module | Launched |
+|---|---|---|
+| M051 | manufacturing/production-work-orders | 2026-08-30 (re-launch) |
+| M038 | procurement/supplier-performance | 2026-08-30 |
 
-Resume order when quota returns: **M056**, **M051** (both re-queued at the top,
-aborted with no work lost but no work done), then M038, M041, M040, M042.
+Next up: M041, M040, M042, then the remaining Tier 3/4 list.
 
 ## Completed this pipeline
 
@@ -148,6 +150,7 @@ aborted with no work lost but no work done), then M038, M041, M040, M042.
 | M028 | finance/accounts-receivable | 🔁 Needs Re-audit | Statement reported ₱800/₱800/₱500 for the SAME rows; two credit notes drove GL AR to −₱1,000; 12% VAT charged on a VAT-exempt invoice. 3 fixed (all 500s), 7 of 9 new tests red at HEAD. No AR payment void exists at all. |
 | M023 | people/separation-final-pay | 🔁 Needs Re-audit | **Prior 4 sessions never measured anything** — their verification came from a shared DB reporting "34 failures / 0 assertions". All 13 findings reproduced, +5 new. 13th month and last salary each paid TWICE; leave conversion uncapped and never debited. 6 contained fixes, 10 of 12 tests red at HEAD. |
 | M021 | people/payroll-period-processing | 🔁 Needs Re-audit | Loan over-deduction mechanism identified: an as-of `reconcileAggregates` cut drops ledger rows dated after `payroll_date`, taking the ledger to ₱14,000 on ₱12,000 owed. Anomaly gate **fails OPEN** — a bad setting yields zero flags and approve+finalize both succeed. 4 fixed, 8 of 14 tests red at HEAD. |
+| M056 | quality/inspections-certificates | 🔁 Needs Re-audit | P0: a CoC could be issued with **zero measurement rows**, with 45/50 units unresolved, after readings were rewritten to fail, and after **all evidence was deleted** — re-issuing the same number with a blank critical-dimension table. Fixed, 6 of 7 tests red at HEAD. Found the compose-containers-down root cause. IC-16: the in-process QC gate does not exist. |
 | M037 | procurement/purchase-orders | 🔁 Needs Re-audit | A blocked three-way match rendered as a green "Matched". Fix + 204-line test + all three audit docs committed in `dd120ef0` before the quota kill; only the release step was missed. |
 | M001 | platform/auth-session | 🔁 Needs Re-audit | Idle session timeout was opt-out via a client-supplied `Authorization` header — fixed. Login + reset timing oracles and an ip\|email-keyed limiter deferred (locking out 200+ employees is the failure mode). 59-row control checklist in audit-report.md. |
 
