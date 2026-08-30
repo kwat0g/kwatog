@@ -14,6 +14,7 @@ use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Exceptions\InspectionCertificateException;
 use App\Modules\Quality\Models\Inspection;
+use App\Modules\Quality\Models\InspectionMeasurement;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\ShipmentLot;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -42,6 +43,20 @@ class CoCService
     public function generateForInspection(Inspection $inspection, ?string $deliveryNumber = null): StreamedResponse
     {
         $this->assertEligible($inspection);
+
+        // M056 — the CoC number is derived from the inspection, so re-issuing
+        // is the SAME certificate, not a new one. Storing fresh bytes on every
+        // request left the vault holding several documents that all claim one
+        // certificate number with different checksums (the payload embeds
+        // `issued_at` and the requesting user), so no reader could tell which
+        // copy the customer holds. Stream the certificate already on file
+        // instead; that also keeps this GET endpoint free of a write.
+        $existing = $this->vault->listForEntity($inspection)
+            ->firstWhere('document_type', DocumentType::Coc);
+        if ($existing !== null) {
+            return $this->vault->streamInline($existing);
+        }
+
         [$cocNumber, $payload] = $this->buildPayload($inspection, $deliveryNumber);
 
         $bytes = $this->renderer->render('pdf.coc', $payload, [
@@ -170,6 +185,69 @@ class CoCService
             throw new InspectionCertificateException(
                 "CoC requires a passed inspection (current: {$status->value}).",
                 'COC_INSPECTION_NOT_PASSED',
+            );
+        }
+
+        $this->assertEvidenceSupportsCertificate($inspection);
+    }
+
+    /**
+     * M056 — a Certificate of Conformance is an external, IATF-auditable
+     * declaration, so `status = passed` alone is not sufficient authority to
+     * issue one. The stored measurement rows are the evidence the certificate
+     * asserts, and they are reachable outside the inspection state machine
+     * (imports, console tasks, direct SQL, a cascade that removed rows). Any
+     * of the following means the certificate would misstate its own evidence:
+     *
+     *   - no measurement rows at all               → nothing was measured
+     *   - a row with is_pass = null                → the lot is part-inspected
+     *   - a row with is_pass = false               → evidence contradicts the verdict
+     *   - fewer sampled units than `sample_size`   → fewer units than declared
+     *
+     * Verified rather than trusted: this method re-reads the rows instead of
+     * relying on `defect_count`, which is a snapshot taken at completion and
+     * does not track later edits to the evidence.
+     */
+    private function assertEvidenceSupportsCertificate(Inspection $inspection): void
+    {
+        $stats = InspectionMeasurement::query()
+            ->where('inspection_id', $inspection->getKey())
+            ->selectRaw('count(*) as total')
+            ->selectRaw('count(*) filter (where is_pass is null) as unresolved')
+            ->selectRaw('count(*) filter (where is_pass = false) as failing')
+            ->selectRaw('count(distinct sample_index) as sampled_units')
+            ->first();
+
+        $total = (int) ($stats->total ?? 0);
+        if ($total < 1) {
+            throw new InspectionCertificateException(
+                'CoC requires recorded inspection measurements; this inspection has none.',
+                'COC_NO_MEASUREMENT_EVIDENCE',
+            );
+        }
+
+        $unresolved = (int) ($stats->unresolved ?? 0);
+        if ($unresolved > 0) {
+            throw new InspectionCertificateException(
+                "CoC requires every sampled measurement to be resolved; {$unresolved} have no pass/fail recorded.",
+                'COC_EVIDENCE_INCOMPLETE',
+            );
+        }
+
+        $failing = (int) ($stats->failing ?? 0);
+        if ($failing > 0) {
+            throw new InspectionCertificateException(
+                "CoC cannot be issued: {$failing} recorded measurement(s) failed, which contradicts the passed verdict.",
+                'COC_EVIDENCE_CONTRADICTS_VERDICT',
+            );
+        }
+
+        $sampledUnits = (int) ($stats->sampled_units ?? 0);
+        $declaredSample = (int) $inspection->sample_size;
+        if ($declaredSample > 0 && $sampledUnits < $declaredSample) {
+            throw new InspectionCertificateException(
+                "CoC declares a sample of {$declaredSample} unit(s) but only {$sampledUnits} were measured.",
+                'COC_EVIDENCE_SHORT_OF_SAMPLE',
             );
         }
     }

@@ -128,6 +128,11 @@ export default function InspectionDetailPage() {
  const hasTolerance = isNumericMeasurement(measurement);
  return {
  id: d.id,
+ // AUDIT NOTE (M056) — decimals should stay strings end to end per
+ // CLAUDE.md, but InspectionMeasurementResource returns measured_value
+ // as a JSON float, so RecordMeasurementsData is typed `number`.
+ // Switching only this direction would half-migrate the contract; the
+ // resource + type + tolerance-bar change is tracked as a separate item.
  ...(hasTolerance ? { measured_value: d.measured_value === '' ? null : Number(d.measured_value) } : {}),
  ...(!hasTolerance ? { is_pass: d.is_pass } : {}),
  notes: d.notes || null,
@@ -137,6 +142,17 @@ export default function InspectionDetailPage() {
  },
  onSuccess: () => {
  toast.success('Measurements saved');
+ // M056 — the seeding effect above deliberately preserves rows still
+ // flagged dirty, so leaving the flags set after a successful save kept
+ // the table showing stale local values and Save permanently enabled.
+ // Clear them here; the refetched server payload is the source of truth.
+ setDrafts((existing) => {
+ const cleared: Record<string, RowDraft> = {};
+ for (const [rowId, draft] of Object.entries(existing)) {
+ cleared[rowId] = { ...draft, dirty: false };
+ }
+ return cleared;
+ });
  qc.invalidateQueries({ queryKey: ['quality', 'inspections', id] });
  },
  onError: (e: AxiosError<{ message?: string }>) => {
@@ -234,7 +250,12 @@ export default function InspectionDetailPage() {
  variant="primary"
  size="sm"
  icon={<LuCheck size={14} />}
- disabled={unresolvedCount > 0}
+ disabled={unresolvedCount > 0 || dirtyCount > 0}
+ title={
+ dirtyCount > 0
+ ? 'Save your measurement edits before completing — completion is computed from saved evidence.'
+ : undefined
+ }
  onClick={() => setConfirmComplete(true)}
  >
  Complete
@@ -390,7 +411,7 @@ export default function InspectionDetailPage() {
  type="number"
  step="any"
  disabled={isTerminal}
- aria-label="Measured value"
+ aria-label={`Measured value — ${m.parameter_name}, sample ${m.sample_index}${m.unit_of_measure ? ` (${m.unit_of_measure})` : ''}`}
  containerClassName="inline-flex w-24"
  className="text-right font-mono tabular-nums"
  value={draft.measured_value}

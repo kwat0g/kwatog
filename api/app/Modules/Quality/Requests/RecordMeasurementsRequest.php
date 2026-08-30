@@ -52,7 +52,18 @@ class RecordMeasurementsRequest extends FormRequest
         return [
             'measurements'                    => ['required', 'array', 'min:1'],
             'measurements.*._id'              => ['required', 'integer', 'min:1', 'distinct:strict'],
-            'measurements.*.measured_value'   => ['nullable', 'numeric'],
+            // M056 — `numeric` alone accepted more than the decimal(12,4)
+            // column can hold. `10.00005` was silently rounded to `10.0001`
+            // and then evaluated, so the stored evidence was not the reading
+            // the inspector entered; `1e20` and `99999999999999` overflowed
+            // the column and 500'd. Bound both the scale and the magnitude so
+            // an out-of-range reading is a 422 the operator can see and
+            // correct, never a rounded value presented as measured fact.
+            'measurements.*.measured_value'   => [
+                'nullable',
+                'decimal:0,4',
+                'between:-99999999.9999,99999999.9999',
+            ],
             'measurements.*.is_pass'          => ['nullable', 'boolean'],
             'measurements.*.notes'            => ['nullable', 'string', 'max:500'],
         ];
