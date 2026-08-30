@@ -34,7 +34,12 @@ vi.mock('@/components/guards/CanDo', () => ({
 const request = {
   id: 'lr-1',
   leave_request_no: 'LR-202608-0001',
-  employee: { id: 'e-1', employee_no: 'OGM-2026-0001', full_name: 'Ana Dela Cruz', department: 'Production' },
+  employee: {
+    id: 'e-1',
+    employee_no: 'OGM-2026-0001',
+    full_name: 'Ana Dela Cruz',
+    department: 'Production',
+  },
   leave_type: { id: 'lt-vl', code: 'VL', name: 'Vacation Leave' },
   start_date: '2026-09-07',
   end_date: '2026-09-07',

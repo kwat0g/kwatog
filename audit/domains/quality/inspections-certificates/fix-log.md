@@ -24,3 +24,21 @@ No production files outside this module's audit artifact directory were modified
 - Plan item 1 (`IC-01`, `IC-02`) was not implemented because it requires human/product and Inventory decisions about whether fractional received quantities are valid inspection units, how quantity conversion and accepted quantities must be represented, and whether AQL Ac/Re defects are failed sampled units or failed parameter rows.
 - Plan items 2–10 remain pending and were not attempted; the ordered plan was stopped at the first decision-dependent item.
 - No production code was modified and no fix verification was run in this session.
+
+## Session aborted 2026-08-30 — API quota exhausted mid-discovery
+
+The 2026-08-30 session was killed by `403 pre-consume quota failed` during the
+hardening pass. It wrote **no audit-report, action-plan or fix-log entry**,
+applied **no production change**, and left no committed work. Nothing here was
+verified by the coordinator.
+
+**Partial state, recorded second-hand from the session's last output and NOT
+independently confirmed:** it had surveyed `api/routes/console.php` and reported
+that **no scheduled command runs inspections directly**, and was about to execute
+the three commands that touch inspection data to check whether each distinguishes
+"nothing to do" from "everything threw". That check was never completed.
+
+It also left a scratch probe behind, untracked and uncommitted:
+`api/tests/Feature/Quality/ZzQcInvariantProbeTest.php`. Read it before deleting —
+it may encode which invariants had already been set up — but do not trust it as
+evidence of anything, since no run of it was reported.

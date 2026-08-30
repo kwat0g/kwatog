@@ -68,16 +68,16 @@ existing `fix-log.md` / `git diff` before trusting its status.
 | 6 | 2 | M020 | people/loans-cash-advances | done |
 | 7 | 2 | M021 | people/payroll-period-processing | done |
 | 8 | 2 | M023 | people/separation-final-pay | done |
-| 9 | 3 | M037 | procurement/purchase-orders | **in flight** |
-| 10 | 3 | M038 | procurement/supplier-performance | queued — HOLD while M037 purchase-orders is in flight; both live in api/app/Modules/Purchasing/ |
+| 9 | 3 | M037 | procurement/purchase-orders | done (work committed in `dd120ef0`; died at the release step only) |
+| 10 | 3 | M038 | procurement/supplier-performance | queued (hold lifted — M037 released) |
 | 11 | 3 | M041 | inventory/goods-receiving | queued |
 | 12 | 3 | M040 | inventory/warehouse-stock-control | queued |
 | 13 | 3 | M042 | inventory/material-issues-reservations | queued |
-| 14 | 3 | M056 | quality/inspections-certificates | **in flight** (taken out of order — M038/M041 collide with live M037 in Purchasing) |
+| 14 | 3 | M056 | quality/inspections-certificates | **RE-QUEUE — aborted mid-discovery, quota. No docs, no changes. One lead in fix-log.** |
 | 15 | 3 | M057 | quality/ncr-capa | queued |
 | 16 | 3 | M054 | quality/material-review-board | queued |
 | 17 | 3 | M058 | quality/traceability-ppap | queued |
-| 18 | 3 | M051 | manufacturing/production-work-orders | **in flight** (out of order — Purchasing + Quality dirs both occupied) |
+| 18 | 3 | M051 | manufacturing/production-work-orders | **RE-QUEUE — aborted mid-discovery, quota. No docs, no changes. One lead in fix-log.** |
 | 19 | 3 | M050 | manufacturing/capacity-scheduling | queued |
 | 20 | 3 | M053 | manufacturing/maintenance-machine-health | queued |
 | 21 | 3 | M048 | manufacturing/demand-forecasting | queued |
@@ -119,11 +119,16 @@ fresh discovery pass.
 
 ## In flight
 
-| ID | Module | Launched |
-|---|---|---|
-| M037 | procurement/purchase-orders | 2026-08-30 |
-| M056 | quality/inspections-certificates | 2026-08-30 |
-| M051 | manufacturing/production-work-orders | 2026-08-30 |
+**NONE — pipeline HALTED 2026-08-30 on API quota exhaustion.**
+
+All three concurrent agents died within 30 seconds of each other on
+`403 pre-consume quota failed` (`user quota: ~$0.39–0.69, need: ~$0.63–0.90`).
+This is an account-level budget stop, not a code failure, so **relaunching will
+fail identically until quota is restored.** Do not spawn replacements first —
+verify quota, then resume from the table above.
+
+Resume order when quota returns: **M056**, **M051** (both re-queued at the top,
+aborted with no work lost but no work done), then M038, M041, M040, M042.
 
 ## Completed this pipeline
 
@@ -143,6 +148,7 @@ fresh discovery pass.
 | M028 | finance/accounts-receivable | 🔁 Needs Re-audit | Statement reported ₱800/₱800/₱500 for the SAME rows; two credit notes drove GL AR to −₱1,000; 12% VAT charged on a VAT-exempt invoice. 3 fixed (all 500s), 7 of 9 new tests red at HEAD. No AR payment void exists at all. |
 | M023 | people/separation-final-pay | 🔁 Needs Re-audit | **Prior 4 sessions never measured anything** — their verification came from a shared DB reporting "34 failures / 0 assertions". All 13 findings reproduced, +5 new. 13th month and last salary each paid TWICE; leave conversion uncapped and never debited. 6 contained fixes, 10 of 12 tests red at HEAD. |
 | M021 | people/payroll-period-processing | 🔁 Needs Re-audit | Loan over-deduction mechanism identified: an as-of `reconcileAggregates` cut drops ledger rows dated after `payroll_date`, taking the ledger to ₱14,000 on ₱12,000 owed. Anomaly gate **fails OPEN** — a bad setting yields zero flags and approve+finalize both succeed. 4 fixed, 8 of 14 tests red at HEAD. |
+| M037 | procurement/purchase-orders | 🔁 Needs Re-audit | A blocked three-way match rendered as a green "Matched". Fix + 204-line test + all three audit docs committed in `dd120ef0` before the quota kill; only the release step was missed. |
 | M001 | platform/auth-session | 🔁 Needs Re-audit | Idle session timeout was opt-out via a client-supplied `Authorization` header — fixed. Login + reset timing oracles and an ip\|email-keyed limiter deferred (locking out 200+ employees is the failure mode). 59-row control checklist in audit-report.md. |
 
 

@@ -53,3 +53,28 @@ The existing action plan was executed in order where the required policy and cro
 - `docker compose run --rm spa npm run test:run -- src/pages/responsive-detail-tables.test.ts` — **PASS**, 1 test.
 - `npm run typecheck` — the audited production files typecheck; the command remains **BLOCKED by pre-existing** `src/pages/assets/detail.tsx` errors because the `qrcode` module/types are absent (`TS2307`, `TS7006`).
 - PHP lint for changed Production source/tests and `git diff --check` — **PASS**.
+
+## Session aborted 2026-08-30 — API quota exhausted mid-discovery
+
+The 2026-08-30 session was killed by `403 pre-consume quota failed` partway
+through the hardening pass. It wrote **no audit-report, action-plan or fix-log
+entry**, applied **no production change**, and left the working tree clean for
+this module. Nothing here was verified by the coordinator.
+
+**One lead worth keeping, recorded second-hand from the session's last output
+and NOT independently confirmed — treat it as a hypothesis to re-measure, not a
+finding:**
+
+> "Confirmed: no listener exists for `MoldShotLimitNearing` / `MoldShotLimitReached`."
+
+If that holds, it matters: CLAUDE.md states mold shot count auto-increments with
+an **alert at 80% of max**, so an event dispatched with no registered listener
+means the alert has never fired for any mold. Note the wiring convention —
+`Event::listen($EventClass, [$ListenerClass, 'handle'])` is explicit in
+`AppServiceProvider::boot()` with **no auto-discovery** — so a missing
+registration is silent by construction. This is the same shape as the 8D SLA
+escalation ledger that was dead for its entire life.
+
+First move for the next session: `grep -rn 'MoldShotLimit' api/app` and check
+`AppServiceProvider::boot()` for a registration, then dispatch the event and
+observe whether any notification is delivered.

@@ -35,7 +35,7 @@ describe('toCentavos', () => {
     expect(toCentavos('0.10') + toCentavos('0.20')).toBe(30);
 
     // A 3-period split of 1000.00 must add back up to exactly 1000.00.
-        const instalments = ['333.33', '333.33', '333.34'];
+    const instalments = ['333.33', '333.33', '333.34'];
     const total = instalments.reduce((sum, v) => sum + toCentavos(v), 0);
     expect(total).toBe(100000);
     expect(fromCentavos(total)).toBe('1000.00');
