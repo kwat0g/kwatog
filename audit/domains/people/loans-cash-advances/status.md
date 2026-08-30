@@ -6,4 +6,4 @@ roles: system_admin, hr_officer, finance_officer, production_manager, ppc_head, 
 depends_on: employee-master, payroll-period-processing, approval-workflows
 surface: M
 status: 🔁 Needs Re-audit
-last_session: 2026-08-24
+last_session: 2026-08-30
