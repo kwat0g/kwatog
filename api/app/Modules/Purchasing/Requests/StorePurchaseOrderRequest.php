@@ -48,9 +48,16 @@ class StorePurchaseOrderRequest extends FormRequest
             'items.*.item_id'        => ['required', 'integer', 'exists:items,id'],
             'items.*.purchase_request_item_id' => ['nullable', 'integer', 'exists:purchase_request_items,id'],
             'items.*.description'    => ['required', 'string', 'min:2', 'max:200'],
-            'items.*.quantity'       => ['required', 'decimal:0,2', 'min:0.01'],
+            // `decimal:0,2` already refuses 1.999 and 1e3. What was missing is an
+            // upper bound: quantity/unit_price land in decimal(15,2) columns and
+            // feed Money::mul() into decimal(15,2) line and header totals, so an
+            // in-range-looking 1e17 reached PostgreSQL and returned SQLSTATE[22003]
+            // as a 500. 10^13 is the real ceiling for decimal(15,2); the line
+            // total is a product of two of these, so each factor is capped an
+            // order below the column ceiling to keep quantity x unit_price inside it.
+            'items.*.quantity'       => ['required', 'decimal:0,2', 'min:0.01', 'max:999999.99'],
             'items.*.unit'           => ['nullable', 'string', 'max:20'],
-            'items.*.unit_price'     => ['required', 'decimal:0,2', 'min:0'],
+            'items.*.unit_price'     => ['required', 'decimal:0,2', 'min:0', 'max:9999999.99'],
         ];
     }
 

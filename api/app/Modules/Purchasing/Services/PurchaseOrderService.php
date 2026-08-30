@@ -126,7 +126,18 @@ class PurchaseOrderService
             'items.item:id,code,name,unit_of_measure',
             'approvalRecords.approver:id,name',
             'goodsReceiptNotes:id,grn_number,received_date,status,purchase_order_id',
-            'bills:id,bill_number,total_amount,balance,status,purchase_order_id',
+            // Every column PurchaseOrderResource reads off a bill must be in this
+            // projection. `has_variances`, `three_way_overridden`,
+            // `three_way_match_snapshot` (via Bill::threeWayReviewStatus()) and
+            // `due_date` used to be omitted, and because
+            // preventAccessingMissingAttributes() is deliberately OFF
+            // (AppServiceProvider) an unselected column reads as null instead of
+            // throwing: `(bool) null` is false, and threeWayReviewStatus() fell
+            // through to 'matched'. The PO detail page therefore showed a green
+            // "Matched"/"Matched within tolerance" for a bill whose three-way
+            // match was actually BLOCKED, and the three variance branches in
+            // detail.tsx had never once rendered.
+            'bills:id,bill_number,total_amount,balance,status,purchase_order_id,due_date,has_variances,three_way_overridden,three_way_match_snapshot',
             'supplierDispatch',
             'creator:id,name,role_id', 'approver:id,name,role_id',
         ]);
@@ -249,7 +260,7 @@ class PurchaseOrderService
             foreach ($lockedPr->items as $line) {
                 $vendorId = $vendorMap[$line->id] ?? null;
                 if (! $vendorId) {
-                    throw new BusinessRuleException("PR line {$line->id} has no vendor assignment.");
+                    throw new BusinessRuleException('PR line "'.($line->description ?? 'unnamed').'" has no vendor assignment.');
                 }
                 $byVendor[$vendorId][] = $line;
             }
@@ -259,7 +270,7 @@ class PurchaseOrderService
                 foreach ($lines as $line) {
                     $unitPrice = $line->estimated_unit_price;
                     if ($unitPrice === null || (float) $unitPrice <= 0) {
-                        throw new BusinessRuleException("PR line {$line->id} has no authoritative unit price.");
+                        throw new BusinessRuleException('PR line "'.($line->description ?? 'unnamed').'" has no authoritative unit price.');
                     }
                     $itemPayload[] = [
                         'item_id'                  => $line->item_id,
@@ -411,10 +422,14 @@ class PurchaseOrderService
         if ($this->settings->requiredBool('quality.ppap_gate_enabled')
             && class_exists(\App\Modules\Quality\Services\PpapService::class)) {
             $ppap = app(\App\Modules\Quality\Services\PpapService::class);
-            foreach ($po->items()->get() as $line) {
+            foreach ($po->items()->with('item:id,code,name')->get() as $line) {
                 if ($line->item_id && ! $ppap->vendorHasActivePpap((int) $po->vendor_id, (int) $line->item_id)) {
+                    // Name the item, never its primary key. This message reaches the
+                    // browser, and `item #42` both violates the HashID rule and hands
+                    // the caller a raw `items` PK it has no other way to observe.
+                    $label = $line->item?->code ?? $line->description ?? 'unnamed item';
                     throw new BusinessRuleException(
-                        "Vendor has no approved PPAP for item #{$line->item_id}. Approve the PPAP submission before this PO."
+                        "Vendor has no approved PPAP for item {$label}. Approve the PPAP submission before this PO."
                     );
                 }
             }
@@ -587,6 +602,14 @@ class PurchaseOrderService
             $row = PurchaseOrder::query()->lockForUpdate()->findOrFail($po->id);
             if (in_array($row->status, [PurchaseOrderStatus::Received, PurchaseOrderStatus::Closed], true)) {
                 throw new BusinessRuleException('Cannot cancel a fully received or closed PO.');
+            }
+            // Cancelling an already-cancelled PO used to succeed. It is not
+            // harmless: it appends a second "Cancelled: …" block to remarks and
+            // records ANOTHER PurchaseOrderCancelled row on the p2p outbox, so a
+            // double-submit published one logical cancellation twice to every
+            // downstream chain listener.
+            if ($row->status === PurchaseOrderStatus::Cancelled) {
+                throw new BusinessRuleException('This purchase order is already cancelled.');
             }
             if ($row->goodsReceiptNotes()->exists()) {
                 throw new BusinessRuleException('Cannot cancel a PO with GRNs.');

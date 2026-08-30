@@ -115,3 +115,199 @@ and is explicitly deferred to a separately scoped B2B change.
   shared test database and must run in the dedicated verification environment.
 
 M037 therefore remains `🔁 Needs Re-audit`; it is not a fresh Plan Ready bounce.
+
+---
+
+# Fix log — re-audit 2026-08-30
+
+Claimed `RECLAIMED`. Prior session's work was already committed in `167de85e`
+but **verified by reading, not by probe** (its own log records the shared
+`ogami_test` database had no `migrations` table). All measurements below are
+against a dedicated PostgreSQL database `ogami_test_po`, since dropped.
+
+Four contained fixes. Every one confirmed red against unmodified `HEAD` source
+before being applied — baseline output quoted per fix.
+
+## M037-F18 — bill variance flags were dropped by the PO projection
+
+File: `api/app/Modules/Purchasing/Services/PurchaseOrderService.php:129` → `:140`
+
+Before:
+```php
+'bills:id,bill_number,total_amount,balance,status,purchase_order_id',
+```
+
+After (comment abridged; four columns added):
+```php
+'bills:id,bill_number,total_amount,balance,status,purchase_order_id,due_date,has_variances,three_way_overridden,three_way_match_snapshot',
+```
+
+`PurchaseOrderResource.php:97-100` reads all four. Because
+`AppServiceProvider.php:229-240` deliberately omits
+`preventAccessingMissingAttributes()`, the unselected columns read as `null`
+instead of throwing, `(bool) null` became `false`, and
+`Bill::threeWayReviewStatus()` fell through to `'matched'`.
+
+Measured before (bill row genuinely `has_variances = true`,
+`three_way_match_snapshot = {"overall_status":"blocked"}`):
+```
+[VARIANCE-FLAG] DB row: has_variances=true three_way_overridden=false snapshot={"overall_status":"blocked"} due_date=2026-09-30
+[VARIANCE-FLAG] PO show() payload bills[0]={... "due_date":null,"has_variances":false,"three_way_overridden":false,"three_way_review_status":"matched"}
+[VARIANCE-FLAG] threeWayReviewStatus() on a FULLY loaded Bill = manual_review
+[VARIANCE-FLAG] SPA chip would render: SUCCESS/Matched (truth = WARNING/Variance)
+```
+
+Measured after: payload carries `has_variances: true`,
+`three_way_overridden: false`, `due_date: "2026-09-30"`,
+`three_way_review_status: "manual_review"`.
+
+## M037-F19 — oversized money 500'd instead of 422
+
+Files: `api/app/Modules/Purchasing/Requests/StorePurchaseOrderRequest.php:58,60`
+and `api/app/Modules/Purchasing/Requests/UpdatePurchaseOrderRequest.php:47,49`
+
+Before:
+```php
+'items.*.quantity'   => ['required', 'decimal:0,2', 'min:0.01'],
+'items.*.unit_price' => ['required', 'decimal:0,2', 'min:0'],
+```
+
+After:
+```php
+'items.*.quantity'   => ['required', 'decimal:0,2', 'min:0.01', 'max:999999.99'],
+'items.*.unit_price' => ['required', 'decimal:0,2', 'min:0', 'max:9999999.99'],
+```
+
+`decimal:0,2` already refused `1.999` and `1e3` (both 422 before and after — the
+half of the sibling-module defect that was already closed here). The missing
+piece was an upper bound. `decimal(15,2)` admits 13 integer digits and the line
+total is a *product* of the two fields, so both are capped an order below the
+column ceiling.
+
+Measured before:
+```
+[MONEY unit_price=1.999]              status=422  (correct)
+[MONEY unit_price=1e3]                status=422  (correct)
+[MONEY unit_price=100000000000000000] status=500 SQLSTATE[22003]: Numeric value out of range ... numeric field overflow
+[MONEY unit_price=999999999999999.99] status=500 SQLSTATE[22003]
+[MONEY quantity=100000000000000000]   status=500 SQLSTATE[22003]
+```
+Measured after: all three overflow cases 422 with the correct field key;
+`unit_price = 9999999.99` still posts 201.
+
+## M037-F20 — raw integer primary keys in error bodies
+
+File: `api/app/Modules/Purchasing/Services/PurchaseOrderService.php:263,273,432`
+
+Before / after:
+```php
+- "PR line {$line->id} has no vendor assignment."
++ 'PR line "'.($line->description ?? 'unnamed').'" has no vendor assignment.'
+
+- "PR line {$line->id} has no authoritative unit price."
++ 'PR line "'.($line->description ?? 'unnamed').'" has no authoritative unit price.'
+
+- "Vendor has no approved PPAP for item #{$line->item_id}. …"
++ $label = $line->item?->code ?? $line->description ?? 'unnamed item';
++ "Vendor has no approved PPAP for item {$label}. …"
+```
+The PPAP loop now eager-loads `item:id,code,name` so the label costs no N+1.
+
+Measured before, from the conversion path:
+`Expected: PR line 1 has no vendor assignment.`
+Measured after: `PR line "Polypropylene resin" has no vendor assignment.`, and a
+`/\bline \d+\b/` assertion confirms no bare PK remains.
+
+## M037-F21 — cancelling an already-cancelled PO succeeded
+
+File: `api/app/Modules/Purchasing/Services/PurchaseOrderService.php:611-613`
+
+Added after the received/closed guard:
+```php
+if ($row->status === PurchaseOrderStatus::Cancelled) {
+    throw new BusinessRuleException('This purchase order is already cancelled.');
+}
+```
+
+Measured before: three consecutive `cancel()` calls all succeeded, each
+appending another `Cancelled: <reason>` block to `remarks`, re-running
+`supplierDispatches->cancelForPurchaseOrder()` and
+`reopenSourcePrIfLastLink()`, and recording another `PurchaseOrderCancelled`
+message on the `p2p` outbox — one logical cancellation published repeatedly.
+Measured after: the second call raises `BusinessRuleException` and `remarks` is
+byte-identical to its post-first-cancellation value.
+
+---
+
+## Regression test
+
+`api/tests/Feature/Purchasing/PurchaseOrderAuditHardeningTest.php` — 4 tests,
+27 assertions. **Confirmed red against unmodified HEAD**: the three production
+files were replaced with their `git show HEAD:` extracts and the suite re-run.
+
+```
+⨯ bill variance flags survive the purchase order projection
+⨯ oversized money is a validation error not a database overflow
+⨯ cancelling an already cancelled purchase order is refused
+⨯ conversion errors do not leak raw primary keys
+  Failed asserting that false is identical to true.
+  Expected response status code [422] but received 500.
+  Failed asserting that two strings are identical.
+  Expected: PR line 1 has no vendor assignment.
+  Tests: 4 failed (5 assertions)
+```
+
+All four go red, one per fix — none is a pass-either-way regression lock. The
+fixes were then re-applied and the restoration proven byte-identical to the
+tested state:
+```
+$ sha256sum -c /tmp/m037base/after.sha256
+app/Modules/Purchasing/Services/PurchaseOrderService.php: OK
+app/Modules/Purchasing/Requests/StorePurchaseOrderRequest.php: OK
+app/Modules/Purchasing/Requests/UpdatePurchaseOrderRequest.php: OK
+```
+Re-run after restore: `Tests: 4 passed (27 assertions)`.
+
+## Verification
+
+- `php -l` — clean on all four files.
+- `./vendor/bin/phpstan analyse <4 paths> --memory-limit=1G` — **`[OK] No errors`**.
+- `./vendor/bin/pint --test` — the three production files fail. **Inheritance
+  proven**: their `git show HEAD:` extracts were written to `/tmp/pintbase` with
+  the repo's `pint.json` and produce byte-identical fixer lists —
+  `PurchaseOrderService.php`: `fully_qualified_strict_types, control_structure_braces,
+  unary_operator_spaces, braces_position, statement_indentation,
+  not_operator_with_successor_space, single_line_empty_body,
+  blank_line_before_statement, ordered_imports, binary_operator_spaces,
+  phpdoc_align`; both Requests: `ordered_imports, binary_operator_spaces`.
+  Pre-existing, not introduced. Not touched. The one file I authored,
+  `PurchaseOrderAuditHardeningTest.php`, had genuinely new violations and now
+  reports `{"tool":"pint","result":"passed"}`.
+- `php artisan test tests/Feature/Purchasing` — **145 passed, 1 failed**; the
+  failure was my own scratch probe deliberately triple-cancelling a PO, which the
+  F21 guard now correctly refuses. That probe has been deleted. No pre-existing
+  Purchasing test regressed.
+- `php artisan test tests/Feature/Accounting/AccountsPayableHardeningTest.php
+  tests/Feature/B2B` — **150 passed, 1 failed**. The failure is the known AP
+  defect at `AccountsPayableHardeningTest.php:229`
+  (`assertArrayNotHasKey('payments', $data)` on `SupplierBillResource`), now
+  confirmed by a fourth session. `git diff --name-only HEAD` returns nothing
+  under `Accounting`, so it is not attributable to this session. Not fixed —
+  it belongs to AP.
+- Scratch probes deleted; `ogami_test_po` dropped.
+
+## Deferred, with reasons
+
+| item | why not now |
+|---|---|
+| F17 row scope (a) breadth + (b) `show`/`pdf` unscoped | (a) is a human decision about who may see what — options written up in the action plan, not acted on. (b) is a real authorization gap but the fix shape depends on (a)'s answer. |
+| Two ₱50,000 thresholds, one inert | Choosing which governs changes **who may approve**. Explicitly out of bounds. |
+| `AVG(unit_cost)` GRN cost basis (F22) | One line, but it moves the variance gate in both directions, i.e. changes whether a supplier is paid without review. |
+| Stranded `partially_received` PO (F24) | The missing transition writes off an outstanding purchase commitment; needs a permission and an approval policy. |
+| No header↔lines DB guard | Unreachable via the API (both write paths recompute; measured exact). Needs a trigger, not a CHECK. Disproportionate today. |
+| SPA money floats, PO edit surface, HashID the 3WM response, duplicate-`item_id` keying | Medium-scope work, no decision needed; several cross into Accounting/SPA files outside this module. |
+| `purchasing.open_pos` counts archived POs; GRN raw-PK error message | Dashboard and Inventory modules. Reported, not touched. |
+| F09 / F11 / F16 from 2026-08-25 | Unchanged and still open questions; none re-opened by this session's measurements. |
+
+Final status: `🔁 Needs Re-audit` — four contained defects fixed and verified;
+the remaining plan is gated on decisions this session is not entitled to make.

@@ -40,9 +40,13 @@ class UpdatePurchaseOrderRequest extends FormRequest
             'items.*.item_id'        => ['required_with:items', 'integer', 'exists:items,id'],
             'items.*.purchase_request_item_id' => ['nullable', 'integer', 'exists:purchase_request_items,id'],
             'items.*.description'    => ['required_with:items', 'string', 'min:2', 'max:200'],
-            'items.*.quantity'       => ['required_with:items', 'decimal:0,2', 'min:0.01'],
+            // Bounds must match StorePurchaseOrderRequest: update() re-runs
+            // normalizeLines() and rewrites the same decimal(15,2) columns, so an
+            // unbounded amend reached PostgreSQL as SQLSTATE[22003] / 500 exactly
+            // as create did.
+            'items.*.quantity'       => ['required_with:items', 'decimal:0,2', 'min:0.01', 'max:999999.99'],
             'items.*.unit'           => ['nullable', 'string', 'max:20'],
-            'items.*.unit_price'     => ['required_with:items', 'decimal:0,2', 'min:0'],
+            'items.*.unit_price'     => ['required_with:items', 'decimal:0,2', 'min:0', 'max:9999999.99'],
         ];
     }
 }
