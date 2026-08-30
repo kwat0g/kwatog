@@ -30,6 +30,7 @@ Rules the coordinator holds and agents never touch:
 - **P0 CROSS-MODULE, needs an owner: `App\Modules\HR\Services\UserProvisioningService::deactivateForEmployee()` (`:82-104`) has NO last-admin guard**, across 4 call paths — one of them the *unattended* clearance listener (`DeactivateAccountOnClearanceComplete.php:54`). Measured from M003: an `hr_officer` deactivation returned 204 and left **0 active administrators**. M003 correctly refused to fix another module's file, and notes it wants a *shared* guard rather than a copied one. Assign with `people/employee-master` (M014) or `people/onboarding` (M015), whichever owns that service.
 - `api/tests/Feature/Accounting/AccountingPeriodDuplicateRecoveryTest.php:39` calls `DB::commit()` with no `RefreshDatabaseState::$migrated` reset — same class of suite-poisoning defect M003 just fixed in `RbacConcurrencyTest`. Accounting's to own.
 - **CROSS-MODULE, needs an owner: the supplier portal writes its bearer token to `sessionStorage`** (`spa/src/api/b2b/client.ts:14-38`), which CLAUDE.md forbids outright ("NEVER store auth in localStorage/sessionStorage"). The fix is to flip the `supplier_portal` guard from `sanctum` to `session` as `customer_portal` already is — so it spans B2B + auth config, and `supply-chain/supplier-portal` has already released. Needs re-assignment.
+- **Decision #12's blast radius is now measured in four modules** — Assets (0 of 36 depreciation JEs had a maker), AR (every AR posting), Payroll (every payroll JE), GL itself (9 of 11 reference types pass a real user and have it discarded). Because `posted_by` gets the same user, `assertNotSelfPosting()` early-returns, so the JE maker-checker guard is **inert system-wide on automated postings**. This is ONE control, not four findings. `PayrollMoneyFindingsRegressionTest:208` is deliberately left RED asserting it.
 - **Sanctum abilities are not enforced anywhere on the supplier portal** — tokens mint with no ability list (defaults `['*']`) and no route uses the `ability` middleware. That is "no abilities model", not "attached but unenforced".
 
 
@@ -65,7 +66,7 @@ existing `fix-log.md` / `git diff` before trusting its status.
 | 4 | 2 | M028 | finance/accounts-receivable | done |
 | 5 | 2 | M032 | commercial/customer-product-pricing | done |
 | 6 | 2 | M020 | people/loans-cash-advances | done |
-| 7 | 2 | M021 | people/payroll-period-processing | **in flight** (hold lifted — M026 released) |
+| 7 | 2 | M021 | people/payroll-period-processing | done |
 | 8 | 2 | M023 | people/separation-final-pay | done |
 | 9 | 3 | M037 | procurement/purchase-orders | **in flight** |
 | 10 | 3 | M038 | procurement/supplier-performance | queued — HOLD while M037 purchase-orders is in flight; both live in api/app/Modules/Purchasing/ |
@@ -76,7 +77,7 @@ existing `fix-log.md` / `git diff` before trusting its status.
 | 15 | 3 | M057 | quality/ncr-capa | queued |
 | 16 | 3 | M054 | quality/material-review-board | queued |
 | 17 | 3 | M058 | quality/traceability-ppap | queued |
-| 18 | 3 | M051 | manufacturing/production-work-orders | queued |
+| 18 | 3 | M051 | manufacturing/production-work-orders | **in flight** (out of order — Purchasing + Quality dirs both occupied) |
 | 19 | 3 | M050 | manufacturing/capacity-scheduling | queued |
 | 20 | 3 | M053 | manufacturing/maintenance-machine-health | queued |
 | 21 | 3 | M048 | manufacturing/demand-forecasting | queued |
@@ -120,9 +121,9 @@ fresh discovery pass.
 
 | ID | Module | Launched |
 |---|---|---|
-| M021 | people/payroll-period-processing | 2026-08-30 |
 | M037 | procurement/purchase-orders | 2026-08-30 |
 | M056 | quality/inspections-certificates | 2026-08-30 |
+| M051 | manufacturing/production-work-orders | 2026-08-30 |
 
 ## Completed this pipeline
 
@@ -141,6 +142,7 @@ fresh discovery pass.
 | M020 | people/loans-cash-advances | 🔁 Needs Re-audit | No company loan can EVER be disbursed (workflow step 2 role holds no `loans.*`). A borrower can never be separated. 4 contained fixes. |
 | M028 | finance/accounts-receivable | 🔁 Needs Re-audit | Statement reported ₱800/₱800/₱500 for the SAME rows; two credit notes drove GL AR to −₱1,000; 12% VAT charged on a VAT-exempt invoice. 3 fixed (all 500s), 7 of 9 new tests red at HEAD. No AR payment void exists at all. |
 | M023 | people/separation-final-pay | 🔁 Needs Re-audit | **Prior 4 sessions never measured anything** — their verification came from a shared DB reporting "34 failures / 0 assertions". All 13 findings reproduced, +5 new. 13th month and last salary each paid TWICE; leave conversion uncapped and never debited. 6 contained fixes, 10 of 12 tests red at HEAD. |
+| M021 | people/payroll-period-processing | 🔁 Needs Re-audit | Loan over-deduction mechanism identified: an as-of `reconcileAggregates` cut drops ledger rows dated after `payroll_date`, taking the ledger to ₱14,000 on ₱12,000 owed. Anomaly gate **fails OPEN** — a bad setting yields zero flags and approve+finalize both succeed. 4 fixed, 8 of 14 tests red at HEAD. |
 | M001 | platform/auth-session | 🔁 Needs Re-audit | Idle session timeout was opt-out via a client-supplied `Authorization` header — fixed. Login + reset timing oracles and an ip\|email-keyed limiter deferred (locking out 200+ employees is the failure mode). 59-row control checklist in audit-report.md. |
 
 
