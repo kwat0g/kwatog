@@ -149,3 +149,115 @@ Acceptance: the module has runnable regression evidence for every P0/P1 item and
 - SPA browser tests for queue defaults, output/product selectors, dirty completion, manual/numeric rows, notes, accessibility, and role guards.
 - `npm run audit:tokens`, `npm run audit:rbac`, SPA typecheck, PHP syntax checks, and migration checks on a fresh database plus representative existing data.
 - Regenerate the registry and release only after all P0/P1 items and their evidence gaps are closed.
+
+---
+
+# Action plan — 2026-08-30 re-audit
+
+**Release status:** ✅ Verified for the certificate/evidence surface; the
+remainder is gated and re-queued.
+
+The four items marked ✅ below were implemented and committed in this session
+(`8d126a1f`). Everything else is ordered for a follow-up. Items 5–7 are gated on
+a **human or cross-module decision**, not on effort — per the audit protocol, a
+sampling plan, an acceptance number, a tolerance, or the meaning of a quality
+record is an IATF-auditable decision and is not an audit session's to make.
+
+## Done this session
+
+### ✅ 1. Bind the Certificate of Conformance to its evidence — IC-12
+Scope **small** · `same-session-ok` · P0
+`CoCService::assertEvidenceSupportsCertificate()`. Four typed refusals: no
+evidence, unresolved rows, evidence contradicting the verdict, fewer sampled
+units than declared. Locked by `CoCEvidenceIntegrityTest` (6 of 7 red at HEAD).
+
+### ✅ 2. Make certificate re-issue idempotent — IC-13
+Scope **small** · `same-session-ok` · P1
+One certificate number now maps to one vault document, and the `GET /coc`
+endpoint no longer writes on every call.
+
+### ✅ 3. Bound `measured_value` validation — IC-14
+Scope **small** · `same-session-ok` · P2
+`decimal:0,4` + `between`. Ends silent rounding of the operator's reading and
+three 500-class overflows.
+
+### ✅ 4. Make completion safe with local SPA edits, and label the inputs — IC-07, IC-10
+Scope **small** · `same-session-ok` · P1 / P3
+Complete is gated on `dirtyCount` with an explanatory `title`; drafts clear on
+save success; every measurement input has a unique accessible name.
+
+## Gated on a human decision — do not implement unilaterally
+
+### 5. Define what an AQL defect counts — IC-02
+Scope **medium** (implementation) · `separate-recommended` · P1
+**Question, not a bug.** The sampling table, the arrow rule, the lot clamp and
+both Ac/Re boundaries are now measured correct. What is undefined is whether a
+defect is a failed *sampled unit* or a failed *parameter row*; today it is the
+latter, so one unit failing two parameters counts twice against an Ac defined
+per unit. Needs a quality-engineering ruling first, then implement the aggregate
+at the same level as Ac and keep `defect_count`, NCR severity and CoC
+consistent with it.
+
+### 6. Decide whether issuing a CoC is a read — IC-20
+Scope **small** (implementation) · `separate-recommended` · P1
+`quality.inspections.view` currently lets `production_manager` — the role
+producing the goods — issue the conformance certificate for its own output.
+Either that is intended customer-facing convenience, or the route moves to a
+dedicated `quality.coc.issue` slug. Separation-of-duties call for a human.
+
+### 7. Decide what the lightweight incoming path claims — IC-17
+Scope **small** · `separate-recommended` · P2
+`createIncomingForItem()` writes `sample_size=32, aql_code=G` and scaffolds one
+verdict row. Either stop asserting an AQL sample on that path, or scaffold it.
+Both change what the record means.
+
+## Ordered engineering work
+
+### 8. Make a completed quality record immutable — IC-15
+Scope **large** · `separate-recommended` · P1
+The highest-value item left. Follow the `journal-ledger` precedent: an observer
+**plus** a PostgreSQL trigger raising `P0001`, covering update, soft-delete,
+force-delete and measurement-row mutation once an inspection is terminal. Also
+remove `'status'` from `Inspection::$fillable` (the three service `create()`
+calls move to `forceFill`), and add soft deletes with a `->withTrashed()`
+restore route if retention requires one. Migration must be
+`2026_MM_DD_HHMMSS_*`, not `0NNN_`: it depends on
+`2026_08_25_200000_add_inspection_integrity_checks`, and every `0NNN_` runs
+before every `2026_*`.
+
+### 9. Gate the work order on its in-process inspection — IC-16
+Scope **medium** · `separate-recommended` · P1 · **owner: Production**
+No gate exists at all. Report only; the fix is not this module's file.
+
+### 10. Replace the outgoing no-spec fallback with a recoverable path — IC-03
+Scope **large** · `separate-recommended` · P1
+Prior plan item 2, now confirmed by measurement: the fallback row is
+uncompletable *and* unrepairable. Unchanged otherwise.
+
+### 11. Resolve the decimal received-quantity contract — IC-01
+Scope **large** · `separate-recommended` · P1 · needs Inventory
+Prior plan item 1, still open, still decision-dependent.
+
+### 12. Finish the decimal-as-string contract — IC-18
+Scope **medium** · `separate-recommended` · P2
+`InspectionMeasurementResource` returns decimals as JSON floats and
+`evaluate()` compares as floats. **Latent, not live** — no wrong verdict is
+reachable at `decimal(12,4)`. Fix all three sides together (resource, SPA type,
+tolerance bar) or none; an `AUDIT NOTE` in `detail.tsx` marks the half-migration
+I deliberately backed out.
+
+### 13. Remaining prior items, unchanged
+IC-04 (stage/entity provenance, large), IC-05 (cross-row DB checks — partly
+subsumed by item 8), IC-06 (full-sample workload ceiling, large), IC-09
+(paginated selectors, medium), IC-11 (browser coverage, medium). IC-04, IC-06
+and IC-09 were **not re-measured** this session.
+
+### 14. Polish
+IC-08 draft-queue default (product decision); drop the unused
+`quality.inspections.create` / `.edit` permission slugs; give the
+`app.debug=false` 404 a message.
+
+## Shared-service items — report, do not fix here
+`HashIdFilter::decode` accepting raw integers in production; the
+`document_sequences` create race; the `CocAutoAttachOnConfirmTest` fixture
+(SupplyChain owner).
