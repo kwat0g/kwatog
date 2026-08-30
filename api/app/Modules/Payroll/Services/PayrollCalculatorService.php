@@ -722,21 +722,28 @@ class PayrollCalculatorService
      *
      *   monthly       → basic_monthly_salary
      *   semi_monthly  → semi_monthly_rate × 2
+     *
+     * Delegates to Employee::monthlyEquivalentSalary() rather than re-deriving
+     * it. CLAUDE.md names that method as the ONE place the two pay types are
+     * reconciled; this method used to hold a byte-identical second copy of the
+     * same rule, which is the drift hazard the single-definition rule exists to
+     * prevent — the calculator could start disagreeing with loan limits, final
+     * pay, leave encashment and the scope preview after a one-line edit to
+     * either copy. Only the payroll-specific "no authoritative figure" error
+     * messages stay here, because the accessor deliberately returns null and
+     * leaves that decision to its caller.
      */
     private function monthlyBasis(Employee $employee, string $payType): string
     {
-        if ($payType === PayType::SemiMonthly->value) {
-            if ($employee->semi_monthly_rate === null) {
-                throw new BusinessRuleException("Employee {$employee->employee_no} has no semi-monthly rate for payroll calculation.");
-            }
-            return Money::mul((string) $employee->semi_monthly_rate, '2');
+        $monthly = $employee->monthlyEquivalentSalary();
+
+        if ($monthly === null) {
+            throw new BusinessRuleException($payType === PayType::SemiMonthly->value
+                ? "Employee {$employee->employee_no} has no semi-monthly rate for payroll calculation."
+                : "Employee {$employee->employee_no} has no monthly salary for payroll calculation.");
         }
 
-        if ($employee->basic_monthly_salary === null) {
-            throw new BusinessRuleException("Employee {$employee->employee_no} has no monthly salary for payroll calculation.");
-        }
-
-        return (string) $employee->basic_monthly_salary;
+        return $monthly;
     }
 
     /**

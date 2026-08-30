@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Payroll\Services;
 
+use App\Common\Support\Money;
 use App\Modules\HR\Models\Employee;
 use Illuminate\Support\Facades\DB;
 
@@ -28,10 +29,18 @@ class BirAlphalistService
      * We load Employee models via Eloquent so the cast decrypts TIN automatically.
      * Do NOT use pgcrypto — that is a separate mechanism.
      *
+     * Money stays a decimal STRING end to end. It used to pass through
+     * round((float) …) and `taxable_income` was computed as a float subtraction
+     * of two float-cast sums, which is money arithmetic in binary floating point
+     * inside a filed tax return: at company-wide annual totals the sum can land
+     * a cent away from the payroll rows it is meant to report, and the resulting
+     * 2316 disagrees with the ledger with nothing to explain the difference.
+     * decimal(15,2) exists precisely to prevent that.
+     *
      * @return array<int, array{
      *   tin: string, last_name: string, first_name: string, middle_name: string,
-     *   employee_no: string, total_gross: float, total_deductions: float,
-     *   taxable_income: float, total_withheld_tax: float
+     *   employee_no: string, total_gross: string, total_deductions: string,
+     *   taxable_income: string, total_withheld_tax: string
      * }>
      */
     public function generate(int $year): array
@@ -72,17 +81,26 @@ class BirAlphalistService
             ->get()
             ->keyBy('id');
 
-        return $rows->map(fn ($r) => [
-            'tin'                => (string) ($employees[$r->employee_id]?->tin ?? ''),
-            'last_name'          => strtoupper((string) $r->last_name),
-            'first_name'         => strtoupper((string) $r->first_name),
-            'middle_name'        => strtoupper((string) $r->middle_name),
-            'employee_no'        => (string) $r->employee_no,
-            'total_gross'        => round((float) $r->total_gross, 2),
-            'total_deductions'   => round((float) $r->total_deductions, 2),
-            'taxable_income'     => round(max(0.0, (float) $r->total_gross - (float) $r->total_deductions), 2),
-            'total_withheld_tax' => round((float) $r->total_withheld_tax, 2),
-        ])->toArray();
+        return $rows->map(function ($r) use ($employees): array {
+            $gross = Money::round2((string) $r->total_gross);
+            $deductions = Money::round2((string) $r->total_deductions);
+            $taxable = Money::sub($gross, $deductions);
+            if (Money::lt($taxable, '0')) {
+                $taxable = Money::zero();
+            }
+
+            return [
+                'tin'                => (string) ($employees[$r->employee_id]?->tin ?? ''),
+                'last_name'          => strtoupper((string) $r->last_name),
+                'first_name'         => strtoupper((string) $r->first_name),
+                'middle_name'        => strtoupper((string) $r->middle_name),
+                'employee_no'        => (string) $r->employee_no,
+                'total_gross'        => $gross,
+                'total_deductions'   => $deductions,
+                'taxable_income'     => $taxable,
+                'total_withheld_tax' => Money::round2((string) $r->total_withheld_tax),
+            ];
+        })->toArray();
     }
 
     /**
@@ -90,8 +108,8 @@ class BirAlphalistService
      *
      * @param array<int, array{
      *   tin: string, last_name: string, first_name: string, middle_name: string,
-     *   employee_no: string, total_gross: float, total_deductions: float,
-     *   taxable_income: float, total_withheld_tax: float
+     *   employee_no: string, total_gross: string, total_deductions: string,
+     *   taxable_income: string, total_withheld_tax: string
      * }> $data
      */
     public function toCsv(array $data): string
@@ -109,10 +127,12 @@ class BirAlphalistService
                 '"'.str_replace('"', '""', (string) $row['first_name']).'"',
                 '"'.str_replace('"', '""', (string) $row['middle_name']).'"',
                 '"'.str_replace('"', '""', (string) $row['employee_no']).'"',
-                number_format($row['total_gross'], 2, '.', ''),
-                number_format($row['total_deductions'], 2, '.', ''),
-                number_format($row['taxable_income'], 2, '.', ''),
-                number_format($row['total_withheld_tax'], 2, '.', ''),
+                // Money::round2 already fixes the scale at 2, so the filed figure
+                // is the persisted decimal verbatim — no float round-trip.
+                Money::round2((string) $row['total_gross']),
+                Money::round2((string) $row['total_deductions']),
+                Money::round2((string) $row['taxable_income']),
+                Money::round2((string) $row['total_withheld_tax']),
             ]);
         }
 

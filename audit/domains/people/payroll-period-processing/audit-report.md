@@ -114,3 +114,246 @@ Action: keep money as decimal strings through response DTOs and artifact builder
 ## Release decision
 
 No production-code fixes were applied. The majority of findings require migrations, transaction/locking changes, financial policy decisions, permission changes, or new concurrency/publication tests. Applying only the smaller float, UI, or query improvements would leave the primary financial-integrity risks unresolved. M021 is released as 📋 Plan Ready with the ordered action plan below.
+
+---
+
+# Re-audit — 2026-08-30
+
+Audit date: 2026-08-30
+Status: 🔁 Needs Re-audit
+Release recommendation: three contained fixes applied in-session; the loan
+over-deduction defect and the anomaly-gate fail-open are handed off.
+
+## What the reclaimed session left behind
+
+The lock was an orphan stamped `2026-08-25T11:51:43Z` by
+`codex-coordinator-blocker-quarantine`, 108h old. It was **completed work, not
+abandonment**, matching the pattern seen in `user-administration`, `auth-session`,
+`journal-ledger` and `loans-cash-advances`:
+
+- `fix-log.md` was fully written (the "2026-08-25 implementation session" section).
+- Every claimed fix is **committed** — swept into `167de85e`. Verified by probe,
+  not by reading the log: `DisbursementEvidenceService.php` exists and enforces
+  exact evidence reconciliation (`:99-133`), `2026_08_25_140000_add_artifact_key_to_bank_file_records.php`
+  and `2026_08_25_141000_add_unique_government_schedule_key.php` are on disk,
+  `PayrollCalculatorService::deMinimisTaxableExcess()` now throws instead of
+  returning `0.00` (`:788-807`), `applyApprovedAdjustments()` holds
+  `orderBy('id')->lockForUpdate()` (`:980-989`), and the separate
+  `payroll.adjustments.{view,approve,reject}` permissions are enforced in
+  `routes.php:112-118`.
+- The working tree held **no uncommitted payroll change** at claim time.
+
+Of the nine findings the 2026-08-24 report raised, **none of F01–F05, F07 or the
+decimal half of F09 still reproduce**. F06 (statutory-import completeness
+metadata) and F08 (bank-file population/lock) remain open exactly as the prior
+fix-log states. Two NEW Broken findings and several Incomplete/Polish items are
+recorded below.
+
+## Baseline before any change this session
+
+`tests/Feature/Payroll` on a private database (`ogami_test_payroll`):
+**268 passed, 1 failed, 790 assertions, 269.83s.**
+
+The one failure is a pre-existing cross-module blocker, unchanged from the prior
+session's note:
+
+```
+FAILED PayrollMoneyFindingsRegressionTest > p02 01 payroll je has actor and audit row
+Payroll JE must record who created it.
+Failed asserting that null is not null.
+  at tests/Feature/Payroll/PayrollMoneyFindingsRegressionTest.php:208
+```
+
+This is shared Accounting decision #12 and is **not this module's to decide** —
+see "Cross-module consequences" below. Not fixed, not worked around.
+
+## Broken
+
+### M021-F10 — P0, Broken: a payroll run can over-deduct a loan past what is owed
+
+`PayrollCalculatorService::applyLoanDeductions()` clamps the deduction on the
+**denormalized** `employee_loans.balance` column
+(`api/app/Modules/Payroll/Services/PayrollCalculatorService.php:867-869`) and then
+rebuilds that same column with
+`reconcileAggregates($loan, $period->payroll_date->toDateString())`
+(`:896-897`) — an as-of cut that **drops every ledger row dated after the payroll
+date**. A back-dated or out-of-order cutoff therefore erases later payments from
+the summary and re-opens a settled loan, and the next run clamps against the
+fabricated balance.
+
+The asymmetry is the tell: the manual path, `LoanService::recordPayment()`
+(`api/app/Modules/Loans/Services/LoanService.php:325-332`), derives its cap from
+the **ledger** (`totalDueFor - SUM(payments)`) and therefore cannot overdraw. Only
+the payroll path trusts the denormalized column.
+
+Measured against real PostgreSQL rows (zero-interest company loan, principal
+₱12,000, 12 cutoffs × ₱1,000; `now()` pinned to 2026-08-30):
+
+| step | ledger `SUM(loan_payments.amount)` | `employee_loans.balance` | `status` |
+|---|---|---|---|
+| manual ₱11,000 recorded 2026-08-30 | 11,000.00 | 1,000.00 | active |
+| April 1–15 cutoff computed (`payroll_date` 2026-04-15) | **12,000.00** (settled) | **11,000.00** | **active** |
+| two further cutoffs computed | **14,000.00** | 9,000.00 | active |
+
+`14,000.00` against a `12,000.00` total due: **₱2,000 taken that was not owed**,
+and the loan would keep paying itself down from a fabricated balance until the
+as-of cut caught up. This independently reproduces the ₱250 overdraw the
+`loans-cash-advances` session reported (R-005b) and identifies the mechanism.
+
+### M021-F11 — P1, Broken: the anomaly gate that blocks finalize fails OPEN
+
+Anomaly flags are the finalize gate (`PayrollPeriodService::finalize()` counts
+unresolved flags at `:1193-1200`). Detection runs in `ProcessPayrollJob`'s
+`finally` block inside `catch (Throwable) → Log::warning`
+(`api/app/Modules/Payroll/Jobs/ProcessPayrollJob.php:214-221`), and
+`PayrollAnomalyService::policy()` throws `BusinessRuleException` on any
+non-numeric `payroll.anomaly.*` setting (`:225-231` pre-fix). So a detector that
+threw produced **zero flags**, and a broken gate is indistinguishable from a
+clean period — the exact defect pattern CLAUDE.md documents for the 8D SLA
+escalation ledger, this time on a money gate.
+
+Measured: with `payroll.anomaly.deduction_ratio` set to `'not-a-number'`, the
+compute job completed without error, `payroll_anomaly_flags` for the period was
+**empty**, and `approve()` then `finalize()` both **succeeded** — the period
+reached Finalized with the gate silently disabled. The same period computed with
+an intact policy raised flags and would have been held.
+
+Related, and part of the same finding: neither `ThirteenthMonthService::computeAndPay()`
+nor the single-employee `PayrollController::recompute()` path runs detection at
+all, so a 13th-month period is finalized having **never** been evaluated.
+
+**Not fixed in-session.** A re-run of `detect()` inside `finalize()` was
+implemented and measured, then reverted: it broke **9 pre-existing tests** with
+`BusinessRuleException`, because it newly blocks the flows that have never been
+evaluated (13th-month and direct-compute). Closing this needs a durable
+"detection completed / failed" state on the period plus a decision on the
+13th-month path — schema plus policy. An `AUDIT NOTE` comment now marks the gate
+at `PayrollPeriodService.php:1176-1192` so the next reader does not have to
+re-derive this.
+
+### M021-F12 — P2, Broken (fixed): an unusable sort direction returned HTTP 500
+
+Both payroll list endpoints whitelisted the sort **column** and passed the
+caller's `direction` straight to `orderBy()`, which throws
+`InvalidArgumentException` on anything but `asc`/`desc`.
+`GET /api/v1/payroll-periods?sort=period_start&direction=sideways` returned
+**500** (measured). Same shape as the `docs/PATTERNS.md:262-268` bug.
+Sites: `PayrollPeriodService::list()` and `PayrollController::index()`.
+
+### M021-F13 — P2, Broken (fixed): the BIR 2316 Alphalist did money in floats
+
+`BirAlphalistService::generate()` passed every figure through
+`round((float) …)` and computed `taxable_income` as
+`max(0.0, (float) gross - (float) deductions)` — binary floating-point
+arithmetic producing a **filed tax return** figure that has to reconcile against
+the payroll rows. `toCsv()` then re-converted with `number_format(float)`.
+This is the one money surface the prior session's F09 decimal pass missed.
+
+## Incomplete
+
+- **M021-F14 — a second copy of the pay-type reconciliation (fixed).**
+  `PayrollCalculatorService::monthlyBasis()` re-derived `semi_monthly_rate × 2`
+  itself rather than calling `Employee::monthlyEquivalentSalary()`, which
+  CLAUDE.md names as the ONE place the two pay types are reconciled. The copies
+  agreed (measured: `basic_pay === monthlyEquivalentSalary() ÷ 2` for both pay
+  types, before and after), which is precisely why a divergence would have gone
+  unnoticed. A third reader remains and is legitimate:
+  `historyMonthly()` (`:706-724`) must read a `employee_salary_history` row, which
+  the model accessor cannot serve.
+
+- **M021-F15 — `recompute` is gated by a READ-scope check.**
+  `PayrollController::recompute()` (`:86-93`) authorizes with
+  `authorizePayroll()`, the same predicate used by `show()` and `payslip()`: it
+  returns early for the caller's own payroll row and for any row in a
+  `department_head`'s department. The route permission
+  (`payroll.periods.compute`) is the real control, but a mutation should not
+  share a read predicate. No seeded role reaches it, so it is latent.
+
+- **M021-F16 — five backend endpoints have no client, and one page has no route.**
+  No SPA caller exists for `POST gov-tables/{agency}/import` (`routes.php:41`),
+  `DELETE`/`PATCH restore` on `admin/gov-tables/{govTable}` (`:33`, `:35`),
+  `GET de-minimis/{deMinimisBenefit}` (`:125`), or
+  `GET payroll/statutory/sss-r3/{period}` (`:152`). Two more have an api-layer
+  method but no page caller: `GET payroll-adjustments/{adjustment}`
+  (`spa/src/api/payroll/adjustments.ts:15-16`) and `listProofs`
+  (`spa/src/api/payroll/periods.ts:99-102`). `spa/src/pages/payroll/pipeline.tsx`
+  is fully dead — nothing imports it and its only endpoint is the deliberately
+  commented-out `/payroll-periods/pipeline` (`routes.php:53-61`), which is
+  intentional scope-cut, unlike the rest.
+  Two of these matter beyond tidiness: **SSS R-3 is a statutory remittance with
+  no way to reach it**, and the **government-table CSV import that the prior
+  session hardened (F06) has no UI at all** — that hardening is currently
+  unreachable.
+
+- **M021-F17 — an over-permissive 13th-month button.**
+  `spa/src/pages/payroll/periods/index.tsx:128` computes
+  `can('payroll.thirteenth_month.run') || can('payroll.periods.create')`, while
+  the backend requires the first alone (`routes.php:67`). A create-only custom
+  role sees a live button and gets a generic
+  `toast.error('Failed to create 13th-month period.')` (`:221`) rather than a
+  permission message. Backend enforces; UX only. Unreachable with seeded roles.
+
+- **M021-F18 — a cancelled separation would still cut pay (latent).**
+  `PayrollCalculatorService::separationDate()` (`:606-619`) reads
+  `clearances.separation_date` filtering only on `deleted_at`, so it does not
+  exclude `ClearanceStatus::Cancelled`. Not currently reachable: no service or
+  route sets that status. Owned by `people/separation-final-pay`; reported, not
+  touched.
+
+## Polish
+
+- `PayrollAnomalyService::detectForPayroll()` (`:94-155`) casts money to `float`
+  for the ratio comparisons and **persists those floats** into the flag
+  `details` JSON. Diagnostics only, never an amount, but the stored figures are
+  the ones an operator reads while deciding to resolve a flag.
+- `PayrollPeriodService::variance()` (`:165`) and `pipeline()` (`:182`) use
+  `round((float) …)` for **percentages**, not money — correct as-is; noted so a
+  future grep does not re-flag them.
+- `DeMinimisBenefitResource:27` reads a money **limit** through
+  `SettingsService::requiredFloat()`. Fixing it needs a decimal accessor in
+  `App\Common`, outside this module.
+- `spa/src/types/payroll.ts:340-345` types `delta.gross/net/deductions` as
+  `number`; the backend returns decimal strings (`PayrollPeriodService.php:171-173`).
+  Nothing mis-renders today (only comparison and formatting), but the type lies
+  about the wire format.
+- `spa/src/types/payroll.ts:188` declares `PayrollDeductionDetail.reference_id`
+  as a required `number | null`, yet `PayrollDeductionDetailResource` never
+  serializes it — a non-optional field that is always `undefined` at runtime,
+  typed as a raw integer. Nothing leaks; the declaration should go.
+- `spa/src/types/payroll.ts` declares `PipelinePeriod` and `PayrollPipeline`
+  twice, byte-identical (`:305-325` and `:355-375`).
+- `PayrollController::index()` applies `scopePublishable()` unconditionally, so
+  `/payrolls?period_id=<computed period>` is empty and `/payrolls/{id}` 422s for
+  a Computed row **even for HR**. Intentional publication boundary as far as can
+  be told (the period detail page reads its rows off the period resource
+  instead), but it makes a plausible review URL look broken. Flagged as a
+  question, not a defect.
+
+## Cross-module consequences (report only — do not fix here)
+
+**Shared Accounting decision #12.** `JournalEntryService::create()` discards the
+maker on any source-linked entry:
+`'created_by' => empty($data['reference_type']) ? $user?->id : null`
+(`api/app/Modules/Accounting/Services/JournalEntryService.php:139`). Payroll always
+sets `reference_type => 'payroll_period'`
+(`PayrollGlPostingService.php:317-323`), so **every payroll GL entry carries
+`created_by = null`**. Two payroll-side consequences:
+
+1. `assertNotSelfPosting()` returns early when `created_by` is null
+   (`JournalEntryService.php:409-412`), so the JE-level self-posting guard is
+   **inert on every payroll posting**. Payroll's own maker-checker is not
+   affected: `approve()` still refuses `computed_by === approver`
+   (`PayrollPeriodService.php:972-976`).
+2. Attribution is not lost, only absent from the ledger row — it survives in
+   `payroll_periods.finalized_by` and in the `payroll.je.post` audit row whose
+   `user_id` is that same actor (`PayrollGlPostingService.php:327-343`).
+
+The consequence is a **red test inside this module** asserting the opposite of
+the shipped shared decision: `PayrollMoneyFindingsRegressionTest:208`. Left red
+deliberately. Someone owning both modules must decide whether the decision or
+the test is wrong.
+
+## Invariants executed
+
+See the table in `fix-log.md` for the probe used and the measured result for each
+of the 26 assigned invariants.

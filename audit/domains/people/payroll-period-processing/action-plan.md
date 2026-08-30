@@ -101,3 +101,148 @@ No production-code implementation is authorized for this audit session. The majo
 - Bank generation has an idempotent artifact record and read-only download path.
 - Statutory table activation is all-or-nothing, exact-decimal, versioned, and reversible.
 - Permission matrix, migrations/backfills, deployment order, worker restart, rollback, and restore evidence are documented before release.
+
+---
+
+# Action plan — re-audit 2026-08-30
+
+Status: 🔁 Needs Re-audit
+Applied this session: M021-F12, F13, F14 (all small + contained).
+Handed off: M021-F10 (P0), F11 (P1), F15–F18, plus F06/F08 carried from 2026-08-24.
+
+**Why the split.** Three items refuse impossible input or remove a duplicated
+definition without altering a single amount — those are judged on containment and
+were done. The two Broken items that remain both change what someone is paid or
+require a schema plus a policy decision, so they are gated. Fixing the contained
+three does not mask either.
+
+## 1. M021-F10 — stop the payroll loan deduction over-drawing the ledger
+
+- Classification/severity: **Broken, P0**
+- Scope: **medium**
+- Session recommendation: **separate-recommended**
+- Justification: two independent changes are needed and both alter money.
+  (a) `PayrollCalculatorService::applyLoanDeductions()` must clamp from the
+  **ledger** (`totalDue − SUM(loan_payments.amount)`) instead of the
+  denormalized `employee_loans.balance` (`:867-869`). (b) The
+  `reconcileAggregates($loan, $period->payroll_date)` as-of cut (`:896-897`) must
+  stop erasing later ledger rows from the summary. (b) cannot be done from this
+  module alone: the `$asOf` argument exists to date `end_date` when a loan
+  settles (`LoanService.php:355-383`), which is **loans' column and loans'
+  semantics** — dropping the argument silently redefines when a loan closed, and
+  `LoanService` is outside this module's boundary.
+- Measured evidence: ledger reached **₱14,000 against a ₱12,000 total due**
+  (₱2,000 over-deducted) with `balance` still claiming ₱9,000 outstanding; the
+  loan was re-opened from `paid` to `active` by a back-dated cutoff. Full table
+  in the audit report.
+- Do NOT change any amount without a joint decision with the loans owner. The
+  correct-case behaviour must be proved byte-identical first:
+  `PayrollRecomputeIntegrityTest::test_recompute_does_not_double_deduct_a_loan`
+  and `PayrollCalculatorServiceTest::test_active_loan_deducted_and_payment_recorded`
+  are the existing pins.
+- Tests required: back-dated cutoff after a later-dated manual payment; recompute
+  of an earlier period after a later one; the invariant
+  `balance + SUM(payments) == total_due` asserted after **every** payroll write;
+  `SUM(payments) <= total_due` as a hard ceiling; a partial final instalment;
+  a cash-advance (full-amortization) loan; and the untouched forward-order case
+  proved unchanged.
+- Related, in loans' own scope: the per-cutoff double-deduction guard
+  `loan_payments_payroll_deduction_unique` is a row-pair unique on
+  `(loan_id, payroll_id) WHERE payment_type = 'payroll_deduction'`
+  (`2026_08_13_212000_add_loan_payroll_payment_idempotency.php:29-33`). Confirmed:
+  the payroll path does default to `payroll_deduction`, so the index does cover
+  it — but a second payroll row for the same cutoff has a different `payroll_id`,
+  so only `payroll_cycle_claims` stops that, not this index.
+
+## 2. M021-F11 — make the anomaly gate fail closed
+
+- Classification/severity: **Broken, P1**
+- Scope: **medium**
+- Session recommendation: **separate-recommended**
+- Justification: it *sounds* like a guard that only refuses, which would be
+  contained — but it is not, and this was measured rather than assumed. Re-running
+  `detect()` inside `finalize()` was implemented and **broke 9 pre-existing
+  tests**, because it newly blocks flows that have never been evaluated at all:
+  `ThirteenthMonthService::computeAndPay()` and `PayrollController::recompute()`
+  do not run detection. Closing it properly needs a durable "detection completed
+  / failed at run N" state on `payroll_periods` (migration) plus a policy
+  decision on whether a 13th-month period must be anomaly-screened before it can
+  be finalized. That is a schema and a policy change, not a guard.
+- Measured evidence: with `payroll.anomaly.deduction_ratio = 'not-a-number'` the
+  compute job completed clean, zero flags were written, and `approve()` +
+  `finalize()` both succeeded.
+- Migration naming: `payroll_periods` is altered by several `2026_*` timestamped
+  migrations (`2026_08_25_*` among them), so a column added here **must be
+  timestamp-named and dated after** whatever it depends on. Confirm with
+  `grep -rln 'payroll_periods' api/database/migrations | sort | tail -1` before
+  choosing a name. A `0NNN_` prefix would run before every `2026_*` file.
+- Partially done: `PayrollAnomalyService::flag()` no longer swallows a
+  non-unique-violation write failure (`:161-206`) — the detector's own failure
+  path can no longer hide its failure. The *caller's* swallow
+  (`ProcessPayrollJob.php:214-221`) and the gate itself are untouched.
+- Tests required: invalid policy setting; a detector write failure; a 13th-month
+  period; single-employee recompute; a legitimately clean period must still
+  finalize; and an operator's resolved flags must survive re-detection.
+
+## 3. M021-F06 — statutory-import completeness metadata (carried from 2026-08-24)
+
+- Classification/severity: Incomplete, P1
+- Scope: medium
+- Session recommendation: **separate-recommended** — still needs the statutory
+  owner to define expected bracket coverage and version ownership.
+- New information: the import endpoint it hardens
+  (`POST gov-tables/{agency}/import`) has **no SPA client at all** (M021-F16), so
+  the hardening is currently unreachable. Sequence the UI with this item or the
+  work stays invisible.
+
+## 4. M021-F08 — bank-file population and lock duration (carried from 2026-08-24)
+
+- Classification/severity: Incomplete, P2
+- Scope: medium/large
+- Session recommendation: **separate-recommended** — unchanged; needs a
+  large-population load run before the transaction boundary moves.
+
+## 5. M021-F16 — reconcile the dead surfaces in both directions
+
+- Classification/severity: Incomplete (Missing, for SSS R-3), P2
+- Scope: medium
+- Session recommendation: **separate-recommended** — it is SPA feature work
+  (a gov-table import screen, a delete/restore affordance, an SSS R-3 export
+  card), not a repair. Decide per endpoint whether to build the client or remove
+  the route; do not leave a statutory export unreachable.
+- Priority within it: **SSS R-3** (a statutory remittance with no UI) and the
+  **gov-table CSV import** (blocks item 3) first.
+
+## 6. M021-F15 — give `recompute` its own authorization predicate
+
+- Classification/severity: Incomplete, P2
+- Scope: **small**
+- Session recommendation: **separate-recommended** (narrowly)
+- Justification: the change itself is a few lines, but it narrows who may mutate
+  payroll. It needs the role/permission matrix decided and
+  `tests/Feature/Security/PayrollAuthorizationTest.php` extended, and no seeded
+  role reaches the hole today — so it is not worth landing beside a money fix
+  where a mistake is expensive.
+
+## 7. M021-F17 / F18 and the Polish list
+
+- Classification/severity: Incomplete + Polish, P3
+- Scope: **small** each
+- Session recommendation: **same-session-ok**, as one tidy-up batch
+- Contents: drop the `|| can('payroll.periods.create')` fallback on the
+  13th-month button; exclude `ClearanceStatus::Cancelled` in
+  `separationDate()` (**coordinate with `people/separation-final-pay` — that
+  session owns the clearance lifecycle**); retype `delta.*` as decimal strings;
+  delete `PayrollDeductionDetail.reference_id` from the SPA types; de-duplicate
+  `PipelinePeriod`/`PayrollPipeline`; keep money out of the anomaly `details`
+  JSON.
+- Not batched with anything above: none of it touches an amount, but F18 crosses
+  a module line and must be handed to its owner rather than edited here.
+
+## Question for a human
+
+`PayrollController::index()` applies `scopePublishable()` to **every** caller, so
+a Computed period's rows are invisible on `/payrolls` and `/payrolls/{id}` returns
+422 even for HR. Is that the intended publication boundary (the period detail page
+reads its rows off the period resource, so nothing is broken in the UI), or should
+holders of `payroll.payslip.view_all` see pre-finalization rows there? Not changed.

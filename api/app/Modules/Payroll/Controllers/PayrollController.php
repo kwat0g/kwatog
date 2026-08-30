@@ -65,7 +65,10 @@ class PayrollController
         }
 
         $sort = $request->query('sort', 'created_at');
-        $dir  = $request->query('direction', 'desc');
+        // Same hole as the periods list: the column was whitelisted but the
+        // direction was passed straight to orderBy(), which throws
+        // InvalidArgumentException on anything but asc/desc — a 500, not a 422.
+        $dir = strtolower((string) $request->query('direction', 'desc')) === 'asc' ? 'asc' : 'desc';
         $allowed = ['created_at', 'gross_pay', 'net_pay', 'employee_id'];
         if (in_array($sort, $allowed, true)) {
             $query->orderBy($sort, $dir);

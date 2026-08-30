@@ -11,6 +11,7 @@ use App\Modules\Payroll\Enums\PayrollAnomalyType;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollAnomalyFlag;
 use App\Modules\Payroll\Models\PayrollPeriod;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -170,15 +171,37 @@ class PayrollAnomalyService
                 'details'           => $details,
                 'is_resolved'       => false,
             ]);
+
             return $row->wasRecentlyCreated ? 1 : 0;
-        } catch (\Throwable $e) {
-            Log::warning('PayrollAnomalyService: flag failed', [
+        } catch (QueryException $e) {
+            // A concurrent detector inserting the same (payroll_id, flag_type)
+            // is the ONE benign failure here: the flag it raced us to write is
+            // the flag we wanted, so the row exists either way.
+            //
+            // Anything else — a missing column, a bad FK, a dead connection —
+            // must NOT be swallowed. These flags are the gate finalize() reads,
+            // so a detector that silently wrote nothing reads as a clean period.
+            // A guard whose failure path hides its own failure is the defect
+            // pattern CLAUDE.md calls out; the caller is responsible for
+            // deciding what an unevaluable gate means.
+            if (! $this->isUniqueViolation($e)) {
+                throw $e;
+            }
+
+            Log::info('PayrollAnomalyService: flag already raised by a concurrent detector', [
                 'payroll_id' => $payroll->id,
                 'type'       => $type->value,
-                'error'      => $e->getMessage(),
             ]);
+
             return 0;
         }
+    }
+
+    private function isUniqueViolation(QueryException $e): bool
+    {
+        // PG: SQLSTATE 23505. SQLite (test fallback): 23000 with a message.
+        return in_array((string) $e->getCode(), ['23505', '23000'], true)
+            || str_contains(strtolower($e->getMessage()), 'unique');
     }
 
     public function resolve(PayrollAnomalyFlag $flag, int $userId, ?string $remarks): PayrollAnomalyFlag

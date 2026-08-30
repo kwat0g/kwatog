@@ -60,7 +60,10 @@ class PayrollPeriodService
         }
 
         $sort = $filters['sort'] ?? 'period_start';
-        $dir  = $filters['direction'] ?? 'desc';
+        // Eloquent's orderBy() throws InvalidArgumentException on anything that
+        // is not asc/desc, which reached the client as a 500 with a stack trace.
+        // The column was already whitelisted; the direction was not.
+        $dir = strtolower((string) ($filters['direction'] ?? 'desc')) === 'asc' ? 'asc' : 'desc';
         $allowed = ['period_start', 'period_end', 'payroll_date', 'status', 'created_at'];
         if (in_array($sort, $allowed, true)) {
             $query->orderBy($sort, $dir);
@@ -1171,6 +1174,22 @@ class PayrollPeriodService
             }
 
             // Task A9 — block finalization while unresolved anomaly flags exist.
+            //
+            // AUDIT NOTE (2026-08-30, M021): this gate can currently be reached
+            // with zero flags because detection never ran. It happens in
+            // ProcessPayrollJob's finally block inside catch(Throwable) →
+            // Log::warning, so an invalid `payroll.anomaly.*` setting is enough
+            // to produce no flags at all, and a broken gate reads exactly like a
+            // clean period. Measured: a period whose anomaly policy was invalid
+            // approved and finalized with the gate silently disabled.
+            //
+            // Deliberately NOT closed here by re-running detect(): the 13th-month
+            // path (ThirteenthMonthService::computeAndPay) never runs detection
+            // at all, and single-employee recompute does not either, so
+            // re-deriving flags at finalize would newly block flows that have
+            // never been evaluated. Closing this needs a durable
+            // "detection completed / failed" state on the period plus a decision
+            // about the 13th-month path — see M021-F11 in the action plan.
             $unresolved = \App\Modules\Payroll\Models\PayrollAnomalyFlag::query()
                 ->where('payroll_period_id', $locked->id)
                 ->where('is_resolved', false)
