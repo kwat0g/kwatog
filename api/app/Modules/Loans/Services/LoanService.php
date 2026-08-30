@@ -234,8 +234,14 @@ class LoanService
     /**
      * T1.7 — Bulk approve loan applications. Per-row try/catch.
      *
+     * The failure rows are echoed straight back to the caller, so they must
+     * carry the obfuscated identifier the caller submitted — never the decoded
+     * primary key. A raw `employee_loans.id` in a response body is an
+     * existence oracle, and since HashIdFilter::decode accepts bare integers a
+     * caller can probe with PKs directly.
+     *
      * @param array<int, int> $ids
-     * @return array{approved: array<int, EmployeeLoan>, failed: array<int, array{id:int, reason:string}>}
+     * @return array{approved: array<int, EmployeeLoan>, failed: array<int, array{id:string, reason:string}>}
      */
     public function bulkApprove(array $ids, User $approver, ?string $remarks = null): array
     {
@@ -243,15 +249,16 @@ class LoanService
         $failed   = [];
 
         foreach ($ids as $id) {
+            $reference = app('hashids')->encode($id);
             try {
                 $loan = EmployeeLoan::query()->find($id);
                 if (! $loan) {
-                    $failed[] = ['id' => $id, 'reason' => 'Not found.'];
+                    $failed[] = ['id' => $reference, 'reason' => 'Not found.'];
                     continue;
                 }
                 $approved[] = $this->approve($loan, $approver, $remarks);
             } catch (\Throwable $e) {
-                $failed[] = ['id' => $id, 'reason' => $e->getMessage()];
+                $failed[] = ['id' => $reference, 'reason' => $e->getMessage()];
             }
         }
         return ['approved' => $approved, 'failed' => $failed];

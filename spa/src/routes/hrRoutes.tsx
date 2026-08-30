@@ -155,19 +155,22 @@ export const hrRoutes = (
  />
  </Route>
 
- {/* Loans module */}
+ {/* Loans module — each guard names the permission the endpoints that page
+ actually calls require: loans.view for GET /loans and GET /loans/{loan},
+ loans.create for GET /loans/types and POST /loans. Frontend guards are UX
+ only; the API enforces the same permissions independently. */}
  <Route element={<ModuleGuard module="loans" />}>
  <Route
  path="/hr/loans"
- element={<PermissionGuard anyOf={['loans.approve', 'loans.write_off']}><LoansPage /></PermissionGuard>}
+ element={<PermissionGuard permission="loans.view"><LoansPage /></PermissionGuard>}
  />
  <Route
  path="/hr/loans/create"
- element={<PermissionGuard anyOf={['loans.approve', 'loans.write_off']}><CreateLoanPage /></PermissionGuard>}
+ element={<PermissionGuard permission="loans.create"><CreateLoanPage /></PermissionGuard>}
  />
  <Route
  path="/hr/loans/:id"
- element={<PermissionGuard anyOf={['loans.approve', 'loans.write_off']}><LoanDetailPage /></PermissionGuard>}
+ element={<PermissionGuard permission="loans.view"><LoanDetailPage /></PermissionGuard>}
  />
  </Route>
 

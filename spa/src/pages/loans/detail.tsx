@@ -18,6 +18,7 @@ import { buildLoanChain } from '@/lib/chains';
 import { fromApprovalRecords } from '@/lib/approvals';
 import { usePermission } from '@/hooks/usePermission';
 import { formatPercent, formatPeso } from '@/lib/formatNumber';
+import { toCentavos } from '@/lib/money';
 import { formatDate } from '@/lib/formatDate';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
@@ -59,9 +60,15 @@ export default function LoanDetailPage() {
  const isPending = loan.status === 'pending';
 
  const loanChain = buildLoanChain(loan);
- const totalDue = Number(loan.total_paid) + Number(loan.balance);
- const remainingPercent = totalDue > 0
- ? Math.min(100, (Number(loan.total_paid) / totalDue) * 100)
+ // Decimals arrive as strings so that decimal(15,2) precision survives the
+ // wire; parsing two of them into JS doubles and ADDING them reintroduces
+ // exactly the binary-float error the column type exists to prevent. Sum in
+ // integer centavos instead, and take the ratio only at the very last step,
+ // where a percentage is inherently a float anyway.
+ const paidCentavos = toCentavos(loan.total_paid);
+ const totalDueCentavos = paidCentavos + toCentavos(loan.balance);
+ const remainingPercent = totalDueCentavos > 0
+ ? Math.min(100, (paidCentavos / totalDueCentavos) * 100)
  : 0;
 
  return (

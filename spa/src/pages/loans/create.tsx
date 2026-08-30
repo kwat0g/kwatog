@@ -84,15 +84,21 @@ export default function CreateLoanPage() {
  enabled: !!employeeId && !!loanType,
  });
 
- const [schedule, setSchedule] = useState<AmortizationItem[]>([]);
- useEffect(() => {
- if (loanType && Number(principal) > 0 && periods && periods > 0) {
- loansApi.previewAmortization(loanType, principal, Number(periods))
- .then(setSchedule);
- } else {
- setSchedule([]);
- }
- }, [loanType, principal, periods]);
+ // The preview route carries `throttle:sensitive` (10/min). Firing it from an
+ // effect keyed on a raw watch() sent one request per keystroke, which
+ // exhausted the bucket while typing an amount, and the bare .then() left the
+ // resulting 429 as an unhandled rejection with no feedback and no ordering
+ // guard. Debounce and let TanStack Query own the request lifecycle — the same
+ // shape self-service/loans.tsx already uses.
+ const debouncedPrincipal = useDebounce(principal, 500);
+ const debouncedPeriods = useDebounce(periods, 300);
+ const { data: schedule = [], isError: previewFailed } = useQuery<AmortizationItem[]>({
+ queryKey: ['loans', 'preview', loanType, debouncedPrincipal, debouncedPeriods],
+ queryFn: () => loansApi.previewAmortization(loanType, debouncedPrincipal, Number(debouncedPeriods)),
+ enabled: !!loanType && Number(debouncedPrincipal) > 0 && Number(debouncedPeriods) >= 1,
+ staleTime: 30_000,
+ retry: false,
+ });
 
  const mutation = useMutation({
  mutationFn: (d: FormValues) => loansApi.create({
@@ -162,6 +168,12 @@ export default function CreateLoanPage() {
  <Input label="Pay periods" type="number" min={1} max={limits?.max_pay_periods} required {...register('pay_periods')} error={errors.pay_periods?.message} className="font-mono tabular-nums text-right" />
  <Textarea label="Purpose" {...register('purpose')} error={errors.purpose?.message} rows={2} className="col-span-2" maxLength={1000} />
  </div>
+ {previewFailed && (
+ <p className="mt-4 text-xs text-danger" role="status">
+ The amortization preview is temporarily unavailable. You can still submit the
+ request — the schedule is recalculated on the server.
+ </p>
+ )}
  {schedule.length > 0 && (
  <div className="mt-4 border border-default rounded-md overflow-hidden">
  <div className="px-3 py-2 bg-subtle text-2xs uppercase tracking-wider text-muted font-medium">
