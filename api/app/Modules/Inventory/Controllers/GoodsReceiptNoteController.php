@@ -150,6 +150,14 @@ class GoodsReceiptNoteController
      */
     public function receiveWithQc(Request $request): JsonResponse
     {
+        // `numeric` is wrong for anything BCMath or a numeric() column then
+        // reads: is_numeric('1e3') is true, bccomp('1e3', …) raises a ValueError,
+        // and PostgreSQL answers 22003 for 1e17/1e20 — all uncaught 500s. Worse
+        // for unit_cost, which StockMovementService blends into
+        // weighted_avg_cost and GrnGlPostingService debits to inventory:
+        // `numeric` stored 10.00005 as 10.0001 and accepted '1e3' as a ₱1000
+        // price. `decimal:0,N` + a column-matching max is the same shape
+        // StoreGrnRequest already uses.
         $data = $request->validate([
             'purchase_order_id'                  => ['required', 'string'],
             'received_date'                      => ['nullable', 'date'],
@@ -158,14 +166,14 @@ class GoodsReceiptNoteController
             'items.*.purchase_order_item_id'     => ['required', 'string'],
             'items.*.item_id'                    => ['required', 'string'],
             'items.*.location_id'                => ['required', 'string'],
-            'items.*.quantity_received'           => ['required', 'numeric', 'min:0.001'],
-            'items.*.unit_cost'                  => ['nullable', 'numeric', 'min:0'],
+            'items.*.quantity_received'           => ['required', 'decimal:0,3', 'min:0.001', 'max:999999999999.999'],
+            'items.*.unit_cost'                  => ['nullable', 'decimal:0,4', 'min:0', 'max:99999999999.9999'],
             'items.*.received_uom_code'          => ['nullable', 'string', 'max:20'],
             'items.*.lot_number'                 => ['nullable', 'string', 'max:50'],
             'items.*.material_lot_number'        => ['nullable', 'string', 'max:50'],
             'items.*.supplier_lot_reference'     => ['nullable', 'string', 'max:100'],
             'items.*.expiry_date'                => ['nullable', 'date'],
-            'items.*.moisture_percentage'       => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'items.*.moisture_percentage'       => ['nullable', 'decimal:0,3', 'min:0', 'max:100'],
             'items.*.coa_document_path'         => ['nullable', 'string', 'max:500'],
             'items.*.coa_verified'              => ['prohibited'],
             'items.*.remarks'                    => ['nullable', 'string'],

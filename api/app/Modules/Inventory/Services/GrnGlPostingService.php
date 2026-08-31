@@ -94,7 +94,12 @@ class GrnGlPostingService
             $unitCost = (string) $row->unit_cost;
             $value    = Money::round2(bcmul($accepted, $unitCost, 6));
 
-            $item = Item::query()->whereKey($row->item_id)->firstOrFail();
+            // withTrashed(): archiving an item in inventory-master must not turn
+            // a legitimate acceptance into an unhandled ModelNotFoundException
+            // (a 500 with no actionable message). The routed account is derived
+            // from item_type, which archiving does not change, so the accounts
+            // and the amount are exactly what they would have been beforehand.
+            $item = Item::withTrashed()->whereKey($row->item_id)->firstOrFail();
             $code = $this->inventoryAccountCode($item);
 
             $byAccount[$code] = isset($byAccount[$code])

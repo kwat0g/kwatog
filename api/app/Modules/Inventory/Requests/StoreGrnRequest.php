@@ -34,22 +34,47 @@ class StoreGrnRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'purchase_order_id'              => ['required', 'integer', 'exists:purchase_orders,id'],
+            // Soft-deleted parents must fail validation, not reach the service.
+            // A bare `exists:purchase_orders,id` ignores `deleted_at`, and the
+            // service then dereferences a trashed row — measured as a 500 for
+            // both an archived PO and an archived item.
+            'purchase_order_id'              => [
+                'required',
+                'integer',
+                Rule::exists('purchase_orders', 'id')->whereNull('deleted_at'),
+            ],
             'received_date'                  => ['nullable', 'date'],
             'remarks'                        => ['nullable', 'string', 'max:1000'],
             'items'                          => ['required', 'array', 'min:1'],
+            // purchase_order_items has no SoftDeletes — a plain exists is right.
             'items.*.purchase_order_item_id' => ['required', 'integer', 'exists:purchase_order_items,id'],
-            'items.*.item_id'                => ['required', 'integer', 'exists:items,id'],
+            'items.*.item_id'                => [
+                'required',
+                'integer',
+                Rule::exists('items', 'id')->whereNull('deleted_at'),
+            ],
+            // The boolean predicates MUST go through the closure form.
+            // `Rule::exists()->where($col, false)` is string-serialised by
+            // DatabaseRule::formatWheres() — `(string) false` is '' — so
+            // PostgreSQL received `is_blocked = ''` and answered
+            // `22P02 invalid input syntax for type boolean: ""`, making this
+            // endpoint return 500 for EVERY request. ValidationRuleParser
+            // ::prepareRule() keeps an Exists object unserialised only when
+            // queryCallbacks() is non-empty, which is what a closure creates.
             'items.*.location_id'            => [
                 'required',
                 'integer',
                 Rule::exists('warehouse_locations', 'id')
                     ->whereNull('deleted_at')
-                    ->where('is_active', true)
-                    ->where('is_blocked', false),
+                    ->where(fn ($query) => $query
+                        ->where('is_active', true)
+                        ->where('is_blocked', false)),
             ],
-            'items.*.quantity_received'      => ['required', 'decimal:0,3', 'min:0.001'],
-            'items.*.unit_cost'              => ['nullable', 'decimal:0,4', 'min:0'],
+            // Upper bounds match the columns: grn_items.quantity_received is
+            // numeric(15,3) and unit_cost numeric(15,4). Without them an
+            // in-range-looking decimal overflows into a 22003 500.
+            'items.*.quantity_received'      => ['required', 'decimal:0,3', 'min:0.001', 'max:999999999999.999'],
+            'items.*.unit_cost'              => ['nullable', 'decimal:0,4', 'min:0', 'max:99999999999.9999'],
             'items.*.received_uom_code'      => ['nullable', 'string', 'max:20'],
             'items.*.lot_number'             => ['nullable', 'string', 'max:50'],
             'items.*.material_lot_number'    => ['nullable', 'string', 'max:50'],

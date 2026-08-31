@@ -819,20 +819,40 @@ class GrnService
         return $this->qcEligibleLineIds($grn) !== [];
     }
 
-    /** @return array<int, int> */
+    /**
+     * Which GRN lines require an incoming inspection before acceptance.
+     *
+     * `Item` uses SoftDeletes, so `$line->item` is NULL once inventory-master
+     * archives the item — and a null item used to make the line silently
+     * INELIGIBLE. That turned the whole fail-closed gate into a fail-open one:
+     * with the item archived, an empty eligible set short-circuits
+     * assertIncomingInspectionCoverage(), and an empty inspection set then
+     * short-circuits assertQcGate(). Measured: a receipt with ZERO inspection
+     * rows and a nulled qc_inspection_id was ACCEPTED and moved 10.000 units
+     * into stock, while the identical receipt with a live item was refused.
+     *
+     * Archiving a master-data row is not a quality decision, so the item is
+     * resolved withTrashed(); and a line whose item cannot be resolved at all
+     * is treated as eligible — an anomaly must require QC, never waive it.
+     *
+     * @return array<int, int>
+     */
     private function qcEligibleLineIds(GoodsReceiptNote $grn): array
     {
         $grn->loadMissing('items.item');
         $eligible = [];
         foreach ($grn->items as $line) {
-            if (! $line->item) {
-                continue;
-            }
-            if ($line->item->item_type === ItemType::RawMaterial) {
+            $item = $line->item
+                ?? Item::withTrashed()->find($line->item_id);
+            if (! $item) {
                 $eligible[] = (int) $line->id;
                 continue;
             }
-            if ($line->item->qualityPlans()->effective(now()->toDateString())->exists()) {
+            if ($item->item_type === ItemType::RawMaterial) {
+                $eligible[] = (int) $line->id;
+                continue;
+            }
+            if ($item->qualityPlans()->effective(now()->toDateString())->exists()) {
                 $eligible[] = (int) $line->id;
             }
         }
