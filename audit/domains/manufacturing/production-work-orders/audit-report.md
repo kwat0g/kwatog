@@ -1205,3 +1205,150 @@ relation. Enumeration oracle, and the most contained fix in this report.
   current batch to finish and refuse the next start (the status flip already
   achieves this), or warn only. This changes a mold-life threshold's *effect*, so
   it is explicitly not the auditor's call.
+
+---
+
+# Re-audit — 2026-09-01, part 3: permissions and dead surfaces (MEASURED)
+
+Supersedes the "Still NOT verified" entries for permissions and dead surfaces.
+
+## Permission matrix — measured against a freshly seeded database
+
+`RefreshDatabase` alone does **not** seed RBAC (a first attempt returned an empty
+`permissions` table and zero roles — worth knowing, since a matrix dumped without
+seeding looks exactly like "no role holds anything"). Re-run with
+`$this->seed(\Database\Seeders\RolePermissionSeeder::class)`:
+
+```
+[PERM] slugs referenced by routes but NOT seeded: []
+
+  department_head        (none)
+  driver                 (none)
+  employee               (none)
+  finance_officer        (none)
+  hr_officer             (none)
+  impex_officer          (none)
+  maintenance_tech       (none)
+  ppc_head               create confirm view r.view r.manage
+  production_manager     create confirm record view lifecycle dash r.view
+  purchasing_officer     (none)
+  qc_inspector           (none)
+  system_admin           create confirm record view lifecycle dash r.view r.manage
+  warehouse_staff        (none)
+
+[PERM] can record AND complete/close its own output: ["production_manager","system_admin"]
+[PERM] can record but cannot view work orders: []
+[PERM] holds lifecycle but not confirm: []
+```
+
+### Results against the questions the brief asked
+
+- **No route is gated on an un-grantable permission.** All 8 permission slugs used
+  by `api/app/Modules/Production/routes.php` exist as seeded rows
+  (`RolePermissionSeeder.php:267-281`). This module does **not** have the defect
+  three sibling modules shipped.
+- **No chain step is impossible.** `production_manager` holds create + confirm +
+  lifecycle + record, so one role can carry a work order from creation to close
+  end-to-end. Nothing stalls.
+- **No role can record output without being able to view work orders**, and **no
+  role holds `lifecycle` without `confirm`.** Both clean.
+- **The prior session's I08 lead is CONFIRMED as measured and looks intentional.**
+  `ppc_head` holds `create`, `confirm`, `view`, `routings.view`, `routings.manage`
+  but **not** `lifecycle`, **not** `record` and **not** `dashboard.view`. That is a
+  coherent planner-vs-executor boundary — PPC plans and authors routings,
+  production_manager executes — and it is deliberate: `production_manager` is
+  explicitly denied `routings.manage` with a comment explaining why
+  (`RolePermissionSeeder.php:562-570`), which is the mirror image of the same
+  boundary. Reclassify I08 from "not aligned" to **intentional, worth documenting**.
+
+### NEW Incomplete — `qc_inspector` is notified of in-process QC with a link it gets 403 on
+
+This is the one concrete permission defect, and it falls out of combining two
+measurements.
+
+`TriggerInProcessQC` notifies the roles named in
+`quality.in_process_qc.notification_roles`, with a deep link into this module:
+
+```php
+'link_to' => "/production/work-orders/{$wo->hash_id}",
+```
+
+and the setting's live value is **measured** as:
+
+```
+$ docker compose exec -T db psql -U ogami -d ogami -c "select key, value from settings where key like 'quality.in_process%';"
+ quality.in_process_qc.notification_roles | ["qc_inspector","production_manager"]
+```
+(seeded at `api/database/migrations/0374_seed_remaining_notification_roles.php:15`)
+
+But `qc_inspector` holds **zero** production permissions, and
+`GET /production/work-orders/{workOrder}` is gated on
+`production.work_orders.view` (`routes.php:49`). So **half the recipients of every
+in-process QC notification receive a link that 403s** — both at the API and behind
+the SPA's `PermissionGuard`.
+
+The QC inspector can still do the inspection itself (those endpoints are gated on
+`quality.*`), so this is not a blocked chain — it is a notification pointing at a
+door the recipient cannot open, on the touchpoint that is this thesis's
+differentiator.
+
+**Not fixed.** The remedy is granting `production.work_orders.view` to
+`qc_inspector`, and changing who may see what is an authorisation change —
+explicitly on the not-contained list regardless of diff size. See Q7.
+
+### Self-certification — real, but with a caveat that changes the answer
+
+`production_manager` holds **both** `production.wo.record` and
+`production.work_orders.lifecycle`, so one role records production output and then
+completes/closes the very work order that output belongs to. Taken alone that
+reads as a separation-of-duties failure.
+
+It probably is not, for a reason the matrix makes visible: **`production_manager`
+is the only non-admin role holding either permission.** Requiring separation would
+leave nobody to perform the other half, so the current grants are not a leak so
+much as an absence of a second production role. And the real independent check on
+production output is not the lifecycle transition — it is outgoing QC and the
+Certificate of Conformance, which sit with `qc_inspector` under `quality.*`.
+
+Recorded as a **question** (Q8) rather than a finding, because deciding whether
+production needs a maker/checker split is an authorisation policy call.
+
+## Dead surfaces — measured
+
+**Frontend: clean.** Every page under `spa/src/pages/production/` is registered in
+`spa/src/routes/productionRoutes.tsx` (`dashboard.tsx`, `oee.tsx`, `schedule.tsx`,
+`routings/`, and all four of `work-orders/{index,create,detail,record-output}.tsx`).
+No orphan pages.
+
+**Backend: one dead route.**
+`GET /production/operations/schedule` (`api/app/Modules/Production/routes.php:89`,
+→ `WoOperationController::schedule()` → `WoOperationService::getScheduleByMachine()`)
+has **zero callers** — no SPA client function, no page, no test:
+
+```
+$ grep -rn "operations/schedule" spa/ api/tests    # (excluding node_modules)
+(no output)
+```
+
+The production schedule page does not use it: `spa/src/pages/production/schedule.tsx:4-5,13`
+reads `GET /mrp/scheduler/snapshot` via `schedulerApi` instead. So the
+operation-level machine schedule endpoint, its service method and its response
+transform are unreachable. Classification **Polish** (dead code, no correctness
+impact) — but note it is gated on `production.dashboard.view`, so it is not
+inert-and-unreachable, merely unused.
+
+`docs/USER-MANUAL.md` was **not** cross-checked — out of budget. Still open.
+
+## Additional questions
+
+- **M051-R-Q7 — should `qc_inspector` hold `production.work_orders.view`?** It is
+  notified of in-process QC with a work-order deep link and currently 403s on it.
+  Granting read on work orders is the obvious remedy; the alternative is changing
+  the notification's `link_to` to a Quality-side inspection URL. Authorisation
+  change either way.
+- **M051-R-Q8 — does recording production output need a maker/checker split?**
+  `production_manager` can record output and then complete the work order it
+  belongs to, and is the only non-admin role able to do either — so enforcing
+  separation requires inventing a second production role, not just moving a grant.
+  The independent quality check already lives with `qc_inspector` via outgoing QC
+  and the CoC.
