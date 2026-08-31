@@ -73,3 +73,135 @@ Disposition: Plan Ready after the 2026-08-25 re-audit. The current working-tree 
 - Add tests for every Broken finding, especially count scope/claim/closure/SoD, negative reservations, decimal valuation, same-location transfer creation, restore binding, scanner deep links, lot allocation, picking permission/execution, and lifecycle transitions.
 - Run `php -l` on changed PHP files, the focused backend suite, SPA typecheck/build, token audit, and browser flows for map → bin, scan → bin/count, count → approval/completion, transfer create → execute, adjustment → approval, and picking execution.
 - Re-run the M040 audit after implementation and regenerate the registry.
+
+---
+
+# M040 — Action Plan, 2026-09-01 re-audit
+
+Disposition: **Partially Fixed** — the contained items were fixed and verified this
+session; the rest are gated on policy decisions or on files outside this module.
+
+## Fixed this session (containment — commit `ae98ee65`)
+
+Each of these is a *missing guard refusing impossible input* or a plumbing repair that
+changes no correct behaviour. All verified with before/after measurement.
+
+| # | Item | Scope | Verification |
+|---|---|---|---|
+| 1 | N1 — `variance_percent` numeric(8,2) overflow 500 on an ordinary count | small | 500 → 200, saturates at `999999.99`; everyday 5.00% unchanged |
+| 2 | N2 — `counted_quantity` `numeric` admits `1e3`/`1e17` → 500 | small | 500 → 422; `1.999` still stores exactly |
+| 3 | N3 — transfer `quantity` `numeric` → 500 on `1e17`, silent truncation of `10.00005` | small | 500 → 422, truncation → 422; `1.999` still 201 |
+| 4 | M040-F07 (create half) — transfer to its own source | small | 201-then-stuck → 422 at create |
+| 5 | M040-F03 — warehouse/zone scope silently widening to every location | small | 201 covering 2 warehouses → 422; correct scope still 201/1 location |
+| 6 | M040-F13 — all three restore routes 404 for every valid target | small | 404/404/404 → 200/200/200 |
+| 7 | M040-F08 — negative reserve/release corrupting reservations | small | `reserved` −40.000 and 959.000-over-on-hand → `InvalidMovementException`, reservation intact |
+
+## Deferred — ordered
+
+### 1. Make the stock-movement ledger immutable after it has moved stock (N4)
+
+Scope: **medium** · Session recommendation: **separate-recommended**
+
+`$movement->save()` with a changed quantity succeeds, and a hard `DELETE` succeeds, while
+`stock_levels` is untouched — on-hand and the ledger diverge silently and permanently, with
+no void/reversal surface as the safe alternative. Needs an observer **plus** a PostgreSQL
+`P0001` trigger, following the `journal-ledger` precedent.
+
+**Why not containment:** the trigger must be **column-scoped**, not row-scoped.
+`StockMovementService::stampLot()` and `MovementGlPostingService::markManual()/
+markGenerated()` legitimately update a movement after creation, so a blanket rule would
+break lot capture and the GL handoff replay. It also needs a decision on what the intended
+reversal path *is* (today there is none), which is a policy question. Requires a migration —
+check `ls api/database/migrations | grep -E '^04' | sort | tail -3` and note that a
+dependency on any `2026_*` migration forces a timestamp name.
+
+### 2. Give the adjustment CHECKER a way to see what it approves (N5)
+
+Scope: **small** · Session recommendation: **separate-recommended** — *and needs a human*
+
+`finance_officer`'s only inventory permission is `inventory.adjust.approve`, so it is 403
+on the adjustment list, the options endpoint, stock levels and the warehouse map. It can
+approve only if handed a hash id out of band, and cannot load the SPA page at all.
+
+**Why not containment:** the fix is a permission grant in
+`api/database/seeders/RolePermissionSeeder.php` — **outside this module**, and an approval/
+visibility boundary this session must not move unilaterally. Two shapes are possible and
+the choice is a human's: grant `inventory.view` to `finance_officer` (widest, simplest), or
+introduce a narrow `inventory.adjust.review` gate on `GET /stock-adjustments*` only.
+
+Separately, `StockAdjustmentService::approve()` has no `requested_by !== approved_by`
+check, so any role holding both permissions can self-approve — `system_admin` does, and
+this was measured. Adding that check is containment-sized but belongs with the decision
+above so the two do not contradict each other.
+
+### 3. Claim shared locations when a count starts (M040-F04)
+
+Scope: **medium** · Session recommendation: **separate-recommended**
+
+Measured with two real concurrent connections: two draft sessions covering the same
+location both reached `in_progress`. `startSession()` locks its own session row and then
+*pre-reads* for overlap, which is exactly the shape the payroll module could not close
+without a UNIQUE index. Needs a shared claim — a unique partial index on (location, active
+session) or a claim table — not another application check.
+
+### 4. Decide count closure and variance semantics (M040-F05, M040-F06)
+
+Scope: **large** · Session recommendation: **separate-recommended**
+
+Measured: a session completes with items still `pending` (left `counted_quantity = null`);
+a session with **zero** items starts and completes; `variance_value` stores the raw
+quantity variance in a `numeric(15,2)` money column (5 units at WAC 10.00 recorded as
+`5.00`, not `50.00`); and the user who counted can approve their own variance and then
+complete the session, because `inventory.stock_count.manage` gates all three and
+`approveVariance()` never inspects the actor.
+
+**Why not containment:** changing `variance_value` changes a valuation figure; blocking
+completion-with-pending changes whether an existing flow is allowed; and separating count
+from approval changes who may approve. All three are explicitly out of bounds for a
+containment pass, and the first needs the open policy answer on whether variance is
+monetary or quantity.
+
+### 5–11. Carried forward unchanged from the 2026-08-25 plan
+
+M040-F02 (scanner deep links — the backend emits `location_id`/`count_item_id`/
+`material_issue_id` and no page reads them), M040-F11 (authoritative lot balances),
+M040-F12 (picking execution missing), M040-F14 (reparenting a stocked location),
+M040-F15 (active/blocked/capacity policy), M040-F17/F18 (list pagination, type-union
+drift, cycle-count reason code), M040-F19 (opaque-surface and responsive polish),
+M040-F21 (state-machine contract). All remain `separate-recommended`; see the
+2026-08-25 section above for the detail, which this re-audit confirmed still applies.
+
+### 12. Dead surfaces and documentation (N7, N8)
+
+Scope: **small** each · Session recommendation: **separate-recommended** (SPA + docs, not
+this module's files)
+
+- `GET /api/v1/inventory/warehouses` has a wrapper (`warehouse.ts:31`) and no caller.
+- `stockTransfersApi.create` → `/inventory/stock-transfers` (route commented out at
+  `routes.php:104`), called only from the unrouted
+  `spa/src/pages/inventory/stock-transfers/create.tsx` — dead the whole way down.
+- `/inventory/warehouse` is the only UI for 12 warehouse/zone/location mutation routes and
+  has no sidebar entry.
+- `inventory.picking.view` is seeded but enforced by no route — a dead permission.
+- `docs/PROCESS-FLOWS.md:1578-1579` sends operators to two routes that do not exist.
+- The entire WMS surface (map, counts, transfers, picking, scanner) is undocumented in
+  `docs/USER-MANUAL.md`.
+- `usePermission` is never imported in `stock-adjustments/index.tsx` or
+  `warehouse/index.tsx`, so mutation buttons render then 403.
+
+## Outside-module blocker to report, not fix (N6)
+
+`php artisan migrate:fresh --seed` fails at HEAD:
+`ComprehensiveDemoSeeder.php:634` inserts `journal_entry_lines` for an already-`posted`
+entry and `journal-ledger`'s `prevent_posted_journal_line_mutation()` trigger raises
+`P0001`. Reproduced on a throwaway database independently of any test. Belongs to whoever
+owns `ComprehensiveDemoSeeder` / `journal-ledger`.
+
+## Verification gate for the deferred work
+
+- Reproduce N4 with the edit/hard-delete probe before and after the trigger, and prove
+  `stampLot()` and the GL handoff replay still work.
+- Reproduce the count-start race with two real concurrent connections, never under
+  `RefreshDatabase` (which hides uncommitted rows from a second connection).
+- Any count-semantics change must re-run `tests/Feature/Inventory` (177 passed / 621
+  assertions at this commit) and state which pre-existing tests it turns red and why.
