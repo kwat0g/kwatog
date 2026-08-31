@@ -105,3 +105,169 @@ The module is released as 🔁 Needs Re-audit. Re-audit the implemented findings
 - Every release disposition has the required Quality, concession, supplier, and approval evidence before stock/GL changes.
 - Locations, source quantities, and quality links are validated server-side and reflected in the UI.
 - Replayed holds are idempotent, MRB search works, and the operator can recover from lookup/API failures.
+
+---
+
+# RE-AUDIT ACTION PLAN — 2026-09-01
+
+Status: **📋 Plan Ready** · Overall recommendation: **hand off — no code fixed
+this session, for a structural reason stated below.**
+
+## Why nothing was fixed (the split, and its justification)
+
+**100% of M054's runtime surface lives in `api/app/Modules/Inventory/`, which is
+LIVE under another agent (`warehouse-stock-control`) this session and read-only
+for me.** That covers `QuarantineService`, `MrbController`, all four MRB
+FormRequests, `MaterialReviewRecordResource`, `MaterialReviewRecord`, `MrbStatus`,
+`Inventory/routes.php`, and — for the most severe finding — `StockMovementService`.
+`api/app/Modules/SupplyChain/` is live too. So the usual Step 6 arithmetic
+(majority `same-session-ok` + small scope → fix) does not decide anything here:
+there is no file in my lane to change.
+
+Independently, 6 of 9 findings fall squarely in the briefing's *not-contained*
+category — wiring the disposition→movement bridge, changing who may disposition,
+and changing what a decision means are IATF-auditable design decisions. Those
+would be `separate-recommended` even if I owned the files.
+
+The three findings that *are* containment-shaped (R1 guard extension, R5
+immutability trigger, R8 FK tightening) each harden an Inventory-owned artefact
+while that agent is live; landing them now risks either a merge collision or a
+migration-ordering collision with work that agent may be doing on the same
+tables. They are sequenced first below so whoever owns Inventory next can take
+them immediately.
+
+One item (R9.4, the `USER-MANUAL.md` gap) is genuinely outside any live module.
+It is still deferred: `docs/USER-MANUAL.md` is edited by many audit sessions on
+this branch, and a new section is a poor trade against that collision risk for a
+documentation-only gap.
+
+## Ordered items
+
+### 1. M054-R1 — Make quarantine stock exclusive to the MRB release path
+- Broken, **P0**. Scope: **medium**. Session: **separate-recommended** (Inventory-owned).
+- `StockMovementService::assertConsumableSource()` `:307-329` only guards
+  `MaterialIssue` and `Delivery`. Extend it so **any** movement whose
+  `fromLocationId` is in a Quarantine zone must carry an MRB release context;
+  `Transfer`, `AdjustmentOut`, `Scrap` and `ReturnToVendor` currently pass.
+- Must also handle the **stranded-MRB** half: an MRB left `held` over an empty
+  quarantine location can never terminate (measured: `release()` throws
+  `InsufficientStockException` forever). Needs either a reconciliation path or a
+  `void`/`cancel` transition on `MrbStatus`, plus a backfill for existing stranded
+  rows.
+- Note the legitimate exception the prior session flagged: ReturnManagement's RMA
+  flow also writes Quarantine/Scrap zones
+  (`ReturnRequestService.php:687,1379,1649`), so the guard must allow an RMA
+  context as well as an MRB one — this is why it is medium, not small.
+- Acceptance: each of the four escaping movement types is denied from a
+  quarantine location without an MRB/RMA context; every MRB can reach a terminal
+  state; `mrb_holds` badge count cannot include an unterminable row.
+
+### 2. M054-R5 — Make a terminal MRB immutable (observer + PostgreSQL trigger)
+- Broken, P1. Scope: **small**. Session: **separate-recommended** (Inventory table).
+- Follow the `journal-ledger` precedent: an Eloquent observer **plus** a `P0001`
+  trigger. MRB is an easier target than NCR/CAPA because it has **no legitimate
+  post-terminal writer** — unlike `NcrService::close()` (double write) and CAPA
+  (writes to closed rows), which is the hazard `ncr-capa` documented. So a trigger
+  keyed on `OLD.status IN ('released','scrapped','returned')` rejecting any UPDATE
+  or DELETE is safe here. Verify against `hold()`'s two writes (`:266`, `:281`)
+  and `release()`'s one (`:402`) — all occur while `OLD.status = 'held'`.
+- **Migration naming:** this touches `material_review_records`, whose most recent
+  dependency is the timestamp-named
+  `2026_08_25_190000_add_mrb_hold_idempotency.php`. Per CLAUDE.md's dependency
+  rule, use a `2026_MM_DD_HHMMSS_*` name dated after it, **not** `0479_` — every
+  `0NNN_` runs before every `2026_*`.
+- Acceptance: Eloquent update, property-set status downgrade, raw SQL rewrite and
+  `delete()` on a terminal MRB all fail; `hold()` and `release()` still pass.
+
+### 3. M054-R8 — `ncr_id` / `inspection_id` must be `restrictOnDelete`
+- Broken, P2. Scope: **small**. Session: **separate-recommended** (Inventory table).
+- `0262_…:24-27` uses `nullOnDelete()`, and neither `NonConformanceReport` nor
+  `Inspection` uses `SoftDeletes`, so a hard delete silently erases an MRB's
+  quality trace (measured: `ncr_id` → NULL, `GET /mrb/{id}` still 200). Match
+  `item_id` / `source_location_id` / `held_by` on the same table, which are all
+  `restrictOnDelete`. Same migration-naming rule as item 2.
+- Acceptance: deleting a referenced NCR or inspection is refused; existing MRB
+  rows already orphaned are enumerated for a human.
+
+### 4. M054-R2 — Decide and enforce the disposition→movement bridge
+- Broken, **P0**. Scope: **large**. Session: **separate-recommended** —
+  **needs a human decision first** (Options A–D in `audit-report.md`).
+- Blocking question: which mechanism owns the movement? Until that is answered,
+  no code should be written. Whatever is chosen must include a **per-NCR quantity
+  ledger** (measured: 3 MRBs summing 120.000 against `affected_quantity = 40`) and
+  a rule that resolves `ncr.disposition` vs `mrb.disposition` disagreement
+  (measured: `return_to_supplier` vs `use_as_is`, material into finished goods).
+- Also needs a decision on the `product_id` (NCR) vs `item_id` (MRB) identity
+  mismatch — they join only via `inspections.item_id`.
+- Acceptance: one nonconformance cannot be over-dispositioned; the two
+  disposition columns cannot disagree; a scrap and a return-to-supplier cannot
+  both be executed against the same nonconformance.
+
+### 5. M054-R3 — Decide whether MRB is a board, then enforce it
+- Broken, P1. Scope: **medium**. Session: **separate-recommended** —
+  **needs a human decision first.**
+- Measured: one `qc_inspector` inspected, raised the NCR, held, and released
+  `use_as_is` into good stock. Requires splitting `inventory.mrb.manage` into a
+  hold permission and a disposition permission, and/or a second-signature row.
+  Touches `RolePermissionSeeder` (shared RBAC) — do not change unilaterally.
+- Acceptance: the actor who detected or caused the nonconformance cannot be the
+  sole approver of its disposition; all three registry roles can still complete
+  their part of the split.
+
+### 6. M054-R4 — Rework reinspection + use-as-is concession evidence
+- Broken, P1. Scope: **large**. Session: **separate-recommended** —
+  **needs a human decision first** (question 4 in `audit-report.md`).
+- Split the shared `Rework`/`UseAsIs` arm at `QuarantineService.php:331-356`.
+  Rework should require a **passed** reinspection linked on release; use-as-is
+  should require a recorded concession approval and customer sign-off, which the
+  enum already claims (`NcrDisposition.php:12`) and the schema has no room for.
+
+### 7. M054-R7 — Supplier-return provenance
+- Incomplete, P1. Scope: **large**. Session: **separate-recommended**.
+- Unchanged from prior F004. Add vendor / PO / GRN lineage or make the handoff
+  boundary explicit so `returned` stops implying more than it proves. Note the
+  adjacent fact found this re-audit: the RMA path is the only other
+  `ReturnToVendor` producer and it is hard-capped at `quantity_accepted`
+  (`ReturnRequestService.php:360,494`), so it cannot cover the MRB case either.
+
+### 8. M054-R6 — A quarantine aging / escalation command
+- Missing, P1. Scope: **medium**. Session: **separate-recommended**.
+- There are **zero** MRB scheduled commands (measured). Add an aging report or
+  escalation for holds exceeding a configured age, wired in
+  `api/routes/console.php`. **Build it so it distinguishes "nothing to do" from
+  "everything threw"** — non-zero exit and a distinct counter when work was
+  attempted and failed. Do not wrap the failure-recorder in a swallowing
+  `catch (Throwable)`; that is exactly how the 8D SLA ledger stayed dead for its
+  whole life.
+
+### 9. M054-R9 — Polish
+- Polish, P2/P3. Scope: **small** each. Session: **separate-recommended**
+  (items 1–3 are Inventory-owned).
+1. Guard `MaterialReviewRecordResource:30-35` so a soft-deleted item still shows
+   its code/name (via `withTrashed()` on the eager load), rather than `"item": null`
+   on a lot that is physically in quarantine.
+2. Distinguish "invalid hash id" from "missing field" in `ResolvesHashIds` so
+   `?item_id=garbage` stops reporting *"The item id field is required."*
+3. Decide whether accepting raw integer ids alongside hash ids
+   (`HashIdFilter::decode`, measured to work in the test environment) is intended.
+4. Add an MRB / quarantine section to `docs/USER-MANUAL.md` — currently **zero**
+   mentions of "material review", "MRB" or "quarantine".
+
+### 10. Test debt to land alongside any of the above
+- Broken (coverage), P1. Scope: **medium**.
+- Only **2 HTTP calls** exist to any MRB endpoint in the whole repo
+  (`QuarantineMrbTest.php:418,424`); 5 of 6 endpoints are service-only. Add
+  HTTP-level tests for `options`, `index` (with each filter), `quality-options`,
+  `show` and `release`. This session probed all of them and found them healthy —
+  the point is to keep them that way, since `goods-receiving` found a route that
+  had 500'd for six days behind 52 green service-level tests.
+- Also add regression tests for the 20-cell transition matrix and the 20-value
+  quantity validation family, both of which pass today and are unguarded.
+
+## Deferred with reason (this session)
+
+Everything above. The reason is uniform and structural: **the module's code is
+owned by a live agent and read-only for me**, and the majority of the work is
+IATF-auditable design that the briefing explicitly excludes from same-session
+fixing. Four questions for a human are recorded at the end of `audit-report.md`;
+items 4, 5 and 6 should not be started before they are answered.
