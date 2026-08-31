@@ -205,4 +205,138 @@ Open policy questions are recorded rather than guessed:
 - [ ] Validation family (~7 values, money/qty)
 - [ ] Dead surfaces both directions
 
-Findings appended below as measured.
+## Baseline (real run, non-zero assertions)
+
+`docker compose run --rm --no-deps -e DB_DATABASE=ogami_test_ppap api php artisan test tests/Feature/Quality tests/Unit/BatchLotSequenceTest.php tests/Feature/B2B/SupplierPpapViewTest.php --no-coverage`
+→ **135 tests / 388 assertions / exit 0**, duration 59s.
+
+## HTTP-vs-service coverage split — measured
+
+`grep -rn -E "quality/ppap|quality/traceability" api/tests/` returns **nothing**.
+**0 of my 12 endpoints has ever been exercised over HTTP by any test.** Existing coverage
+touches only adjacent surfaces: `tests/Feature/B2B/SupplierPpapViewTest.php` (the B2B
+read endpoint, 4 tests), `tests/Feature/Inventory/LotTraceabilityTest.php` (service-level
+lot movements), `tests/Unit/BatchLotSequenceTest.php` (number formats). Neither
+`TraceabilityService`, `PpapService` nor `ShipmentLotService` has a single test of its own.
+
+That gap is where every finding below came from.
+
+## R1 — [Broken/P0] The forward trace has never worked: `whereJsonContains` compares an object against an array
+
+`TraceabilityService` looks up the work orders that consumed a material lot with
+
+```php
+->whereJsonContains('material_lot_references', ['material_lot_number' => $lotNumber])
+```
+
+at **`api/app/Modules/Quality/Services/TraceabilityService.php:59`** (`simulateRecall`) and
+**`:216`** (`traceFromMaterialLot`) — the module's only two forward hops.
+
+`whereJsonContains` json-encodes an associative PHP array into a JSON **object**, and
+`work_orders.material_lot_references` is a JSON **array of objects**. PostgreSQL
+containment refuses that shape. Measured directly against PostgreSQL 16:
+
+```
+ obj_against_array | arr_against_array | scalar_against_array
+-------------------+-------------------+----------------------
+ f                 | t                 | t
+```
+
+(`'[{"material_lot_number":"L1","qty":1}]'::jsonb @> '{"material_lot_number":"L1"}'::jsonb` = **false**.)
+
+Measured end to end on a fully intact chain (material lot → GRN → WO whose
+`material_lot_references` explicitly names that lot → passed outgoing inspection →
+shipment lot → delivered delivery → customer "Toyota-A"):
+
+```
+[T1-fwd] search(material lot)  found=true  type=material_lot  consuming_wos=0
+[T1-fwd] does the material-lot trace reach a CUSTOMER?  NO — trace stops at the work order
+[T1-fwd] recall(material lot)  found=false customers=0 deliveries=0 qty=0
+[T1-bwd] search(shipment lot)  found=true  wos=1 materials=1 inspections=1 delivery=present customer=Toyota-A
+```
+
+**Impact.** The backward trace (customer shipment → lots) works. The forward trace
+(this lot went to these customers) — the question an IATF auditor and a recall
+coordinator actually ask — returns **`found: false`, zero customers, zero deliveries,
+zero quantity** for a lot that was demonstrably consumed and shipped. `simulateRecall`
+is not "incomplete": for a material lot it has never returned a single row in its life,
+and because it answers `found: false` rather than erroring, a recall operator is told the
+bad resin lot is unknown to the system. The same silent-zero shape as the 8D SLA ledger.
+
+The correct form is `whereJsonContains($col, [['material_lot_number' => $lot]])`.
+
+## R2 — [Broken/P1] A material lot that exists but has no downstream WO is reported as non-existent
+
+`TraceabilityService.php:64` — `if ($woIds->isEmpty() && !$lot) return ['found' => false, ...]`.
+Measured on a received-but-unconsumed lot (row present in `grn_items`):
+
+```
+[T5] search  found=true  type=material_lot
+[T5] recall  found=false     <- the lot demonstrably EXISTS in grn_items
+```
+
+The recall endpoint cannot distinguish "this identifier is unknown" from "received, not
+yet consumed" — the two answers demand opposite operator actions (quarantine the
+warehouse stock vs. recall from customers). Reproduces prior F007 in part.
+
+## R3 — [Broken/P1] `?term[]=` / `?lot[]=` array query parameter 500s both traceability endpoints
+
+`TraceabilityController.php:20,27` casts the raw query value with `(string) $request->query(...)`.
+There is no FormRequest and no validation on either route.
+
+```
+[T4] GET /api/v1/quality/traceability/search?term[a]=b            => 500
+[T4] GET /api/v1/quality/traceability/recall-simulation?lot[a]=b  => 500
+```
+
+Benign inputs are handled (`''`, whitespace, 5000 chars, `' or 1=1 --`, `%`, `_` all → 200
+`found:false`, so there is no injection), but any array-shaped parameter is an
+unauthenticated-adjacent 500. Same class as the `goods-receiving` GRN 500: invisible
+because no test posts to the route.
+
+## R4 — [Broken/P1] Ambiguous identifiers resolve first-match and silently drop the rest
+
+- `grn_items.material_lot_number` is indexed but **not unique**
+  (`api/database/migrations/0150_add_batch_lot_traceability.php:33`). Two GRN lines sharing
+  a lot number: `search` returned `supplier_lot_reference = 'SUP-D2'` only — one of two, no
+  signal that a second exists.
+- `batch_number` and `lot_number` occupy one identifier namespace with no prefix guard.
+  With both set to `COLLIDE-1`, `TraceabilityService::search` (`:125-140`, ordered
+  batch → lot → material lot) resolved `type=batch`; **the shipment-lot leg became
+  unreachable** for that identifier.
+
+## R5 — [Broken/P1] A partial trace is indistinguishable from a complete one
+
+`work_orders` ids live in an unconstrained JSON column (`0150_...:43`) with no FK, so a
+deleted work order leaves a dangling id that `whereIn('id', $woIds)` simply skips.
+
+```
+[T3] lot claims quantity 800 from 1 work order(s)  (was 2)
+[T3] work_order_ids json still = [3,4]
+[T3] payload keys = lot,backward,forward   <- no partial flag, no warning
+[T3] found still = true — one batch vanished with no signal
+```
+
+The lot still asserts 800 units while accounting for one batch. Nothing in the payload
+lets a caller detect the loss.
+
+## R6 — [Broken/P0] Zero triggers; every trace identifier is rewritable and a confirmed lot is mutable
+
+`pg_trigger` (non-internal) across `shipment_lots, work_orders, grn_items, deliveries,
+inspections, ppap_submissions, ppap_elements` = **0**. The whole database has 2, both on
+`audit_logs`. Measured:
+
+```
+[T8] raw SQL rewrote lot_number          -> HACKED-LOT
+[T8] raw SQL rewrote batch_number        -> HACKED-BATCH
+[T8] raw SQL rewrote material_lot_number -> HACKED-MAT
+[T8] raw SQL emptied work_order_ids, qty=999999; trace backward wos = 0
+[T8] Eloquent update on a lot whose delivery is CONFIRMED => true, qty 500 -> 1
+```
+
+The last line is the material one: **a shipment lot stays fully mutable after the customer
+has confirmed the delivery.** `ShipmentLot` carries `HasAuditLog` (3 rows recorded), so the
+change is logged — but nothing refuses it. Same shape found in `ncr-capa` (closed NCR) and
+`inspections-certificates` (completed inspection).
+
+Findings continue below.
