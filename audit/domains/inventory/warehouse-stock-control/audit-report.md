@@ -196,4 +196,302 @@ re-derives each by probe.
 `276f2e3e` (the neighbouring goods-receiving session's fix), so the working tree at
 claim time is unmodified relative to that report.
 
-## Status: probing in progress — findings appended below as measured.
+## Baseline (real, measured)
+
+```
+docker compose run --rm --no-deps -e DB_DATABASE=ogami_test_stock api \
+  php artisan test tests/Feature/Inventory --no-coverage
+→ Tests: 169 passed (557 assertions)   exit code 0   67.76s
+```
+
+Non-zero assertions is the proof the run was real. **The 2026-08-25 "42 failures" were
+entirely a database-connectivity artifact; the module's existing suite is green at HEAD.**
+
+## HTTP coverage vs service-only coverage (the decisive distinction)
+
+Grepping every HTTP call in `api/tests/` for `/api/v1/inventory/*` gives only six in-scope
+paths with *any* HTTP-level test: `POST /scan/resolve`, `GET /stock-levels`,
+`GET /stock-movements`, `GET /stock-adjustments`, `PATCH /stock-adjustments/{id}/approve`,
+`GET /warehouse-map/bins/{location}`.
+
+**Uncovered at the HTTP layer (26 endpoints):** all 9 `stock-counts*`, all 5
+`transfer-orders*`, `POST /stock-adjustments`, `GET /warehouse-map`, all 12
+warehouse/zone/location CRUD + restore routes, `GET /picking-lists/mis/{mis}`,
+`GET /scan/options`, `GET /stock-movements/options`, `GET /stock-adjustments/options`.
+
+Probing those uncovered endpoints produced **three HTTP-reachable 500s** (N1, N2, N3
+below) and the three dead restore routes. This is the same pattern the neighbouring
+`goods-receiving` module found.
+
+## `Rule::exists()->where(col, false)` sweep
+
+`grep -rn "Rule::exists" app/Modules/Inventory/` → **no instance** of the broken shape in
+this module. `StoreGrnRequest.php:57` already carries the fix comment from the
+`goods-receiving` session. Repo-wide, the only `->where(col, <bool>)` instances pass
+`true` (CRM price-agreement/sales-order requests, `Quality/AddNcrActionRequest.php:36`),
+which `formatWheres()` renders as `"1"` — accepted by PostgreSQL. Nothing to report
+outside this module.
+
+## Prior findings: how many reproduce
+
+| Prior finding | Verdict by probe |
+|---|---|
+| M040-F02 scanner deep links unusable | **Reproduces** (raw ids in actions; no page reads the params) |
+| M040-F03 count scope silently widens | **Reproduces** over HTTP |
+| M040-F04 no shared location claim across sessions | **Reproduces** with two real connections |
+| M040-F05 completion permits incomplete counts; non-monetary variance | **Reproduces** (both halves) |
+| M040-F06 count approval not segregated | **Reproduces** (self-approve = 200) |
+| M040-F07 transfer order creates unexecutable orders | **Reproduces** |
+| M040-F08 negative reserve/release accepted | **Reproduces** (reserved went negative, then above on-hand) |
+| M040-F09 valuation crosses into floats | **DISPROVED as a correctness defect** — see below |
+| M040-F11 lot suggestions not authoritative | Reproduces by reading; not re-derived (policy-gated) |
+| M040-F12 picking execution missing | **Reproduces** (read-only route only) |
+| M040-F13 restore endpoints cannot bind deleted records | **Reproduces** — all three 404 |
+| M040-F14 hierarchy edits move stocked locations | Reproduces by reading; not runtime-probed |
+| M040-F15 active/blocked/capacity incomplete | Reproduces by reading |
+| M040-F17 WMS list/type contract gaps | **Reproduces** (`frozen` SPA-only, `completed` backend-only) |
+| M040-F18 cycle-count adjustments omit reason code | **Reproduces** (`reconcileStockCountItem` passes `null`) |
+| M040-F19 opacity/responsive polish | Reproduces by reading |
+| M040-F20 picking read access broader than its permission | **Reproduces, and worse** — the permission is enforced nowhere |
+| M040-F21 ad-hoc lifecycle transitions | Reproduces by reading |
+
+**17 of 18 reproduce; 1 disproved.**
+
+### M040-F09 — DISPROVED as a correctness defect (downgraded to Polish)
+
+`StockLevel::getAvailableAttribute()` / `getTotalValueAttribute()`
+(`api/app/Modules/Inventory/Models/StockLevel.php:47-56`) do use PHP floats, so the
+convention violation is real. But the claimed consequence — "high-precision quantities or
+costs can round API values incorrectly" — **does not occur at any representable value**.
+Measured at the columns' maximum magnitude:
+
+```
+quantity 999999999.999  ×  weighted_avg_cost 9999.9999
+  API total_value  = "9999999899990.00"
+  bcmath exact     =  9999999899990.00     ← identical
+qty 0.005 × wac 0.0005 → API "0.00", exact 0.00 (unrounded 0.00000250) ← identical
+```
+
+`numeric(15,3) × numeric(15,4)` needs at most ~17 significant digits and IEEE-754 double
+carries ~15–17, which is why the product survives. Keep the finding as a convention/Polish
+item; do **not** carry it as a financial defect.
+
+### The headline invariant HOLDS
+
+On-hand equals the independent SQL sum of movements, exactly, through a full lifecycle
+(2 receipts, issue, transfer, delivery, adjustment-out, adjustment-in):
+
+```
+loc A: stock_levels.quantity = 82.000   SQL SUM(in) - SUM(out) = 82.000   wac 11.4634
+loc B: stock_levels.quantity = 30.000   SQL SUM(in) - SUM(out) = 30.000   wac 10.6667
+```
+
+The dev database *does* show 12 of 13 (item, location) pairs divergent, but the shape
+proves it is **seeded opening stock, not a runtime defect**: items 2–12 have *zero*
+movement rows and levels in an exact arithmetic progression (374, 511, 648 … +137), and
+the single pair created wholly through the application (item 13 / location 73) reconciles
+at 82.000 = 82.000. Reported as an opening-balance data-integrity observation, not as a
+stock-control defect.
+
+## NEW findings
+
+### N1 — `POST /stock-counts/items/{id}/count` returns 500 on an ordinary count · Broken · P0
+
+`variance_percent` is `numeric(8,2)` (max 999999.99) but
+`StockCountService::recordCount()` computes it unbounded
+(`api/app/Modules/Inventory/Services/StockCountService.php:150-152`). Any count where
+counted/system exceeds ~10,000 overflows the column:
+
+```
+system_quantity 0.500, counted_quantity 6000
+→ SQLSTATE[22003]: Numeric value out of range: numeric field overflow   → HTTP 500
+```
+
+No malicious input is required — a bulk item whose system record has drifted to a
+fraction is enough. The endpoint has **zero HTTP test coverage**, which is why a 500 on
+the primary data-entry action of the whole stock-count workflow went unnoticed.
+
+### N2 — Same endpoint returns 500 on scientific notation · Broken
+
+`counted_quantity` is validated `required|numeric|min:0`
+(`api/app/Modules/Inventory/Controllers/StockCountController.php:117`). `numeric` admits
+`1e3`, which then reaches bcmath:
+
+```
+counted_quantity=1e3   → ValueError: bcsub(): Argument #1 ($num1) is not well-formed → 500
+counted_quantity=1e17  → same
+```
+
+### N3 — `POST /transfer-orders` returns 500 on large input and silently truncates precision · Broken
+
+`quantity` is validated `required|numeric|min:0.001`
+(`api/app/Modules/Inventory/Controllers/TransferOrderController.php:62`):
+
+```
+1.999    → 201, stored 1.999          ok
+1e3      → 201, stored 1000.000       accepted silently
+10.00005 → 201, stored 10.000         4th/5th decimal silently discarded
+1e17     → 500  SQLSTATE[22003] numeric field overflow
+1e20     → 500  SQLSTATE[22003]
+```
+
+`StoreStockAdjustmentRequest.php:38-39` already uses the hardened
+`decimal:0,3` / `decimal:0,4` form and correctly answers 422 for all of these — the two
+`Request`-validated controllers above simply never adopted it.
+
+### N4 — Stock movements are mutable and hard-deletable after they have moved stock · Broken · P0
+
+The ledger has no observer and no database trigger. Measured:
+
+```
+movement created: 100 units in, stock_levels.quantity = 100.000
+$movement->quantity = '9999'; $movement->save();   → succeeded (row now 9999.000)
+DELETE FROM stock_movements WHERE id = ...          → succeeded
+stock_levels.quantity after both                    → still 100.000
+```
+
+Editing or deleting a movement leaves `stock_levels` untouched, so on-hand and the ledger
+diverge silently and permanently — and there is no void/reversal surface for a movement,
+so an operator's only route is exactly this destructive one. This is the same exposure
+`journal-ledger` closed with an observer **plus** a PostgreSQL `P0001` trigger, and the
+same shape `goods-receiving` reported for hard-deletable accepted GRNs.
+
+**Not a blanket fix:** `StockMovementService::stampLot()`
+(`StockMovementService.php:449-462`) and `MovementGlPostingService::markManual()/
+markGenerated()` legitimately update a movement after creation, so immutability must be
+column-scoped (as `journal-ledger`'s trigger is), not row-scoped.
+
+### N5 — The designated adjustment CHECKER cannot see what it is approving · Broken · RBAC
+
+Seeded reality (`api/database/seeders/RolePermissionSeeder.php:554, 664`) matches
+OGAMI-012: `inventory.adjust` → warehouse_staff (maker), `inventory.adjust.approve` →
+finance_officer (checker). Separation is genuinely enforced — the maker's self-approve is
+403. But finance_officer's **only** inventory permission is `inventory.adjust.approve`:
+
+```
+maker (warehouse_staff) create                  → 201 pending
+maker self-approve                              → 403   separation enforced
+checker GET /stock-adjustments?status=pending   → 403   cannot see the queue
+checker GET /stock-adjustments/options          → 403
+checker GET /stock-levels                       → 403   cannot judge the adjustment
+checker GET /warehouse-map                      → 403
+checker PATCH /stock-adjustments/{id}/approve   → 200   works only if handed the hash id
+```
+
+`GET /stock-adjustments` requires `inventory.view` (`routes.php:94`) and the SPA route is
+guarded on `inventory.view` too, so the checker cannot load the page at all. The approval
+step is reachable only out of band. This is the "approval chain impossible to complete"
+class seen in three sibling modules.
+
+The service also has **no `requested_by !== approved_by` check**
+(`StockAdjustmentService::approve()`, `StockAdjustmentService.php:179-219`), so the
+separation rests entirely on the permission split. `system_admin` holds both and can
+self-approve — measured.
+
+### N6 — OUTSIDE-MODULE BLOCKER: `migrate:fresh --seed` fails at HEAD
+
+Not mine, not fixed, reported:
+
+```
+docker compose run --rm --no-deps -e DB_DATABASE=ogami_seedcheck api \
+  php artisan migrate:fresh --seed --force
+→ SQLSTATE[P0001]: Posted journal entry lines are immutable.
+  CONTEXT: PL/pgSQL function prevent_posted_journal_line_mutation() line 19
+  SQL: insert into "journal_entry_lines" (...) values (1, 1, 1, 50000, 0)
+  at database/seeders/ComprehensiveDemoSeeder.php:634 (seedJournalEntries)
+```
+
+`ComprehensiveDemoSeeder` inserts lines into an already-`posted` journal entry, which the
+`journal-ledger` module's new immutability trigger correctly refuses. Reproduced on a
+throwaway database independently of any test of mine. Consequence for this audit: probes
+could not use `$seed = true`; they seed only `RolePermissionSeeder`, which is enough for
+role/permission truth. The throwaway database was dropped.
+
+### N7 — Dead surfaces, both directions
+
+- `GET /api/v1/inventory/warehouses` (`routes.php:71`) — wrapper exists
+  (`spa/src/api/inventory/warehouse.ts:31` `listWarehouses`) with **no caller anywhere**.
+- `spa/src/api/inventory/stock.ts:36-39` `stockTransfersApi.create` POSTs
+  `/inventory/stock-transfers`, which is **commented out** at `routes.php:104`; its only
+  caller `spa/src/pages/inventory/stock-transfers/create.tsx:56` is itself unrouted.
+  Dead the whole way down.
+- `/inventory/warehouse` (`spa/src/routes/inventoryRoutes.tsx:63`) is the **only** UI for
+  all 12 warehouse/zone/location mutation routes and has **no sidebar entry**; its sole
+  entry point is a button at `spa/src/pages/inventory/items/index.tsx:310`.
+- Scanner deep links emit query params no page reads:
+  `WarehouseScanController.php:70-72` produces `?location_id=`, `?count_item_id=`,
+  `?material_issue_id=`; `map.tsx:50,54` reads only `view`, and neither
+  `stock-count.tsx` nor `picking.tsx` calls `useSearchParams` at all. (This is the
+  reachable half of M040-F02.)
+- `inventory.picking.view` is seeded (`RolePermissionSeeder.php:224, 667`) but enforced by
+  **no** backend route and no route guard — a dead permission (sharpens M040-F20).
+- `docs/PROCESS-FLOWS.md:1578` points operators at `/inventory/warehouses`, which does not
+  exist (the route is `/inventory/warehouse`); `:1579` points at
+  `/inventory/item-categories`, removed 2026-08-08.
+- Stock Count, Transfer Orders, Picking, Warehouse Map and the Scanner — the entire WMS
+  surface — are **undocumented** in `docs/USER-MANUAL.md` (§9 is 8 lines covering only
+  items/categories/warehouse/movements/issues).
+
+### N8 — SPA mutation buttons are not permission-gated
+
+`usePermission` is never imported in `spa/src/pages/inventory/stock-adjustments/index.tsx`
+(Approve button, needs `inventory.adjust.approve`) or
+`spa/src/pages/inventory/warehouse/index.tsx` (all create/edit/delete/restore, need
+`inventory.warehouse.manage`). Buttons render for any `inventory.view` holder and fail
+with 403 on submit. Backend enforcement is correct; this is UX only.
+
+## Invariants executed — measured results
+
+| Invariant | Probe | Result |
+|---|---|---|
+| on-hand == independent SQL sum of movements | 2 receipts + issue + transfer + delivery + adj-out + adj-in | **HOLDS.** A 82.000=82.000, B 30.000=30.000 |
+| dev-DB on-hand vs ledger | SQL over real rows | 12/13 divergent — **seeder opening stock**, not runtime |
+| stock cannot go negative via issue | `move()` MaterialIssue > available | `InsufficientStockException` |
+| …via adjustment | adjust-out 10 on 0 available | `InsufficientStockException` |
+| …via transfer | transfer 10 on 0 available | `InsufficientStockException` |
+| …via delivery | Delivery from empty | `InsufficientStockException` |
+| two issues racing the last unit | 2 concurrent processes, wall-clock barrier | **exactly one won** (other: insufficient stock) |
+| two concurrent adjustments on one row | same | **exactly one won**; `stock_adjustments`=1 |
+| issue racing a transfer | same | **exactly one won**; A=0.000 B=10.000, ledger consistent |
+| guard is a row lock, not a pre-read | `lockForUpdate()` at `StockMovementService.php:225-249` + races above | **row lock, real** |
+| transfer decrement+increment atomic | execute 30 of 100 | A=70.000 B=30.000, single transaction |
+| source ≠ destination enforced | `POST /transfer-orders` same location | **NOT at create (201)**; only at execute (422) — M040-F07 |
+| in-transit double-counted or invisible | pending order then inspect levels | Neither — pending does not reserve or decrement; stock stays at source |
+| cancelled transfer restores both sides | cancel pending, then cancel after execute | pending cancel 204 (nothing to restore); post-execute cancel **422** |
+| double execute | execute twice | **422** |
+| adjustment recomputes WAC correctly | 100@10 then adj-in 100@90 | wac **50.0000** exact; adj-out leaves it 50.0000 |
+| transfer preserves WAC | receipt @10.6172, transfer 40 | destination wac **10.6172** exact |
+| negative adjustment at a different cost | adj-out 150 after blend | qty 50.000, wac unchanged — correct |
+| unapproved adjustment has not moved stock | gate on, create above threshold | status `pending`, `stock_movements` count **unchanged** |
+| maker cannot approve own adjustment | warehouse_staff self-approve | **403** by permission; **no `requested_by!=approver` check in the service** (N5) |
+| threshold read from settings | set `inventory.adjustment_approval_threshold`=100 | **yes** — 50×10=500 > 100 → pending |
+| count variance posts to GL | `MovementGlPostingTest` (green in baseline) + `postFor()` in the same transaction | **yes** when COA mapped |
+| count variance refuses a closed period | closed `accounting_periods` row, then complete | **NO — by design.** `MovementGlPostingService.php:186-197` deliberately catches it and records a replayable `manual_required` handoff so the physical fact survives. Variance applied (100→90), session completed 200. Intended, not a defect. |
+| variance not appliable twice | complete twice | second → **422** |
+| `Rule::exists()->where(col,false)` | grep + review | **none in this module** |
+| money/quantity family, `POST /transfer-orders` | 1.999 / 1e3 / 1e17 / 1e20 / 10.00005 | 201/201/**500**/**500**/201-truncated — **N3** |
+| money/quantity family, `recordCount` | 1.999 / 1e3 / 1e17 / 1e20 | 200/**500**/**500**/**500** — **N2** |
+| money/quantity family, `POST /stock-adjustments` | 1.999 / 1e3 / 1e17 / unit_cost 10.00005 | 201 / **422** / **422** / **422** — already hardened |
+| array/map payload per-value rule | no map/array payload exists in M040's requests | n/a |
+| soft-deleted item across 13 aggregates/lists/options | archive item, re-probe all | **no 500s, no 404s** — all 200 |
+| soft-deleted location across the same 13 | archive location too | **no 500s**; `bin-detail` correctly 404s |
+| soft-deleted movement | movements have no `deleted_at` | n/a — they hard-delete (N4) |
+| movement immutable after moving stock | edit + hard delete | **BOTH SUCCEED**, `stock_levels` unchanged — **N4** |
+| precision mismatch stock tables vs consumers | `information_schema` over 8 tables | **none** — every stock quantity is `numeric(15,3)`. But `variance_percent` is `numeric(8,2)` and overflows (**N1**) |
+| permission gate per endpoint incl. list/options | bare role, 7 endpoints incl. 3 options | **all 403** |
+| every registry role completes its part | 6 seeded roles × 7 operations | `system_admin` and `warehouse_staff` complete everything; `production_manager`/`purchasing_officer`/`qc_inspector` view-only (by design); **`finance_officer` 403 on stock-levels, map and the adjustment list it must approve — N5** |
+| raw-id-free payloads and error bodies | 5 endpoints + a 422 body | **clean** — no `"id":<pk>`, `"item_id":`, `"location_id":`, `"zone_id":`, `"warehouse_id":` leak |
+| restore binds `withTrashed()` | archive warehouse/zone/location, PATCH each restore | **all three 404** — M040-F13 |
+
+## Could NOT verify
+
+- **A real journal entry from a count variance in my own probe** — the COA the mapping
+  needs is created by the seeder that is broken at HEAD (N6). Relied instead on
+  `tests/Feature/Inventory/MovementGlPostingTest.php`, which is green in my baseline and
+  proves adjustment-in/out posting against a seeded COA.
+- **M040-F11 (lot balances) and M040-F12 (picking execution)** were not runtime-probed:
+  both are blocked on the open policy decisions the prior action plan lists, and probing
+  them would not change the answer.
+- **M040-F14/F15** (reparenting a stocked location, blocked/capacity policy) confirmed by
+  reading only; each needs a policy decision before a probe means anything.
+
