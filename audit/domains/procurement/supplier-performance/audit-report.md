@@ -807,3 +807,134 @@ Interrupted mid-flight; these were planned and not reached.
   quality inputs are inspection pass rate and NCR rate. The NCR arm was not
   exercised against real NCR rows this session.
 - `docs/USER-MANUAL.md` cross-check for documented-but-unbuilt features.
+
+---
+
+## Runtime measurements — 2026-09-01 (second half of session)
+
+Everything marked "probe outstanding" above was subsequently executed against
+real PostgreSQL rows. **Every hypothesis confirmed.** The probe was a scratch
+file (deleted); the durable cases live in
+`api/tests/Feature/Purchasing/SupplierScorecardInvariantsTest.php`.
+
+Mid-session the compose project was torn down again (`ogami-db` and
+`ogami-redis` both `Exited (255)` at the same moment — the same event that
+interrupted this session). Only those two services were restarted
+(`docker compose start db redis`); PostgreSQL then needed ~65s of crash
+recovery before accepting connections. No other container was touched and
+`docker compose down` was never run.
+
+### NEW-01 — confirmed exactly, including the tier
+
+`[PROBE] onTime='100.00' quality=NULL ncr='0.00' price=NULL lead='-5.00'
+SCORE='53.75' TIER='D'`
+
+The hand arithmetic was exact. A vendor with a **100% on-time delivery record**,
+a **0% NCR rate**, and one incoming inspection still sitting in `draft` is
+stamped **tier D — the worst tier the system has**. Applying the module's own
+`neutral_missing_metric` consistently gives 71.25 (**C**); renormalising gives
+82.69 (**B**).
+
+The mirror arm also confirmed: `onTime=NULL quality='100.00' SCORE='60.00'
+TIER='C'` — a vendor with a perfect quality pass rate whose POs simply carry no
+promised date loses a flat 12.5 points.
+
+Worst measured case: a single receipt with no promised date and QC not yet done
+scored **25.00 / D** (`onTime=NULL quality='0.00' → SCORE='25.00'`).
+
+### NEW-02 — the falsified comment, now measured
+
+`[PROBE P4a] onTime='100.00' quality='0.00'` — with one `pending_qc` GRN and no
+inspections, the GRN-status fallback returns **`0.00`**, not `NULL`. This
+directly falsifies the existing test's comment, which asserts the fallback
+"gives null because the GRN status is `pending_qc` not `accepted`". Measured: it
+gives `0.00`. (In the test's own fixture the fallback is not reached at all.)
+
+### NEW-03 — measured leak, then measured fix
+
+| | `price_variance_pct` | `po_count` | archived PO leaked |
+|---|---|---|---|
+| live PO only | `0.00` | 1 | — |
+| **+ one soft-deleted PO, before fix** | **`50.00`** | **2** | **true** |
+| + same soft-deleted PO, after fix | `0.00` | 1 | false |
+
+### NEW-04 — measured leak, then measured fix
+
+Before: `ranking returned 2 row(s)` — `vendor_id=10 score='95.00'
+vendor_relation=NULL name=NULL` ranked **first**, ahead of the live
+`AAA Live Vendor` on 70.00. After: `ranking returned 1 row(s)`, archived vendor
+absent, `vendor_relation=loaded`.
+
+### NEW-06 — measured overflow, then measured score-neutral clamp
+
+Before: `SQLSTATE[22003]: Numeric value out of range … A field with precision 5,
+scale 2 must round to an absolute value less than 10^3` — the raw value was
+`2206` days and it aborted the whole snapshot.
+After: `lead='999.99' SCORE='17.50'`. The score is **identical** to what the
+unclamped value would have produced, because `max(0, 100 - |v| × 5)` is already
+0 at 20 days. Asserted in the test so the claim cannot rot.
+
+### F-004 — confirmed against real rows
+
+Two GRNs, one `accepted` and one `partial_accepted`, no inspections:
+`quality='50.00'`. A **partially accepted receipt scores as a total quality
+failure**. Still open (cross-module policy).
+
+### NCR rate — confirmed against real NCR rows, no `42803`
+
+One `failed` incoming inspection with a real `inspection_fail` NCR row:
+`incoming='0.00' ncr='100.00' SCORE='43.75' TIER='D'`. The quality metric does
+derive from real inspection rows and the NCR metric from real NCR rows — neither
+is a constant, and the per-stage `incoming` breakdown does populate. No
+`SQLSTATE[42803]` is reachable here: this module never aggregates over
+`NonConformanceReport::actions()`.
+
+Note `ncr_rate` is unbounded above (one NCR per GRN = 100%; several per GRN
+exceeds 100%), and at the seeded `ncr_penalty_factor = 2` any rate at or above 50%
+floors that component. Not a defect, but the metric is a ratio of NCRs to
+receipts, not a percentage of receipts with an NCR — worth stating.
+
+### NEW-08 — the same archived-vendor leak exists DOWNSTREAM (outside this module)
+
+Classification: **Broken**, in the **Dashboard** module — **reported, not touched**.
+
+`api/app/Modules/Dashboard/Services/PurchasingDashboardService.php:142-143`
+joins `vendors` to `supplier_performance_snapshots` with **no `deleted_at`
+guard**, so the purchasing dashboard's supplier widget still exhibits exactly the
+NEW-04 leak this session fixed in `ranking()`. In addition,
+`DashboardWidgetDataService.php:445` and `KpiSnapshotService.php:451` both
+`avg('overall_score')` across every snapshot for the period without excluding
+archived vendors, so the "average supplier score" KPI includes suppliers the
+business has retired.
+
+Out of surface for M038 — Dashboard belongs to another module's owner. No
+Dashboard file was read beyond these three lines or modified.
+
+## Scorecard invariant results — executed
+
+| Invariant | Probe | Measured result |
+|---|---|---|
+| Vendor with zero POs / receipts / inspections | `test_vendor_with_no_history_returns_null_not_zero` | Every metric, `overall_score` and `tier` **NULL**; `po_count=0 grn_count=0`. No throw. "No history" **is** distinguishable from "scored zero" |
+| Divide-by-zero on every ratio | same + code audit of all five | All guarded (`$total>0`, `$terminalCount>0`, `$totalGrns===0`, `qty<=0`, `empty($diffs)`). **No `DivisionByZeroError` reachable** |
+| "No history" vs "scored zero" in the **mixed** case | NEW-01 probe | **FAILS** — a NULL on-time or quality is scored as **0** at 25%/35% weight. Score 53.75/D measured. Unresolved, QUESTION-1 |
+| Which statuses enter each metric | code audit + NEW-05 | Quality: inspections `passed`/`failed` only (terminal), `entity_type='grn'` only. NCR: `source='inspection_fail'`. GRN fallback: `accepted` only. **PO: no status filter at all** — drafts and cancellations count |
+| Soft-deleted **vendor** vs ranking | `test_ranking_excludes_soft_deleted_vendors` | Leaked (ranked 1st, null identity) → **FIXED**, 1 row |
+| Soft-deleted **PO** vs every metric | 3 cases in the new test | Leaked into price, `po_count`, on-time, lead-time → **FIXED** |
+| Soft-deleted **PO item** | `test_soft_deleted_purchase_order_item_…` | Leaked → **FIXED** |
+| Soft-deleted **GRN / inspection** | `information_schema` | **N/A** — neither table has `deleted_at` |
+| On-time boundary: delivered **exactly** on promised date | `test_receipt_exactly_on_promised_date_…` | `100.00` — **on time** (`lte`). Locked |
+| Early receipt | `test_early_receipt_is_on_time_…` | On time; one early + one late = `50.00`. Locked |
+| Partial receipt | code audit (F-003) | Counts as a **full independent vote** — GRN grain. Still open |
+| Receipt with **no** promised date | `test_receipt_with_no_promised_date_…` | Excluded from **both** sides → `NULL`, **not** counted late. Locked |
+| Quality metric against real defect rows | NCR probe | `incoming='0.00' ncr='100.00'` from a real failed inspection + real NCR row. Not a constant. **No PPM metric exists in this module** |
+| Test actually reaches the row-mapping branch | NEW-02 | **NO** — the terminal-empty test asserts only `quality_pass_rate`, never `overall_score`. That is why NEW-01 survived a green suite |
+| NCR aggregate `->reorder()` / `42803` | code audit + probe | **Cannot fire** — no `GROUP BY` over `actions()` anywhere in this module |
+| Ranking tie determinism, **both** insertion orders | 2 cases | Zeta-first and Alpha-first both → `AAA Alpha Co | ZZZ Zeta Co`. Deterministic. Labelled pass-either-way lock |
+| Money / percentage rounding direction | code audit | **No money arithmetic in this service.** All metrics `round(x, 2)`, composite `round($score, 2)`; values non-negative so half-up, consistently applied. Direction defined, undocumented |
+| `/vendors/ranking` not param-bound | `routes.php:86` vs `:89` + 7 green ranking tests | Literal declared **first**; resolves correctly |
+| Permission gate per endpoint incl. export | `RolePermissionSeeder` + route middleware | `.view` on detail+ranking, `.recompute` on recompute. **No export endpoint exists.** Live per-role 403 probes NOT run |
+| Every registry role can reach what it needs | seeder read | `purchasing_officer` both slugs via `module('purchasing')`; `finance_officer` `.view` only (`:549`); `system_admin` wildcard. **Satisfied** |
+| No supplier-facing surface exposes another vendor's score | grep of portal routes/controllers | **No supplier-portal surface references** `SupplierPerformanceSnapshot`, the service, or the snapshot table (see referencer list in fix-log). No cross-vendor score leak |
+| Raw-id-free error bodies | validation + binding behaviour | `SupplierRankingRequest` returns 422 field errors only; `{vendor}` binding 404s via `HasHashId::resolveRouteBinding` with no id echo. No `{"id":<pk>}` oracle found |
+| Scheduled recompute distinguishes "nothing to do" from "everything threw" | code audit of command + service | **YES** — `recomputeAll()` collects per-vendor failures; command returns `FAILURE` if any, prints each error. Zero vendors → `computed=0 failed=0` → truthful `SUCCESS`. Command NOT executed against seeded data this session |
+| Lead-time overflow → 500 | `test_extreme_lead_time_variance_…` | `SQLSTATE[22003]` before → clamped `999.99`, score unchanged at `17.50`, after |

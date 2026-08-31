@@ -136,9 +136,74 @@ The F-007 database CHECK constraint was confirmed **present and correct** in a
 fresh migration run; it is absent from the long-lived dev `ogami` database only
 because that migration has never been applied there (dev drift, NEW-07).
 
-### Fixed
+### Fixed — commit `6f357553`
 
-Nothing yet. No source file was modified in this session.
+Three items, all measured failing before and passing after. **No scoring
+formula, weighting, or definition of "on time" was touched.**
+
+- **NEW-03 — archived POs and PO lines no longer score their supplier.**
+  `SupplierPerformanceService.php` — `whereNull('deleted_at')` added to the
+  `po_count` query and to `priceVariancePct()` (both `po` and `poi`), and the
+  guard moved *into* the JOIN clause for the two `leftJoin`s in
+  `onTimeDeliveryRate()` and `leadTimeVarianceDays()` so an archived PO reads as
+  "no promised date" and its receipt leaves the ratio, rather than being scored
+  late against an order that no longer exists.
+  Measured: one soft-deleted, wholly unreceived PO moved `price_variance_pct`
+  **0.00 → 50.00** and `po_count` **1 → 2**. After the fix both are unchanged.
+- **NEW-04 — archived vendors no longer keep a ranking slot.** `ranking()` gains
+  `whereNull('vendors.deleted_at')`, reconciling the raw `leftJoin` with the
+  `with('vendor:id,name')` that was already applying the scope.
+  Measured: the archived vendor ranked **first** on 95.00 with
+  `{"id":null,"name":null}`; ranking returned 2 rows, now 1.
+- **NEW-06 — lead-time variance can no longer 500.** New
+  `MAX_LEAD_TIME_VARIANCE_DAYS = 999.99` clamp with a `Log::warning`.
+  Measured: `SQLSTATE[22003] numeric field overflow` on a raw 2206 days, which
+  aborted the entire snapshot; now stores `999.99`. **Score-neutral** — the
+  composite floors this component at 0 past 20 days, so clamped and unclamped
+  both score `17.50`, and the test asserts that number so the claim cannot rot.
+
+### Deliberately NOT fixed
+
+NEW-01 (the 0-vs-neutral defect), NEW-05 (PO status filter), and the carried
+F-001/F-002/F-003/F-004/F-009/F-010/F-011. Each either changes what a score
+means or crosses into quality/inventory ownership. NEW-01 in particular moves
+every tier boundary, and the brief is explicit that a scoring formula is not this
+session's decision.
+
+### Verification
+
+```
+BEFORE (baseline):  29 passed / 0 failed / 69 assertions
+AFTER  (+ new test): 40 passed / 0 failed / 96 assertions
+```
+
+- New regressions proven red against unmodified source: HEAD's service restored
+  from `git show HEAD:…`, suite re-run → **5 failed / 6 passed**. The 5 are
+  exactly the three NEW-03 cases, NEW-04 and NEW-06; the 6 that stayed green are
+  the labelled **pass-either-way locks** (on-time boundary ×3, zero-history
+  vendor, tie determinism ×2). The fixed file was then re-applied and proven
+  byte-identical with `sha256sum -c` → `OK`.
+  *Process note, for honesty:* the temporary revert overwrote the fixed file
+  without a backup, so the six edits were re-applied from context; the
+  `sha256sum -c` check against the hash taken before the revert is what proves
+  the restore is exact.
+- `php -l` clean on both files.
+- `phpstan analyse` on both changed files → **`[OK] No errors`**.
+- `pint --test`: the test file passes. The service fails with 10 fixers, **all
+  inherited** — proven by extracting `git show HEAD:…` to a temp path, running
+  Pint on it, and diffing the rule lists programmatically: `NEW (mine only): []`.
+  The change in fact *removes* one (`class_attributes_separation`).
+- No SPA file was modified, so no `npm` checks were required and the
+  Prettier `PostToolUse` hook never fired.
+
+### Out-of-module defect found — reported, NOT touched (NEW-08)
+
+The archived-vendor leak fixed here in `ranking()` **also exists downstream in
+the Dashboard module**: `PurchasingDashboardService.php:142-143` joins `vendors`
+with no `deleted_at` guard, and `DashboardWidgetDataService.php:445` /
+`KpiSnapshotService.php:451` both `avg('overall_score')` without excluding
+archived vendors, so the "average supplier score" KPI includes retired
+suppliers. Outside this module's surface; not modified.
 
 ### New findings recorded (see audit-report.md for evidence)
 
