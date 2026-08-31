@@ -430,3 +430,127 @@ raw integers. No `42803`.
   `open`, `in_progress`, `cancelled`, and from a `closed` NCR whose action was never
   scheduled ("Unscheduled"). No `resume()`-style backdoor found — there is no second
   entry point to any transition.
+
+## Handoffs I was asked to characterise
+
+### H-1 — in-process QC notifies a role that 403s on the link it is given
+
+**Confirmed, and it is my side.** `TriggerInProcessQC`
+(`api/app/Modules/Quality/Listeners/TriggerInProcessQC.php:130-143`) resolves recipients from
+`quality.in_process_qc.notification_roles` — seeded `['qc_inspector','production_manager']` at
+`0374_seed_remaining_notification_roles.php:15` — and sends
+`link_to = "/production/work-orders/{hash}"`.
+
+`qc_inspector` (`RolePermissionSeeder.php:682-696`) is `module('quality')` + `selfService()` +
+`return_management.view/inspect` + `dashboard.quality.view` + `inventory.view/mrb.view/mrb.manage`.
+**No `production.*` permission of any kind.** So half the audience of the differentiator
+touchpoint receives a notification whose only call to action lands on a page they cannot open.
+
+Whether to widen `qc_inspector` or retarget the link (e.g. to
+`/quality/inspections/{inspection}`, which the listener has in hand) is a permissions decision
+for a human. Note the second option is strictly better on the merits — the notification's
+subject *is* the inspection — but it changes what an existing notification points at, so I did
+not take it.
+
+Secondary, minor: that notification's failure is swallowed into `Log::debug`
+(`TriggerInProcessQC.php:144-146`) rather than `Log::warning` as every sibling path uses. It is
+the *work*, not a failure-recorder, so the convention permits catching it — but at `debug` it
+is the least visible log level in the file.
+
+### H-2 — the per-operation QC gate
+
+`routing_operations.qc_required` is a stub on Production's side
+(`WoOperationService.php:243-266`), which is not mine and which I did not touch. **What exists on
+the Quality side:** exactly one in-process entry point, `TriggerInProcessQC`, bound to
+`WorkOrderStatusChanged` and firing **once per work order** when it reaches `in_progress`. It
+creates a single `InspectionStage::InProcess` inspection for the whole WO
+(`:102-109`), keyed idempotently on `(stage, entity_type=work_order, entity_id)` (`:68-73`).
+
+`InspectionEntityType` has no operation case and `inspections` has no `routing_operation_id`,
+so a working per-operation gate would need, on my side: an entity type (or nullable
+`routing_operation_id`) so several in-process inspections can coexist for one WO; the
+idempotency key widened to include it, otherwise the existing `exists()` check suppresses every
+operation after the first; a listener on whatever per-operation event Production dispatches;
+and a blocking read Production can call to refuse an operation advance while its inspection is
+incomplete — nothing in Quality exposes one today. Reported only.
+
+## SPA and docs surface (read-only sweep)
+
+**Clean:** all 24 NCR/CAPA/Pareto/template routes have a client and a live caller — no dead
+endpoint, no client without a caller. Every page file under `spa/src/pages/quality/ncrs/` and
+`ncr-templates/` is route-registered. The SPA union types for `NcrSource`, `NcrSeverity`,
+`NcrStatus`, `NcrDisposition`, `NcrActionType` and `EffectivenessStatus`
+(`spa/src/types/quality.ts:167-172`) match the backend enums value-for-value, and `Ncr` /
+`NcrAction` cover every field the resources emit. **Prior finding F-012 is refuted** — the
+contract drift it described was fixed and no longer exists.
+
+**Not clean:**
+
+- `spa/src/pages/quality/dashboard.tsx:40` calls `ncrsApi.list()` — a `quality.ncr.view`
+  endpoint — from a page guarded on `quality.view` only, with no `can()` gate and **no error
+  branch** (`:192-199`). A 403 renders as "0 total". (SPA-1)
+- `/quality/ncr-templates*` is guarded on `quality.ncr.manage`
+  (`spa/src/routes/qualityRoutes.tsx:66,68,70`) while its read endpoints are
+  `quality.ncr.view`. Measured from the API side: `production_manager` gets **200** from
+  `GET /ncr-templates` but can never reach the page. Conversely a manage-only holder passes the
+  guard then 403s on the page's own list call. Same shape at `/quality/ncrs/new` (`:61`), which
+  calls two `.view` endpoints behind a `.manage` guard. (SPA-2)
+- `/quality/dashboard` — the only Defect Pareto surface and the sole consumer of all three
+  `quality/analytics/*` routes — has **no Sidebar entry** (`Sidebar.tsx:422-469` lists six
+  Quality items, not including it); reachable only via the "Quality" breadcrumb.
+  `/quality/ncr-templates` likewise, with one inbound link inside the New-NCR form
+  (`ncrs/create.tsx:214`). (SPA-3)
+- `docs/USER-MANUAL.md:212-215` is three sentences for a feature with 12 NCR routes, 8 template
+  routes and 4 pages. Disposition, CAPA authoring, effectiveness verification, the due-check
+  queue, bulk close, cancel, assignees, templates and the Pareto page are all undocumented.
+  `docs/QA-MATRIX.md:57-58` has no NCR rows. (DOC-1)
+- `docs/SCHEMA.md:377,380` documents enums that no longer exist:
+  `source (incoming/in_process/outgoing/customer)` against the real
+  `inspection_fail|customer_complaint`, and an action set without `containment`. The entire CAPA
+  effectiveness column set is undocumented. (DOC-2)
+- Documented-with-no-surface: `docs/PROCESS-FLOWS.md:1242` describes recurring NCRs
+  auto-spawning an 8D investigation. The resource emits `recurrence_of_ncr`
+  (`NcrResource.php:73-76`) and the SPA type has it (`types/quality.ts:216`), but no NCR page
+  reads it and there is no link from an NCR to its spawned 8D — the 8D tab lives only on
+  `pages/crm/complaints/detail.tsx` behind `crm.complaints.manage`, which `qc_inspector` does
+  not hold. `docs/PROCESS-FLOWS.md:1243` documents the escalation cron and
+  `NcrController::options()` emits `escalation_roles` (`:51`), but the SPA `options()` type
+  omits it (`spa/src/api/quality/ncrs.ts:35`) and no page displays escalation state.
+
+## Invariants executed — 2026-09-01
+
+| # | Invariant | Result | Probe |
+|---:|---|---|---|
+| 1 | Failed inspection creates an NCR (`NcrSource::inspection_fail`) | **PASS** — `NCR-202609-0001`, `source=inspection_fail`, `severity=high`, `defect_signature` populated | `openFromInspectionFailure()` on a real failed outgoing inspection with 2 failing measurements |
+| 2 | Corrective action generates a replacement work order | **PASS** — `rework` close → `rework_work_order_id` set; `scrap` on outgoing → `replacement_work_order_id` set | end-to-end close through `NcrService` |
+| 3 | Defect data reaches Pareto | **PASS** — both defects appear (`total_defects=2`, rows `["Burr","Flash"]`) | `DefectParetoService::run()` after the loop above |
+| 4 | No link in the loop swallowed by a `catch` | **PASS** — `createRequiredWorkOrder()` (`NcrService.php:404-428`) rethrows as `BusinessRuleException` and rolls the close back; the only caught-and-logged path is the QC fan-out notification (`:213-219`), which is the *work*, not a recorder | source read + `InspectionNcrTest` WO-failure case green |
+| 5 | `scrap` removes stock, and is reversible | **FAIL (N-004)** — `stock_movements` 0 → 0, `material_review_records` 0 → 0 on a 40-piece scrap close. Nothing to reverse because nothing happened | row counts before/after `close()` |
+| 6 | `rework` creates the replacement WO | **PASS** — `rework_work_order_id` set (outgoing stage only, by design) | as #2 |
+| 7 | `use_as_is` requires approval and records the grantor | **FAIL (N-005)** — closes with no extra step; zero columns matching `concession\|approv\|grant` | `information_schema.columns` + a `use_as_is` close |
+| 8 | `return_to_supplier` links a vendor and reaches supplier performance | **FAIL (N-005)** — zero columns matching `vendor\|supplier`; the notification names the NCR and quantity, not the supplier; nothing reaches supplier performance | `information_schema.columns` + `notifyPurchasing()` payload |
+| 9 | Close with open actions refused | **PASS** — refused without ≥1 Corrective and ≥1 Preventive, and without a disposition | matrix + `NcrCloseRequiresActionsTest` (4 green) |
+| 10 | Re-open after close refused | **PASS via service** / **FAIL at data layer (N-003)** — every service entry point refuses; `forceFill(status=open)->save()` and raw SQL both succeed | transition matrix + direct model/SQL writes |
+| 11 | Disposition twice refused | **PARTIAL** — refused once terminal; **freely re-writable while `in_progress`**. Harmless today only because #5 means a disposition has no material effect | matrix cell `in_progress × setDisposition` |
+| 12 | Disposition change after stock moved | **N/A** — stock never moves (#5), so the hazard cannot arise; it becomes live the moment N-004 is addressed | — |
+| 13 | Delete with a linked replacement WO refused | **PASS at API** (no `DELETE` route among the 12 registered `quality/ncrs` routes) / **FAIL in-process (N-003)** — `->delete()` hard-deletes the row | route enumeration + `delete()` on a closed NCR |
+| 14 | Status settable directly, bypassing the service | **FAIL (N-003)** — yes, by Eloquent and by raw SQL; `ncr_number` rewritable to `HACKED`; zero triggers on `non_conformance_reports` or `ncr_actions` | `pg_trigger` query + direct writes |
+| 15 | Full transition matrix walked | **PASS — 20 cells** (4 statuses × 5 operations). All four NCR operations refuse from `closed` and `cancelled`; `verifyAction` refuses from `open`, `in_progress`, `cancelled`, and from a `closed` NCR whose action was never scheduled. **No `resume()`-style backdoor: no transition has a second entry point** | scripted matrix, every outcome recorded |
+| 16 | NCR immutable after closure (update / soft-delete / force-delete) | **FAIL (N-003)** — update mutates, no soft delete exists, `delete()` is a hard delete | as #14 |
+| 17 | Overdue CAPA escalated | **PASS** — `notifyOverdueChecks()` finds the overdue action, notifies the owner, and escalates to the configured manager roles past the threshold, each once per due date via an idempotency key | `NcrCapaEffectivenessTest` dedup case green + a 30-day-overdue probe |
+| 18 | CAPA closable without effectiveness evidence | **FAIL (N-006)** — the only gate is a non-empty free-text note; `ncr_actions` has no attachment column; all-`not_applicable` rolls the NCR up to `effectiveness_status=effective` | verified both actions `not_applicable` with note `n/a` |
+| 19 | Pareto against real rows, no `42803` | **PASS** — 3 defects → 66.67% / 33.33%, cumulative 100.0, no error | `DefectParetoService::run()` with real measurement rows |
+| 20 | Pareto test reaches the row-mapping branch | **WAS NO (N-009), NOW YES** — its only caller asserted the empty case; probed correct and now pinned at service + HTTP level | new regression test |
+| 21 | Soft-deleted NCR/defect consistent across every aggregate | **PASS (vacuously, and consistently)** — none of `non_conformance_reports`, `ncr_actions`, `inspections`, `inspection_measurements` uses `SoftDeletes`, so no aggregate can disagree. `products` *is* soft-deletable and **neither** Pareto aggregate filters it — the same choice in both, and the right one | model reads + both aggregates compared |
+| 22 | Empty-period divide-by-zero returns null, not 0 | **PASS** — `inspectionSummary` → `pass_rate: null`; `run()` → `total_defects: 0, rows: []` | 2001 date window |
+| 23 | `ncr` row exists in `document_sequences` | **PASS with nuance** — **no** row until the first `generate('ncr')`, then one row keyed `(ncr, 2026, 9)`. The "no row at all" state another session reported is pre-generation, not a defect | row count before/after two generates |
+| 24 | `NCR-YYYYMM-NNNN` uniqueness under concurrency | **NOT TESTED** — sequential format and monthly reset verified (`NCR-202609-0001`, `-0002`); the race lives in `DocumentSequenceService` (`Common` scope) and a two-connection probe against an uncommitted unique insert deadlocks. Abandoned deliberately rather than reported bogus | — |
+| 25 | Money/quantity FormRequest vs `1.999` / `1e3` / `1e17` / `10.00005` | **PASS** — six clean 422s (`1.999`, `1e3`, `1e17`, `1e20`, `10.00005`, `-1`), zero 500s. `affected_quantity` is `integer\|min:0\|max:1000000`; this module has no money column | HTTP probes on `POST /quality/ncrs` |
+| 26 | Permission gate per endpoint | **PASS — 42 cells** (3 roles × 14 endpoints, including `options`, `assignees` and both analytics list endpoints). `production_manager` 403s on all seven manage endpoints and 200s on all view endpoints | HTTP matrix |
+| 27 | All three registry roles complete their part | **2 of 3.** `system_admin` and `qc_inspector` complete the whole lifecycle. `production_manager` is view-only — which is a legitimate policy, except the SLA escalation makes it tier 2 (N-002), so it is notified about something it cannot resolve | same matrix |
+| 28 | The causer cannot disposition or close its own NCR | **FAIL (N-007)** — one `qc_inspector` created, dispositioned, actioned, closed (`created_by == closed_by`) and self-verified (`performed_by == verified_by`) | single-actor end-to-end run |
+| 29 | Raw-id-free error bodies | **PASS** — 13 error/edge bodies (422 validation, 422 `BusinessRuleException`, 207 partial bulk-close, 200 analytics); `"(id\|ncr_id\|product_id\|inspection_id\|user_id)":\d+` matched none | regex over each response body |
+| 30 | Restore binds `withTrashed()` | **WAS FAIL (N-008, HTTP 404), NOW PASS (HTTP 200)** — `ncr-templates` restore. NCR itself has no restore route because it has no soft deletes | HTTP probe before/after |
+| 31 | `ncr:escalate` distinguishes "nothing to do" from "everything threw" | **WAS FAIL (N-001), NOW PASS** — was `0 advanced` + exit 0 with three thrown candidates; now `3 considered, 0 advanced, 0 skipped, 0 unstaffed, 3 failed` + exit 1 | throwing `NotificationService` bound in the container |
+| 32 | `ncr:check-effectiveness` distinguishes the same | **PASS (already)** — `notifyOverdueChecks()` lets a transport `RuntimeException` propagate, so the command exits non-zero. Only `ncr:escalate` had the defect | same throwing binding |
+| 33 | No failure-recorder swallows its own errors | **PASS after N-001** — the escalation recorder's own `catch (Throwable) → Log::error` (`NcrEscalationService.php:213-219`) remains, but the NCR is now counted `failed` regardless, so the command reports and exits non-zero either way. The 8D `42P01` cause does not exist here: all three new models' inferred table names match `0478` | source read + the N-001 probe |
