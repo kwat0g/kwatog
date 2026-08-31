@@ -206,3 +206,326 @@ Read-only (LIVE under other agents): `api/app/Modules/Inventory/`, `api/app/Modu
 
 (populated below as measured)
 
+### Environment and baseline (real, quoted)
+
+```
+docker compose ps                → ogami-db + ogami-redis up (healthy); api/queue/reverb/spa/nginx NOT running
+docker compose exec db psql      → select 1 → 1 row
+CREATE DATABASE ogami_test_impex OWNER ogami
+docker compose run --rm --no-deps -e DB_DATABASE=ogami_test_impex api \
+  php artisan test tests/Feature/SupplyChain --no-coverage
+  → Tests: 109 passed (304 assertions)   Duration: 106.91s   EXIT=0
+```
+
+Non-zero assertions, so the run was real. `SupplyChain/CocAutoAttachOnConfirmTest` is
+green, as `deliveries-proof` reported. Scheduled commands: **0 of 48** in
+`api/routes/console.php` reference shipment / customs / impex / landed cost, so the
+"command exit code lies about doing nothing" invariant is N/A here — recorded, not skipped.
+
+### HTTP-level coverage vs service-only (the goods-receiving lesson)
+
+21 import endpoints exist. Before this session **6 had HTTP-level coverage; 15 did not.**
+
+| endpoint | HTTP-covered at HEAD | uncovered result measured this session |
+|---|---|---|
+| `GET /shipments/options` | no | 200 |
+| `GET /shipments` | yes (`DeliveryReadPermissionTest`, permission only) | — |
+| `GET /shipments/{s}` | yes | — |
+| `POST /shipments` | yes | — |
+| `PATCH /shipments/{s}/status` | **no** — `ShipmentStatusRegressionRaceTest` calls the service, never HTTP | 200 for a shipment with zero documents |
+| `PATCH /shipments/{s}` | **no** | 200 on a `received` shipment; accepts ETA < ETD |
+| `DELETE /shipments/{s}` | **no** | 204 on `cleared`; 422 on `received` |
+| `PATCH /shipments/{s}/restore` | **no** | **404 for its only valid target** |
+| `POST /shipments/{s}/calculate-landed-cost` | **no** | **500 for any shipment with ≥2 PO lines** |
+| `GET /shipments/{s}/packing-list` | yes | — |
+| `GET /shipments/{s}/commercial-invoice` | yes | — |
+| `POST /shipments/{s}/documents` | yes | — |
+| `GET /shipment-documents/{d}/download` | yes | header injection (see F103) |
+| `DELETE /shipment-documents/{d}` | **no** | 204 after receipt |
+| `PATCH /shipment-documents/{d}/restore` | **no** | **404** |
+| `GET /shipments/{s}/containers` | **no** | 200 |
+| `POST /shipments/{s}/containers` | **no** | **500 on `1e17`/`1e20`**; `1.999`→`2.00` |
+| `GET /containers/{c}` | **no** | 200 |
+| `PUT /containers/{c}` | **no** | 200 on a received shipment's container |
+| `DELETE /containers/{c}` | **no** | 204 |
+| `PATCH /containers/{c}/restore` | **no** | **404** |
+
+Three of the four new P0/P1 defects below live on routes with no HTTP test.
+
+### Prior-work assessment
+
+The 2026-08-25 session committed **no source changes** and its log says so plainly; its
+recorded verification (26 tests / 53 assertions) is consistent with what is on disk. So this
+is the "log accurate, nothing fixed" outcome, not a fabricated or self-flagged one.
+
+Re-measured, **8 of 8 prior findings still reproduce**, none is disproved:
+
+| prior | verdict | probe |
+|---|---|---|
+| F001 shipments for terminal/invalid POs | REPRODUCES, worse than stated | all **8** PO states accepted (`draft…cancelled`) |
+| F002 no customs evidence / receiving gate | REPRODUCES | empty shipment walks `ordered→received` in five 200s |
+| F003 Incoterm discarded | REPRODUCES | submitted `DDP` → response `null`, column `null` |
+| F004 landed cost unusable + never reaches inventory | REPRODUCES, and understated | see F100/F101/F102 |
+| F005 containers API/PDF-only | REPRODUCES | zero container methods in `spa/src/api/supply-chain/index.ts` |
+| F006 archive destroys files; restore cannot bind | REPRODUCES | file deleted + row live; restore 404 ×3 |
+| F007 supplier portal does not converge | REPRODUCES | `supplier_shipments` read only by `B2B` resources |
+| F008 no terminal-state mutation policy | REPRODUCES | `received` shipment fully editable, ETA < ETD accepted |
+
+## New findings (2026-09-01)
+
+### M043-F100 — `by_weight` landed-cost allocation has never worked (Broken, P0)
+
+`LandedCostService::getItemWeights()` declares
+`: Illuminate\Database\Eloquent\Collection` at
+`api/app/Modules/SupplyChain/Services/LandedCostService.php:176` but maps PO lines to
+floats at `:178-186`. `Eloquent\Collection::map()` downgrades to
+`Illuminate\Support\Collection` as soon as the mapped values are not Models, so the
+declared return type is violated on **every** invocation — not only for degenerate input.
+
+Measured with two ordinary non-zero lines:
+
+```
+TypeError: App\Modules\SupplyChain\Services\LandedCostService::getItemWeights():
+Return value must be of type Illuminate\Database\Eloquent\Collection,
+Illuminate\Support\Collection returned      (LandedCostService.php:186, from :155)
+```
+
+A `TypeError` is not a `BusinessRuleException`, so it escapes the whole
+`DB::transaction()` closure as an unhandled 500. Nothing is persisted.
+
+Second, independent defect in the same method: it reads
+`$item->item->net_weight ?? $item->item->weight`, and **neither is a column** —
+`information_schema` reports zero `%weight%` columns on `items` (asserted in the probe).
+So even with the type error repaired, `by_weight` would silently produce an equal split
+while claiming to apportion by weight. One of the four advertised bases is doubly dead.
+
+This is the 8D-SLA-ledger shape: a code path that has never once executed successfully,
+indistinguishable from a working one because no test and no client ever calls it.
+
+### M043-F101 — the only landed-cost endpoint 500s on every multi-line shipment (Broken, P0)
+
+`LandedCostService::calculate()` returns
+`$shipment->fresh()->load('landedCosts.purchaseOrderItem')` at
+`api/app/Modules/SupplyChain/Services/LandedCostService.php:70,106` — it does **not**
+load `landedCosts.shipment`. `ShipmentLandedCostResource:16` then reads
+`$this->shipment?->hash_id`, and `AppServiceProvider:237` sets
+`Model::preventLazyLoading(! $this->app->isProduction())`.
+
+Measured over HTTP on `POST /supply-chain/shipments/{id}/calculate-landed-cost`:
+
+```
+{"lines=1":200,"lines=2":500,"lines=3":500,"lines=2,freight=100":500}
+exception = Illuminate\Database\LazyLoadingViolationException:
+  Attempted to lazy load [shipment] on model
+  [App\Modules\SupplyChain\Models\ShipmentLandedCost] but lazy loading is disabled.
+```
+
+Deterministic and reproducible. A real resin import is multi-line, so in every
+non-production environment the endpoint is a hard 500; in production the guard is off
+and the same line becomes a silent N+1 (one query per allocation row). The single-line
+case escaping is reproducible but its mechanism is **not established** — recorded honestly
+rather than guessed.
+
+`impex_officer` — the seeded role that exists for exactly this module — completes 14 of the
+15 steps `docs/PROCESS-FLOWS.md:627-632` documents and fails on step 5:
+
+```
+{"options":200,"create":201,"upload_bill_of_lading":201,"upload_commercial_invoice":201,
+ "upload_packing_list":201,"add_container":201,"list_containers":200,
+ "status_shipped":200,"status_in_transit":200,"status_customs":200,"status_cleared":200,
+ "status_received":200,"landed_cost":500,"packing_list_pdf":200,"commercial_invoice_pdf":200}
+```
+
+No test in the repository posts to this route. Same class as `goods-receiving`'s
+`POST /inventory/grn`.
+
+### M043-F102 — landed-cost apportionment does not reconcile to the charged total (Broken, P0)
+
+`LandedCostService` reads the five charge columns as **floats** at `:53-57`, sums them as
+floats at `:59`, and rounds each component on each line independently at `:81-85` with no
+residual reconciliation. `ShipmentLandedCost` totals therefore do not equal
+`shipments.landed_cost_total`.
+
+Measured against real Postgres rows with BCMath:
+
+| case | header total | Σ line `total_allocated` | delta |
+|---|---|---|---|
+| 7 equal lines, freight 100.00 | `100.00` | `100.03` | **+0.03 over-allocated** |
+| 3 equal lines, freight 100.00 | `100.00` | `99.99` | **−0.01 parked on no line** |
+| 3 lines × five components of 100.00 | `500.00` | `499.95` | **−0.05** (each component `99.99`) |
+
+The over-allocating direction is the more serious one: the ledger claims more duty and
+freight were apportioned to inventory than the broker actually charged. `goods-receiving`
+verified weighted-average cost exact to `10.6172` against independent BCMath — if landed
+cost is ever wired into GRN unit cost, this defect corrupts a verified-correct downstream
+calculation.
+
+Related, same finding family:
+
+- The **basis is not consistent**: `manual` is implemented as an equal split at `:145-150`
+  while its own comment says "user enters amounts directly". Measured with lopsided line
+  values `9000.00` / `1000.00` and freight `100.00`: allocations `["50.00","50.00"]`.
+  There is no per-line input anywhere to enter a manual amount with.
+- Zero-basis is **safe**: `computeRatios()` guards `$total <= 0` at `:160-165`, so
+  `by_value` and `by_quantity` with all-zero lines fall back to an equal split and
+  allocate `90.00` of `90.00` with no `DivisionByZeroError`. (`by_weight` throws first —
+  F100.)
+- `shipment_landed_costs` has **no `deleted_at`**, so the `->delete()` at `:76,194` is a
+  hard delete and the `shipment_landed_cost_unique` constraint cannot be tripped by a
+  re-run. Recalculation is idempotent.
+- `ShipmentLandedCost` is the only model in the module **without `HasAuditLog`**
+  (`api/app/Modules/SupplyChain/Models/ShipmentLandedCost.php:21` — `HasFactory, HasHashId`
+  only), while `Shipment`, `Container` and `ShipmentDocument` all have it. Money
+  allocations are written and hard-deleted with no audit row.
+
+### M043-F103 — document download forges its own Content-Disposition (Broken, P1)
+
+`ShipmentController::downloadDocument()` interpolates the client's stored
+`original_filename` straight into the header at
+`api/app/Modules/SupplyChain/Controllers/ShipmentController.php:145-147`:
+
+```php
+'Content-Disposition' => $isImage
+    ? sprintf('inline; filename="%s"', $filename)
+    : sprintf('attachment; filename="%s"', $filename),
+```
+
+Measured with a real upload named `bl".pdf`:
+
+```
+attachment; filename="bl".pdf"
+```
+
+The double quote closes the `filename` parameter early and the remainder is injected into
+the header value. This is the **identical defect** `DeliveryProofController` was repaired
+for at commit `38663a81` hours earlier in this same module directory, which left an
+RFC 6266 helper to copy (`DeliveryProofController::contentDisposition()`, including a
+comment about the character-class escaping that 500s if written the obvious way).
+
+### M043-F104 — an over-length client filename reaches Postgres as a 500 (Broken, P1)
+
+`shipment_documents.original_filename` is `varchar(255)`. The upload validator at
+`api/app/Modules/SupplyChain/Controllers/ShipmentController.php:107-111` has no rule on
+the client filename, and `ShipmentService::uploadDocument()` writes
+`$file->getClientOriginalName()` verbatim at `:180`. Measured: a 304-character name →
+**500** (SQLSTATE 22001). The file is stored before the insert, so the `catch` at `:187`
+does remove the blob and no row is written — the data stays consistent, but the caller
+gets an unhandled server error instead of a validation message.
+
+### M043-F105 — container weight/volume is the `numeric|min:0` money-validation family (Broken, P1)
+
+`ContainerController::store()/update()` validate `gross_weight_kg`, `net_weight_kg` and
+`volume_cbm` with the bare `['nullable','numeric','min:0']` shape found in eight sibling
+modules (`api/app/Modules/SupplyChain/Controllers/ContainerController.php:34-36,55-57`),
+against `numeric(10,2)` and `numeric(8,3)` columns.
+
+Measured **one value per test** (a 22003 overflow aborts the surrounding `RefreshDatabase`
+transaction, so a shared-test loop reports cascade 500s that are a harness artifact — the
+first version of this probe wrongly recorded `-1 => 500` and `0 => 500` for exactly that
+reason and was rewritten):
+
+| field | value | result |
+|---|---|---|
+| `gross_weight_kg` | `-1` | 422 ✔ |
+| `gross_weight_kg` | `0` | 201, stored `0.00` ✔ |
+| `volume_cbm` | `-1` | 422 ✔ |
+| `gross_weight_kg` | `1.999` | 201, stored **`2.00`** — silent precision loss |
+| `gross_weight_kg` | `10.00005` | 201, stored **`10.00`** |
+| `volume_cbm` | `1.9999` | 201, stored **`2.000`** |
+| `gross_weight_kg` | `1e3` | 201, stored **`1000.00`** — scientific notation accepted |
+| `gross_weight_kg` | `1e17` | **500** (22003) |
+| `gross_weight_kg` | `1e20` | **500** (22003) |
+| `volume_cbm` | `1e17` | **500** |
+| `volume_cbm` | `1e20` | **500** |
+
+No `Money.php` `ValueError` here because these are quantities, not money — but the
+overflow 500 and the silent rounding are the same shape.
+
+### M043-F106 — `updateMeta` drops the create request's date invariant (Incomplete, P1)
+
+`CreateShipmentRequest` enforces ETA ≥ ETD with a closure rule at
+`api/app/Modules/SupplyChain/Requests/CreateShipmentRequest.php:36-42`.
+`ShipmentController::updateMeta()` validates the same two fields as bare `['nullable','date']`
+at `:98-99` and carries no cross-field rule. Measured on a **received** shipment:
+`etd=2026-12-31, eta=2026-01-01` accepted with 200.
+
+### M043-F107 — dead surfaces, both directions (Missing, P2)
+
+- `GET /shipments/options` returns an `allocation_methods` array
+  (`ShipmentController:56-59`) that **no client consumes** — `spa/src/api/supply-chain/index.ts`
+  types the key but nothing reads it, because there is no landed-cost UI.
+- All **6** container routes have no SPA client method and no page: `grep -rn "containers"
+  spa/src/api spa/src/pages/supply-chain` returns nothing. `docs/PROCESS-FLOWS.md:629`
+  nevertheless instructs the operator to "Add containers with details".
+- `DELETE /shipments/{id}` and `PATCH /shipments/{id}/restore` have no SPA client either
+  (`shipmentsApi` exposes only `destroyDocument`/`restoreDocument`).
+- `docs/PROCESS-FLOWS.md:615` documents `POST .../calculate-landed-cost` — measured 500
+  (F101) — and `:631` documents "Calculate landed cost (freight, duties, insurance, etc.)"
+  with no field anywhere to enter freight, duties or insurance (F102 family).
+- `CLAUDE.md`'s number-format table has no Shipment row, although the sequence is
+  configured and works: measured `SHP-202609-0001` with a `document_sequences` row created
+  on first use. (Reported, not fixed — outside this module's files.)
+
+## Invariants verified as SOUND (no defect)
+
+- Full 7×7 transition matrix walked: **49 cells, 10 accepted, 39 refused**, and the accepted
+  set is exactly the linear chain plus cancel-from-any-non-terminal.
+- Clear customs twice → 422. Receive from `ordered`/`shipped`/`in_transit`/`customs` → 422 ×4.
+  Cancel a received shipment → 422. Archive a received shipment → 422.
+- Permission gate: **21/21** endpoints 403 a permissionless user. Auth gate: **21/21** 401
+  unauthenticated. Internal shipment middleware is
+  `api|auth:sanctum|feature:supply_chain|permission:…` on every route, with no
+  `supplier_portal` guard anywhere near it.
+- MIME is validated from real bytes: real PHP source named `exploit.pdf` → **422**; a real
+  PDF → 201. (Probed with `new Illuminate\Http\UploadedFile(..., test: true)` over real
+  bytes, not `UploadedFile::fake()`, whose `getMimeType()` reads the name.)
+- Stored filename is random and traversal-safe: a client name of
+  `../../../../etc/passwd.pdf` stored as `shipments/73/iAoaW32Hy3j6NIYgIieQfKgKtIUlGD4XAUeDOrkc.pdf`;
+  matches `^shipments/\d+/[A-Za-z0-9]{20,}\.pdf$`; local disk root
+  `/var/www/storage/app/private` — outside the web root.
+- Soft-deleted shipment → **404 on all seven surfaces** (show, packing list, commercial
+  invoice, calculate-landed-cost, status, containers, create-against-trashed-PO) and absent
+  from the default list. A soft-deleted **vendor** and **item** behind a live shipment do
+  **not** 500 either PDF (both 200) — no repeat of the AR `DivisionByZeroError` class.
+- Error bodies carry no raw primary key and no internal column name; the transition refusal
+  names `shipment_number`, not the id.
+- FX: `shipments` and `purchase_orders` have **zero** `currency`/`fx`/`exchange`/`rate`
+  columns. There is no conversion and therefore no float rate to corrupt. Peso-only per
+  CLAUDE.md — recorded as a documented absence, not filed as missing.
+- `Rule::exists()` in this module: one instance, `CreateDeliveryRequest:43`, closure form
+  with a `true`-ish string `'available'` — not the `false` landmine, and not an import route.
+- Landed-cost recalculation is idempotent (hard-delete + unique constraint).
+
+## Invariants that are DEFECTIVE (summary, detail above)
+
+- Apportionment does not sum to the total (F102). Basis inconsistent (`manual`) (F102).
+  `by_weight` unreachable and its basis column absent (F100).
+- The computed figure reaches **nothing**: zero references to `LandedCost`/`landed_cost` in
+  `Modules/Inventory`, `Modules/Accounting`, `Modules/Purchasing` (asserted structurally in
+  the probe). `GrnService:214` takes `$row['unit_cost'] ?? $poi->unit_price`.
+- Clearance is **not** gated on documents (F/prior-F002): five 200s with 0 documents and
+  0 containers, and a `customs_clearance_date` stamped behind no evidence.
+- A document **is** swappable after clearance: a second `bill_of_lading` uploaded after
+  `received` → 201, and the B/L clearance relied on deleted → 204.
+- The received→GRN handoff is not swallowed into a log — **it does not exist**. `Event::fake`
+  + `Queue::fake` + `Notification::fake` across the whole walk to `received`: nothing pushed,
+  nothing sent, and `shipments` has **no** `%handoff%` column while `deliveries` has
+  `["invoice_handoff_status","invoice_handoff_message","invoice_handoff_at"]`. That is the
+  asymmetry `deliveries-proof` taught us to look for, in its starkest form.
+- Immutability after receipt: Eloquent rewrote `shipment_number` to `SHP-HACKED`; raw SQL
+  rewrote it to `HACKED`, moved `customs_clearance_date` to `1999-01-01` and walked status
+  back to `cleared`; `DB::table('shipments')->delete()` removed the row; **`pg_trigger`
+  count on `shipments`/`shipment_documents`/`containers`/`shipment_landed_costs` = 0**.
+  The only protection is the service guard on `DELETE /shipments/{id}`, and a **`cleared`**
+  customs record can still be archived (204).
+- A document does **not** survive its shipment being archived: shipment trashed=yes,
+  document row trashed=**no**, file deleted=**yes** — a live metadata row pointing at a
+  destroyed file, the inverse of the delivery-proof defect and unrecoverable because
+  restore cannot bind.
+- Restore binding: `{"shipment":404,"document":404,"container":404}` — 3 of the 3 import
+  restore routes are unreachable for their only valid target
+  (`api/app/Modules/SupplyChain/routes.php:35,55,69`; only `/vehicles/{vehicle}/restore:83-85`
+  declares `withTrashed()`).
+- PO-state gate: `["draft","pending_approval","approved","sent","partially_received",
+  "received","closed","cancelled"]` — **all 8** accepted, against `GrnService:103-121`'s
+  three.
