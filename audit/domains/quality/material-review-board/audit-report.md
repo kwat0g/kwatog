@@ -647,3 +647,206 @@ a quarantine/disposition record with its cause silently removed. For an IATF
   (`spa/src/routes/inventoryRoutes.tsx:109-112`) and reachable from the sidebar
   (`Sidebar.tsx:337-342`). The only documentation gap is `USER-MANUAL.md`
   (M054-R9.4).
+
+---
+
+# THE CENTRAL QUESTION — the disposition → movement seam
+
+## 1. What does MRB actually do today?
+
+MRB is a **manually-raised, location-based warehouse segregation tool for stock
+that is already on the books.** Precisely:
+
+- `hold()` requires an existing `stock_levels` row at a **good** source location
+  with `quantity - reserved_quantity >= qty`
+  (`QuarantineService.php:233-244`, plus `rejectSpecialZones: true` at `:195`).
+  It posts a `Transfer` good-location → Quarantine-zone location and opens a
+  `held` MRB row.
+- `release()` posts a second movement whose type depends on a disposition string
+  the operator supplies **at release time**, and sets the terminal status.
+- Its only entry points are `POST /api/v1/inventory/mrb` and
+  `POST /api/v1/inventory/mrb/{mrb}/release`, both from the
+  `/inventory/mrb` screen. **Nothing anywhere in the codebase creates an MRB
+  automatically** — `MrbController.php:65` is the only production caller of
+  `hold()`; the only other callers are the two MRB test files.
+- `ncr_id` and `inspection_id` are **nullable and optional**. An MRB can be
+  raised, dispositioned and closed with no quality record attached at all.
+
+So MRB is the **only** mechanism in the system that gives a nonconforming-material
+decision a physical consequence, and it is entirely operator-driven.
+
+## 2. Is it the intended `NCR disposition → MRB decision → stock movement` bridge?
+
+**No. It is not wired as a bridge, and the data model cannot express one.**
+
+The intended chain would need the NCR's decision to *drive* the MRB's movement.
+What exists instead is two independent decisions over the same enum (M054-R2):
+`NcrService::setDisposition()` produces work orders and notifications and never
+touches stock; `QuarantineService::release()` produces stock movements and never
+touches work orders or notifications. Neither reads the other's `disposition`
+column. Measured: they can hold openly contradictory values simultaneously
+(`ncr=return_to_supplier` / `mrb=use_as_is`, material into finished goods).
+
+Three concrete reasons the bridge is absent rather than merely unwired:
+
+1. **Direction of dependency.** Inventory imports Quality
+   (`QuarantineService.php:20-24`); Quality imports nothing from Inventory. A
+   Quality-initiated bridge (`NcrService` → `QuarantineService`) would be a **new**
+   dependency direction and would make `NcrService::close()` fail on a warehouse
+   condition.
+2. **No quantity ledger.** `assertQualityLinks()` `:506-508` compares each hold
+   against `affected_quantity` in isolation. There is no per-NCR running total, so
+   nothing can know how much of a nonconformance has been dispositioned.
+   Measured: 3 MRBs summing 120.000 against `affected_quantity = 40`.
+3. **The NCR carries a `product_id`, the MRB carries an `item_id`.**
+   `NonConformanceReport` is keyed on `App\Modules\CRM\Models\Product` (finished
+   goods) while `MaterialReviewRecord.item_id` is
+   `App\Modules\Inventory\Models\Item` (raw materials). They are joined only
+   indirectly, via `inspections.item_id` (`assertQualityLinks()` `:487,520`).
+   A bridge has to decide which side owns the identity of the held lot.
+
+## 3. Is `goods-receiving`'s claim correct?
+
+> *"MRB can't help, because it transfers stock that never existed."*
+
+**CORRECT, for the receipt remainder — with one important narrowing.**
+
+Verified against the GRN path (read-only; `Inventory` is live under another agent):
+
+- `GrnService::moveAcceptedQuantity()`
+  `api/app/Modules/Inventory/Services/GrnService.php:1225-1245` is the single
+  stock-posting funnel for receiving, and it posts a delta derived from
+  `quantity_accepted` only. `partialAccept()` `:606-686` sets
+  `quantity_accepted = $accepted` at `:645` and posts only that delta at `:650`.
+  For received 100 / accepted 60, **60 is booked; the other 40 is booked nowhere** —
+  not to a quarantine location, not to a hold location, not to scrap.
+- `resolveReceivingLocation()` `:1252-1290` **forbids** receiving into a
+  Quarantine or Scrap zone outright (`:1283`), so the GRN path structurally cannot
+  place rejected material where MRB operates.
+- There is **no `quantity_rejected` column on `grn_items`**. The create migration
+  `0064_create_grn_items_table.php:19-20` has only `quantity_received` and
+  `quantity_accepted`, and no later migration adds a rejected column. The
+  "rejected 40" is an arithmetic residue no table records.
+- `MaterialReviewRecord` has **no GRN foreign key** at all
+  (`0262_…:24-27` — only `ncr_id`, `inspection_id`).
+
+Therefore for `received = 100, accepted = 60`: the 60 in a good location **can**
+legitimately be held under MRB; the other 40 has no `stock_levels` row anywhere,
+so `hold()` fails at `QuarantineService.php:237`
+(`"No stock for item {$itemId} at source location {$sourceId}."`). For a fully
+`rejected` GRN nothing is booked, so MRB is inapplicable to the entire receipt.
+
+**The narrowing:** the claim is right about the remainder and wrong as a blanket
+statement — MRB works correctly on accepted stock, which is its actual design
+(hold material that is on the books but suspect, e.g. an in-process or dock-audit
+failure discovered after put-away). The gap is that **Chain 2 has no destination
+for received-but-not-accepted quantity**, and MRB is not it.
+
+Two adjacent Chain-2 defects surfaced while verifying this. **Both belong to
+`goods-receiving` / `purchasing`, not to M054** — reported here only so they are
+not lost:
+
+- `partialAccept()` does not call `reversePoReceipt()`, so the PO line keeps
+  `quantity_received = 100, quantity_accepted = 60`. Remaining capacity is
+  computed from *received* (`GrnService.php:197`), so a replacement 40 can never
+  be received against that line, and `refreshPoStatus()` `:1364-1366` requires
+  `quantity_accepted >= quantity` — the PO is stuck at `partially_received`
+  permanently.
+- `partialAccept()` calls `assertQcGate()` `:616`, which throws unless every
+  incoming inspection is `passed` or `cancelled` (`:737-750`). So
+  `GrnStatus::PartialAccepted` is **unreachable on a genuine quality failure** —
+  the operator must accept all 100, reject all 100, or cancel the inspection.
+
+> Correction to `CLAUDE.md` and to my own briefing: **`GrnStatus::Draft` does
+> exist** (`api/app/Modules/Inventory/Enums/GrnStatus.php:9`) and is live
+> (`GrnService.php:311,318,329,361`). The note claiming "no `draft`" is stale.
+
+## 4. Options for reconciling MRB with the NCR disposition — with consequences
+
+Presented as options because **which mechanism owns the movement is an
+IATF-auditable design decision, not a code cleanup.** I am not choosing one.
+
+### Option A — MRB is the sole executor; the NCR disposition becomes advisory
+Make `release()` require an `ncr_id` and refuse a disposition that differs from
+`non_conformance_reports.disposition`. Add a per-NCR quantity ledger so
+`sum(mrb.quantity) <= ncr.affected_quantity`.
+
+- *Direction*: Inventory → Quality only. **No new dependency** — the imports
+  already exist. Cheapest to build.
+- *Consequence*: every disposition now requires a warehouse action to be
+  complete, so an NCR cannot close until the material is physically dealt with.
+  That is arguably the correct IATF posture, but it **couples NCR closure to
+  warehouse throughput** and will block closures today that currently succeed.
+- *Consequence*: makes the NCR's own `scrap`/`rework` work-order side effects
+  (`NcrService.php:319-357`) and MRB's movements two halves of one decision that
+  must now be kept consistent across a module boundary in both directions.
+- *Consequence*: does **not** address the GRN remainder (§3) — nothing to hold.
+
+### Option B — Quality orchestrates; `NcrService::close()` drives the movement
+`NcrService::close()` calls `QuarantineService` for the material effect.
+
+- *Direction*: **new Quality → Inventory dependency.** Quality currently has zero
+  stock code; this would make the Quality module unbootable without Inventory
+  unless lazily resolved the way `NcrService::workOrderService()` already does
+  (`:404-411`).
+- *Consequence*: `close()` starts failing on warehouse conditions (no active
+  quarantine location, stock moved, insufficient available). `NcrService` already
+  has the precedent for refusing to close when a required downstream effect fails
+  (`createRequiredWorkOrder()` `:413-437` throws and leaves the NCR open) — so the
+  pattern exists, but the failure surface grows a lot.
+- *Consequence*: puts the decision where IATF expects it (Quality owns
+  disposition of nonconforming product) and gives one place to audit.
+- *Consequence*: still requires the quantity ledger from Option A.
+
+### Option C — A third owner: MRB becomes the board of record for both
+Move the disposition decision *out* of `NcrService::setDisposition()` and make
+the MRB record the single place a disposition is decided, with the NCR reading it.
+
+- *Consequence*: the largest change, and it inverts the current model where NCR
+  is the quality record of record. Would need MRB to also trigger the replacement
+  / rework work orders that `NcrService::close()` currently creates.
+- *Consequence*: cleanly solves M054-R2, R3 and R4 at once, because a *board*
+  record can carry board membership, a second signature, reinspection evidence and
+  concession sign-off — none of which the current schema has room for.
+- *Consequence*: MRB would then need a non-stock entry point to cover the GRN
+  remainder (§3), i.e. a disposition record that is not backed by a stock movement.
+
+### Option D — Leave the two mechanisms independent, and say so
+Document that `non_conformance_reports.disposition` is a *quality determination*
+and `material_review_records.disposition` is a *physical execution*, and add a
+reconciliation report rather than a constraint.
+
+- *Consequence*: the cheapest, and honest about what is shipped. But it leaves
+  M054-R2's measured contradiction (`return_to_supplier` vs `use_as_is`, material
+  into finished goods) legal, which is very hard to defend to an IATF auditor
+  because §8.7 requires nonconforming product to be controlled *to prevent
+  unintended use* — and a use-as-is release into finished goods against an NCR
+  that says return-to-supplier is exactly unintended use.
+
+### Orthogonal to all four, and independently necessary
+**M054-R1 must be fixed regardless of which option is chosen.** As long as
+`Transfer` / `AdjustmentOut` / `Scrap` / `ReturnToVendor` can leave a quarantine
+location with no MRB decision, no bridge design holds — the material escapes
+underneath whichever mechanism owns the decision, and the MRB is stranded at
+`held` forever. This is a containment-shaped fix (extend
+`assertConsumableSource()` to require an MRB release context for any movement out
+of a Quarantine zone) but it lives in `StockMovementService`, which is
+**Inventory-owned and live under another agent.**
+
+## 5. Questions that need a human
+
+1. **Which of Options A–D is the intended design?** This determines whether
+   `NcrService::close()` may fail on a warehouse condition, and whether an NCR can
+   be closed with material still in quarantine.
+2. **Is MRB meant to be a *board* at all?** The name and IATF §8.7 imply a
+   multi-party body; the implementation is one permission held by two roles, and
+   measured: one `qc_inspector` inspected, raised the NCR, held and released
+   `use_as_is` into good stock (M054-R3). If single-actor is the intended plant
+   reality for a 200-person shop, that should be a recorded decision rather than
+   an accident of the permission model.
+3. **Where does received-but-not-accepted GRN quantity go?** (§3.) This is a
+   Chain-2 gap that neither MRB nor GRN nor RMA currently owns, and it needs an
+   owner before it can be built. It is **not** M054's to answer alone.
+4. **Should `use_as_is` require recorded customer sign-off before material
+   re-enters good stock?** The enum says it does (`NcrDisposition.php:12`); the
+   code requires nothing (M054-R4).
