@@ -848,3 +848,360 @@ measurements had to be committed first.
 Status: **🔁 Needs Re-audit** — discovery is substantially complete and recorded
 with citations, but the probe suite that would convert the `[code-read]` findings
 into measured ones has not run.
+
+---
+
+# Re-audit — 2026-09-01, part 2: PROBES EXECUTED
+
+The §3 "NOT executed" table above is now superseded for every row listed here.
+Probe file: `api/tests/Feature/Production/ZzM051AuditProbeTest.php` (scratch,
+deleted after recording — it asserts nothing, it prints measurements).
+
+Run on this session's own database, never the shared `ogami_test`:
+`docker compose run --rm -e DB_DATABASE=ogami_test_wo2 api php artisan test tests/Feature/Production/ZzM051AuditProbeTest.php --no-coverage`
+→ **10 passed, 1 failed (12 assertions)**; the single failure was my own wrong
+table name (`outbox_events`; the real table is `event_outbox`), fixed and re-run
+→ **1 passed**. No probe failure was a product defect.
+
+**Environment note:** the `db` and `redis` containers were **restarted by
+something outside this session** partway through (a `psql` call returned
+`FATAL: the database system is starting up`). Re-verified before continuing —
+`docker compose ps` showed both `Up (healthy)` and `select 1;` returned a row —
+and `ogami_test_wo2` survived. Recorded because a stopped container was the root
+cause of four earlier sessions' phantom verification, and this is exactly the
+moment a session would start measuring nothing.
+
+## Measured results, and what changed versus the code-read predictions
+
+### PROMOTED TO BROKEN — negative output corrupts a recorded production quantity
+
+Predicted as a "suspected hole"; **confirmed, and worse than predicted.**
+
+```
+[PROBE negative-output] threw=NULL produced=5 good=-5 rejected=10 scrap=200.00
+```
+
+`WorkOrderOutputService::record()` with `good_count: -5, reject_count: 10`
+**succeeded silently**. The work order now carries `quantity_good = -5` and
+`scrap_rate = 200.00`. The only quantity guard is `total <= 0`
+(`api/app/Modules/Production/Services/WorkOrderOutputService.php:82`), and
+`-5 + 10 = 5` clears it. Nothing downstream rejects a negative good count, and
+`scrap_rate = 200.00` fits `numeric(5,2)` so the database raises nothing either.
+
+`scrap_rate` above 100% is by itself proof the value is nonsense, and it will
+flow into OEE quality, the Pareto analysis and the production dashboard.
+
+**Reachability:** the HTTP path is protected — `RecordOutputRequest.php:28-29`
+is `integer|min:0`, and the probe confirmed `qty: -5` → **422** on the operation
+endpoint too. So this is not remotely exploitable today. But `record()` is the
+module's **published shared contract** — the brief states any other output path
+must go through it — so every future job, console command, importer or Edge
+ingest path inherits an unguarded signature. Classified **Broken** (a recorded
+production quantity can be corrupted) with the mitigation that it is currently
+service-internal.
+
+### NEW BROKEN — `POST /work-orders/{id}/resume` on a *confirmed* work order is a backdoor start
+
+Found by the exhaustive transition matrix; **not predicted at all.**
+
+```
+"confirmed": { ..., "resume": "ALLOWED(in_progress)", ... }
+```
+
+`resume()` validates only the state-machine edge, and `confirmed → in_progress`
+**is** a legal edge (`WorkOrderStateMachine.php:17`) because it is the edge
+`start()` uses. So `resume()` moves a Confirmed work order straight to
+`in_progress` (`api/app/Modules/Production/Services/WorkOrderService.php:423-465`)
+while skipping everything `start()` does at `:312-379`:
+
+| `start()` does | `resume()` on a confirmed WO |
+|---|---|
+| `assertMaterialPlan()` (`:324`) — a standard WO needs an effective BOM | **skipped** |
+| `assertProductionDependenciesReady()` (`:325`) — subassembly children must have produced their target | **skipped** |
+| machine must be Idle/Running, mold Available/InUse (`:332-337`) | **skipped** |
+| `issueReservedMaterials()` (`:358`) — the MaterialIssue movements | **skipped** — material never issued |
+| `batch_number` generation (`:347`) — the IATF production batch | **skipped** — stays null |
+| `actual_start` stamp (`:351`) | **skipped** — stays null, so OEE and cycle time have no start |
+| `captureMaterialLotReferences()` (`:364`) — IATF backward traceability | **skipped** |
+| promote parent SO to `in_production` (`:368-371`) | **skipped** |
+
+Both endpoints carry the same `production.work_orders.lifecycle` permission
+(`api/app/Modules/Production/routes.php:57` vs `:55`), so this is not privilege
+escalation — it is a guard bypass. It defeats at least one invariant that has a
+dedicated passing test: `WorkOrderMachineConflictTest::parent_work_order_cannot_start_before_subassembly_child_is_ready`
+holds for `start()` and is simply not consulted by `resume()`. It also defeats
+`standard_no_bom_work_order_cannot_start`. Output can then be recorded on the
+resulting `in_progress` WO, producing finished goods from material that was never
+issued and a batch with no batch number.
+
+The fix is one guard — `resume()` must require the source state to be `Paused`
+specifically, not merely "any state with a legal edge to in_progress". Note this
+is *narrowing* a transition, which by the containment rule is a change to when
+production may proceed, so it is **not** an in-session fix despite the tiny diff.
+
+Lower-severity mirror of the same root cause, also measured: `paused → start` is
+`business-rule` rather than `illegal-transition`, i.e. the state machine permits
+it and only a missing machine stopped the probe. With a real machine, `start()`
+would re-run on a Paused WO. That case is largely benign — `issueReservedMaterials()`
+finds no `Reserved` rows (they are already `Issued`), `actual_start ?? now()` and
+`batch_number ?:` both preserve the originals — but it is a second uncontrolled
+entry into `in_progress`.
+
+### CONFIRMED — the full transition matrix, all 49 cells
+
+Every one of the 7 statuses × 7 lifecycle actions was attempted.
+
+```
+planned:     confirm=business-rule  start=illegal  pause=illegal  resume=illegal  complete=illegal  close=illegal  cancel=ALLOWED(cancelled)
+confirmed:   confirm=illegal        start=business-rule  pause=illegal  resume=ALLOWED(in_progress)  complete=illegal  close=illegal  cancel=ALLOWED(cancelled)
+in_progress: confirm=illegal        start=illegal  pause=ALLOWED(paused)  resume=illegal  complete=ALLOWED(completed)  close=illegal  cancel=illegal
+paused:      confirm=illegal        start=business-rule  pause=illegal  resume=ALLOWED(in_progress)  complete=illegal  close=illegal  cancel=ALLOWED(cancelled)
+completed:   confirm=illegal        start=illegal  pause=illegal  resume=illegal  complete=illegal  close=ALLOWED(closed)  cancel=illegal
+closed:      all 7 illegal
+cancelled:   all 7 illegal
+```
+
+The named illegal transitions the brief asked about **all hold**:
+
+- **cancel a completed WO** → `illegal-transition` (409) ✓
+- **re-open a closed WO** → every action `illegal-transition`; `closed` is fully terminal ✓
+- **complete twice** → `refused: IllegalLifecycleTransitionException` ✓
+- **record output on a cancelled WO** → refused ✓ (see next section)
+- **cancel an in-progress WO** → `illegal-transition`; the operator must pause first (see Q3)
+
+`cancelled` is likewise fully terminal, so there is no resurrection path.
+
+### CONFIRMED — output guards all hold except the negative case
+
+```
+zero output ............. refused: "At least one of Good count or Reject count must be greater than zero."
+beyond ordered qty ...... refused: "Recording this output would exceed the work order target quantity (10)."
+status planned .......... refused
+status confirmed ........ refused
+status completed ........ refused
+status closed ........... refused
+status cancelled ........ refused
+status paused ........... refused
+reject without defects .. refused: "The total sum of defects (0) must exactly equal the Reject count (3)."
+defect sum mismatch ..... refused
+```
+
+Note output is refused on **paused** as well as the terminal states — only
+`in_progress` may record, and the guard re-reads the locked authoritative row
+(`WorkOrderOutputService.php:184-186`) rather than trusting the route-bound
+model, so a stale model cannot slip through.
+
+### CONFIRMED — duplicate-output idempotency, including the half the baseline suite does not cover
+
+```
+[PROBE idempotency] first ={"shots":5,"lifetime":5,"produced":5,"scrap_rate":"40.00","outputs":1,"outbox":4}
+[PROBE idempotency] second={"shots":5,"lifetime":5,"produced":5,"scrap_rate":"40.00","outputs":1,"outbox":4}
+```
+
+Identical payload replayed under one `X-Idempotency-Key`: **mold shots, lifetime
+shots, WO produced quantity, scrap rate, output row count and `event_outbox` row
+count are all unchanged.** The baseline suite asserts the output-row half; this
+measures the shot / scrap / event half the brief specifically asked for. Nothing
+is doubled.
+
+Mold shots incremented **exactly once per output, by `good + reject`** (3 + 2 = 5).
+
+Same payload with **no** key creates a genuine second output (shots 10, produced
+10, 2 output rows). That is correct — two real shifts may legitimately record
+identical numbers — and is worth stating so it is not mistaken for a leak.
+
+### CONFIRMED — a mold past 100% of its rated life keeps running
+
+```
+[PROBE mold-past-100pct] after-crossing status=maintenance shots=101/100 pct=101
+[PROBE mold-past-100pct] further-output threw=NULL shots_now=106 status_now=maintenance
+```
+
+Crossing 100% correctly flips the mold to `Maintenance` and writes a
+`MoldHistory` row (`api/app/Modules/MRP/Services/MoldService.php:120-128`). But
+the already-running work order **kept recording output on it**: a further 5
+parts were accepted and the shot count rose to 106/100 while the mold sat in
+`Maintenance`. `start()` checks mold status (`WorkOrderService.php:335-337`) and
+nothing re-checks it afterwards, so the auto-flip to `Maintenance` is advisory
+for the run that caused it.
+
+This is the substantive mold finding, and it is **not** per-shot mold
+depreciation (correctly out of scope per CLAUDE.md's NOT-BUILDING list). Whether
+an in-flight run should be stopped or allowed to finish its batch is a
+manufacturing policy call — see Q6. Classified **Incomplete**.
+
+### CONFIRMED — `complete()` accepts zero output; short-of-target is also accepted
+
+```
+[PROBE complete-zero-output]     ALLOWED status=completed produced=0
+[PROBE complete-twice]           refused: IllegalLifecycleTransitionException
+[PROBE complete-short-of-target] ALLOWED status=completed
+```
+
+I01 confirmed. The short-of-target case is very likely correct by design
+(partial completion is real) and should not be conflated with the zero case,
+which claims completion of a run that produced nothing and then fires
+`WorkOrderCompleted` onto the `o2c` chain — triggering outgoing QC
+(`AppServiceProvider.php:331`) for a batch that does not exist.
+
+### CONFIRMED — `skipOperation()` destroys a completed operation's record
+
+```
+[PROBE skip-completed-operation] threw=NULL status_now=skipped qty_completed=42.0000
+                                actual_end='2026-09-01 04:51:09' notes='probe skip of a completed op'
+```
+
+B03 confirmed exactly as read. The operation is now `skipped` while still
+carrying `qty_completed = 42` and an `actual_end` — a row asserting both that 42
+parts were completed and that the operation never ran.
+
+### CONFIRMED — all three `numeric` quantity failures on `/operations/{op}/output`
+
+Service level:
+
+```
+"1.999"    → ACCEPTED qty_completed=1.9990
+"1.99995"  → ACCEPTED qty_completed=1.9999      ← silent rounding
+"10.00005" → ACCEPTED qty_completed=10.0000     ← silent truncation
+"1e3"      → ACCEPTED qty_completed=1000.0000
+"1e12"     → THREW QueryException: SQLSTATE[22003] Numeric value out of range: numeric field overflow
+"1e15"     → THREW ValueError: bcadd(): Argument #2 ($num2) is not well-formed
+"1e17"     → THREW ValueError: bcadd(): Argument #2 ($num2) is not well-formed
+"1e20"     → THREW ValueError: bcadd(): Argument #2 ($num2) is not well-formed
+```
+
+And over HTTP, which is what a client actually sees:
+
+```
+[PROBE operation-http-status] {"1.999":200,"1.99995":200,"1e3":200,"1e12":500,"1e15":500,"1e20":500,"-5":422}
+```
+
+**Three 500s from one endpoint**, confirming B01 in full. `10.00005 → 10.0000`
+is the quality session's exact defect (`10.00005` silently stored as `10.0001`)
+reproduced in a second module. `-5` correctly 422s, so the sign guard is the one
+part of this validation that works.
+
+### CONFIRMED — the operation output path bypasses everything, measured
+
+```
+[PROBE operation-qty] bypass_check:
+  wo.quantity_produced=0  wo.quantity_rejected=0  wo.scrap_rate=0.00
+  work_order_outputs=0    mold_shots=0
+  op.qty_completed=25.0000  op.qty_scrapped=5.0000
+```
+
+25 good parts and 5 scrap recorded through the operation endpoint left the work
+order reading **zero produced, zero rejected, 0.00% scrap, no output rows and no
+mold shots**. B02 is now measured, not inferred. The two counters are fully
+disjoint, and 5 scrapped parts are invisible to the WO scrap rate, to OEE
+quality, and to Pareto defect analysis.
+
+Overrun also confirmed: `qty: 10000` against `qty_planned: 10` → **ACCEPTED**,
+`qty_completed = 10000.0000`.
+
+### CONFIRMED — raw integer primary key in a 422 body
+
+```
+[PROBE raw-pk-leak] status=422 item_pk=1 item_code=ITM-73BL
+body={"message":"Insufficient stock for item 1 (work order WO-P-81057): needed 5.000."}
+contains raw pk "item 1": true
+```
+
+I06 confirmed end-to-end over HTTP. The body carries the raw `items` primary key
+`1` while the human-meaningful `ITM-73BL` was available on the already-loaded
+relation. Enumeration oracle, and the most contained fix in this report.
+
+### OEE — divide-by-zero is safe, but two semantic defects confirmed and one NEW one found
+
+```
+[PROBE oee-idle]         a=1.0  p=NULL q=NULL oee=NULL
+                         diag={"scheduled_minutes":960,...,"available_time":960,"run_time":960,
+                               "good_count":0,"reject_count":0,"ideal_cycle_seconds":0}
+[PROBE oee-weekend-run]  a=NULL q=0.9804 oee=NULL scheduled_minutes=0 good=500
+[PROBE downtime-split]   MON unplanned=300 available=960 run=660 availability=0.6875
+                         TUE unplanned=0   available=960 run=960 availability=1.0
+```
+
+1. **Divide-by-zero: safe.** An idle machine with no downtime and no output
+   returned cleanly with `performance`, `quality` and `oee` all `null` and **no
+   exception**. This is the opposite of the AR `credit_limit = 0.00`
+   `DivisionByZeroError` that 500'd an entire customer list. Confirmed good.
+
+2. **NEW (Incomplete) — an idle machine reports `availability = 1.0`.** Not
+   predicted. A machine that produced nothing, ran nothing and was never
+   scheduled anything reports **100% availability**, because availability is
+   `run_time / available_time` and both are derived from the
+   `available_hours_per_day` constant rather than from anything recorded. So
+   "perfect uptime" and "no work at all" are indistinguishable on the metric
+   that is supposed to detect stoppages. `performance`/`quality`/`oee` correctly
+   go `null`; availability alone asserts a measured result it does not have.
+
+3. **I04 confirmed — a real weekend run yields no OEE at all.** 500 good and 10
+   reject parts genuinely recorded on Saturday 2026-06-06 gave
+   `scheduled_minutes = 0` → `availability = null` → **`oee = null`**, despite
+   `quality` computing fine at 0.9804 from the same rows. Availability is the
+   only one of the three not derived from recorded data, and it takes OEE down
+   with it.
+
+4. **I05 confirmed — misattributed, NOT double-counted.** A 300-minute breakdown
+   starting 23:00 Monday was charged **300 minutes to Monday and 0 to Tuesday**,
+   though only 60 of those minutes fell on Monday. Monday's availability reads
+   0.6875 against a true ≈0.9375; Tuesday reads a clean 1.0 while it actually
+   lost 240 minutes. The brief's "double-counted" hypothesis does **not**
+   reproduce — each row is attributed to exactly one window by `start_time`.
+
+## Revised finding classifications after measurement
+
+| ID | Before probes | After probes | Why it moved |
+|---|---|---|---|
+| — | (not found) | **Broken** — `resume()` backdoor-starts a confirmed WO | found only by the exhaustive matrix |
+| — | "suspected hole" | **Broken** — negative output persists `quantity_good = -5`, `scrap_rate = 200.00` | measured |
+| B01 | Broken [code-read] | **Broken [measured]** — three 500s over HTTP | measured |
+| B02 | Broken [code-read] | **Broken [measured]** — WO totals and mold shots provably untouched | measured |
+| B03 | Broken [code-read] | **Broken [measured]** | measured |
+| I01 | Incomplete [code-read] | **Incomplete [measured]** | measured |
+| I04 | Incomplete [code-read] | **Incomplete [measured]** + idle machine reports `availability=1.0` | measured, plus a new sub-finding |
+| I05 | Incomplete [code-read] | **Incomplete [measured]**, "double-counted" refuted | measured |
+| I06 | Incomplete [code-read] | **Incomplete [measured]** | measured |
+| — | — | **New Incomplete** — mold past 100% keeps taking output | measured |
+| idempotency | predicted to hold | **holds [measured]**, incl. shots/scrap/events | measured |
+| transitions | predicted to hold | **hold [measured]**, all 49 cells | measured |
+| OEE div-by-zero | predicted safe | **safe [measured]** | measured |
+
+## Still NOT verified after part 2 — stated plainly
+
+- **Permissions and row scope.** The delegated seeder/route sweep did not return
+  before this session ended. So: which of the 13 roles holds each of the 8
+  `production.*` permissions, whether every registry role can complete its part,
+  and whether any single role can both record output and complete the work order
+  it recorded (self-certification), are all **unverified**. What *is* measured is
+  that all 27 Production routes carry `permission:` middleware (read directly
+  from `routes.php:19-98`) — but not that the grants behind them are coherent.
+  The prior session's I08 lead (`ppc_head` holds create/confirm + view but not
+  lifecycle or record, `RolePermissionSeeder.php:530-583`) remains unconfirmed.
+- **Concurrency.** Neither the two-connection concurrent-output probe nor the
+  `WO-YYYYMM-NNNN` uniqueness race was run. The output case is predicted safe
+  (both callers take `WorkOrder::lockForUpdate()` at
+  `WorkOrderOutputService.php:160` before any write); the sequence case is
+  predicted to 500 for one caller (M02, no `work_order` row exists — measured).
+  Per the brief, a two-connection probe on an uncommitted unique insert can
+  deadlock; if the next session's does, it should say so rather than invent a
+  result.
+- **Activity feed read surface.** `ActivityFeedService::record()` is called on
+  restore (`WorkOrderService.php:611-619`), so the module does write to the feed
+  — but the read endpoint, its permission gate, and whether it leaks fields the
+  caller cannot otherwise read were not located.
+- **80% mold alert end-to-end delivery.** Still inferred from the
+  `AlertEngineService` poll query plus live settings, not observed as a
+  materialised `alerts` row. Classification is very unlikely to change.
+- **Dead surfaces** (route with no client, page with no route, `docs/USER-MANUAL.md`
+  vs implementation) — same delegated sweep, did not return.
+
+## Additional question
+
+- **M051-R-Q6 — should an in-flight run stop when its mold crosses 100% of rated
+  life?** Measured: it does not — output kept being accepted onto a mold sitting
+  in `Maintenance` at 106/100 shots. Options are refuse further output, allow the
+  current batch to finish and refuse the next start (the status flip already
+  achieves this), or warn only. This changes a mold-life threshold's *effect*, so
+  it is explicitly not the auditor's call.
