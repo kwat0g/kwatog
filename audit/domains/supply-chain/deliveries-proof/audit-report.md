@@ -191,3 +191,20 @@ Evidence limits:
 - No browser-driven authenticated journey was run for manual delivery creation, assignment, archive/restore, narrow-role proof access, fleet/container management, or landed-cost entry.
 - No concurrent proof-delete, manual delivery replay, shipment-delete/received race, or cent-level landed-cost allocation test exists in the focused suite.
 - No deployed storage-retention, customer confirmation, or restore drill was available.
+
+---
+
+## Re-audit — 2026-09-01 (IN PROGRESS)
+
+Claim: RECLAIMED (stale lock, 153h old, from the 2026-08-25 session).
+
+Environment baseline recorded at claim time:
+- `docker compose ps`: `ogami-db` Up (healthy), `ogami-redis` Up. `ogami-api`/`ogami-nginx`/`ogami-spa` exited; tests run via `docker compose run --rm api`.
+- `docker compose exec -T db psql -U ogami -d postgres -c "select 1;"` → 1 row.
+
+Scope of this re-audit: verify the 10 prior findings by probe (not by log), resolve the
+inherited red `tests/Feature/SupplyChain/CocAutoAttachOnConfirmTest` fixture question left
+by the quality session's evidence-integrity guard, and run the invariant matrix for the
+outgoing-QC → delivery → confirmation → invoice last mile.
+
+(Section will be replaced with measured findings as probes complete.)
