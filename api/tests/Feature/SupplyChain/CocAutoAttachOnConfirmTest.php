@@ -11,9 +11,11 @@ use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
+use App\Modules\Quality\Enums\InspectionParameterType;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Models\Inspection;
+use App\Modules\Quality\Models\InspectionMeasurement;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\DeliveryItem;
 use App\Modules\SupplyChain\Models\DeliveryProof;
@@ -222,19 +224,31 @@ class CocAutoAttachOnConfirmTest extends TestCase
 
         $inspection = null;
         if ($stage !== null && $status !== null) {
+            $sampleSize = 8;
             $inspection = Inspection::create([
                 'inspection_number' => 'QC-TEST-' . substr(uniqid(), -8),
                 'stage'             => $stage->value,
                 'status'            => $status->value,
                 'product_id'        => $product->id,
                 'batch_quantity'    => 100,
-                'sample_size'       => 8,
-                'accept_count'      => $status === InspectionStatus::Passed ? 0 : 0,
-                'reject_count'      => 0,
-                'defect_count'      => 0,
+                'accepted_quantity' => $status === InspectionStatus::Passed ? 100 : 0,
+                'sample_size'       => $sampleSize,
+                'accept_count'      => 0,
+                'reject_count'      => 1,
+                'defect_count'      => $status === InspectionStatus::Passed ? 0 : 1,
                 'inspector_id'      => $user->id,
                 'completed_at'      => now(),
             ]);
+
+            // M044 re-audit — the evidence a certificate asserts must actually
+            // exist. `InspectionService::complete()` (the ONLY writer of
+            // `passed`) refuses an inspection with no measurement rows and any
+            // row whose `is_pass` is still null, so a terminal inspection
+            // ALWAYS carries one resolved row per (sample unit x parameter).
+            // The old fixture mass-assigned `passed` with zero measurements —
+            // a state no production path can reach — which is exactly what
+            // CoCService::assertEvidenceSupportsCertificate() exists to refuse.
+            $this->seedResolvedMeasurements($inspection, $sampleSize, $status);
         }
 
         $delivery = Delivery::create([
@@ -255,5 +269,37 @@ class CocAutoAttachOnConfirmTest extends TestCase
         ]);
 
         return [$delivery, $item, $inspection];
+    }
+
+    /**
+     * Seed one resolved critical-dimension reading per sampled unit, the shape
+     * `InspectionService::complete()` leaves behind. A passed inspection gets
+     * every reading inside tolerance; a failed one gets a critical reading
+     * outside it, which is what made the verdict `failed`.
+     */
+    private function seedResolvedMeasurements(
+        Inspection $inspection,
+        int $sampleSize,
+        InspectionStatus $status,
+    ): void {
+        $passed = $status === InspectionStatus::Passed;
+
+        for ($sampleIndex = 1; $sampleIndex <= $sampleSize; $sampleIndex++) {
+            InspectionMeasurement::create([
+                'inspection_id'   => $inspection->id,
+                'sample_index'    => $sampleIndex,
+                'parameter_name'  => 'Outer diameter',
+                'parameter_type'  => InspectionParameterType::Dimensional->value,
+                'unit_of_measure' => 'mm',
+                'nominal_value'   => '10.0000',
+                'tolerance_min'   => '9.9000',
+                'tolerance_max'   => '10.1000',
+                // A failed lot fails on its first sampled unit; the rest still
+                // read in-tolerance, so `failing` is 1 and not `sample_size`.
+                'measured_value'  => ($passed || $sampleIndex > 1) ? '10.0100' : '12.5000',
+                'is_critical'     => true,
+                'is_pass'         => $passed || $sampleIndex > 1,
+            ]);
+        }
     }
 }

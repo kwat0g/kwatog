@@ -22,3 +22,39 @@ The findings and ordered remediation steps are in `audit-report.md` and `action-
 ### Deferred at human-decision gate
 
 - M044-F002–F010 remain pending. M044-F002 must first define assignment ownership, driver handoff permissions, and the customer-versus-internal confirmation actor. Implementing the next ordered item without that decision would guess at the RBAC and workflow contract.
+
+## 2026-09-01 re-audit
+
+Baseline before any change (own database `ogami_test_dlv`):
+`docker compose run --rm -e DB_DATABASE=ogami_test_dlv api php artisan test tests/Feature/SupplyChain --no-coverage`
+→ **93 tests: 91 passed, 2 failed, 226 assertions, 138.23s**. Both failures were the
+inherited `CocAutoAttachOnConfirmTest` cases left red by the quality session (M056).
+
+### Inherited task — `CocAutoAttachOnConfirmTest` fixture: resolved (case (a))
+
+Conclusion: **the fixture was unrealistic; the quality session's guard is correct.**
+Evidence, measured not assumed:
+
+- `InspectionStatus::Passed` is written in exactly ONE place in the whole
+  application — `api/app/Modules/Quality/Services/InspectionService.php:567`
+  (`grep -rn "InspectionStatus::Passed" app/` returns 12 hits; every other one is a
+  read/comparison).
+- That writer is `complete()`, which refuses the fixture's state twice before it can
+  reach `passed`: `InspectionService.php:552-554` ("Cannot complete: inspection has no
+  measurement rows.") and `:556-559` (any `is_pass IS NULL` row blocks completion).
+- Scaffold rows are created one per (sample unit x spec item) at
+  `InspectionService.php:375-399`, so `count(distinct sample_index)` always reaches
+  `sample_size` for a spec-backed inspection.
+- The old fixture mass-assigned `status = passed` with **zero** measurement rows —
+  precisely the falsified state `CoCService::assertEvidenceSupportsCertificate()`
+  (`api/app/Modules/Quality/Services/CoCService.php:211-254`) exists to refuse.
+
+- Before: `api/tests/Feature/SupplyChain/CocAutoAttachOnConfirmTest.php:225-237`
+  created the inspection with no measurements; 2 of 4 tests failed
+  (`COC_NO_MEASUREMENT_EVIDENCE`).
+- After: the same helper seeds one resolved critical-dimension reading per sampled
+  unit via a new `seedResolvedMeasurements()`; a passed lot reads in-tolerance, a
+  failed lot fails its first unit. `accept_count`/`reject_count`/`defect_count` are now
+  self-consistent with the verdict.
+- Result: `tests/Feature/SupplyChain/CocAutoAttachOnConfirmTest.php` → **4 passed
+  (13 assertions), 24.84s**. The guard was not weakened and no Quality file was touched.
