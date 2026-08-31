@@ -21,6 +21,8 @@ Rules the coordinator holds and agents never touch:
 
 ## Coordinator to-do, raised by agents, owned by nobody yet
 
+- **LIKELY CAUSE of the container cycling, now flagged by three sessions: `docker compose run api …` WITHOUT `--no-deps` can recreate the `db` service.** One session hit `FATAL: the database system is starting up` mid-run; another had both containers `Exited (255)` needing ~65s crash recovery. All briefs now specify `docker compose run --rm --no-deps …` since `db`/`redis` are already up. Worth confirming and, if right, adding to CLAUDE.md's test-environment section.
+- **`document_sequences` has NO `work_order` row** (measured by the work-orders session), so `WO-YYYYMM-NNNN` generation is predicted to 500 on first use. Check whether other document types are missing rows too — this is a seeder gap with a wide blast radius.
 - **`artisan test api/tests/...` (repo-relative) prints "Test file not found" and EXITS 0** — a green run with zero tests. Paths must be container-relative (`tests/...`). Add to every brief; this is a second way to fake a passing verification.
 - `docker rm ogami-meili` — an orphan container labelled to this Compose project makes **every** `docker compose` command in the repo print an orphan warning. Meilisearch is not used, not required, and referenced nowhere in code or compose; global search is pure Postgres `ILIKE`.
 - `release-module.sh` stamps `last_session` in UTC, so a release at 06:xx local (+08:00) records the previous day. Cosmetic but it makes the registry look a day stale.
@@ -79,10 +81,10 @@ existing `fix-log.md` / `git diff` before trusting its status.
 | 12 | 3 | M040 | inventory/warehouse-stock-control | queued — HOLD while M041 is in flight (both in api/app/Modules/Inventory/) |
 | 13 | 3 | M042 | inventory/material-issues-reservations | queued |
 | 14 | 3 | M056 | quality/inspections-certificates | done |
-| 15 | 3 | M057 | quality/ncr-capa | queued |
-| 16 | 3 | M054 | quality/material-review-board | queued |
+| 15 | 3 | M057 | quality/ncr-capa | **in flight** |
+| 16 | 3 | M054 | quality/material-review-board | queued — HOLD while M057 is in flight (both in api/app/Modules/Quality/) |
 | 17 | 3 | M058 | quality/traceability-ppap | queued |
-| 18 | 3 | M051 | manufacturing/production-work-orders | **in flight** (re-launched after quota abort) |
+| 18 | 3 | M051 | manufacturing/production-work-orders | done |
 | 19 | 3 | M050 | manufacturing/capacity-scheduling | queued |
 | 20 | 3 | M053 | manufacturing/maintenance-machine-health | queued |
 | 21 | 3 | M048 | manufacturing/demand-forecasting | queued |
@@ -130,8 +132,8 @@ completed, so the other two slots were refilled.
 
 | ID | Module | Launched |
 |---|---|---|
-| M051 | manufacturing/production-work-orders | 2026-08-30 (re-launch, then RESUMED after a parent-process exit) |
 | M041 | inventory/goods-receiving | 2026-08-30 |
+| M057 | quality/ncr-capa | 2026-08-30 |
 | M044 | supply-chain/deliveries-proof | 2026-08-30 |
 
 Next up: M041, M040, M042, then the remaining Tier 3/4 list.
@@ -154,6 +156,7 @@ Next up: M041, M040, M042, then the remaining Tier 3/4 list.
 | M028 | finance/accounts-receivable | 🔁 Needs Re-audit | Statement reported ₱800/₱800/₱500 for the SAME rows; two credit notes drove GL AR to −₱1,000; 12% VAT charged on a VAT-exempt invoice. 3 fixed (all 500s), 7 of 9 new tests red at HEAD. No AR payment void exists at all. |
 | M023 | people/separation-final-pay | 🔁 Needs Re-audit | **Prior 4 sessions never measured anything** — their verification came from a shared DB reporting "34 failures / 0 assertions". All 13 findings reproduced, +5 new. 13th month and last salary each paid TWICE; leave conversion uncapped and never debited. 6 contained fixes, 10 of 12 tests red at HEAD. |
 | M021 | people/payroll-period-processing | 🔁 Needs Re-audit | Loan over-deduction mechanism identified: an as-of `reconcileAggregates` cut drops ledger rows dated after `payroll_date`, taking the ledger to ₱14,000 on ₱12,000 owed. Anomaly gate **fails OPEN** — a bad setting yields zero flags and approve+finalize both succeed. 4 fixed, 8 of 14 tests red at HEAD. |
+| M051 | manufacturing/production-work-orders | 🔁 Needs Re-audit | `resume()` back-doored a confirmed WO into `in_progress` by checking only the state edge, skipping the material plan, machine/mold checks, material issue, batch number and SO promotion — found by walking all 49 matrix cells. Negative output persisted `quantity_good=-5, scrap_rate=200`. **Refuted both handed-down leads.** 5 fixes, 13 gated on Q1–Q8. |
 | M038 | procurement/supplier-performance | 📋 Plan Ready | Missing on-time/quality metrics substitute **0** while the other three honour the seeded neutral 50 — and those two carry 60% of the composite. A vendor with a 100% on-time record and 0% NCR scored **53.75 / tier D**, the worst tier. 3 contained fixes; formula untouched (commercial decision). First actual execution of the prior session's work: all of it passed. |
 | M056 | quality/inspections-certificates | 🔁 Needs Re-audit | P0: a CoC could be issued with **zero measurement rows**, with 45/50 units unresolved, after readings were rewritten to fail, and after **all evidence was deleted** — re-issuing the same number with a blank critical-dimension table. Fixed, 6 of 7 tests red at HEAD. Found the compose-containers-down root cause. IC-16: the in-process QC gate does not exist. |
 | M037 | procurement/purchase-orders | 🔁 Needs Re-audit | A blocked three-way match rendered as a green "Matched". Fix + 204-line test + all three audit docs committed in `dd120ef0` before the quota kill; only the release step was missed. |
