@@ -180,3 +180,29 @@ Open policy questions are recorded rather than guessed:
 1. Is PSW one of the 18 required PPAP elements or an additional element?
 2. Which PPAP levels require which evidence, and is an absent PPAP fail-closed when the gate is enabled?
 3. What is the authoritative quantity/allocation rule when one work order or material lot contributes to multiple shipment lots?
+
+---
+
+# M058 — Traceability & PPAP re-audit — 2026-09-01
+
+**Claim:** RECLAIMED (orphan lock from 2026-08-31T22:06Z, 153h stale).
+**Mode:** re-audit of the 2026-08-25 `📋 Plan Ready` session (9 findings, only F009 implemented).
+
+## Status: IN PROGRESS (skeleton committed before probing, per pipeline protocol)
+
+- [ ] Environment verified, own test DB created
+- [ ] Prior findings reproduced / disproved (F001–F009)
+- [ ] HTTP-vs-service coverage split measured
+- [ ] Trace chain built and attacked (link-by-link delete/archive)
+- [ ] PPAP integrity invariants executed
+- [ ] Immutability + pg_trigger census
+- [ ] Scheduled commands executed
+- [ ] State transition matrix walked
+- [ ] Attachments / evidence probes
+- [ ] Cross-tenant PPAP isolation
+- [ ] Soft-delete divergence probes
+- [ ] Permissions per endpoint incl. list/options
+- [ ] Validation family (~7 values, money/qty)
+- [ ] Dead surfaces both directions
+
+Findings appended below as measured.
