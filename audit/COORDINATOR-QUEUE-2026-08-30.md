@@ -23,6 +23,8 @@ Rules the coordinator holds and agents never touch:
 
 - **CLOSED by the coordinator 2026-08-30 — the `Rule::exists()->where(col, false)` bug class is confined to ONE site, already fixed.** Measured: `DatabaseRule::formatWheres()` does `str_replace('"','""', $where['value'])`, so a PHP string cast — `false` becomes `''` (Postgres `22P02` on `= ''`), while `true` becomes `'1'` and `whereNull` becomes `'NULL'`, both of which Postgres accepts. Swept `api/app/**/*Request*.php`: the only `false` instance was `StoreGrnRequest`, now correctly inside a closure. **Residual fragility worth a cheap hardening pass, not a bug:** `CRM/{Store,Update}PriceAgreementRequest.php:38,42` use the non-closure form with `true`, which works today but silently 500s the moment anyone writes `false`. Converting those to the closure form removes the landmine.
 - **THE DISPOSITION→MOVEMENT SEAM, now raised from two sides and handed to `material-review-board`:** `ncr-capa` measured `stock_movements` 0→0 on a 40-piece `scrap` close, while **Inventory's `QuarantineService` already switches on the `NcrDisposition` enum and moves stock**, with `ncr_id` nullable and nothing reconciling the two. Separately `goods-receiving` found a partial-accept remainder has no reachable destination and judged *"MRB can't help, it transfers stock that never existed."* Two mechanisms both believe they handle nonconforming material. Which one owns the movement is an IATF-auditable design decision — needs a human.
+- **`->withTrashed()` missing on 5 of 6 SupplyChain restore routes** (measured by `deliveries-proof`; delivery restore 404s for every valid target). Deferred there pending a human answer: **is archive recoverable or permanent?** Answer that before anyone adds the binding — this is now the sixth module with this defect, so it wants one decision and one sweep.
+- **A CoC-guard over-strictness found while proving the fixture case (Quality's to own):** `assertEvidenceSupportsCertificate()` refuses a certificate when `failing > 0`, but `complete()` passes a lot when `defects <= accept_count`, and the seeded AQL plan gives `Ac >= 1` for **every lot over 280 units**. So a 400-unit batch with one accepted non-critical defect is a legitimate AQL pass whose certificate is refused. The guard closed a real P0 — this is a narrowing question, not a reason to weaken it.
 - **Self-absolution, the IATF form of self-approval, is unguarded in at least one module:** `ncr-capa` measured a single `qc_inspector` creating, dispositioning, actioning, closing **and self-verifying** its own NCR. Worth checking every quality module for the same shape.
 - **A systemic test-coverage gap, not a single defect: service-level tests that bypass FormRequests.** The six-day GRN outage was invisible because every test called the service directly. Worth a sweep for endpoints with **zero HTTP-level coverage** — that is where this class hides. Every brief now tells agents to probe the HTTP layer, not just the service.
 - **LIKELY CAUSE of the container cycling, now flagged by three sessions: `docker compose run api …` WITHOUT `--no-deps` can recreate the `db` service.** One session hit `FATAL: the database system is starting up` mid-run; another had both containers `Exited (255)` needing ~65s crash recovery. All briefs now specify `docker compose run --rm --no-deps …` since `db`/`redis` are already up. Worth confirming and, if right, adding to CLAUDE.md's test-environment section.
@@ -92,9 +94,9 @@ existing `fix-log.md` / `git diff` before trusting its status.
 | 19 | 3 | M050 | manufacturing/capacity-scheduling | queued |
 | 20 | 3 | M053 | manufacturing/maintenance-machine-health | queued |
 | 21 | 3 | M048 | manufacturing/demand-forecasting | queued |
-| 22 | 3 | M043 | supply-chain/import-shipments-customs | queued |
-| 23 | 3 | M044 | supply-chain/deliveries-proof | **in flight** (out of order — owns the 2 red CocAutoAttach tests M056 left) |
-| 24 | 3 | M045 | supply-chain/fleet-driver | queued |
+| 22 | 3 | M043 | supply-chain/import-shipments-customs | **in flight** |
+| 23 | 3 | M044 | supply-chain/deliveries-proof | done → 📋 Plan Ready |
+| 24 | 3 | M045 | supply-chain/fleet-driver | queued — HOLD while M043 is in flight (both in api/app/Modules/SupplyChain/); inherits M044's `fleet.manage` held-by-no-role finding |
 | 25 | 4 | M006 | platform/notifications | queued |
 | 26 | 4 | M008 | platform/alerts | queued |
 | 27 | 4 | M013 | platform/chain-monitoring | queued |
@@ -136,9 +138,9 @@ completed, so the other two slots were refilled.
 
 | ID | Module | Launched |
 |---|---|---|
-| M044 | supply-chain/deliveries-proof | 2026-08-30 |
 | M040 | inventory/warehouse-stock-control | 2026-08-30 |
 | M054 | quality/material-review-board | 2026-08-30 |
+| M043 | supply-chain/import-shipments-customs | 2026-08-30 |
 | M044 | supply-chain/deliveries-proof | 2026-08-30 |
 
 Next up: M041, M040, M042, then the remaining Tier 3/4 list.
@@ -161,6 +163,7 @@ Next up: M041, M040, M042, then the remaining Tier 3/4 list.
 | M028 | finance/accounts-receivable | 🔁 Needs Re-audit | Statement reported ₱800/₱800/₱500 for the SAME rows; two credit notes drove GL AR to −₱1,000; 12% VAT charged on a VAT-exempt invoice. 3 fixed (all 500s), 7 of 9 new tests red at HEAD. No AR payment void exists at all. |
 | M023 | people/separation-final-pay | 🔁 Needs Re-audit | **Prior 4 sessions never measured anything** — their verification came from a shared DB reporting "34 failures / 0 assertions". All 13 findings reproduced, +5 new. 13th month and last salary each paid TWICE; leave conversion uncapped and never debited. 6 contained fixes, 10 of 12 tests red at HEAD. |
 | M021 | people/payroll-period-processing | 🔁 Needs Re-audit | Loan over-deduction mechanism identified: an as-of `reconcileAggregates` cut drops ledger rows dated after `payroll_date`, taking the ledger to ₱14,000 on ₱12,000 owed. Anomaly gate **fails OPEN** — a bad setting yields zero flags and approve+finalize both succeed. 4 fixed, 8 of 14 tests red at HEAD. |
+| M044 | supply-chain/deliveries-proof | 📋 Plan Ready | Two P0s: CoC generation failure **swallowed into `Log::warning`**, so a delivery confirms AND invoices with no certificate; and AR's invoice path never reads delivery status — measured **201 against a cancelled delivery**. `StockMovementType::Delivery` is **never emitted**, so finished-goods stock never falls. Resolved the 2 inherited red tests as case (a) — unrealistic fixture, guard correct — proven from three code sites. 3 fixed, 93→109 tests. |
 | M057 | quality/ncr-capa | ✅ partially fixed | `ncr:escalate` (every 15 min) printed `0 advanced.` and **exited 0 while all three overdue NCRs threw** — the live 8D-ledger shape. Restore route 404'd for every valid target. 3 fixed, 6 of 8 tests red at HEAD. **15 of 16 prior findings gone** (log had self-flagged as unverified). Refuted 3 handed-down claims. Found: a disposition has NO material consequence, and one `qc_inspector` created→dispositioned→closed→**self-verified** its own NCR. |
 | M041 | inventory/goods-receiving | 📋 Plan Ready | **`POST /api/v1/inventory/grn` had 500'd on EVERY request for ~6 days** — `Rule::exists()->where('is_blocked', false)` string-serialises `false` to `''` → `22P02`. Survived because **no test in the repo posts to that route**; all 52 green tests called the service and skipped the FormRequest. Incoming-QC gate also failed OPEN for a soft-deleted item. 5 fixed, 29 of 31 tests red at HEAD. Zero of 11 prior findings reproduced. |
 | M051 | manufacturing/production-work-orders | 🔁 Needs Re-audit | `resume()` back-doored a confirmed WO into `in_progress` by checking only the state edge, skipping the material plan, machine/mold checks, material issue, batch number and SO promotion — found by walking all 49 matrix cells. Negative output persisted `quantity_good=-5, scrap_rate=200`. **Refuted both handed-down leads.** 5 fixes, 13 gated on Q1–Q8. |
