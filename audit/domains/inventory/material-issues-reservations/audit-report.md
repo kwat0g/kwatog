@@ -340,3 +340,26 @@ refreshed action plan records the required human decision and implementation
 sequence.
 
 
+
+---
+
+# Re-audit — 2026-09-01 (session 4)
+
+Claim: `RECLAIMED` (orphan lock, 2026-08-25, 154h stale).
+
+## Status: IN PROGRESS (skeleton committed before probing)
+
+Prior-work assessment: three prior sessions produced 15 findings (M042-F01…F15)
+and applied **zero production-code fixes**. The prior fix log self-flags that its
+focused PHP suite "reached setup but failed before assertions because PostgreSQL
+host `db` could not resolve" — i.e. **no finding in this module has ever been
+runtime-verified**. This session's job is therefore to measure each of them, and
+to execute the reservation-invariant matrix.
+
+Where the code actually lives: `api/app/Modules/Inventory/` (owned this session)
+plus `spa/src/pages/inventory/material-issues/`, `spa/src/pages/warehouse/picking.tsx`.
+Reservation *writers* also live in `api/app/Modules/Production/Services/WorkOrderService.php`
+and `api/app/Modules/Maintenance/Services/SparePartUsageService.php` — out of
+module, report-only.
+
+(Findings appended below as measured.)
