@@ -22,6 +22,8 @@ Rules the coordinator holds and agents never touch:
 ## Coordinator to-do, raised by agents, owned by nobody yet
 
 - **CLOSED by the coordinator 2026-08-30 — the `Rule::exists()->where(col, false)` bug class is confined to ONE site, already fixed.** Measured: `DatabaseRule::formatWheres()` does `str_replace('"','""', $where['value'])`, so a PHP string cast — `false` becomes `''` (Postgres `22P02` on `= ''`), while `true` becomes `'1'` and `whereNull` becomes `'NULL'`, both of which Postgres accepts. Swept `api/app/**/*Request*.php`: the only `false` instance was `StoreGrnRequest`, now correctly inside a closure. **Residual fragility worth a cheap hardening pass, not a bug:** `CRM/{Store,Update}PriceAgreementRequest.php:38,42` use the non-closure form with `true`, which works today but silently 500s the moment anyone writes `false`. Converting those to the closure form removes the landmine.
+- **THE DISPOSITION→MOVEMENT SEAM, now raised from two sides and handed to `material-review-board`:** `ncr-capa` measured `stock_movements` 0→0 on a 40-piece `scrap` close, while **Inventory's `QuarantineService` already switches on the `NcrDisposition` enum and moves stock**, with `ncr_id` nullable and nothing reconciling the two. Separately `goods-receiving` found a partial-accept remainder has no reachable destination and judged *"MRB can't help, it transfers stock that never existed."* Two mechanisms both believe they handle nonconforming material. Which one owns the movement is an IATF-auditable design decision — needs a human.
+- **Self-absolution, the IATF form of self-approval, is unguarded in at least one module:** `ncr-capa` measured a single `qc_inspector` creating, dispositioning, actioning, closing **and self-verifying** its own NCR. Worth checking every quality module for the same shape.
 - **A systemic test-coverage gap, not a single defect: service-level tests that bypass FormRequests.** The six-day GRN outage was invisible because every test called the service directly. Worth a sweep for endpoints with **zero HTTP-level coverage** — that is where this class hides. Every brief now tells agents to probe the HTTP layer, not just the service.
 - **LIKELY CAUSE of the container cycling, now flagged by three sessions: `docker compose run api …` WITHOUT `--no-deps` can recreate the `db` service.** One session hit `FATAL: the database system is starting up` mid-run; another had both containers `Exited (255)` needing ~65s crash recovery. All briefs now specify `docker compose run --rm --no-deps …` since `db`/`redis` are already up. Worth confirming and, if right, adding to CLAUDE.md's test-environment section.
 - **`document_sequences` has NO `work_order` row** (measured by the work-orders session), so `WO-YYYYMM-NNNN` generation is predicted to 500 on first use. Check whether other document types are missing rows too — this is a seeder gap with a wide blast radius.
@@ -83,8 +85,8 @@ existing `fix-log.md` / `git diff` before trusting its status.
 | 12 | 3 | M040 | inventory/warehouse-stock-control | **in flight** (hold lifted — M041 released) |
 | 13 | 3 | M042 | inventory/material-issues-reservations | queued |
 | 14 | 3 | M056 | quality/inspections-certificates | done |
-| 15 | 3 | M057 | quality/ncr-capa | **in flight** |
-| 16 | 3 | M054 | quality/material-review-board | queued — HOLD while M057 is in flight (both in api/app/Modules/Quality/) |
+| 15 | 3 | M057 | quality/ncr-capa | done |
+| 16 | 3 | M054 | quality/material-review-board | **in flight** (hold lifted — M057 released) |
 | 17 | 3 | M058 | quality/traceability-ppap | queued |
 | 18 | 3 | M051 | manufacturing/production-work-orders | done |
 | 19 | 3 | M050 | manufacturing/capacity-scheduling | queued |
@@ -135,8 +137,8 @@ completed, so the other two slots were refilled.
 | ID | Module | Launched |
 |---|---|---|
 | M044 | supply-chain/deliveries-proof | 2026-08-30 |
-| M057 | quality/ncr-capa | 2026-08-30 |
 | M040 | inventory/warehouse-stock-control | 2026-08-30 |
+| M054 | quality/material-review-board | 2026-08-30 |
 | M044 | supply-chain/deliveries-proof | 2026-08-30 |
 
 Next up: M041, M040, M042, then the remaining Tier 3/4 list.
@@ -159,6 +161,7 @@ Next up: M041, M040, M042, then the remaining Tier 3/4 list.
 | M028 | finance/accounts-receivable | 🔁 Needs Re-audit | Statement reported ₱800/₱800/₱500 for the SAME rows; two credit notes drove GL AR to −₱1,000; 12% VAT charged on a VAT-exempt invoice. 3 fixed (all 500s), 7 of 9 new tests red at HEAD. No AR payment void exists at all. |
 | M023 | people/separation-final-pay | 🔁 Needs Re-audit | **Prior 4 sessions never measured anything** — their verification came from a shared DB reporting "34 failures / 0 assertions". All 13 findings reproduced, +5 new. 13th month and last salary each paid TWICE; leave conversion uncapped and never debited. 6 contained fixes, 10 of 12 tests red at HEAD. |
 | M021 | people/payroll-period-processing | 🔁 Needs Re-audit | Loan over-deduction mechanism identified: an as-of `reconcileAggregates` cut drops ledger rows dated after `payroll_date`, taking the ledger to ₱14,000 on ₱12,000 owed. Anomaly gate **fails OPEN** — a bad setting yields zero flags and approve+finalize both succeed. 4 fixed, 8 of 14 tests red at HEAD. |
+| M057 | quality/ncr-capa | ✅ partially fixed | `ncr:escalate` (every 15 min) printed `0 advanced.` and **exited 0 while all three overdue NCRs threw** — the live 8D-ledger shape. Restore route 404'd for every valid target. 3 fixed, 6 of 8 tests red at HEAD. **15 of 16 prior findings gone** (log had self-flagged as unverified). Refuted 3 handed-down claims. Found: a disposition has NO material consequence, and one `qc_inspector` created→dispositioned→closed→**self-verified** its own NCR. |
 | M041 | inventory/goods-receiving | 📋 Plan Ready | **`POST /api/v1/inventory/grn` had 500'd on EVERY request for ~6 days** — `Rule::exists()->where('is_blocked', false)` string-serialises `false` to `''` → `22P02`. Survived because **no test in the repo posts to that route**; all 52 green tests called the service and skipped the FormRequest. Incoming-QC gate also failed OPEN for a soft-deleted item. 5 fixed, 29 of 31 tests red at HEAD. Zero of 11 prior findings reproduced. |
 | M051 | manufacturing/production-work-orders | 🔁 Needs Re-audit | `resume()` back-doored a confirmed WO into `in_progress` by checking only the state edge, skipping the material plan, machine/mold checks, material issue, batch number and SO promotion — found by walking all 49 matrix cells. Negative output persisted `quantity_good=-5, scrap_rate=200`. **Refuted both handed-down leads.** 5 fixes, 13 gated on Q1–Q8. |
 | M038 | procurement/supplier-performance | 📋 Plan Ready | Missing on-time/quality metrics substitute **0** while the other three honour the seeded neutral 50 — and those two carry 60% of the composite. A vendor with a 100% on-time record and 0% NCR scored **53.75 / tier D**, the worst tier. 3 contained fixes; formula untouched (commercial decision). First actual execution of the prior session's work: all of it passed. |
