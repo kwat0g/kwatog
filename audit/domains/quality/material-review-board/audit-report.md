@@ -181,3 +181,28 @@ Evidence limits:
 
 - `docker compose run --rm api php artisan test tests/Feature/Inventory/QuarantineMrbTest.php tests/Feature/Inventory/MrbDoubleReleaseRaceTest.php` — 16 tests, 49 assertions passed, including the new location, idempotency, and quality-link cases.
 - Targeted ESLint for both MRB SPA pages — passed. The latest repository-wide `npm run typecheck` is blocked by pre-existing errors in `src/pages/assets/detail.tsx` (`qrcode`) and `src/pages/return-management/detail.tsx`; no M054 file appears in that error set. The repository-wide lint command also reports three unrelated pre-existing hook dependency errors outside M054.
+
+---
+
+# M054 — material-review-board RE-AUDIT (2026-09-01) — IN PROGRESS
+
+Claim: RECLAIMED (orphan lock, 153h old, from 2026-08-25 session).
+Session focus: the **disposition -> stock-movement seam**, handed to this session
+independently by two other audits (`ncr-capa` finding N-004 and `goods-receiving`
+finding GRN-R6).
+
+## STRUCTURAL BLOCKER RECORDED BEFORE ANY PROBE
+
+**M054 is registered under domain `quality`, but 100% of its code lives in
+`api/app/Modules/Inventory/`** — `Models/MaterialReviewRecord.php`,
+`Controllers/MrbController.php`, `Services/QuarantineService.php`,
+`Requests/{StoreMrb,ReleaseMrb,MrbIndex,MrbQualityOptions}Request.php`,
+`Resources/MaterialReviewRecordResource.php`, routes in `Inventory/routes.php`,
+SPA at `spa/src/pages/inventory/mrb/`.
+
+`api/app/Modules/Inventory/` is LIVE under another agent this session
+(`warehouse-stock-control`), and this session's constraints are read-only there.
+Therefore this session is **characterisation + report**, not fix, for the MRB
+surface itself. Findings below are reports, not fixes, unless explicitly marked.
+
+(sections appended as findings are measured)
