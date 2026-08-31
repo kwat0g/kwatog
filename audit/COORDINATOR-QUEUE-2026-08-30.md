@@ -23,6 +23,9 @@ Rules the coordinator holds and agents never touch:
 
 ## Coordinator to-do, raised by agents, owned by nobody yet
 
+- **DONE 2026-08-30 (`d4b22ef9`): `migrate:fresh --seed` was failing outright at HEAD and is now fixed.** `ComprehensiveDemoSeeder` inserted `journal_entries` as `posted` then inserted their lines; the `journal_entry_lines_immutable` trigger refuses that with `P0001`, so **no fresh environment could be built** — plausibly a contributor to the "db unreachable / 0 assertions" chaos that fooled four sessions. Now seeds draft → lines → post, the order `JournalEntryService` itself uses. Verified by a real `migrate:fresh --seed` to completion; Pint failure proven inherited. **It needs `php -d memory_limit=1G`** — the 128M default OOMs the seed, not just the test suite. Worth adding to CLAUDE.md's test-environment section alongside the existing note.
+- **OPEN, found while verifying that fix — the demo dataset may not demonstrate the demo.** On a fully seeded database `GoldenPathDemoSeeder` prints `No batch WO; skipping hero trace.` / `Created 0 shipment lots.` / `Created 0 delivery proofs.` / `SPC control charts are out of scope; skipping fixture.` **and exits green.** So a freshly seeded system appears to have no traceable lot chain and no delivery proofs — the artefacts a thesis defence would show. Same silent-skip shape as the dead subsystems this pipeline keeps finding. Handed to the live `traceability-ppap` session to confirm or refute; if confirmed it needs an owner, because no single module will claim the golden-path seeder.
+
 - **CLOSED by the coordinator 2026-08-30 — the `Rule::exists()->where(col, false)` bug class is confined to ONE site, already fixed.** Measured: `DatabaseRule::formatWheres()` does `str_replace('"','""', $where['value'])`, so a PHP string cast — `false` becomes `''` (Postgres `22P02` on `= ''`), while `true` becomes `'1'` and `whereNull` becomes `'NULL'`, both of which Postgres accepts. Swept `api/app/**/*Request*.php`: the only `false` instance was `StoreGrnRequest`, now correctly inside a closure. **Residual fragility worth a cheap hardening pass, not a bug:** `CRM/{Store,Update}PriceAgreementRequest.php:38,42` use the non-closure form with `true`, which works today but silently 500s the moment anyone writes `false`. Converting those to the closure form removes the landmine.
 - **THE DISPOSITION→MOVEMENT SEAM, now raised from two sides and handed to `material-review-board`:** `ncr-capa` measured `stock_movements` 0→0 on a 40-piece `scrap` close, while **Inventory's `QuarantineService` already switches on the `NcrDisposition` enum and moves stock**, with `ncr_id` nullable and nothing reconciling the two. Separately `goods-receiving` found a partial-accept remainder has no reachable destination and judged *"MRB can't help, it transfers stock that never existed."* Two mechanisms both believe they handle nonconforming material. Which one owns the movement is an IATF-auditable design decision — needs a human.
 - **`->withTrashed()` missing on 5 of 6 SupplyChain restore routes** (measured by `deliveries-proof`; delivery restore 404s for every valid target). Deferred there pending a human answer: **is archive recoverable or permanent?** Answer that before anyone adds the binding — this is now the sixth module with this defect, so it wants one decision and one sweep.
@@ -87,8 +90,8 @@ existing `fix-log.md` / `git diff` before trusting its status.
 | 9 | 3 | M037 | procurement/purchase-orders | done (work committed in `dd120ef0`; died at the release step only) |
 | 10 | 3 | M038 | procurement/supplier-performance | done → 📋 Plan Ready |
 | 11 | 3 | M041 | inventory/goods-receiving | done → 📋 Plan Ready |
-| 12 | 3 | M040 | inventory/warehouse-stock-control | **in flight** (hold lifted — M041 released) |
-| 13 | 3 | M042 | inventory/material-issues-reservations | queued |
+| 12 | 3 | M040 | inventory/warehouse-stock-control | done → 📋 Plan Ready |
+| 13 | 3 | M042 | inventory/material-issues-reservations | **in flight** |
 | 14 | 3 | M056 | quality/inspections-certificates | done |
 | 15 | 3 | M057 | quality/ncr-capa | done |
 | 16 | 3 | M054 | quality/material-review-board | done → 📋 Plan Ready (report-only: its code is all in Inventory, which was live) |
@@ -141,9 +144,9 @@ completed, so the other two slots were refilled.
 
 | ID | Module | Launched |
 |---|---|---|
-| M040 | inventory/warehouse-stock-control | 2026-08-30 |
 | M043 | supply-chain/import-shipments-customs | 2026-08-30 |
 | M058 | quality/traceability-ppap | 2026-08-30 |
+| M042 | inventory/material-issues-reservations | 2026-08-30 |
 | M044 | supply-chain/deliveries-proof | 2026-08-30 |
 
 Next up: M041, M040, M042, then the remaining Tier 3/4 list.
@@ -166,6 +169,7 @@ Next up: M041, M040, M042, then the remaining Tier 3/4 list.
 | M028 | finance/accounts-receivable | 🔁 Needs Re-audit | Statement reported ₱800/₱800/₱500 for the SAME rows; two credit notes drove GL AR to −₱1,000; 12% VAT charged on a VAT-exempt invoice. 3 fixed (all 500s), 7 of 9 new tests red at HEAD. No AR payment void exists at all. |
 | M023 | people/separation-final-pay | 🔁 Needs Re-audit | **Prior 4 sessions never measured anything** — their verification came from a shared DB reporting "34 failures / 0 assertions". All 13 findings reproduced, +5 new. 13th month and last salary each paid TWICE; leave conversion uncapped and never debited. 6 contained fixes, 10 of 12 tests red at HEAD. |
 | M021 | people/payroll-period-processing | 🔁 Needs Re-audit | Loan over-deduction mechanism identified: an as-of `reconcileAggregates` cut drops ledger rows dated after `payroll_date`, taking the ledger to ₱14,000 on ₱12,000 owed. Anomaly gate **fails OPEN** — a bad setting yields zero flags and approve+finalize both succeed. 4 fixed, 8 of 14 tests red at HEAD. |
+| M040 | inventory/warehouse-stock-control | 📋 Plan Ready | Only **6 of 32 routes had any HTTP test**; probing the other 26 found **three 500s and three routes 404ing for every valid target**. `reserve(-50)` produced reserved **−40.000**; `release(-999)` gave **959 against 100 on-hand**. 8 fixes, 7 of 8 tests red at HEAD. On-hand == SQL sum of movements **exactly**; all four races had one winner via real `lockForUpdate()`. **Downgraded a prior Broken to Polish** by measuring zero float divergence at full column range. |
 | M054 | quality/material-review-board | 📋 Plan Ready | **Report-only** — its code is 100% in `Inventory`, which was live under another agent. P0: four of six movement types (`Transfer`/`AdjustmentOut`/`Scrap`/`ReturnToVendor`) **escape quarantine with no MRB decision**, and the MRB is then stranded at `held` forever because `release()` throws permanently. Measured contradictions: one NCR → 3 MRBs summing 120 units against `affected_quantity=40`; NCR said `return_to_supplier` while MRB released `use_as_is` into finished goods; one NCR both scrapped AND returned. |
 | M044 | supply-chain/deliveries-proof | 📋 Plan Ready | Two P0s: CoC generation failure **swallowed into `Log::warning`**, so a delivery confirms AND invoices with no certificate; and AR's invoice path never reads delivery status — measured **201 against a cancelled delivery**. `StockMovementType::Delivery` is **never emitted**, so finished-goods stock never falls. Resolved the 2 inherited red tests as case (a) — unrealistic fixture, guard correct — proven from three code sites. 3 fixed, 93→109 tests. |
 | M057 | quality/ncr-capa | ✅ partially fixed | `ncr:escalate` (every 15 min) printed `0 advanced.` and **exited 0 while all three overdue NCRs threw** — the live 8D-ledger shape. Restore route 404'd for every valid target. 3 fixed, 6 of 8 tests red at HEAD. **15 of 16 prior findings gone** (log had self-flagged as unverified). Refuted 3 handed-down claims. Found: a disposition has NO material consequence, and one `qc_inspector` created→dispositioned→closed→**self-verified** its own NCR. |
