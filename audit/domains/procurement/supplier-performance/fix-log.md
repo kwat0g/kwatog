@@ -89,3 +89,110 @@ restore routing and quality-spec revision loading did not invalidate the report.
   values are approved.
 - **F-014/F-015** still need the database-backed focused suite and a real
   concurrent first-computation regression once PostgreSQL is available.
+
+## 2026-09-01 — Re-audit
+
+Lock **RECLAIMED** (orphan lock 118h old, `2026-08-25T12:09:11Z`).
+
+### Environment — verified before any probe
+
+`docker compose ps` showed `ogami-db` (healthy) and `ogami-redis` both **Up**;
+`psql -c "select 1"` returned a row. No container was started or restarted.
+This is the condition four earlier pipeline sessions lacked, which is why their
+verification claims were phantom.
+
+### Real numeric baseline
+
+**29 passed / 0 failed / 69 assertions**, 35.47s, on a dedicated database
+`ogami_test_supperf` (never the shared `ogami_test`):
+
+```
+docker compose run --rm -e DB_DATABASE=ogami_test_supperf api php artisan test \
+  tests/Feature/Purchasing/SupplierRankingTest.php \
+  tests/Feature/Purchasing/SupplierTierTest.php \
+  tests/Feature/Purchasing/SupplierQualityMetricsTest.php \
+  tests/Feature/Purchasing/SupplierDeteriorationTest.php --no-coverage
+```
+
+Harness trap recorded for the next session: passing **repo-relative** paths
+(`api/tests/...`) makes `artisan test` print `Test file not found` and **exit 0**
+— a green run with zero tests. Container-relative paths are required.
+
+### Prior session's work — assessed
+
+The 2026-08-25 fix-log was **accurate and honest**. Its code is committed (swept
+into `167de85e`); `git status` over all module paths is clean; every file it
+claims exists. It explicitly recorded that its DB-backed verification never ran
+(`SQLSTATE[08006]`, host `db` unresolvable) rather than claiming success — the
+opposite of the `separation-final-pay` failure mode. **This session is the first
+execution of that work, and all of it passes.**
+
+**8 of 15 prior findings now CLOSED** (F-005, F-006, F-007, F-008, F-012, F-013,
+plus F-014 partially and F-015's code path). **7 still reproduce** — F-001,
+F-002, F-003, F-004, F-009, F-010, F-011 — all knowingly deferred as commercial
+or cross-module decisions. No prior fix was falsely claimed.
+
+The F-007 database CHECK constraint was confirmed **present and correct** in a
+fresh migration run; it is absent from the long-lived dev `ogami` database only
+because that migration has never been applied there (dev drift, NEW-07).
+
+### Fixed
+
+Nothing yet. No source file was modified in this session.
+
+### New findings recorded (see audit-report.md for evidence)
+
+- **NEW-01 (Broken, high)** — `compositeScore()` substitutes **0** for a missing
+  `on_time_delivery_rate` or `quality_pass_rate` while honouring the seeded
+  `neutral_missing_metric` = 50 for NCR/price/lead-time. The two metrics scored
+  as zero carry **60% of the composite**. Both arms are reachable: a vendor whose
+  incoming inspection is merely still `draft` loses 35%; a vendor whose POs carry
+  no promised date loses 25%. On the repo's own fixture this stamps **tier D**
+  where consistent-neutral gives **C** and renormalisation gives **B**.
+  *Not fixed — QUESTION-1; changing it moves every tier boundary.*
+- **NEW-02 (Incomplete)** — the existing terminal-empty quality test asserts only
+  `quality_pass_rate` is null and never reaches `overall_score`, which is why
+  NEW-01 survived a green suite. Its comment is also wrong twice.
+- **NEW-03 (Broken)** — soft-deleted `purchase_orders` / `purchase_order_items`
+  still feed `priceVariancePct()`, `po_count`, and the on-time and lead-time
+  joins, because all four reach them via `DB::table()`.
+  `goods_receipt_notes` and `inspections` have **no `deleted_at`** — that arm is N/A.
+- **NEW-04 (Broken)** — `ranking()`'s raw `leftJoin('vendors')` does not filter
+  `deleted_at` while its `with('vendor:id,name')` does, so an archived vendor
+  ranks with `vendor.id = null, vendor.name = null` and consumes a `limit` slot.
+- **NEW-05 (Incomplete, QUESTION-2)** — no `purchase_orders.status` filter
+  anywhere; a **cancelled** PO reads as a 100% price variance and zeroes 15% of
+  the composite.
+- **NEW-06 (Incomplete)** — `lead_time_variance_days` is `numeric(5,2)`
+  (±999.99) with no clamp; a mis-keyed expected date overflows and 500s `compute()`.
+- **NEW-07** — not a code defect: dev DB is missing the F-007 migration.
+
+### Controls confirmed PASSING (measured)
+
+`/vendors/ranking` is declared before `/vendors/{vendor}/performance`
+(`routes.php:86` vs `:89`) and is **not param-bound** — five ranking tests
+resolve it. All five ratios are divide-by-zero guarded; no AR-style
+`DivisionByZeroError` exists here. A zero-history vendor yields NULL metrics,
+NULL score and NULL tier — "no history" **is** distinguishable from "scored zero"
+in the all-empty case, and breaks down only in the mixed case (NEW-01).
+On-time uses the PO's promised date with `lte()`, so **exactly-on-date and early
+both count on time**, and a receipt with no promised date is excluded from both
+sides rather than counted late. The recompute command returns `FAILURE` whenever
+any vendor threw, so "everything failed" is distinguishable from "nothing to do"
+— this module does **not** have the 8D-SLA false-green defect. All three registry
+roles can reach what they need (`purchasing_officer` holds view+recompute via
+`module('purchasing')`; `finance_officer` holds view only at
+`RolePermissionSeeder:549`; `system_admin` wildcard). No NCR aggregate exists, so
+the `->reorder()` / `42803` trap cannot fire. No money arithmetic anywhere in
+this service. SPA `Number(overall_score)` is safe because `decimal:2` yields the
+truthy string `"0.00"`.
+
+### Not verified — stated plainly
+
+Runtime confirmation of NEW-01's 53.75/tier-D arithmetic; runtime probes for
+NEW-03, NEW-04 and NEW-06; ranking tie determinism under both insertion orders
+(deterministic by construction, probe not run); two-connection race for F-015;
+live per-role HTTP 403 probes (there is **no export endpoint** on this surface);
+NCR rate against real NCR rows; `docs/USER-MANUAL.md` cross-check. This module
+has **no quality-PPM metric** — its quality inputs are inspection pass rate and
+NCR rate.

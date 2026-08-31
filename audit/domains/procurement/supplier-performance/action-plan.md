@@ -40,3 +40,52 @@ isolated fixes that would leave the scorecard internally inconsistent.
 3. Harden ranking/period contracts and correct the alert link.
 4. Resolve recompute RBAC, then build the ranking UI and dynamic trend polish.
 5. Run the focused Laravel suite and the SPA checks with PostgreSQL available.
+
+---
+
+# Re-audit action plan — 2026-09-01
+
+Status: `🔁 Needs Re-audit` → see release status below.
+Baseline before any change: **29 passed / 0 failed / 69 assertions**
+(`SupplierRankingTest`, `SupplierTierTest`, `SupplierQualityMetricsTest`,
+`SupplierDeteriorationTest` on `ogami_test_supperf`).
+
+Prior plan items F-005, F-006, F-007, F-008, F-012, F-013 are **closed and now
+runtime-verified**; F-015's code is closed. The rows below are the newly measured
+items plus the carried commercial/cross-module ones.
+
+| Priority | Finding(s) | Ordered work | Scope | Session recommendation |
+|---|---|---|---|---|
+| P0 | NEW-01 | **Decide first (QUESTION-1), then implement.** Make the composite's treatment of an unknown `on_time_delivery_rate` / `quality_pass_rate` consistent with the seeded `neutral_missing_metric` policy, or renormalise weights, or ratify the current 0. Whichever is chosen, persist a marker distinguishing "not measured" from "measured zero" so the API can too. | medium | **separate-recommended** — changes every tier boundary; commercial |
+| P0 | NEW-02 | Extend `test_only_non_terminal_inspections_does_not_divide_by_zero` to assert `overall_score` and `tier`, and correct its two factually wrong comments. Must be done *with* NEW-01 so the assertion pins the ratified number, not the current one. | small | separate-recommended (coupled to NEW-01) |
+| P0 | F-001 | Replace the quantity-shortfall placeholder with the approved price-variance definition. Carried unchanged. | large | separate-recommended |
+| P0 | F-002, F-004 | Supplier attribution for work-order/delivery inspections; mixed coverage and `partial_accepted` semantics. Carried unchanged. | large | separate-recommended |
+| P0 | F-009 | Stable vendor-period deterioration identity + notification idempotency. Carried unchanged. | medium | separate-recommended |
+| P1 | NEW-03 | Exclude soft-deleted `purchase_orders` / `purchase_order_items` from `priceVariancePct()`, `po_count`, and the on-time and lead-time joins (`whereNull('deleted_at')` on each `DB::table()` reach, or route through the Eloquent model). Archived rows must not feed a live score. | small | **same-session-ok** — "archived rows do not count" is a correctness rule, not a commercial choice |
+| P1 | NEW-04 | Exclude soft-deleted vendors from `ranking()` — the raw `leftJoin('vendors')` bypasses the scope the eager load applies, so an archived vendor ranks with a null identity and consumes a `limit` slot. No score changes. | small | **same-session-ok** |
+| P1 | NEW-06 | Clamp or guard `lead_time_variance_days` against the `numeric(5,2)` ±999.99 domain so a mis-keyed expected date cannot 500 `compute()`. Prefer a service-side clamp with a logged warning over widening the column. | small | **same-session-ok** |
+| P1 | NEW-05 | **QUESTION-2 first.** Constrain which `purchase_orders.status` values enter `price_variance_pct` / `po_count`. Today `draft`, `pending_approval` and `cancelled` all count and a cancelled PO reads as 100% variance. | medium | separate-recommended — commercial |
+| P1 | F-010 | **QUESTION-3.** Resolve recompute RBAC: seeder grants it to `purchasing_officer`, controller docblock says Admin-only. Align seeder, route, docblock and UI. | medium | separate-recommended |
+| P2 | F-011 | Bound each supplier policy setting to its real domain (neutral/targets 0–100, thresholds inside the score domain, penalty factors sane). | medium | separate-recommended |
+| P2 | F-015 | Two-connection concurrent first-computation probe. Subject to the `RefreshDatabase` visibility artifact; abandon and say so if it deadlocks. | medium | separate-recommended |
+| P2 | — | Ranking tie determinism: insert two equal-score vendors in **both** insertion orders and assert identical output. Ordering is deterministic by construction (score → `vendors.name` → unique `vendor_id`); this is a **regression lock**, expected to pass either way. | small | same-session-ok |
+
+## Release decision
+
+The three P0 items and both `NEW-05`/`F-010` are commercial or cross-module
+decisions that this session is explicitly forbidden to make: NEW-01 alone moves
+every supplier's tier. The majority of the *meaningful* work is therefore
+`separate-recommended`, and the module stays short of `✅ Verified`.
+
+The genuinely contained items — NEW-03, NEW-04, NEW-06 — are corrections of the
+"which rows count" and "unhandled domain overflow" kind, none of which requires a
+policy choice: excluding archived rows and refusing to overflow a column are
+unambiguously right. They are the only candidates for same-session work.
+
+## Suggested follow-up order
+
+1. Get QUESTION-1 answered — it blocks the largest single scoring defect and
+   NEW-02's assertion depends on the answer.
+2. Land the contained soft-delete and overflow guards (NEW-03/04/06) with probes.
+3. Then QUESTION-2/QUESTION-3, then the carried F-001/F-002/F-003/F-004 metric
+   redefinitions with their cross-module fixtures.

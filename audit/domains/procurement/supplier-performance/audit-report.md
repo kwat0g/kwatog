@@ -382,3 +382,428 @@ strategy consistent with the repository's write conventions.
 
 The dashboard is a downstream consumer and was read only for context; no
 dashboard files were audited or modified in this module session.
+
+---
+
+# Re-audit — 2026-09-01
+
+Status entering: `🔁 Needs Re-audit` (M038, Tier 3)
+Lock: **RECLAIMED** — orphan lock from `2026-08-25T12:09:11Z`, 118h old.
+
+## Environment verification (done FIRST, before any probe)
+
+Four prior sessions across two modules wrote verification claims from runs that
+never executed; the root cause was a stopped compose project. Verified before
+probing:
+
+```
+$ docker compose ps
+ogami-db      postgres:16-alpine   Up 41 minutes (healthy)   5432/tcp
+ogami-redis   redis:7-alpine       Up 41 minutes             6379/tcp
+
+$ docker compose exec -T db psql -U ogami -d postgres -c "select 1;"
+ ?column?
+----------
+        1
+```
+
+`db` and `redis` were both **running** for the entire session. No containers were
+started, stopped, or restarted.
+
+## Real numeric baseline (before any change)
+
+Own database, never the shared `ogami_test`:
+
+```
+$ docker compose exec -T db psql -U ogami -d postgres \
+    -c "CREATE DATABASE ogami_test_supperf OWNER ogami;"
+CREATE DATABASE
+
+$ docker compose run --rm -e DB_DATABASE=ogami_test_supperf api php artisan test \
+    tests/Feature/Purchasing/SupplierRankingTest.php \
+    tests/Feature/Purchasing/SupplierTierTest.php \
+    tests/Feature/Purchasing/SupplierQualityMetricsTest.php \
+    tests/Feature/Purchasing/SupplierDeteriorationTest.php --no-coverage
+
+  Tests:    29 passed (69 assertions)
+  Duration: 35.47s
+```
+
+**Baseline = 29 passed / 0 failed / 69 assertions.** Assertions are non-zero, so
+this is a real run, not a poisoned one.
+
+Harness note worth recording: `php artisan test api/tests/...` (repo-relative
+path) prints `Test file "…" not found` **and exits 0**. Paths must be
+container-relative (`tests/Feature/...`). A session that used the repo-relative
+form would see a green exit with zero tests run — the same phantom-verification
+shape the pipeline has already been bitten by four times.
+
+## Prior-work assessment
+
+This is the *good* case, with one important qualification.
+
+- The 2026-08-25 session's code **is committed** — swept into
+  `167de85e` ("chore: remaining uncommitted work from ~50 crashed audit
+  sessions"). `git status --porcelain` over all module paths is **clean**; every
+  file it claims to have written exists.
+- Its `fix-log.md` was **honest**, not fabricated. It explicitly recorded that
+  its focused Laravel run "selected 24 module tests but every case stopped in
+  `RefreshDatabase` because PostgreSQL host `db` could not be resolved
+  (`SQLSTATE[08006]`)" and that "database-backed fixes are therefore not
+  runtime-verified in this environment." This is the opposite of the
+  `separation-final-pay` failure mode.
+- **Its unverified claims now verify.** The 29/0 baseline above is the first
+  actual execution of that work. Every fix it claimed is confirmed below.
+
+### Prior findings — reproduction status
+
+Verified by probe, not by reading the log.
+
+| Finding | Prior disposition | Re-audit result |
+|---|---|---|
+| F-001 price variance is quantity shortfall | deferred | **STILL REPRODUCES** — `SupplierPerformanceService.php:375-392` still sums `poi.quantity`/`poi.quantity_received`; docblock at `:29` still claims unit-cost variance |
+| F-002 in-process/outgoing quality unpopulatable | deferred | **STILL REPRODUCES** — `:293-301` still requires `i.entity_type = 'grn'` |
+| F-003 delivery metrics at GRN grain | deferred | **STILL REPRODUCES** — `:258-280`, `:394-423` still one vote per GRN |
+| F-004 no mixed-coverage / partial-acceptance policy | deferred | **STILL REPRODUCES** — `:340` counts only `'accepted'`; `GrnStatus::PartialAccepted` exists |
+| F-005 ranking null-first / id tie-break | fixed | **CLOSED** — `:231-235` orders `CASE WHEN score IS NULL` → score DESC → `vendors.name` → `vendor_id`; test green |
+| F-006 ranking contract permissive | fixed | **CLOSED** — `SupplierRankingRequest.php` validates year/month/tier/limit; controller consumes `validated()` only; `meta.count` present at `:139` |
+| F-007 invalid periods persistable | fixed | **CLOSED** — `validatePeriod()` at `:243-256` on all three entry points; CLI at `RecomputeSupplierPerformance.php:39-62`; **DB CHECK constraint confirmed present** (see below) |
+| F-008 deterioration link 404s | fixed | **CLOSED** — `AlertOnSupplierDeterioration.php:66-68` emits `/purchasing/suppliers/{hash}/performance`, matching `purchasingRoutes.tsx:109` |
+| F-009 no notification idempotency boundary | deferred | **STILL REPRODUCES** (not re-probed at runtime this session) |
+| F-010 recompute RBAC vs "Admin-only" label | deferred | **STILL REPRODUCES** — controller docblock `:82` says Admin-only; `purchasing_officer` holds the slug (measured, below) |
+| F-011 policy settings only partially bounded | deferred | **STILL REPRODUCES** — `setting()` at `:466-473` accepts any non-negative numeric |
+| F-012 no ranking frontend | fixed | **CLOSED** — client `ranking()` in `spa/src/api/purchasing/supplier-performance.ts`; page `spa/src/pages/purchasing/suppliers/ranking.tsx`; route `purchasingRoutes.tsx:101` → `SupplierRankingPage` |
+| F-013 hardcoded trend window / weak fallback | fixed | **CLOSED** — table alternative present at `performance.tsx:240-311` |
+| F-014 tests do not protect high-risk paths | partial | **PARTLY REPRODUCES** — ranking/tier/period/link now covered and green, but see NEW-02: the quality test's terminal-empty case never asserts the composite |
+| F-015 first-computation race | fixed (code) | **CODE CLOSED** — `:98-108` is a real DB `upsert()` on the unique key; `repeated compute keeps one snapshot for a vendor period` green. Two-connection race NOT probed (see Not verified) |
+
+**8 of 15 prior findings closed; 7 still reproduce** (F-001, F-002, F-003, F-004,
+F-009, F-010, F-011), all of which were knowingly deferred as commercial or
+cross-module decisions. No prior fix was found to be falsely claimed.
+
+## Findings — new this session
+
+### NEW-01 — A missing metric is scored **0**, not neutral, for two of five inputs
+
+Classification: **Broken**
+Risk: **high** — this is the module's characteristic failure: a confidently wrong tier.
+
+`compositeScore()` (`api/app/Modules/Purchasing/Services/SupplierPerformanceService.php:430-464`)
+returns a score whenever *either* `on_time` or `quality` is non-null:
+
+```php
+if ($onTime === null && $quality === null) { return null; }   // :437-439
+$onTimeScore  = $onTime  ?? 0;                                 // :442
+$qualityScore = $quality ?? 0;                                 // :443
+$neutral = $this->setting('purchasing.supplier_score.neutral_missing_metric');
+$ncrScore      = $ncrRate  === null ? $neutral : …             // :445
+$priceScore    = $price    === null ? $neutral : …             // :446
+$leadTimeScore = $leadTime === null ? $neutral : …             // :447
+```
+
+Three metrics honour the seeded `neutral_missing_metric` policy (**50**); the two
+**most heavily weighted** ones (on-time 25%, quality 35% — 60% of the composite)
+silently substitute **0**. "No data" is therefore scored identically to "total
+failure" for 60% of the score, and the API cannot distinguish them: the snapshot
+stores `quality_pass_rate = NULL` next to an `overall_score` that already
+penalised that NULL as a zero.
+
+Both arms are reachable in ordinary operation:
+
+- **quality NULL, on-time present.** `qualityMetrics()` returns early at
+  `:303-327` as soon as *any* GRN-linked inspection row exists. If none of them
+  is terminal, `passRate` is NULL (`:309-311`) and the GRN-status fallback at
+  `:330-344` is **never reached**. So a vendor whose incoming inspection is
+  merely still `draft`/`in_progress` loses 35% of its score outright.
+- **on-time NULL, quality present.** `onTimeDeliveryRate()` returns NULL when
+  every receipt's PO has no `expected_delivery_date` (`:272`, `:279`). A vendor
+  whose POs simply carry no promised date loses 25% of its score.
+
+Arithmetic against the seeded policy (measured from `settings`: neutral=50,
+weights .25/.35/.10/.15/.15, ncr factor 2, price factor 2, lead factor 5), using
+the **repo's own existing fixture** in
+`test_only_non_terminal_inspections_does_not_divide_by_zero` (one GRN received
+2026-01-15, PO dated 2026-01-05 expecting 2026-01-20, one `draft` inspection, no
+PO items):
+
+| treatment of the NULL quality input | composite | tier |
+|---|---|---|
+| **as shipped (`?? 0`)** | 100(.25) + **0**(.35) + 100(.10) + 50(.15) + 75(.15) = **53.75** | **D** |
+| neutral 50, as the other three metrics | 71.25 | C |
+| excluded, weights renormalised over 0.65 | 82.69 | B |
+
+A vendor with a perfect delivery record and an inspection that has not been
+closed yet is stamped **D — the worst tier** — when the same policy applied
+consistently yields **C**, and excluding the unknown yields **B**.
+
+**Status: computed, not yet runtime-confirmed.** The three numbers above are
+derived by hand from the code path and the measured `settings` rows; the
+end-to-end assertion against a persisted snapshot was still outstanding when this
+session was interrupted. The reachability of both arms is read off the control
+flow and is not in doubt; the exact 53.75 should be confirmed by probe before it
+is quoted to purchasing.
+
+**This is NOT to be fixed unilaterally.** Consistency with the module's own
+declared `neutral_missing_metric` policy is the *likely* intent, but choosing
+between neutral-substitution and weight-renormalisation moves every tier
+boundary and therefore decides which suppliers get business. Escalated as
+QUESTION-1.
+
+### NEW-02 — The quality metric's empty-denominator test never reaches the composite
+
+Classification: **Incomplete**
+Risk: medium — this is why NEW-01 survived a green suite.
+
+`api/tests/Feature/Purchasing/SupplierQualityMetricsTest.php:296-317`
+(`test_only_non_terminal_inspections_does_not_divide_by_zero`) calls
+`compute()` and then asserts **only**:
+
+```php
+$this->assertNull($snapshot->quality_pass_rate, …);
+```
+
+It never asserts `overall_score` or `tier`, so the branch that converts that NULL
+into a 0-weighted-at-35% score is executed on every run and checked by nothing.
+This is the same shape as the analytics row-mapping branch a quality session
+found: *the test asserts the empty case and stops*, so the interesting arm is
+covered in name only.
+
+Its explanatory comment is also wrong on two counts: it states the pass rate is
+NULL "because the GRN fallback gives null because the GRN status is `pending_qc`
+not `accepted`". The fallback is **not reached** (the early return at `:326`
+fires first), and had it been reached, `pending_qc` would have produced
+`round((0/1)*100, 2) = 0.0`, not NULL. The test passes for a different reason
+than it documents.
+
+### NEW-03 — Soft-deleted purchase orders and PO items still enter the score
+
+Classification: **Broken**
+Risk: medium — archived rows changing a live number is a measured pattern in this repo.
+
+`purchase_orders` and `purchase_order_items` both carry `deleted_at` (confirmed
+against `information_schema.columns`), and `PurchaseOrder` uses `SoftDeletes`
+(`api/app/Modules/Purchasing/Models/PurchaseOrder.php:26`). Every consumer in
+this service reaches them through **`DB::table()`**, which does not apply the
+global scope:
+
+- `priceVariancePct()` — `:377-385`
+- `po_count` — `:60-63`
+- `onTimeDeliveryRate()` join to `purchase_orders` — `:260-265`
+- `leadTimeVarianceDays()` join to `purchase_orders` — `:396-401`
+
+An archived PO therefore still contributes ordered quantity to the price metric,
+still occupies a slot in `po_count`, and still supplies the `expected_delivery_date`
+that decides on-time. This is the class that produced ₱111-vs-₱999 in
+`journal-ledger` and a 500 on an archived customer in AR.
+
+`goods_receipt_notes` and `inspections` have **no `deleted_at`** (verified via
+`information_schema`), so the GRN/inspection arms of this question are **N/A**,
+not unverified.
+
+**Status: identified from schema + code; runtime probe outstanding.**
+
+### NEW-04 — A soft-deleted vendor keeps its ranking slot, with a null identity
+
+Classification: **Broken**
+Risk: medium — an archived supplier displacing a live one in a ranking table.
+
+`ranking()` (`:220-236`) mixes two different soft-delete behaviours on the same
+vendor:
+
+```php
+->leftJoin('vendors', 'supplier_performance_snapshots.vendor_id', '=', 'vendors.id')
+->with('vendor:id,name')
+```
+
+The `leftJoin` is raw SQL and does **not** filter `vendors.deleted_at`, so the
+archived vendor's snapshot is still selected, still ordered, and still consumes
+one of the `limit` rows. The eager load **does** apply `SoftDeletes`, so
+`$s->vendor` resolves to `null` — and the controller then emits
+`'vendor' => ['id' => null, 'name' => null]`
+(`SupplierPerformanceController.php:120-124`). The result is a ranked row with a
+score, a tier and PO/GRN counts but no supplier identity.
+
+Note the same join is the `ORDER BY vendors.name` source (`:233`), so an archived
+vendor also sorts on a name the response will not show.
+
+`recomputeAll()` is **not** affected — it uses `Vendor::query()` (`:180`), which
+does apply the scope.
+
+**Status: identified from code; runtime probe outstanding.**
+
+### NEW-05 — No purchase-order status filter anywhere in the score
+
+Classification: **Incomplete** (raised as a QUESTION, not fixed)
+Risk: medium
+
+Neither `priceVariancePct()` (`:377-385`) nor the `po_count` query (`:60-63`)
+constrains `purchase_orders.status`. `PurchaseOrderStatus` has eight cases
+including `Draft`, `PendingApproval` and `Cancelled`. A **cancelled** PO retains
+its ordered quantity and has `quantity_received = 0`, so it lands in the
+shortfall numerator as a 100% "price variance" and, at the seeded
+`price_penalty_factor = 2`, drives `priceScore` to `max(0, 100 - 200) = 0` —
+15% of the composite zeroed by an order the supplier was told not to fill.
+
+Which statuses should count is a commercial decision, so this is escalated
+(QUESTION-2) rather than changed. Recorded here because "which rows count" is
+the exact question the brief asks this module to pin down, and today the answer
+is **all of them, including drafts and cancellations**.
+
+### NEW-06 — `lead_time_variance_days` can overflow `numeric(5,2)`
+
+Classification: **Incomplete**
+Risk: low (narrow trigger, but an unhandled 500)
+
+`lead_time_variance_days` is `numeric(5,2)` — maximum **999.99** (confirmed
+against `\d supplier_performance_snapshots`). `leadTimeVarianceDays()` computes a
+signed day difference with no clamp (`:415-422`), and the service's own comment
+at `:410-414` documents that neither `expected_delivery_date` nor `received_date`
+is constrained relative to the PO date. A PO whose expected date is mis-keyed by
+more than ~2.7 years yields a variance the column cannot hold, and `compute()`
+raises a PostgreSQL numeric-overflow error inside its transaction — surfacing as
+a 500 on the recompute endpoint and as a per-vendor entry in `recomputeAll()`'s
+failure list.
+
+**Status: identified from schema + code; overflow not yet triggered at runtime.**
+
+### NEW-07 — Dev database is missing the F-007 period CHECK constraint
+
+Classification: **Not a code defect** — environment drift, recorded so the next
+session does not re-discover it.
+
+```
+$ psql -d ogami_test_supperf -c "select conname, pg_get_constraintdef(oid) …"
+supplier_performance_snapshots_period_check |
+  CHECK (period_year >= 2000 AND period_year <= 2100
+         AND period_month >= 1 AND period_month <= 12)
+
+$ psql -d ogami       -c "select conname … contype='c'"
+(0 rows)
+
+$ psql -d ogami       -c "select migration from migrations
+                          where migration like '%guard_supplier_performance%'"
+(0 rows)
+```
+
+The migration `2026_08_25_180000_guard_supplier_performance_periods` has **run in
+a fresh test database and its constraint is present and correct**; it has simply
+never been run against the long-lived dev `ogami` database. Consistent with the
+known "dev DB drifts from seeders" behaviour. The prior session's F-007 fix is
+sound; the dev database is stale. No action taken (running migrations against
+dev is outside this module's surface and other sessions share that database).
+
+## Controls confirmed PASSING this session
+
+Each measured, not assumed.
+
+- **Route ordering / `/vendors/ranking` is not param-bound.** `routes.php:86`
+  declares the literal `/vendors/ranking` **before** `/vendors/{vendor}/performance`
+  at `:89` and `/vendors/{vendor}/performance/recompute` at `:92`, with a comment
+  recording why. `SupplierRankingTest::ranking defaults to previous calendar
+  month` and four sibling ranking cases resolve the literal route and pass — a
+  param-bound `ranking` would 404 on vendor lookup instead.
+- **Divide-by-zero is guarded on every ratio** (code-read, all five):
+  `onTimeDeliveryRate` `$total > 0` (`:279`); `qualityMetrics` `$terminalCount > 0`
+  (`:309`, `:319`) and `$grnRows->isEmpty()` (`:336`); `ncrRate`
+  `$totalGrns === 0 → null` (`:359`); `priceVariancePct` `qty <= 0 → null`
+  (`:387`); `leadTimeVarianceDays` `empty($diffs) → null` (`:420`). No unguarded
+  divisor found. `test_only_non_terminal_inspections_does_not_divide_by_zero`
+  passes. No AR-style `DivisionByZeroError` exists in this module.
+- **Zero-history vendor returns NULL, not 0, at the metric level.** Every metric
+  returns `null` on an empty base, and `compositeScore` returns `null` when
+  on-time *and* quality are both absent (`:437-439`), so `tier` is `null`
+  (`:131`) — the docblock's "vendors with no data don't get a synthetic letter"
+  holds. `SupplierTierTest::tier is null when overall score is null` passes.
+  **The distinction breaks only in the mixed case** — NEW-01.
+- **On-time boundary semantics** (code-read at `:271-277`): reference date is the
+  PO's `expected_delivery_date` (promised, never revised — there is no revised
+  column). `->lte()` means **delivered exactly on the promised date counts as
+  on time**, and an **early receipt counts as on time**. A receipt whose PO has
+  **no promised date is excluded from both numerator and denominator**
+  (`continue` at `:272`) rather than counted as late — the honest choice. A
+  **partial receipt counts as a full independent vote** (GRN grain) — that is
+  prior finding F-003, still open.
+- **Recompute exit codes distinguish "nothing to do" from "everything threw."**
+  `RecomputeSupplierPerformance::handle()` returns `self::FAILURE` whenever
+  `$result['failed'] !== []` and echoes each vendor's error (`:78-85`);
+  `recomputeAll()` collects per-vendor failures instead of swallowing them
+  (`:185-198`). Zero vendors gives `computed=0 failed=0` → `SUCCESS`, which is a
+  truthful "nothing to do". This module does **not** have the 8D-SLA
+  false-green defect.
+- **Permissions — every registry role can reach what it needs.** Measured in
+  `RolePermissionSeeder`: `purchasing.suppliers.performance.view` and
+  `.recompute` are both catalogued in the `purchasing` bucket (`:240-241`);
+  `purchasing_officer` takes `module('purchasing', except: ['purchasing.po.sod_override'])`
+  (`:637`) so it holds **both**; `finance_officer` is granted `.view` explicitly
+  and only `.view` (`:549`); `system_admin` is wildcard. The registry row
+  (`system_admin, finance_officer, purchasing_officer`) is satisfied — no route
+  is gated on a slug no role holds.
+- **HashIDs at the API boundary.** `hash_id` on vendor detail
+  (`Controller:39`), ranking rows (`:122`) and recompute (`:91`); the snapshot's
+  own id is exposed as `hash_id` in the alert payload
+  (`AlertOnSupplierDeterioration:73`). `SupplierRankingTest::ranking returns
+  hash id never raw id` passes.
+- **No float/`round()` on money.** The five metrics are percentages and day
+  counts in `numeric(5,2)`, not money; this service performs **no** monetary
+  arithmetic at all (`priceVariancePct` divides *quantities*, which is precisely
+  prior finding F-001). Rounding is `round(x, 2)` at every metric and
+  `round($score, 2)` for the composite — PHP's default half-away-from-zero, and
+  since every value is non-negative that is **half-up, consistently applied**.
+  Direction is therefore defined, if not documented.
+- **SPA money/number handling is safe here.** `spa/src/pages/purchasing/suppliers/performance.tsx:140`
+  uses `latest?.overall_score ? Number(...) : null`, which would be a
+  falsy-zero bug — except the model's `decimal:2` cast serialises the score as
+  the **string** `"0.00"`, which is truthy in JS. Checked explicitly; a genuine
+  zero score renders as `0.0`, not as "no data". `Number()` here is on a score,
+  not on money, so the four-module `Number(x)`-on-money defect does not apply.
+- **No NCR aggregate over `NonConformanceReport::actions()`.** `ncrRate()`
+  (`:352-373`) queries `non_conformance_reports` through `DB::table()` with joins
+  and no `GROUP BY`, so the `orderBy('performed_at')` / `->reorder()` trap
+  (`SQLSTATE[42803]`) **cannot fire** in this module. Verified by reading every
+  NCR touchpoint in the service — there is exactly one.
+- **F-012's dead-surface risk is closed in both directions.** Backend
+  `/vendors/ranking` now has a client (`supplier-performance.ts` `ranking()`), a
+  typed response, a page (`pages/purchasing/suppliers/ranking.tsx`) and a
+  permission-gated route (`purchasingRoutes.tsx:101`); the per-vendor page at
+  `:109` matches the path the deterioration alert now emits.
+
+## Questions for a human (not decided by this session)
+
+- **QUESTION-1 (NEW-01, blocking).** When `on_time_delivery_rate` or
+  `quality_pass_rate` is unknown, should the composite (a) substitute the seeded
+  `neutral_missing_metric` = 50, as it already does for NCR/price/lead-time,
+  (b) drop the metric and renormalise the remaining weights, or (c) keep the
+  current 0 — i.e. deliberately treat "not measured" as "failed"? On the repo's
+  own fixture these give tier **C / B / D**. Purchasing must choose; it moves
+  every tier boundary.
+- **QUESTION-2 (NEW-05).** Which `purchase_orders.status` values should enter
+  `price_variance_pct` and `po_count`? Today `draft`, `pending_approval` and
+  `cancelled` all count, and a cancelled PO reads as a 100% price variance.
+- **QUESTION-3 (F-010, carried).** Is recompute purchasing-officer self-service
+  (what the seeder does) or admin-only (what
+  `SupplierPerformanceController.php:82` says)? One of the two is wrong.
+
+## Not verified (stated plainly)
+
+Interrupted mid-flight; these were planned and not reached.
+
+- Runtime confirmation of the NEW-01 arithmetic (53.75 / tier D) against a
+  persisted snapshot. Derived by hand from code + measured settings.
+- Runtime probes for NEW-03 (soft-deleted PO), NEW-04 (soft-deleted vendor in
+  ranking) and NEW-06 (`numeric(5,2)` overflow). All three are identified from
+  schema and control flow, not yet executed.
+- **Ranking tie determinism under both insertion orders.** The ordering clause is
+  fully deterministic *by construction* (score → `vendors.name` → `vendor_id`,
+  a unique final key) and the existing tie test passes, but the
+  insert-in-both-orders probe the brief asks for was not run.
+- Two-connection concurrent first-computation race (F-015). The `upsert()` is the
+  right shape and the repeated-compute test is green; a genuine two-connection
+  probe is subject to the `RefreshDatabase` visibility artifact and the deadlock
+  a prior session correctly abandoned.
+- Live HTTP 403 probes per endpoint (including any export). Permissions were
+  verified from the seeder and the route middleware, not by issuing requests as
+  each role. **There is no export endpoint on this surface** to gate.
+- Quality PPM against real defect rows: this module has **no PPM metric**; its
+  quality inputs are inspection pass rate and NCR rate. The NCR arm was not
+  exercised against real NCR rows this session.
+- `docs/USER-MANUAL.md` cross-check for documented-but-unbuilt features.
