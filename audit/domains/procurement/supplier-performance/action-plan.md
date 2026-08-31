@@ -89,3 +89,28 @@ unambiguously right. They are the only candidates for same-session work.
 2. Land the contained soft-delete and overflow guards (NEW-03/04/06) with probes.
 3. Then QUESTION-2/QUESTION-3, then the carried F-001/F-002/F-003/F-004 metric
    redefinitions with their cross-module fixtures.
+
+## Outcome of the 2026-09-01 session
+
+**Landed** (commit `6f357553`): NEW-03, NEW-04, NEW-06 — the three items tagged
+`same-session-ok`. Each was measured failing before and passing after, and the
+five new regression cases were confirmed red against unmodified HEAD. Baseline
+29/69 → 40/96, no regressions.
+
+**Not landed, by design:** NEW-01, NEW-02 (coupled to NEW-01), NEW-05, and the
+carried F-001/F-002/F-003/F-004/F-009/F-010/F-011.
+
+Justification for the split: the landed three are corrections to *which rows
+count* and to an *unhandled column domain* — excluding archived rows and refusing
+to overflow `numeric(5,2)` require no policy choice, and the clamp was proven
+score-neutral by assertion. Everything deferred either changes what a score
+*means* (NEW-01 moves every tier boundary; NEW-05 redefines the price base) or
+crosses into quality/inventory/RBAC ownership. Fixing only the contained items
+from a mostly-gated plan is the explicitly sanctioned split.
+
+**Blocking on humans:** QUESTION-1 (0-vs-neutral for a missing metric — the
+single largest scoring defect), QUESTION-2 (which PO statuses count),
+QUESTION-3 (recompute RBAC).
+
+**Also referred out:** NEW-08 — the archived-vendor leak fixed here in `ranking()`
+still exists in three Dashboard services. Needs the Dashboard module's owner.
