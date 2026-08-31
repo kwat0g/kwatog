@@ -78,3 +78,118 @@ escalation ledger that was dead for its entire life.
 First move for the next session: `grep -rn 'MoldShotLimit' api/app` and check
 `AppServiceProvider::boot()` for a registration, then dispatch the event and
 observe whether any notification is delivered.
+
+## 2026-09-01 — re-audit session 3: discovery recorded, no production change
+
+Interrupted by the parent Claude Code process exiting mid-probe-authoring (not
+quota, not an error in-session). The lock was still held and zero commits had
+landed, so the write-up was committed before any further work.
+
+**No production code changed. No test written. Baseline run only.**
+
+### Environment + baseline (both verified, quoted here because four earlier sessions faked this)
+
+- `docker compose ps` → `ogami-db` and `ogami-redis` both **Up (healthy)**. Neither
+  started, stopped nor restarted by this session.
+- `docker compose exec -T db psql -U ogami -d postgres -c "select 1;"` → 1 row.
+- Baseline on an **own** database (`ogami_test_wo2`, created for this session):
+  `docker compose run --rm -e DB_DATABASE=ogami_test_wo2 api php artisan test tests/Feature/Production --no-coverage`
+  → **67 passed / 232 assertions / 43.05s / exit 0**. Non-zero assertions, so not
+  the poisoned-run signature. (Prior session recorded 39/143; the suite grew.)
+
+### The two prioritised leads — both resolved, both against the incoming hypothesis
+
+**Lead A — "no listener for `MoldShotLimitNearing`/`MoldShotLimitReached`": grep TRUE, conclusion FALSE. CLOSE AS NOT-A-DEFECT.**
+There is no `Event::listen()` for either class, and there was never meant to be.
+Both `implement ShouldBroadcast` and are recorded through `OutboxService` at
+`api/app/Modules/MRP/Services/MoldService.php:135,138`; they are registered in
+the outbox codec allow-list at `api/app/Common/Services/OutboxEventCodec.php:125-126`
+(an unregistered class would be rejected — positive evidence the path is live).
+The operator-facing 80% alert comes from a *different* mechanism: the scheduled
+`AlertEngineService` production check at
+`api/app/Common/Services/AlertEngineService.php:395-424`, which polls `molds` and
+raises `AlertType::MoldShotLimit`, with a missing-condition resolver at `:700-730`
+that clears stale alerts. Both driving settings are present and non-null in the
+live DB (`alerts.mold.warning_ratio=0.8`, `alerts.mold.critical_ratio=0.95`), so
+`requiredFloat()` inside the shot-increment transaction cannot throw and roll back
+an output recording. **Caveat: "delivered" is inferred from the poll query, not
+observed end-to-end — the runtime probe did not run.**
+
+**Lead B — IC-16 "in-process QC gate does not exist": grep reproduces exactly, conclusion FALSE.**
+`grep -rn "InProcess\|in_process" api/app/Modules/Production/` → exit 1, no output.
+But the gate is not supposed to live in Production — Production dispatches and
+Quality listens, which is the correct dependency direction, so a Production-scoped
+grep can never see it. `App\Modules\Quality\Listeners\TriggerInProcessQC` is
+registered at `api/app/Providers/AppServiceProvider.php:330` on
+`WorkOrderStatusChanged`, which this module stages inside the owning lifecycle
+transaction at `api/app/Modules/Production/Services/WorkOrderService.php:732-738`.
+It creates an `in_process` inspection on start, is idempotent, refuses rather than
+inventing data, notifies through `NotificationService`, and — unlike the 8D SLA
+ledger — logs **and rethrows** for queue retry.
+
+Correct classification is **Incomplete, in two separable ways**:
+- (a) the WO-level inspection is **created but gates nothing** —
+  `WorkOrderService::complete()` (`:467-516`) reads no inspection state, so a WO
+  completes with its in-process inspection pending or failed;
+- (b) the per-operation gate CLAUDE.md actually describes ("periodic sampling
+  between operations") is a **`Log::info` stub** at
+  `api/app/Modules/Production/Services/WoOperationService.php:243-266`, whose own
+  docblock says "actual event integration comes in a later task". So
+  `routing_operations.qc_required` is a configurable IATF flag whose entire effect
+  is a log line. **That is the genuine IC-16 gap → Missing.**
+Whether to build a sampling regime is a human scope call (Q2 in the report).
+
+### New findings recorded (full evidence + file:line in audit-report.md §2)
+
+Broken: **B01** `/operations/{op}/output` validates `qty` as `numeric` → `1.99995`
+silently stored as `2.0000`, `1e15` → `bcadd` `ValueError` 500, `1e12` → `22003`
+500 (controller catches only `BusinessRuleException`). **B02**
+`WoOperationService::recordOutput()` is a second output path that bypasses
+`WorkOrderOutputService::record()` entirely — no `work_order_outputs` row, **no
+mold shot increment**, no WO totals/scrap rate, no FG receipt, no outbox event, no
+defect reconciliation, no idempotency. **B03** `skipOperation()` is the only
+operation command with no `assertStatus()`, so a **Completed** operation can be
+flipped to Skipped.
+
+Missing: **M01** per-operation QC is a log statement. **M02** `document_sequences`
+has **no `work_order` and no `production_batch` row** (measured), so the known
+unguarded lock-or-create in `DocumentSequenceService::generate()` exposes the
+first WO create and first start of **every calendar month** to a `23505` 500 —
+shared-service scope, reported not fixed. **M03** zero triggers on any
+`work_order*` table and no `deleted_at` on `work_order_outputs` (both measured);
+mitigated in practice because **no update or delete endpoint for outputs exists**,
+so this is defence-in-depth absent rather than reachable.
+
+Incomplete: **I01** `complete()` accepts zero output (and then fires outgoing QC
+for a nonexistent batch). **I02** `complete()` never reconciles issued material
+against BOM. **I03** `cancel()` ignores already-issued material on the legal
+`paused → cancelled` edge. **I04** OEE availability derives from
+`available_hours_per_day × naive weekday count`, ignoring shifts and holidays — a
+real weekend run yields OEE `null`. **I05** downtime is charged wholly to its
+start day; not double-counted but misattributed, and the `max(0, …)` clamp turns
+the artifact into a reported hard 0% availability. **I06** raw integer `items` PK
+leaks into a 422 body at `WorkOrderService.php:880-883` via `confirm()`. **I07**
+`status` + recorded quantity columns still mass-assignable on `WorkOrder`
+(measured: an existing test mass-assigns `status` and passes).
+
+Polish: **P01** OEE `report()` trend is O(days × machines) service calls.
+
+Verified as **holding** (credit where due): restore binds `withTrashed()` at both
+route and service and refuses a non-trashed target — not the 404-for-every-target
+defect three modules shipped; `work_order_outputs` has a real DB
+`UNIQUE (work_order_id, idempotency_key)`; all three OEE metrics are null-guarded
+rather than divided, so no `DivisionByZeroError`; all 27 Production routes carry
+`permission:` middleware; the state machine re-checks `assertTransition` after
+taking the row lock, so a stale model cannot slip an illegal transition through.
+
+### Required follow-up (ordered, next session's first job)
+
+1. Run the probe suite in audit-report.md §3 "NOT executed" — it names each probe
+   and the predicted outcome, so no rediscovery is needed. Highest value: the B01
+   `1e15` 500, the duplicate-output shot/scrap/event non-doubling (baseline covers
+   the row-count half only), and whether a mold flipped to `Maintenance`
+   **mid-run** can still take output (`start()` checks mold status but nothing
+   re-checks it after).
+2. Apply I06 (most contained: swap the raw PK for `item->code`), then B01.
+3. Resolve Q1–Q5 with a human before touching B02's ceiling, I01, I03 or either
+   half of the in-process QC gating.
