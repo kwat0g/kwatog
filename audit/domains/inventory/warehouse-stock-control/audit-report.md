@@ -174,3 +174,26 @@ Stock-count and transfer services write enum values directly (`api/app/Modules/I
 ## Audit conclusion
 
 M040 remains not ready for production sign-off. The previous map-projection and several concurrency/contract seams are improved in the current worktree, but scanner navigation, count scope/closure/segregation, reservation arithmetic, valuation precision, lot traceability, picking execution, restore behavior, and picking RBAC remain open. The first plan items require explicit warehouse/count/picking policy decisions; see `action-plan.md`.
+
+---
+
+# M040 — Warehouse & Stock Control — Re-audit 2026-09-01 (IN PROGRESS)
+
+Claimed: `audit/scripts/claim-module.sh inventory warehouse-stock-control` → **RECLAIMED**
+(stale lock 153h old from the 2026-08-25 session).
+
+## Prior-session assessment (pre-probe)
+
+The 2026-08-25 report **self-flags its own verification as unusable**: its focused run
+produced "exit code 2; 42 tests failed during setup with 0 assertions because PostgreSQL
+host `db` could not be resolved (`SQLSTATE[08006]`)". Per the pipeline's own guidance,
+many failures with **zero assertions** means the database was gone, not that the code was
+broken — so none of M040-F02 … M040-F21 has ever been runtime-verified. This session
+re-derives each by probe.
+
+`fix-log.md` states no application source was changed on 2026-08-25, and
+`git log -- api/app/Modules/Inventory/` confirms the newest Inventory commit is
+`276f2e3e` (the neighbouring goods-receiving session's fix), so the working tree at
+claim time is unmodified relative to that report.
+
+## Status: probing in progress — findings appended below as measured.
