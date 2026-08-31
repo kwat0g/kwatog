@@ -193,3 +193,84 @@ taking the row lock, so a stale model cannot slip an illegal transition through.
 2. Apply I06 (most contained: swap the raw PK for `item->code`), then B01.
 3. Resolve Q1–Q5 with a human before touching B02's ceiling, I01, I03 or either
    half of the in-process QC gating.
+
+### 2026-09-01 — fixes applied (same session, contained subset only)
+
+The action plan is majority `separate-recommended`, so this module does **not**
+clear the "majority same-session-ok → fix now" gate. Per the brief, only the
+genuinely contained items were landed; the split is stated in
+`action-plan.md` and justified per item.
+
+**Baseline before:** 67 passed / 232 assertions (`ogami_test_wo2`).
+**After:** **78 passed / 247 assertions, 0 failures** — 67 pre-existing (all still
+green) + 11 probes, plus 15 extra assertions from the strengthened stock test.
+**Zero pre-existing regressions.**
+
+| Finding | File:line | Before (measured) | After (measured) |
+|---|---|---|---|
+| **NEW Broken** — `resume()` backdoor-starts a confirmed WO | `api/app/Modules/Production/Services/WorkOrderService.php:423-450`, new `assertResumable()` at `:668-685` | transition matrix cell `confirmed → resume` = `ALLOWED(in_progress)`, skipping the material-plan assertion, subassembly readiness, machine/mold availability, material issue, `batch_number`, `actual_start`, lot capture and SO promotion | `confirmed → resume` = `illegal-transition` (409). Only the `paused` row still shows `ALLOWED(in_progress)` |
+| **NEW Broken** — negative output persists a corrupt quantity | `api/app/Modules/Production/Services/WorkOrderOutputService.php:79-96` | `good=-5, reject=10` → `threw=NULL produced=5 good=-5 rejected=10 scrap=200.00` | `threw='BusinessRuleException: Good count and Reject count cannot be negative.' produced=0 good=0 rejected=0 scrap=0.00` |
+| **B01** — `numeric` quantity → three 500s + silent rounding | `api/app/Modules/Production/Controllers/WoOperationController.php:148-168` | HTTP `{"1.999":200,"1.99995":200,"1e3":200,"1e12":500,"1e15":500,"1e20":500,"-5":422}` | HTTP `{"1.999":200,"1.99995":422,"1e3":422,"1e12":422,"1e15":422,"1e20":422,"-5":422}` |
+| **B03** — `skipOperation()` destroys a completed operation | `api/app/Modules/Production/Services/WoOperationService.php:277-315` | `threw=NULL status_now=skipped qty_completed=42.0000 actual_end='…' notes='probe skip…'` | `threw='BusinessRuleException: Cannot skip an operation that is already ''completed''.' status_now=completed qty_completed=42.0000 notes=NULL` |
+| **I06** — raw `items` PK in a 422 body | `api/app/Modules/Production/Services/WorkOrderService.php:892-895, 906-919` | `{"message":"Insufficient stock for item 1 (work order WO-P-81057): needed 5.000."}` — contains raw pk: **true** | `{"message":"Insufficient stock for ITM-55YS (work order WO-P-c3aa2): needed 5.000."}` — contains raw pk: **false** |
+
+#### One pre-existing test was made red by a fix, and updated — deliberately
+
+`api/tests/Feature/Production/WorkOrderSplitReservationTest.php:250-283`
+(`test_confirm_fails_when_pooled_stock_is_insufficient`) asserted
+`expectExceptionMessage('Insufficient stock for item')`, i.e. it **locked in the
+raw-PK message format that I06 exists to remove**. This is the quality-session
+shape rather than the payroll shape: the red assertion encodes exactly the
+falsified state the fix removes, and it is **this module's own test**, so
+updating it is not editing another module's test to make a change pass. It now
+asserts the item **code** is present and the primary key is **absent**, so it
+locks the fix instead of the defect. That is a strictly stronger assertion and
+the reason the assertion count rose.
+
+#### Behaviour narrowings worth flagging explicitly
+
+- `decimal:0,4` also rejects **scientific notation** on the operation quantity, so
+  `qty: 1e3` went from `200` (stored as 1000) to `422`. No UI sends exponential
+  notation for a piece count, and the alternative was leaving the 1e15 `ValueError`
+  500 in place, but this is a real input-format narrowing rather than pure
+  hardening — noted so it is not a surprise.
+- The `max:99999999999` bound is derived from the column: `numeric(15,4)` holds at
+  most `99999999999.9999` (11 integer digits). Anything the column can store is
+  still accepted.
+- `reserveMaterialsFor()` now eager-loads `materials.item` rather than `materials`,
+  because `Model::preventLazyLoading` is active outside production and the message
+  reads the item's code.
+
+#### Static analysis
+
+- `php -l` — clean on all 4 changed source files.
+- `phpstan analyse <4 changed files> --memory-limit=1G` → **`[OK] No errors`**.
+- `pint --test` — 4 of the 5 changed files fail, and **inheritance was proved, not
+  assumed**: each file's HEAD extract was run through Pint in the *same
+  invocation* as the working copy so column truncation matched, and the rule lists
+  came back identical (`WoOperationController` 6/6, `WoOperationService` 6/6,
+  `WorkOrderService` 14/14, `WorkOrderSplitReservationTest` 5/5, with `NEW rules:
+  NONE`). For `WorkOrderService` the comparison was repeated with the HEAD extract
+  at an **identical path length** (`WorkOrderServic0.php`) to rule out a
+  truncation artifact — both truncated at the same character. `WorkOrderOutputService`
+  passes Pint outright. **Zero new violations; nothing was reformatted.**
+
+#### Not fixed, and why (see action-plan.md for the full ordering)
+
+`B02` (the operation output path bypassing `WorkOrderOutputService::record()` —
+measured as leaving `wo.quantity_produced=0` and `mold_shots=0` for 25 good and 5
+scrap parts) is the single most valuable remaining item, and is `large`: the two
+counters have been diverging in any existing installation, so reconciling the
+write paths raises a migration question about rows already recorded. `M01`
+(per-operation QC is a `Log::info`), `I01` (complete with zero output), `I03`
+(material consumed by a cancelled WO), the mold-past-100% behaviour, `I04`/`I05`
+(OEE availability and downtime attribution) and `I07` (`status` in `$fillable`)
+are all gated on a human decision or on moving numbers a human may already be
+reporting. `M02` is `Common` scope and was deliberately left alone.
+
+#### Housekeeping
+
+Scratch probe `api/tests/Feature/Production/ZzM051AuditProbeTest.php` was deleted
+after its measurements were recorded (it asserts nothing — it prints). The
+session database `ogami_test_wo2` was dropped. `db` and `redis` were left running
+and untouched for the other sessions.
