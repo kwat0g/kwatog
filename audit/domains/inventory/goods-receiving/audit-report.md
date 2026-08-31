@@ -95,3 +95,22 @@ Draft finalization intentionally permits a partial submitted line set: the UI se
 Focused command: `cd api && php artisan test tests/Feature/Inventory/GrnQcGateTest.php tests/Feature/Inventory/GrnPartialAcceptHttpTest.php tests/Feature/Inventory/GrnIncomingQcHandoffTest.php tests/Feature/Inventory/DraftGrnOnPoSentTest.php tests/Feature/Inventory/ReceiveGoodsAuthorizationTest.php tests/Feature/Inventory/GrnRejectionTest.php tests/Feature/Inventory/GrnGlPostingTest.php tests/Feature/Inventory/LotTraceabilityTest.php`.
 
 Result: 39 tests failed before assertions because `db` could not be resolved. Re-run after the test database/container is available; add targeted regression coverage for GRN-01, GRN-02, GRN-05, GRN-06, and GRN-07.
+
+---
+
+## Re-audit 2026-09-01 (session 3, in progress)
+
+Status: **in progress**. Claim result: `RECLAIMED` (stale lock, 150h old, from the
+2026-08-25 session).
+
+Prior-work assessment: the 2026-08-25 session **committed fixes** and its
+`fix-log.md` **self-flags as unverified** — "The focused Laravel suite could not
+reach its configured PostgreSQL host `db` (`SQLSTATE[08006]`), so assertions
+remain to be rerun." Same category as `supplier-performance`. This session's job
+is therefore first to *execute* what was written, then extend into the invariants
+the prior two sessions never probed (weighted-average cost, over-receipt
+aggregation, AP handoff, immutability, concurrency, archived-row leakage,
+money-validation family).
+
+Findings below are appended as they are measured.
+
