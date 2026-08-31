@@ -150,12 +150,23 @@ class WoOperationController
 
     /**
      * Record production output and optional scrap.
+     *
+     * `qty_completed`/`qty_scrapped` are numeric(15,4), so the bare
+     * `numeric` rule below used to admit three 500s and one silent corruption,
+     * all measured: `1e12` reached the column as `SQLSTATE[22003] numeric field
+     * overflow`; `1e15`/`1e17`/`1e20` reached bcadd as
+     * `ValueError: bcadd(): Argument #2 ($num2) is not well-formed`, because PHP
+     * renders floats at or above 1e15 in exponential form and bcmath rejects
+     * that; and `10.00005` was silently stored as `10.0000`, quietly changing a
+     * recorded production quantity. `decimal:0,4` and the max bound refuse
+     * exactly those inputs and nothing that is currently stored correctly —
+     * 99999999999.9999 is the largest value numeric(15,4) holds.
      */
     public function recordOutput(WoOperation $operation, Request $request): WoOperationResource|JsonResponse
     {
         $request->validate([
-            'qty'          => ['required', 'numeric', 'min:0.0001'],
-            'scrap'        => ['nullable', 'numeric', 'min:0', 'lte:qty'],
+            'qty'          => ['required', 'numeric', 'decimal:0,4', 'min:0.0001', 'max:99999999999'],
+            'scrap'        => ['nullable', 'numeric', 'decimal:0,4', 'min:0', 'max:99999999999', 'lte:qty'],
             'scrap_reason' => ['nullable', 'string', 'max:500'],
         ]);
 

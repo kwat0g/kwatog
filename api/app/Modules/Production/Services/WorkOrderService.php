@@ -30,6 +30,7 @@ use App\Modules\Production\Enums\ProductionScheduleStatus;
 use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Production\Events\WorkOrderCompleted;
 use App\Modules\Production\Events\WorkOrderStatusChanged;
+use App\Modules\Production\Exceptions\IllegalLifecycleTransitionException;
 use App\Modules\Production\Models\MachineDowntime;
 use App\Modules\Production\Models\ProductionSchedule;
 use App\Modules\Production\Models\WorkOrder;
@@ -420,8 +421,25 @@ class WorkOrderService
         return $result;
     }
 
+    /**
+     * Resume a PAUSED work order.
+     *
+     * The source state must be checked explicitly, not left to the state
+     * machine: `confirmed → in_progress` is a legal edge because that is the
+     * edge start() uses, so an edge-only check let resume() move a *Confirmed*
+     * work order straight into production as a backdoor start — skipping
+     * assertMaterialPlan(), assertProductionDependenciesReady(), the
+     * machine/mold availability checks, issueReservedMaterials(),
+     * batch_number generation, the actual_start stamp,
+     * captureMaterialLotReferences() and the parent-SO promotion. That defeated
+     * two invariants which have their own passing tests
+     * (`standard_no_bom_work_order_cannot_start` and
+     * `parent_work_order_cannot_start_before_subassembly_child_is_ready`) and
+     * produced finished goods from material that was never issued.
+     */
     public function resume(WorkOrder $wo): WorkOrder
     {
+        $this->assertResumable($wo);
         $this->assertTransition($wo, WorkOrderStatus::InProgress);
         $from = $wo->status?->value ?? 'paused';
 
@@ -430,6 +448,7 @@ class WorkOrderService
             if (! $lockedWo) {
                 throw new BusinessRuleException('Work order not found.');
             }
+            $this->assertResumable($lockedWo);
             $this->assertTransition($lockedWo, WorkOrderStatus::InProgress);
             $from = $lockedWo->status?->value ?? 'paused';
 
@@ -652,6 +671,21 @@ class WorkOrderService
         $this->stateMachine->assertAllowed($wo, $to);
     }
 
+    /**
+     * Only a paused work order may be resumed. Reported as the same illegal
+     * transition (409 + stable code) the state machine raises, because "this
+     * work order is not paused" is a state conflict, not a malformed request.
+     */
+    private function assertResumable(WorkOrder $wo): void
+    {
+        if ($wo->status !== WorkOrderStatus::Paused) {
+            throw new IllegalLifecycleTransitionException(
+                $wo->status?->value ?? 'unknown',
+                WorkOrderStatus::InProgress->value,
+            );
+        }
+    }
+
     private function assertMaterialPlan(WorkOrder $wo): void
     {
         $class = (string) ($wo->work_order_class ?: 'standard');
@@ -855,7 +889,10 @@ class WorkOrderService
      */
     private function reserveMaterialsFor(WorkOrder $wo): void
     {
-        $wo->loadMissing('materials');
+        // `materials.item` (not just `materials`) because the insufficient-stock
+        // message below names the item by code, and Model::preventLazyLoading is
+        // active outside production.
+        $wo->loadMissing('materials.item');
         foreach ($wo->materials as $material) {
             $needed = (string) $material->bom_quantity;
             if (bccomp($needed, '0', 3) <= 0) continue;
@@ -877,8 +914,14 @@ class WorkOrderService
                 // The operator's remedies are real ones — receive the shortfall,
                 // release another WO's reservation, or cut the target quantity —
                 // and confirm() has already rolled back, so nothing is half done.
+                //
+                // Name the item by CODE, never by primary key: this message is
+                // returned verbatim in a 422 body by WorkOrderController::confirm(),
+                // so interpolating $material->item_id published a raw `items` PK
+                // to the client and made the endpoint an id-enumeration oracle.
+                $itemLabel = $material->item?->code ?? "item #{$material->item_id}";
                 throw new BusinessRuleException(
-                    "Insufficient stock for item {$material->item_id} (work order {$wo->wo_number}): "
+                    "Insufficient stock for {$itemLabel} (work order {$wo->wo_number}): "
                     . "needed {$needed}."
                 );
             }

@@ -257,14 +257,29 @@ class WorkOrderSplitReservationTest extends TestCase
         $mold = $this->mold();
         $mold->compatibleMachines()->syncWithoutDetaching([$machine->id]);
 
-        $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('Insufficient stock for item');
-
+        // This assertion used to require the literal 'Insufficient stock for item',
+        // which locked in the raw `items` primary key the message interpolated —
+        // and WorkOrderController::confirm() returns this message verbatim in a
+        // 422 body, so it was published to the client as an id-enumeration
+        // oracle. It now names the item by CODE, and the absence of the PK is
+        // asserted rather than merely assumed.
+        $thrown = null;
         try {
             $this->service->confirm($wo, $machine->id, $mold->id);
+        } catch (RuntimeException $e) {
+            $thrown = $e;
         } finally {
             // Transaction rolled back — nothing reserved.
             $this->assertSame(0, MaterialReservation::where('work_order_id', $wo->id)->count());
         }
+
+        $this->assertNotNull($thrown, 'Confirm must fail when pooled stock cannot cover demand.');
+        $this->assertStringContainsString('Insufficient stock for', $thrown->getMessage());
+        $this->assertStringContainsString($this->item->code, $thrown->getMessage());
+        $this->assertStringNotContainsString(
+            "for {$this->item->id} ",
+            $thrown->getMessage(),
+            'The insufficient-stock message must not leak the raw items primary key.',
+        );
     }
 }

@@ -79,6 +79,18 @@ class WorkOrderOutputService
         $good = (int) ($data['good_count'] ?? 0);
         $reject = (int) ($data['reject_count'] ?? 0);
         $total = $good + $reject;
+
+        // Piece counts are never negative. The `$total <= 0` check below cannot
+        // stand in for this: good=-5 / reject=10 sums to 5, cleared that guard,
+        // and persisted quantity_good = -5 with scrap_rate = 200.00 — a corrupt
+        // production record that then flows into OEE quality, the scrap rate and
+        // Pareto defect analysis. RecordOutputRequest already rejects negatives
+        // on the HTTP path, but record() is this module's published contract for
+        // every other output path, so the guard belongs here too.
+        if ($good < 0 || $reject < 0) {
+            throw new BusinessRuleException('Good count and Reject count cannot be negative.');
+        }
+
         if ($total <= 0) {
             throw new BusinessRuleException('At least one of Good count or Reject count must be greater than zero.');
         }

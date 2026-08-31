@@ -30,7 +30,8 @@ use App\Common\Exceptions\BusinessRuleException;
  *                                                              │
  *   pending/setup ─────────────────→ in_progress ──────────────┘
  *                                                              │
- *   any ──────────────────────────────────────────────────→ skipped
+ *   pending/setup/in_progress/paused ─────────────────────→ skipped
+ *   (completed and skipped are NOT skippable — see skipOperation)
  */
 class WoOperationService
 {
@@ -268,12 +269,21 @@ class WoOperationService
     /**
      * Skip an operation with a reason.
      *
-     * Can be called from any status.
+     * Deliberately permissive about the source state — skipping a routing step
+     * that turns out not to be needed is legitimate from Pending, Setup,
+     * InProgress or Paused. It is NOT legitimate from Completed: that overwrote
+     * a finished operation's status while leaving its qty_completed and
+     * actual_end in place, producing a row asserting both that N parts were
+     * completed and that the operation never ran. Skipped is refused too, so a
+     * repeat call cannot append a second skip log for one logical action.
      */
     public function skipOperation(WoOperation $op, string $reason, Employee $operator): void
     {
+        $this->assertSkippable($op);
+
         DB::transaction(function () use ($op, $reason, $operator) {
             $locked = WoOperation::query()->lockForUpdate()->findOrFail($op->getKey());
+            $this->assertSkippable($locked);
             $this->assertParentInProgress($locked);
             $locked->update([
                 'status' => WoOperationStatus::Skipped,
@@ -282,6 +292,20 @@ class WoOperationService
 
             $this->log($locked, $operator, ProductionLogEvent::Skip, notes: $reason);
         });
+    }
+
+    /** A completed operation's record must not be overwritten by a skip. */
+    private function assertSkippable(WoOperation $op): void
+    {
+        $status = $op->status instanceof WoOperationStatus
+            ? $op->status
+            : WoOperationStatus::tryFrom((string) $op->status);
+
+        if (in_array($status, [WoOperationStatus::Completed, WoOperationStatus::Skipped], true)) {
+            throw new BusinessRuleException(
+                "Cannot skip an operation that is already '{$status->value}'."
+            );
+        }
     }
 
     /**
