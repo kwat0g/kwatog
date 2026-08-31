@@ -175,3 +175,17 @@ Recommendation: make the dependency explicit for production-enabled deployments,
 ## Fix disposition
 
 No source fix was applied. The recommended work is predominantly separate-session work because it changes state-machine policy, database uniqueness, notification delivery, RBAC, cross-module work-order behavior, and introduces a new CAPA UI. Small same-session candidates (query validation and type reconciliation) should be bundled only after the state/contract decisions are settled.
+
+---
+
+# Re-audit — 2026-09-01 (session 4) — IN PROGRESS
+
+Status: 🔁 in progress. Scope: verify every fix claimed in the 2026-08-25 plan-execution
+session by runtime probe against real PostgreSQL rows (that session self-flagged all
+feature tests as blocked at `SQLSTATE[08006]` with 0 assertions, so nothing in it was
+ever executed). Then walk the closing arc of the IATF loop: inspection fail -> NCR ->
+disposition consequences -> replacement WO -> Pareto, plus CAPA SLA/effectiveness,
+the full NCR transition matrix, immutability after closure, numbering/concurrency,
+validation family, permissions, HashID leakage, and dead surfaces.
+
+Findings are appended below as they are measured.
