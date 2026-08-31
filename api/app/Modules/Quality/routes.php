@@ -104,7 +104,12 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
     Route::delete('/ncr-templates/{ncrTemplate}',               [NcrTemplateController::class, 'destroy'])
         ->middleware('permission:quality.ncr.manage');
     Route::patch('/ncr-templates/{ncrTemplate}/restore',        [NcrTemplateController::class, 'restore'])
-        ->middleware('permission:quality.ncr.manage');
+        ->middleware('permission:quality.ncr.manage')
+        // NcrTemplate uses SoftDeletes, so without this the binding resolves
+        // only live rows and every restore of an archived template 404s — the
+        // one target this route exists for. The inspection-spec restore above
+        // already had it.
+        ->withTrashed();
 
     /* ─── NCRs (Task 61) ─── */
     Route::get('/ncrs',                                         [NcrController::class, 'index'])

@@ -30,6 +30,15 @@ class NcrEscalationService
 {
     private const MAX_TIER = 3;
 
+    /** advanceOne() outcomes. `failed` must never be reported as `skipped`. */
+    private const OUTCOME_ADVANCED = 'advanced';
+
+    private const OUTCOME_SKIPPED = 'skipped';
+
+    private const OUTCOME_UNSTAFFED = 'unstaffed';
+
+    private const OUTCOME_FAILED = 'failed';
+
     public function __construct(
         private readonly NotificationService $notifications,
         private readonly SettingsService $settings,
@@ -37,6 +46,26 @@ class NcrEscalationService
 
     /** Returns the count of NCRs whose tier was durably delivered this run. */
     public function run(): int
+    {
+        return $this->runWithOutcome()['advanced'];
+    }
+
+    /**
+     * Escalate every eligible NCR and report what actually happened.
+     *
+     * `advanced` alone cannot be read as health. A run in which every single
+     * candidate threw also advances nothing, and for the 8D SLA ledger that
+     * ambiguity meant a subsystem which had never once worked printed a
+     * zero-count summary and exited SUCCESS every 15 minutes (see CLAUDE.md).
+     * `failed` is what separates "nothing was due" from "nothing survived", so
+     * it is reported separately and never folded into `skipped`. An unstaffed
+     * escalation role gets its own bucket: no notification reached anybody,
+     * which an operator must see, but it is a configuration state rather than
+     * a fault, so it does not fail the run.
+     *
+     * @return array{considered: int, advanced: int, skipped: int, unstaffed: int, failed: int}
+     */
+    public function runWithOutcome(): array
     {
         $ids = NonConformanceReport::query()
             ->whereIn('status', [NcrStatus::Open->value, NcrStatus::InProgress->value])
@@ -47,23 +76,29 @@ class NcrEscalationService
             )
             ->pluck('id');
 
-        $advanced = 0;
+        $tally = [
+            'considered' => $ids->count(),
+            'advanced'   => 0,
+            'skipped'    => 0,
+            'unstaffed'  => 0,
+            'failed'     => 0,
+        ];
+
         foreach ($ids as $id) {
-            if ($this->advanceOne((int) $id)) {
-                $advanced++;
-            }
+            $tally[$this->advanceOne((int) $id)]++;
         }
 
-        return $advanced;
+        return $tally;
     }
 
-    private function advanceOne(int $ncrId): bool
+    /** @return self::OUTCOME_* */
+    private function advanceOne(int $ncrId): string
     {
         try {
-            return DB::transaction(function () use ($ncrId): bool {
+            return DB::transaction(function () use ($ncrId): string {
                 $ncr = NonConformanceReport::query()->lockForUpdate()->find($ncrId);
                 if (! $ncr || ! $this->isEligible($ncr)) {
-                    return false;
+                    return self::OUTCOME_SKIPPED;
                 }
 
                 $severity = $ncr->severity instanceof NcrSeverity
@@ -75,12 +110,12 @@ class NcrEscalationService
                     $clockStart = Carbon::parse((string) $clockStart);
                 }
                 if ($clockStart->diffInHours(now(), true) < $hoursDue) {
-                    return false;
+                    return self::OUTCOME_SKIPPED;
                 }
 
                 $nextTier = ((int) $ncr->escalation_level) + 1;
                 if ($nextTier > self::MAX_TIER) {
-                    return false;
+                    return self::OUTCOME_SKIPPED;
                 }
 
                 [$role, $subject] = $this->tierConfiguration($nextTier);
@@ -113,7 +148,7 @@ class NcrEscalationService
                         ])->save();
                     }
 
-                    return false;
+                    return self::OUTCOME_SKIPPED;
                 }
 
                 $recipients = User::query()
@@ -130,13 +165,15 @@ class NcrEscalationService
                 if ($recipients->isEmpty()) {
                     // Empty audiences are not a successful delivery. Keep the
                     // durable row pending so the next run can retry after the
-                    // role is staffed or reconfigured.
+                    // role is staffed or reconfigured, and report it in its own
+                    // bucket — a tier nobody received is invisible if it is
+                    // counted as an ordinary skip.
                     $delivery->forceFill([
                         'status'     => 'pending',
                         'last_error' => "No active recipients for escalation role {$role}.",
                     ])->save();
 
-                    return false;
+                    return self::OUTCOME_UNSTAFFED;
                 }
 
                 $this->notifications->send($recipients, 'ncr.escalation', [
@@ -163,7 +200,7 @@ class NcrEscalationService
                     'last_escalated_at' => $sentAt,
                 ])->save();
 
-                return true;
+                return self::OUTCOME_ADVANCED;
             });
         } catch (BusinessRuleException $exception) {
             // A malformed/missing escalation policy is an operator-facing
@@ -213,6 +250,10 @@ class NcrEscalationService
                     ])->save();
                 });
             } catch (Throwable $recordingFailure) {
+                // The recorder could not record. That is not a delivery
+                // problem and must not be reduced to a log line: the caller
+                // still counts this NCR as failed, so the command reports a
+                // non-zero failure count and exits non-zero either way.
                 Log::error('NCR escalation failure could not be recorded.', [
                     'ncr_id'    => $ncrId,
                     'exception' => $recordingFailure::class,
@@ -226,7 +267,7 @@ class NcrEscalationService
                 'message'   => $exception->getMessage(),
             ]);
 
-            return false;
+            return self::OUTCOME_FAILED;
         }
     }
 
