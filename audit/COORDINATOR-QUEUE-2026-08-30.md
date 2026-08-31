@@ -3,6 +3,8 @@
 Started 2026-08-30. Owner: coordinator session (not a module session).
 **Discipline: max 3 agents in flight. On each completion, launch exactly one replacement from the top of the queue.**
 
+**CORRECTION 2026-08-30 — a registry domain does NOT tell you where a module's code lives.** `quality/material-review-board` turned out to be **100% inside `api/app/Modules/Inventory/`**, which was live under another agent, so it could fix nothing and correctly reported everything instead. **Verify each module's real code location with a grep before assigning it**, rather than inferring the directory from the domain name. `quality/traceability-ppap`, checked this way, is ~17 files in `Quality` plus 6 in `B2B`, 5 in `Production`, 2 in `Purchasing` and 2 in the live `Inventory`.
+
 **Scheduling rule learned 2026-08-30:** do not run two modules that share a Laravel module directory concurrently. `supplier-performance` and `goods-receiving` both live in / write to `api/app/Modules/Purchasing/`, so they wait while `purchase-orders` is live. Same reason AR and payroll waited for `journal-ledger`. Deviating from queue order for this is correct; record the reason in the table.
 
 **Verification rule learned 2026-08-30 (the most important one):** a `fix-log.md` full of confident verification claims can be worthless. Four `separation-final-pay` sessions wrote them from runs that produced *"34 failures and 0 assertions"* — the signature of two suites sharing one database. Every agent must be told to re-measure by probe and to check whether a prior claim came from a run that actually executed.
@@ -48,6 +50,7 @@ Rules the coordinator holds and agents never touch:
 
 
 Corrections established by sessions — these OVERRIDE the doc, pass them to every agent:
+0. **`GrnStatus::Draft` DOES exist** (`api/app/Modules/Inventory/Enums/GrnStatus.php:9`, live at `GrnService.php:311,318,329,361`). CLAUDE.md says "no `draft`" and the coordinator repeated that to **three** agents before `material-review-board` caught it. Verified by reading the enum. **Generalise: CLAUDE.md's enum lists are stale — read the enum file, never the doc.**
 1. **`EdgeSystemUserResolver` and `auth:edge_device` do NOT exist.** The working helper is **`App\Common\Services\SystemUserResolver::impersonate()`**. **TWO independent sessions failed to reproduce the `audit_logs` FK violation** that section warns about — treat the whole section as obsolete rather than a hazard to design around. `config/auth.php` declares only `web`, `supplier_portal`, `customer_portal`.
 2. Migration max confirmed **0478** on 2026-08-30; the figure goes stale, re-confirm with `ls api/database/migrations | grep -E '^04' | sort | tail -3`.
 3. `docs/PATTERNS.md:262-268` — the canonical service template carries an unvalidated `direction` → `orderBy()` that 500s. Do not copy the bug when copying the template.
@@ -88,8 +91,8 @@ existing `fix-log.md` / `git diff` before trusting its status.
 | 13 | 3 | M042 | inventory/material-issues-reservations | queued |
 | 14 | 3 | M056 | quality/inspections-certificates | done |
 | 15 | 3 | M057 | quality/ncr-capa | done |
-| 16 | 3 | M054 | quality/material-review-board | **in flight** (hold lifted — M057 released) |
-| 17 | 3 | M058 | quality/traceability-ppap | queued |
+| 16 | 3 | M054 | quality/material-review-board | done → 📋 Plan Ready (report-only: its code is all in Inventory, which was live) |
+| 17 | 3 | M058 | quality/traceability-ppap | **in flight** |
 | 18 | 3 | M051 | manufacturing/production-work-orders | done |
 | 19 | 3 | M050 | manufacturing/capacity-scheduling | queued |
 | 20 | 3 | M053 | manufacturing/maintenance-machine-health | queued |
@@ -139,8 +142,8 @@ completed, so the other two slots were refilled.
 | ID | Module | Launched |
 |---|---|---|
 | M040 | inventory/warehouse-stock-control | 2026-08-30 |
-| M054 | quality/material-review-board | 2026-08-30 |
 | M043 | supply-chain/import-shipments-customs | 2026-08-30 |
+| M058 | quality/traceability-ppap | 2026-08-30 |
 | M044 | supply-chain/deliveries-proof | 2026-08-30 |
 
 Next up: M041, M040, M042, then the remaining Tier 3/4 list.
@@ -163,6 +166,7 @@ Next up: M041, M040, M042, then the remaining Tier 3/4 list.
 | M028 | finance/accounts-receivable | 🔁 Needs Re-audit | Statement reported ₱800/₱800/₱500 for the SAME rows; two credit notes drove GL AR to −₱1,000; 12% VAT charged on a VAT-exempt invoice. 3 fixed (all 500s), 7 of 9 new tests red at HEAD. No AR payment void exists at all. |
 | M023 | people/separation-final-pay | 🔁 Needs Re-audit | **Prior 4 sessions never measured anything** — their verification came from a shared DB reporting "34 failures / 0 assertions". All 13 findings reproduced, +5 new. 13th month and last salary each paid TWICE; leave conversion uncapped and never debited. 6 contained fixes, 10 of 12 tests red at HEAD. |
 | M021 | people/payroll-period-processing | 🔁 Needs Re-audit | Loan over-deduction mechanism identified: an as-of `reconcileAggregates` cut drops ledger rows dated after `payroll_date`, taking the ledger to ₱14,000 on ₱12,000 owed. Anomaly gate **fails OPEN** — a bad setting yields zero flags and approve+finalize both succeed. 4 fixed, 8 of 14 tests red at HEAD. |
+| M054 | quality/material-review-board | 📋 Plan Ready | **Report-only** — its code is 100% in `Inventory`, which was live under another agent. P0: four of six movement types (`Transfer`/`AdjustmentOut`/`Scrap`/`ReturnToVendor`) **escape quarantine with no MRB decision**, and the MRB is then stranded at `held` forever because `release()` throws permanently. Measured contradictions: one NCR → 3 MRBs summing 120 units against `affected_quantity=40`; NCR said `return_to_supplier` while MRB released `use_as_is` into finished goods; one NCR both scrapped AND returned. |
 | M044 | supply-chain/deliveries-proof | 📋 Plan Ready | Two P0s: CoC generation failure **swallowed into `Log::warning`**, so a delivery confirms AND invoices with no certificate; and AR's invoice path never reads delivery status — measured **201 against a cancelled delivery**. `StockMovementType::Delivery` is **never emitted**, so finished-goods stock never falls. Resolved the 2 inherited red tests as case (a) — unrealistic fixture, guard correct — proven from three code sites. 3 fixed, 93→109 tests. |
 | M057 | quality/ncr-capa | ✅ partially fixed | `ncr:escalate` (every 15 min) printed `0 advanced.` and **exited 0 while all three overdue NCRs threw** — the live 8D-ledger shape. Restore route 404'd for every valid target. 3 fixed, 6 of 8 tests red at HEAD. **15 of 16 prior findings gone** (log had self-flagged as unverified). Refuted 3 handed-down claims. Found: a disposition has NO material consequence, and one `qc_inspector` created→dispositioned→closed→**self-verified** its own NCR. |
 | M041 | inventory/goods-receiving | 📋 Plan Ready | **`POST /api/v1/inventory/grn` had 500'd on EVERY request for ~6 days** — `Rule::exists()->where('is_blocked', false)` string-serialises `false` to `''` → `22P02`. Survived because **no test in the repo posts to that route**; all 52 green tests called the service and skipped the FormRequest. Incoming-QC gate also failed OPEN for a soft-deleted item. 5 fixed, 29 of 31 tests red at HEAD. Zero of 11 prior findings reproduced. |
