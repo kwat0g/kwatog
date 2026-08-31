@@ -77,8 +77,32 @@ class StockCountController
         $data = $request->validate([
             'title'        => 'required|string|max:200',
             'scope'        => ['required', Rule::enum(StockCountScope::class)],
-            'warehouse_id' => 'nullable|integer|exists:warehouses,id',
-            'zone_id'      => 'nullable|integer|exists:warehouse_zones,id',
+            // A `warehouse`/`zone` scope whose id is absent used to fall through
+            // createSession()'s `elseif` chain and select EVERY active location —
+            // a silently company-wide count that also freezes every location it
+            // touched. The scope's own id is required for that scope, and a zone
+            // must belong to the warehouse it is counted under.
+            'warehouse_id' => [
+                Rule::requiredIf(static fn (): bool => $request->input('scope') === StockCountScope::Warehouse->value),
+                'nullable', 'integer', 'exists:warehouses,id',
+            ],
+            'zone_id' => [
+                Rule::requiredIf(static fn (): bool => $request->input('scope') === StockCountScope::Zone->value),
+                'nullable', 'integer',
+                Rule::exists('warehouse_zones', 'id')->where(function ($query) use ($request) {
+                    // Closure form on purpose: `->where('col', $value)` is
+                    // string-serialised by Laravel and would compare a bigint
+                    // column against a quoted literal.
+                    $warehouseId = $request->input('warehouse_id');
+                    if ($warehouseId !== null && $warehouseId !== '') {
+                        $query->where('warehouse_id', (int) $warehouseId);
+                    }
+                }),
+            ],
+        ], [
+            'warehouse_id.required' => 'A warehouse is required for a warehouse-scoped count.',
+            'zone_id.required'      => 'A zone is required for a zone-scoped count.',
+            'zone_id.exists'        => 'The selected zone does not belong to the selected warehouse.',
         ]);
 
         try {
@@ -114,7 +138,11 @@ class StockCountController
         $itemId = $this->itemId($id);
 
         $data = $request->validate([
-            'counted_quantity' => 'required|numeric|min:0',
+            // `numeric` admitted scientific notation: `1e3` reached bcsub() as
+            // a malformed operand (ValueError → 500), and `1e17` overflowed
+            // stock_count_items.counted_quantity numeric(15,3) as 22003.
+            // `decimal:0,3` + max matches the column and answers 422 instead.
+            'counted_quantity' => 'required|decimal:0,3|min:0|max:999999999999.999',
             'lot_number'       => 'nullable|string|max:50',
             'notes'            => 'nullable|string|max:500',
         ]);

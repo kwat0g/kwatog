@@ -19,6 +19,9 @@ use Illuminate\Support\Facades\DB;
 
 class StockCountService
 {
+    /** Ceiling of `stock_count_items.variance_percent` — numeric(8,2). */
+    private const VARIANCE_PERCENT_MAX = '999999.99';
+
     public function __construct(
         private readonly DocumentSequenceService $sequences,
         private readonly StockAdjustmentService $adjustments,
@@ -147,9 +150,10 @@ class StockCountService
             $item->update([
                 'counted_quantity'  => $data['counted_quantity'],
                 'variance'          => bcsub((string) $data['counted_quantity'], (string) $item->system_quantity, 3),
-                'variance_percent'  => $item->system_quantity > 0
-                    ? round(abs((float) $data['counted_quantity'] - (float) $item->system_quantity) / (float) $item->system_quantity * 100, 2)
-                    : ($data['counted_quantity'] > 0 ? 100 : 0),
+                'variance_percent'  => $this->variancePercent(
+                    (string) $data['counted_quantity'],
+                    (string) $item->system_quantity,
+                ),
                 'lot_number'        => $data['lot_number'] ?? $item->lot_number,
                 'status'            => StockCountItemStatus::Counted->value,
                 'counted_by'        => $user->id,
@@ -164,6 +168,41 @@ class StockCountService
 
             return $item->fresh()->load(['location', 'item', 'counter']);
         });
+    }
+
+    /**
+     * Absolute variance as a percentage of the system quantity, as a decimal
+     * string bounded to `stock_count_items.variance_percent` — numeric(8,2),
+     * so 999999.99 is the largest value the column can hold.
+     *
+     * This used to be float arithmetic with no bound. Any count where
+     * counted/system exceeded ~10,000 produced a percentage the column could
+     * not store, and PostgreSQL answered SQLSTATE[22003] "numeric field
+     * overflow" — a 500 on the primary data-entry action of the whole
+     * stock-count workflow. A system quantity that has drifted to a fraction
+     * (0.500) against a real count of 6,000 was enough to trigger it.
+     *
+     * Saturating at the column ceiling keeps the row storable while still
+     * reading as a gross variance, which is the only thing the value is used
+     * for (the tolerance comparison in completeSession()). Ordinary
+     * percentages are unaffected and are now computed in bcmath rather than
+     * floats.
+     */
+    private function variancePercent(string $countedQuantity, string $systemQuantity): string
+    {
+        if (bccomp($systemQuantity, '0', 3) <= 0) {
+            return bccomp($countedQuantity, '0', 3) > 0 ? '100.00' : '0.00';
+        }
+
+        $delta = bcsub($countedQuantity, $systemQuantity, 3);
+        $absDelta = ltrim($delta, '-');
+        // One extra digit, then round half-up to the column's 2 decimals.
+        $pct = bcdiv(bcmul($absDelta, '100', 3), $systemQuantity, 3);
+        $pct = bcadd($pct, '0.005', 2);
+
+        return bccomp($pct, self::VARIANCE_PERCENT_MAX, 2) > 0
+            ? self::VARIANCE_PERCENT_MAX
+            : $pct;
     }
 
     public function approveVariance(int $itemId, User $user): StockCountItem

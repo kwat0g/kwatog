@@ -380,6 +380,12 @@ class StockMovementService
     /** Reserve stock for a work order (no quantity change, just reservation). */
     public function reserve(int $itemId, int $locationId, string $quantity): void
     {
+        // A negative reserve silently DECREASED reserved_quantity (it passed the
+        // availability check, since any negative is below available), driving it
+        // below zero and over-stating what the location can issue. Reservations
+        // are a one-directional counter; release() is the inverse operation.
+        $this->assertPositiveQuantity($quantity, 'reserve');
+
         DB::transaction(function () use ($itemId, $locationId, $quantity) {
             $this->assertLocationsNotFrozen([$locationId]);
             // F-02 — never reserve stock held in quarantine/scrap zones.
@@ -411,6 +417,11 @@ class StockMovementService
     /** Release a reservation without issuing. */
     public function release(int $itemId, int $locationId, string $quantity): void
     {
+        // A negative release INCREASED reserved_quantity, and the `< 0` clamp
+        // below only guards the floor — so release(-999) pushed reserved above
+        // on-hand, making available() negative and the location unissuable.
+        $this->assertPositiveQuantity($quantity, 'release');
+
         DB::transaction(function () use ($itemId, $locationId, $quantity) {
             $this->assertLocationsNotFrozen([$locationId]);
             $level = $this->lockOrCreate($itemId, $locationId);
@@ -420,6 +431,20 @@ class StockMovementService
             $level->lock_version++;
             $level->save();
         });
+    }
+
+    /**
+     * Reservation quantities are magnitudes, never signed deltas. `move()`
+     * already enforces this for physical movements via validateInput(); the
+     * reservation pair had no equivalent guard.
+     */
+    private function assertPositiveQuantity(string $quantity, string $operation): void
+    {
+        if (! is_numeric($quantity) || bccomp($quantity, '0', 3) <= 0) {
+            throw new InvalidMovementException(
+                "Cannot {$operation} a non-positive quantity ({$quantity}); reservation quantities must be greater than zero."
+            );
+        }
     }
 
     private function round2(string $v): string

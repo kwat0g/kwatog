@@ -57,10 +57,20 @@ class TransferOrderController
 
         $data = $request->validate([
             'from_location_id' => 'required|integer|exists:warehouse_locations,id',
-            'to_location_id'   => 'required|integer|exists:warehouse_locations,id',
+            // A transfer to its own source can never execute — the movement
+            // boundary rejects it (StockMovementService::validateInput) — so
+            // refuse it here rather than persisting an unexecutable order.
+            'to_location_id'   => 'required|integer|different:from_location_id|exists:warehouse_locations,id',
             'item_id'          => 'required|integer|exists:items,id',
-            'quantity'         => 'required|numeric|min:0.001',
+            // `numeric` admitted `1e17`, which reached PostgreSQL as 22003
+            // (numeric field overflow) on transfer_orders.quantity numeric(15,3)
+            // — a 500. It also admitted `10.00005`, silently truncated to
+            // 10.000. `decimal:0,3` + max mirrors StoreStockAdjustmentRequest
+            // and answers 422 for both.
+            'quantity'         => 'required|decimal:0,3|min:0.001|max:999999999999.999',
             'reason'           => 'nullable|string|max:200',
+        ], [
+            'to_location_id.different' => 'The destination location must differ from the source location.',
         ]);
 
         try {
