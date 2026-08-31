@@ -11,6 +11,8 @@ Rules the coordinator holds and agents never touch:
 - Only the coordinator runs `audit/scripts/regenerate-registry.sh`, once per batch when all in-flight agents have finished. It truncates then appends row-by-row, so a concurrent reader sees a partial table.
 - Each agent gets exactly one assigned module and must not wander. LOCKED → report back, do not pick another.
 - **VERIFY `docker compose ps` BEFORE ANY PROBE.** The real cause of four sessions' "0 assertions" was found 2026-08-30: **every container in the compose project had been stopped**, so `SQLSTATE[08006] host "db" could not be resolved` read as a broken test bootstrap. Every agent must run `docker compose ps` + a `select 1;` first, start only `db`+`redis` if needed, and quote a real numeric baseline before changing anything.
+- **Two interruption classes have now hit this pipeline: API quota exhaustion, and the parent Claude Code process exiting.** After the second, M051 and M038 were found with locks held and **zero commits** — killed before their first commit. They were **resumed via SendMessage rather than relaunched**, which recovered their in-context measurements; M038 then finished with 4 incremental commits. So: resume, don't relaunch, when a transcript survives.
+- **Every agent must write and commit a skeleton `audit-report.md` section on claiming, BEFORE probing anything.** Incremental committing only helps if the agent reaches its first commit; the two above did not.
 - **Instruct every agent to commit incrementally and log as it goes.** Three agents were killed mid-flight by quota on 2026-08-30; the two that had saved logging and committing for the end lost everything they had discovered.
 - Each agent uses its own test database. `RefreshDatabase` runs `migrate:fresh`; two suites on one database tear the schema out from under each other. The tell is hundreds of failures with zero assertion failures among them.
 - `db` and `redis` stay up for the whole pipeline. No agent restarts them.
@@ -19,6 +21,7 @@ Rules the coordinator holds and agents never touch:
 
 ## Coordinator to-do, raised by agents, owned by nobody yet
 
+- **`artisan test api/tests/...` (repo-relative) prints "Test file not found" and EXITS 0** — a green run with zero tests. Paths must be container-relative (`tests/...`). Add to every brief; this is a second way to fake a passing verification.
 - `docker rm ogami-meili` — an orphan container labelled to this Compose project makes **every** `docker compose` command in the repo print an orphan warning. Meilisearch is not used, not required, and referenced nowhere in code or compose; global search is pure Postgres `ILIKE`.
 - `release-module.sh` stamps `last_session` in UTC, so a release at 06:xx local (+08:00) records the previous day. Cosmetic but it makes the registry look a day stale.
 - `App\Common\Services\DocumentSequenceService::generate()` has an insert-then-reselect path that may race two concurrent first-of-month callers. Shared `Common` service, so no module session will own it. Needs a home.
@@ -71,9 +74,9 @@ existing `fix-log.md` / `git diff` before trusting its status.
 | 7 | 2 | M021 | people/payroll-period-processing | done |
 | 8 | 2 | M023 | people/separation-final-pay | done |
 | 9 | 3 | M037 | procurement/purchase-orders | done (work committed in `dd120ef0`; died at the release step only) |
-| 10 | 3 | M038 | procurement/supplier-performance | **in flight** |
-| 11 | 3 | M041 | inventory/goods-receiving | queued |
-| 12 | 3 | M040 | inventory/warehouse-stock-control | queued |
+| 10 | 3 | M038 | procurement/supplier-performance | done → 📋 Plan Ready |
+| 11 | 3 | M041 | inventory/goods-receiving | **in flight** |
+| 12 | 3 | M040 | inventory/warehouse-stock-control | queued — HOLD while M041 is in flight (both in api/app/Modules/Inventory/) |
 | 13 | 3 | M042 | inventory/material-issues-reservations | queued |
 | 14 | 3 | M056 | quality/inspections-certificates | done |
 | 15 | 3 | M057 | quality/ncr-capa | queued |
@@ -84,7 +87,7 @@ existing `fix-log.md` / `git diff` before trusting its status.
 | 20 | 3 | M053 | manufacturing/maintenance-machine-health | queued |
 | 21 | 3 | M048 | manufacturing/demand-forecasting | queued |
 | 22 | 3 | M043 | supply-chain/import-shipments-customs | queued |
-| 23 | 3 | M044 | supply-chain/deliveries-proof | queued |
+| 23 | 3 | M044 | supply-chain/deliveries-proof | **in flight** (out of order — owns the 2 red CocAutoAttach tests M056 left) |
 | 24 | 3 | M045 | supply-chain/fleet-driver | queued |
 | 25 | 4 | M006 | platform/notifications | queued |
 | 26 | 4 | M008 | platform/alerts | queued |
@@ -127,8 +130,9 @@ completed, so the other two slots were refilled.
 
 | ID | Module | Launched |
 |---|---|---|
-| M051 | manufacturing/production-work-orders | 2026-08-30 (re-launch) |
-| M038 | procurement/supplier-performance | 2026-08-30 |
+| M051 | manufacturing/production-work-orders | 2026-08-30 (re-launch, then RESUMED after a parent-process exit) |
+| M041 | inventory/goods-receiving | 2026-08-30 |
+| M044 | supply-chain/deliveries-proof | 2026-08-30 |
 
 Next up: M041, M040, M042, then the remaining Tier 3/4 list.
 
@@ -150,6 +154,7 @@ Next up: M041, M040, M042, then the remaining Tier 3/4 list.
 | M028 | finance/accounts-receivable | 🔁 Needs Re-audit | Statement reported ₱800/₱800/₱500 for the SAME rows; two credit notes drove GL AR to −₱1,000; 12% VAT charged on a VAT-exempt invoice. 3 fixed (all 500s), 7 of 9 new tests red at HEAD. No AR payment void exists at all. |
 | M023 | people/separation-final-pay | 🔁 Needs Re-audit | **Prior 4 sessions never measured anything** — their verification came from a shared DB reporting "34 failures / 0 assertions". All 13 findings reproduced, +5 new. 13th month and last salary each paid TWICE; leave conversion uncapped and never debited. 6 contained fixes, 10 of 12 tests red at HEAD. |
 | M021 | people/payroll-period-processing | 🔁 Needs Re-audit | Loan over-deduction mechanism identified: an as-of `reconcileAggregates` cut drops ledger rows dated after `payroll_date`, taking the ledger to ₱14,000 on ₱12,000 owed. Anomaly gate **fails OPEN** — a bad setting yields zero flags and approve+finalize both succeed. 4 fixed, 8 of 14 tests red at HEAD. |
+| M038 | procurement/supplier-performance | 📋 Plan Ready | Missing on-time/quality metrics substitute **0** while the other three honour the seeded neutral 50 — and those two carry 60% of the composite. A vendor with a 100% on-time record and 0% NCR scored **53.75 / tier D**, the worst tier. 3 contained fixes; formula untouched (commercial decision). First actual execution of the prior session's work: all of it passed. |
 | M056 | quality/inspections-certificates | 🔁 Needs Re-audit | P0: a CoC could be issued with **zero measurement rows**, with 45/50 units unresolved, after readings were rewritten to fail, and after **all evidence was deleted** — re-issuing the same number with a blank critical-dimension table. Fixed, 6 of 7 tests red at HEAD. Found the compose-containers-down root cause. IC-16: the in-process QC gate does not exist. |
 | M037 | procurement/purchase-orders | 🔁 Needs Re-audit | A blocked three-way match rendered as a green "Matched". Fix + 204-line test + all three audit docs committed in `dd120ef0` before the quota kill; only the release step was missed. |
 | M001 | platform/auth-session | 🔁 Needs Re-audit | Idle session timeout was opt-out via a client-supplied `Authorization` header — fixed. Login + reset timing oracles and an ip\|email-keyed limiter deferred (locking out 200+ employees is the failure mode). 59-row control checklist in audit-report.md. |
