@@ -103,3 +103,128 @@ Production managers remain view-only for NCR/CAPA. The implementation keeps them
 
 - F-013 requires the RBAC/product decision.
 - F-015's database-backed delivery-failure, uniqueness-race, and CAPA assertions need to run against reachable PostgreSQL; the tests are present but were not verified in this environment.
+
+## 2026-09-01 re-audit (session 4) — verification + three contained fixes
+
+### Before
+
+- Module status `🔁 Needs Re-audit`; lock RECLAIMED (151h stale, crashed session).
+- The 2026-08-25 plan-execution session had landed real code (`0478_harden_ncr_capa_contracts`,
+  the escalation delivery ledger, the CAPA state machine, the recurrence signature/job, the SPA
+  CAPA surfaces) and had stated in this file that **every feature test stopped at
+  `SQLSTATE[08006]` with 0 assertions**. Nothing in it had ever been executed.
+
+### Environment
+
+`docker compose ps` showed only `db` and `redis` up (no `api` container); both healthy,
+`select 1;` returned. Ran everything via `docker compose run --rm --no-deps` against my own
+database `ogami_test_ncr`, container-relative paths.
+
+**Real baseline before changing anything:**
+
+| run | tests | assertions | exit |
+|---|---|---|---|
+| escalation + CAPA + recurrence + unit state machine | 21 passed | 29 | 0 |
+| inspection→NCR + rework/scrap WO + 4 race tests + analytics boundary | 31 passed | 92 | 0 |
+| **total** | **52 passed** | **121** | **0** |
+
+**Verdict on the prior session: honest log, real work, and it works.** 15 of its 16 findings
+no longer reproduce. Verified by probe, not by reading the log — see the invariant table in
+`audit-report.md`.
+
+### Fixed
+
+#### N-001 — `ncr:escalate` reported a total failure as an idle run
+
+- Before: `NcrEscalationService::run()` returned only the advanced count and `advanceOne()`
+  returned `false` for not-due, already-delivered **and** `catch (Throwable)` alike;
+  `RunNcrEscalations::handle()` printed that one number and always returned `SUCCESS`.
+  Measured with three overdue critical NCRs and the notification transport bound to throw:
+  `run()` → `0`, output `NCR escalation completed: 0 advanced.`, exit **0** — identical to idle.
+  Every 15 minutes. The 8D blind spot CLAUDE.md documents.
+- After: `advanceOne()` returns `advanced|skipped|unstaffed|failed`; `runWithOutcome()` tallies
+  all four plus `considered`; the command prints all five and returns `FAILURE` when
+  `failed > 0`, warning separately on an unstaffed tier. `run(): int` kept, so no existing
+  caller or assertion changed. **No escalation policy, tier, SLA window or eligibility rule
+  was touched.**
+- Evidence: `api/app/Modules/Quality/Services/NcrEscalationService.php:31-38,45-88,90-97,
+  140-153,213-219`; `api/app/Console/Commands/RunNcrEscalations.php:19-55`;
+  `api/tests/Feature/Quality/NcrCapaReauditRegressionTest.php:87-153`.
+- Note in the module's favour: unlike 8D, the durable ledger *did* record the truth —
+  `ncr_escalation_deliveries` held `status=pending, attempts=1,
+  last_error="notification transport is down"`. Only the operator signal was missing, and the
+  `42P01` dead-table failure mode does not exist here (all three new models' inferred table
+  names match `0478`).
+
+#### N-008 — `PATCH /quality/ncr-templates/{id}/restore` 404'd for every valid target
+
+- Before: route registered without `->withTrashed()` while `NcrTemplate` uses `SoftDeletes`,
+  so binding resolved live rows only — never the archived template the route exists for.
+  Measured: HTTP **404** against a real soft-deleted row.
+- After: `->withTrashed()` added; HTTP **200** and `deleted_at` cleared. The inspection-spec
+  restore two blocks above already had it.
+- Evidence: `api/app/Modules/Quality/routes.php:106-112`;
+  `api/tests/Feature/Quality/NcrCapaReauditRegressionTest.php:157-176`.
+
+#### N-009 — Pareto drill-down row-mapping branch had zero coverage
+
+- Before: `DefectParetoService::inspectionsWithDefect()` had exactly one test caller,
+  `QualityAnalyticsBoundaryTest.php:53`, asserting `assertSame([], $drill)`. The hashid
+  encoding and `product` sub-array at `DefectParetoService.php:172-185` had never executed in
+  any environment, while `spa/src/pages/quality/dashboard.tsx:46` calls the endpoint. Same
+  shape as the calibration-analytics finding.
+- After: **refuted as a defect, closed as a coverage gap.** Probed with real defect rows the
+  branch is correct — HashID ids for both inspection and product, no raw integers, no `42803`.
+  Now pinned at service and HTTP level, including a raw-id negative assertion.
+- Evidence: `api/tests/Feature/Quality/NcrCapaReauditRegressionTest.php:180-247`.
+
+### Red-proof
+
+Extracted the three pre-existing files from `HEAD` (`git show HEAD:api/<path>`), swapped them
+in, re-ran: **6 failed / 2 passed**. The two that passed are the N-009 drill-down cases —
+**labelled pass-either-way locks**, because they close a coverage hole rather than a defect.
+Restored my versions and proved it with `diff -q` on all three (`ALL THREE REPO FILES == MY
+VERSION`).
+
+### Verification
+
+- `php -l`: clean on all four changed/added files.
+- `phpstan analyse` (3 changed source files, `--memory-limit=1G`): **No errors**.
+- `pint --test`, rule lists diffed programmatically against the extracted `HEAD` copies:
+  `NcrEscalationService.php` **NEW (mine only): []** (identical set to HEAD);
+  `RunNcrEscalations.php` **NEW: []** (one fewer than HEAD);
+  `routes.php` **NEW: []** (identical to HEAD);
+  new test file **passes Pint**. Much of this repo fails Pint at HEAD; nothing new is mine.
+- Whole Quality feature + unit suite after the fixes:
+  **132 passed / 371 assertions / exit 0**.
+- Scratch probe `ZzAuditProbeTest.php` deleted; scratch dirs `api/.pintprobe`,
+  `api/.pintprobe2` removed. (`api/.pintbase/` is untracked and **not mine** — left alone.)
+
+### Not fixed, and why
+
+N-002 (escalation tier 2 targets a role that 403s on the only action that clears it), N-003
+(a closed NCR is fully mutable and hard-deletable, zero triggers), N-004 (a disposition moves
+no stock; the Inventory MRB is a parallel register), N-005 (no concession grantor, no vendor
+reference), N-006 (all-`not_applicable` rolls up to `effective`), N-007 (the causer closes and
+self-verifies its own NCR), plus three SPA permission/discoverability items and two docs items.
+
+Every one of these either changes **what a disposition does**, **who may close an NCR**, **what
+counts as effectiveness evidence**, or **an SLA target** — the four things this session was
+explicitly told not to decide — or lives in Inventory / shared SPA files owned elsewhere.
+N-003 additionally carries a concrete implementation hazard documented in `action-plan.md`
+order 5: a freeze trigger keyed naively on `OLD.status` breaks `NcrService::close()` (which
+writes the row twice) and the CAPA verdict path (which legitimately writes to closed rows).
+
+### Could not verify
+
+- **`NCR-YYYYMM-NNNN` uniqueness under true concurrency.** Numbering, format and monthly reset
+  were verified sequentially against a real row. A two-connection race probe was **not** run:
+  `DocumentSequenceService::generate()` is `Common` scope, another session measured the `23505`
+  there, and a second connection against an uncommitted unique insert deadlocks. Reported as
+  shared-service scope rather than guessed at.
+- **Nothing was verified in a browser.** No SPA source was changed this session.
+
+### Revisit trigger
+
+Reopen after the four IATF decisions in `action-plan.md` orders 4, 6, 8 and 9 are answered by a
+human. Start with N-003, which needs no policy decision — only careful per-column scoping.
