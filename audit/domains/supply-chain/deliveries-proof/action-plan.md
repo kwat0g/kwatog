@@ -102,3 +102,165 @@ No production-code implementation is authorized in this audit session. The major
 - Confirmed proof has a tested append-only/correction policy and concurrent deletion coverage.
 - Landed-cost lines reconcile exactly to entered charges and downstream accounting/receiving consumers.
 - Delivery replay, lifecycle status, permission, and restore negative tests run in CI.
+
+---
+
+# Action plan — re-audit 2026-09-01
+
+Status after this session: **🔁 Needs Re-audit** (unchanged label, materially advanced).
+
+Of 17 findings now on the board, **3 were closed in-session** as containment
+(F011 cancelled-order gate, F004's delete race, F010's header) and **14 are gated**
+behind a decision that is explicitly not an auditor's: whether a shipment may leave
+uncertified, what quantity is invoiced, who may confirm, whether archive is
+recoverable, and how money is allocated. The split is stated rather than smuggled:
+the contained items refuse impossible input or close a race without changing correct
+behaviour; nothing else does.
+
+## Closed this session
+
+| # | Finding | Why it was containment |
+|---|---|---|
+| ✅ | **F011** cancelled sales order still shipped | A missing guard refusing impossible input. Placed at `assertDeliveryQuantitiesAvailable()`, the single seam the manual and auto-draft paths share. No valid order changes behaviour. |
+| ✅ | **F004a** last-proof delete race | A lock closing a race without changing correct behaviour. Reuses the row `confirm()` already serializes on. |
+| ✅ | **F010** client filename forged `Content-Disposition` | Small, no behaviour change for well-formed names; the portal stream's existing RFC 6266 shape was copied. |
+| ✅ | Inherited `CocAutoAttachOnConfirmTest` fixture | A fixture correction. The guard was not weakened. |
+
+## Ordered remaining work
+
+### 1. M044-F014 — Make a missing Certificate of Conformance visible
+
+- Broken, **P0**. Scope: **medium**. Session: **separate-recommended**.
+- Two options, and the choice is a human's:
+  **(a) surface-only** — add `coc_handoff_status` / `_message` / `_at` columns
+  mirroring `invoice_handoff_*`, notify QC, record a replayable outbox event, and add
+  a `delivery_confirmed_without_coc` bottleneck. Confirm still succeeds. This is
+  containment-shaped and could be same-session in a follow-up.
+  **(b) fail closed** — refuse confirmation when a linked passed outgoing inspection
+  cannot produce a certificate. Correct for IATF, but it changes whether a shipment
+  may leave, so not an auditor's call.
+- Do **not** simply widen the `catch`. The failure path must not swallow its own
+  errors — CLAUDE.md's own rule, and the reason this was invisible.
+- Acceptance: a delivery whose CoC cannot be issued is distinguishable from one whose
+  CoC was issued, without reading a log; the state is durable and replayable; the
+  process document matches the code.
+
+### 2. M044-F013 — Gate the AR side of the proof-of-delivery contract
+
+- Broken, **P0**. Owner: **accounts-receivable**. Scope: **small** in AR.
+- `InvoiceService::resolveSourceChain()` must read `deliveries.status` and refuse
+  anything but `confirmed`, and should bound invoice line quantities by the linked
+  `delivery_items`. Hand off with the measured 201s.
+- Acceptance: no invoice can be raised against a scheduled, in-transit or cancelled
+  delivery from any path; the delivery→AR precondition is enforced on both sides.
+
+### 3. M044-F016 — Reconcile the CoC evidence guard with the AQL acceptance number
+
+- Broken, **P1**. Owner: **quality / inspections-certificates**. Scope: **small**.
+- `failing > 0` should become `failing > accept_count || any critical failure`. Keep
+  the other three rules. Compounds with F014, so sequence after or with it.
+- Acceptance: a lot of 400 with one accepted non-critical defect gets its
+  certificate; a lot with a critical failure or defects above `Ac` still cannot.
+
+### 4. M044-F002 — Decide and seed the last-mile actors
+
+- Missing, **P0 operational**. Scope: **large**. Session: **separate-recommended**.
+- Name the operator for create/assign/status/proof and the actor for confirmation,
+  then grant the minimum to seeded roles. `warehouse_staff` is the natural candidate
+  for dispatch; the confirmer has no seeded home today. Decide whether the customer
+  portal confirms (build it) or not (fix `docs/PROCESS-FLOWS.md:332`).
+- Acceptance: every registry role completes its documented part with no throwaway
+  test role; negative authorization tests per role; `CreateDeliveryDriverGateTest.php:119`
+  can drop its workaround comment.
+
+### 5. M044-F004b — Make confirmed evidence append-only
+
+- Broken, **P1**. Scope: **medium**. Session: **separate-recommended**.
+- Refuse post-confirmation proof `store()` and receipt replacement by default. If
+  corrections are allowed, require a distinct permission, a reason, an actor and a
+  replacement link. An auto-generated `coc` proof should never be operator-deletable
+  or operator-replaceable at all. Add an observer **plus** a PostgreSQL `P0001`
+  trigger — the `journal-ledger` shape — since `deliveries` has zero triggers today.
+- Acceptance: no unapproved post-confirmation add/replace/delete; the certificate on
+  file is provably the generated one.
+
+### 6. M044-F003 — Choose a retention policy, then make archive/restore honest
+
+- Broken, **P1**. Scope: **medium**. Session: **separate-recommended**.
+- Decide true archive vs permanent delete **first**. For archive: retain the private
+  files, cascade `deleted_at` to `delivery_proofs`, add `->withTrashed()` to the five
+  restore routes that lack it, and expose archived rows. For permanent delete: remove
+  the restore routes and the SPA's "can be restored later" copy.
+- Adding `->withTrashed()` alone is a half-fix that resurrects metadata pointing at
+  deleted bytes. Do not ship it on its own.
+- Acceptance: archive → list archived → restore → download succeeds, or the API and
+  UI both say deletion is permanent; missing-file and parent-deleted cases return
+  explicit errors.
+
+### 7. M044-F012 — Decrement finished goods when goods leave
+
+- Missing, **P1**. Owner spans **warehouse-stock-control**. Scope: **large**.
+- Emit a `StockMovementType::Delivery` movement on the delivered transition, inside
+  the existing transaction, from the finished-goods location. The enum, GL
+  classification, zone-consumability check and ABC bucket are already built for it.
+- Acceptance: FG on-hand falls by the delivered quantity; the movement cannot drive
+  stock negative; it is idempotent per delivery; voiding restores it exactly. All
+  four are currently vacuous and become live with this change.
+
+### 8. M044-F015 — Record what the customer actually accepted
+
+- Missing, **P2**. Scope: **medium**. Session: **separate-recommended** (changes what
+  is invoiced).
+- Capture an accepted quantity per delivery line at confirmation, invoice that, and
+  reconcile the SO ledger to it. Define the shortfall route (return, re-delivery, or
+  order amendment).
+
+### 9. M044-F007 — Durable idempotency on manual delivery creation
+
+- Incomplete, **P1**. Scope: **medium**. Session: **separate-recommended**.
+- Bounded `X-Idempotency-Key`, payload+actor fingerprint, persisted command/result,
+  replay returns the original delivery, key reuse with a different payload is
+  refused. Legitimate partial deliveries with distinct keys must remain possible.
+
+### 10. M044-F005 — Reconcile narrow delivery reads with the proof contract
+
+- Incomplete, **P2**. Scope: **medium**. Session: **separate-recommended after F002**.
+- Either accept `supply_chain.deliveries.view` on the proof/receipt read routes, or
+  hide those controls from the narrow role in the SPA. Sequence after the actor
+  decision so the same matrix answers both.
+
+### 11. M044-F006 — Complete the landed-cost money controls
+
+- Broken, **P1**. Scope: **large**. Session: **separate-recommended**.
+- Unchanged from the 2026-08-25 plan: authorized cost entry, decimal-string
+  arithmetic instead of floats, real manual line allocation, residual-cent
+  reconciliation, and a reachable UI.
+
+### 12. M044-F008b — Lock shipment deletion against a terminal transition
+
+- Incomplete, **P2**. Scope: **small**. Session: **separate-recommended**.
+- Re-read and lock the shipment inside the transaction before the terminal-status
+  check. The status-domain half of the old finding is void: `deliveries_status_check`
+  already exists.
+
+### 13. M044-F009 — Container surface parity
+
+- Missing, **P2**. Scope: **medium**.
+- Either build the container client and shipment-detail section, or remove the six
+  routes and the process-flow expectation. The fleet half is now partly closed.
+
+### 14. M044-F017 — Mass-assignment and enum hardening
+
+- Polish, **P2**. Scope: **small but cross-module**.
+- Remove `status` from `Delivery::$fillable` and route writes through
+  `forceFill()`; add a `proof_type` domain check. Deferred here only because several
+  tests in other modules mass-assign `Delivery` status, so it is not contained.
+
+## Definition of done for the next tranche
+
+- A confirmed delivery without a certificate is impossible, or loudly visible.
+- The delivery→AR precondition is enforced on both sides of the contract.
+- Every registry role completes its documented part of the last mile.
+- Confirmed evidence is append-only, backed by a database trigger.
+- Archive is demonstrably recoverable, or the product says it is permanent.
+- Finished-goods stock falls when goods leave.
