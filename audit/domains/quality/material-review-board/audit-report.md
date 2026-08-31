@@ -205,4 +205,445 @@ SPA at `spa/src/pages/inventory/mrb/`.
 Therefore this session is **characterisation + report**, not fix, for the MRB
 surface itself. Findings below are reports, not fixes, unless explicitly marked.
 
-(sections appended as findings are measured)
+
+## Real numeric baseline (this session)
+
+```
+docker compose run --rm --no-deps -e DB_DATABASE=ogami_test_mrb api \
+  php artisan test tests/Feature/Inventory/QuarantineMrbTest.php \
+                   tests/Feature/Inventory/MrbDoubleReleaseRaceTest.php --no-coverage
+→ 16 passed, 49 assertions, exit 0
+```
+Non-zero assertions, so the run was real. This **exactly matches** the number the
+prior session claimed in its "Resumed-plan verification" block. The prior log is
+**accurate**, not fabricated and not self-flagged-unverified.
+
+Environment re-verified at claim time: `docker compose ps` showed only `db`
+(healthy, up 57m) and `redis` running — **the `api` container is NOT up on this
+branch**, so every command in this report used
+`docker compose run --rm --no-deps -e DB_DATABASE=ogami_test_mrb api …`.
+`select 1;` against `db` returned a row.
+
+## Prior-finding reproduction
+
+| prior | verdict this session | evidence |
+|---|---|---|
+| F001 explicit location IDs violate zone/warehouse/active invariants | **FIXED — does not reproduce** | `QuarantineService::assertLocation()` `:412-449` now enforces active location, active warehouse, typed zone, required zone, `rejectSpecialZones`, same-warehouse. Applied to source `:195`, quarantine `:200`, release target `:337-342`, and the scrap resolver `:359`. 4 existing tests cover it. |
+| F002 held stock bypasses MRB release via generic transfer/adjustment | **REPRODUCES — and is worse than described** | see M054-R1 |
+| F003 rework/use_as_is release has no reinspection or concession gate | **REPRODUCES** | `release()` `:331-356` treats Rework and UseAsIs identically: target location + zone check, then transfer to good stock. `ReleaseMrbRequest::rules()` `:34-39` has only `disposition`, `target_location_id`, `notes`. |
+| F004 return_to_supplier has no supplier/procurement provenance | **REPRODUCES** | `:375-388` posts a bare `ReturnToVendor` with `referenceType: 'material_review_record'`; `0262_create_material_review_records_table.php:20-56` + `2026_08_25_190000_add_mrb_hold_idempotency.php` have no vendor/PO/GRN/bill column. |
+| F005 NCR/inspection links existence-only, not item/status-bound | **FIXED — does not reproduce** | `assertQualityLinks()` `:472-526` now checks inspection status=Failed, item identity, batch ≥ qty, NCR status ∈ {Open,InProgress}, affected_qty ≥ qty, NCR↔inspection identity. `qualityOptions()` `:111-164` filters candidates by item + failed status. Measured over HTTP: `GET /mrb/quality-options?item_id=<hash>` → 200 returning only the matching failed inspection. |
+| F006 hold has no durable idempotency contract | **FIXED — does not reproduce** | `Idempotency-Key` header → `:176-223` fingerprint compare under `lockForUpdate`, backed by UNIQUE `(held_by, idempotency_key)` in `2026_08_25_190000_add_mrb_hold_idempotency.php:16`. |
+| F007 MRB search field is a no-op | **FIXED — does not reproduce** | `list()` `:71-86` searches mrb_number, item code/name, ncr_number, source + quarantine location/zone codes. `MrbIndexRequest:21` validates `search`. Measured: `GET /mrb?search=MRB-` → 200. |
+| F008 client/API quantity precision disagree | **FIXED on the API side — does not reproduce as a defect** | `StoreMrbRequest:41` is `['required','decimal:0,3','min:0.001']`. Probed 20 values over HTTP (below) — zero 500s, zero silent corruption. |
+| F009 high-impact dispositions have no dual-control boundary | **REPRODUCES** | see M054-R3 |
+
+**5 of 9 prior findings are genuinely fixed and verified by probe; 4 reproduce.**
+The four that reproduce are exactly the four the prior session deferred as
+requiring cross-module policy, which was the correct call.
+
+---
+
+## HTTP-level coverage versus service-only
+
+The whole repo contains **two** HTTP calls to any MRB endpoint, both
+`postJson('/api/v1/inventory/mrb', …)` in
+`api/tests/Feature/Inventory/QuarantineMrbTest.php:418,424`. Everything else in
+`QuarantineMrbTest` and all of `MrbDoubleReleaseRaceTest` calls
+`QuarantineService` directly, skipping the FormRequest and the route middleware.
+
+| endpoint | HTTP coverage before this session | probed here | result |
+|---|---|---|---|
+| `GET /api/v1/inventory/mrb/options` | **none** | yes | 200; 403 without `inventory.mrb.view` |
+| `GET /api/v1/inventory/mrb` | **none** | yes, 9 filter combinations | 200 / 422 correctly; no 500 |
+| `GET /api/v1/inventory/mrb/quality-options` | **none** | yes, 5 combinations | 200 / 422; one misleading message (M054-R7) |
+| `GET /api/v1/inventory/mrb/{mrb}` | **none** | yes | 200; 403 unauthorised; 404 on raw int |
+| `POST /api/v1/inventory/mrb` | 2 calls | yes, 20 quantity values | all correct |
+| `POST /api/v1/inventory/mrb/{mrb}/release` | **none** | yes | 200 / 422 / 403 correctly |
+
+**No `goods-receiving`-class defect was found on the uncovered endpoints — every
+one of the five responds correctly.** The FormRequests are all reachable and
+behave. This is the good outcome, and it is now measured rather than assumed.
+
+---
+
+# FINDINGS — 2026-09-01
+
+## STRUCTURAL: M054 is a `quality` registry entry whose code is 100% Inventory
+
+Classification: **Incomplete** (registry/ownership, not runtime)
+Priority: P2 · Session: separate-recommended
+
+`api/app/Modules/Inventory/` holds every MRB artefact:
+`Models/MaterialReviewRecord.php`, `Controllers/MrbController.php`,
+`Services/QuarantineService.php`, four `Requests/Mrb*|*Mrb*.php`,
+`Resources/MaterialReviewRecordResource.php`, `Enums/MrbStatus.php`, routes at
+`Inventory/routes.php:153-158`, SPA at `spa/src/pages/inventory/mrb/`,
+API client `spa/src/api/inventory/mrb.ts`, sidebar
+`spa/src/components/layout/Sidebar.tsx:337-342`.
+
+The dependency direction is **Inventory → Quality**: `QuarantineService.php:20-24`
+imports `InspectionStatus`, `NcrDisposition`, `NcrStatus`, `Inspection`,
+`NonConformanceReport`. Quality imports nothing from Inventory —
+`grep StockMovementInput\|StockMovementService api/app/Modules/Quality` returns
+**nothing**. This matters for the bridge options below.
+
+Consequence for this session: `Inventory/` is LIVE under another agent, so
+**every finding below is a report, not a fix.** No MRB source file was modified.
+
+---
+
+## M054-R1 — Held quarantine stock escapes on four of six movement types, and strands the MRB permanently
+
+Classification: **Broken** · Priority: **P0** · Session: separate-recommended
+(reproduces and extends prior F002)
+
+`StockMovementService::assertConsumableSource()`
+`api/app/Modules/Inventory/Services/StockMovementService.php:307-329` returns
+early unless the movement type is `MaterialIssue` or `Delivery`:
+
+```php
+if (! in_array($type, [StockMovementType::MaterialIssue, StockMovementType::Delivery], true)) {
+    return;
+}
+```
+
+and the comment at `:300-304` states the intent: *"Only deliberate write-offs
+(adjustment_out, scrap, return_to_vendor) and quarantine mechanics (transfer) may
+touch it."* `SourceReferenceRegistry::assertValid()`
+`api/app/Modules/Accounting/Services/SourceReferenceRegistry.php:75-77` permits
+`referenceType: null, referenceId: null`, so a caller needs no document at all.
+
+**Measured** (this session, `ogami_test_mrb`) — one MRB holding 20.000 at a
+quarantine location, then each movement type attempted out of that location with
+a null reference and no MRB decision:
+
+| movement type | outcome | MRB afterwards | quarantine left |
+|---|---|---|---|
+| `Transfer` (→ good location) | **ESCAPED** | still `held`, claims 20.000 | 0.000 |
+| `AdjustmentOut` | **ESCAPED** | still `held`, claims 20.000 | 0.000 |
+| `Scrap` | **ESCAPED** | still `held`, claims 20.000 | 0.000 |
+| `ReturnToVendor` | **ESCAPED** | still `held`, claims 20.000 | 0.000 |
+| `MaterialIssue` | blocked (`BusinessRuleException`) | `held` | 20.000 |
+| `Delivery` | blocked (`BusinessRuleException`) | `held` | 20.000 |
+
+The escape is not the whole defect. **After any escape the MRB can never reach a
+terminal state.** `release()` re-reads the row, sees `held`, and then
+`StockMovementService::move()` throws:
+
+```
+InsufficientStockException: Insufficient available stock at location 2 for item 1: needed 20.000, available 0.000
+```
+
+measured on all four escape paths. So the record is stuck at `held` forever: an
+IATF §8.7 "nonconforming material on hold" that can never be dispositioned or
+closed out, while the physical material has already gone back to good stock
+(`Transfer`), off the books (`AdjustmentOut`), to scrap, or to a vendor — in every
+case with **no disposition recorded, no MRB release movement, and no link to the
+NCR**. The `mrb_holds` dashboard badge
+(`api/app/Modules/Dashboard/Services/BadgeService.php:433-435`) counts it forever.
+
+This is a stronger claim than prior F002, which said "later release can fail".
+Measured: it **always** fails, permanently.
+
+**Owned by Inventory (live under another agent) — reported, not fixed.**
+
+---
+
+## M054-R2 — Two independent disposition decisions on the same lot, and nothing reconciles them
+
+Classification: **Broken** · Priority: **P0** · Session: separate-recommended
+(this is the seam `ncr-capa` N-004 and `goods-receiving` GRN-R6 both pointed at)
+
+There are two `disposition` columns over the same `NcrDisposition` enum, written
+by two services, with two disjoint sets of consequences and **no constraint
+between them**:
+
+| | `non_conformance_reports.disposition` | `material_review_records.disposition` |
+|---|---|---|
+| written by | `NcrService::setDisposition()` `api/app/Modules/Quality/Services/NcrService.php:255-275` | `QuarantineService::release()` `api/app/Modules/Inventory/Services/QuarantineService.php:391-402` |
+| `scrap` does | replacement Work Order, **only if** outgoing stage + product_id (`NcrService.php:319-336`) | `StockMovementType::Scrap` out of quarantine (`:358-373`) |
+| `rework` does | rework Work Order, **only if** outgoing stage (`NcrService.php:338-357`) | Transfer quarantine → good location (`:331-356`) |
+| `use_as_is` does | **nothing** | Transfer quarantine → good location (`:331-356`) |
+| `return_to_supplier` does | notify Purchasing (`NcrService.php:360-362`, `:430-453`) | `ReturnToVendor` out of quarantine (`:375-388`) |
+| touches stock? | **never** | always |
+| touches WO / notification? | always | **never** |
+
+`NcrService` contains **zero** references to `MaterialReviewRecord`,
+`QuarantineService`, `StockMovement*` or any warehouse zone. Confirmed by grep
+across `api/app/Modules/Quality/`.
+
+**Measured — I1: an NCR disposition has no material consequence.** Setting
+`ncr.disposition = 'scrap'` with no MRB: `stock_movements` **0 → 0**. This
+independently reproduces `ncr-capa` N-004 from the MRB side.
+
+**Measured — I2: the two decisions may openly contradict each other.** An NCR
+whose `disposition` is `return_to_supplier`, with a linked MRB released
+`use_as_is`, both succeed. Result: `ncr=return_to_supplier mrb=use_as_is
+status=released`, and `40.000` of the nonconforming lot landed in a
+`finished_goods` location. The quality record says "send it back to the
+supplier"; the stock ledger says "it is good finished stock". Both are
+authoritative in their own module and neither knows about the other.
+
+**Measured — I3: quantity dispositioned is not reconciled against quantity
+quarantined.** `assertQualityLinks()` `:506-508` checks each hold individually
+against `affected_quantity`, never the running total. Against one NCR with
+`affected_quantity = 40`: **3 MRB rows, `sum(quantity) = 120.000`** — three times
+the quantity the NCR says is affected — all accepted.
+
+**Measured — I4/I5: the same nonconformance can be scrapped AND returned to the
+supplier at the same time.** Two MRBs on one NCR (`affected_quantity = 40`), one
+released `scrap` → `scrapped`, the other `return_to_supplier` → `returned`. Both
+terminal, both physical movements posted, 80 units disposed against a 40-unit
+nonconformance. Re-releasing an already-terminal MRB *is* correctly refused
+(`MRB … is not held (status: scrapped)`) — the guard is per-record, and there is
+no per-NCR guard at all.
+
+---
+
+## M054-R3 — There is no board: one actor inspects, raises the NCR, holds, and dispositions
+
+Classification: **Broken** · Priority: **P1** · Session: separate-recommended
+(reproduces prior F009; this is the MRB form of the self-absolution hole
+`ncr-capa` measured on NCRs)
+
+A Material Review Board is by definition a multi-party body. The implementation
+has a single permission for both sides of the decision:
+
+- `Inventory/routes.php:157` hold → `permission:inventory.mrb.manage`
+- `Inventory/routes.php:158` release → `permission:inventory.mrb.manage`
+- `StoreMrbRequest:23` and `ReleaseMrbRequest:22` both check the same slug.
+- `RolePermissionSeeder.php` grants `inventory.mrb.view` + `inventory.mrb.manage`
+  to **`warehouse_staff` (:669-670)** and **`qc_inspector` (:694-695)**.
+- The schema has no approver, no second signature, no board-membership row.
+
+**Measured — I9/I10.** One `qc_inspector` user performed the entire chain:
+`inspector_id=7  ncr.created_by=7  held_by=7  released_by=7`. The same person who
+detected the nonconformance released it `use_as_is` — a concession that
+`NcrDisposition.php:12` documents as *"records but ships anyway, with customer
+sign-off"* — into good stock, with no second party and no recorded customer
+sign-off anywhere in the schema.
+
+All three registry roles complete their part; the problem is that **any one of
+them completes all of it.**
+
+---
+
+## M054-R4 — Rework and use-as-is return material to good stock with no reinspection or concession evidence
+
+Classification: **Broken** · Priority: **P1** · Session: separate-recommended
+(reproduces prior F003)
+
+`release()` `:331-356` handles `Rework` and `UseAsIs` in one shared `case` arm:
+require a target location, assert it is active/same-warehouse/non-special, post
+the transfer, set `Released`. `ReleaseMrbRequest:34-39` accepts only
+`disposition`, `target_location_id`, `notes`.
+
+So `rework` is recorded as complete with **no evidence the rework was performed**
+and **no reinspection at all** — no `inspection_id` field on release, and
+`NcrService`'s own rework work-order path (`NcrService.php:338-357`) is never
+invoked by MRB and only fires for outgoing-stage inspections anyway. `use_as_is`
+is recorded with **no concession approval and no customer sign-off**, despite the
+enum documenting sign-off as its defining requirement.
+
+Measured over HTTP: `POST /mrb/{id}/release {"disposition":"use_as_is",
+"target_location_id":"<hash>"}` → **200**, and the material is in a
+`finished_goods` location. The only thing the endpoint refuses is a *missing*
+target location (`422 A target good location is required for rework/use-as-is
+release.`).
+
+---
+
+## M054-R5 — A terminal MRB record is fully mutable, hard-deletable, and untriggered
+
+Classification: **Broken** · Priority: **P1** · Session: separate-recommended
+
+Measured against a `scrapped` MRB (`ogami_test_mrb`, real Postgres):
+
+| attack | result |
+|---|---|
+| Eloquent `fill(['quantity' => '999.000', …])->save()` | **ALLOWED** — `quantity` became `999.000` on a scrapped record |
+| property-set `status = MrbStatus::Held; save()` | **ALLOWED** — terminal record reopened to `held` |
+| raw SQL `UPDATE … SET mrb_number = 'HACKED'` | **ALLOWED** — document number rewritten |
+| `MaterialReviewRecord::find($id)->delete()` | **ALLOWED** — row gone (no `SoftDeletes` on the model) |
+| non-internal triggers on `material_review_records` | **NONE** |
+| CHECK constraints | exactly one: `material_review_records_status_lifecycle_check` |
+
+The single CHECK constraint (from
+`2026_08_13_221000_add_enum_lifecycle_status_guards.php:53,72-99`) only restricts
+`status` to the four enum values — it does **not** prevent a terminal → `held`
+downgrade, which is why that downgrade succeeded.
+
+Mitigations that do exist: none of this is HTTP-reachable (there is no update or
+destroy route — `Inventory/routes.php:153-158` exposes only
+options/index/quality-options/show/store/release), and `MaterialReviewRecord`
+uses `HasAuditLog` (`Models/MaterialReviewRecord.php:27`), so the *Eloquent*
+mutations leave an audit row. The **raw-SQL rewrite and the hard delete leave
+nothing**, and there is no `P0001` trigger of the kind `journal-ledger`
+established as the precedent.
+
+Same shape `ncr-capa` found on `non_conformance_reports`. **If a trigger is
+proposed, note the hazard `ncr-capa` documented:** `release()` writes the MRB row
+**twice** in `hold()` (`:266` then `:281` for `hold_movement_id`) and once in
+`release()`, so a trigger keyed naively on `OLD.status` being terminal is fine
+here — but a trigger keyed on "any UPDATE after terminal" would also have to
+permit nothing, since MRB has no legitimate post-terminal writer. That makes MRB
+an *easier* trigger target than NCR/CAPA, not a harder one.
+
+---
+
+## M054-R6 — Nothing ages, escalates, or reports on a quarantine hold; there are zero MRB scheduled commands
+
+Classification: **Missing** · Priority: **P1** · Session: separate-recommended
+
+Measured: enumerating the full Artisan command list inside the container and
+filtering on `/mrb|quarantine/i` returns **NONE**.
+`grep -n 'mrb\|quarantine' api/routes/console.php` → no matches.
+
+So there is no aging report, no SLA, no escalation, and no alert for material
+sitting in quarantine. An MRB raised today can remain `held` indefinitely — and
+per M054-R1 a stranded one *must* remain `held` forever — with the only signal
+being an ever-growing `mrb_holds` sidebar badge count
+(`BadgeService.php:430-435`). IATF §8.7 expects nonconforming material to be
+dispositioned in a controlled, timely way; nothing here measures timeliness.
+
+Note the good news on the flip side of the "dead scheduled command" class: there
+is no MRB command printing zero counts and exiting SUCCESS, because there is no
+MRB command at all. That invariant is vacuously satisfied and is reported as
+**N/A — no command exists**, not as "passed".
+
+---
+
+## M054-R7 — `return_to_supplier` records a vendor return with no vendor
+
+Classification: **Incomplete** · Priority: **P1** · Session: separate-recommended
+(reproduces prior F004)
+
+`release()` `:375-388` posts `StockMovementType::ReturnToVendor` with
+`referenceType: 'material_review_record'` and sets `MrbStatus::Returned`. The
+table has no `vendor_id`, `purchase_order_id`, `goods_receipt_note_id`, `bill_id`
+or supplier-return document column —
+`0262_create_material_review_records_table.php:20-56` plus
+`2026_08_25_190000_add_mrb_hold_idempotency.php:14-15` are the complete schema.
+
+So the inventory ledger asserts material went back to a supplier while naming no
+supplier, no receipt, and no financial document to reverse. Purchasing and AP
+have nothing to act on. Meanwhile `NcrService::notifyPurchasing()`
+(`NcrService.php:430-453`) sends a *notification* naming the NCR — the two halves
+of "return to supplier" are in different modules and never meet.
+
+---
+
+## M054-R8 — Deleting an NCR silently erases the MRB's quality trace
+
+Classification: **Broken** · Priority: **P2** · Session: separate-recommended
+
+`0262_create_material_review_records_table.php:24-27` declares both quality FKs
+`->nullOnDelete()`:
+
+```php
+$table->foreignId('ncr_id')->nullable()->constrained('non_conformance_reports')->nullOnDelete();
+$table->foreignId('inspection_id')->nullable()->constrained('inspections')->nullOnDelete();
+```
+
+Measured: `NonConformanceReport` and `Inspection` **do not use `SoftDeletes`**
+(probed via `class_uses_recursive`), so a delete is a hard delete. After
+`DELETE FROM non_conformance_reports WHERE id = …`, the MRB row survives with
+`ncr_id = NULL` and `GET /mrb/{id}` still returns **200** showing `"ncr": null` —
+a quarantine/disposition record with its cause silently removed. For an IATF
+§8.7 traceability record the correct FK is `restrictOnDelete`, matching
+`item_id`, `source_location_id` and `held_by` on the same table (`:29,32-35,46`).
+
+---
+
+## M054-R9 — Polish
+
+1. **A soft-deleted item makes a held lot unidentifiable.** `Item` uses
+   `SoftDeletes` (`Models/Item.php:20`) but `item_id` is `restrictOnDelete`, so
+   the FK survives while the `belongsTo` resolves to null. Measured:
+   `GET /mrb` and `GET /mrb/{id}` both return **200** with `"item": null`.
+   *This refutes a hypothesis I formed while reading* — I expected a 500 from
+   `MaterialReviewRecordResource:30-35` (`$this->item->hash_id`, the only
+   relation payload in that resource with **no** null guard, unlike `ncr` `:37`,
+   `inspection` `:53` and `locationPayload()` `:84`). `JsonResource::whenLoaded()`
+   returns `null` when a loaded relation is null, so it never reaches the
+   closure. Not a 500 — but the operator sees a quarantined lot with no item code
+   or name, and the `mrb_holds` badge still counts it.
+2. **Misleading validation message on a bad hash id.** `GET
+   /mrb/quality-options?item_id=garbage` → `422 "The item id field is required."`
+   `ResolvesHashIds` nulls an unresolvable hash before `rules()` runs, so an
+   *invalid* id is reported as a *missing* one. Same for `StoreMrbRequest`.
+3. **`HashIdFilter::decode` accepts raw integers in every environment**
+   (correction #4, confirmed): `GET /mrb/quality-options?item_id=12` → 200, and
+   `GET /mrb?item_id=999999` → 200. Not a leak, but the API accepts two id forms.
+4. **MRB is absent from `docs/USER-MANUAL.md`.** `grep -i 'material
+   review\|MRB\|quarantine' docs/USER-MANUAL.md` → **zero matches**, for a
+   live, permission-gated, sidebar-linked, IATF-relevant screen.
+
+---
+
+## Verified strengths (measured this session, not read)
+
+- **State machine is sound. 20/20 transition-matrix cells walked** (4 states ×
+  5 dispositions including one invalid). `held` + each of the four valid
+  dispositions → the correct terminal state; `held` + invalid → refused; **all 15
+  terminal-state cells refused** with `BusinessRuleException`. No back-door of
+  the `resume()` kind — `release()` is the single mutation path and it re-reads
+  under `lockForUpdate` (`:313-316`).
+- **Quantity validation is fully hardened — the eight-module validation family
+  does not apply here.** `StoreMrbRequest:41` = `['required','decimal:0,3','min:0.001']`.
+  20 values probed over HTTP: `1.999`→201 stored exactly `1.999` (no rounding);
+  `1.9999`, `10.00005`, `1e3`, `1E3`, `1e17`, `1e20`, `0.0001`, `abc`, `1,5`,
+  `0x10`, `NaN`, `Infinity` → **422**; `0`, `-5` → 422 `min`; `''` → 422
+  required; `'  7  '`→201 `7.000`; `'+3'`→201 `3.000`. **Zero 500s, zero silent
+  corruption, no `ValueError`, no `22003`.** `999999999999999` (which would
+  overflow `decimal(15,3)`) is masked by the stock-availability check at `:236-244`
+  returning 422 first — theoretically reachable only with ≥1e12 on hand.
+  No array/map payload exists on either MRB request.
+- **`Rule::exists()` landmine absent.** No MRB FormRequest uses `Rule::exists`
+  in any form (all four checked programmatically); they use plain
+  `'exists:table,id'` strings.
+- **No `orderBy($variable)`.** `QuarantineService::list()` `:88` hardcodes
+  `orderByDesc('held_at')->orderByDesc('id')`. The `docs/PATTERNS.md:262-268`
+  unvalidated-`direction` bug is **not** inherited.
+- **No `42803` risk.** MRB has no aggregate query anywhere — `list()` paginates,
+  `qualityOptions()` uses `whereHas`. Nothing selects over
+  `NonConformanceReport::actions()`, so the default-`orderBy` GROUP BY trap does
+  not apply. The only MRB aggregate in the codebase is `BadgeService.php:433-435`,
+  a plain `count()`.
+- **Empty-period divide-by-zero: N/A.** There is no MRB rate, average or
+  percentage anywhere. A `count()` of 0 is honest, not fabricated.
+- **`document_sequences` row exists.** Measured:
+  `{document_type: mrb, prefix: MRB, year: 2026, month: 9, last_number: 1}`
+  (seeded by `0360_seed_document_sequence_config.php:16`), producing
+  `MRB-202609-0001` — correct monthly-reset format. Unlike `work_order`
+  (correction #5), MRB's row is present.
+- **No raw integer PKs leak.** `GET /mrb/{id}` payload: `id` `'1kPNxQbXyR'`,
+  `hold_movement_id` `'40awqV4pKG'`, `release_movement_id` `null`. Programmatic
+  check for `"id":<pk>` where pk=34 → **not present**. `GET /mrb/999999` → 404.
+  (The 404 body carries `exception`/`file` keys because `APP_DEBUG=true` under
+  `phpunit.xml`; that is an env artifact, not an MRB defect.)
+- **Permission gate holds on all six endpoints including list and options.**
+  `maintenance_tech` (no `inventory.mrb.*`) → **403** on `/mrb/options`, `/mrb`,
+  `/mrb/quality-options`, `/mrb/{id}` and `POST /mrb/{id}/release`. `warehouse_staff`
+  and `qc_inspector` both complete hold **and** release (which is itself
+  M054-R3). All three registry roles can complete their part.
+- **Quarantined stock is visible, not invisible.** Measured after a 30-unit hold
+  from a 100-unit source: a real `stock_levels` row at the quarantine location
+  with `quantity=30.000 reserved=0.000`; total on hand across all locations still
+  `100.000`; non-quarantine/non-scrap on hand `70.000`. Nothing vanished and
+  nothing is double-counted.
+- **Quarantined stock is excluded from issue, delivery, reservation, picking, MRP
+  and work orders.** Measured for issue and delivery (both blocked, above);
+  guards read at `MaterialIssueService:96-97`, `PickingListService:132-133`,
+  `StockMovementService::reserve()` `:386-397`, `MrpEngineService:867-868`,
+  `WorkOrderService:955-956,1063-1064`. (The *write* side is the hole — M054-R1.)
+- **Restore route / soft-delete invariants: N/A, correctly.** `MaterialReviewRecord`
+  has no `SoftDeletes` and no restore or destroy route, so the five-module
+  `withTrashed()` defect cannot exist here. There is also **no MRB export**, so
+  the archived-row-in-export invariant has no surface.
+- **No dead surfaces in either direction.** All six routes have an SPA client
+  method (`spa/src/api/inventory/mrb.ts:25-40+`); both pages are routed
+  (`spa/src/routes/inventoryRoutes.tsx:109-112`) and reachable from the sidebar
+  (`Sidebar.tsx:337-342`). The only documentation gap is `USER-MANUAL.md`
+  (M054-R9.4).
