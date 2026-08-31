@@ -178,17 +178,18 @@ No source fix was applied. The recommended work is predominantly separate-sessio
 
 ---
 
-# Re-audit — 2026-09-01 (session 4) — IN PROGRESS
+# Re-audit — 2026-09-01 (session 4) — COMPLETE
 
-Status: 🔁 in progress. Scope: verify every fix claimed in the 2026-08-25 plan-execution
-session by runtime probe against real PostgreSQL rows (that session self-flagged all
-feature tests as blocked at `SQLSTATE[08006]` with 0 assertions, so nothing in it was
-ever executed). Then walk the closing arc of the IATF loop: inspection fail -> NCR ->
-disposition consequences -> replacement WO -> Pareto, plus CAPA SLA/effectiveness,
-the full NCR transition matrix, immutability after closure, numbering/concurrency,
-validation family, permissions, HashID leakage, and dead surfaces.
+Status: ✅ Partially Fixed (3 contained fixes verified; 9 items IATF-gated or cross-module).
+Scope: verify every fix claimed in the 2026-08-25 plan-execution session by runtime probe
+against real PostgreSQL rows (that session self-flagged all feature tests as blocked at
+`SQLSTATE[08006]` with 0 assertions, so nothing in it was ever executed). Then walk the closing
+arc of the IATF loop: inspection fail -> NCR -> disposition consequences -> replacement WO ->
+Pareto, plus CAPA SLA/effectiveness, the full NCR transition matrix, immutability after closure,
+numbering/concurrency, validation family, permissions, HashID leakage, and dead surfaces.
 
-Findings are appended below as they are measured.
+Outcome in one line: **the loop closes and the prior session's work is real, but a disposition
+has no material consequence and a closed NCR is not a record — it is a mutable row.**
 
 ## Baseline (real, measured 2026-09-01)
 
