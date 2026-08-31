@@ -173,3 +173,36 @@ Evidence limits:
 ## Next action
 
 Start with the separate implementation tranche in `action-plan.md`: agree the authoritative PO → shipment → customs evidence → GRN/AP contract, then implement and test the lifecycle gate, supplier evidence convergence, and landed-cost accounting path before adding UI polish.
+
+---
+
+# M043 — import-shipments-customs RE-AUDIT (2026-09-01)
+
+Session: re-audit of the 2026-08-25 `📋 Plan Ready` session (RECLAIMED, 153h orphan lock).
+Status: IN PROGRESS — skeleton committed before probing.
+
+Owned this session: `api/app/Modules/SupplyChain/`.
+Read-only (LIVE under other agents): `api/app/Modules/Inventory/`, `api/app/Modules/Quality/`.
+
+## Plan
+
+1. Prior-work assessment — verify each of M043-F001..F008 by probe, not by reading the log.
+2. Numeric baseline (tests + assertions + exit code) on a private database.
+3. HTTP-layer coverage inventory: which shipment/document/container/landed-cost endpoints
+   have HTTP-level tests vs service-only, then hit the uncovered ones.
+4. Landed-cost apportionment invariants (exact-sum, basis, divide-by-zero, figure reaching GRN).
+5. Currency / FX handling (or documented absence).
+6. Document-completeness gate before clearance / receipt; swallowed-handoff asymmetry.
+7. Scheduled commands touching shipments — exit codes and counters.
+8. Full status transition matrix; immutability after clearance/receipt (incl. `pg_trigger`).
+9. Attachments: real-bytes MIME, random filename, outside web root, traversal, over-length name,
+   orphan-on-archive.
+10. Soft-deleted PO/vendor/item/shipment across aggregates, lists, exports.
+11. Money FormRequest probes (`1.999`/`1e3`/`1e17`/`1e20`/`10.00005`/`-1`/`0`).
+12. `impex_officer` end-to-end import; permission gate per endpoint; raw-id-free error bodies.
+13. Dead surfaces both directions vs `docs/USER-MANUAL.md`, `docs/PROCESS-FLOWS.md`.
+
+## Findings
+
+(populated below as measured)
+
