@@ -623,12 +623,20 @@ class ComprehensiveDemoSeeder extends Seeder
 
         $now = Carbon::now();
         for ($i = 0; $i < 3; $i++) {
+            // Insert as `draft`, add the lines, then post — the same order
+            // JournalEntryService uses. Seeding `posted` up front and adding
+            // lines afterwards is refused by the `journal_entry_lines_immutable`
+            // trigger (`2026_08_25_100000_harden_journal_immutability`), which
+            // rejects any line INSERT whose parent is already posted. That broke
+            // `migrate:fresh --seed` outright with SQLSTATE[P0001]. The entries
+            // trigger only constrains rows that are ALREADY posted, so the
+            // draft → posted update below is permitted.
             $entryId = DB::table('journal_entries')->insertGetId([
                 'entry_number' => 'JE-' . $now->format('Ymd') . '-' . str_pad((string)($i + 1), 4, '0', STR_PAD_LEFT),
                 'date'         => $now->copy()->subDays(10 - $i * 3)->toDateString(),
                 'total_debit'  => 50000 + $i * 10000,
                 'total_credit' => 50000 + $i * 10000,
-                'status'       => 'posted',
+                'status'       => 'draft',
             ]);
 
             DB::table('journal_entry_lines')->insert([
@@ -645,6 +653,8 @@ class ComprehensiveDemoSeeder extends Seeder
                 'debit'            => 0,
                 'credit'           => 50000 + $i * 10000,
             ]);
+
+            DB::table('journal_entries')->where('id', $entryId)->update(['status' => 'posted']);
         }
 
         $this->command?->info('[JEs] Created 3 demo journal entries.');
