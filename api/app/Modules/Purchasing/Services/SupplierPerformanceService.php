@@ -37,7 +37,24 @@ use Illuminate\Support\Facades\Log;
 class SupplierPerformanceService
 {
     public const MIN_PERIOD_YEAR = 2000;
+
     public const MAX_PERIOD_YEAR = 2100;
+
+    /**
+     * `lead_time_variance_days` is `numeric(5,2)`, so the widest value the
+     * column can hold is ±999.99. The variance is computed from two dates that
+     * the API does not constrain relative to the PO date (see the comment in
+     * leadTimeVarianceDays()), so a mis-keyed expected date could previously
+     * push the average past that domain and abort the whole computation with
+     * `SQLSTATE[22003] numeric field overflow`.
+     *
+     * Clamping is score-neutral, not a policy change: the composite scores this
+     * metric as max(0, 100 - |variance| × lead_time_penalty_factor), so with any
+     * penalty factor >= 5 every variance beyond 20 days already floors that
+     * component at 0. Clamping only affects the number that is displayed, and
+     * only for variances that are already far outside any operational range.
+     */
+    private const MAX_LEAD_TIME_VARIANCE_DAYS = 999.99;
 
     public function __construct(private readonly SettingsService $settings) {}
 
@@ -57,8 +74,12 @@ class SupplierPerformanceService
             $price     = $this->priceVariancePct($vendor->id, $start, $end);
             $leadTime  = $this->leadTimeVarianceDays($vendor->id, $start, $end);
 
+            // Archived purchase orders must not feed a live scorecard. Every
+            // reach into purchase_orders here is a raw DB::table() query, which
+            // does NOT apply PurchaseOrder's SoftDeletes global scope.
             $poCount  = (int) DB::table('purchase_orders')
                 ->where('vendor_id', $vendor->id)
+                ->whereNull('deleted_at')
                 ->whereBetween('date', [$start, $end])
                 ->count();
             $grnCount = (int) DB::table('goods_receipt_notes')
@@ -221,6 +242,11 @@ class SupplierPerformanceService
             ->select('supplier_performance_snapshots.*')
             ->leftJoin('vendors', 'supplier_performance_snapshots.vendor_id', '=', 'vendors.id')
             ->with('vendor:id,name')
+            // The join is raw SQL and does not apply Vendor's SoftDeletes scope,
+            // but the eager load above does — so without this guard an archived
+            // vendor kept its ranking slot (and its ORDER BY vendors.name key)
+            // while the response rendered it with a null id and a null name.
+            ->whereNull('vendors.deleted_at')
             ->where('period_year', $year)
             ->where('period_month', $month);
 
@@ -258,7 +284,13 @@ class SupplierPerformanceService
     private function onTimeDeliveryRate(int $vendorId, Carbon $start, Carbon $end): ?float
     {
         $rows = DB::table('goods_receipt_notes as g')
-            ->leftJoin('purchase_orders as po', 'g.purchase_order_id', '=', 'po.id')
+            // The deleted_at guard belongs in the JOIN, not the WHERE: an
+            // archived PO must read as "no promised date" (and so drop out of
+            // both sides of the ratio), not eliminate its receipt row outright.
+            ->leftJoin('purchase_orders as po', function ($join) {
+                $join->on('g.purchase_order_id', '=', 'po.id')
+                    ->whereNull('po.deleted_at');
+            })
             ->select(['g.received_date', 'po.expected_delivery_date'])
             ->where('g.vendor_id', $vendorId)
             ->whereBetween('g.received_date', [$start, $end])
@@ -381,6 +413,11 @@ class SupplierPerformanceService
                 DB::raw('SUM(poi.quantity_received) as recv'),
             ])
             ->where('po.vendor_id', $vendorId)
+            // Both tables are soft-deleting and both are reached raw, so neither
+            // global scope applies. An archived PO or line would otherwise
+            // contribute ordered quantity it can never receive against.
+            ->whereNull('po.deleted_at')
+            ->whereNull('poi.deleted_at')
             ->whereBetween('po.date', [$start, $end])
             ->first();
 
@@ -394,7 +431,14 @@ class SupplierPerformanceService
     private function leadTimeVarianceDays(int $vendorId, Carbon $start, Carbon $end): ?float
     {
         $rows = DB::table('goods_receipt_notes as g')
-            ->leftJoin('purchase_orders as po', 'g.purchase_order_id', '=', 'po.id')
+            // Same reasoning as onTimeDeliveryRate(): an archived PO supplies
+            // neither an anchor date nor an expectation, so its receipt is
+            // skipped by the null guard below rather than measured against a
+            // row that no longer exists operationally.
+            ->leftJoin('purchase_orders as po', function ($join) {
+                $join->on('g.purchase_order_id', '=', 'po.id')
+                    ->whereNull('po.deleted_at');
+            })
             ->select(['g.received_date', 'po.date as po_date', 'po.expected_delivery_date'])
             ->where('g.vendor_id', $vendorId)
             ->whereBetween('g.received_date', [$start, $end])
@@ -419,6 +463,18 @@ class SupplierPerformanceService
 
         if (empty($diffs)) return null;
         $avg = array_sum($diffs) / count($diffs);
+
+        // Keep the average inside the column's domain so one mis-keyed date
+        // cannot abort the vendor's entire snapshot with a numeric overflow.
+        if (abs($avg) > self::MAX_LEAD_TIME_VARIANCE_DAYS) {
+            Log::warning('Supplier lead-time variance clamped to the storable range.', [
+                'vendor_id' => $vendorId,
+                'computed_days' => $avg,
+                'clamped_to' => $avg < 0 ? -self::MAX_LEAD_TIME_VARIANCE_DAYS : self::MAX_LEAD_TIME_VARIANCE_DAYS,
+            ]);
+            $avg = $avg < 0 ? -self::MAX_LEAD_TIME_VARIANCE_DAYS : self::MAX_LEAD_TIME_VARIANCE_DAYS;
+        }
+
         return round($avg, 2);
     }
 
