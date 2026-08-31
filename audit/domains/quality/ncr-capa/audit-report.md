@@ -189,3 +189,244 @@ the full NCR transition matrix, immutability after closure, numbering/concurrenc
 validation family, permissions, HashID leakage, and dead surfaces.
 
 Findings are appended below as they are measured.
+
+## Baseline (real, measured 2026-09-01)
+
+Own database `ogami_test_ncr`; container-relative paths.
+
+| run | tests | assertions | exit |
+|---|---|---|---|
+| `NcrEscalationTest NcrCapaEffectivenessTest NcrRecurrenceTest Unit/NcrEffectivenessStateMachineTest` | 21 passed | 29 | 0 |
+| `InspectionNcrTest NcrAutoReworkWoTest NcrCloseCancelRaceTest NcrCloseRequiresActionsTest NcrDoubleCloseRaceTest NcrSetDispositionRaceTest QualityAnalyticsBoundaryTest` | 31 passed | 92 | 0 |
+| **total** | **52 passed** | **121** | **0** |
+
+## Prior-session assessment
+
+The 2026-08-25 plan-execution session **did real work and its log is honest**: it wrote
+`0478_harden_ncr_capa_contracts`, the escalation delivery ledger, the CAPA state machine,
+the recurrence signature/job, and the SPA CAPA surfaces — and it stated plainly that every
+feature test stopped at `SQLSTATE[08006]` with 0 assertions. On first real execution
+**all 52 tests pass.** This is the `supplier-performance` outcome, not the
+`separation-final-pay` one.
+
+Of the 16 prior findings F-001…F-016, **15 no longer reproduce** (verified by probe, not by
+reading the log — see the invariant table). **F-013 still reproduces** and is now measured
+precisely rather than described (see N-002).
+
+## Findings — re-audit 2026-09-01
+
+### N-001 — `ncr:escalate` cannot tell "nothing to do" from "everything threw"
+
+Classification: **Broken** · Priority: P1 · Scope: small · **same-session-ok**
+
+`NcrEscalationService::run()`
+(`api/app/Modules/Quality/Services/NcrEscalationService.php:39-58`) counts only NCRs whose
+tier was *advanced*. `advanceOne()` returns `false` for three different things —
+not-yet-due, already-delivered, and **`catch (Throwable)` at :179-230** — and
+`RunNcrEscalations::handle()` (`api/app/Console/Commands/RunNcrEscalations.php:19-24`)
+prints that one number and always returns `self::SUCCESS`.
+
+Measured: three overdue critical NCRs, notification transport bound to throw.
+`run()` returned `0`; the command printed exactly `NCR escalation completed: 0 advanced.`
+and exited **0** — byte-identical to an idle run. Every 15 minutes, forever.
+This is the shape CLAUDE.md documents for the 8D SLA ledger.
+
+Mitigating (and materially better than 8D): the durable ledger **did** record the failure —
+`ncr_escalation_deliveries` held three rows `status=pending, attempts=1,
+last_error="probe: notification transport is down"`. The data is there; the operator-facing
+signal is not. Also unlike 8D, the failure-recorder's own `catch (Throwable) → Log::error`
+at `:215-221` was never exercised because the table exists (`0478:66-84`) and the model's
+inferred table name `ncr_escalation_deliveries` matches it — the 8D `42P01` failure mode
+does **not** reproduce here.
+
+### N-002 — escalation tier 2 targets a role that cannot clear the escalation (F-013, still open)
+
+Classification: **Incomplete** · Priority: P1 · Scope: small but **IATF/RBAC decision** ·
+**separate-recommended**
+
+`0366_seed_ncr_escalation_roles.php:13` sets the tiers to
+`['qc_inspector', 'production_manager', 'system_admin']`. The escalation clears only when a
+**Corrective** action exists (`NcrEscalationService.php:44-48,246-248`), and adding one
+requires `quality.ncr.manage` (`api/app/Modules/Quality/routes.php:128-129`).
+`RolePermissionSeeder.php:577` grants `production_manager` only
+`quality.view, quality.inspections.view, quality.ncr.view`.
+
+So tier 2 of 3 notifies a role that can read the NCR and can do nothing about it. Tier 1
+(`qc_inspector`) and tier 3 (`system_admin`) hold `quality.ncr.manage` and are actionable.
+Either widen `production_manager` or retarget tier 2 — a human decision, not mine.
+
+### N-003 — a closed NCR is fully mutable and hard-deletable, with zero triggers
+
+Classification: **Missing** · Priority: P1 · Scope: medium · **separate-recommended**
+
+`NonConformanceReport` (`api/app/Modules/Quality/Models/NonConformanceReport.php:25-48`)
+has **no `SoftDeletes`** and there is **no observer and no PostgreSQL trigger** on either
+`non_conformance_reports` or `ncr_actions`. Measured against a closed NCR:
+
+- `forceFill(['status' => 'open', 'defect_description' => 'rewritten'])->save()` → **mutated**
+- raw `update … set status='open', ncr_number='HACKED'` → **mutated**
+- `->delete()` → **row gone**
+- `select tgname from pg_trigger …` → `[]` for both tables
+
+Not reachable over HTTP: there is no `PATCH /quality/ncrs/{ncr}` and no `DELETE` route at
+all (12 registered `quality/ncrs` routes enumerated, none `DELETE`). So this is a missing
+record-integrity control on an IATF record, not a live exploit. Precedent: `journal-ledger`
+pairs an observer with a `P0001` trigger; a prior quality session found completed
+inspections in the same state.
+
+**Hazard for whoever implements it — do not naively key a trigger on `OLD.status`.**
+`NcrService::close()` writes the row **twice**: `:312-316` flips status to `closed`, then
+`:334` / `:355` writes `replacement_work_order_id` / `rework_work_order_id` in a second
+`save()` where `OLD.status` is *already* `closed`. `EffectivenessService` also legitimately
+writes `effectiveness_status` / `effectiveness_closed_at` to a closed NCR
+(`EffectivenessService.php:167-172`) and `effectiveness_*` / `verified_*` /
+`next_effectiveness_check_at` to its actions (`:112-120`). Any freeze needs a per-column
+allow-list, or it breaks the CAPA loop that currently works.
+
+### N-004 — an NCR disposition has no material consequence
+
+Classification: **Missing** · Priority: P1 · Scope: large · **separate-recommended**
+(cross-module + IATF-auditable)
+
+`NcrService::close()` (`:304-369`) produces exactly two effects: a work order (scrap/rework,
+outgoing stage only) and a role notification (return-to-supplier). Measured on a `scrap`
+close of a 40-piece outgoing NCR: `stock_movements` 0 → 0, `material_review_records` 0 → 0,
+`replacement_work_order_id` set. **Scrap removes no stock**, so the question of reversibility
+does not arise — nothing happened to reverse.
+
+The stock mechanism exists, in Inventory, and it already speaks this module's enum:
+`QuarantineService::release()` (`api/app/Modules/Inventory/Services/QuarantineService.php:289-390`)
+switches on `NcrDisposition::{Rework,UseAsIs,Scrap,ReturnToSupplier}` and emits
+`Transfer` / `Scrap` / `ReturnToVendor` stock movements. `material_review_records.ncr_id`
+is **nullable** (`QuarantineService.php:172,228`). Nothing reconciles the two dispositions,
+so an MRB can be released `use_as_is` while its linked NCR says `scrap`, and an NCR
+disposition set with no MRB moves nothing at all.
+
+**Question for a human:** is the NCR disposition meant to drive the MRB release, or are the
+two registers deliberately independent with the MRB as the sole stock authority? Reported,
+not touched — Inventory belongs to another session and changing a disposition's consequences
+is explicitly an IATF-auditable decision.
+
+### N-005 — `use_as_is` records no concession and no grantor; `return_to_supplier` names no vendor
+
+Classification: **Missing** · Priority: P1 · Scope: medium · **separate-recommended**
+
+`non_conformance_reports` has 28 columns and **none** matching `concession|approv|grant`
+and **none** matching `vendor|supplier` (enumerated from `information_schema.columns`).
+Measured: an NCR closes on `use_as_is` with no additional approval step and no record of who
+granted the concession — an IATF-auditable act with no auditable trace.
+
+`return_to_supplier` (`NcrService.php:360-361,430-453`) sends a role-targeted notification
+whose body names the NCR and quantity but **not the supplier**, because the NCR cannot
+reference one. Nothing reaches supplier performance. For an incoming-QC NCR the vendor is
+derivable (inspection → GRN → PO → vendor) and no code derives it.
+
+### N-006 — a CAPA loop closes as "Effective" when every verdict was "Not Applicable"
+
+Classification: **Incomplete** · Priority: P2 · Scope: small but **IATF decision** ·
+**separate-recommended**
+
+`NcrEffectivenessStateMachine::TRANSITIONS`
+(`api/app/Modules/Quality/Support/NcrEffectivenessStateMachine.php:20-25`) allows
+`pending_verification → not_applicable`, and `EffectivenessService::updateNcrEffectiveness()`
+(`:143-172`) counts `NotApplicable` as verified and rolls up to `Effective` unless something
+is `Ineffective`. Measured: both CAPA actions verified `not_applicable` with the note `n/a`
+→ NCR `effectiveness_status = effective`, `effectiveness_closed_at` set.
+
+The only evidence gate is a non-empty `effectiveness_notes` string
+(`EffectivenessService.php:83-86`); `ncr_actions` has **no attachment or evidence-reference
+column** (17 columns enumerated). Same class as the CoC that could be issued with zero
+measurement rows. What counts as effectiveness evidence is an IATF-auditable decision — flagged,
+not changed.
+
+### N-007 — the causer can disposition, close, and verify its own NCR
+
+Classification: **Incomplete** · Priority: P2 · Scope: small but **IATF decision** ·
+**separate-recommended**
+
+Measured with one `qc_inspector`: the same user created the NCR, set its disposition,
+recorded both the Corrective and Preventive action, closed it (`created_by == closed_by`),
+and then recorded the CAPA effectiveness verdict on its own corrective action
+(`performed_by == verified_by`). No separation-of-duty check exists in
+`NcrService::close()` (`:282-370`) or `EffectivenessService::verifyAction()` (`:77-126`).
+`qc_inspector` holds the whole Quality module (`RolePermissionSeeder.php:682-696`,
+`$this->module('quality')`), and tier 1 of the SLA escalation escalates *to the same role*.
+Self-absolution is the IATF-relevant form of self-approval. Who may close an NCR is
+explicitly a human decision.
+
+### N-008 — `PATCH /quality/ncr-templates/{id}/restore` lacks `->withTrashed()`
+
+Classification: **Broken** · Priority: P2 · Scope: small · **same-session-ok**
+
+`api/app/Modules/Quality/routes.php:106-107` registers the restore route with no
+`->withTrashed()`, while `NcrTemplate` **does** use `SoftDeletes`
+(`api/app/Modules/Quality/Models/NcrTemplate.php:14,25`). Compare the correct
+inspection-spec restore two blocks up at `routes.php:55-57`, which has it. Route-model
+binding therefore cannot resolve a trashed template — the fourth-plus instance of the
+pattern four other modules shipped. (Runtime confirmation deferred to the second probe pass;
+first attempt failed on my own fixture, not on the route — `ncr_templates.source` is NOT NULL.)
+
+### N-009 — the Pareto drill-down row-mapping branch had zero coverage (but works)
+
+Classification: **Polish** · Priority: P3 · Scope: small · **same-session-ok**
+
+`DefectParetoService::inspectionsWithDefect()` has exactly one test caller,
+`api/tests/Feature/Quality/QualityAnalyticsBoundaryTest.php:53`, which asserts
+`assertSame([], $drill)` — the **empty case only**. Lines `:172-185` (the hashid encoding
+and the `product` sub-array) had never executed in any test, while the SPA calls the
+endpoint from `spa/src/pages/quality/dashboard.tsx:46`. Exactly the calibration-analytics
+precedent.
+
+**Refuted as a defect, kept as a coverage gap.** Probed with real rows, the branch is
+correct: 3 defects → `Burr` 2 / 66.67%, `Short shot` 1 / 33.33%, cumulative 100; the
+drill-down returned one row with HashID ids for both the inspection and the product and no
+raw integers. No `42803`.
+
+## Refuted / verified-good (do not inherit these as findings)
+
+- **No `SQLSTATE[42803]` anywhere.** Every aggregate over `NonConformanceReport::actions()`
+  already calls `->reorder()` inside the closure: `NcrService.php:292`,
+  `NcrEscalationService.php:46`, `EffectivenessService.php:51,135`. Pareto aggregates over
+  `inspection_measurements` via the query builder and never touches the relation.
+- **Empty-period divide-by-zero is honest.** `inspectionSummary` returns `pass_rate: null`
+  (`DefectParetoService.php:53`, comment says so out loud) and `run()` returns
+  `total_defects: 0, rows: []`.
+- **Archived-row divergence does not apply.** `NonConformanceReport`, `NcrAction`,
+  `Inspection` and `InspectionMeasurement` all lack `SoftDeletes`, so there is no trashed
+  row for an aggregate to disagree about. `products` *is* soft-deletable and neither
+  `run()` nor `inspectionsWithDefect()` filters it — **consistently**, in both aggregates,
+  which is the correct outcome (a defect that happened still happened).
+- **The validation family does not reproduce.** `affected_quantity` is
+  `integer|min:0|max:1000000` (`CreateNcrRequest.php:42`). Probed `1.999`, `1e3`, `1e17`,
+  `1e20`, `10.00005`, `-1` → six clean 422s, zero 500s. There is no money column in this
+  module. `analytics/defect-pareto?from=0000-01-01` → clean 422; `from=9999-12-31` → 200
+  with empty rows. `per_page=0`, `status=bogus`, `product_id=999999` → one 422 naming all
+  three fields.
+- **No raw-integer-id oracle.** 13 error/edge bodies probed (422 validation, 422
+  `BusinessRuleException`, 207 partial bulk-close, 200 analytics); the regex
+  `"(id|ncr_id|product_id|inspection_id|user_id)":\d+` matched **none**. `bulk-close` echoes
+  a rejected raw `"30"` back as the caller's own input string with `"Invalid ID."`, which is
+  not a leak.
+- **Numbering is correct.** `document_sequences` starts with **no** `ncr` row and creates it
+  lazily on first `generate('ncr')`; two sequential calls produced
+  `NCR-202609-0001` / `NCR-202609-0002` against a single row keyed
+  `(document_type=ncr, year=2026, month=9)`. The work-orders session's "no row at all"
+  observation is the pre-generation state, not a defect. The `23505` race lives in
+  `DocumentSequenceService` — **`Common` scope, not fixed here.**
+- **The 8D `42P01` dead-ledger failure mode does not reproduce.** All three new models omit
+  `$table` and their inferred names match the migration exactly:
+  `NcrEscalationDelivery`→`ncr_escalation_deliveries`,
+  `NcrEffectivenessNotification`→`ncr_effectiveness_notifications`,
+  `NcrRecurrenceScan`→`ncr_recurrence_scans` (`0478:48,66,87`).
+- **`ncr:check-effectiveness` *does* surface failures.** With the notification transport
+  bound to throw, `notifyOverdueChecks()` let the `RuntimeException` propagate, so the
+  command exits non-zero. Only `ncr:escalate` has the N-001 defect.
+- **The loop closes end to end.** Failed outgoing inspection → `openFromInspectionFailure`
+  → NCR `source=inspection_fail`, `severity=high`, `defect_signature` populated →
+  `rework` disposition + close → `rework_work_order_id` created → both defects visible in
+  Pareto. Measured in one transaction chain, no swallowed link.
+- **The full transition matrix is sound.** 20 cells (4 statuses × 5 operations) walked; all
+  four operations refuse from `closed` and `cancelled`, and `verifyAction` refuses from
+  `open`, `in_progress`, `cancelled`, and from a `closed` NCR whose action was never
+  scheduled ("Unscheduled"). No `resume()`-style backdoor found — there is no second
+  entry point to any transition.
