@@ -19,6 +19,7 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Services\InvoiceService;
 use App\Modules\Auth\Models\User;
+use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\CRM\Services\SalesOrderService;
@@ -632,6 +633,24 @@ class DeliveryService
     {
         if ($requestedByItem === []) {
             throw new BusinessRuleException('At least one delivery item is required.');
+        }
+
+        // M044 — create() and the outgoing-QC auto-draft listener both lock the
+        // sales order and both land here, but neither ever read its STATUS, so a
+        // cancelled order still accepted new deliveries: the quantity ledger only
+        // asks whether the ordered quantity is still uncommitted, and cancelling
+        // an order does not release it. A shipment against a cancelled order
+        // reaches confirm(), which raises a customer invoice — goods and a bill
+        // for an order the customer already withdrew. This is the one seam both
+        // creation paths share, which is why the gate belongs here and not in
+        // create() alone.
+        $soStatus = $so->status instanceof SalesOrderStatus
+            ? $so->status
+            : SalesOrderStatus::tryFrom((string) $so->status);
+        if ($soStatus === SalesOrderStatus::Cancelled) {
+            throw new BusinessRuleException(
+                "Sales order {$so->so_number} is cancelled; no further deliveries can be scheduled against it."
+            );
         }
 
         $itemIds = array_values(array_unique(array_map('intval', array_keys($requestedByItem))));

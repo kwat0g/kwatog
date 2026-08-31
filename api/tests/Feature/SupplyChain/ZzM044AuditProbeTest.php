@@ -8,6 +8,7 @@ use App\Modules\Accounting\Models\Customer;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
@@ -234,10 +235,11 @@ class ZzM044AuditProbeTest extends TestCase
         ], $ctx['officer']));
 
         fwrite(STDERR, "\n[M044 cancelled-SO create] {$result}\n");
-        // MEASURED DEFECT (M044-F011): create() locks the sales order but never
-        // reads its status, so a cancelled order still accepts new deliveries.
-        $this->assertSame('OK', $result,
-            'PROBE: a delivery IS creatable against a cancelled sales order — no status gate.');
+        // M044-F011, FIXED this session: the gate lives in
+        // assertDeliveryQuantitiesAvailable(), the one seam the manual create
+        // path and the outgoing-QC auto-draft listener both pass through.
+        $this->assertStringContainsString('is cancelled', $result,
+            'A delivery must not be creatable against a cancelled sales order.');
     }
 
     // ── P7. Upload hardening — real UploadedFile, content-sniffed MIME ────────
@@ -318,8 +320,10 @@ class ZzM044AuditProbeTest extends TestCase
         );
         $header = $response->headers->get('Content-Disposition');
         fwrite(STDERR, "\n[M044 disposition] ".var_export($header, true)."\n");
-        $this->assertSame('inline; filename="a".jpg"', $header,
-            'PROBE: the internal proof stream interpolates the client name unescaped.');
+        // M044-F010, FIXED this session: the quote is stripped from the ASCII
+        // parameter and the real name is carried in filename* instead.
+        $this->assertSame('inline; filename="a.jpg"; filename*=UTF-8\'\'a.jpg', $header,
+            'The proof stream must not let a client filename forge the header.');
     }
 
     // ── P8. Files after a delivery is archived ───────────────────────────────
@@ -441,20 +445,20 @@ class ZzM044AuditProbeTest extends TestCase
         $proof = DeliveryProof::query()->where('delivery_id', $ctx['delivery']->id)->firstOrFail();
 
         $endpoints = [
-            'GET  deliveries'          => ['get',   '/api/v1/supply-chain/deliveries'],
-            'GET  deliveries/options'  => ['get',   '/api/v1/supply-chain/deliveries/options'],
-            'GET  delivery detail'     => ['get',   "/api/v1/supply-chain/deliveries/{$hash}"],
-            'GET  inspection-options'  => ['get',   '/api/v1/supply-chain/deliveries/inspection-options?sales_order_id='.$ctx['so']->hash_id],
-            'GET  driver-options'      => ['get',   '/api/v1/supply-chain/deliveries/driver-options'],
-            'GET  proofs/options'      => ['get',   '/api/v1/supply-chain/deliveries/proofs/options'],
-            'GET  proofs index'        => ['get',   "/api/v1/supply-chain/deliveries/{$hash}/proofs"],
-            'GET  proof view'          => ['get',   "/api/v1/supply-chain/deliveries/{$hash}/proofs/{$proof->hash_id}/view"],
-            'GET  receipt-photo'       => ['get',   "/api/v1/supply-chain/deliveries/{$hash}/receipt-photo"],
-            'POST confirm'             => ['post',  "/api/v1/supply-chain/deliveries/{$hash}/confirm"],
-            'PATCH status'             => ['patch', "/api/v1/supply-chain/deliveries/{$hash}/status"],
-            'PATCH assignment'         => ['patch', "/api/v1/supply-chain/deliveries/{$hash}/assignment"],
-            'GET  vehicles'            => ['get',   '/api/v1/supply-chain/vehicles'],
-            'POST vehicles'            => ['post',  '/api/v1/supply-chain/vehicles'],
+            'GET  deliveries' => ['get',   '/api/v1/supply-chain/deliveries'],
+            'GET  deliveries/options' => ['get',   '/api/v1/supply-chain/deliveries/options'],
+            'GET  delivery detail' => ['get',   "/api/v1/supply-chain/deliveries/{$hash}"],
+            'GET  inspection-options' => ['get',   '/api/v1/supply-chain/deliveries/inspection-options?sales_order_id='.$ctx['so']->hash_id],
+            'GET  driver-options' => ['get',   '/api/v1/supply-chain/deliveries/driver-options'],
+            'GET  proofs/options' => ['get',   '/api/v1/supply-chain/deliveries/proofs/options'],
+            'GET  proofs index' => ['get',   "/api/v1/supply-chain/deliveries/{$hash}/proofs"],
+            'GET  proof view' => ['get',   "/api/v1/supply-chain/deliveries/{$hash}/proofs/{$proof->hash_id}/view"],
+            'GET  receipt-photo' => ['get',   "/api/v1/supply-chain/deliveries/{$hash}/receipt-photo"],
+            'POST confirm' => ['post',  "/api/v1/supply-chain/deliveries/{$hash}/confirm"],
+            'PATCH status' => ['patch', "/api/v1/supply-chain/deliveries/{$hash}/status"],
+            'PATCH assignment' => ['patch', "/api/v1/supply-chain/deliveries/{$hash}/assignment"],
+            'GET  vehicles' => ['get',   '/api/v1/supply-chain/vehicles'],
+            'POST vehicles' => ['post',  '/api/v1/supply-chain/vehicles'],
         ];
 
         $matrix = [];
@@ -610,9 +614,9 @@ class ZzM044AuditProbeTest extends TestCase
             'PROBE: the portal exposes no delivery confirmation route.');
     }
 
-    private function portalUser(int $customerId): \App\Modules\B2B\Models\CustomerPortalUser
+    private function portalUser(int $customerId): CustomerPortalUser
     {
-        return \App\Modules\B2B\Models\CustomerPortalUser::create([
+        return CustomerPortalUser::create([
             'customer_id' => $customerId,
             'name' => 'Portal '.uniqid(),
             'email' => 'portal'.substr(uniqid(), -8).'@example.test',

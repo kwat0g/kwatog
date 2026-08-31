@@ -107,10 +107,39 @@ class DeliveryProofController
             [
                 'Content-Type' => $mime,
                 'Cache-Control' => 'private, no-store, max-age=0',
-                'Content-Disposition' => $isImage
-                    ? sprintf('inline; filename="%s"', $proof->file_name)
-                    : sprintf('attachment; filename="%s"', $proof->file_name),
+                'Content-Disposition' => self::contentDisposition(
+                    $isImage ? 'inline' : 'attachment',
+                    (string) $proof->file_name,
+                ),
             ],
+        );
+    }
+
+    /**
+     * M044 — `file_name` is the client's original upload name, stored verbatim.
+     * Interpolating it straight into the header let a name containing a double
+     * quote terminate the `filename` parameter early (measured:
+     * `inline; filename="a".jpg"`), which forges the rest of the header value.
+     * Build an RFC 6266 disposition instead: a sanitised ASCII `filename` for
+     * old clients plus a percent-encoded UTF-8 `filename*` for the real name.
+     *
+     * The character class is written with hex escapes and a doubled backslash on
+     * purpose — the obvious `/[\r\n"\\]/` collapses to `[\r\n"\]` in a
+     * single-quoted PHP string, PCRE reads `\]` as a literal `]`, the class never
+     * closes, preg_replace() returns null, and every download becomes a 500.
+     * The customer portal stream paid for that lesson already.
+     */
+    private static function contentDisposition(string $type, string $name): string
+    {
+        $name = basename($name);
+        $name = preg_replace('/[\x00-\x1f\x7f"\\\\]/', '', $name) ?: 'delivery-proof';
+        $ascii = preg_replace('/[^A-Za-z0-9._-]/', '_', $name) ?: 'delivery-proof';
+
+        return sprintf(
+            '%s; filename="%s"; filename*=UTF-8\'\'%s',
+            $type,
+            $ascii,
+            rawurlencode($name),
         );
     }
 
@@ -121,21 +150,41 @@ class DeliveryProofController
             throw new RuntimeException('Proof does not belong to this delivery.');
         }
 
-        // Once a delivery has been confirmed, removing the last proof would
-        // leave the confirmation undefensible. Block deletion in that case.
-        $remaining = $delivery->proofs()->where('id', '!=', $proof->id)->count();
-        $status = $delivery->status instanceof \BackedEnum ? $delivery->status->value : $delivery->status;
-        if ($status === 'confirmed' && $remaining === 0) {
-            return response()->json([
-                'message' => 'Cannot delete the only proof of a confirmed delivery.',
-            ], 422);
-        }
+        try {
+            $path = DB::transaction(function () use ($delivery, $proof): string {
+                // M044 — the "is this the last proof" count used to be taken
+                // BEFORE the transaction and without a lock, so two concurrent
+                // deletes against two proofs each saw one proof remaining, each
+                // passed the guard, and both committed: a confirmed delivery
+                // with zero proofs. confirm() already serializes on this row, so
+                // taking the same lock here puts both operations on one queue.
+                $locked = Delivery::query()->lockForUpdate()->find($delivery->id);
+                if (! $locked) {
+                    throw new BusinessRuleException('Delivery not found.');
+                }
 
-        $path = $proof->file_path;
-        DB::transaction(function () use ($proof, $path): void {
-            $proof->delete();
-            DB::afterCommit(fn () => Storage::disk('local')->delete($path));
-        });
+                $target = DeliveryProof::query()->lockForUpdate()->find($proof->id);
+                if (! $target) {
+                    throw new BusinessRuleException('Delivery proof not found.');
+                }
+
+                // Once a delivery has been confirmed, removing the last proof
+                // would leave the confirmation undefensible.
+                $remaining = $locked->proofs()->where('id', '!=', $target->id)->count();
+                $status = $locked->status instanceof \BackedEnum ? $locked->status->value : $locked->status;
+                if ($status === 'confirmed' && $remaining === 0) {
+                    throw new BusinessRuleException('Cannot delete the only proof of a confirmed delivery.');
+                }
+
+                $path = (string) $target->file_path;
+                $target->delete();
+                DB::afterCommit(fn () => Storage::disk('local')->delete($path));
+
+                return $path;
+            });
+        } catch (BusinessRuleException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
 
         return response()->json([], 204);
     }
