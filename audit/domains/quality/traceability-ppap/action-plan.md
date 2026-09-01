@@ -118,3 +118,153 @@ The plan is intentionally conservative: the core items affect lot quantities, li
 7. Frontend polish and complete verification.
 
 Items 1–7 require a dedicated implementation session or coordinated module claims. The current audit session must not modify dependency modules, resolve the open PPAP policy questions by assumption, or mark the module Verified.
+
+---
+
+# M058 action plan — 2026-09-01 re-audit
+
+**Basis:** 19 measured findings. 5 contained items were implemented this session
+(commit `1b5dc582`); the rest are ordered below. The split is deliberate and justified:
+everything fixed was a *missing guard refusing impossible input*, a *validation rule*, or a
+*broken query returning rows it always intended to*. Everything deferred either changes what
+a trace means, changes PPAP approval authority or supersession, or lives in a directory
+another agent owns.
+
+## DONE this session (contained)
+
+| # | Finding | Scope | What |
+|---|---|---|---|
+| ✅ | R1 | small | `whereJsonContains` object→array at both forward-hop call sites |
+| ✅ | R10 (evidence) | small | approved PPAP evidence frozen |
+| ✅ | R3 | small | array query params 422 instead of 500 |
+| ✅ | R14 (update) | small | update route speaks HashIDs; `ppap_level` validated |
+| ✅ | R14 (create) | small | `Rule::enum`; optional refs refused not nulled |
+
+## 1. Repair shipment-lot creation — it has never worked
+
+**Findings:** R7 · **Scope:** small (the bug) / large (the contract) ·
+**Session recommendation:** `separate-recommended` — **SupplyChain owner only**
+
+- `ShipmentLotService.php:41` calls `WorkOrder::decodeHashId()`, which does not exist. Use
+  `WorkOrder::tryDecodeHash()` and 422 on an unresolvable id.
+- Then the contract work the 2026-08-25 plan already specified: per-work-order allocation
+  rather than a bare JSON id list, invoke `DeliveryService`'s locked
+  inspection/output/Sales-Order validation, reject duplicate ids and over-allocation, and
+  define idempotency (the table has `unique(delivery_id)`, so a re-post is currently a
+  unique violation waiting behind the 500).
+- Until this lands, **no shipment lot can be created by any caller**, so the whole
+  batch→customer leg is unreachable in production.
+
+## 2. Make trace links refuse instead of silently erasing
+
+**Findings:** R8, R5 · **Scope:** large · **Session recommendation:** `separate-recommended`
+— **IATF-auditable; needs a human decision first**
+
+Measured: 9 of 11 links silently erase. Ordered by blast radius:
+
+1. `shipment_lots.customer_id` and `.product_id` are `nullOnDelete` — a deleted customer or
+   archived product silently removes it from the trace. Decide: restrict, or soft-delete-aware.
+2. `Delivery` uses `SoftDeletes`, so archiving one drops it from both `search` and
+   `simulateRecall` while they still report success. The trace must either resolve trashed
+   parents (`withTrashed()`) or refuse to answer.
+3. `work_order_ids` / `material_lot_references` are unconstrained JSON with no FK, so a
+   dangling id yields a partial answer with no flag (R5). Either add a real allocation table
+   (folds into item 1) or have the service compare the resolved count against the stored
+   list and mark the result partial.
+4. `Product` / `Item` archive nulls the part and material identity out of an otherwise
+   successful trace.
+5. Depends on the open question: **is archival recoverable or permanent?** No restore route
+   exists in this module today.
+
+## 3. PPAP element matrix, evidence boundary, and a way to add an element at all
+
+**Findings:** R9.1, R9.2, R16 · **Scope:** large · **Session recommendation:** `separate-recommended`
+— blocked on open questions 1 and 2
+
+- **There is no create-element route**, so the 18 AIAG elements are unreachable through the
+  API, not merely unenforced. This is the first thing to build.
+- Then the versioned level→required-element matrix, and enforcement at `submit()`/`approve()`.
+- Replace the free-text `document_path` with a real private upload/download contract:
+  server-side MIME from real bytes, random filename, storage outside the web root,
+  permission-checked serving, and access logging. `B2B` already models the read side
+  correctly (`SupplierPpapElementResource` emits `has_document`, not the path).
+- Add `HasAuditLog` to `PpapElement` — it is the one child table an auditor will demand a
+  history for and the only one without one.
+
+## 4. PPAP lifecycle: terminality, supersession, and segregation of duties
+
+**Findings:** R10 (reject-after-approve), R11, R13 · **Scope:** large ·
+**Session recommendation:** `separate-recommended` — **IATF-auditable**
+
+- Decide whether `approved` is terminal and how an approval is withdrawn (revision vs.
+  reject). `PpapStatus::isTerminal()` currently excludes `Approved`, which is what allows
+  the post-approval reject measured in R13.
+- Prevent two conflicting active approvals for one vendor+item; `revision` exists in the
+  schema and **no code ever writes it**.
+- Require review before approval (`reviewed_by` is NULL on the happy path today) and
+  prevent self-approval. This means splitting `quality.ppap.manage` into
+  submit/review/approve and updating `RolePermissionSeeder` — a role-matrix change, hence
+  a human decision.
+- Decide whether `draft` + `reject` is an intentional "abandon draft" affordance.
+- Walk the matrix again afterwards; 27 of 30 cells are already sound.
+
+## 5. Age the expiry, and stop presenting an expired PPAP as current
+
+**Findings:** R12 · **Scope:** medium · **Session recommendation:** `same-session-ok` for a
+session that owns `routes/console.php`
+
+- `expireOverdue()` has **0 callers**. Add an artisan command + a `Schedule::command` entry
+  that distinguishes "nothing to expire" from "everything threw" and does not exit 0 on the
+  latter.
+- Replace the mass `->update()` with a per-row loop (or an explicit audit write) so the
+  status change is attributable — the builder update fires no model events, so `HasAuditLog`
+  records nothing today.
+- Until then, every list keyed on `status = 'approved'` shows expired approvals labelled
+  "Approved" while the PO gate correctly refuses them. Consider having the list/resource
+  derive an effective status from `expires_at` so the screen and the control agree.
+
+## 6. Ship the missing operator surfaces
+
+**Findings:** R15 · **Scope:** large · **Session recommendation:** `separate-recommended`
+— after items 1–4
+
+- PPAP has **zero SPA presence**: no type, no api module, no page, no route, no nav entry,
+  against 9 internal routes and 1 supplier route.
+- `recall-simulation` has no client either.
+- `spa/src/api/supply-chain/shipmentLots.ts` exists and **nothing imports it**; its
+  `createForDelivery` points at the route from item 1.
+- `docs/USER-MANUAL.md` has **0 mentions** of ppap / traceability / recall.
+
+## 7. Identifier namespace and result semantics
+
+**Findings:** R2, R4 · **Scope:** medium · **Session recommendation:** `separate-recommended`
+
+- `grn_items.material_lot_number` is indexed but not unique; duplicates resolve first-match
+  and silently drop the rest.
+- `batch_number` and `lot_number` share one namespace with no prefix guard — with both set
+  to the same string, batch wins and the shipment-lot leg is unreachable.
+- `simulateRecall` cannot distinguish "unknown identifier" from "received but not yet
+  consumed" (R2); those demand opposite operator actions.
+- Cap result size and preserve per-hop provenance.
+
+## 8. Give the seeders a trace to seed
+
+**Findings:** R19 · **Scope:** medium · **Session recommendation:** `separate-recommended`
+— **`database/seeders/` owner**
+
+- No seeder creates work orders, sales orders or deliveries, so every trace input is empty
+  after a green `migrate:fresh --seed`.
+- `seedBatchNumbers()` must not report "Batch numbers already present." when the table is
+  empty; distinguish "all already stamped" from "nothing to stamp".
+- `seedShipmentLots()` would write `work_order_ids = []` if it ran with no work orders —
+  a lot pointing at nothing. Guard it.
+
+## Recommended execution order
+
+1. Item 1 (shipment-lot creation) — nothing downstream is testable until it works.
+2. Item 8 (seed data) — cheap, and everything after it becomes demonstrable.
+3. Item 5 (expiry ageing) — contained, high signal.
+4. Item 3 (elements + evidence boundary).
+5. Item 4 (lifecycle + SoD) — needs the human decisions.
+6. Item 2 (trace erasure) — needs the archival decision.
+7. Item 7, then item 6 (UI last, once the contracts are stable).
