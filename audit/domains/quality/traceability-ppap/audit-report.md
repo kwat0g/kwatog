@@ -786,4 +786,65 @@ Two prior claims are now **stale and should not be inherited**:
    shipment lots?** Blocks any honest affected-quantity number in recall.
    (Carried over, still open.)
 
-Findings continue below.
+## R19 — [Broken/P1] A green full seed produces ZERO trace inputs, and the seeder reports success
+
+The coordinator flagged `GoldenPathDemoSeeder` printing zero counts and exiting green.
+**Measured** with `migrate:fresh --seed --force` (needs `php -d memory_limit=1G`) on a
+throwaway database, exit **0**:
+
+```
+[Delivery Items] No deliveries or sales order items, skipping.
+...
+Database\Seeders\GoldenPathDemoSeeder ............ RUNNING
+  Batch numbers already present.
+  No batch WO; skipping hero trace.
+  Created 0 shipment lots.
+  Created 0 delivery proofs.
+Golden-path demo seed complete.
+EXIT=0
+```
+
+Row counts in that fully seeded database:
+
+| table | rows |
+|---|---|
+| `work_orders` | **0** |
+| `work_orders` with a `batch_number` | **0** |
+| `deliveries` | **0** |
+| `sales_orders` | **0** |
+| `sales_order_items` | **0** |
+| `shipment_lots` | **0** |
+| `grn_items` with a `material_lot_number` | **0** |
+| `ppap_submissions` | **0** |
+| `inspections` | 3 |
+
+**Every input to the trace is empty after a green seed.** Chain 1 (Order to Cash) has no
+sales orders, no work orders and no deliveries at all, so there is nothing to trace and
+nothing to demo.
+
+The two adjacent log lines are the diagnostic tell, and they contradict each other:
+
+1. `seedBatchNumbers()` (`database/seeders/GoldenPathDemoSeeder.php`) does
+   `WorkOrder::whereNull('batch_number')->get()`; if empty it prints **"Batch numbers
+   already present."** That message is true when every WO already has a batch and
+   **false when there are no work orders at all** — the two cases are indistinguishable,
+   and it is the second one here.
+2. `hardenHeroTrace()` then does `WorkOrder::whereNotNull('batch_number')->first()`, gets
+   null, and warns **"No batch WO; skipping hero trace."** — immediately contradicting the
+   line above it.
+3. `seedShipmentLots()` iterates `Delivery::orderBy('id')->get()`, which is empty, so
+   "Created 0 shipment lots" means *zero deliveries existed*. Note it would also have
+   produced a trace to nowhere if it had run: `$woIds = WorkOrder::pluck('id')` is empty,
+   so `array_slice($woIds, 0, 2)` is `[]` and each lot would be written with
+   `work_order_ids = []`.
+
+Exactly the "nothing to do" vs. "everything was skipped" conflation the 8D SLA ledger
+taught, in a seeder rather than a scheduled command: a zero count plus exit 0 is
+indistinguishable from healthy.
+
+**`database/seeders/` is not my module** — reported, not fixed. The upstream cause is that
+no seeder creates work orders, sales orders or deliveries; `GoldenPathDemoSeeder` is only
+where it becomes visible. This also explains why the running dev database has 0 rows in
+every trace table, and it means **no trace or PPAP screen has ever been seen with data**.
+
+Findings end here for the 2026-09-01 session.
