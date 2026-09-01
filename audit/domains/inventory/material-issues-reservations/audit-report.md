@@ -538,3 +538,100 @@ Confirms prior **M042-F07** as a real inconsistency; magnitude measured below.
   produce a draft. The Draft branch of `cancel()` (`:200-216`) — the only code
   that correctly releases a reservation — is therefore **unreachable through any
   HTTP path**. This sharpens prior M042-F01/F05 rather than refuting them.
+
+## MEASURED — reservation invariant matrix (probe run 1: 10 tests / 14 assertions / exit 0)
+
+Executed against PostgreSQL 16 in `ogami_test_matiss`. Raw probe output quoted verbatim.
+
+### What HOLDS (good news, verified against independent SQL)
+
+| Invariant | Probe | Measured |
+|---|---|---|
+| `available = on_hand − reserved` | reserve 30, issue 10 of 100, then read `stock_levels` with raw SQL, *not* through Eloquent | `qty=90.000 reserved=30.000 avail=60.000` — exact |
+| `reserved ≤ on_hand` | reserve 101 against 100 on hand | refused, `InsufficientStockException` |
+| same, cumulative | reserve 60, then reserve 60 more | second refused; `reserved` stays `60.000` |
+| **stock cannot be issued out from under a reservation** | reserve all 100, then a *plain* issue of 10 with no reservation link | refused — `Insufficient available stock at location 4 for item 4: needed 10, available 0.000` |
+| release floor | `release(999)` against 20 reserved | clamped to `0.000`, never negative |
+| double release | release 999 then release 20 | `0.000`, idempotent |
+| negatives at **every** reserve/release/issue call site | `reserve(-50)`, `release(-999)`, issue `-50` | all three `InvalidMovementException`; `reserved` untouched at `0.000` |
+
+The neighbour's `assertPositiveQuantity()` handoff is verified working, and the
+issue path is covered by it too (`move()`'s own `validateInput()` at
+`StockMovementService.php:276-278`).
+
+### M042-N01 — Broken (P0) — CONFIRMED BY MEASUREMENT: a reservation cannot be drawn against by the issue it exists for
+
+```
+[I5] *** F02 REPRODUCES: a reservation cannot be drawn against.
+     InsufficientStockException — Insufficient available stock at location 5
+     for item 5: needed 10, available 0.000.
+```
+
+Reserve 100 of 100 for a work order, then issue 10 **citing that reservation's
+id**: refused. `move()` (`StockMovementService.php:118`) subtracts
+`reserved_quantity` from availability, and `create()` calls `move()` at
+`MaterialIssueService.php:109` — *before* the reservation is released at `:132`.
+So reserving stock makes it unissuable **including to the work order that
+reserved it**. The feature is not merely unguarded, it is inverted: a reservation
+is a promise that converts into a refusal. Prior **M042-F02 reproduces exactly.**
+
+### M042-N02a — Broken (P0) — NEW: a partial issue orphans the reservation remainder in the ledger forever
+
+```
+[I6] reservation status=issued qty=50.000; level reserved=45.000;
+     sum(active reservations)=0
+```
+
+Reserve 50, issue 5 against it. The reservation row flips to `issued` **in full**
+while `release()` is called with the *issued* quantity (5), so `reserved_quantity`
+drops only to 45. Result: **45.000 units are held reserved in `stock_levels` with
+zero `reserved` rows backing them.** No code path can ever release them — every
+releaser keys on `status = reserved`, and this row is now `issued`. The 45 units
+are permanently unissuable and permanently invisible.
+
+`reserved_quantity` = 45.000 vs `Σ(active reservations)` = 0. The two disagree.
+
+### M042-N02b — Broken (P0) — NEW: issuing against one reservation silently destroys another work order's reservation
+
+```
+[I7] after issuing 100 vs reservation A(10): level.reserved=0.000;
+     reservation B status=reserved qty=90.000; sum(active)=90.000
+```
+
+200 on hand. WO-101 reserves 10; WO-102 reserves 90; `reserved_quantity = 100`.
+Now issue **100** citing reservation A — which covers only 10. Accepted. Then
+`release($itemId, $locId, '100')` runs, and because `reserved_quantity` is a
+single per-(item, location) scalar with no per-reservation accounting, **it is
+WO-102's 90 units that get released.** WO-102's row still reads `reserved`,
+quantity 90, and believes it is protected. It is not: its stock is now free for
+anyone to take.
+
+`reserved_quantity` = 0.000 vs `Σ(active reservations)` = 90.000.
+
+This is a cross-work-order integrity failure, materially worse than prior
+**M042-F03**, which described only the missing validation.
+
+### M042-N02c — Broken (P0) — NEW: a spent reservation is replayable, and the replay steals a third party's fresh reservation
+
+```
+[I8] *** re-use of an ISSUED reservation ACCEPTED. reserved: 0.000
+     -> (3rd party +10) 10.000 -> 0.000; res.status=issued
+```
+
+`if ($res)` at `MaterialIssueService.php:130` never checks the status. Issue 10
+against reservation A (reserved → 0). A third party then reserves 10 of its own
+(reserved → 10). Re-submit the **same** issue against the **same, already-`issued`**
+reservation: accepted, and `release()` runs again — taking the third party's 10.
+So a retried or duplicated create request does not merely double-consume stock
+(prior M042-F06), it also silently strips an unrelated reservation.
+
+### The single root cause
+
+All three are one defect: **`stock_levels.reserved_quantity` is an unattributed
+scalar, and `material_reservations` rows are never reconciled against it.**
+`release()` takes a bare `(item, location, quantity)` and cannot know whose
+reservation it is decrementing. Any fix has to either (a) release exactly the
+reservation's own outstanding quantity under the same lock that flips its status,
+or (b) derive `reserved_quantity` from `Σ(active reservations)` rather than
+maintaining it independently. Both change what a reservation *means*, so this is
+**not** containment work.
