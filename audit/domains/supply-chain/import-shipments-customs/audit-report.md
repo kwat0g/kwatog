@@ -529,3 +529,83 @@ at `:98-99` and carries no cross-field rule. Measured on a **received** shipment
 - PO-state gate: `["draft","pending_approval","approved","sent","partially_received",
   "received","closed","cancelled"]` — **all 8** accepted, against `GrnService:103-121`'s
   three.
+
+## Fixes applied and verification (2026-09-01)
+
+Seven contained items fixed; eight gated. Full before/after table in `fix-log.md`.
+Commits: `98817e8e` skeleton · `cc140299` findings · `a9f5de6b` action plan ·
+`ec145663` the seven fixes · `6349f0d4` rename + Pint · `b3d60e96` fix log.
+
+```
+tests/Feature/SupplyChain   baseline 109 passed / 304 assertions / exit 0
+                            after    160 passed / 477 assertions / exit 0
+phpstan analyse app/Modules/SupplyChain --memory-limit=1G   → No errors
+pint --test (4 changed files fail at HEAD)  → NEW (mine only): []
+```
+
+A mid-session host OOM (exit 137) put Postgres into crash recovery and produced a
+**160-failed / ZERO-assertion** run in 7.6s (`SQLSTATE[08006] … the database system is
+starting up`). That run is discarded, not reported: zero assertions means the database
+was gone. Recovery took 50s and the suite then passed.
+
+### Invariant table — every row executed, with its measured result
+
+| invariant | probe | result |
+|---|---|---|
+| apportionment sums exactly to the total | 7 lines / freight 100.00, BCMath sum | **FAIL — 100.03 vs 100.00 (+0.03)**; 3 lines **99.99 (−0.01)**; five components **499.95 vs 500.00** |
+| apportionment basis stated and consistent | `manual` with lopsided lines 9000/1000 | **FAIL — equal split `["50.00","50.00"]`**, contradicting its own docblock |
+| `by_weight` basis usable | `information_schema` on `items` | **FAIL — zero `%weight%` columns**; method also `TypeError`d on every call → **FIXED to refuse (422)** |
+| zero-weight / zero-value line divide-by-zero | `by_value`/`by_quantity`, all-zero lines | **PASS** — guarded, equal split, 90.00 of 90.00, no `DivisionByZeroError` |
+| cost reaching GRN equals cost computed | recursive scan of Inventory/Accounting/Purchasing | **FAIL — zero references**; `GrnService:214` uses `$row['unit_cost'] ?? $poi->unit_price` |
+| FX handling or documented absence | column scan on `shipments` + `purchase_orders` | **PASS (absent by design)** — no currency/fx/rate column; peso-only, nothing to corrupt |
+| clearance blocked with mandatory documents missing | empty shipment, 5 transitions over HTTP | **FAIL — 200 ×5**, 0 documents, 0 containers, clearance date stamped |
+| document swappable after clearance | 2nd B/L + delete original after `received` | **FAIL — 201 and 204** |
+| handoff failure not swallowed into a log | `Event`/`Queue`/`Notification::fake` + column scan | **FAIL, worse — no handoff exists.** Nothing pushed/sent; `shipments` has no `%handoff%` column vs `deliveries`' three |
+| scheduled commands distinguish "nothing to do" from "everything threw" | `schedule:list` + grep | **N/A — 0 of 48** commands touch shipment/customs/impex/landed cost |
+| full transition matrix | 7×7 via the service | **PASS — 49 cells, 10 legal, 39 refused**, exactly the linear chain + cancel-from-non-terminal |
+| clear customs twice | HTTP ×2 from `customs` | **PASS** — 200 then **422** |
+| receive an uncleared shipment | HTTP from 4 non-`cleared` states | **PASS — 422 ×4** |
+| cancel a received one | HTTP | **PASS — 422** |
+| edit cost/quantity after clearance | `PATCH` meta + `PUT` container on `received` | **FAIL — 200 and 200** (gated, tranche B5) |
+| record immutable after receipt | Eloquent / raw SQL / delete / `pg_trigger` | **FAIL on all four** — `SHP-HACKED` via Eloquent, `HACKED` + `1999-01-01` + status walked back to `cleared` via SQL, row hard-deleted, **`pg_trigger` = 0** |
+| attachment MIME validated with real bytes | real PHP bytes as `.pdf`; real PDF as `.png`; real PDF | **PASS — 422**, 201, 201 (probed with `new UploadedFile(..., test: true)`, not `::fake()`) |
+| random stored filename | client name `../../../../etc/passwd.pdf` | **PASS** — `shipments/73/iAoaW32Hy3j6NIYgIieQfKgKtIUlGD4XAUeDOrkc.pdf` |
+| outside web root | `config('filesystems.disks.local.root')` | **PASS** — `/var/www/storage/app/private` |
+| permission-checked serve | 21-endpoint sweep | **PASS** — download requires `supply_chain.view` |
+| path traversal refused | as above | **PASS** — no `..`, no `passwd` in the stored path |
+| over-length filename | 304 chars into varchar(255) | **FAIL — 500** (22001) → **FIXED to 422** |
+| document survives shipment archive | archive then inspect row + file | **FAIL — orphaned**: shipment trashed, document row **live**, file **destroyed** |
+| soft-deleted PO/vendor/item/shipment across aggregates and exports | 7 surfaces + list + both PDFs | **PASS** — archived shipment **404 on all 7** and absent from the list; archived **vendor** and **item** behind a live shipment do **not** 500 either PDF (200/200) |
+| money FormRequest vs the seven poison values | container weight/volume, **one value per test** | **FAIL — 5 defective of 11** (`1.999`→`2.00`, `10.00005`→`10.00`, `1e3`→`1000.00`, `1e17`/`1e20`→500) → **all FIXED to 422** |
+| `Rule::exists()` non-closure instances | grep the module | **PASS — none.** One instance total (`CreateDeliveryRequest:43`), closure form, non-`false` value |
+| permission gate per endpoint incl. list/options | 21 endpoints, permissionless user | **PASS — 21/21 → 403** |
+| auth gate per endpoint | same 21, no session | **PASS — 21/21 → 401** (first attempt read 403 for all 21 because `actingAs()` persists within a test method — a harness artifact, split into its own test) |
+| `impex_officer` completes an import end to end | 15 documented steps | **FAIL — 14/15**, `landed_cost` 500 → **FIXED, now 15/15** |
+| internal endpoints leak no other supplier's shipment | middleware inspection + unauthenticated read | **PASS** — every shipment route is `auth:sanctum|feature:supply_chain|permission:…`, no `supplier_portal` guard; unauthenticated 401 |
+| raw-id-free error bodies | 4 refusal bodies | **PASS** — no raw pk, no internal column name; refusals name `shipment_number` |
+| restore binds `withTrashed()` | archive then restore ×3 | **FAIL — 404/404/404** → **FIXED to 200/200/200** |
+| sequence row exists in `document_sequences` | create over HTTP | **PASS** — `SHP-202609-0001`, config `{prefix:SHP, reset:monthly, pad:4}`, row created on first use |
+
+### Could NOT verify — stated plainly
+
+- **No browser-driven journey.** `ogami-api`, `-queue`, `-reverb`, `-spa`, `-nginx` were
+  stopped for the whole session (as in the prior one). Everything above is PHPUnit-level
+  HTTP through Laravel's kernel, not a real nginx/Sanctum-cookie round trip.
+- **Why a single-line shipment escaped the `calculate-landed-cost` 500** while 2 and 3 lines
+  hit it. Deterministic and reproduced four times, but the mechanism was not established;
+  recorded rather than guessed. Moot after the fix (all line counts now 200).
+- **No concurrency probe on landed-cost recalculation.** `RefreshDatabase` hides
+  uncommitted rows from a second connection, so a two-connection race probe would report a
+  bogus "no lock". Not attempted rather than reported wrongly. The table's
+  `shipment_landed_cost_unique` constraint plus the hard delete make a duplicate impossible,
+  but a lost-update between two concurrent recalculations is untested.
+- **`GrnService` was not called.** Inventory is LIVE under another agent; the
+  landed-cost-never-reaches-GRN finding is a structural scan plus a code citation, not an
+  executed GRN.
+- **No production feature-toggle values, customs SOP, or landed-cost accounting policy**
+  were available, so tranche B is a plan, not a validated design.
+
+### Note for the registry
+
+`CLAUDE.md`'s number-format table has no Shipment row although the sequence exists and
+works (`SHP-YYYYMM-NNNN`, measured). Reported only — outside this module's files.
