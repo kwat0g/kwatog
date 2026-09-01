@@ -6,4 +6,4 @@ roles: system_admin, qc_inspector, supplier-portal
 depends_on: inspections-certificates, ncr-capa, deliveries-proof, supplier-portal, customer-product-pricing
 surface: L
 status: 🔁 Needs Re-audit
-last_session: 2026-08-25
+last_session: 2026-09-01
