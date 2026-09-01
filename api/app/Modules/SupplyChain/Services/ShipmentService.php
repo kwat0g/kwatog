@@ -99,6 +99,17 @@ class ShipmentService
             'vessel' => $data['vessel'] ?? null,
             'container_number' => $data['container_number'] ?? null,
             'bl_number' => $data['bl_number'] ?? null,
+            // CreateShipmentRequest validates `incoterm` against the Incoterm
+            // enum and the SPA create form submits it, but it was never copied
+            // into the payload: the caller got a 201 with the value silently
+            // gone and the column left null, so customs paperwork fell back to
+            // the PO's term or a blank.
+            //
+            // Persisting the submitted value is not the same as deciding whether
+            // a shipment term OVERRIDES or INHERITS the PO's — the generated PDFs
+            // still render `$po->incoterm`, and reconciling those two is left to
+            // the trade-document work in the action plan.
+            'incoterm' => $data['incoterm'] ?? null,
             'etd' => $data['etd'] ?? null,
             'eta' => $data['eta'] ?? null,
             'notes' => $data['notes'] ?? null,

@@ -11,6 +11,7 @@ use App\Modules\SupplyChain\Models\Shipment;
 use App\Modules\SupplyChain\Models\ShipmentLandedCost;
 use App\Modules\SupplyChain\Enums\LandedCostAllocationMethod;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Collection as SupportCollection;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -23,6 +24,23 @@ use InvalidArgumentException;
  */
 class LandedCostService
 {
+    /**
+     * Relations every returned shipment must carry.
+     *
+     * `landedCosts.shipment` is not decoration. `ShipmentLandedCostResource`
+     * reads `$this->shipment?->hash_id`, and `AppServiceProvider` sets
+     * `Model::preventLazyLoading(! isProduction())` — so omitting it made
+     * `POST /shipments/{id}/calculate-landed-cost` throw
+     * `LazyLoadingViolationException` (a 500) for every shipment with more than
+     * one PO line outside production, and a silent N+1 inside it. No test posted
+     * to that route, so the only landed-cost endpoint in the module was broken
+     * on every real (multi-line) import.
+     */
+    private const ALLOCATION_RELATIONS = [
+        'landedCosts.purchaseOrderItem',
+        'landedCosts.shipment',
+    ];
+
     /**
      * Calculate and persist landed cost allocations for a shipment.
      *
@@ -38,6 +56,7 @@ class LandedCostService
         if (! in_array($method, LandedCostAllocationMethod::values(), true)) {
             throw new InvalidArgumentException("Invalid allocation method: {$method}");
         }
+        $this->assertMethodIsSupported($method);
 
         return DB::transaction(function () use ($shipment, $method) {
             $shipment->load([
@@ -67,7 +86,7 @@ class LandedCostService
                     'landed_cost_calculated_at' => now(),
                 ])->save();
 
-                return $shipment->fresh()->load('landedCosts.purchaseOrderItem');
+                return $shipment->fresh()->load(self::ALLOCATION_RELATIONS);
             }
 
             $ratios = $this->computeRatios($poItems, $method);
@@ -103,7 +122,7 @@ class LandedCostService
                 'landed_cost_calculated_at' => now(),
             ])->save();
 
-            return $shipment->fresh()->load('landedCosts.purchaseOrderItem');
+            return $shipment->fresh()->load(self::ALLOCATION_RELATIONS);
         });
     }
 
@@ -170,10 +189,17 @@ class LandedCostService
     /**
      * Extract net_weight from each PO line's item (or 0 if not available).
      *
+     * Returns a base collection, NOT an Eloquent one: `Eloquent\Collection::map()`
+     * downgrades to `Support\Collection` the moment the mapped values are not
+     * Models, so the old `: Eloquent\Collection` return type here was violated on
+     * EVERY call and raised a `TypeError` — which, not being a
+     * `BusinessRuleException`, escaped the whole `DB::transaction()` closure as an
+     * unhandled 500. `by_weight` had therefore never once completed.
+     *
      * @param Collection<int, PurchaseOrderItem> $poItems
-     * @return Collection<int, float>
+     * @return SupportCollection<int, float>
      */
-    private function getItemWeights(Collection $poItems): Collection
+    private function getItemWeights(Collection $poItems): SupportCollection
     {
         return $poItems->map(function (PurchaseOrderItem $item) {
             $item->loadMissing('item');
@@ -183,7 +209,32 @@ class LandedCostService
             // incomplete legacy line as zero rather than inventing one unit
             // and skewing landed-cost allocation.
             return $weight * (float) ($item->quantity ?? 0);
-        });
+        })->toBase();
+    }
+
+    /**
+     * `by_weight` cannot be honoured: `items` has no weight column at all
+     * (verified against `information_schema` — zero `%weight%` columns), so
+     * `getItemWeights()` can only ever return zeros, and `computeRatios()` would
+     * then fall through to an EQUAL SPLIT while reporting `allocation_method =
+     * by_weight`. Silently apportioning by line count under a name that promises
+     * weight is worse than refusing.
+     *
+     * Refusing is deliberately not the same as capturing item weights and
+     * apportioning by them — that is a scoped change to the allocation basis and
+     * belongs with the rest of the landed-cost work (action plan tranche B).
+     */
+    private function assertMethodIsSupported(string $method): void
+    {
+        if ($method !== LandedCostAllocationMethod::ByWeight->value) {
+            return;
+        }
+
+        throw new BusinessRuleException(
+            'Landed cost cannot be allocated by weight: purchase-order items carry no '
+            .'weight, so every line would weigh zero and the charge would be split equally '
+            .'instead. Choose by value, by quantity, or manual.'
+        );
     }
 
     /**

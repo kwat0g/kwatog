@@ -33,7 +33,8 @@ Route::middleware(['auth:sanctum', 'feature:supply_chain'])->prefix('supply-chai
     Route::delete('/shipments/{shipment}',                  [ShipmentController::class, 'destroy'])
         ->middleware('permission:supply_chain.shipments.manage');
     Route::patch('/shipments/{shipment}/restore',            [ShipmentController::class, 'restore'])
-        ->middleware('permission:supply_chain.shipments.manage');
+        ->middleware('permission:supply_chain.shipments.manage')
+        ->withTrashed();
 
     /* ─── OGAMI-104 — Landed cost calculation ─── */
     Route::post('/shipments/{shipment}/calculate-landed-cost', [ShipmentController::class, 'calculateLandedCost'])
@@ -53,9 +54,23 @@ Route::middleware(['auth:sanctum', 'feature:supply_chain'])->prefix('supply-chai
     Route::delete('/shipment-documents/{document}',         [ShipmentController::class, 'destroyDocument'])
         ->middleware('permission:supply_chain.shipments.manage');
     Route::patch('/shipment-documents/{document}/restore',  [ShipmentController::class, 'restoreDocument'])
-        ->middleware('permission:supply_chain.shipments.manage');
+        ->middleware('permission:supply_chain.shipments.manage')
+        ->withTrashed();
 
     /* ─── Containers (multi-container shipment tracking) ─── */
+    /*
+     * The three restore routes below and above (`/shipments/{shipment}/restore`,
+     * `/shipment-documents/{document}/restore`, `/containers/{container}/restore`)
+     * all lacked `->withTrashed()`, so ordinary hash binding refused the archived
+     * row they exist to recover: measured 404 for every valid target. See
+     * HasHashId::resolveSoftDeletableRouteBinding(). `/vehicles/{vehicle}/restore`
+     * was the only one in this file that had it.
+     *
+     * OPEN QUESTION (shared with M044 deliveries-proof): whether archive is
+     * recoverable or permanent has not been answered. If the answer is
+     * "permanent", these routes should be deleted rather than repaired — but
+     * while they are advertised they must reach their target.
+     */
     Route::get('/shipments/{shipment}/containers',              [\App\Modules\SupplyChain\Controllers\ContainerController::class, 'index'])
         ->middleware('permission:supply_chain.view');
     Route::post('/shipments/{shipment}/containers',             [\App\Modules\SupplyChain\Controllers\ContainerController::class, 'store'])
@@ -67,7 +82,8 @@ Route::middleware(['auth:sanctum', 'feature:supply_chain'])->prefix('supply-chai
     Route::delete('/containers/{container}',                     [\App\Modules\SupplyChain\Controllers\ContainerController::class, 'destroy'])
         ->middleware('permission:supply_chain.shipments.manage');
     Route::patch('/containers/{container}/restore',              [\App\Modules\SupplyChain\Controllers\ContainerController::class, 'restore'])
-        ->middleware('permission:supply_chain.shipments.manage');
+        ->middleware('permission:supply_chain.shipments.manage')
+        ->withTrashed();
 
     /* ─── Vehicles (Task 66) ─── */
     Route::get('/vehicles/options',                          [VehicleController::class, 'options'])

@@ -96,7 +96,22 @@ class ShipmentController
             'container_number' => ['nullable', 'string', 'max:32'],
             'bl_number'        => ['nullable', 'string', 'max:32'],
             'etd'              => ['nullable', 'date'],
-            'eta'              => ['nullable', 'date'],
+            // CreateShipmentRequest enforces ETA >= ETD; this path did not, so a
+            // patch could leave a shipment arriving before it departed. Compare
+            // against the submitted ETD when one is present, otherwise against
+            // the value already on the record — a partial patch of ETA alone must
+            // still be checked.
+            'eta'              => ['nullable', 'date', function (string $attribute, mixed $value, callable $fail) use ($request, $shipment): void {
+                if ($value === null) {
+                    return;
+                }
+                $etd = $request->has('etd')
+                    ? $request->input('etd')
+                    : optional($shipment->etd)?->toDateString();
+                if ($etd !== null && $etd !== '' && strtotime((string) $value) < strtotime((string) $etd)) {
+                    $fail('ETA cannot be before ETD.');
+                }
+            }],
             'notes'            => ['nullable', 'string', 'max:2000'],
         ]);
         return new ShipmentResource($this->service->updateMeta($shipment, $data));
@@ -106,7 +121,21 @@ class ShipmentController
     {
         $data = $request->validate([
             'document_type' => ['required', Rule::in(ShipmentDocumentType::values())],
-            'file'          => ['required', 'file', 'mimes:pdf,jpg,jpeg,png,xlsx,csv', 'max:20480'], // 20 MB
+            'file'          => [
+                'required', 'file', 'mimes:pdf,jpg,jpeg,png,xlsx,csv', 'max:20480', // 20 MB
+                // `shipment_documents.original_filename` is varchar(255) and
+                // ShipmentService::uploadDocument() writes the client name
+                // verbatim. Measured: a 304-character filename reached Postgres
+                // as SQLSTATE 22001 and surfaced as a 500. Refuse it here.
+                static function (string $attribute, mixed $value, callable $fail): void {
+                    if (! $value instanceof \Illuminate\Http\UploadedFile) {
+                        return;
+                    }
+                    if (mb_strlen((string) $value->getClientOriginalName()) > 255) {
+                        $fail('The file name may not be greater than 255 characters.');
+                    }
+                },
+            ],
             'notes'         => ['nullable', 'string', 'max:500'],
         ]);
         $doc = $this->service->uploadDocument(
@@ -142,10 +171,40 @@ class ShipmentController
             [
                 'Content-Type'        => $mime,
                 'Cache-Control'       => 'private, no-store, max-age=0',
-                'Content-Disposition' => $isImage
-                    ? sprintf('inline; filename="%s"', $filename)
-                    : sprintf('attachment; filename="%s"', $filename),
+                'Content-Disposition' => self::contentDisposition(
+                    $isImage ? 'inline' : 'attachment',
+                    (string) $filename,
+                ),
             ],
+        );
+    }
+
+    /**
+     * M043 — `original_filename` is the client's upload name, stored verbatim, and
+     * it used to be interpolated straight into the header. Measured: a document
+     * uploaded as `bl".pdf` produced `attachment; filename="bl".pdf"`, where the
+     * double quote closes the `filename` parameter early and the remainder is
+     * injected into the header value. Build an RFC 6266 disposition instead — a
+     * sanitised ASCII `filename` for old clients plus a percent-encoded UTF-8
+     * `filename*` for the real name. Same shape and same reasoning as
+     * `DeliveryProofController::contentDisposition()`.
+     *
+     * The character class is written with hex escapes and a doubled backslash on
+     * purpose: the obvious `/[\r\n"\\]/` collapses to `[\r\n"\]` in a
+     * single-quoted PHP string, PCRE reads `\]` as a literal `]`, the class never
+     * closes, preg_replace() returns null, and every download becomes a 500.
+     */
+    private static function contentDisposition(string $type, string $name): string
+    {
+        $name = basename($name);
+        $name = preg_replace('/[\x00-\x1f\x7f"\\\\]/', '', $name) ?: 'shipment-document';
+        $ascii = preg_replace('/[^A-Za-z0-9._-]/', '_', $name) ?: 'shipment-document';
+
+        return sprintf(
+            '%s; filename="%s"; filename*=UTF-8\'\'%s',
+            $type,
+            $ascii,
+            rawurlencode($name),
         );
     }
 

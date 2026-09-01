@@ -161,18 +161,20 @@ class ZzM043ImportAuditProbeTest extends TestCase
     }
 
     /**
-     * `by_weight` is 100% DEAD CODE and has never once worked.
+     * `by_weight` was 100% DEAD CODE and had never once worked.
      *
-     * `LandedCostService::getItemWeights()` declares
+     * `LandedCostService::getItemWeights()` declared
      * `: Illuminate\Database\Eloquent\Collection` but maps PO lines to floats.
      * `Eloquent\Collection::map()` downgrades to `Support\Collection` as soon as
-     * the mapped values are not Models, so the return type is violated on EVERY
-     * invocation — not only for zero weights. A `TypeError` escapes the whole
+     * the mapped values are not Models, so the return type was violated on EVERY
+     * invocation — not only for zero weights. A `TypeError` escaped the whole
      * `DB::transaction()` closure as an uncaught 500.
      *
-     * PASS-EITHER-WAY LOCK ON A KNOWN DEFECT.
+     * FIXED: the return type is corrected, and because the weight basis column
+     * does not exist on `items` at all, `by_weight` now refuses explicitly rather
+     * than silently equal-splitting under a name that promises weight.
      */
-    public function test_probe_by_weight_allocation_always_throws_a_type_error(): void
+    public function test_probe_by_weight_allocation_refuses_explicitly(): void
     {
         $user = $this->userWith(['supply_chain.view', 'supply_chain.shipments.manage']);
         // Non-zero line values and quantities: nothing degenerate about this input.
@@ -184,7 +186,7 @@ class ZzM043ImportAuditProbeTest extends TestCase
         $weightCols = array_values(array_filter($itemCols, fn (string $c) => str_contains($c, 'weight')));
         fwrite(STDERR, '[M043 by_weight] items weight columns='.json_encode($weightCols)."\n");
         $this->assertSame([], $weightCols,
-            'MEASURED: getItemWeights() reads item->net_weight / item->weight, neither of which is a column');
+            'getItemWeights() reads item->net_weight / item->weight, neither of which is a column');
 
         $caught = null;
         try {
@@ -196,10 +198,19 @@ class ZzM043ImportAuditProbeTest extends TestCase
         fwrite(STDERR, '[M043 by_weight] '.($caught === null ? 'NO THROW' : get_class($caught).': '
             .$caught->getMessage())."\n");
 
-        $this->assertInstanceOf(\TypeError::class, $caught,
-            'MEASURED: by_weight allocation is unreachable — TypeError on every call');
-        $this->assertStringContainsString('getItemWeights', $caught->getMessage());
+        $this->assertInstanceOf(BusinessRuleException::class, $caught,
+            'a business refusal, not a TypeError 500');
+        $this->assertNotInstanceOf(\TypeError::class, $caught);
+        $this->assertStringContainsString('by weight', $caught->getMessage());
         $this->assertSame(0, $shipment->landedCosts()->count(), 'nothing was persisted');
+
+        // Over HTTP it is a 422, not a 500.
+        $r = $this->actingAs($user)->postJson(
+            "/api/v1/supply-chain/shipments/{$shipment->hash_id}/calculate-landed-cost",
+            ['allocation_method' => 'by_weight'],
+        );
+        fwrite(STDERR, "[M043 by_weight] http={$r->getStatusCode()}\n");
+        $this->assertSame(422, $r->getStatusCode());
     }
 
     /**
@@ -225,25 +236,27 @@ class ZzM043ImportAuditProbeTest extends TestCase
     }
 
     /**
-     * `POST /shipments/{id}/calculate-landed-cost` 500s on EVERY request outside
-     * production, and no test in the repository posts to this route.
+     * `POST /shipments/{id}/calculate-landed-cost` used to 500 on EVERY multi-line
+     * shipment outside production, and no test in the repository posted to it.
      *
-     * `calculate()` returns the shipment with `landedCosts` loaded but NOT
-     * `landedCosts.shipment`; `ShipmentLandedCostResource:16` then reads
-     * `$this->shipment?->hash_id`. `AppServiceProvider:237` sets
-     * `Model::preventLazyLoading(! isProduction())`, so local / staging /
-     * testing raise `LazyLoadingViolationException` → 500. In production the
-     * guard is off, so the same line becomes a silent N+1 instead.
+     * `calculate()` returned the shipment with `landedCosts` loaded but NOT
+     * `landedCosts.shipment`; `ShipmentLandedCostResource:16` reads
+     * `$this->shipment?->hash_id`, and `AppServiceProvider:237` sets
+     * `Model::preventLazyLoading(! isProduction())`. Measured before the fix:
+     * `{"lines=1":200,"lines=2":500,"lines=3":500,"lines=2,freight=100":500}` with
+     * `LazyLoadingViolationException: Attempted to lazy load [shipment] on model
+     * [ShipmentLandedCost]`. In production the guard is off, so the same line was
+     * a silent N+1 instead.
      *
-     * PASS-EITHER-WAY LOCK ON A KNOWN DEFECT.
+     * FIXED by eager-loading the relation.
      */
-    public function test_probe_calculate_landed_cost_endpoint_500s_outside_production(): void
+    public function test_probe_calculate_landed_cost_endpoint_does_not_500(): void
     {
         $user = $this->userWith(['supply_chain.view', 'supply_chain.shipments.manage']);
-        $shipment = $this->seedShipment($user, lineCount: 2, lineTotal: '1000.00');
 
         $this->assertFalse($this->app->isProduction());
-        $this->assertTrue(\Illuminate\Database\Eloquent\Model::preventsLazyLoading());
+        $this->assertTrue(\Illuminate\Database\Eloquent\Model::preventsLazyLoading(),
+            'the guard that exposed this must still be on, or the probe proves nothing');
 
         $codes = [];
         foreach ([1, 2, 3] as $lines) {
@@ -256,35 +269,26 @@ class ZzM043ImportAuditProbeTest extends TestCase
         // And with a non-zero charge, so the real allocation branch runs.
         $paid = $this->seedShipment($user, lineCount: 2, lineTotal: '1000.00');
         $paid->forceFill(['freight_cost' => '100.00'])->save();
-        $codes['lines=2,freight=100'] = $this->actingAs($user)->postJson(
+        $r = $this->actingAs($user)->postJson(
             "/api/v1/supply-chain/shipments/{$paid->hash_id}/calculate-landed-cost",
             ['allocation_method' => 'by_value'],
-        )->getStatusCode();
+        );
+        $codes['lines=2,freight=100'] = $r->getStatusCode();
 
         fwrite(STDERR, '[M043 calculate endpoint] '.json_encode($codes)."\n");
 
         $this->assertSame([
             'lines=1' => 200,
-            'lines=2' => 500,
-            'lines=3' => 500,
-            'lines=2,freight=100' => 500,
-        ], $codes, 'MEASURED: the only landed-cost endpoint 500s for any shipment with more than one PO line');
+            'lines=2' => 200,
+            'lines=3' => 200,
+            'lines=2,freight=100' => 200,
+        ], $codes, 'the only landed-cost endpoint must not 500 for a multi-line import');
 
-        // Name the actual exception rather than inferring it from the status.
-        $multi = $this->seedShipment($user, lineCount: 2, lineTotal: '1000.00');
-        $this->withoutExceptionHandling();
-        $thrown = null;
-        try {
-            $this->actingAs($user)->postJson(
-                "/api/v1/supply-chain/shipments/{$multi->hash_id}/calculate-landed-cost",
-                ['allocation_method' => 'by_value'],
-            );
-        } catch (\Throwable $e) {
-            $thrown = $e;
-        }
-        fwrite(STDERR, '[M043 calculate endpoint] exception='
-            .($thrown === null ? 'NONE' : get_class($thrown).': '.$thrown->getMessage())."\n");
-        $this->assertNotNull($thrown, 'the 500 is a real uncaught exception');
+        // The allocation rows are serialised with a hash id, not a raw pk.
+        $rows = $r->json('data.landed_costs');
+        $this->assertCount(2, $rows);
+        $this->assertSame($paid->hash_id, $rows[0]['shipment_id']);
+        $this->assertStringNotContainsString('"shipment_id":'.$paid->id, (string) $r->getContent());
     }
 
     /**
@@ -382,38 +386,35 @@ class ZzM043ImportAuditProbeTest extends TestCase
     }
 
     /**
-     * `ShipmentLandedCostResource::shipment_id` reads an un-eager-loaded
-     * relation. MEASURED: it throws outside production, and would be an N+1
-     * (one query per allocation row) in production where the guard is off.
+     * `ShipmentLandedCostResource::shipment_id` reads the `shipment` relation.
+     * `calculate()` used to return only `landedCosts.purchaseOrderItem`, so
+     * serialising an allocation row threw outside production and cost one extra
+     * query per row inside it.
      *
-     * PASS-EITHER-WAY LOCK ON A KNOWN DEFECT.
+     * FIXED: `calculate()` now eager-loads the relation, so the resource
+     * serialises with no lazy load and no extra query at all.
      */
-    public function test_probe_landed_cost_resource_lazy_loads_the_shipment(): void
+    public function test_probe_landed_cost_resource_does_not_lazy_load(): void
     {
         $user = $this->userWith(['supply_chain.view', 'supply_chain.shipments.manage']);
         $shipment = $this->seedShipment($user, lineCount: 4, lineTotal: '1000.00');
         $shipment->forceFill(['freight_cost' => '100.00'])->save();
         $out = app(LandedCostService::class)->calculate($shipment, 'by_value');
 
-        $this->assertFalse($out->landedCosts->first()->relationLoaded('shipment'),
-            'MEASURED: calculate() loads landedCosts.purchaseOrderItem but not .shipment');
-
-        $caught = null;
-        try {
-            \App\Modules\SupplyChain\Resources\ShipmentLandedCostResource::collection($out->landedCosts)->resolve();
-        } catch (\Throwable $e) {
-            $caught = $e;
+        $this->assertCount(4, $out->landedCosts);
+        foreach ($out->landedCosts as $row) {
+            $this->assertTrue($row->relationLoaded('shipment'), 'shipment is eager-loaded');
+            $this->assertTrue($row->relationLoaded('purchaseOrderItem'), 'PO line is eager-loaded');
         }
-        fwrite(STDERR, '[M043 lazy load] '.($caught === null ? 'NO THROW' : get_class($caught))."\n");
-        $this->assertNotNull($caught, 'MEASURED: serialising an allocation row throws');
-        $this->assertStringContainsString('lazy load [shipment]', $caught->getMessage());
-        $this->assertStringContainsString('ShipmentLandedCost', $caught->getMessage());
 
-        // Eager-loading the relation is what the service should have done: with
-        // it loaded, the same serialisation is clean.
-        $out->landedCosts->load('shipment');
+        DB::enableQueryLog();
+        DB::flushQueryLog();
         $rows = \App\Modules\SupplyChain\Resources\ShipmentLandedCostResource::collection($out->landedCosts)->resolve();
-        $this->assertCount(4, $rows);
+        $n = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        fwrite(STDERR, "[M043 lazy load] queries to serialise 4 allocation rows={$n}\n");
+        $this->assertSame(0, $n, 'no query at serialisation time — the N+1 is gone');
         $this->assertSame($shipment->hash_id, $rows[0]['shipment_id']);
     }
 
@@ -614,12 +615,16 @@ class ZzM043ImportAuditProbeTest extends TestCase
 
     /**
      * INVARIANT: cost / quantity / trade metadata cannot be edited after
-     * clearance and receipt. MEASURED: `PATCH /shipments/{id}` rewrites the
-     * B/L number, carrier, vessel, container number, ETD and ETA of a RECEIVED
-     * shipment, and accepts an ETA before its ETD (the create-time rule is not
-     * carried over). Containers are editable too.
+     * clearance and receipt. MEASURED: it still can — `PATCH /shipments/{id}`
+     * rewrites the B/L number, carrier, vessel, container number and dates of a
+     * RECEIVED shipment, and its containers are editable too. That is action-plan
+     * item B5 (terminal-state immutability), deliberately NOT fixed here: what is
+     * frozen at `cleared` versus `received` is a business decision.
      *
-     * PASS-EITHER-WAY LOCK ON A KNOWN DEFECT.
+     * The ETA-before-ETD half IS fixed: the create request's cross-field rule now
+     * applies on update, including when only ETA is patched.
+     *
+     * PASS-EITHER-WAY LOCK ON A KNOWN DEFECT (the mutability half).
      */
     public function test_probe_a_received_shipment_is_still_fully_editable(): void
     {
@@ -635,8 +640,6 @@ class ZzM043ImportAuditProbeTest extends TestCase
             'bl_number'        => 'REWRITTEN',
             'carrier'          => 'REWRITTEN CARRIER',
             'container_number' => 'REWRITTEN',
-            'etd'              => '2026-12-31',
-            'eta'              => '2026-01-01',   // ETA before ETD
         ]);
         $cont = $this->actingAs($user)->putJson("/api/v1/supply-chain/containers/{$container->hash_id}", [
             'container_number' => 'REWRITTEN2', 'gross_weight_kg' => '1.00',
@@ -644,14 +647,30 @@ class ZzM043ImportAuditProbeTest extends TestCase
 
         $shipment->refresh();
         fwrite(STDERR, "[M043 post-receipt edit] meta={$meta->getStatusCode()} container={$cont->getStatusCode()}"
-            ." bl={$shipment->bl_number} etd={$shipment->etd?->toDateString()}"
-            ." eta={$shipment->eta?->toDateString()}\n");
+            ." bl={$shipment->bl_number}\n");
 
         $this->assertSame(200, $meta->getStatusCode(), 'MEASURED: no terminal-state guard on updateMeta');
         $this->assertSame('REWRITTEN', $shipment->bl_number);
-        $this->assertTrue($shipment->eta->lessThan($shipment->etd),
-            'MEASURED: ETA-after-ETD is enforced on create but not on update');
         $this->assertSame(200, $cont->getStatusCode(), 'MEASURED: containers of a received shipment are editable');
+
+        // The date invariant, however, is now enforced on update as well.
+        $bad = $this->actingAs($user)->patchJson("/api/v1/supply-chain/shipments/{$shipment->hash_id}", [
+            'etd' => '2026-12-31', 'eta' => '2026-01-01',
+        ]);
+        fwrite(STDERR, "[M043 post-receipt edit] eta<etd both submitted = {$bad->getStatusCode()}\n");
+        $bad->assertStatus(422)->assertJsonValidationErrors('eta');
+
+        // …and when only ETA is patched, against the ETD already on the record.
+        $this->actingAs($user)->patchJson("/api/v1/supply-chain/shipments/{$shipment->hash_id}",
+            ['etd' => '2026-09-10', 'eta' => '2026-09-20'])->assertOk();
+        $etaOnly = $this->actingAs($user)
+            ->patchJson("/api/v1/supply-chain/shipments/{$shipment->hash_id}", ['eta' => '2026-09-01']);
+        fwrite(STDERR, "[M043 post-receipt edit] eta-only against stored etd = {$etaOnly->getStatusCode()}\n");
+        $etaOnly->assertStatus(422)->assertJsonValidationErrors('eta');
+
+        $shipment->refresh();
+        $this->assertSame('2026-09-20', $shipment->eta->toDateString(), 'the bad patch changed nothing');
+        $this->assertTrue($shipment->eta->greaterThanOrEqualTo($shipment->etd));
     }
 
     /**
@@ -784,16 +803,14 @@ class ZzM043ImportAuditProbeTest extends TestCase
 
     /**
      * INVARIANT: a filename longer than the column width.
-     * MEASURED: 500. `original_filename` is varchar(255), the upload validator
-     * has no length rule on the client filename, and `uploadDocument()` writes
-     * `$file->getClientOriginalName()` verbatim — so a 304-character name
-     * reaches Postgres as SQLSTATE 22001. The file is stored first, so the
-     * catch/cleanup path fires and the blob is removed, but the caller gets an
-     * unhandled 500 rather than a validation error.
+     * `shipment_documents.original_filename` is varchar(255), the upload validator
+     * had no length rule on the client filename, and `uploadDocument()` writes
+     * `$file->getClientOriginalName()` verbatim — so a 304-character name reached
+     * Postgres as SQLSTATE 22001 and surfaced as a 500.
      *
-     * PASS-EITHER-WAY LOCK ON A KNOWN DEFECT.
+     * FIXED: refused at validation.
      */
-    public function test_probe_overlength_original_filename_is_a_500(): void
+    public function test_probe_overlength_original_filename_is_refused(): void
     {
         $user = $this->userWith(['supply_chain.view', 'supply_chain.shipments.manage']);
         $shipment = $this->seedShipment($user, lineCount: 1, lineTotal: '100.00');
@@ -805,9 +822,16 @@ class ZzM043ImportAuditProbeTest extends TestCase
 
         fwrite(STDERR, '[M043 long filename] len='.strlen($long)." status={$r->getStatusCode()}\n");
 
-        $this->assertSame(500, $r->getStatusCode(),
-            'MEASURED: an over-length client filename reaches Postgres as an unhandled 500');
+        $this->assertSame(422, $r->getStatusCode(), 'refused, not a 500');
         $this->assertSame(0, $shipment->documents()->count(), 'no row was written');
+
+        // A 255-character name still works.
+        $ok = str_repeat('c', 251).'.pdf';   // 255 exactly
+        $this->assertSame(255, strlen($ok));
+        $this->actingAs($user)->postJson(
+            "/api/v1/supply-chain/shipments/{$shipment->hash_id}/documents",
+            ['document_type' => 'bill_of_lading', 'file' => $this->realFile($ok, "%PDF-1.4\n%%EOF\n")],
+        )->assertCreated();
     }
 
     /**
@@ -846,12 +870,16 @@ class ZzM043ImportAuditProbeTest extends TestCase
 
     /**
      * INVARIANT: restore binds `withTrashed()`.
-     * MEASURED: 404 for every one of shipment / document / container. Vehicles
-     * is the only restore route in this module that declares `withTrashed()`.
+     * Measured before the fix: 404 for every one of shipment / document /
+     * container — 3 of the 3 import restore routes were unreachable for their
+     * only valid target. `/vehicles/{vehicle}/restore` was the only route in the
+     * file that declared it.
      *
-     * PASS-EITHER-WAY LOCK ON A KNOWN DEFECT.
+     * FIXED. NOTE the open question this does NOT answer, shared with M044
+     * deliveries-proof: whether archive is recoverable or permanent. If the
+     * answer is "permanent", these routes should be removed rather than repaired.
      */
-    public function test_probe_restore_routes_cannot_bind_an_archived_row(): void
+    public function test_probe_restore_routes_bind_an_archived_row(): void
     {
         $user = $this->userWith(['supply_chain.view', 'supply_chain.shipments.manage']);
         $shipment = $this->seedShipment($user, lineCount: 1, lineTotal: '100.00');
@@ -876,18 +904,30 @@ class ZzM043ImportAuditProbeTest extends TestCase
         ];
         fwrite(STDERR, '[M043 restore binding] '.json_encode($codes)."\n");
 
-        $this->assertSame(['shipment' => 404, 'document' => 404, 'container' => 404], $codes,
-            'MEASURED: 3 of the 3 import restore routes are unreachable for their only valid target');
-        $this->assertTrue(Shipment::withTrashed()->find($shipment->id)->trashed(), 'still archived');
+        $this->assertSame(['shipment' => 200, 'document' => 200, 'container' => 200], $codes,
+            'each import restore route reaches its archived target');
+        $this->assertFalse(Shipment::query()->find($shipment->id)->trashed(), 'shipment is back');
+        $this->assertFalse(ShipmentDocument::query()->find($doc->id)->trashed(), 'document is back');
+        $this->assertFalse(Container::query()->find($container->id)->trashed(), 'container is back');
+
+        // A live row is still not a restore target, and a bad hash is still a 404.
+        $live = $this->seedShipment($user, lineCount: 1, lineTotal: '100.00');
+        $this->actingAs($user)
+            ->patchJson("/api/v1/supply-chain/shipments/{$live->hash_id}/restore")->assertOk();
+        $this->actingAs($user)
+            ->patchJson('/api/v1/supply-chain/shipments/zzzznope/restore')->assertStatus(404);
     }
 
     /**
      * INVARIANT: the document download's Content-Disposition cannot be forged
-     * from the client's filename. `original_filename` is stored verbatim and
+     * from the client's filename. `original_filename` was stored verbatim and
      * interpolated with `sprintf('inline; filename="%s"')`, so a name containing
-     * a double quote closes the parameter early and injects the rest of the
-     * header value — the identical defect `DeliveryProofController` was repaired
-     * for hours earlier in this same module directory (commit 38663a81).
+     * a double quote closed the parameter early and injected the rest of the
+     * header value. Measured before the fix: `attachment; filename="bl".pdf"`.
+     * The identical defect `DeliveryProofController` was repaired for hours
+     * earlier in this same module directory (commit 38663a81).
+     *
+     * FIXED with the same RFC 6266 shape.
      */
     public function test_probe_document_download_content_disposition_injection(): void
     {
@@ -910,7 +950,24 @@ class ZzM043ImportAuditProbeTest extends TestCase
         $this->assertSame(200, $r->getStatusCode());
         // A well-formed disposition has exactly two quotes around one filename.
         $this->assertSame(2, substr_count($header, '"'),
-            'MEASURED: the client filename injects an extra quote pair into the header');
+            'the client filename must not inject an extra quote pair');
+        $this->assertStringNotContainsString("\r", $header);
+        $this->assertStringNotContainsString("\n", $header);
+        $this->assertStringContainsString("filename*=UTF-8''", $header);
+
+        // A CRLF-bearing name cannot break the header either.
+        $this->actingAs($user)->postJson(
+            "/api/v1/supply-chain/shipments/{$shipment->hash_id}/documents",
+            ['document_type' => 'commercial_invoice',
+                'file' => $this->realFile("a\r\nX-Injected: 1.pdf", "%PDF-1.4\n%%EOF\n")],
+        )->assertCreated();
+        $doc2 = ShipmentDocument::query()->latest('id')->firstOrFail();
+        $r2 = $this->actingAs($user)
+            ->get("/api/v1/supply-chain/shipment-documents/{$doc2->hash_id}/download");
+        $h2 = (string) $r2->headers->get('Content-Disposition');
+        fwrite(STDERR, "[M043 content-disposition] crlf header={$h2}\n");
+        $this->assertNull($r2->headers->get('X-Injected'));
+        $this->assertStringNotContainsString("\n", $h2);
     }
 
     // ─────────────────────── archived / soft-deleted rows ──────────────────
@@ -1003,13 +1060,17 @@ class ZzM043ImportAuditProbeTest extends TestCase
 
     /**
      * INVARIANT: the submitted Incoterm is persisted.
-     * MEASURED: validated, echoed as null, and silently dropped by
-     * `ShipmentService::create()`. The generated customs PDFs then render the
-     * PO's Incoterm instead.
+     * Measured before the fix: validated by `CreateShipmentRequest`, echoed as
+     * null, and silently dropped by `ShipmentService::create()`, so a 201 came
+     * back with the operator's choice gone and the column left null.
      *
-     * PASS-EITHER-WAY LOCK ON A KNOWN DEFECT.
+     * FIXED on create. Two halves remain in the plan, deliberately:
+     *   - `updateMeta` still cannot set it (its allow-list is unchanged);
+     *   - the customs PDFs still render `$po->incoterm`, because whether a
+     *     shipment term OVERRIDES or INHERITS the PO's is a trade-document
+     *     decision, not a dropped-input bug.
      */
-    public function test_probe_submitted_incoterm_is_silently_discarded(): void
+    public function test_probe_submitted_incoterm_is_persisted_on_create(): void
     {
         $user = $this->userWith(['supply_chain.view', 'supply_chain.shipments.manage']);
         $po = $this->seedPo($user, 1, '1000.00');
@@ -1021,16 +1082,27 @@ class ZzM043ImportAuditProbeTest extends TestCase
         ])->assertCreated();
 
         $stored = Shipment::query()->latest('id')->firstOrFail();
-        fwrite(STDERR, "[M043 incoterm] submitted=DDP response=".json_encode($r->json('data.incoterm'))
+        fwrite(STDERR, '[M043 incoterm] submitted=DDP response='.json_encode($r->json('data.incoterm'))
             .' stored='.json_encode($stored->incoterm?->value)." po=FOB\n");
 
-        $this->assertNull($r->json('data.incoterm'), 'MEASURED: 201 with the value silently gone');
-        $this->assertNull($stored->incoterm, 'MEASURED: the column stays null');
+        $this->assertSame('DDP', $r->json('data.incoterm'), 'the response echoes what was submitted');
+        $this->assertSame('DDP', $stored->incoterm?->value, 'the column carries it');
+        $this->assertSame('FOB', $po->fresh()->incoterm?->value, 'the PO term is untouched');
 
-        // The metadata patch cannot set it either.
+        // Still invalid values are refused, and omitting it stays null.
+        $this->actingAs($user)->postJson('/api/v1/supply-chain/shipments', [
+            'purchase_order_id' => $po->hash_id, 'incoterm' => 'NOPE',
+        ])->assertStatus(422);
+        $this->actingAs($user)->postJson('/api/v1/supply-chain/shipments', [
+            'purchase_order_id' => $po->hash_id,
+        ])->assertCreated();
+        $this->assertNull(Shipment::query()->latest('id')->first()->incoterm);
+
+        // RECORDED, still open: updateMeta drops it.
         $this->actingAs($user)->patchJson("/api/v1/supply-chain/shipments/{$stored->hash_id}",
-            ['incoterm' => 'DDP'])->assertOk();
-        $this->assertNull($stored->fresh()->incoterm, 'MEASURED: updateMeta drops it too');
+            ['incoterm' => 'FOB'])->assertOk();
+        $this->assertSame('DDP', $stored->fresh()->incoterm?->value,
+            'RECORDED: updateMeta still cannot change the Incoterm — see action plan B7');
     }
 
     /**
@@ -1073,21 +1145,28 @@ class ZzM043ImportAuditProbeTest extends TestCase
     public static function containerNumericProvider(): array
     {
         return [
-            // MEASURED-GOOD
-            'gross -1 refused'        => ['gross_weight_kg', '-1', '422'],
-            'gross 0 accepted'        => ['gross_weight_kg', '0', '201:0.00'],
-            'vol -1 refused'          => ['volume_cbm', '-1', '422'],
-            // MEASURED-DEFECTIVE — silent precision loss
-            'gross 1.999 -> 2.00'     => ['gross_weight_kg', '1.999', '201:2.00'],
-            'gross 10.00005 -> 10.00' => ['gross_weight_kg', '10.00005', '201:10.00'],
-            'vol 1.9999 -> 2.000'     => ['volume_cbm', '1.9999', '201:2.000'],
-            // MEASURED-DEFECTIVE — scientific notation silently accepted
-            'gross 1e3 -> 1000.00'    => ['gross_weight_kg', '1e3', '201:1000.00'],
-            // MEASURED-DEFECTIVE — 22003 numeric overflow escapes as a 500
-            'gross 1e17 overflows'    => ['gross_weight_kg', '1e17', '500'],
-            'gross 1e20 overflows'    => ['gross_weight_kg', '1e20', '500'],
-            'vol 1e17 overflows'      => ['volume_cbm', '1e17', '500'],
-            'vol 1e20 overflows'      => ['volume_cbm', '1e20', '500'],
+            'gross -1 refused'          => ['gross_weight_kg', '-1', '422'],
+            'gross 0 accepted'          => ['gross_weight_kg', '0', '201:0.00'],
+            'gross 25400.55 accepted'   => ['gross_weight_kg', '25400.55', '201:25400.55'],
+            'vol -1 refused'            => ['volume_cbm', '-1', '422'],
+            'vol 67.500 accepted'       => ['volume_cbm', '67.500', '201:67.500'],
+            // was 201 stored as 2.00 — silent precision loss
+            'gross 1.999 refused'       => ['gross_weight_kg', '1.999', '422'],
+            // was 201 stored as 10.00
+            'gross 10.00005 refused'    => ['gross_weight_kg', '10.00005', '422'],
+            // was 201 stored as 2.000
+            'vol 1.9999 refused'        => ['volume_cbm', '1.9999', '422'],
+            // was 201 stored as 1000.00 — scientific notation silently accepted
+            'gross 1e3 refused'         => ['gross_weight_kg', '1e3', '422'],
+            // were 500s — SQLSTATE 22003 numeric overflow
+            'gross 1e17 refused'        => ['gross_weight_kg', '1e17', '422'],
+            'gross 1e20 refused'        => ['gross_weight_kg', '1e20', '422'],
+            'vol 1e17 refused'          => ['volume_cbm', '1e17', '422'],
+            'vol 1e20 refused'          => ['volume_cbm', '1e20', '422'],
+            // a plain number past the column precision must also be refused,
+            // not left for Postgres to raise
+            'gross 1e11 plain refused'  => ['gross_weight_kg', '100000000000.00', '422'],
+            'vol 999999.999 refused'    => ['volume_cbm', '999999.999', '422'],
         ];
     }
 
@@ -1269,12 +1348,11 @@ class ZzM043ImportAuditProbeTest extends TestCase
 
         fwrite(STDERR, '[M043 impex e2e] '.json_encode($steps)."\n");
 
-        // Every documented step succeeds EXCEPT the landed-cost calculation,
-        // which 500s (see test_probe_calculate_landed_cost_endpoint_500s_*).
-        // PASS-EITHER-WAY LOCK ON A KNOWN DEFECT for that one key.
+        // Before the landed-cost eager-load fix this read
+        // ['landed_cost' => 500] — the one role that exists for this module
+        // could not complete step 5 of the documented journey.
         $bad = array_filter($steps, fn (int $c) => $c >= 400);
-        $this->assertSame(['landed_cost' => 500], $bad,
-            'MEASURED: impex_officer completes 14 of 15 documented steps; step 5 "calculate landed cost" 500s');
+        $this->assertSame([], $bad, 'impex_officer must complete every documented step');
 
         // The documented next step is a GRN — which impex_officer cannot create.
         $this->assertFalse($impex->hasPermission('inventory.grn.create'),
