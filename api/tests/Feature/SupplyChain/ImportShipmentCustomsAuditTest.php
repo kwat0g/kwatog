@@ -18,12 +18,17 @@ use App\Modules\SupplyChain\Enums\ShipmentStatus;
 use App\Modules\SupplyChain\Models\Container;
 use App\Modules\SupplyChain\Models\Shipment;
 use App\Modules\SupplyChain\Models\ShipmentDocument;
+use App\Modules\SupplyChain\Resources\ShipmentLandedCostResource;
 use App\Modules\SupplyChain\Services\LandedCostService;
 use App\Modules\SupplyChain\Services\ShipmentService;
 use Database\Seeders\RolePermissionSeeder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -36,9 +41,11 @@ use Tests\TestCase;
  * `PASS-EITHER-WAY LOCK ON A KNOWN DEFECT` in its docblock — a green run of this
  * file does NOT mean the module is healthy.
  *
- * `Zz` prefix keeps it last in the alphabetical suite order.
+ * Where a defect was FIXED in the same session, the test now asserts the repaired
+ * behaviour and its docblock records what was measured beforehand, so the
+ * regression is pinned rather than merely described.
  */
-class ZzM043ImportAuditProbeTest extends TestCase
+class ImportShipmentCustomsAuditTest extends TestCase
 {
     use RefreshDatabase;
 
@@ -113,11 +120,11 @@ class ZzM043ImportAuditProbeTest extends TestCase
         $user = $this->userWith(['supply_chain.view', 'supply_chain.shipments.manage']);
         $shipment = $this->seedShipment($user, lineCount: 3, lineTotal: '1000.00');
         $shipment->forceFill([
-            'freight_cost'   => '100.00',
+            'freight_cost' => '100.00',
             'insurance_cost' => '100.00',
-            'duties_amount'  => '100.00',
-            'brokerage_fee'  => '100.00',
-            'other_charges'  => '100.00',
+            'duties_amount' => '100.00',
+            'brokerage_fee' => '100.00',
+            'other_charges' => '100.00',
         ])->save();
 
         $out = app(LandedCostService::class)->calculate($shipment, 'by_value');
@@ -255,7 +262,7 @@ class ZzM043ImportAuditProbeTest extends TestCase
         $user = $this->userWith(['supply_chain.view', 'supply_chain.shipments.manage']);
 
         $this->assertFalse($this->app->isProduction());
-        $this->assertTrue(\Illuminate\Database\Eloquent\Model::preventsLazyLoading(),
+        $this->assertTrue(Model::preventsLazyLoading(),
             'the guard that exposed this must still be on, or the probe proves nothing');
 
         $codes = [];
@@ -314,13 +321,13 @@ class ZzM043ImportAuditProbeTest extends TestCase
         $po = $this->seedPo($user, 1, '1000.00');
         $this->actingAs($user)->postJson('/api/v1/supply-chain/shipments', [
             'purchase_order_id' => $po->hash_id,
-            'freight_cost'      => '5000.00',
-            'duties_amount'     => '1200.00',
+            'freight_cost' => '5000.00',
+            'duties_amount' => '1200.00',
         ])->assertCreated();
 
         $shipment->refresh();
         fwrite(STDERR, "[M043 no-input-path] freight={$shipment->freight_cost} duties={$shipment->duties_amount}"
-            ." landed_total=".json_encode($shipment->landed_cost_total)."\n");
+            .' landed_total='.json_encode($shipment->landed_cost_total)."\n");
 
         $this->assertSame('0.00', (string) $shipment->freight_cost, 'MEASURED: freight unreachable over HTTP');
         $this->assertSame('0.00', (string) $shipment->duties_amount, 'MEASURED: duty unreachable over HTTP');
@@ -409,7 +416,7 @@ class ZzM043ImportAuditProbeTest extends TestCase
 
         DB::enableQueryLog();
         DB::flushQueryLog();
-        $rows = \App\Modules\SupplyChain\Resources\ShipmentLandedCostResource::collection($out->landedCosts)->resolve();
+        $rows = ShipmentLandedCostResource::collection($out->landedCosts)->resolve();
         $n = count(DB::getQueryLog());
         DB::disableQueryLog();
 
@@ -504,14 +511,14 @@ class ZzM043ImportAuditProbeTest extends TestCase
         $user = $this->userWith(['supply_chain.view', 'supply_chain.shipments.manage']);
         $shipment = $this->seedShipment($user, lineCount: 1, lineTotal: '1000.00');
 
-        \Illuminate\Support\Facades\Event::fake();
-        \Illuminate\Support\Facades\Queue::fake();
-        \Illuminate\Support\Facades\Notification::fake();
+        Event::fake();
+        Queue::fake();
+        Notification::fake();
 
         $this->advance($shipment, ShipmentStatus::Received);
 
-        \Illuminate\Support\Facades\Queue::assertNothingPushed();
-        \Illuminate\Support\Facades\Notification::assertNothingSent();
+        Queue::assertNothingPushed();
+        Notification::assertNothingSent();
 
         $cols = DB::getSchemaBuilder()->getColumnListing('shipments');
         $handoff = array_values(array_filter($cols, fn (string $c) => str_contains($c, 'handoff')));
@@ -637,8 +644,8 @@ class ZzM043ImportAuditProbeTest extends TestCase
         $this->advance($shipment, ShipmentStatus::Received);
 
         $meta = $this->actingAs($user)->patchJson("/api/v1/supply-chain/shipments/{$shipment->hash_id}", [
-            'bl_number'        => 'REWRITTEN',
-            'carrier'          => 'REWRITTEN CARRIER',
+            'bl_number' => 'REWRITTEN',
+            'carrier' => 'REWRITTEN CARRIER',
             'container_number' => 'REWRITTEN',
         ]);
         $cont = $this->actingAs($user)->putJson("/api/v1/supply-chain/containers/{$container->hash_id}", [
@@ -695,9 +702,9 @@ class ZzM043ImportAuditProbeTest extends TestCase
 
         // 2. Raw SQL rewrite of the customs record.
         DB::table('shipments')->where('id', $id)->update([
-            'shipment_number'        => 'HACKED',
+            'shipment_number' => 'HACKED',
             'customs_clearance_date' => '1999-01-01',
-            'status'                 => 'cleared',
+            'status' => 'cleared',
         ]);
         $row = DB::table('shipments')->where('id', $id)->first();
         $this->assertSame('HACKED', $row->shipment_number, 'MEASURED: raw SQL rewrote the compliance record');
@@ -898,8 +905,8 @@ class ZzM043ImportAuditProbeTest extends TestCase
         $shipment->delete();
 
         $codes = [
-            'shipment'  => $this->actingAs($user)->patchJson("/api/v1/supply-chain/shipments/{$shipment->hash_id}/restore")->getStatusCode(),
-            'document'  => $this->actingAs($user)->patchJson("/api/v1/supply-chain/shipment-documents/{$doc->hash_id}/restore")->getStatusCode(),
+            'shipment' => $this->actingAs($user)->patchJson("/api/v1/supply-chain/shipments/{$shipment->hash_id}/restore")->getStatusCode(),
+            'document' => $this->actingAs($user)->patchJson("/api/v1/supply-chain/shipment-documents/{$doc->hash_id}/restore")->getStatusCode(),
             'container' => $this->actingAs($user)->patchJson("/api/v1/supply-chain/containers/{$container->hash_id}/restore")->getStatusCode(),
         ];
         fwrite(STDERR, '[M043 restore binding] '.json_encode($codes)."\n");
@@ -997,12 +1004,12 @@ class ZzM043ImportAuditProbeTest extends TestCase
         $listIds = collect($list->json('data'))->pluck('id')->all();
         $codes = [
             'create_on_trashed_po' => $createOnTrashedPo->getStatusCode(),
-            'show'                 => $this->actingAs($user)->getJson("/api/v1/supply-chain/shipments/{$shipment->hash_id}")->getStatusCode(),
-            'packing_list'         => $this->actingAs($user)->get("/api/v1/supply-chain/shipments/{$shipment->hash_id}/packing-list")->getStatusCode(),
-            'commercial_invoice'   => $this->actingAs($user)->get("/api/v1/supply-chain/shipments/{$shipment->hash_id}/commercial-invoice")->getStatusCode(),
-            'landed_cost'          => $this->actingAs($user)->postJson("/api/v1/supply-chain/shipments/{$shipment->hash_id}/calculate-landed-cost", [])->getStatusCode(),
-            'status'               => $this->actingAs($user)->patchJson("/api/v1/supply-chain/shipments/{$shipment->hash_id}/status", ['status' => 'shipped'])->getStatusCode(),
-            'documents'            => $this->actingAs($user)->getJson("/api/v1/supply-chain/shipments/{$shipment->hash_id}/containers")->getStatusCode(),
+            'show' => $this->actingAs($user)->getJson("/api/v1/supply-chain/shipments/{$shipment->hash_id}")->getStatusCode(),
+            'packing_list' => $this->actingAs($user)->get("/api/v1/supply-chain/shipments/{$shipment->hash_id}/packing-list")->getStatusCode(),
+            'commercial_invoice' => $this->actingAs($user)->get("/api/v1/supply-chain/shipments/{$shipment->hash_id}/commercial-invoice")->getStatusCode(),
+            'landed_cost' => $this->actingAs($user)->postJson("/api/v1/supply-chain/shipments/{$shipment->hash_id}/calculate-landed-cost", [])->getStatusCode(),
+            'status' => $this->actingAs($user)->patchJson("/api/v1/supply-chain/shipments/{$shipment->hash_id}/status", ['status' => 'shipped'])->getStatusCode(),
+            'documents' => $this->actingAs($user)->getJson("/api/v1/supply-chain/shipments/{$shipment->hash_id}/containers")->getStatusCode(),
         ];
         fwrite(STDERR, '[M043 soft-deleted] '.json_encode($codes)
             .' in_list='.(in_array($shipment->hash_id, $listIds, true) ? 'YES' : 'no')."\n");
@@ -1078,7 +1085,7 @@ class ZzM043ImportAuditProbeTest extends TestCase
 
         $r = $this->actingAs($user)->postJson('/api/v1/supply-chain/shipments', [
             'purchase_order_id' => $po->hash_id,
-            'incoterm'          => 'DDP',
+            'incoterm' => 'DDP',
         ])->assertCreated();
 
         $stored = Shipment::query()->latest('id')->firstOrFail();
@@ -1145,28 +1152,28 @@ class ZzM043ImportAuditProbeTest extends TestCase
     public static function containerNumericProvider(): array
     {
         return [
-            'gross -1 refused'          => ['gross_weight_kg', '-1', '422'],
-            'gross 0 accepted'          => ['gross_weight_kg', '0', '201:0.00'],
-            'gross 25400.55 accepted'   => ['gross_weight_kg', '25400.55', '201:25400.55'],
-            'vol -1 refused'            => ['volume_cbm', '-1', '422'],
-            'vol 67.500 accepted'       => ['volume_cbm', '67.500', '201:67.500'],
+            'gross -1 refused' => ['gross_weight_kg', '-1', '422'],
+            'gross 0 accepted' => ['gross_weight_kg', '0', '201:0.00'],
+            'gross 25400.55 accepted' => ['gross_weight_kg', '25400.55', '201:25400.55'],
+            'vol -1 refused' => ['volume_cbm', '-1', '422'],
+            'vol 67.500 accepted' => ['volume_cbm', '67.500', '201:67.500'],
             // was 201 stored as 2.00 — silent precision loss
-            'gross 1.999 refused'       => ['gross_weight_kg', '1.999', '422'],
+            'gross 1.999 refused' => ['gross_weight_kg', '1.999', '422'],
             // was 201 stored as 10.00
-            'gross 10.00005 refused'    => ['gross_weight_kg', '10.00005', '422'],
+            'gross 10.00005 refused' => ['gross_weight_kg', '10.00005', '422'],
             // was 201 stored as 2.000
-            'vol 1.9999 refused'        => ['volume_cbm', '1.9999', '422'],
+            'vol 1.9999 refused' => ['volume_cbm', '1.9999', '422'],
             // was 201 stored as 1000.00 — scientific notation silently accepted
-            'gross 1e3 refused'         => ['gross_weight_kg', '1e3', '422'],
+            'gross 1e3 refused' => ['gross_weight_kg', '1e3', '422'],
             // were 500s — SQLSTATE 22003 numeric overflow
-            'gross 1e17 refused'        => ['gross_weight_kg', '1e17', '422'],
-            'gross 1e20 refused'        => ['gross_weight_kg', '1e20', '422'],
-            'vol 1e17 refused'          => ['volume_cbm', '1e17', '422'],
-            'vol 1e20 refused'          => ['volume_cbm', '1e20', '422'],
+            'gross 1e17 refused' => ['gross_weight_kg', '1e17', '422'],
+            'gross 1e20 refused' => ['gross_weight_kg', '1e20', '422'],
+            'vol 1e17 refused' => ['volume_cbm', '1e17', '422'],
+            'vol 1e20 refused' => ['volume_cbm', '1e20', '422'],
             // a plain number past the column precision must also be refused,
             // not left for Postgres to raise
-            'gross 1e11 plain refused'  => ['gross_weight_kg', '100000000000.00', '422'],
-            'vol 999999.999 refused'    => ['volume_cbm', '999999.999', '422'],
+            'gross 1e11 plain refused' => ['gross_weight_kg', '100000000000.00', '422'],
+            'vol 999999.999 refused' => ['volume_cbm', '999999.999', '422'],
         ];
     }
 
@@ -1191,10 +1198,10 @@ class ZzM043ImportAuditProbeTest extends TestCase
         $c = $container->hash_id;
         $d = $doc->hash_id;
         $endpoints = [
-            ['get', "/api/v1/supply-chain/shipments/options"],
-            ['get', "/api/v1/supply-chain/shipments"],
+            ['get', '/api/v1/supply-chain/shipments/options'],
+            ['get', '/api/v1/supply-chain/shipments'],
             ['get', "/api/v1/supply-chain/shipments/{$s}"],
-            ['post', "/api/v1/supply-chain/shipments"],
+            ['post', '/api/v1/supply-chain/shipments'],
             ['patch', "/api/v1/supply-chain/shipments/{$s}/status"],
             ['patch', "/api/v1/supply-chain/shipments/{$s}"],
             ['delete', "/api/v1/supply-chain/shipments/{$s}"],
@@ -1307,12 +1314,12 @@ class ZzM043ImportAuditProbeTest extends TestCase
 
         $create = $this->actingAs($impex)->postJson('/api/v1/supply-chain/shipments', [
             'purchase_order_id' => $po->hash_id,
-            'carrier'           => 'ONE',
-            'vessel'            => 'MV OGAMI',
-            'bl_number'         => 'OOLU12345678',
-            'etd'               => '2026-09-05',
-            'eta'               => '2026-09-20',
-            'incoterm'          => 'CIF',
+            'carrier' => 'ONE',
+            'vessel' => 'MV OGAMI',
+            'bl_number' => 'OOLU12345678',
+            'etd' => '2026-09-05',
+            'eta' => '2026-09-20',
+            'incoterm' => 'CIF',
         ]);
         $steps['create'] = $create->getStatusCode();
         $sid = $create->json('data.id');
@@ -1453,7 +1460,7 @@ class ZzM043ImportAuditProbeTest extends TestCase
 
         return User::factory()->create([
             'role_id' => $role->id,
-            'email'   => 'm43_'.substr(uniqid(), -6).'@t.test',
+            'email' => 'm43_'.substr(uniqid(), -6).'@t.test',
         ]);
     }
 

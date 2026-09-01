@@ -18,6 +18,7 @@ use App\Modules\SupplyChain\Services\ShipmentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -128,7 +129,7 @@ class ShipmentController
                 // verbatim. Measured: a 304-character filename reached Postgres
                 // as SQLSTATE 22001 and surfaced as a 500. Refuse it here.
                 static function (string $attribute, mixed $value, callable $fail): void {
-                    if (! $value instanceof \Illuminate\Http\UploadedFile) {
+                    if (! $value instanceof UploadedFile) {
                         return;
                     }
                     if (mb_strlen((string) $value->getClientOriginalName()) > 255) {
