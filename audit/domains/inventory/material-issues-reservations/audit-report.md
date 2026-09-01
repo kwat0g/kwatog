@@ -635,3 +635,366 @@ reservation's own outstanding quantity under the same lock that flips its status
 or (b) derive `reserved_quantity` from `Σ(active reservations)` rather than
 maintaining it independently. Both change what a reservation *means*, so this is
 **not** containment work.
+
+## MEASURED — concurrency (two concurrent OS processes, wall-clock epoch barrier)
+
+Run against a **persistent** database (`ogami_race_matiss`, migrated, no
+`RefreshDatabase` — which would have hidden uncommitted rows from the second
+connection and faked a "no lock" result). Barrier is absolute epoch-ms, so the
+`APP_TIMEZONE=Asia/Manila` vs UTC-container skew cannot affect it.
+
+### Race 1 — two work orders reserving the last unit: **exactly one winner** ✓
+
+10 on hand; both processes call `reserve(10)` at the same instant.
+
+```
+B: WON
+A: LOST InsufficientStockException
+report: qty=10.000 reserved=10.000 sum(active)=10.000 issue_lines=0
+```
+
+`reserve()` takes a genuine `lockForUpdate()` (`StockMovementService.php:404`
+via `lockOrCreate()`) and re-reads availability **inside** the lock, so it is the
+correct shape — not the pre-read that let two stock-count sessions both reach
+`in_progress`. Ledger and reservation table agree.
+
+### Race 2 — two issues citing the SAME reservation: **BOTH WON** ✗ (P0)
+
+20 on hand, one 10-unit reservation. Two processes each issue 10 citing that
+reservation id, simultaneously.
+
+```
+B: WON
+A: WON
+report: qty=0.000 reserved=0.000 sum(active)=0 issue_lines=3
+  res#1 status=issued qty=10.000
+```
+
+**A 10-unit reservation authorised 20 units of issue.** This is the concurrent
+form of M042-N02c, and it is the *worse* of the two shapes the pipeline has seen:
+the reservation row **is** locked (`MaterialIssueService.php:129`,
+`lockForUpdate()->find()`), so the two transactions correctly serialise — but
+there is no status or quantity check *inside* that lock for the serialisation to
+protect. A real lock guarding an absent guard is more dangerous than a missing
+lock, because the code reads as if it were safe.
+
+### Race 3 — incidental: `DocumentSequenceService` loses a first-of-month race
+**(out of module — `api/app/Common/Services/`, report only)**
+
+On the very first `material_issue` number of the month, both processes found no
+`document_sequences` row and both tried to `insert` it
+(`api/app/Common/Services/DocumentSequenceService.php:64-77`):
+
+```
+A: LOST UniqueConstraintViolationException — SQLSTATE[23505] duplicate key
+B: WON
+```
+
+The lock-or-create uses a plain `insert()`, not the `insertOrIgnore()`-then-relock
+pattern that `StockMovementService::lockOrCreate()` uses correctly
+(`StockMovementService.php:233`). A unique violation is not retried by
+`DB::transaction()`'s deadlock retry, so **the first two concurrent documents of
+any type in any month can hard-fail with a 500-class error.** This is a shared
+helper used by every module's numbering; it is not mine to fix. Reported to the
+coordinator.
+
+## MEASURED — remaining invariants
+
+### M042-N10 — Broken (P0): material can be issued to a work order in ANY state, including cancelled
+
+```
+[I17] planned=ISSUE OK | confirmed=ISSUE OK | in_progress=ISSUE OK |
+      paused=ISSUE OK | completed=ISSUE OK | closed=ISSUE OK | cancelled=ISSUE OK
+```
+
+All **7/7** `WorkOrderStatus` cases accept an issue. `StoreMaterialIssueRequest`
+validates only `exists:work_orders,id` (`:34`) and `create()` never loads the work
+order at all. Material can be consumed against a cancelled or closed work order,
+and the cost lands nowhere recoverable.
+
+### M042-N11 — Broken (P0): an issue may exceed the BOM requirement without limit, and never updates work-order actuals
+
+```
+[I18] bom_quantity=5 issued 40 -> actual_quantity_issued=0.000, variance=0.000,
+      actual_cost='0.00', cost_variance='0.00'
+```
+
+Issued **8× the BOM requirement**: accepted silently. And every actuals column on
+`work_order_materials` stayed at zero. Meanwhile the production-start path *does*
+maintain them (`Production/Services/WorkOrderService.php:946-958`). Confirms prior
+**M042-F04** by measurement.
+
+### M042-N12 — Incomplete (P0): two disjoint issue paths, neither doing the other's bookkeeping
+
+`grep -rn "MaterialIssueSlip\|MaterialIssueService" api/app/Modules/Production/ api/app/Modules/Maintenance/`
+returns **zero hits**. So:
+
+| path | creates a slip? | moves stock? | updates WO actuals? |
+|---|---|---|---|
+| `MaterialIssueService::create()` (this module, the HTTP route) | yes | yes | **no** |
+| `Production\WorkOrderService` start/reserve (`:930-942`, `:946-958`) | **no** | yes | yes |
+
+This is the "bypasses the canonical service" shape, but symmetrical: there is no
+single canonical issue path. Production consumes material with no issue document
+at all (nothing for a warehouse to sign, nothing to cancel), and the documented
+path leaves production accounting untouched. Which one is authoritative is a
+**process-owner question**, not something to infer.
+
+### M042-N13 — Broken (P1): issue slips and reservations are fully mutable, with zero triggers
+
+```
+[I13] eloquent slip_number=HACKED-EL; raw=HACKED-SQL;
+      line qty->9999.000 while stock_level stays 90.000; raw delete=DELETED;
+      non-internal pg_triggers on the 3 tables=0
+```
+
+Probed all four ways on a slip that had already moved stock:
+
+- Eloquent `forceFill()->save()` — rewrote `slip_number` to `HACKED-EL`;
+- raw SQL `UPDATE` — rewrote it again to `HACKED-SQL` and `total_value` to 99999;
+- raw SQL rewrote a line's `quantity_issued` from `10` to `9999` while
+  `stock_levels.quantity` stayed at `90.000` — **document and ledger silently
+  disagree by 9989 units**;
+- raw SQL `DELETE` of a line succeeded.
+
+`pg_trigger` count (non-internal) across `material_issue_slips`,
+`material_issue_slip_items`, `material_reservations` = **0**. Same exposure as
+`stock_movements` (N4, deferred by `warehouse-stock-control`) and the two Quality
+modules. Per that handoff, any fix must be **column-scoped** — reported, not
+unilaterally triggered.
+
+### M042-N14 — Broken (P1): a new issue can be created against a soft-deleted item at a soft-deleted location, and archiving destroys the traceability of existing slips
+
+```
+[I19] item trashed=y | loc trashed=y | list=200 | show=200 |
+      show.items=[{"id":"dGypLxpvAg","item":null,"location":null,
+                   "quantity_issued":"10.000","unit_cost":"25.0000","total_cost":"250.00",...}]
+      | new issue on trashed item/loc=ACCEPTED
+```
+
+Two distinct defects:
+
+1. **Fails OPEN on create.** `exists:items,id` / `exists:warehouse_locations,id`
+   (`StoreMaterialIssueRequest.php:39-40`) do not exclude soft-deleted rows, and
+   the service does not check `deleted_at`. An archived item at an archived
+   location is still issuable — the same fail-open shape as `goods-receiving`'s
+   incoming-QC gate.
+2. **Existing slips lose their identity.** `show` still returns 200, but
+   `item` and `location` both come back **`null`** because the resource's
+   `whenLoaded` relations silently skip trashed rows
+   (`MaterialIssueSlipItemResource.php:15-27`). A financial record retains
+   `250.00` of value with no record of *what* was issued or *from where*. For an
+   IATF 16949 traceability chain that is a material loss, not cosmetics.
+
+### M042-N09 — Broken (P1) — CONFIRMED with a discriminating value: the slip disagrees with the stock movement (and therefore the GL) by a centavo per line
+
+My first probe used WAC `0.3335` (exact total `1.0005`) and measured
+`line=1.00, slip=1.00, movement=1.00` — **no divergence**, because half-up and
+truncation agree at that value. That probe did not discriminate; I re-ran with a
+value that does:
+
+```
+[I26] qty 1 @ wac 1.0050 (exact 1.0050) => line.total_cost=1.00,
+      slip.total_value=1.00, movement.total_cost=1.01  [truncate=1.00, half-up=1.01]
+```
+
+`MaterialIssueService.php:142,151` use `bcadd($x,'0',2)` (truncates);
+`StockMovementService::round2()` (`:450-456`) adds `0.005` first (half-up). The
+document says ₱1.00, the inventory ledger and the GL handoff say ₱1.01. Prior
+**M042-F07 reproduces** — and note it took a deliberately chosen value to show it,
+which is why it had never been caught.
+
+### M042-N15 — Broken (P1) — MEASURED: the picking payload and the 422 error bodies leak raw integer PKs
+
+```
+[I21] show data.work_order_id=1 (real WO pk=1); raw match=YES
+[I21] over-issue 422 body={"message":"Insufficient available stock at
+      location 2 for item 2: needed 99999.000, available 95.000."}
+      real item pk=2 loc pk=2
+[I20] picking body: {"data":{...,"lines":[{"item_id":1,...,
+      "preferred_location":{"id":1,...},"suggestions":[{"location":{"id":1,...
+```
+
+Three separate raw-PK oracles, all in **200/422 responses from live routes**:
+the issue resource's `work_order_id` matches the real work-order PK exactly; the
+insufficient-stock message enumerates the raw item and location PKs; and the
+picking payload uses raw ids for item, location and work order throughout
+(`PickingListService.php:33-39,46-66,79-107`). Confirms prior **M042-F10**.
+
+### M042-N08 — Incomplete (P2) — MEASURED: three roles read picking lists without holding `inventory.picking.view`
+
+```
+[I24] warehouse_staff:     index=200 show=200 picking=200 store=201  [view=y issue=y picking=y]
+[I24] system_admin:        index=200 show=200 picking=200 store=201  [view=y issue=y picking=y]
+[I24] qc_inspector:        index=200 show=200 picking=200 store=403  [view=y issue=n picking=n]
+[I24] production_manager:  index=200 show=200 picking=200 store=403  [view=y issue=n picking=n]
+[I24] purchasing_officer:  index=200 show=200 picking=200 store=403  [view=y issue=n picking=n]
+[I24] employee:            index=403 show=403 picking=403 store=403  [view=n issue=n picking=n]
+```
+
+**Both registry roles complete their part** (`system_admin`, `warehouse_staff`
+get 200/200/200/201) — no repeat of the `finance_officer` shape from N5 next
+door. `employee` is correctly refused everywhere. But three roles that do **not**
+hold `inventory.picking.view` still get **200** on picking, because the route
+gates on `inventory.view` (`routes.php:129`). The permission exists and is
+seeded to `warehouse_staff`; the gate just does not use it.
+
+### Reservation lifecycle gaps (measured)
+
+- **Orphaned by a vanishing work order.** `[I12] reservation for a nonexistent
+  WO: rows=1, level.reserved=25.000; FK on material_reservations.work_order_id =
+  NONE.` The reservation keeps consuming 25 units of availability forever.
+- **Nothing ages it.** `[I27] material_reservations cols: id,item_id,work_order_id,
+  location_id,quantity,status,reserved_at,released_at,created_at,updated_at` —
+  no `expires_at`, and zero scheduled commands reference reservations. There is
+  no ager, so neither failure mode (a lying exit code, or nothing at all) applies
+  in the 8D sense: this is the `material-review-board` shape.
+- **Cancelling an issued slip does not restore the reservation.**
+  `[I15] after cancel of an issued reservation-backed slip: res.status=issued,
+  released_at=set, level.reserved=0.000, qty=200.000.` The stock came back but
+  the work order's protection did not — the only code that resets a reservation
+  is the `Draft` branch (`MaterialIssueService.php:200-216`), which **no HTTP
+  path can reach** because `create()` hard-codes `Issued` (`:67`). Confirms prior
+  **M042-F05**.
+
+### Status machine — 6 cells walked
+
+```
+[I14] cancel(draft)     = OK, qty 99.000 -> 99.000   (correct: no stock to reverse)
+      cancel(issued)    = OK, qty 98.000 -> 99.000   (correct: reversal posts)
+      cancel(cancelled) = BusinessRuleException       (correct)
+      issue(vs reserved reservation) = OK, res -> issued
+      issue(vs issued   reservation) = OK, res -> issued   ✗ replay accepted
+      issue(vs released reservation) = OK, res -> issued   ✗ a RELEASED reservation
+                                                             is re-consumable and
+                                                             flips back to issued
+```
+
+3 slip-status cells × cancel, plus 3 reservation-status cells × create. The two
+reservation cells marked ✗ are guard gaps, not transitions — `if ($res)` is the
+whole check. The `released → issued` cell is a state regression: a reservation
+that was deliberately given up is silently reactivated and re-released.
+
+### Invariants that HOLD (measured, and worth recording as such)
+
+- **`reserved ≤ on_hand` cannot be violated by an adjustment either.**
+  `[I11] refused: InsufficientStockException — needed 60, available 0.000.`
+  An `adjustment_out` of 60 under a 100-unit reservation is refused, because
+  `move()` applies the same availability rule to every source movement.
+- **Return-to-stock preserves WAC.** `[I16] wac after receipt=32.5000; after
+  cancel-reversal=31.8182 (qty 110.000); value-neutral expectation=31.8181.`
+  Reversing at the original unit cost is value-neutral; the 0.0001 gap is my
+  expectation being computed with `bcdiv` truncation against the service's
+  half-up `round4()`, not a divergence in the service. **No defect** — and
+  cancelling twice is refused, so it cannot be returned twice.
+- **Quantity validation is CLEAN — the `numeric|min:0` family does NOT reproduce.**
+  My prediction going in was that it would not, and that is what I measured:
+
+  ```
+  [I22] 1.999 => 201 stored=1.999   (exact, no truncation to 2.00)
+        1e3 => 422 | 1e17 => 422 | 1e20 => 422 | 10.00005 => 422
+        0 => 422 | -5 => 422 | 0.0001 => 422 | array payload => 422
+  ```
+
+  `['required','decimal:0,3','min:0.001']` (`StoreMaterialIssueRequest.php:41`)
+  is the correct shape — the same one that made `material-review-board` clean.
+  No overflow, no silent truncation, no `ValueError`, and a map payload is
+  rejected rather than coerced. **This prior-finding family is disproved here.**
+
+### M042-N07 — MEASURED: the reservation id contract is inverted
+
+```
+[I23] reservation hash_id (dGypLxpvAg) => 422
+      {"message":"The items.0.material_reservation_id field must be an integer."}
+      raw pk (1) => 201
+```
+
+The API **refuses** the hash id and **accepts** the raw internal PK — the exact
+inverse of the project-wide contract. `material_reservation_id` is absent from
+`hashIdFields()` (`StoreMaterialIssueRequest.php:22-29`). Any client following
+the documented convention cannot use the reservation feature at all.
+
+### Self-cancellation (question, not filed as a defect)
+
+```
+[I25] same warehouse user created (201) and cancelled (200) its own issue
+```
+
+One `warehouse_staff` user both created and reversed its own stock movement, with
+no second party and no reason recorded (the route takes a bare `Request` and
+`cancel()` persists no actor/reason — `MaterialIssueSlipController.php:43-47`).
+For a warehouse correcting its own slip this may well be intended. **Question for
+the process owner**: does reversing an already-posted stock movement and its GL
+entry require a checker, as journal entries do? Filed as a question, not a
+finding, because a maker-checker requirement here is a policy decision.
+
+## Prior-work assessment — how many of the 15 prior findings reproduce
+
+The prior three sessions wrote 15 findings, applied **zero** fixes, and honestly
+self-flagged that nothing was runtime-verified. On first real execution:
+
+| Prior | Verdict |
+|---|---|
+| F01 lifecycle decision | **Stands, and sharpened** — `create()` hard-codes `Issued` (`:67`) and the only reservation-releasing code is the unreachable `Draft` branch. Still a genuine process-owner question. |
+| F02 availability checked before release | **REPRODUCES** (I5) — measured refusal, `available 0.000`. |
+| F03 reservation identity unvalidated | **REPRODUCES and is worse** — measured cross-work-order destruction (I7), replay (I8), and a 2× over-consume under real concurrency (Race 2). |
+| F04 WO actuals not updated | **REPRODUCES** (I18) — all actuals columns stayed 0 after issuing 8× the BOM. |
+| F05 reversal provenance / reservation not restored | **REPRODUCES** (I15). |
+| F06 no idempotency boundary | **REPRODUCES** — Race 2 committed two slips for one reservation; nothing keys on an operation id. |
+| F07 truncation vs half-up | **REPRODUCES** (I26) — but only at a deliberately chosen value; my first, non-discriminating probe showed no divergence. |
+| F08 missing FKs / checks | **REPRODUCES** (I12) — `FK on material_reservations.work_order_id = NONE`. |
+| F09 inactive/blocked sources issuable | **PARTLY REPRODUCES** — measured for **soft-deleted** item *and* location (I19, accepted). `is_active`/`is_blocked` not separately probed — see "could not verify". |
+| F10 raw internal IDs exposed | **REPRODUCES** (I20, I21) — three separate oracles in live 200/422 bodies. |
+| F11 reservation/lot/UOM not end-to-end | **REPRODUCES** (I23) — hash id 422, raw PK 201. |
+| F12 picking authorization too broad | **REPRODUCES but DOWNGRADED to P2** (I24) — real privilege broadening (3 roles get 200 without the permission), but not an impossible approval chain, and both registry roles work. |
+| F13 FEFO is a movement heuristic | **Stands by reading** — not runtime-probed; the picking payload does present a lot/expiry as exact. |
+| F14 no cancel UI | **Stands by reading** — no cancel method in `spa/src/api/inventory/material-issues.ts`. |
+| F15 list filters/action incomplete | **Stands by reading** (Polish). |
+
+**13 of 15 reproduce or are sharpened; 1 downgraded (F12, P1→P2); 1 partly
+verified (F09).** Plus **6 new findings** the prior sessions missed
+(N02a/N02b/N02c cross-reservation corruption, N10 any-WO-state, N13 mutability,
+N14 archived-item fail-open, N12 two disjoint issue paths, and the out-of-module
+`DocumentSequenceService` race).
+
+**And one prior-finding family disproved:** the `numeric|min:0` validation
+pattern does not apply here (I22) — as I predicted before probing, so that
+prediction is confirmed rather than refuted.
+
+## Critical interaction — why these must be fixed TOGETHER, not incrementally
+
+**Fixing N01 alone would amplify N02b.** N01's spurious refusal (a
+reservation-backed issue rejected because `move()` sees `available 0`) is today
+accidentally *limiting the blast radius* of N02b: many of the over-release paths
+never execute because the issue is refused first. Correct the ordering — release
+the reservation before the movement — without also fixing the per-reservation
+accounting, and issues that currently fail safely would start succeeding **and
+over-releasing other work orders' reservations**. That is a strictly worse state
+than today.
+
+This is the single strongest argument for handing the reservation cluster off as
+one unit of work rather than fixing the "obvious" ordering bug in isolation.
+
+## Verification evidence (this session)
+
+- Baseline `tests/Feature/Inventory`: **177 passed / 621 assertions / exit 0**.
+- Probe suite `ZzM042ProbeTest`: 24 probes executed across 5 runs; all reported
+  results above are from runs with **non-zero assertions and exit 0** except
+  where a probe error is stated and then fixed and re-run.
+- Race probes: 3 scenarios, two concurrent OS processes each, persistent database.
+- The database container was cycled by another session mid-run once ("the database
+  system is starting up", 0 assertions — the documented tell). That run was
+  discarded and re-executed after the container returned healthy; no result above
+  comes from it.
+
+## Could NOT verify (stated plainly)
+
+- **`items.is_active` / `warehouse_locations.is_active` / `is_blocked`** as
+  distinct from soft-deletion (prior F09's other half). I measured the
+  soft-delete case only.
+- **SPA behaviour.** No browser or component test was run; all SPA claims in this
+  report are from reading source, not execution.
+- **FEFO/lot correctness (F13)** beyond observing that the picking payload
+  presents a lot as exact.
+- **GL figures downstream of the centavo divergence (N09)** — I measured the
+  movement/slip disagreement but did not trace it into `journal_entry_lines`.
