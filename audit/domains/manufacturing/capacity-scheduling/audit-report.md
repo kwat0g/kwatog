@@ -184,3 +184,34 @@ Keyboard users can activate a bar, but screen-reader users do not receive a reli
 - PHP syntax checks passed for `CapacityPlanningService.php`, `SchedulerController.php`, `RunSchedulerRequest.php`, and `ConfirmScheduleRequest.php`.
 - No dedicated SPA scheduler/Gantt tests were present to execute.
 - `git diff --check` was clean for the audited paths before report creation.
+
+---
+
+# M050 — Capacity Scheduling Re-audit
+
+**Audit date:** 2026-09-01
+**Status:** 🔄 In Progress (skeleton committed before probing, per Step 0)
+**Scope:** `manufacturing/capacity-scheduling` only
+**Prior session:** 2026-08-24/25, released `📋 Plan Ready` with 19 findings, then re-opened as `Needs Re-audit`.
+**Prior session honesty check:** the prior report SELF-FLAGGED as unverified — its "Verification notes"
+state `CapacityPlanningServiceTest` produced *7 tests failed during setup with 0 assertions* because
+PostgreSQL host `db` could not resolve (`SQLSTATE[08006]`). So every M050-001..019 finding is static
+reading, never executed. This re-audit's job is to reproduce or disprove them against real rows.
+
+## Plan for this session
+
+1. Locate the real code (expected `api/app/Modules/MRP/`, confirm by grep).
+2. Real numeric baseline: tests + assertions + exit code on an own database.
+3. HTTP-layer coverage split (routes with a test vs. routes never hit over HTTP).
+4. Finite-capacity invariant table (overbooking, machine overlap, mold double-book,
+   inactive/archived/maintenance machine, past scheduling, race under two OS processes,
+   mold past rated shot life).
+5. Gantt payload vs. persisted plan, recomputed independently.
+6. Reschedule/cascade, full transition matrix, immutability (`pg_trigger`).
+7. Scheduled commands: lying / missing / uncalled.
+8. Validation family (~7 values, one per test), archived rows, permissions, HashIDs, dead surfaces.
+
+## Findings (2026-09-01)
+
+_To be filled as measured. Each finding carries file:line and a measured result._
+
