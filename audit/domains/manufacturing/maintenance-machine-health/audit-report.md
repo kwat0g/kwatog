@@ -154,3 +154,53 @@ Action: either subscribe and invalidate/update the relevant maintenance queries 
 ## Release decision
 
 No production-code fixes were applied. The majority of findings require a coordinated work-order state machine, exact financial arithmetic, scheduler semantics, archive binding, or Production–Maintenance integration. M053 is released as 📋 Plan Ready with the ordered action plan in `action-plan.md`.
+
+---
+
+# Re-audit — 2026-09-01 (session 3, parallel pipeline)
+
+Module: `manufacturing/maintenance-machine-health` (M053, Tier 3). Lock: **RECLAIMED**
+(170h-old orphan lock from 2026-08-25).
+
+**Status of this section: IN PROGRESS.** Skeleton committed before probing so nothing is
+lost to an interruption. Sections below are filled in as measurements land.
+
+## 1. Where the code actually lives
+
+_TBD_
+
+## 2. Prior-session claims — reproduce / disprove
+
+_TBD_
+
+## 3. Numeric baseline
+
+_TBD_
+
+## 4. HTTP-vs-service coverage split
+
+_TBD_
+
+## 5. Findings — Broken
+
+_TBD_
+
+## 6. Findings — Missing
+
+_TBD_
+
+## 7. Findings — Incomplete
+
+_TBD_
+
+## 8. Findings — Polish
+
+_TBD_
+
+## 9. Invariant table
+
+_TBD_
+
+## 10. Questions for a human
+
+_TBD_
