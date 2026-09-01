@@ -347,7 +347,7 @@ sequence.
 
 Claim: `RECLAIMED` (orphan lock, 2026-08-25, 154h stale).
 
-## Status: IN PROGRESS (skeleton committed before probing)
+## Status: IN PROGRESS — static discovery + baseline MEASURED; invariant probe running
 
 Prior-work assessment: three prior sessions produced 15 findings (M042-F01…F15)
 and applied **zero production-code fixes**. The prior fix log self-flags that its
@@ -363,3 +363,178 @@ and `api/app/Modules/Maintenance/Services/SparePartUsageService.php` — out of
 module, report-only.
 
 (Findings appended below as measured.)
+
+### Environment (verified, this session)
+
+- `docker compose ps`: `ogami-db` and `ogami-redis` up and healthy; **the `api`
+  service is not running** — all PHP is executed through
+  `docker compose run --rm --no-deps -e DB_DATABASE=… api …`.
+- `psql -U ogami -d postgres -c "select 1;"` → `1`.
+- Own database created: `ogami_test_matiss`.
+- **Real baseline: `tests/Feature/Inventory` = 177 passed / 621 assertions / exit 0**
+  (81.75s). Non-zero assertions, and it matches the neighbouring
+  `warehouse-stock-control` session's stated baseline exactly, so the harness is
+  genuinely executing.
+
+### Handoff verification (`warehouse-stock-control`)
+
+`reserve()` and `release()` both now call `assertPositiveQuantity()` before doing
+anything (`api/app/Modules/Inventory/Services/StockMovementService.php:387`,
+`:423`, guard at `:441-448`). The neighbour's fix is present in the tree I
+inherited, and its regression test `reservations reject non positive quantities`
+is green in my baseline run.
+
+## HTTP-vs-service coverage split (MEASURED)
+
+Five routes are in scope (`api/app/Modules/Inventory/routes.php:129,152-155`):
+
+| Route | Permission | Any HTTP test? |
+|---|---|---|
+| `GET /inventory/material-issues` | `inventory.view` | **none** |
+| `GET /inventory/material-issues/{materialIssueSlip}` | `inventory.view` | **none** |
+| `POST /inventory/material-issues` | `inventory.issue.create` | **none** |
+| `DELETE /inventory/material-issues/{materialIssueSlip}` | `inventory.issue.create` | yes — `api/tests/Feature/Inventory/MaterialIssueCancelTest.php:134` |
+| `GET /inventory/picking-lists/mis/{materialIssueSlip}` | `inventory.view` | **none** |
+
+**1 of 5 routes has any HTTP coverage.** `grep -rn "material-issues\|picking-lists" api/tests/`
+returns exactly one hit, the cancel route. In particular **`POST /material-issues`
+— the endpoint that moves stock and posts GL — has never been exercised over
+HTTP by any test**; every existing test calls `MaterialIssueService::create()`
+directly, which bypasses `StoreMaterialIssueRequest` entirely. That is the same
+blind spot that hid the `POST /inventory/grn` 500 for six days.
+
+## Findings measured by static reading (evidence cited; runtime confirmation in the probe section)
+
+### M042-N01 — Broken (P0): a reservation-backed issue is checked against
+*unreserved* stock, so a reservation cannot be drawn against
+
+`StockMovementService::move()` computes availability as on-hand minus reserved
+and refuses when short (`StockMovementService.php:118-124`).
+`MaterialIssueService::create()` calls `move()` **first** (`:109`) and only then
+looks at the linked reservation and calls `release()` (`:126-134`). A reservation
+therefore subtracts from the very pool the issue it exists for must draw from.
+Confirms prior **M042-F02** by code path; runtime result below.
+
+### M042-N02 — Broken (P0): the reservation link is consumed with no identity,
+status or quantity contract — one work order's issue can silently destroy another's reservation
+
+`MaterialIssueService.php:126-134` is the whole of it:
+
+```php
+$res = MaterialReservation::query()->lockForUpdate()->find($actualId);
+if ($res) {
+    $res->update(['status' => ReservationStatus::Issued, 'released_at' => now()]);
+    $this->movements->release($itemId, $locId, $qty);
+}
+```
+
+`if ($res)` is the only guard. Nothing checks that the reservation
+
+- is still `reserved` (an already-`issued` or `released` row is re-consumable),
+- belongs to the `work_order_id` on the slip,
+- matches the submitted `item_id` / `location_id`,
+- covers the submitted quantity.
+
+And `release()` is called with **the issued quantity, not the reservation's
+quantity**. Two distinct corruptions follow, both of which break
+`reserved == Σ(active reservations)`:
+
+- issue *less* than reserved → the row flips to `Issued` while the unreleased
+  remainder stays counted in `stock_levels.reserved_quantity` forever (no code
+  path can ever release it, since the row is no longer `reserved`);
+- issue *more* than reserved → `release()` over-releases, and because
+  `reserved_quantity` is a single per-(item, location) scalar it is **another
+  work order's reservation that gets decremented**. The victim's row still says
+  `reserved`, so the ledger and the reservation table disagree.
+
+This is broader than prior **M042-F03**, which described only the missing
+validation, not the cross-reservation destruction.
+
+### M042-N03 — Missing (P0): reservations have no HTTP surface at all
+
+`grep -rn "reservation" api/app/Modules/*/routes.php api/routes/*.php` returns
+**zero hits**. There is no endpoint to list, create, release or inspect a
+`material_reservations` row anywhere in the system. Reservations are written only
+by `Production\Services\WorkOrderService` (out of module) and read only
+incidentally. So warehouse staff — the role that owns this module — cannot see
+what is reserved, cannot release a reservation, and the create form cannot offer
+one to pick (the SPA has no options call for it). The half of the module named in
+its own title is effectively invisible.
+
+### M042-N04 — Missing (P1): nothing ages a reservation, and there is no column to age it by
+
+`material_reservations` (`api/database/migrations/0067_create_material_reservations_table.php:13-27`)
+has `reserved_at`, `released_at`, `status` — and **no `expires_at`**.
+`grep -rni "reserv" api/routes/console.php` returns **zero hits**: no scheduled
+command touches reservations. This is the `material-review-board` shape (nothing
+ages a hold), not the 8D shape (an ager that lies) — there is no ager to lie.
+Combined with N02 and N06 a reservation can be orphaned permanently while still
+consuming availability. **Question for a human: is reservation expiry in scope?**
+Nothing in the schema suggests it was ever designed, so this is reported, not
+assumed to be a defect.
+
+### M042-N05 — Broken (P1): the issue resource leaks a raw integer work-order PK
+
+`MaterialIssueSlipResource.php:16` returns `'work_order_id' => $this->work_order_id`
+— the raw bigint. Confirms prior **M042-F10**. `spa/src/types/inventory.ts` types
+it as a number and the list renders `WO#<raw id>`.
+
+### M042-N06 — Missing (P1): no FK on either `work_order_id`, nor on the reservation link
+
+- `material_issue_slips.work_order_id` — `unsignedBigInteger`, comment
+  `// FK in Sprint 6` (`0065_…:16`).
+- `material_reservations.work_order_id` — same (`0067_…:16`).
+- `material_issue_slip_items.material_reservation_id` — `unsignedBigInteger`,
+  index only, no FK (`0066_…:21,27`).
+
+So a slip or reservation can point at a work order that does not exist, and
+deleting a work order leaves both dangling. Confirms prior **M042-F08**.
+
+### M042-N07 — Broken (P1): the reservation id is the one foreign key that is *not* hash-decoded
+
+`StoreMaterialIssueRequest::hashIdFields()` covers `work_order_id`,
+`items.*.item_id`, `items.*.location_id` — but **not**
+`items.*.material_reservation_id` (`:22-29`), whose rule is
+`['nullable','integer','exists:material_reservations,id']` (`:44`). The client is
+therefore required to send a **raw internal PK** for that one field, against the
+project-wide HashID contract. Confirms prior **M042-F11** in part.
+
+### M042-N08 — Incomplete (P2): picking is gated on `inventory.view`, not the
+`inventory.picking.view` permission that exists for it
+
+`inventory.picking.view` is defined in the catalog
+(`api/database/seeders/RolePermissionSeeder.php:224`) and held by
+`warehouse_staff` (`:667`), but the route uses `inventory.view`
+(`api/app/Modules/Inventory/routes.php:129`). The permission is real and
+assigned; the gate simply does not use it, so every inventory viewer
+(`qc_inspector`, `purchasing_officer`, …) can read picking lists. This is
+privilege *broadening*, not an impossible approval chain — downgraded from prior
+**M042-F12**'s P1.
+
+### M042-N09 — Polish: line/slip totals truncate where the movement rounds half-up
+
+`MaterialIssueService.php:142,151` use `bcadd($x, '0', 2)`, which truncates.
+`StockMovementService::round2()` (`:450-456`) adds `0.005` first, i.e. half-up.
+So a line whose exact total is `1.0005` stores `1.00` on the slip and `1.00` on
+the movement… but the *slip total* accumulates at scale 4 and truncates once at
+the end, so multi-line slips can differ from the sum of their movements by cents.
+Confirms prior **M042-F07** as a real inconsistency; magnitude measured below.
+
+### Prior findings NOT reproduced / downgraded
+
+- **The `numeric|min:0` validation family does NOT apply here.**
+  `items.*.quantity_issued` is `['required','decimal:0,3','min:0.001']`
+  (`StoreMaterialIssueRequest.php:41`) — the same correct shape that made
+  `material-review-board` clean, not the `numeric|min:0` shape that broke nine
+  siblings. Prediction going into the probe: `1e3`/`1e17`/`10.00005` are all
+  **rejected**, not silently truncated. Measured result below.
+- **CLAUDE.md correction #6 does not bite this module.** `document_sequences` has
+  no `material_issue` row in the dev database, but rows are lock-or-created on
+  demand by `DocumentSequenceService::generate()` (`:60-85`) and the required
+  *config* entry exists (`settings['documents.sequence_config']` contains
+  `"material_issue":{"prefix":"MI"…}`, verified by query). Numbering works.
+- **`MaterialIssueStatus::Draft` exists** (`Enums/MaterialIssueStatus.php:9`) but
+  `create()` hard-codes `Issued` (`MaterialIssueService.php:67`) and no route can
+  produce a draft. The Draft branch of `cancel()` (`:200-216`) — the only code
+  that correctly releases a reservation — is therefore **unreachable through any
+  HTTP path**. This sharpens prior M042-F01/F05 rather than refuting them.
