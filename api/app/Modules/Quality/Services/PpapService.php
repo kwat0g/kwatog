@@ -167,13 +167,34 @@ class PpapService
         return $this->show($ppap);
     }
 
+    /**
+     * Update one element of a submission.
+     *
+     * An APPROVED submission's evidence is frozen. Without this guard the approved PSW
+     * document could be replaced — and its status flipped to `rejected` — while the
+     * parent kept reading `approved`, so the approved package no longer matched what was
+     * approved. That is the precise failure PPAP exists to prevent, and because
+     * `PpapElement` carries no `HasAuditLog` the swap left no trace at all.
+     *
+     * Only `Approved` is refused here. Whether a `Rejected` submission may be reworked in
+     * place or must be superseded by a new revision is an open policy question, so that
+     * path is deliberately left as it was rather than guessed at.
+     */
     public function updateElement(PpapElement $element, array $data): PpapElement
     {
+        $submission = $element->submission;
+        if ($submission && $submission->status === PpapStatus::Approved) {
+            throw new BusinessRuleException(
+                'Cannot change evidence on an approved PPAP submission. Raise a new revision instead.'
+            );
+        }
+
         $element->update(array_filter([
             'status'        => $data['status'] ?? null,
             'document_path' => $data['document_path'] ?? null,
             'notes'         => $data['notes'] ?? null,
         ], fn ($v) => $v !== null));
+
         return $element->fresh();
     }
 

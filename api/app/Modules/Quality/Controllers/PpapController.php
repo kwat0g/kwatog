@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Modules\Quality\Controllers;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Modules\CRM\Models\Product;
 use App\Modules\Quality\Enums\PpapElementStatus;
+use App\Modules\Quality\Enums\PpapLevel;
 use App\Modules\Quality\Models\PpapElement;
 use App\Modules\Quality\Models\PpapSubmission;
 use App\Modules\Quality\Requests\StorePpapRequest;
@@ -39,11 +41,29 @@ class PpapController
 
     public function update(Request $request, PpapSubmission $ppap): PpapSubmissionResource
     {
+        // The create route takes HashIDs and a validated level (StorePpapRequest).
+        // This route used to take `product_id` as a raw `integer` and `ppap_level` as a
+        // bare `string`, so it ACCEPTED an internal primary key, REFUSED the HashID the
+        // rest of the API speaks, and let any string reach `ppap_level varchar(1)` as a
+        // 500. Both halves of the resource now speak the same contract.
         $data = $request->validate([
-            'ppap_level' => ['sometimes', 'string'],
-            'product_id' => ['sometimes', 'nullable', 'integer'],
+            'ppap_level' => ['sometimes', 'string', Rule::enum(PpapLevel::class)],
+            'product_id' => ['sometimes', 'nullable', 'string'],
             'notes'      => ['sometimes', 'nullable', 'string', 'max:2000'],
         ]);
+
+        if (array_key_exists('product_id', $data)) {
+            if ($data['product_id'] === null || $data['product_id'] === '') {
+                $data['product_id'] = null;
+            } else {
+                $productId = Product::tryDecodeHash($data['product_id']);
+                if (! $productId || ! Product::query()->whereKey($productId)->exists()) {
+                    abort(422, 'Invalid product.');
+                }
+                $data['product_id'] = $productId;
+            }
+        }
+
         try {
             return new PpapSubmissionResource($this->service->update($ppap, $data));
         } catch (BusinessRuleException $e) {
@@ -96,6 +116,10 @@ class PpapController
             'document_path' => ['sometimes', 'nullable', 'string', 'max:500'],
             'notes'         => ['sometimes', 'nullable', 'string', 'max:2000'],
         ]);
-        return new PpapElementResource($this->service->updateElement($element, $data));
+        try {
+            return new PpapElementResource($this->service->updateElement($element, $data));
+        } catch (BusinessRuleException $e) {
+            abort(422, $e->getMessage());
+        }
     }
 }

@@ -17,15 +17,21 @@ class TraceabilityController
      */
     public function search(Request $request): JsonResponse
     {
-        $term = (string) $request->query('term', '');
-        $result = $this->service->search($term);
+        $data = $request->validate([
+            'term' => ['nullable', 'string', 'max:100'],
+        ]);
+        $result = $this->service->search((string) ($data['term'] ?? ''));
+
         return response()->json(['data' => $result]);
     }
 
     public function recallSimulation(Request $request): JsonResponse
     {
-        $lotNumber = (string) $request->query('lot', '');
-        $result = $this->service->simulateRecall($lotNumber);
+        $data = $request->validate([
+            'lot' => ['nullable', 'string', 'max:100'],
+        ]);
+        $result = $this->service->simulateRecall((string) ($data['lot'] ?? ''));
+
         return response()->json(['data' => $result]);
     }
 }

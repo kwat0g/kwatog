@@ -14,6 +14,7 @@ use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\SupplyChain\Enums\DeliveryStatus;
+use Illuminate\Database\Eloquent\Builder;
 
 /**
  * ADV3 — IATF 16949 traceability search.
@@ -55,9 +56,7 @@ class TraceabilityService
 
         $grnItem = GrnItem::where('material_lot_number', $lotNumber)->first();
         if ($grnItem) {
-            $consumingWoIds = WorkOrder::query()
-                ->whereJsonContains('material_lot_references', ['material_lot_number' => $lotNumber])
-                ->pluck('id');
+            $consumingWoIds = $this->workOrdersConsumingLot($lotNumber)->pluck('id');
             $woIds = $woIds->merge($consumingWoIds);
         }
 
@@ -212,8 +211,7 @@ class TraceabilityService
         $itemId = (int) $grnItem->item_id;
 
         // Forward: WOs whose material_lot_references mention this lot.
-        $consumingWos = WorkOrder::query()
-            ->whereJsonContains('material_lot_references', ['material_lot_number' => $grnItem->material_lot_number])
+        $consumingWos = $this->workOrdersConsumingLot((string) $grnItem->material_lot_number)
             ->with(['product:id,part_number,name', 'machine:id,machine_code,name', 'mold:id,mold_code,name'])
             ->get();
 
@@ -240,6 +238,28 @@ class TraceabilityService
                 'work_orders' => $consumingWos->map(fn (WorkOrder $wo) => $this->workOrderRow($wo))->all(),
             ],
         ];
+    }
+
+    /**
+     * Work orders whose `material_lot_references` name this material lot.
+     *
+     * The element must be wrapped in an ARRAY. `whereJsonContains($col, ['k' => $v])`
+     * json-encodes an associative PHP array into a JSON *object*, and
+     * `work_orders.material_lot_references` is a JSON *array of objects* — PostgreSQL
+     * containment refuses that shape and the query silently matches nothing:
+     *
+     *   '[{"material_lot_number":"L1"}]'::jsonb @> '{"material_lot_number":"L1"}'::jsonb   -> false
+     *   '[{"material_lot_number":"L1"}]'::jsonb @> '[{"material_lot_number":"L1"}]'::jsonb -> true
+     *
+     * This is the module's only forward hop (material lot -> consuming batches), so the
+     * unwrapped form made `simulateRecall()` answer `found: false` — no customers, no
+     * deliveries, zero quantity — for a lot that had demonstrably been consumed and
+     * shipped. Both call sites go through here so the two cannot drift apart again.
+     */
+    private function workOrdersConsumingLot(string $lotNumber): Builder
+    {
+        return WorkOrder::query()
+            ->whereJsonContains('material_lot_references', [['material_lot_number' => $lotNumber]]);
     }
 
     private function workOrderRow(WorkOrder $wo): array
