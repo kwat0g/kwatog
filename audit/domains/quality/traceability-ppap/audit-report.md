@@ -339,4 +339,451 @@ has confirmed the delivery.** `ShipmentLot` carries `HasAuditLog` (3 rows record
 change is logged — but nothing refuses it. Same shape found in `ncr-capa` (closed NCR) and
 `inspections-certificates` (completed inspection).
 
+## R7 — [Broken/P0] Shipment-lot creation has 500'd on every request for its entire life
+
+`api/app/Modules/SupplyChain/Services/ShipmentLotService.php:40-42`:
+
+```php
+->map(fn (string $hashId) => WorkOrder::query()->findOrFail(
+    (new WorkOrder())->decodeHashId($hashId)
+))
+```
+
+**`decodeHashId()` does not exist.** `App\Common\Traits\HasHashId` exposes
+`decodeHash()` and `tryDecodeHash()` (both static, `HasHashId.php:81,92`). No model in
+the repository defines `decodeHashId` — the only occurrences are a private helper inside
+`Inventory/Services/BarcodeScanResolverService.php:303` and a controller-local method in
+`Accounting/Controllers/BudgetController.php:59`.
+
+Measured over HTTP, 16 POSTs across 16 different payload shapes:
+
+```
+[T6] POST /api/v1/quality/traceability/deliveries/{d}/shipment-lot => 500
+     "Call to undefined method App\Modules\Production\Models\WorkOrder::decodeHashId()"
+     BadMethodCallException
+```
+
+**Every** payload that clears validation reaches the fault. `POST` with one valid
+started work order: 500. Second post: 500. Unstarted WO: 500. Duplicate ids: 500.
+Over-allocation: 500. Foreign product: 500.
+
+**Impact.** `POST .../shipment-lot` is the **only** write path that binds production
+batches to a customer delivery — the hop that makes "which customer got this batch"
+answerable at all. It has never succeeded. This is why `shipment_lots` has **0 rows** in
+the running dev database. The backward trace measured healthy in R1 only because the
+probe inserted the lot row directly; through the product's own API that row cannot exist.
+
+Same shape as `goods-receiving`'s `POST /api/v1/inventory/grn`: a route that 500s
+unconditionally, invisible because no test posts to it.
+
+**`ShipmentLotService` lives in `api/app/Modules/SupplyChain/`, which is LIVE under
+another agent. Reported, not fixed.** The one-line correction is
+`WorkOrder::tryDecodeHash($hashId)`, but it needs the surrounding contract work in
+item 2 of the action plan, and it is not mine to land.
+
+## R8 — [Broken/P0] 9 of 11 trace links SILENTLY ERASE; not one refuses on the trace's behalf
+
+Built a real chain per link — material lot (`grn_items`) → GRN → work order (batch +
+`material_lot_references`) → passed outgoing inspection → shipment lot → delivered
+delivery → customer — then attacked each link and re-read the trace over HTTP. Each raw
+statement ran inside its own SAVEPOINT so a refusal did not abort the outer transaction.
+
+| link attacked | result | verdict |
+|---|---|---|
+| `customers` hard-delete (has a sales order) | `23503` FK violation from **`sales_orders_customer_id_foreign`** | REFUSES — but by an unrelated table, not by the trace |
+| `customers` hard-delete (**no** sales order) | DELETED. lot survives, `customer_id` → NULL, trace `forward.customer` = **NULL** | **SILENTLY ERASES** |
+| `deliveries` hard-delete | `23503` from `shipment_lots_delivery_id_foreign` (`restrictOnDelete`) | REFUSES |
+| `deliveries` **archive** (`SoftDeletes`) | trace `found=true`, `delivery=NULL`, customer still present; recall: `found=true`, deliveries=**0**, customers=1, qty=500 | **SILENTLY ERASES** |
+| `work_orders` hard-delete | DELETED. `found=true`, backward work_orders 1→0, JSON still lists `[4]`, recall still claims qty=500 | **SILENTLY ERASES** |
+| `grn_items` hard-delete | DELETED. `search(material lot)` → `found=false`; the WO's JSON still names the vanished lot | **SILENTLY ERASES** |
+| `goods_receipt_notes` hard-delete | DELETED (cascades its items). `search(material lot)` → `found=false` | **SILENTLY ERASES** |
+| `inspections` hard-delete | DELETED. inspections in trace 1→0, `found=true` | **SILENTLY ERASES** (QC evidence) |
+| `shipment_lots` hard-delete | DELETED. `search(lot)` → `found=false`; batch trace `forward.lots` = 0 | **SILENTLY ERASES** |
+| `products` **archive** (soft) | `found=true` but `lot.product=NULL` **and** `wo.product=NULL` | **SILENTLY ERASES** (which part it was) |
+| `items` **archive** (soft) | `found=true` but `item_code=NULL`, `item_id=NULL` | **SILENTLY ERASES** (material identity) |
+
+**Two links refuse. Nine erase.** And neither refusal is the trace defending itself:
+the customer refusal comes from `sales_orders`, the delivery refusal from the
+`shipment_lots` FK. Remove the sales order and the customer erases.
+
+The two `SoftDeletes` rows are the worst class because no DBA is required — they are the
+product's own archive button. Archiving a **delivery** leaves a recall that reports
+"500 units affected, 1 customer, **0 deliveries**": you learn who has the bad parts but
+not which shipment to intercept. Archiving a **product** leaves a trace that resolves
+but can no longer say what part it describes.
+
+This is `material-review-board`'s R8 confirmed and generalised: its finding was one
+`nullOnDelete` on `material_review_records.ncr_id`; the same pattern runs through
+`shipment_lots.customer_id`, `shipment_lots.product_id` (`0150_...:40-41`) and every
+unconstrained JSON id list.
+
+## R9 — [Broken/P0] A level-3 PPAP is approvable with one element and zero evidence, by its own author, with no review
+
+Measured over HTTP:
+
+```
+[P2] elements auto-created at level 3 = 1        (part_submission_warrant)
+[P2] approve with 1 element, no evidence => 200
+[P2] final status = approved
+[P2] element document_path = NULL
+
+[P3] submitted_by=3  reviewed_by=NULL  approved_by=3
+[P3] SAME ACTOR ALL THREE: YES
+[P3] approved straight from Submitted (no review): YES
+```
+
+Three independent defects compound:
+
+1. **No level→element matrix.** `PpapService::create()` (`:79-83`) inserts exactly one
+   PSW row regardless of level. `PpapLevel` (`Enums/PpapLevel.php:19-24`) *describes*
+   level 3 as "PSW + full supporting data" but supplies no required set.
+   `docs/PROCESS-FLOWS.md:1252-1256` promises 18 tracked elements.
+2. **There is no route to add an element.** Measured route inventory — the complete PPAP
+   surface is 9 internal routes plus 1 B2B read route, and the only element route is
+   `PATCH /ppap/{ppap}/elements/{element}` on a row that must already exist.
+   **0 create-element routes, 0 upload routes, 0 download routes, 0 delete-element routes.**
+   So the other 18 element types are not merely unenforced, they are **unreachable through
+   the API**. Approving a level-3 PPAP on a single evidence-free PSW row is not an edge
+   case; it is the only outcome the product can produce.
+3. **No segregation of duties.** `approve()` (`:135-154`) never compares `$by->id` with
+   `submitted_by`, and accepts `Submitted` directly, so `reviewed_by` stays NULL.
+   `qc_inspector` receives the whole `quality` permission bucket
+   (`RolePermissionSeeder.php:682-698` → `$this->module('quality')`), which contains both
+   `quality.ppap.view` and `quality.ppap.manage` (`:348-349`), and `routes.php:170-178`
+   gates create, submit, review, approve, reject and element mutation on that **one**
+   permission. One `qc_inspector` creates, submits and approves unaided.
+
+Same self-approval shape `ncr-capa` measured (one inspector creating, dispositioning,
+closing and self-verifying an NCR) and `material-review-board` measured (one actor
+inspecting, raising, holding, dispositioning).
+
+## R10 — [Broken/P1] An approved PPAP is fully mutable, rejectable, and hard-deletable; element writes are unaudited
+
+```
+[P4a] PUT approved parent          => 422  (guarded by PpapService::update():91) — OK
+[P4b] PATCH element on APPROVED    => 200  document_path 'ppap/original-psw.pdf'
+                                          -> 'ppap/SWAPPED-EVIDENCE.pdf', status -> rejected
+      parent still reads           => approved
+[P4c] PATCH reject on APPROVED     => 200  status -> rejected
+[P4d] raw SQL rewrote ppap_number  -> HACKED
+[P4e] raw DELETE approved row      => 1 row, still_exists=false, orphan_elements=0
+[P4f] Eloquent delete()            => true, SoftDeletes=false
+[P4g] pg_trigger on ppap tables    => 0
+[P4h] audit_logs PpapElement=0     PpapSubmission=9
+```
+
+- **The evidence is swappable after approval.** `PpapService::updateElement()`
+  (`:170-178`) has no parent-state guard at all. The approved PSW document can be replaced
+  and its status flipped to `rejected` while the submission continues to read `approved`.
+  This is the exact defect PPAP exists to prevent: the approved package no longer matches
+  what was approved.
+- **Approved is not terminal.** `PpapStatus::isTerminal()` (`Enums/PpapStatus.php:28-31`)
+  returns true only for `Rejected` and `Expired`, and `reject()` (`:158`) guards on
+  `isTerminal()` — so an approved submission can be rejected afterwards. Confirmed in the
+  transition matrix (R13).
+- **`PpapElement` has no `HasAuditLog`** (`Models/PpapElement.php:15-17`) while its parent
+  does. Zero audit rows for every evidence change. The one child table whose history an
+  IATF auditor would demand is the one with no history.
+- `PpapSubmission` has **no `SoftDeletes`**, 0 triggers, and cascades its elements away.
+
+For contrast, `audit_logs` in this same database **is** trigger-protected: my probe's
+`DELETE FROM audit_logs` was refused with `SQLSTATE[P0001] Audit logs are immutable`
+(`prevent_audit_log_modification`). The `journal-ledger` precedent exists here and works
+— it simply was never applied to PPAP or to any trace table.
+
+## R11 — [Broken/P1] Nothing prevents conflicting approved PPAPs for one part, and nothing supersedes
+
+```
+[P5] concurrently-approved submissions for one vendor+item = 2
+[P5] approved levels for the SAME part = [3,3,1]
+```
+
+Three simultaneously-`approved`, non-expired submissions for one vendor+item, at two
+different levels. `approve()` performs no check for an existing active approval;
+`revision` (`0240_create_ppap_tables.php:34`, default 1) is never incremented by any code
+path — `grep` finds no writer. `vendorHasActivePpap()` (`:198-214`) answers a boolean, so
+the PO gate is satisfied by whichever row happens to be approved and cannot tell that two
+contradict each other. There is no supersession concept.
+
+## R12 — [Broken/P1] Nothing ages an expiring PPAP, and an expired one presents as current
+
+```
+[P6] approved_at=2026-09-01  expires_at=2029-09-01   (3y, from quality.ppap.approval_validity_years)
+[P6] after forcing expires_at=2020-01-01:
+       vendorHasActivePpap()                        = false   <- read-time scope is correct
+       status column still says                     = approved
+       GET /ppap?status=approved returns expired row = YES
+       its status_label in the payload              = "Approved"
+[Q2] expireOverdue() moved 1 row; NEW audit_logs rows = 0
+```
+
+- **`PpapService::expireOverdue()` (`:181-188`) has zero callers.** `grep -rn 'expireOverdue' app/ database/ routes/` returns only its own definition. `routes/console.php`
+  schedules **47** commands; none touches PPAP or traceability, and there is no
+  `app/Console/Commands` file mentioning either. This is `material-review-board`'s
+  *missing*-command failure mode rather than the 8D ledger's *lying*-command mode: there
+  is no command to lie.
+- Because the status column never flips, every list, filter and report keyed on
+  `status = 'approved'` presents an expired approval as current, labelled "Approved".
+  `scopeActiveApproved` (`Models/PpapSubmission.php:54-58`) is expiry-aware, so the PO
+  gate is right and the UI is wrong — the worst split, because the screen an auditor reads
+  disagrees with the control that enforces.
+- When finally called, the bulk `->update()` writes **0 audit rows** (an Eloquent builder
+  mass update fires no model events, so `HasAuditLog` sees nothing). A status change
+  nobody can attribute.
+
+## R13 — [Incomplete/P2] Full transition matrix: 30 of 30 cells walked, 3 unsound
+
+6 states × 5 actions, each on a fresh submission with all elements pre-accepted so the
+matrix measures the **state** guard rather than the element guard. HTTP status; `->x` = the
+row actually moved.
+
+```
+FROM          submit          review            approve         reject          update
+draft         200->submitted   422              422             200->rejected   200
+submitted     422              200->under_review 200->approved   200->rejected   200
+under_review  422              200               200->approved   200->rejected   200
+approved      422              422               422             200->rejected   422
+rejected      422              422               422             422             422
+approved/expired rows are otherwise sealed; expired: 422 across all five
+```
+
+27 cells sound. Three are not:
+
+1. **`approved` + `reject` → 200 → rejected** (R10). An approved production-part
+   approval can be reversed after the fact.
+2. **`submitted` + `approve` → 200 → approved**, skipping review entirely, leaving
+   `reviewed_by` NULL (R9).
+3. **`draft` + `reject` → 200 → rejected.** A submission is rejectable before anyone has
+   submitted it, producing a `rejection_reason` and a `reviewed_by` for a package no
+   reviewer ever saw. Flagged as a **question** — plausibly an intentional
+   "abandon a draft" affordance, but it is spelled as a review verdict.
+
+Also noted: `under_review` + `review` → 200 overwrites `reviewed_by`/`reviewed_at`, so a
+second actor can silently replace the recorded reviewer.
+
+## R14 — [Broken/P1] The PPAP update route accepts raw integer PKs and rejects HashIDs; three inputs 500
+
+`PpapController::update()` (`:42-46`) validates `'product_id' => ['sometimes','nullable','integer']`
+and `'ppap_level' => ['sometimes','string']`, while `StorePpapRequest` (`:27,29`) uses
+`'string'` + `Rule::in(PpapLevel::values())` and decodes through `Product::tryDecodeHash`.
+The two halves of one resource disagree. Measured:
+
+```
+[Q1] PUT {"product_id":1}            => 200   stored product_id=1     <- raw PK ACCEPTED
+[Q1] PUT {"product_id":"dGypLxpvAg"} => 422                           <- the real HashID REFUSED
+[Q1] PUT {"product_id":987654}       => 500                           <- FK violation to the client
+[Q1] PUT {"ppap_level":"banana"}     => 500 (txn aborted)
+[Q1] PUT {"ppap_level":"7"}          => 500 (txn aborted)
+[Q1] PUT {"ppap_level":"1e0"}        => 500 (txn aborted)
+```
+
+The update route is the inverse of the security rule in `CLAUDE.md`: it takes the integer
+PK and refuses the HashID, so a caller can re-point an approved-adjacent PPAP at any
+product by guessing a small integer. `ppap_level` is unvalidated on update, so any string
+reaches `varchar(1)` / the `2026_08_13_220000` CHECK constraint and 500s.
+
+**And the create route has the same 1e-notation defect as eight sibling modules, in a new
+shape:**
+
+```
+[P9] valid                   => 201
+[P9] garbage hash product_id => 201  product_id silently NULL
+[P9] raw integer product_id  => 201  product_id silently NULL
+[P9] garbage purchase_order  => 201  purchase_order_id silently NULL
+[P9] array product_id        => 422
+[P9] ppap_level '9'          => 422
+[P9] ppap_level '1e0'        => 500   <- Rule::in uses loose comparison: '1e0' == '1'
+[P9] ppap_level 1.0 (float)  => 201   stored as '1'  <- silently became Level 1
+```
+
+`Rule::in` compares loosely, so the numeric strings `'1e0'` and the float `1.0` both
+satisfy `in:1,2,3,4,5`. `1.0` is silently coerced to Level 1; `'1e0'` survives validation
+and overflows `ppap_level varchar(1)` → 500. Note this is *not* the `numeric|min:0` money
+family — it is `Rule::in` against a numeric-valued enum, which has the same root cause.
+
+Silently nulling three invalid optional foreign keys reproduces prior F008.
+
+**The one genuine quantity FormRequest in this module is CLEAN.**
+`ShipmentLotController::createForDelivery` (`:41`) uses `['nullable','integer','min:1']`,
+the correct shape (like `material-review-board`'s `decimal:0,3`), and refused all six
+hostile values with 422: `1.999`, `'1e3'`, `'1e17'`, `-1`, `0`, `{"a":1}` map. Only
+`99999999999` reached the service — and there it hit R7's 500, so whether it would
+overflow `unsignedInteger` is **unmeasured**.
+
+## R15 — [Missing/P1] Dead surfaces in both directions
+
+- **PPAP has no SPA client whatsoever.** `grep -rn -il 'ppap' spa/src/` returns
+  **nothing** — no type, no api module, no page, no route, no nav entry — against 9
+  internal routes and 1 supplier route. Confirms `supplier-portal`'s R010; this is the
+  ninth-plus module with the pattern.
+- **`GET /quality/traceability/recall-simulation` has no client.** `grep -rn 'recall' spa/src/`
+  returns nothing. The recall simulation — an IATF capability, and the endpoint R1 proves
+  has never worked — is unreachable from the product.
+- **`spa/src/api/supply-chain/shipmentLots.ts` is an orphan.** Fully typed
+  (`showForDelivery`, `createForDelivery`, `show`) and **nothing imports it**; its
+  `createForDelivery` targets the route that R7 proves 500s unconditionally.
+- **`docs/USER-MANUAL.md` has 0 mentions** of ppap / traceability / recall (same as
+  `material-review-board`). `docs/PROCESS-FLOWS.md` has 4, including the 18-element
+  promise at `:1252-1256` that R9 shows the API cannot fulfil.
+
+## R16 — [Incomplete/P2] Evidence is an unvalidated free-text pointer, not a document boundary
+
+`ppap_elements.document_path` is `varchar(500)` (`0240_...:47`) written from
+`['sometimes','nullable','string','max:500']` (`PpapController.php:96`) and echoed back
+verbatim by `PpapElementResource.php:20`. Measured:
+
+```
+[Q3] upload routes 0 | download/serve routes 0 | create-element 0 | delete-element 0
+[Q3] PATCH document_path '../../../../etc/passwd' => 200
+[Q3] read back from GET /ppap/{id} = '../../../../etc/passwd'
+```
+
+No file is ever written, so the usual attachment invariants (server-side MIME from real
+bytes, random filename, storage outside the web root, permission-checked serve,
+Content-Disposition, over-length filename) have **no surface to test** — I could not test
+them because they do not exist. The traversal string is not currently exploitable for that
+same reason; it becomes exploitable the moment anyone builds a download route that
+concatenates this field. Reproduces prior F006.
+
+`B2B` handled its half correctly: `SupplierPpapElementResource.php:108` replaces
+`document_path` with `has_document`, and its docblock says why. Only the internal resource
+leaks the path.
+
+## R17 — [Incomplete/P2] Soft-deleted parents leave an approved PPAP with no attribution; a force-delete erases it
+
+```
+[P10] gate before archive               = true
+[P10] vendor soft-deleted → gate        = true   | list still returns row | show vendor = null
+[P10] item soft-deleted   → gate        = true   | show item   = null
+[P10] vendor FORCE-deleted: submissions 1 -> 0   *** APPROVED PPAP SILENTLY ERASED ***
+```
+
+`ppap_submissions.vendor_id` and `.item_id` are `cascadeOnDelete()`
+(`0240_...:19-20`). `Vendor` and `Item` both use `SoftDeletes`, so the cascade normally
+lies dormant — but `forceDelete()` destroys the approved PPAP and its elements with no
+refusal and no trace. An approved production-part approval is the single artefact an IATF
+auditor asks for first.
+
+Meanwhile the soft-delete path leaves the submission listed and `status: approved` while
+`vendor` and `item` resolve to `null` — an active approval that no longer says who
+supplies what.
+
+## R18 — [Polish] Cross-tenant PPAP: no leak found
+
+```
+[Q4] B2B PPAP routes = GET|HEAD api/v1/b2b/supplier/ppap-submissions   (list only)
+[Q4] internal /quality/ppap unreachable from a portal guard
+[Q4] internal qc_inspector sees submissions across all vendors = 2  (by design)
+```
+
+`SupplierPortalService::ppapSubmissions()` (`:743-757`) scopes on an explicitly passed
+`vendor_id` and never reads the auth guard. There is **no per-record show route**, so
+there is no id-guessing surface for supplier A to reach supplier B's submission or its
+documents. `supplier-portal` already verified the tenancy leg and
+`SupplierPpapViewTest` (4 tests) covers it. Nothing to add.
+
+## Guest access — my own earlier reading DISPROVED
+
+An intermediate probe appeared to show a guest receiving 200 on `GET /ppap`,
+`GET /ppap/{id}`, `PATCH .../elements/{element}` and both traceability routes. **That was
+a probe artifact, not a defect**: `actingAs()` persists for the remainder of a test
+method, so `$this->json()` in the same method was still the last authenticated user.
+Re-measured in an isolated test:
+
+```
+[T7] guest GET /quality/traceability/search          => 401
+[T7] guest GET /quality/traceability/recall-simulation => 401
+[T7] guest GET /quality/ppap                          => 401
+```
+
+Recording it because a false auth-bypass claim would have been the most damaging thing in
+this report.
+
+## Permission gate — verified per endpoint including list
+
+11 endpoints × 3 roles. `employee` → **403 on all 11**, including the list and both
+traceability reads. `qc_inspector` and `system_admin` clear the gate on all 11 (subsequent
+422s are business-rule refusals on already-transitioned fixtures, not permission
+failures). No endpoint is gated on a permission no seeded role holds — the failure mode
+found in four sibling modules is absent here. The problem is the opposite: **one
+permission covers six mutating verbs** (R9.3).
+
+Denied bodies carry no raw integer PK (`[P8] body contains the raw pk 42: no`); the 403
+body is a generic message plus a framework stack trace (`APP_DEBUG` artifact of the test
+env, not a finding).
+
+## Sequence rows and restore routes
+
+- `document_sequences` has **no `ppap` or `shipment_lot` row** in the dev database — but
+  that is correct, not the gap CLAUDE.md's warning describes: `DocumentSequenceService::generate()`
+  (`:71-85`) lock-or-**creates** the row on first use, and both types are present in the
+  `documents.sequence_config` setting (`0360_seed_document_sequence_config.php:22-23`).
+  `BatchLotSequenceTest` (3 tests) proves both formats. Numbering works; the rows are
+  absent only because nothing has ever generated one — itself a symptom of R7.
+- **No restore route exists in this module** (2 exist elsewhere in Quality), and
+  `PpapSubmission` / `ShipmentLot` have no `SoftDeletes`, so the missing-`withTrashed()`
+  defect found in six modules cannot occur here. Whether PPAP archival *should* be
+  recoverable is an open human question (see below).
+
+## Prior-session assessment
+
+The 2026-08-25 session's log is **accurate about what it did**: it explicitly deferred
+F001–F008 and implemented only F009. F009's fix is present and committed — the visible
+label is live at `spa/src/pages/quality/traceability.tsx:53`.
+
+Of its 9 findings, **8 reproduce** (F001 not re-tested from my side: it is Production/
+Inventory-owned and both directories are live). F007 reproduces and is *understated* —
+the prior report described "unsafe/ambiguous result semantics"; the measured truth (R1) is
+that the forward leg has never returned a row. F003 also understated: not "completeness is
+not enforced by level" but "the API cannot add an element at all" (R9.2).
+
+Two prior claims are now **stale and should not be inherited**:
+- "`LotTraceabilityTest`: 4 tests failed because `GoodsReceiptNote::qcInspection` is
+  missing." Measured today: `LotTraceabilityTest` **passes**. The GRN service now uses
+  `qc_inspection_id`.
+- "`SupplierPpapViewTest`: 3 tests." It is **4** — `supplier-portal` added the
+  document-path leak test.
+
+## Invariants I could NOT verify, plainly
+
+- **F001 (authoritative material-issue lineage).** `WorkOrderService` and
+  `MaterialIssueService` are in Production/Inventory; Inventory is live under another
+  agent. Read only.
+- **`unsignedInteger` overflow on shipment-lot quantity** — masked by R7's 500.
+- **Attachment invariants** (MIME from real bytes, random filename, outside web root,
+  permission-checked serve, path traversal on serve, over-length filename, survives parent
+  archive) — **no upload or download surface exists** for PPAP evidence. Nothing to probe.
+- **Two-connection race on PPAP approval.** Not attempted: `RefreshDatabase` hides
+  uncommitted rows from a second connection, so the result would be an artifact. Four
+  prior sessions correctly abandoned theirs.
+- **`GoldenPathDemoSeeder` silent skips** — measured by code reading, not yet by
+  execution; see the open question below.
+
+## Open questions for a human (not guessed)
+
+1. **Is PSW one of the 18 AIAG elements or a 19th?** `PpapElementType` has **19 cases**
+   and its own docblock says "18 standard + PSW", while AIAG's element 18 *is* the PSW.
+   The enum also splits `MaterialTest` ("Material / Performance Test Results") from
+   `PerformanceTest` ("Performance Test Results"), which AIAG combines. The count cannot
+   be reconciled without a decision. (Carried over from the prior session, still open.)
+2. **Which levels require which elements, and when is Not Applicable legitimate?**
+   Required before R9 can be closed.
+3. **Is an absent PPAP fail-open or fail-closed when `quality.ppap_gate_enabled` is on?**
+   `vendorHasActivePpap()` returns `true` when no PPAP was ever registered — documented in
+   its own docblock as deliberate ("you can't gate a part that was never put under PPAP
+   control"), and `SettingsSeeder.php:397` seeds the gate off. That is a defensible policy,
+   but it means enabling the gate does not gate an unregistered vendor/item pair. Confirm
+   the intent.
+4. **May a producer approve its own PPAP?** Answer is currently *yes* (R9). IATF says no.
+   Splitting `quality.ppap.manage` into submit/review/approve changes the role matrix, so
+   it is a policy call, not a fix.
+5. **Should `approved` be terminal, and what is the revision/supersession rule?**
+   (R10, R11.) `revision` exists in the schema and is never written.
+6. **Is `draft` + `reject` intentional** as an "abandon draft" affordance? (R13.)
+7. **Is PPAP archival recoverable or permanent?** No `SoftDeletes` today; a force-deleted
+   vendor destroys approved submissions (R17).
+8. **What is the allocation rule when one work order or material lot feeds several
+   shipment lots?** Blocks any honest affected-quantity number in recall.
+   (Carried over, still open.)
+
 Findings continue below.
