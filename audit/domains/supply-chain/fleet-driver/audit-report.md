@@ -126,3 +126,39 @@ The documented endpoint list covers delivery creation, status, proof, and confir
 ## Session decision
 
 The dedicated fixing session implemented F001 and the contained UI fixes F006–F008. F002–F005 still require explicit business or cross-module decisions, and F009 depends on the RBAC decision in F003. The focused backend suite could not reach assertions because the shared PostgreSQL test migration `api/database/migrations/2026_08_25_210000_enforce_one_active_holiday_per_date.php:42` fails while dropping a constraint-backed index. Details are recorded in `fix-log.md`; the module is released as `🔁 Needs Re-audit`.
+
+---
+
+# M045 — Fleet & Driver Re-audit (2026-09-01)
+
+**Domain:** Supply Chain · **Tier:** 3 · **Claim:** RECLAIMED (orphan lock, 169h old, from 2026-08-25)
+**Audit date:** 2026-09-01
+**Status:** IN PROGRESS (skeleton committed before probing, per protocol)
+
+## Where the code actually lives
+
+_(to be filled)_
+
+## Prior-session reproduction
+
+_(to be filled — F001..F009 from the 2026-08-25 report)_
+
+## Baseline
+
+_(to be filled — tests + assertions + exit code)_
+
+## HTTP vs service-only coverage split
+
+_(to be filled)_
+
+## Findings
+
+_(to be filled — Broken / Missing / Incomplete / Polish)_
+
+## Invariant table
+
+_(to be filled)_
+
+## Questions for a human
+
+_(to be filled)_
