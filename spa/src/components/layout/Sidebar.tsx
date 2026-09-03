@@ -517,7 +517,7 @@ export const SECTIONS: NavSection[] = [
       },
       {
         to: '/accounting/portal-access',
-        label: 'Supplier portal access',
+        label: 'Portal access',
         icon: LuUsers,
         feature: 'accounting',
         permission: 'b2b.portal_access.view',

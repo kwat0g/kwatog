@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
+use App\Common\Services\ApprovalService;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillItem;
@@ -70,9 +71,57 @@ class GoldenPathDemoSeeder extends Seeder
         $this->section('PR conversion and budget rehearsal (ADV6/9)', fn () => $this->seedProcurementRehearsal());
         $this->section('supplier-return rehearsal (ADV12)', fn () => $this->seedSupplierReturnRehearsal());
         $this->section('forecast-to-MRP opt-in (ADV11)', fn () => $this->seedForecastMrpOptIn());
+        $this->section('stock card openings', fn () => $this->seedStockOpeningBalances());
         $this->section('dynamic route fixtures', fn () => $this->seedDynamicRouteFixtures());
 
         $this->command?->info('Golden-path demo seed complete.');
+    }
+
+    /**
+     * demo:verify WARNs when stock_movements is empty (every stock card reads
+     * blank). Runs LAST on purpose: ComprehensiveDemoSeeder truncates its
+     * tables with TRUNCATE ... CASCADE, and journal_entries is referenced by
+     * stock_movements, so anything seeded before it is cascade-truncated.
+     * This backfill gives every stock level a matching 'opening' movement so
+     * the StockCard running balance starts at the seeded quantity.
+     */
+    private function seedStockOpeningBalances(): void
+    {
+        $levels = DB::table('stock_levels')->get();
+        if ($levels->isEmpty()) {
+            $this->command?->info('  No stock levels; skipping opening balances.');
+
+            return;
+        }
+
+        $admin = $this->admin();
+        $itemCosts = DB::table('items')->pluck('standard_cost', 'id');
+        $created = 0;
+        foreach ($levels as $level) {
+            $exists = DB::table('stock_movements')
+                ->where('item_id', $level->item_id)
+                ->where('to_location_id', $level->location_id)
+                ->where('movement_type', 'opening')
+                ->exists();
+            if ($exists) {
+                continue;
+            }
+
+            $unitCost = (float) ($itemCosts[$level->item_id] ?? 1.0);
+            DB::table('stock_movements')->insert([
+                'item_id'        => $level->item_id,
+                'to_location_id' => $level->location_id,
+                'movement_type'  => 'opening',
+                'quantity'       => $level->quantity,
+                'unit_cost'      => $unitCost,
+                'total_cost'     => round(((float) $level->quantity) * $unitCost, 2),
+                'remarks'        => 'Opening balance — demo seed',
+                'created_by'     => $admin?->id,
+                'created_at'     => now(),
+            ]);
+            $created++;
+        }
+        $this->command?->info("  Backfilled {$created} opening stock movements for stock-card history.");
     }
 
     /** ADV11 — ensure the forecasting screen has one product opted into MRP. */
@@ -237,7 +286,71 @@ class GoldenPathDemoSeeder extends Seeder
             ]);
         }
 
+        $this->seedApprovalRehearsal($requester);
+
         $this->command?->info('  Approved conversion PR and critical budget-warning PR ready.');
+    }
+
+    /**
+     * ADV6/9 — leave PR-DEMO-BUDGET mid-flight in the purchase_request
+     * workflow so the approval inbox (a demo centerpiece) is never empty.
+     *
+     * The PR is raised by the maintenance user (never an approver on this
+     * chain), then walked through steps 1-3 by their role holders so the
+     * system_admin VP step is the one pending when the demo logs in as
+     * admin@ogami.test and clicks Approve live. Guarded: re-runs skip when
+     * records already exist.
+     */
+    private function seedApprovalRehearsal(User $fallbackRequester): void
+    {
+        $budget = PurchaseRequest::where('pr_number', 'PR-DEMO-BUDGET')->first();
+        if (! $budget) {
+            $this->command?->warn('  PR-DEMO-BUDGET missing; skipping approval rehearsal.');
+
+            return;
+        }
+
+        $hasRecords = DB::table('approval_records')
+            ->where('approvable_type', $budget->getMorphClass())
+            ->where('approvable_id', $budget->id)
+            ->exists();
+        if ($hasRecords) {
+            $this->command?->info('  Approval rehearsal already present.');
+
+            return;
+        }
+
+        $requester = User::where('email', 'maintenance@ogami.test')->first()
+            ?? User::where('email', 'hr@ogami.test')->first()
+            ?? $fallbackRequester;
+        // The maintenance dept raises the PR; anyone else would risk tripping
+        // the maker-checker self-approval guard on step 3 (purchasing_officer).
+        $budget->forceFill(['requested_by' => $requester->id])->save();
+
+        $total = (string) DB::table('purchase_request_items')
+            ->where('purchase_request_id', $budget->id)
+            ->selectRaw('COALESCE(SUM(quantity * estimated_unit_price), 0) as total')
+            ->value('total');
+
+        app(ApprovalService::class)->submit($budget, 'purchase_request', $total);
+
+        // Walk steps 1-3 (department_head → production_manager →
+        // purchasing_officer) so the pending row is the system_admin VP step.
+        $actors = [
+            'depthead@ogami.test'    => 'department_head',
+            'production@ogami.test'  => 'production_manager',
+            'purchasing@ogami.test'  => 'purchasing_officer',
+        ];
+        $approvals = app(ApprovalService::class);
+        foreach ($actors as $email => $role) {
+            $user = User::where('email', $email)->first();
+            if (! $user || $user->role?->slug !== $role) {
+                throw new \RuntimeException("Approval rehearsal needs a {$role} actor ({$email}).");
+            }
+            $approvals->approve($budget, $user, 'Approved — demo rehearsal step.');
+        }
+
+        $this->command?->info('  PR-DEMO-BUDGET is 3/4 steps approved — VP approval pending for the live demo.');
     }
 
     /** ADV12b — inspected supplier RMA with exact PO/GRN/bill lineage, ready to dispose. */

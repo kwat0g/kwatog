@@ -255,6 +255,11 @@ class DemoDataSeeder extends Seeder
             $created++;
         }
 
+        // NOTE: opening stock_movements are backfilled by GoldenPathDemoSeeder
+        // (seedStockOpeningBalances), NOT here: ComprehensiveDemoSeeder's
+        // truncateAll() runs TRUNCATE ... CASCADE and journal_entries is
+        // referenced by stock_movements, so any movement seeded before it
+        // would be cascade-truncated away.
         $this->command?->info("Seeded {$created} stock-level rows.");
     }
 

@@ -15,9 +15,14 @@ class CustomerPortalUserResource extends JsonResource
             'id'                  => $this->hash_id,
             'name'                => $this->name,
             'email'               => $this->email,
+            'is_active'           => (bool) $this->is_active,
+            'must_change_password' => (bool) $this->must_change_password,
+            'failed_login_attempts' => (int) $this->failed_login_attempts,
+            'locked_until'        => optional($this->locked_until)->toIso8601String(),
+            'status'              => $this->portalStatus(),
+            'deleted_at'          => optional($this->deleted_at)->toIso8601String(),
             'customer_id'         => app('hashids')->encode((int) $this->customer_id),
             'customer_name'       => $this->whenLoaded('customer', fn () => $this->customer?->name),
-            'must_change_password' => (bool) $this->must_change_password,
             'customer'            => $this->whenLoaded('customer', fn () => $this->customer ? [
                 'id'   => $this->customer->hash_id,
                 'name' => $this->customer->name,
@@ -25,5 +30,14 @@ class CustomerPortalUserResource extends JsonResource
             'last_login_at'       => optional($this->last_login_at)->toIso8601String(),
             'created_at'          => optional($this->created_at)->toIso8601String(),
         ];
+    }
+
+    private function portalStatus(): string
+    {
+        if ($this->trashed() || ! $this->is_active) return 'inactive';
+        if ($this->isLocked()) return 'locked';
+        if ($this->must_change_password) return 'pending';
+
+        return 'active';
     }
 }

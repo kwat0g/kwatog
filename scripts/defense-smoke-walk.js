@@ -12,7 +12,7 @@ const PAGES = [
   ['/dashboard', 'dashboard', 'Dashboard', /dashboard/i],
   ['/dashboard/plant-manager', 'dashboard-plant-manager', 'Plant Manager Forecast Dashboard', /Demand Forecast[\s\S]*Forecast Accuracy|Forecast Accuracy[\s\S]*Demand Forecast/i],
   ['/dashboard/ppc', 'dashboard-ppc', 'PPC Forecast Dashboard', /Demand Forecast[\s\S]*Forecast Accuracy|Forecast Accuracy[\s\S]*Demand Forecast/i],
-  ['/quality/traceability?term=BATCH-20260709-0001', 'traceability', 'ADV3 Traceability', /IMM-01[\s\S]*M-WB-001|M-WB-001[\s\S]*IMM-01/i],
+  ['/quality/traceability?term=BATCH-20260908-0001', 'traceability', 'ADV3 Traceability', /IMM-01[\s\S]*M-WB-001|M-WB-001[\s\S]*IMM-01/i],
   ['/production/work-orders', 'work-orders', 'ADV3 Work Orders', /work orders/i],
   ['/supply-chain/deliveries', 'deliveries', 'ADV7 Deliveries', /deliveries/i],
   ['/payroll/periods', 'payroll-periods', 'ADV1 Payroll Periods', /payroll/i],

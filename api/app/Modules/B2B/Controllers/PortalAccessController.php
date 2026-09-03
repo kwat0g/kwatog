@@ -7,7 +7,9 @@ namespace App\Modules\B2B\Controllers;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\B2B\Services\PortalInvitationService;
+use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\B2B\Models\SupplierPortalUser;
+use App\Modules\B2B\Resources\CustomerPortalUserResource;
 use App\Modules\B2B\Resources\SupplierPortalUserResource;
 use App\Modules\B2B\Services\PortalAccessService;
 use Illuminate\Http\JsonResponse;
@@ -67,6 +69,18 @@ class PortalAccessController
         return SupplierPortalUserResource::collection($this->access->suppliers($filters));
     }
 
+    public function customers(Request $request): AnonymousResourceCollection
+    {
+        $filters = $request->validate([
+            'search' => ['nullable', 'string', 'max:100'],
+            'status' => ['nullable', 'in:active,inactive,locked,pending'],
+            'customer_id' => ['nullable', 'string', 'max:64'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        return CustomerPortalUserResource::collection($this->access->customers($filters));
+    }
+
     public function resendSupplier(Request $request, SupplierPortalUser $supplierPortalUser): JsonResponse
     {
         /** @var \App\Modules\Auth\Models\User $actor */
@@ -92,6 +106,33 @@ class PortalAccessController
         $user = $this->access->reactivate($supplierPortalUser, $actor, $request);
 
         return response()->json(['message' => 'Supplier portal access reactivated. A new password must be set.', 'data' => (new SupplierPortalUserResource($user))->toArray($request)]);
+    }
+
+    public function resendCustomer(Request $request, CustomerPortalUser $customerPortalUser): JsonResponse
+    {
+        /** @var \App\Modules\Auth\Models\User $actor */
+        $actor = $request->user('sanctum');
+        $user = $this->access->resendCustomer($customerPortalUser, $actor, $request);
+
+        return response()->json(['message' => 'Customer portal invitation re-sent.', 'data' => (new CustomerPortalUserResource($user))->toArray($request)]);
+    }
+
+    public function deactivateCustomer(Request $request, CustomerPortalUser $customerPortalUser): JsonResponse
+    {
+        /** @var \App\Modules\Auth\Models\User $actor */
+        $actor = $request->user('sanctum');
+        $user = $this->access->deactivateCustomer($customerPortalUser, $actor, $request);
+
+        return response()->json(['message' => 'Customer portal access deactivated.', 'data' => (new CustomerPortalUserResource($user))->toArray($request)]);
+    }
+
+    public function reactivateCustomer(Request $request, CustomerPortalUser $customerPortalUser): JsonResponse
+    {
+        /** @var \App\Modules\Auth\Models\User $actor */
+        $actor = $request->user('sanctum');
+        $user = $this->access->reactivateCustomer($customerPortalUser, $actor, $request);
+
+        return response()->json(['message' => 'Customer portal access reactivated. A new password must be set.', 'data' => (new CustomerPortalUserResource($user))->toArray($request)]);
     }
 
     public function revokeSupplierTokens(Request $request, SupplierPortalUser $supplierPortalUser): JsonResponse

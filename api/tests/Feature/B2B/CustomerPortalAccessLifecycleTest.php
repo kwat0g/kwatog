@@ -151,4 +151,133 @@ class CustomerPortalAccessLifecycleTest extends TestCase
         $this->assertStringNotContainsString('temporary_password', $response->getContent());
         $this->assertStringNotContainsString('password', $response->getContent());
     }
+
+    /* ─── Operator lifecycle (mirrors the supplier list in M047-F006) ─── */
+
+    public function test_customer_list_reports_every_lifecycle_state_and_filters_by_status(): void
+    {
+        $customer = Customer::factory()->create(['name' => 'Toyota Demo']);
+        $active = $this->portalUser($customer, 'cust-active@example.test', ['must_change_password' => false]);
+        $pending = $this->portalUser($customer, 'cust-pending@example.test', ['must_change_password' => true]);
+        $locked = $this->portalUser($customer, 'cust-locked@example.test', [
+            'must_change_password' => false,
+            'locked_until' => now()->addMinutes(15),
+        ]);
+        $inactive = $this->portalUser($customer, 'cust-inactive@example.test', ['is_active' => false]);
+
+        $operator = $this->operator();
+        $row = $this->actingAs($operator)
+            ->getJson('/api/v1/b2b/portal-access/customers')
+            ->assertOk()
+            ->json('data.0');
+        // The list is what an admin screen renders: the linked customer org is
+        // present, and the status field drives the lifecycle chip.
+        $this->assertSame('Toyota Demo', $row['customer']['name']);
+
+        $statuses = $this->actingAs($operator)
+            ->getJson('/api/v1/b2b/portal-access/customers')
+            ->assertOk()
+            ->json('data.*.status');
+        $this->assertEqualsCanonicalizing(['active', 'pending', 'locked', 'inactive'], $statuses);
+
+        foreach ([
+            'active' => $active,
+            'pending' => $pending,
+            'locked' => $locked,
+            'inactive' => $inactive,
+        ] as $status => $expected) {
+            $ids = $this->actingAs($operator)
+                ->getJson("/api/v1/b2b/portal-access/customers?status={$status}")
+                ->assertOk()
+                ->json('data.*.id');
+            $this->assertSame([$expected->hash_id], $ids, "status={$status} must return only that account.");
+        }
+    }
+
+    public function test_customer_deactivation_and_reactivation_roundtrip(): void
+    {
+        $customer = Customer::factory()->create();
+        $user = $this->portalUser($customer, 'cust-lifecycle@example.test', [
+            'failed_login_attempts' => 3,
+            'locked_until' => now()->addMinutes(15),
+        ]);
+
+        $this->actingAs($this->operator())
+            ->patchJson("/api/v1/b2b/portal-access/customers/{$user->hash_id}/deactivate")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'inactive');
+
+        $fresh = $user->fresh();
+        $this->assertFalse((bool) $fresh->is_active);
+
+        $this->actingAs($this->operator())
+            ->patchJson("/api/v1/b2b/portal-access/customers/{$user->hash_id}/reactivate")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'pending');
+
+        $fresh = $user->fresh();
+        $this->assertTrue((bool) $fresh->is_active);
+        $this->assertTrue((bool) $fresh->must_change_password);
+        $this->assertSame(0, (int) $fresh->failed_login_attempts);
+        $this->assertNull($fresh->locked_until);
+    }
+
+    public function test_customer_resend_cannot_quietly_reactivate_a_deactivated_account(): void
+    {
+        $customer = Customer::factory()->create();
+        $user = $this->portalUser($customer, 'cust-no-backdoor@example.test', ['is_active' => false]);
+
+        $this->actingAs($this->operator())
+            ->postJson("/api/v1/b2b/portal-access/customers/{$user->hash_id}/resend")
+            ->assertStatus(422);
+
+        $this->assertFalse((bool) $user->fresh()->is_active);
+    }
+
+    public function test_customer_resend_rotates_the_credential_when_active(): void
+    {
+        $customer = Customer::factory()->create();
+        $user = $this->portalUser($customer, 'cust-rotate@example.test');
+        $oldHash = $user->password;
+
+        $this->actingAs($this->operator())
+            ->postJson("/api/v1/b2b/portal-access/customers/{$user->hash_id}/resend")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'pending');
+
+        $fresh = $user->fresh();
+        $this->assertNotSame($oldHash, $fresh->password);
+        $this->assertTrue((bool) $fresh->must_change_password);
+    }
+
+    public function test_the_customer_list_never_returns_a_password_or_temporary_credential(): void
+    {
+        $customer = Customer::factory()->create();
+        $this->portalUser($customer, 'cust-no-secrets@example.test');
+
+        $row = $this->actingAs($this->operator())
+            ->getJson('/api/v1/b2b/portal-access/customers')
+            ->assertOk()
+            ->json('data.0');
+
+        foreach (['password', 'temporary_password', 'password_hash'] as $forbidden) {
+            $this->assertArrayNotHasKey($forbidden, $row);
+        }
+    }
+
+    public function test_customer_lifecycle_actions_require_the_access_permissions(): void
+    {
+        $customer = Customer::factory()->create();
+        $user = $this->portalUser($customer, 'cust-rbac@example.test');
+        // warehouse_staff holds no b2b.portal_access.* permission.
+        $outsider = $this->operator('warehouse_staff');
+
+        $this->actingAs($outsider)->getJson('/api/v1/b2b/portal-access/customers')->assertStatus(403);
+        $this->actingAs($outsider)
+            ->patchJson("/api/v1/b2b/portal-access/customers/{$user->hash_id}/deactivate")->assertStatus(403);
+        $this->actingAs($outsider)
+            ->patchJson("/api/v1/b2b/portal-access/customers/{$user->hash_id}/reactivate")->assertStatus(403);
+
+        $this->assertTrue((bool) $user->fresh()->is_active);
+    }
 }

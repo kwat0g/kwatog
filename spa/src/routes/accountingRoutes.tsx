@@ -36,7 +36,7 @@ const AccountingPeriodsPage = lazy(() => import('@/pages/accounting/periods'));
 // REC-13 — AR/AP credit notes
 const CreditNotesPage = lazy(() => import('@/pages/accounting/credit-notes'));
 const CreditNoteDetailPage = lazy(() => import('@/pages/accounting/credit-notes/detail'));
-const SupplierPortalAccessPage = lazy(() => import('@/pages/accounting/portal-access'));
+const PortalAccessPage = lazy(() => import('@/pages/accounting/portal-access'));
 
 export const accountingRoutes = (
  <>
@@ -67,10 +67,8 @@ export const accountingRoutes = (
  <Route path="/accounting/vendors/:id"
  element={<PermissionGuard permission="accounting.vendors.view"><VendorDetailPage /></PermissionGuard>} />
  <Route path="/accounting/vendors/:id/edit"
- element={<PermissionGuard permission="accounting.vendors.manage"><EditVendorPage /></PermissionGuard>} />
-
- <Route path="/accounting/portal-access"
- element={<PermissionGuard permission="b2b.portal_access.view"><SupplierPortalAccessPage /></PermissionGuard>} />
+ element={<PermissionGuard permission="accounting.vendors.manage"><EditVendorPage /></PermissionGuard>} />  <Route path="/accounting/portal-access"
+ element={<PermissionGuard permission="b2b.portal_access.view"><PortalAccessPage /></PermissionGuard>} />
 
  <Route path="/accounting/bills"
  element={<PermissionGuard permission="accounting.bills.view"><BillsPage /></PermissionGuard>} />

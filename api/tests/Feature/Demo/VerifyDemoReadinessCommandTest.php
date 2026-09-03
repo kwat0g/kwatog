@@ -19,6 +19,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 /**
@@ -43,10 +44,32 @@ class VerifyDemoReadinessCommandTest extends TestCase
 
     private function seedDemoActors(): void
     {
+        // The internal admin lives in `users`; B2B portal accounts live in
+        // their own tables behind separate guards (auth:supplier_portal /
+        // auth:customer_portal), which is where demo:verify checks for them.
         $roleId = Role::query()->value('id');
-        foreach (['admin@ogami.test', 'portal@supp.test', 'portal@cust.test'] as $email) {
-            User::factory()->create(['email' => $email, 'role_id' => $roleId]);
-        }
+        User::factory()->create(['email' => 'admin@ogami.test', 'role_id' => $roleId]);
+
+        $vendorId = DB::table('vendors')->insertGetId([
+            'name' => 'Hero Portal Vendor', 'email' => 'portal.vendor@ogami.test',
+            'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $customerId = DB::table('customers')->insertGetId([
+            'name' => 'Hero Portal Customer', 'email' => 'portal.customer@ogami.test',
+            'is_active' => true, 'payment_terms_days' => 30,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        DB::table('supplier_portal_users')->insert([
+            'vendor_id' => $vendorId, 'name' => 'Supplier Portal',
+            'email' => 'portal@supp.test', 'password' => Hash::make('password'),
+            'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('customer_portal_users')->insert([
+            'customer_id' => $customerId, 'name' => 'Customer Portal',
+            'email' => 'portal@cust.test', 'password' => Hash::make('password'),
+            'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
+        ]);
     }
 
     private function snapshot(): array

@@ -4,15 +4,22 @@
 > narrative: the three business chains, then the single end-to-end IATF 16949
 > traceability trace that ties everything together.
 >
-> **Before the demo:** run the demo seeder so every screen has data:
+> **Before the demo — canonical fresh build (validated 2026-09-03, demo:verify all-green):**
 > ```
 > docker compose up -d
-> docker compose exec api php artisan migrate --force
-> docker compose exec api php artisan db:seed --class=GoldenPathDemoSeeder
-> cd spa && npm run test:defense
+> docker compose stop queue          # avoid lock contention during the reset
+> docker compose exec api php artisan migrate:fresh --seed
+> docker compose start queue         # drains seeded MRP/payslip jobs; MAIL_MAILER=log in api/.env so nothing e-mails
+> docker compose exec api php artisan db:seed --class=DefenseHeroSeeder
+> docker compose exec api php artisan demo:verify   # must print PASSED — 0 critical failures
+> cd spa && npm run test:defense     # strict showcase walk — must print PASS for all rows
 > ```
-> Log in as `admin@ogami.test` / `password`. Companion: `docs/DEFENSE-TRACEABILITY.md` maps
-> each adviser item to its screen/route/test.
+> Log in as `admin@ogami.test` / `password`. `migrate:fresh --seed` runs the full
+> reference + demo chain (SOs → MRP → work orders → deliveries), and
+> `DefenseHeroSeeder` adds the open accounting period, leave balances, and the
+> delivery→invoice handoff that `demo:verify` gates on — GoldenPathDemoSeeder alone
+> does not satisfy the gate. Companion: `docs/DEFENSE-TRACEABILITY.md` maps each
+> adviser item to its screen/route/test.
 
 ---
 
@@ -61,11 +68,16 @@ Customer complaint → RMA → Shipment Lot LOT-… → Batch BATCH-… → QC i
 > this machine using Resin A from this GRN — supplier Taiwan Plastics, supplier
 > lot SL-TW-0234, QC-passed on receipt. One click, full genealogy — that is the
 > IATF 16949 traceability requirement."
+>
+> Batch numbers embed the WO's start date, so a fresh demo seed shifts them
+> (e.g. `BATCH-20260908-0001`). If your seed ran on another day, search the
+> live value instead — the trace page shows every batch / lot / material lot
+> on the hero WO (first work order).
 
 **Verified search terms (all three resolve to the full trace — try any):**
-- Batch: `BATCH-20260709-0001` → machine IMM-01, mold M-WB-001, 9955 good / 45 rejected, passed outgoing QC, 2 shipment lots
-- Shipment lot: `LOT-20260709-0002`
-- Material lot: `MLOT-20260703-01` → GRN-20260704-0001, supplier lot SL-TW-0234
+- Batch: `BATCH-20260908-0001` → machine IMM-01, mold M-WB-001, 9955 good / 45 rejected, passed outgoing QC, 2 shipment lots
+- Shipment lot: `LOT-20260908-0002`
+- Material lot: `MLOT-20260902-01` → GRN-20260903-0001, supplier lot SL-TW-0234
 
 
 Then **Return Management** (`/return-management`) — `RMA-DEMO-SUP-READY` is the non-destructive rehearsal record. Its Return-to-Supplier disposition is wired to reduce the exact GRN/PO receipt, apply a supplier credit to the bill, and optionally create a replacement PO. Use a reseeded database if you plan to execute this mutation live. *ADV12.*

@@ -67,8 +67,13 @@ class DatabaseSeeder extends Seeder
         // Demo records are deliberately opt-in.
         if (config('app.seed_demo_data')) {
             $this->call([
-                DemoDataSeeder::class,
+                // DemoAccountSeeder first: DemoDataSeeder needs admin@ogami.test
+                // to confirm sales orders (the confirmed-SO → MRP → work-order
+                // path is what populates the Order-to-Cash chain). Accounts only
+                // need roles + departments/positions, all seeded above; they
+                // create their own dept-linked employees.
                 DemoAccountSeeder::class,
+                DemoDataSeeder::class,
                 Sprint8DemoSeeder::class,
                 SeriesEDemoSeeder::class,
                 ComprehensiveDemoSeeder::class,

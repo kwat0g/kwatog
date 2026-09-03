@@ -22,6 +22,11 @@ export interface CustomerPortalUser {
  customer_id: string;
  customer_name: string | null;
  must_change_password: boolean;
+ is_active: boolean;
+ status: 'active' | 'inactive' | 'locked' | 'pending';
+ failed_login_attempts: number;
+ locked_until: string | null;
+ deleted_at: string | null;
  customer: { id: string; name: string } | null;
  last_login_at: string | null;
  created_at: string;

@@ -69,7 +69,9 @@ export const customerPortalApi = {
 
  // Shared read-only policy values, authenticated with the portal session.
  businessPolicies: async () => {
- const { data } = await portalClient.get<{ data: BusinessPolicies }>('/business-policies');
+ // Portal-scoped endpoint: the customer session guard cannot read the
+ // internal auth:sanctum /business-policies route.
+ const { data } = await portalClient.get<{ data: BusinessPolicies }>('/b2b/customer/business-policies');
  return data.data;
  },
 

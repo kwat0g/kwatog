@@ -76,7 +76,7 @@ class ComprehensiveDemoSeeder extends Seeder
     private function truncateAll(): void
     {
         $tables = [
-            'payroll_periods', 'payrolls', 'invoices', 'bills',
+            'payroll_periods', 'payrolls', 'invoices', 'invoice_items', 'collections', 'bills', 'bill_payments',
             'purchase_requests', 'purchase_request_items',
             'purchase_orders', 'purchase_order_items',
             'approved_suppliers', 'goods_receipt_notes', 'grn_items',
@@ -185,39 +185,105 @@ class ComprehensiveDemoSeeder extends Seeder
     /* ===================================================================
      * 2. INVOICES
      * =================================================================== */
+    /**
+     * Demo invoices with REAL provenance and REAL money backing.
+     *
+     * demo:verify FAILs on any invoice that claims paid/partial without a
+     * collections row or that has neither delivery_id nor sales_order_id — a
+     * panelist would read either as fabricated. Each invoice here is therefore
+     * linked to a confirmed/completed sales order, itemized from that order's
+     * lines, and every paid/partial status is backed by collections rows.
+     */
     private function seedInvoices(): void
     {
-        $customers = DB::table('customers')->limit(2)->get();
-        if ($customers->isEmpty()) {
-            $this->command?->warn('[Invoices] No customers, skipping.');
+        $sos = DB::table('sales_orders')
+            ->whereIn('status', ['confirmed', 'completed', 'in_production', 'partially_delivered'])
+            ->orderBy('id')
+            ->limit(3)
+            ->get();
+        if ($sos->isEmpty()) {
+            $this->command?->warn('[Invoices] No confirmed/completed sales orders, skipping.');
+            return;
+        }
+
+        $revenueAccount = Account::where('type', 'revenue')->orderBy('id')->value('id')
+            ?? Account::orderBy('id')->value('id');
+        $cashAccount = Account::whereIn('type', ['asset', 'assets'])->orderBy('id')->value('id')
+            ?? Account::orderBy('id')->value('id');
+        if (! $revenueAccount || ! $cashAccount) {
+            $this->command?->warn('[Invoices] No accounts for invoice lines/collections, skipping.');
             return;
         }
 
         $now = Carbon::now();
+        // status, share of the SO total collected, days ago (aging variety).
         $invData = [
-            ['number' => '0001', 'status' => 'finalized', 'sub' => 223214.29, 'total' => 250000.00, 'paid' => 0, 'daysAgo' => 20],
-            ['number' => '0002', 'status' => 'paid',      'sub' => 160714.29, 'total' => 180000.00, 'paid' => 180000, 'daysAgo' => 15],
-            ['number' => '0003', 'status' => 'partial',   'sub' => 84821.43,  'total' => 95000.00,  'paid' => 57000,  'daysAgo' => 10],
+            ['status' => 'finalized', 'collectPct' => 0,   'daysAgo' => 20],
+            ['status' => 'paid',      'collectPct' => 1.0, 'daysAgo' => 15],
+            ['status' => 'partial',   'collectPct' => 0.6, 'daysAgo' => 10],
         ];
 
+        $created = 0;
         foreach ($invData as $i => $d) {
+            $so = $sos[$i % $sos->count()];
+            $soItems = DB::table('sales_order_items')->where('sales_order_id', $so->id)->get();
+            if ($soItems->isEmpty()) {
+                continue;
+            }
+
             $date = $now->copy()->subDays($d['daysAgo']);
-            DB::table('invoices')->insert([
-                'invoice_number' => 'INV-' . $now->format('Ymd') . '-' . $d['number'],
-                'customer_id'    => $customers[min($i, count($customers) - 1)]->id,
+            $subtotal = 0.0;
+            foreach ($soItems as $si) {
+                $subtotal += (float) $si->quantity * (float) $si->unit_price;
+            }
+            $vat = round($subtotal * 0.12, 2);
+            $total = round($subtotal + $vat, 2);
+            $collected = round($total * $d['collectPct'], 2);
+
+            $invoiceId = DB::table('invoices')->insertGetId([
+                'invoice_number' => 'INV-' . $now->format('Ymd') . '-' . str_pad((string) ($i + 1), 4, '0', STR_PAD_LEFT),
+                'customer_id'    => $so->customer_id,
+                'sales_order_id' => $so->id,
                 'date'           => $date->toDateString(),
                 'due_date'       => $date->copy()->addDays(30)->toDateString(),
                 'is_vatable'     => true,
-                'subtotal'       => $d['sub'],
-                'vat_amount'     => round($d['sub'] * 0.12, 2),
-                'total_amount'   => $d['total'],
-                'amount_paid'    => $d['paid'],
-                'balance'        => $d['total'] - $d['paid'],
+                'subtotal'       => $subtotal,
+                'vat_amount'     => $vat,
+                'total_amount'   => $total,
+                'amount_paid'    => $collected,
+                'balance'        => round($total - $collected, 2),
                 'status'         => $d['status'],
                 'created_by'     => $this->admin->id,
             ]);
+
+            foreach ($soItems as $si) {
+                $lineTotal = round((float) $si->quantity * (float) $si->unit_price, 2);
+                DB::table('invoice_items')->insert([
+                    'invoice_id'         => $invoiceId,
+                    'revenue_account_id' => $revenueAccount,
+                    'product_id'         => $si->product_id,
+                    'description'        => 'Sales order line — demo invoice',
+                    'quantity'           => $si->quantity,
+                    'unit'               => 'pcs',
+                    'unit_price'         => $si->unit_price,
+                    'total'              => $lineTotal,
+                ]);
+            }
+
+            if ($collected > 0) {
+                DB::table('collections')->insert([
+                    'invoice_id'       => $invoiceId,
+                    'cash_account_id'  => $cashAccount,
+                    'collection_date'  => $date->copy()->addDays(2)->toDateString(),
+                    'amount'           => $collected,
+                    'payment_method'   => 'bank_transfer',
+                    'reference_number' => 'DEMO-COL-' . str_pad((string) ($i + 1), 4, '0', STR_PAD_LEFT),
+                    'created_by'       => $this->admin->id,
+                ]);
+            }
+            $created++;
         }
-        $this->command?->info('[Invoices] Created 3 demo invoices (finalized, paid, partial).');
+        $this->command?->info("[Invoices] Created {$created} demo invoices (finalized, paid, partial) with SO provenance + collection backing.");
     }
 
     /* ===================================================================
@@ -234,9 +300,10 @@ class ComprehensiveDemoSeeder extends Seeder
             ['number' => '0002', 'status' => 'unpaid', 'sub' => 75892.86,  'total' => 85000.00,  'paid' => 0,      'daysAgo' => 10],
         ];
 
+        $paidBillId = null;
         foreach ($billData as $d) {
             $date = $now->copy()->subDays($d['daysAgo']);
-            DB::table('bills')->insert([
+            $billId = DB::table('bills')->insertGetId([
                 'bill_number'  => 'BILL-' . $now->format('Ymd') . '-' . $d['number'],
                 'vendor_id'    => $vendor->id,
                 'date'         => $date->toDateString(),
@@ -250,8 +317,30 @@ class ComprehensiveDemoSeeder extends Seeder
                 'status'       => $d['status'],
                 'created_by'   => $this->admin->id,
             ]);
+            if ($d['status'] === 'paid') {
+                $paidBillId = $billId;
+            }
         }
-        $this->command?->info('[Bills] Created 2 demo bills.');
+
+        // A 'paid' bill must be backed by a bill_payments row — otherwise the
+        // bill reads as fabricated money (demo:verify WARNs on the empty
+        // Procure-to-Pay tail).
+        if ($paidBillId !== null) {
+            $cashAccount = Account::whereIn('type', ['asset', 'assets'])->orderBy('id')->value('id')
+                ?? Account::orderBy('id')->value('id');
+            if ($cashAccount) {
+                DB::table('bill_payments')->insert([
+                    'bill_id'          => $paidBillId,
+                    'cash_account_id'  => $cashAccount,
+                    'payment_date'     => $now->copy()->subDays(23)->toDateString(),
+                    'amount'           => 150000.00,
+                    'payment_method'   => 'bank_transfer',
+                    'reference_number' => 'DEMO-BP-0001',
+                    'created_by'       => $this->admin->id,
+                ]);
+            }
+        }
+        $this->command?->info('[Bills] Created 2 demo bills (paid bill backed by a payment record).');
     }
 
     /* ===================================================================

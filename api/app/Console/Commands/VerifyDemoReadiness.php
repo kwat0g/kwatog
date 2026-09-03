@@ -78,17 +78,26 @@ class VerifyDemoReadiness extends Command
     /** @return array{ok: bool, message: string} */
     private function checkDemoActors(): array
     {
-        $required = ['admin@ogami.test', 'portal@supp.test', 'portal@cust.test'];
+        // The internal admin lives in `users`; B2B portal accounts live in
+        // their OWN tables behind separate guards (auth:supplier_portal /
+        // auth:customer_portal providers), so each email is checked against
+        // the table its login actually authenticates against.
+        $checks = [
+            ['email' => 'admin@ogami.test',    'table' => 'users'],
+            ['email' => 'portal@supp.test',     'table' => 'supplier_portal_users'],
+            ['email' => 'portal@cust.test',     'table' => 'customer_portal_users'],
+        ];
+
         $missing = [];
-        foreach ($required as $email) {
-            if (! DB::table('users')->where('email', $email)->exists()) {
-                $missing[] = $email;
+        foreach ($checks as $c) {
+            if (! Schema::hasTable($c['table']) || ! DB::table($c['table'])->where('email', $c['email'])->exists()) {
+                $missing[] = $c['email'];
             }
         }
 
         return $missing === []
-            ? ['ok' => true, 'message' => 'Demo actors present ('.implode(', ', $required).').']
-            : ['ok' => false, 'message' => 'Missing demo accounts: '.implode(', ', $missing).'. Re-run DemoAccountSeeder.'];
+            ? ['ok' => true, 'message' => 'Demo actors present (admin@ogami.test in users; portal accounts in their portal tables).']
+            : ['ok' => false, 'message' => 'Missing demo accounts: '.implode(', ', $missing).'. Re-run GoldenPathDemoSeeder (portal accounts).'];
     }
 
     /** @return array{ok: bool, message: string} */

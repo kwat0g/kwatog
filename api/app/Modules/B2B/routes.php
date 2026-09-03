@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Common\Controllers\BusinessPolicyController;
 use App\Modules\B2B\Controllers\CustomerAuthController;
 use App\Modules\B2B\Controllers\CustomerPortalController;
 use App\Modules\B2B\Controllers\SupplierAuthController;
@@ -57,8 +58,19 @@ Route::prefix('b2b/supplier')->group(function () {
 Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired', 'feature:b2b_portals'])
     ->prefix('b2b/portal-access')
     ->group(function (): void {
+        Route::get('customers', [PortalAccessController::class, 'customers'])
+            ->middleware('permission:b2b.portal_access.view');
         Route::post('customers/{customer}/invite', [PortalAccessController::class, 'inviteCustomer'])
             ->middleware('permission:b2b.portal_access.manage');
+        Route::post('customers/{customerPortalUser}/resend', [PortalAccessController::class, 'resendCustomer'])
+            ->middleware('permission:b2b.portal_access.manage')
+            ->withTrashed();
+        Route::patch('customers/{customerPortalUser}/deactivate', [PortalAccessController::class, 'deactivateCustomer'])
+            ->middleware('permission:b2b.portal_access.manage')
+            ->withTrashed();
+        Route::patch('customers/{customerPortalUser}/reactivate', [PortalAccessController::class, 'reactivateCustomer'])
+            ->middleware('permission:b2b.portal_access.manage')
+            ->withTrashed();
         Route::get('suppliers', [PortalAccessController::class, 'suppliers'])
             ->middleware('permission:b2b.portal_access.view');
         Route::post('suppliers/{vendor}/invite', [PortalAccessController::class, 'inviteSupplier'])
@@ -90,6 +102,10 @@ Route::prefix('b2b/customer')->group(function () {
     // Authenticated
     Route::middleware(['auth:customer_portal', 'portal:customer_portal', 'feature:b2b_portals', \App\Modules\B2B\Middleware\CheckPortalPasswordExpiry::class, \App\Modules\B2B\Middleware\B2BTenancyScopeMiddleware::class])->group(function () {
         Route::get('me', [CustomerAuthController::class, 'me']);
+        // The customer portal is a session guard, so the internal
+        // /business-policies endpoint (auth:sanctum) cannot serve it. Portal
+        // layout shares the same policy payload through its own guard.
+        Route::get('business-policies', BusinessPolicyController::class);
         Route::post('change-password', [CustomerAuthController::class, 'changePassword'])->middleware('throttle:sensitive');
         Route::middleware('portal.password.changed')->group(function (): void {
         Route::get('dashboard', [CustomerPortalController::class, 'dashboard']);
