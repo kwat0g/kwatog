@@ -1161,7 +1161,12 @@ class ComprehensiveDemoSeeder extends Seeder
                 ->get();
 
             $sampleCount = (int) ($inspection->sample_size ?? 10);
-            $sampleSize = min(3, $sampleCount);
+            // Measure EVERY declared sample. A passed inspection that only
+            // measured a subset of its declared AQL sample cannot issue a
+            // Certificate of Conformance — CoCService asserts evidence == the
+            // declared sample — and treating 3 of 10 units as a passed verdict
+            // misstates AQL evidence on an IATF-auditable record.
+            $sampleSize = $sampleCount;
 
             for ($s = 1; $s <= $sampleSize; $s++) {
                 foreach ($specItems as $si) {

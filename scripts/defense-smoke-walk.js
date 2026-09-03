@@ -12,7 +12,9 @@ const PAGES = [
   ['/dashboard', 'dashboard', 'Dashboard', /dashboard/i],
   ['/dashboard/plant-manager', 'dashboard-plant-manager', 'Plant Manager Forecast Dashboard', /Demand Forecast[\s\S]*Forecast Accuracy|Forecast Accuracy[\s\S]*Demand Forecast/i],
   ['/dashboard/ppc', 'dashboard-ppc', 'PPC Forecast Dashboard', /Demand Forecast[\s\S]*Forecast Accuracy|Forecast Accuracy[\s\S]*Demand Forecast/i],
-  ['/quality/traceability?term=BATCH-20260908-0001', 'traceability', 'ADV3 Traceability', /IMM-01[\s\S]*M-WB-001|M-WB-001[\s\S]*IMM-01/i],
+  // __BATCH__ is substituted with the live hero batch number after login
+  // (batch numbers embed the WO start date, so they shift per seed day).
+  ['/quality/traceability?term=__BATCH__', 'traceability', 'ADV3 Traceability', /IMM-01[\s\S]*M-WB-001|M-WB-001[\s\S]*IMM-01/i],
   ['/production/work-orders', 'work-orders', 'ADV3 Work Orders', /work orders/i],
   ['/supply-chain/deliveries', 'deliveries', 'ADV7 Deliveries', /deliveries/i],
   ['/payroll/periods', 'payroll-periods', 'ADV1 Payroll Periods', /payroll/i],
@@ -103,12 +105,34 @@ async function portalCheck(browser, kind, email, expected) {
     results.push(['Internal login', `FAIL: ${String(error.message || error).slice(0, 160)}`]);
   }
 
+  // Resolve the live hero batch number so the traceability check searches a
+  // term that actually exists on this seed's data. Batch numbers embed the WO
+  // start date (BATCH-YYYYMMDD-NNNN), so a fresh seed on a different day
+  // shifts them. Falls back to the historically-documented term.
+  let heroBatch = 'BATCH-20260908-0001';
+  try {
+    const woResp = await page.evaluate(async () => {
+      const res = await fetch('/api/v1/production/work-orders?per_page=10', {
+        headers: { Accept: 'application/json' },
+      });
+      if (!res.ok) return null;
+      const json = await res.json();
+      const rows = json?.data ?? [];
+      const first = rows.find((row) => row && row.batch_number);
+      return first ? String(first.batch_number) : null;
+    });
+    if (woResp) heroBatch = woResp;
+  } catch {
+    // keep the fallback term
+  }
+
   for (const [route, file, label, expected] of PAGES) {
+    const resolvedRoute = route.replace('__BATCH__', encodeURIComponent(heroBatch));
     const consoleBefore = errors.consoleErrors.length;
     const httpBefore = errors.httpErrors.length;
     let status = 'OK';
     try {
-      const response = await page.goto(BASE + route, { waitUntil: 'networkidle', timeout: 25000 });
+      const response = await page.goto(BASE + resolvedRoute, { waitUntil: 'networkidle', timeout: 25000 });
       if (!response || response.status() >= 400) {
         status = `FAIL: document HTTP ${response?.status() ?? 'none'}`;
       } else {
@@ -125,7 +149,7 @@ async function portalCheck(browser, kind, email, expected) {
     } catch (error) {
       status = `FAIL: ${String(error.message || error).slice(0, 160)}`;
     }
-    results.push([`${label} (${route})`, status]);
+    results.push([`${label} (${resolvedRoute})`, status]);
   }
 
   await context.close();

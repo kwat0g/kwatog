@@ -131,11 +131,16 @@ export default function InvoicesPage() {
  meta={data.meta}
  onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
  onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
- selectable
- bulkActions={[{
- label: 'Print PDFs',
- icon: <LuPrinter size={14} />,
- onClick: (rows) => bulkPrint('invoice', rows.map((r) => r.id)) } as BulkAction<Invoice>]}
+ selectable={can('admin.print.bulk')}
+ bulkActions={
+  can('admin.print.bulk')
+   ? [{
+     label: 'Print PDFs',
+     icon: <LuPrinter size={14} />,
+     onClick: (rows) => bulkPrint('invoice', rows.map((r) => r.id)),
+    } as BulkAction<Invoice>]
+   : []
+ }
  />
  </div>
  )}

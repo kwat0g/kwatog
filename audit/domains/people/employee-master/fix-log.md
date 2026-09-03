@@ -239,3 +239,28 @@ After the fixes:
 Net for this batch: **3 of 4 tests fixed**, 1 escalated as a policy decision with
 both patches specified above. No SPA file was changed, so no typecheck/lint run
 was required.
+
+---
+
+### RESOLVED 2026-09-04 — recertification policy (Option B)
+
+Decision made by the project owner: **a completed training record is immutable;
+a retake creates a NEW assignment record.** Implemented in this session:
+
+- `EmployeeTrainingStateMachine::transition()` no longer no-ops on
+  `$current === $target` — self-transitions (re-complete, re-cancel) throw, so
+  the `/complete` endpoint returns 422 on a completed record and its
+  `completed_at`/`expires_at`/certificate/alert fields can no longer be
+  silently rewritten.
+- `TrainingExpiryService::check()` only evaluates the **newest** completed row
+  per (employee, training), so a superseded cert cannot fire expiry alarms
+  while a newer one is current.
+- `EmployeeTrainingExpiresAtTest::test_retake_creates_a_new_record_that_starts_clean`
+  replaces the old recompletion test: the retake record starts clean (null
+  alert state, own `expires_at`) and the original keeps its signed-off history.
+- `EmployeeTrainingAssignTest::test_training_lifecycle_rejects_recompletion_and_cancelling_completed_record`
+  now passes as written (422 on both).
+
+Verification: full `tests/Feature/HR` 172 passed, `TrainingExpiryAlertTest` +
+`SelfServiceTrainingsTest` + badge/expiry filters green, full Feature suite
+green for this change set.

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\HR;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\HR\Enums\EmployeeTrainingStatus;
 use App\Modules\HR\Enums\TrainingAlertLevel;
 use App\Modules\HR\Models\Department;
@@ -64,27 +65,59 @@ class EmployeeTrainingExpiresAtTest extends TestCase
         $this->assertNull($rec->expires_at);
     }
 
-    public function test_recompletion_resets_alert_state(): void
+    public function test_retake_creates_a_new_record_that_starts_clean(): void
     {
-        $rec = $this->makeRecord(6);
+        // Recertification policy (2026-09-04, Option B): a completed record is
+        // immutable — re-completing it is refused, and a retake is a NEW
+        // assignment record. The fresh record carries no alert bookkeeping, so
+        // future expiry firings run off its own expires_at; the superseded row
+        // keeps its signed-off history for traceability.
+        $dept = Department::firstOrCreate(['code' => 'WHS'], ['name' => 'Warehouse']);
+        $emp  = Employee::factory()->create(['department_id' => $dept->id]);
+        $t    = Training::create([
+            'name' => 'Forklift', 'validity_months' => 6, 'is_active' => true,
+        ]);
 
         /** @var EmployeeTrainingService $svc */
         $svc = app(EmployeeTrainingService::class);
-        $svc->recordCompletion($rec, Carbon::parse('2026-01-01'));
 
-        // Simulate that the cron fired t14 already.
-        $rec->refresh()->forceFill([
+        $original = EmployeeTraining::create([
+            'employee_id' => $emp->id, 'training_id' => $t->id,
+            'scheduled_for' => '2025-12-01',
+        ]);
+        $svc->recordCompletion($original, Carbon::parse('2026-01-01')); // expires 2026-07-01
+
+        // The expiry cron already fired the T14 tier for the original.
+        $original->refresh()->forceFill([
             'last_alert_level' => TrainingAlertLevel::T14->value,
             'last_alert_at'    => now(),
         ])->save();
 
-        // Re-complete (e.g. retake): expect alert state cleared so future
-        // expiry firings can re-fire on the new expires_at.
-        $svc->recordCompletion($rec->fresh(), Carbon::parse('2026-07-01'));
+        // Re-completing the signed-off record is refused, not a silent reset.
+        try {
+            $svc->recordCompletion($original->fresh(), Carbon::parse('2026-07-01'));
+            $this->fail('Re-completing a completed record must be refused.');
+        } catch (BusinessRuleException) {
+            // expected — a completed record is terminal.
+        }
 
-        $rec->refresh();
-        $this->assertNull($rec->last_alert_level);
-        $this->assertNull($rec->last_alert_at);
-        $this->assertSame('2027-01-01', $rec->expires_at->toDateString());
+        // The retake is a fresh assignment record.
+        $retake = EmployeeTraining::create([
+            'employee_id' => $emp->id, 'training_id' => $t->id,
+            'scheduled_for' => '2026-06-01',
+        ]);
+        $retake = $svc->recordCompletion($retake, Carbon::parse('2026-07-01'));
+
+        // The original keeps its signed-off history untouched.
+        $original->refresh();
+        $this->assertSame('2026-01-01', $original->completed_at->toDateString());
+        $this->assertSame('2026-07-01', $original->expires_at->toDateString());
+        $this->assertSame(TrainingAlertLevel::T14, $original->last_alert_level);
+        $this->assertSame(EmployeeTrainingStatus::Completed, $original->status);
+
+        // The fresh record starts clean and carries its own expiry.
+        $this->assertNull($retake->last_alert_level);
+        $this->assertNull($retake->last_alert_at);
+        $this->assertSame('2027-01-01', $retake->expires_at->toDateString());
     }
 }

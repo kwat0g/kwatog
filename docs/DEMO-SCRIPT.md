@@ -10,10 +10,18 @@
 > docker compose stop queue          # avoid lock contention during the reset
 > docker compose exec api php artisan migrate:fresh --seed
 > docker compose start queue         # drains seeded MRP/payslip jobs; MAIL_MAILER=log in api/.env so nothing e-mails
+> docker compose exec api php artisan db:seed --class=GoldenPathDemoSeeder   # stamps batch numbers on the WOs the queue just created + hardens the hero QC trace
 > docker compose exec api php artisan db:seed --class=DefenseHeroSeeder
 > docker compose exec api php artisan demo:verify   # must print PASSED — 0 critical failures
 > cd spa && npm run test:defense     # strict showcase walk — must print PASS for all rows
 > ```
+>
+> The GoldenPathDemoSeeder re-run after the queue drain is load-bearing: the
+> MRP outbox the seeder enqueues creates the work orders only once the queue
+> worker runs, and batch numbers + the hero QC record are stamped onto WOs
+> that exist. Skipping it leaves the flagship traceability search and the
+> Certificate of Conformance button empty — `demo:verify` now FAILs on
+> `hero_trace` if that state is ever reached.
 > Log in as `admin@ogami.test` / `password`. `migrate:fresh --seed` runs the full
 > reference + demo chain (SOs → MRP → work orders → deliveries), and
 > `DefenseHeroSeeder` adds the open accounting period, leave balances, and the

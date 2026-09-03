@@ -619,3 +619,18 @@ Deferred deliberately: it changes an authentication gate on an externally facing
 portal, and the supplier SPA has no handler for the `password_expired` code, so
 turning the gate on without the client work would hard-brick an expired supplier
 with no route to change their password. `separate-recommended`.
+
+---
+
+### RESOLVED 2026-09-04 — supplier payment visibility
+
+Decision made by the project owner: **payments stay supplier-visible as a
+statement of account.** `SupplierBillResource` keeps its allowlisted `payments`
+mapping (date / amount / method / reference / status — no journal, GL, or
+internal approver fields). The `AccountsPayableHardeningTest` assertion was
+rewritten to assert on the real serialized payload (`resolve()`, relations
+loaded — `toArray()` on an unloaded `whenLoaded()` relation yields a
+MissingValue key, a serializer artifact) and to pin the allowlist: internal
+fields absent at the top level and inside each payment, statement fields
+present. Internal AP controls (`exception_evidence`,
+`three_way_override_reason`, `expense_account`) remain hidden.

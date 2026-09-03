@@ -146,16 +146,17 @@ class ZzM050CapacityProbeTest extends TestCase
             'planned_end'   => $this->tomorrow->copy()->setTime(17, 0),
         ])->save();
 
-        $this->planner->run([$wo->id]);
-        $row = ProductionSchedule::where('work_order_id', $wo->id)->firstOrFail();
+        $result = $this->planner->run([$wo->id]);
+        $row = ProductionSchedule::where('work_order_id', $wo->id)->first();
 
         fwrite(STDERR, "\n[M050-P1d] planned_end=" . $wo->planned_end->toDateTimeString()
-            . ' scheduled_end=' . $row->scheduled_end->toDateTimeString()
-            . ' overrun_hours=' . round($wo->planned_end->diffInMinutes($row->scheduled_end, false) / 60, 1) . "\n");
+            . ' scheduled=' . count($result['scheduled'])
+            . ' conflicts=' . count($result['conflicts'])
+            . ' row=' . ($row?->scheduled_end?->toDateTimeString() ?? 'none') . "\n");
 
-        $this->assertTrue(
-            $row->scheduled_end->lessThanOrEqualTo($wo->planned_end),
-            'A schedule that ends after the work-order due date is a promise the plant cannot keep.'
+        $this->assertNull(
+            $row,
+            'A workload that cannot finish before the work-order due date must be refused, not promised.'
         );
     }
 
@@ -193,11 +194,16 @@ class ZzM050CapacityProbeTest extends TestCase
 
         $this->rawSchedule($a, $machine, $mold, 8, 12, 'confirmed');
         $thrown = null;
+        // The expected violation aborts the surrounding test transaction in
+        // PostgreSQL; nest it inside a savepoint and roll back so the count
+        // below can still run.
+        DB::beginTransaction();
         try {
             $this->rawSchedule($b, $machine, $mold, 9, 11, 'confirmed');
         } catch (\Throwable $e) {
             $thrown = $e::class;
         }
+        DB::rollBack();
 
         $count = ProductionSchedule::where('machine_id', $machine->id)->count();
         fwrite(STDERR, "\n[M050-P2b] direct overlapping insert threw=" . ($thrown ?? 'nothing')
@@ -652,7 +658,7 @@ class ZzM050CapacityProbeTest extends TestCase
         $this->planner->confirm([$row->id], $this->user->id);
 
         $svc = app(\App\Modules\Production\Services\WorkOrderService::class);
-        $svc->start($wo->fresh());
+        $svc->start($wo->fresh(), $this->user->id);
         $started = $row->fresh();
         $svc->complete($wo->fresh(), ['quantity_produced' => 100, 'quantity_rejected' => 0]);
         $completed = $row->fresh();
@@ -758,7 +764,9 @@ class ZzM050CapacityProbeTest extends TestCase
 
         foreach ($statuses as $status) {
             foreach ($verbs as $verb) {
-                $hour = ($hour + 2) % 20;
+                // 12 cells × +2h must never wrap onto an already-used hour:
+                // the 0479 exclusion constraint rejects exact-window repeats.
+                $hour = ($hour + 2) % 24;
                 $wo = $this->workOrder('CAP-TM-' . substr(uniqid(), -6), WorkOrderStatus::Planned, '100', 5);
                 $row = $this->rawSchedule($wo, $machine, $mold, $hour, $hour + 1, $status);
                 $outcome = 'ACCEPTED';
@@ -803,7 +811,7 @@ class ZzM050CapacityProbeTest extends TestCase
         $wo->forceFill(['planned_start' => $this->tomorrow->copy()->setTime(8, 0)])->save();
         $row = $this->rawSchedule($wo, $machine, $mold, 8, 12, 'pending');
         $this->planner->confirm([$row->id], $this->user->id);
-        app(\App\Modules\Production\Services\WorkOrderService::class)->start($wo->fresh());
+        app(\App\Modules\Production\Services\WorkOrderService::class)->start($wo->fresh(), $this->user->id);
         return $row->fresh();
     }
 
@@ -856,6 +864,11 @@ class ZzM050CapacityProbeTest extends TestCase
             'priority' => $priority,
             'status' => $status->value,
             'created_by' => $this->user->id,
+            // M050 probe WOs carry no BOM; mark them non-stock so the
+            // service's material-plan gate at start() passes without setup.
+            'work_order_class' => 'non_stock',
+            'exception_reason' => 'M050 capacity probe',
+            'exception_authorized_by' => $this->user->id,
         ]);
     }
 

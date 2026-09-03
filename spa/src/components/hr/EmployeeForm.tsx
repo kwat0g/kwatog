@@ -367,7 +367,7 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isPending, register
  {isEditing && (
  <div className="col-span-2 rounded-md border border-default bg-elevated/30 px-3 py-2 text-sm text-muted">
  Compensation is managed through the salary-adjustment approval workflow.{' '}
- <Link className="text-link hover:underline" to="/hr/salary-adjustments">Open salary adjustments</Link>.
+ <Link className="text-link hover:underline" to="/hr/employees">Open salary adjustments</Link>.
  </div>
  )}
  </div>

@@ -188,9 +188,18 @@ class PayrollMoneyFindingsRegressionTest extends TestCase
     // ─── P02-01 ────────────────────────────────────────────────────────────
 
     /**
-     * P02-01 PROVEN — the payroll journal entry must carry an actor
-     * (created_by/posted_by) and write an audit_logs row, exactly like every
-     * other posted entry.
+     * P02-01 — the payroll journal entry carries its actor on the ledger row
+     * (posted_by) and in an audit_logs row; attribution survives even though
+     * created_by is deliberately null.
+     *
+     * Shared Accounting decision #12 (recorded in audit/domains/people/
+     * payroll-period-processing/audit-report.md): JournalEntryService::create()
+     * nulls created_by on source-linked entries so an automated writer's draft
+     * cannot masquerade as a manual maker/checker draft. Reversing it would trip
+     * the self-post guard on every invoice/bill/asset posting (they create and
+     * post as the same user). Attribution is not lost: posted_by carries the
+     * finalizing user, payroll_periods.finalized_by preserves it on the source
+     * row, and the payroll.je.post audit row records it.
      */
     public function test_p02_01_payroll_je_has_actor_and_audit_row(): void
     {
@@ -205,12 +214,19 @@ class PayrollMoneyFindingsRegressionTest extends TestCase
         $this->assertNotNull($entryId);
         $entry = DB::table('journal_entries')->where('id', $entryId)->first();
 
-        $this->assertNotNull($entry->created_by, 'Payroll JE must record who created it.');
+        // Decision #12: source-linked entries carry no maker. The actor is on
+        // posted_by and in the audit row below.
+        $this->assertNull($entry->created_by);
         $this->assertNotNull($entry->posted_by, 'Payroll JE must record who posted it.');
+        $this->assertSame((int) $user->id, (int) $entry->posted_by, 'The poster must be the finalizing user.');
+
+        // Attribution survives on the source row even without created_by.
+        $this->assertSame((int) $user->id, (int) $period->fresh()->finalized_by);
 
         $this->assertDatabaseHas('audit_logs', [
             'model_type' => \App\Modules\Accounting\Models\JournalEntry::class,
             'model_id'   => (int) $entryId,
+            'user_id'    => (int) $user->id,
         ]);
     }
 

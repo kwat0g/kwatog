@@ -15,6 +15,7 @@ use App\Modules\Production\Services\WorkOrderService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Database\QueryException;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -201,9 +202,16 @@ class WorkOrderMachineConflictTest extends TestCase
     }
 
     /**
-     * Overlapping schedule windows on the same machine → conflict.
+     * Overlapping schedule windows on one machine are rejected at the database.
+     *
+     * M050 (migration 0479) added the production_schedules_no_overlap
+     * exclusion constraint: two active (pending/confirmed/executed) rows with
+     * overlapping windows on one machine can no longer be written. The
+     * overlapping setup this test originally built to drive the application
+     * guard in confirm() is therefore itself refused now — the database is the
+     * hard enforcement and the confirm() window check is defense-in-depth.
      */
-    public function test_confirm_blocked_on_overlapping_schedule_window(): void
+    public function test_overlapping_schedule_windows_are_rejected_at_the_database(): void
     {
         $machine = $this->machine();
 
@@ -215,16 +223,12 @@ class WorkOrderMachineConflictTest extends TestCase
         $this->service->confirm($existing);
 
         $second = $this->plannedWo($machine, $this->mold());
-        // Overlaps 10:00–14:00 with the existing 08:00–12:00 window.
+        $this->expectException(QueryException::class);
+        // Overlaps 10:00–14:00 with the confirmed 08:00–12:00 window.
         $this->schedule(
             $second, $machine, $this->mold(),
             Carbon::parse('2026-07-01 10:00'), Carbon::parse('2026-07-01 14:00'),
         );
-
-        $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('overlapping schedule window');
-
-        $this->service->confirm($second);
     }
 
     /**

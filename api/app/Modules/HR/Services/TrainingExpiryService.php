@@ -36,11 +36,25 @@ class TrainingExpiryService
         $tiers = $this->tiers();
         $horizon = $today->copy()->addDays(max(array_column($tiers, 'days')))->toDateString();
 
+        // Recertification policy (2026-09-04): a retake creates a NEW record,
+        // so an employee can hold several completed rows for one training.
+        // Only the newest completion drives expiry alerts — an older
+        // (superseded) cert must not fire expiry alarms while a newer one is
+        // current, and once the newest lapses it is the row that alerts.
         $rows = EmployeeTraining::query()
-            ->where('status', EmployeeTrainingStatus::Completed->value)
-            ->whereNotNull('expires_at')
-            ->where('expires_at', '<=', $horizon)
-            ->get(['id']);
+            ->from('employee_trainings as et')
+            ->where('et.status', EmployeeTrainingStatus::Completed->value)
+            ->whereNotNull('et.expires_at')
+            ->where('et.expires_at', '<=', $horizon)
+            ->whereNotExists(static function ($query): void {
+                $query->selectRaw('1')
+                    ->from('employee_trainings as newer')
+                    ->whereColumn('newer.employee_id', 'et.employee_id')
+                    ->whereColumn('newer.training_id', 'et.training_id')
+                    ->where('newer.status', EmployeeTrainingStatus::Completed->value)
+                    ->whereColumn('newer.id', '>', 'et.id');
+            })
+            ->get(['et.id']);
 
         $alertsSent = 0;
         $expiredMarked = 0;

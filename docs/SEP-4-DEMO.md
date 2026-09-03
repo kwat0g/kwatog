@@ -150,16 +150,17 @@ responses, and browser console errors.
 For a clean local demo database, use the canonical sequence from
 [`DEMO-SCRIPT.md`](DEMO-SCRIPT.md). Warning: `migrate:fresh` deletes and
 recreates the selected database, so use it only when resetting a disposable
-demo environment:
-
-```bash
-docker compose up -d
-docker compose stop queue
-docker compose exec api php artisan migrate:fresh --seed
-docker compose start queue
-docker compose exec api php artisan db:seed --class=DefenseHeroSeeder
-docker compose exec api php artisan demo:verify
-cd spa && npm run test:defense
+demo environment:```bash
+ docker compose up -d
+ docker compose stop queue
+ docker compose exec api php artisan migrate:fresh --seed
+ docker compose start queue
+ # Batch numbers + the hero QC record are stamped onto the work orders the
+ # queue just created — this re-run is load-bearing for traceability/CoC.
+ docker compose exec api php artisan db:seed --class=GoldenPathDemoSeeder
+ docker compose exec api php artisan db:seed --class=DefenseHeroSeeder
+ docker compose exec api php artisan demo:verify
+ cd spa && npm run test:defense
 ```
 
 The seeded rehearsal records include:

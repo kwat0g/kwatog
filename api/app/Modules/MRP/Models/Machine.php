@@ -7,6 +7,9 @@ namespace App\Modules\MRP\Models;
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\MRP\Enums\MachineStatus;
+use App\Modules\Production\Enums\ProductionScheduleStatus;
+use App\Modules\Production\Enums\WorkOrderStatus;
+use App\Modules\Production\Models\ProductionSchedule;
 use App\Modules\Production\Models\WorkOrder;
 use Database\Factories\MachineFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -62,5 +65,36 @@ class Machine extends Model
     public function getIsAvailableNowAttribute(): bool
     {
         return $this->status === MachineStatus::Idle;
+    }
+
+    /**
+     * M050 — a machine entering breakdown must release every promised
+     * (pending/confirmed) window so the scheduler can replan that work
+     * elsewhere. Rows belonging to a running/paused work order are left
+     * alone: their plan is an operational record, and the pause flow handles
+     * the running WO separately.
+     */
+    protected static function booted(): void
+    {
+        static::updating(static function (Machine $machine): void {
+            $from = $machine->getOriginal('status');
+            $fromValue = $from instanceof MachineStatus ? $from->value : (string) $from;
+            $toValue = $machine->status instanceof MachineStatus
+                ? $machine->status->value
+                : (string) $machine->status;
+            if ($fromValue !== MachineStatus::Breakdown->value
+                && $toValue === MachineStatus::Breakdown->value) {
+                ProductionSchedule::where('machine_id', $machine->id)
+                    ->whereIn('status', [
+                        ProductionScheduleStatus::Pending->value,
+                        ProductionScheduleStatus::Confirmed->value,
+                    ])
+                    ->whereDoesntHave('workOrder', static fn ($q) => $q->whereIn('status', [
+                        WorkOrderStatus::InProgress->value,
+                        WorkOrderStatus::Paused->value,
+                    ]))
+                    ->update(['status' => ProductionScheduleStatus::Superseded->value]);
+            }
+        });
     }
 }

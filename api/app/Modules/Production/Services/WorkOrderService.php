@@ -519,6 +519,17 @@ class WorkOrderService
                     $mold->update(['status' => MoldStatus::Available->value]);
                 }
             }
+            // M050 — a completed work order retires its schedule rows so they
+            // stop blocking machine capacity in future planning runs. Runs
+            // after the WO transition so the immutability guard on started
+            // schedules (in_progress/paused) does not fire.
+            ProductionSchedule::where('work_order_id', $lockedWo->id)
+                ->whereIn('status', [
+                    ProductionScheduleStatus::Pending->value,
+                    ProductionScheduleStatus::Confirmed->value,
+                ])
+                ->update(['status' => ProductionScheduleStatus::Executed->value]);
+
             $completed = $this->show($lockedWo->fresh());
             app(OutboxService::class)->recordForChain(
                 new WorkOrderCompleted($completed),
@@ -592,6 +603,15 @@ class WorkOrderService
                     $mold->update(['status' => MoldStatus::Available->value]);
                 }
             }
+            // M050 — a cancelled work order releases its reserved machine
+            // window so the scheduler can replan the slot.
+            ProductionSchedule::where('work_order_id', $lockedWo->id)
+                ->whereIn('status', [
+                    ProductionScheduleStatus::Pending->value,
+                    ProductionScheduleStatus::Confirmed->value,
+                ])
+                ->update(['status' => ProductionScheduleStatus::Superseded->value]);
+
             $cancelled = $this->show($lockedWo->fresh());
             $this->recordStatusChange($cancelled, $from, WorkOrderStatus::Cancelled->value, $reason);
 
@@ -797,6 +817,9 @@ class WorkOrderService
         }
         if (! in_array($mold->status, [MoldStatus::Available, MoldStatus::InUse], true)) {
             throw new BusinessRuleException('The selected mold is not available for scheduling.');
+        }
+        if ((int) $mold->current_shot_count + (int) $wo->quantity_target > (int) $mold->max_shots_before_maintenance) {
+            throw new BusinessRuleException('The selected mold has insufficient rated shot life remaining for this work-order quantity.');
         }
         if (! $mold->compatibleMachines()->whereKey($machine->id)->exists()) {
             throw new BusinessRuleException('The selected machine and mold are not compatible.');

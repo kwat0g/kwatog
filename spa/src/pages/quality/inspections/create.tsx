@@ -72,12 +72,13 @@ export default function CreateInspectionPage() {
  });
  const outputId = watch('work_order_output_id');
  const selectedOutput = workOrderOutputs.data?.find((output) => output.id === outputId);
+ const selectedGoodCount = selectedOutput?.good_count;
 
  useEffect(() => {
-  if (stage === 'outgoing' && selectedOutput) {
-   setValue('batch_quantity', selectedOutput.good_count, { shouldValidate: true, shouldDirty: true });
+  if (stage === 'outgoing' && selectedGoodCount) {
+   setValue('batch_quantity', selectedGoodCount, { shouldValidate: true, shouldDirty: true });
   }
- }, [selectedOutput?.good_count, setValue, stage]);
+ }, [selectedGoodCount, setValue, stage]);
 
  // Live preview AQL sample plan only for outgoing.
  useQuery({

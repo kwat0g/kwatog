@@ -192,7 +192,7 @@ class AccountsPayableHardeningTest extends TestCase
         $this->assertSame('0.00', $afterPayment['buckets']['total']);
     }
 
-    public function test_supplier_resource_does_not_expose_internal_ap_controls(): void
+    public function test_supplier_resource_exposes_statement_of_account_but_no_internal_ap_controls(): void
     {
         $bill = Bill::create([
             'bill_number' => 'AP-RESOURCE-1',
@@ -221,16 +221,38 @@ class AccountsPayableHardeningTest extends TestCase
             'unit_price' => '100.00',
             'total' => '100.00',
         ]);
+        BillPayment::create([
+            'bill_id' => $bill->id,
+            'cash_account_id' => Account::query()->where('code', '1020')->firstOrFail()->id,
+            'payment_date' => now()->toDateString(),
+            'amount' => '50.00',
+            'payment_method' => PaymentMethod::BankTransfer->value,
+            'reference_number' => 'PAY-REF-1',
+            'status' => BillPaymentStatus::Posted->value,
+        ]);
 
-        $data = (new SupplierBillResource($bill))->toArray(Request::create('/supplier/invoices'));
+        // resolve() — not toArray() — is the real serialized payload: toArray()
+        // on an unloaded whenLoaded() relation yields a MissingValue key, which
+        // is a serializer artifact and not what the portal receives.
+        $bill->load('items.expenseAccount', 'payments');
+        $data = (new SupplierBillResource($bill))->resolve(Request::create('/supplier/invoices'));
 
+        // Internal AP controls never cross the supplier boundary.
         $this->assertArrayNotHasKey('exception_evidence', $data);
         $this->assertArrayNotHasKey('three_way_override_reason', $data);
-        $this->assertArrayNotHasKey('payments', $data);
-
-        $bill->load('items.expenseAccount');
-        $data = (new SupplierBillResource($bill))->resolve(Request::create('/supplier/invoices'));
         $this->assertArrayNotHasKey('expense_account', $data['items'][0]);
+
+        // Payments ARE supplier-visible as a statement of account (decision in
+        // audit/domains/supply-chain/supplier-portal/fix-log.md) — allowlisted
+        // to date/amount/method/reference/status with no journal or GL metadata.
+        $this->assertArrayHasKey('payments', $data);
+        $this->assertCount(1, $data['payments']);
+        $payment = $data['payments'][0];
+        $this->assertSame('50.00', $payment['amount']);
+        $this->assertSame('PAY-REF-1', $payment['reference_number']);
+        foreach (['journal_entry_id', 'cash_account_id', 'created_by', 'void_reason', 'void_reversal_journal_entry_id'] as $internal) {
+            $this->assertArrayNotHasKey($internal, $payment);
+        }
     }
 
     public function test_vendor_list_aggregates_open_balance_and_restore_reaches_trashed_vendor(): void

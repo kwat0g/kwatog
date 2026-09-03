@@ -41,6 +41,8 @@ class VerifyDemoReadiness extends Command
             'failed_jobs'        => $this->checkFailedJobs(),
             'accounting_periods' => $this->checkAccountingPeriods(),
             'leave_balances'     => $this->checkLeaveBalances(),
+            'coc_evidence'       => $this->checkCocEvidence(),
+            'hero_trace'         => $this->checkHeroTrace(),
         ];
 
         $warnChecks = $this->option('no-warn') ? [] : [
@@ -185,6 +187,93 @@ class VerifyDemoReadiness extends Command
         return $balances > 0
             ? ['ok' => true, 'message' => "{$balances} leave balance row(s)."]
             : ['ok' => false, 'message' => 'Zero leave balances — every leave screen reads empty. Seed balances for employees with leave requests.'];
+    }
+
+    /**
+     * Every passed outgoing inspection must carry enough resolved, passing
+     * measurement evidence to issue its Certificate of Conformance. The demo
+     * flagships the CoC button on the hero QC record; a passed inspection with
+     * zero rows or a short sample makes that button fail (CoCService guard).
+     * Vacuous pass when no passed outgoing inspection exists.
+     *
+     * @return array{ok: bool, message: string}
+     */
+    private function checkCocEvidence(): array
+    {
+        if (! Schema::hasTable('inspections') || ! Schema::hasTable('inspection_measurements')) {
+            return ['ok' => true, 'message' => 'No inspections tables.'];
+        }
+
+        $bad = DB::table('inspections as i')
+            ->leftJoinSub(
+                DB::table('inspection_measurements')
+                    ->select('inspection_id')
+                    ->selectRaw('count(*) as total')
+                    ->selectRaw('count(*) filter (where is_pass is null) as unresolved')
+                    ->selectRaw('count(*) filter (where is_pass = false) as failing')
+                    ->selectRaw('count(distinct sample_index) as sampled_units')
+                    ->groupBy('inspection_id'),
+                'm',
+                'm.inspection_id',
+                '=',
+                'i.id'
+            )
+            ->where('i.stage', 'outgoing')
+            ->where('i.status', 'passed')
+            ->where(function ($q): void {
+                $q->whereNull('m.total')
+                    ->orWhere('m.unresolved', '>', 0)
+                    ->orWhere('m.failing', '>', 0)
+                    ->orWhereRaw('i.sample_size > 0 AND m.sampled_units < i.sample_size');
+            })
+            ->limit(3)
+            ->pluck('i.inspection_number');
+
+        if ($bad->isEmpty()) {
+            return ['ok' => true, 'message' => 'Every passed outgoing inspection has CoC-grade measurement evidence.'];
+        }
+
+        return ['ok' => false, 'message' => 'CoC would fail on passed outgoing inspection(s): '.$bad->implode(', ').' — measure every declared sample with resolved passing rows.'];
+    }
+
+    /**
+     * The flagship traceability search resolves against a batch-numbered work
+     * order whose outgoing QC inspection carries CoC-grade evidence. A fresh
+     * canonical seed only reaches that state after the queue drains the MRP
+     * outbox AND GoldenPathDemoSeeder is re-run (batch numbers are stamped on
+     * the WOs that drain created). Fail loudly when the hero record is missing
+     * so a stale or half-built demo DB cannot pass the gate.
+     *
+     * @return array{ok: bool, message: string}
+     */
+    private function checkHeroTrace(): array
+    {
+        if (! Schema::hasTable('work_orders') || ! Schema::hasTable('inspections')) {
+            return ['ok' => true, 'message' => 'No traceability tables.'];
+        }
+
+        $totalWos = DB::table('work_orders')->count();
+        if ($totalWos < 1) {
+            return ['ok' => true, 'message' => 'No work orders; hero trace not applicable.'];
+        }
+
+        $batchWos = DB::table('work_orders')->whereNotNull('batch_number')->count();
+        $heroQc = DB::table('inspections as i')
+            ->where('i.stage', 'outgoing')
+            ->where('i.status', 'passed')
+            ->whereNotNull('i.entity_id')
+            ->whereExists(function ($q): void {
+                $q->selectRaw('1')
+                    ->from('work_orders as w')
+                    ->whereColumn('w.id', 'i.entity_id');
+            })
+            ->count();
+
+        if ($batchWos >= 1 && $heroQc >= 1) {
+            return ['ok' => true, 'message' => "Hero trace present: {$batchWos} batch-numbered WO(s), {$heroQc} entity-linked passed outgoing QC."];
+        }
+
+        return ['ok' => false, 'message' => 'No hero trace record — a fresh seed needs the MRP outbox drained (start the queue) and GoldenPathDemoSeeder re-run so a batch-numbered WO links to a passed outgoing QC. The flagship traceability search and CoC button depend on it.'];
     }
 
     /* ─── Advisory (WARN) checks ─────────────────────────────────────── */

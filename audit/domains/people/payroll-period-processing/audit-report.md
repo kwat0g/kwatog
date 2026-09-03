@@ -357,3 +357,15 @@ the test is wrong.
 
 See the table in `fix-log.md` for the probe used and the measured result for each
 of the 26 assigned invariants.
+
+---
+
+### RESOLVED 2026-09-04 — cross-module decision #12 upheld
+
+The project owner upheld shared Accounting decision #12: source-linked entries
+carry no maker, so `created_by` stays null on the payroll JE. The P02-01 test
+was aligned to assert the attribution that actually exists — `posted_by` equals
+the finalizing user, `payroll_periods.finalized_by` preserves the actor on the
+source row, and the `payroll.je.post` audit row records it (asserted with
+`user_id`). Reversing the decision would trip the self-post guard on every
+invoice/bill/asset posting, which create and post as the same user.

@@ -63,10 +63,16 @@ export default function PurchaseOrdersListPage() {
     queryFn: purchaseOrdersApi.options,
     staleTime: 5 * 60 * 1000,
   });
+  // The vendor filter is only usable by roles that may read the vendor
+  // catalogue. Roles with PO visibility but no accounting.vendors.view
+  // (e.g. department head, production manager) must not fire a request
+  // that the backend will 403.
+  const canReadVendors = can('accounting.vendors.view');
   const { data: vendors } = useQuery({
     queryKey: ['accounting', 'vendors', { per_page: 100, is_active: 'true' }],
     queryFn: () => vendorsApi.list({ per_page: 100, is_active: 'true' }),
     staleTime: 5 * 60 * 1000,
+    enabled: canReadVendors,
   });
   const statusLabels = new Map(
     (orderOptions?.statuses ?? []).map((option) => [option.value, option.label]),
@@ -150,15 +156,19 @@ export default function PurchaseOrdersListPage() {
       type: 'select',
       options: [{ value: '', label: 'All' }, ...(orderOptions?.statuses ?? [])],
     },
-    {
-      key: 'vendor_id',
-      label: 'Vendor',
-      type: 'select',
-      options: [
-        { value: '', label: 'All' },
-        ...(vendors?.data ?? []).map((vendor) => ({ value: vendor.id, label: vendor.name })),
-      ],
-    },
+    ...(canReadVendors
+      ? [
+          {
+            key: 'vendor_id',
+            label: 'Vendor',
+            type: 'select' as const,
+            options: [
+              { value: '', label: 'All' },
+              ...(vendors?.data ?? []).map((vendor) => ({ value: vendor.id, label: vendor.name })),
+            ],
+          },
+        ]
+      : []),
     {
       key: 'requires_vp_approval',
       label: 'VP threshold',
@@ -235,18 +245,22 @@ export default function PurchaseOrdersListPage() {
             meta={data.meta}
             onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
  onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
-            selectable
-            bulkActions={[
-              {
-                label: 'Print PDFs',
-                icon: <LuPrinter size={14} />,
-                onClick: (rows: PurchaseOrder[]) =>
-                  bulkPrint(
-                    'purchase_order',
-                    rows.map((r) => r.id),
-                  ),
-              } as BulkAction<PurchaseOrder>,
-            ]}
+            selectable={can('admin.print.bulk')}
+            bulkActions={
+              can('admin.print.bulk')
+                ? [
+                    {
+                      label: 'Print PDFs',
+                      icon: <LuPrinter size={14} />,
+                      onClick: (rows: PurchaseOrder[]) =>
+                        bulkPrint(
+                          'purchase_order',
+                          rows.map((r) => r.id),
+                        ),
+                    } as BulkAction<PurchaseOrder>,
+                  ]
+                : []
+            }
           />
         </div>
       )}

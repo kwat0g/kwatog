@@ -589,7 +589,79 @@ class GoldenPathDemoSeeder extends Seeder
             ]);
         }
 
+        // The hero outgoing inspection must carry FULL measurement evidence for
+        // its declared AQL sample. CoCService refuses to certify a passed
+        // inspection whose measured units fall short of sample_size, so a
+        // status=passed inspection with zero rows would make the flagship
+        // "Certificate of Conformance" button fail on the demo record.
+        $this->seedHeroInspectionMeasurements((int) ($existing->id ?? DB::getPdo()->lastInsertId()), $spec);
+
         $this->command?->info("  Hardened hero trace on {$wo->batch_number} (machine/mold/GRN/QC linked).");
+    }
+
+    /**
+     * Record a passing measurement for every unit of the declared AQL sample on
+     * the hero inspection, against each spec item in the linked revision.
+     */
+    private function seedHeroInspectionMeasurements(int $inspectionId, object $spec): void
+    {
+        if ($inspectionId < 1 || DB::table('inspection_measurements')->where('inspection_id', $inspectionId)->exists()) {
+            return;
+        }
+
+        $specItems = DB::table('inspection_spec_items')
+            ->where('inspection_spec_id', $spec->inspection_spec_id)
+            ->where('inspection_spec_revision_id', $spec->inspection_spec_revision_id)
+            ->orderBy('sort_order')
+            ->get();
+        if ($specItems->isEmpty()) {
+            return;
+        }
+
+        $inspection = DB::table('inspections')->where('id', $inspectionId)->first();
+        $sampleSize = (int) ($inspection->sample_size ?? 0);
+        if ($sampleSize < 1) {
+            return;
+        }
+
+        $timestamp = Carbon::now();
+        $rows = [];
+        for ($s = 1; $s <= $sampleSize; $s++) {
+            foreach ($specItems as $si) {
+                $measuredVal = null;
+                if ($si->tolerance_min !== null && $si->tolerance_max !== null) {
+                    $tolMin = (float) $si->tolerance_min;
+                    $tolMax = (float) $si->tolerance_max;
+                    $span = max($tolMax - $tolMin, 0.0001);
+                    // Deterministic in-tolerance value that varies by sample so
+                    // the certificate reads as real measurements, not clones.
+                    $fraction = (($s % 5) + 1) / 6;
+                    $measuredVal = round($tolMin + ($span * $fraction), 4);
+                }
+
+                $rows[] = [
+                    'inspection_id'             => $inspectionId,
+                    'inspection_spec_item_id'   => $si->id,
+                    'sample_index'              => $s,
+                    'parameter_name'            => $si->parameter_name,
+                    'parameter_type'            => $si->parameter_type,
+                    'unit_of_measure'           => $si->unit_of_measure,
+                    'nominal_value'             => $si->nominal_value,
+                    'tolerance_min'             => $si->tolerance_min,
+                    'tolerance_max'             => $si->tolerance_max,
+                    'measured_value'            => $measuredVal,
+                    'is_critical'               => $si->is_critical,
+                    'is_pass'                   => true,
+                    'notes'                     => null,
+                    'created_at'                => $timestamp,
+                    'updated_at'                => $timestamp,
+                ];
+            }
+        }
+
+        foreach (array_chunk($rows, 500) as $chunk) {
+            DB::table('inspection_measurements')->insert($chunk);
+        }
     }
 
     /** ADV3 — one shipment lot per delivery, tied to the delivery's work orders. */

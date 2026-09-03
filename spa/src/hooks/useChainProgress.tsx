@@ -32,6 +32,13 @@ export function useChainProgress(
 ): void {
   const queryClient = useQueryClient();
 
+  // Join signatures are computed here so callers may pass inline query-key
+  // arrays without rebinding the channel subscription on every render.
+  const queryKeySignature = queryKey.join('|');
+  const additionalQueryKeysSignature = additionalQueryKeys
+    .map((key) => key.join('|'))
+    .join('::');
+
   useEffect(() => {
     if (!entityId) return;
     const channelName = `chain.${entityType}.${entityId}`;
@@ -80,14 +87,16 @@ export function useChainProgress(
       disposed = true;
       teardown?.();
     };
-    // queryKey is intentionally dereferenced into a stable join string in
-    // the dep list so callers can pass an inline array.
+    // The effect body intentionally reads the raw arrays (never the joined
+    // signatures) — the dep list below tracks the signatures so inline
+    // arrays don't rebind the subscription, while the handler still sees
+    // the freshest keys for invalidation.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     entityType,
     entityId,
-    queryKey.join('|'),
-    additionalQueryKeys.map((key) => key.join('|')).join('::'),
+    queryKeySignature,
+    additionalQueryKeysSignature,
   ]);
 }
 
