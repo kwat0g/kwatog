@@ -41,7 +41,7 @@ describe('role-aligned sidebar permissions', () => {
  expect(isNavItemVisible(item('/payroll/statutory'), hr)).toBe(true);
  });
 
- it('keeps presentation-only pages out of the shared navigation sitemap', () => {
+ it('keeps secondary pages out of the shared navigation sitemap', () => {
  const paths = new Set(SECTIONS.flatMap((section) => section.items).map((entry) => entry.to));
 
  expect(paths).not.toContain('/calendar');
@@ -50,6 +50,28 @@ describe('role-aligned sidebar permissions', () => {
  expect(paths).not.toContain('/hr/skills');
  expect(paths).not.toContain('/quality/capability');
  expect(paths).not.toContain('/maintenance/downtime');
+ expect(paths).not.toContain('/crm/inquiries');
+ expect(paths).not.toContain('/quality/calibration');
+ expect(paths).not.toContain('/accounting/portal-access');
+ expect(paths).not.toContain('/hr/recruitment');
+ });
+
+ it('orders sections along the primary business flow', () => {
+ expect(SECTIONS.map((section) => section.label)).toEqual([
+ 'Overview',
+ 'Sales & CRM',
+ 'Production Planning (MRP)',
+ 'Procurement',
+ 'Production',
+ 'Quality',
+ 'Warehouse',
+ 'Supply Chain',
+ 'Human Resources',
+ 'Finance',
+ 'Maintenance',
+ 'Assets',
+ 'Administration',
+ ]);
  });
 
  it('shows department approval pages without granting HR or payroll administration', () => {

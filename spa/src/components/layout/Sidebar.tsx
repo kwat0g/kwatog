@@ -9,7 +9,6 @@ import {
   LuBookOpen,
   LuTruck,
   LuLayers,
-  LuBriefcase,
   LuShieldCheck,
   LuWrench,
   LuSettings as SettingsIcon,
@@ -19,7 +18,6 @@ import {
   LuPackage,
   LuBell,
   LuInbox,
-  LuMailOpen,
   LuTriangleAlert,
   LuCalendar,
   LuArrowLeftRight,
@@ -106,6 +104,10 @@ export interface NavSection {
 /**
  * Sidebar — workflow pages only.
  *
+ * The sitemap intentionally keeps primary chain/workflow destinations here.
+ * Supporting pages can remain routable and linked from dashboards, detail
+ * views, notifications, or direct URLs without taking a top-level slot.
+ *
  * Visibility is decided by permission + feature flag, never by role name:
  * `isNavItemVisible` reads `roleSlug` only for the system_admin bypass that
  * mirrors User::hasPermission. A per-item role allowlist used to exist here and
@@ -114,6 +116,22 @@ export interface NavSection {
  * Quality Dashboard) are removed — users reach their role dashboard via the
  * top-level /dashboard redirect.
  */
+const SECTION_PRIORITY: Record<string, number> = {
+  Overview: 0,
+  'Sales & CRM': 10,
+  'Production Planning (MRP)': 20,
+  Procurement: 30,
+  Production: 40,
+  Quality: 50,
+  Warehouse: 60,
+  'Supply Chain': 70,
+  'Human Resources': 80,
+  Finance: 90,
+  Maintenance: 100,
+  Assets: 110,
+  Administration: 120,
+};
+
 export const SECTIONS: NavSection[] = [
   {
     label: 'Overview',
@@ -156,14 +174,6 @@ export const SECTIONS: NavSection[] = [
         feature: 'crm',
         permission: 'crm.sales_orders.view',
         badgeKey: 'pending_so',
-      },
-      {
-        to: '/crm/inquiries',
-        label: 'Inquiries',
-        icon: LuMailOpen,
-        feature: 'crm',
-        permission: 'crm.inquiries.view',
-        badgeKey: 'inquiries',
       },
       // Customers deduped 2026-08-08: /accounting/customers and /crm/customers are
       // the SAME table + controller (Accounting CustomerController). One entry kept
@@ -427,13 +437,6 @@ export const SECTIONS: NavSection[] = [
         permission: 'quality.specs.view',
       },
       {
-        to: '/quality/calibration',
-        label: 'Calibration',
-        icon: LuCalendarClock,
-        feature: 'quality',
-        permission: 'quality.calibration.view',
-      },
-      {
         to: '/quality/inspections',
         label: 'Inspections',
         icon: InspectionIcon,
@@ -504,13 +507,6 @@ export const SECTIONS: NavSection[] = [
         icon: LuStore,
         feature: 'accounting',
         permission: 'accounting.vendors.view',
-      },
-      {
-        to: '/accounting/portal-access',
-        label: 'Portal access',
-        icon: LuUsers,
-        feature: 'accounting',
-        permission: 'b2b.portal_access.view',
       },
       {
         to: '/accounting/periods',
@@ -635,14 +631,6 @@ export const SECTIONS: NavSection[] = [
         feature: 'payroll',
         permission: 'payroll.statutory.export',
       },
-      {
-        to: '/hr/recruitment',
-        label: 'Recruitment',
-        icon: LuBriefcase,
-        feature: 'recruitment',
-        permission: 'hr.recruitment.view',
-        badgeKey: 'open_postings',
-      },
     ],
   },
   {
@@ -722,7 +710,11 @@ export const SECTIONS: NavSection[] = [
       // to the Fixed Assets page as a header button/modal, same permission gate).
     ],
   },
-];
+].sort(
+  (left, right) =>
+    (SECTION_PRIORITY[left.label] ?? Number.MAX_SAFE_INTEGER) -
+    (SECTION_PRIORITY[right.label] ?? Number.MAX_SAFE_INTEGER),
+);
 
 export interface NavVisibilityContext {
   permissions?: Set<string>;
