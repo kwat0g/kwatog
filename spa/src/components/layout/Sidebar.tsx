@@ -46,8 +46,6 @@ import {
   LuDatabase,
   LuListChecks,
   LuScanBarcode,
-  LuGraduationCap,
-
 } from '@/lib/icons';
 import {
   WorkflowIcon,
@@ -146,7 +144,6 @@ export const SECTIONS: NavSection[] = [
         badgeKey: 'approvals',
       },
       { to: '/notifications', label: 'Notifications', icon: LuBell, badgeKey: 'unread' },
-      { to: '/calendar', label: 'Calendar', icon: LuCalendar, permission: 'calendar.view' },
     ],
   },
   {
@@ -445,13 +442,6 @@ export const SECTIONS: NavSection[] = [
         badgeKey: 'pending_inspections',
       },
       {
-        to: '/quality/capability',
-        label: 'Capability Study',
-        icon: LuChartColumnIncreasing,
-        feature: 'quality',
-        permission: 'quality.inspections.view',
-      },
-      {
         to: '/quality/ncrs',
         label: 'NCRs',
         icon: LuTriangleAlert,
@@ -653,29 +643,6 @@ export const SECTIONS: NavSection[] = [
         permission: 'hr.recruitment.view',
         badgeKey: 'open_postings',
       },
-      {
-        to: '/hr/training/matrix',
-        label: 'Training Matrix',
-        icon: LuClipboardList,
-        feature: 'hr',
-        permission: 'hr.trainings.view',
-        badgeKey: 'training_expiry',
-      },
-      {
-        to: '/hr/trainings',
-        label: 'Trainings',
-        icon: LuGraduationCap,
-        feature: 'hr',
-        permission: 'hr.trainings.view',
-        badgeKey: 'training_upcoming',
-      },
-      {
-        to: '/hr/skills',
-        label: 'Skills',
-        icon: LuBadgeCheck,
-        feature: 'hr',
-        permission: 'hr.trainings.view',
-      },
     ],
   },
   {
@@ -693,13 +660,6 @@ export const SECTIONS: NavSection[] = [
         to: '/maintenance/schedules',
         label: 'Schedules',
         icon: LuCalendar,
-        feature: 'maintenance',
-        permission: 'maintenance.view',
-      },
-      {
-        to: '/maintenance/downtime',
-        label: 'Downtime',
-        icon: LuChartColumn,
         feature: 'maintenance',
         permission: 'maintenance.view',
       },

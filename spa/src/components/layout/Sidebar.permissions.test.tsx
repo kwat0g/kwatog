@@ -41,20 +41,15 @@ describe('role-aligned sidebar permissions', () => {
  expect(isNavItemVisible(item('/payroll/statutory'), hr)).toBe(true);
  });
 
- it('shows Calendar only to users who can open its guarded route', () => {
- const employee = {
- permissions: new Set(['calendar.view']),
- features: allFeatures,
- roleSlug: 'employee',
- };
- const noCalendar = {
- permissions: new Set<string>(),
- features: allFeatures,
- roleSlug: 'employee',
- };
+ it('keeps presentation-only pages out of the shared navigation sitemap', () => {
+ const paths = new Set(SECTIONS.flatMap((section) => section.items).map((entry) => entry.to));
 
- expect(isNavItemVisible(item('/calendar'), employee)).toBe(true);
- expect(isNavItemVisible(item('/calendar'), noCalendar)).toBe(false);
+ expect(paths).not.toContain('/calendar');
+ expect(paths).not.toContain('/hr/training/matrix');
+ expect(paths).not.toContain('/hr/trainings');
+ expect(paths).not.toContain('/hr/skills');
+ expect(paths).not.toContain('/quality/capability');
+ expect(paths).not.toContain('/maintenance/downtime');
  });
 
  it('shows department approval pages without granting HR or payroll administration', () => {
