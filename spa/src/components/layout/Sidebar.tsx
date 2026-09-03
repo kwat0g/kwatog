@@ -39,11 +39,9 @@ import {
   LuBadgeCheck,
   LuRoute,
   LuX,
-  LuShieldAlert,
   LuMonitor,
   LuDatabase,
   LuListChecks,
-  LuScanBarcode,
 } from '@/lib/icons';
 import {
   WorkflowIcon,
@@ -144,7 +142,7 @@ export const SECTIONS: NavSection[] = [
       { to: '/dashboard/scorecard', label: 'KPI Scorecard', icon: LuChartColumnIncreasing },
       {
         to: '/chains',
-        label: 'Chain Tracker',
+        label: 'Business Chain Tracker',
         icon: WorkflowIcon,
         permission: 'crm.sales_orders.view',
       },
@@ -156,7 +154,7 @@ export const SECTIONS: NavSection[] = [
       },
       {
         to: '/approvals',
-        label: 'Approvals',
+        label: 'Approval Queue',
         icon: LuInbox,
         permission: 'approvals.board.view',
         badgeKey: 'approvals',
@@ -203,7 +201,7 @@ export const SECTIONS: NavSection[] = [
       },
       {
         to: '/crm/complaints',
-        label: 'Complaints',
+        label: 'Customer Complaints',
         icon: ComplaintIcon,
         feature: 'crm',
         permission: 'crm.complaints.manage',
@@ -224,7 +222,7 @@ export const SECTIONS: NavSection[] = [
     items: [
       {
         to: '/production/work-orders',
-        label: 'Work Orders',
+        label: 'Production Work Orders',
         icon: WorkOrderIcon,
         feature: 'production',
         permission: 'production.work_orders.view',
@@ -232,14 +230,14 @@ export const SECTIONS: NavSection[] = [
       },
       {
         to: '/production/schedule',
-        label: 'Schedule (Gantt)',
+        label: 'Production Schedule (Gantt)',
         icon: LuCalendarClock,
         feature: 'production',
         permission: 'production.schedule.view',
       },
       {
         to: '/production/routings',
-        label: 'Routings',
+        label: 'Production Routings',
         icon: LuRoute,
         feature: 'production',
         permission: 'production.routings.view',
@@ -266,14 +264,14 @@ export const SECTIONS: NavSection[] = [
       },
       {
         to: '/mrp/machines',
-        label: 'Machines',
+        label: 'Production Machines',
         icon: LuCpu,
         feature: 'mrp',
         permission: 'mrp.machines.view',
       },
       {
         to: '/mrp/molds',
-        label: 'Molds',
+        label: 'Production Molds',
         icon: LuPackage,
         feature: 'mrp',
         permission: 'mrp.molds.view',
@@ -319,7 +317,7 @@ export const SECTIONS: NavSection[] = [
     items: [
       {
         to: '/inventory/items',
-        label: 'Items',
+        label: 'Inventory Items',
         icon: InventoryIcon,
         feature: 'inventory',
         permission: 'inventory.view',
@@ -327,7 +325,7 @@ export const SECTIONS: NavSection[] = [
       },
       {
         to: '/inventory/grn',
-        label: 'Receiving (GRN)',
+        label: 'Goods Receipts (GRN)',
         icon: ReceivingIcon,
         feature: 'inventory',
         permission: 'inventory.view',
@@ -335,14 +333,14 @@ export const SECTIONS: NavSection[] = [
       },
       {
         to: '/inventory/material-issues',
-        label: 'Issuance',
+        label: 'Material Issues',
         icon: IssuanceIcon,
         feature: 'inventory',
         permission: 'inventory.view',
       },
       {
         to: '/inventory/mrb',
-        label: 'MRB / Quarantine',
+        label: 'Quarantine Holds (MRB)',
         icon: LuTriangleAlert,
         feature: 'inventory',
         permission: 'inventory.mrb.view',
@@ -350,7 +348,7 @@ export const SECTIONS: NavSection[] = [
       },
       {
         to: '/inventory/stock-levels',
-        label: 'Stock Levels',
+        label: 'Inventory Stock Levels',
         icon: LuChartColumnIncreasing,
         feature: 'inventory',
         permission: 'inventory.view',
@@ -360,13 +358,6 @@ export const SECTIONS: NavSection[] = [
         to: '/inventory/stock-adjustments',
         label: 'Stock Adjustments',
         icon: LuSlidersHorizontal,
-        feature: 'inventory',
-        permission: 'inventory.view',
-      },
-      {
-        to: '/inventory/scanner',
-        label: 'Warehouse Scanner',
-        icon: LuScanBarcode,
         feature: 'inventory',
         permission: 'inventory.view',
       },
@@ -381,14 +372,14 @@ export const SECTIONS: NavSection[] = [
       },
       {
         to: '/inventory/transfer-orders',
-        label: 'Transfer Orders',
+        label: 'Inventory Transfers',
         icon: LuArrowLeftRight,
         feature: 'inventory',
         permission: 'inventory.view',
       },
       {
         to: '/inventory/picking',
-        label: 'Picking',
+        label: 'Order Picking',
         icon: PickingIcon,
         feature: 'inventory',
         permission: 'inventory.view',
@@ -400,7 +391,7 @@ export const SECTIONS: NavSection[] = [
     items: [
       {
         to: '/supply-chain/deliveries',
-        label: 'Deliveries',
+        label: 'Outbound Deliveries',
         icon: LuTruck,
         feature: 'supply_chain',
         // Either read reaches the page (see supplyChainRoutes). Warehouse staff
@@ -411,7 +402,7 @@ export const SECTIONS: NavSection[] = [
       },
       {
         to: '/supply-chain/shipments',
-        label: 'Shipments',
+        label: 'Inbound Shipments',
         icon: DeliveryIcon,
         feature: 'supply_chain',
         permission: 'supply_chain.view',
@@ -419,7 +410,7 @@ export const SECTIONS: NavSection[] = [
       },
       {
         to: '/supply-chain/fleet',
-        label: 'Fleet',
+        label: 'Delivery Fleet',
         icon: FleetIcon,
         feature: 'supply_chain',
         permission: 'supply_chain.view',
@@ -431,14 +422,14 @@ export const SECTIONS: NavSection[] = [
     items: [
       {
         to: '/quality/inspection-specs',
-        label: 'Inspection Specs',
+        label: 'Inspection Specifications',
         icon: LuClipboardList,
         feature: 'quality',
         permission: 'quality.specs.view',
       },
       {
         to: '/quality/inspections',
-        label: 'Inspections',
+        label: 'Quality Inspections',
         icon: InspectionIcon,
         feature: 'quality',
         permission: 'quality.inspections.view',
@@ -446,7 +437,7 @@ export const SECTIONS: NavSection[] = [
       },
       {
         to: '/quality/ncrs',
-        label: 'NCRs',
+        label: 'Nonconformance Reports (NCRs)',
         icon: LuTriangleAlert,
         feature: 'quality',
         permission: 'quality.ncr.view',
@@ -454,7 +445,7 @@ export const SECTIONS: NavSection[] = [
       },
       {
         to: '/quality/traceability',
-        label: 'Traceability',
+        label: 'Lot Traceability',
         icon: LuGitFork,
         feature: 'quality',
         permission: 'quality.inspections.view',
@@ -480,7 +471,7 @@ export const SECTIONS: NavSection[] = [
       },
       {
         to: '/accounting/invoices',
-        label: 'Invoices (AR)',
+        label: 'Accounts Receivable Invoices',
         icon: InvoiceIcon,
         feature: 'accounting',
         permission: 'accounting.invoices.view',
@@ -488,7 +479,7 @@ export const SECTIONS: NavSection[] = [
       },
       {
         to: '/accounting/bills',
-        label: 'Bills (AP)',
+        label: 'Accounts Payable Bills',
         icon: BillIcon,
         feature: 'accounting',
         permission: 'accounting.bills.view',
@@ -503,7 +494,7 @@ export const SECTIONS: NavSection[] = [
       },
       {
         to: '/accounting/vendors',
-        label: 'Vendors',
+        label: 'Suppliers & Vendors',
         icon: LuStore,
         feature: 'accounting',
         permission: 'accounting.vendors.view',
@@ -538,14 +529,14 @@ export const SECTIONS: NavSection[] = [
       },
       {
         to: '/accounting/ar-aging',
-        label: 'AR Aging',
+        label: 'Accounts Receivable Aging',
         icon: LuListTree,
         feature: 'accounting',
         permission: 'accounting.statements.view',
       },
       {
         to: '/accounting/ap-aging',
-        label: 'AP Aging',
+        label: 'Accounts Payable Aging',
         icon: LuListTree,
         feature: 'accounting',
         permission: 'accounting.statements.view',
@@ -559,7 +550,7 @@ export const SECTIONS: NavSection[] = [
       },
       {
         to: '/budgeting/budget-vs-actual',
-        label: 'Budget vs Actual',
+        label: 'Budget vs. Actual',
         icon: LuTarget,
         feature: 'budgeting',
         permission: 'budgeting.view',
@@ -586,7 +577,7 @@ export const SECTIONS: NavSection[] = [
       },
       {
         to: '/hr/attendance',
-        label: 'Attendance',
+        label: 'Attendance & DTR',
         icon: LuClock4,
         feature: 'attendance',
         anyPermissions: ['attendance.edit', 'attendance.import', 'attendance.ot.approve'],
@@ -603,7 +594,7 @@ export const SECTIONS: NavSection[] = [
       // Attendance — the Leave page is where those approvals are actioned.
       {
         to: '/hr/leaves',
-        label: 'Leave',
+        label: 'Leave Management',
         icon: LuCalendarDays,
         feature: 'leave',
         anyPermissions: ['leave.approve_dept', 'leave.approve_hr', 'leave.types.manage'],
@@ -611,7 +602,7 @@ export const SECTIONS: NavSection[] = [
       },
       {
         to: '/payroll/periods',
-        label: 'Payroll',
+        label: 'Payroll Processing',
         icon: LuWallet,
         feature: 'payroll',
         permission: 'payroll.periods.view',
@@ -619,14 +610,14 @@ export const SECTIONS: NavSection[] = [
       },
       {
         to: '/payroll/adjustments',
-        label: 'Adjustments',
+        label: 'Payroll Adjustments',
         icon: LuSettings2,
         feature: 'payroll',
         permission: 'payroll.adjustments.view',
       },
       {
         to: '/payroll/statutory',
-        label: 'Statutory Exports',
+        label: 'Payroll Statutory Exports',
         icon: LuFileText,
         feature: 'payroll',
         permission: 'payroll.statutory.export',
@@ -638,7 +629,7 @@ export const SECTIONS: NavSection[] = [
     items: [
       {
         to: '/maintenance/work-orders',
-        label: 'Work Orders',
+        label: 'Maintenance Work Orders',
         icon: LuWrench,
         feature: 'maintenance',
         permission: 'maintenance.view',
@@ -646,7 +637,7 @@ export const SECTIONS: NavSection[] = [
       },
       {
         to: '/maintenance/schedules',
-        label: 'Schedules',
+        label: 'Maintenance Schedules',
         icon: LuCalendar,
         feature: 'maintenance',
         permission: 'maintenance.view',
@@ -668,8 +659,8 @@ export const SECTIONS: NavSection[] = [
   {
     label: 'Administration',
     items: [
-      { to: '/admin/users', label: 'Users', icon: LuUsers, permission: 'admin.users.manage' },
-      { to: '/admin/roles', label: 'Roles', icon: LuShieldCheck, permission: 'admin.roles.manage' },
+      { to: '/admin/users', label: 'User Accounts', icon: LuUsers, permission: 'admin.users.manage' },
+      { to: '/admin/roles', label: 'Roles & Permissions', icon: LuShieldCheck, permission: 'admin.roles.manage' },
       {
         to: '/admin/audit-logs',
         label: 'Audit Logs',
@@ -677,20 +668,14 @@ export const SECTIONS: NavSection[] = [
         permission: 'admin.audit_logs.view',
       },
       {
-        to: '/admin/sod',
-        label: 'Segregation of Duties',
-        icon: LuShieldAlert,
-        permission: 'admin.sod.view',
-      },
-      {
         to: '/admin/settings',
-        label: 'LuSettings',
+        label: 'Settings',
         icon: SettingsIcon,
         permission: 'admin.settings.manage',
       },
       {
         to: '/admin/sessions',
-        label: 'Sessions',
+        label: 'Active Sessions',
         icon: LuMonitor,
         permission: 'admin.settings.manage',
       },
@@ -702,7 +687,7 @@ export const SECTIONS: NavSection[] = [
       },
       {
         to: '/admin/gov-tables',
-        label: 'Gov Contribution Tables',
+        label: 'Government Contribution Tables',
         icon: LuLandmark,
         permission: 'admin.gov_tables.manage',
       },

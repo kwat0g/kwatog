@@ -54,6 +54,51 @@ describe('role-aligned sidebar permissions', () => {
  expect(paths).not.toContain('/quality/calibration');
  expect(paths).not.toContain('/accounting/portal-access');
  expect(paths).not.toContain('/hr/recruitment');
+ expect(paths).not.toContain('/admin/sod');
+ expect(paths).not.toContain('/inventory/scanner');
+ });
+
+ it('uses labels that describe each primary destination', () => {
+ expect(item('/chains').label).toBe('Business Chain Tracker');
+ expect(item('/approvals').label).toBe('Approval Queue');
+ expect(item('/crm/complaints').label).toBe('Customer Complaints');
+ expect(item('/production/work-orders').label).toBe('Production Work Orders');
+ expect(item('/production/schedule').label).toBe('Production Schedule (Gantt)');
+ expect(item('/production/routings').label).toBe('Production Routings');
+ expect(item('/mrp/machines').label).toBe('Production Machines');
+ expect(item('/mrp/molds').label).toBe('Production Molds');
+ expect(item('/inventory/items').label).toBe('Inventory Items');
+ expect(item('/inventory/grn').label).toBe('Goods Receipts (GRN)');
+ expect(item('/inventory/material-issues').label).toBe('Material Issues');
+ expect(item('/inventory/mrb').label).toBe('Quarantine Holds (MRB)');
+ expect(item('/inventory/stock-levels').label).toBe('Inventory Stock Levels');
+ expect(item('/inventory/transfer-orders').label).toBe('Inventory Transfers');
+ expect(item('/inventory/picking').label).toBe('Order Picking');
+ expect(item('/supply-chain/deliveries').label).toBe('Outbound Deliveries');
+ expect(item('/supply-chain/shipments').label).toBe('Inbound Shipments');
+ expect(item('/supply-chain/fleet').label).toBe('Delivery Fleet');
+ expect(item('/quality/inspection-specs').label).toBe('Inspection Specifications');
+ expect(item('/quality/inspections').label).toBe('Quality Inspections');
+ expect(item('/quality/ncrs').label).toBe('Nonconformance Reports (NCRs)');
+ expect(item('/quality/traceability').label).toBe('Lot Traceability');
+ expect(item('/accounting/invoices').label).toBe('Accounts Receivable Invoices');
+ expect(item('/accounting/bills').label).toBe('Accounts Payable Bills');
+ expect(item('/accounting/vendors').label).toBe('Suppliers & Vendors');
+ expect(item('/accounting/ar-aging').label).toBe('Accounts Receivable Aging');
+ expect(item('/accounting/ap-aging').label).toBe('Accounts Payable Aging');
+ expect(item('/budgeting/budget-vs-actual').label).toBe('Budget vs. Actual');
+ expect(item('/hr/attendance').label).toBe('Attendance & DTR');
+ expect(item('/hr/leaves').label).toBe('Leave Management');
+ expect(item('/payroll/periods').label).toBe('Payroll Processing');
+ expect(item('/payroll/adjustments').label).toBe('Payroll Adjustments');
+ expect(item('/payroll/statutory').label).toBe('Payroll Statutory Exports');
+ expect(item('/maintenance/work-orders').label).toBe('Maintenance Work Orders');
+ expect(item('/maintenance/schedules').label).toBe('Maintenance Schedules');
+ expect(item('/admin/users').label).toBe('User Accounts');
+ expect(item('/admin/roles').label).toBe('Roles & Permissions');
+ expect(item('/admin/settings').label).toBe('Settings');
+ expect(item('/admin/sessions').label).toBe('Active Sessions');
+ expect(item('/admin/gov-tables').label).toBe('Government Contribution Tables');
  });
 
  it('orders sections along the primary business flow', () => {

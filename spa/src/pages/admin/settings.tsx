@@ -256,7 +256,7 @@ export default function SettingsPage() {
   return (
     <div>
       <PageHeader
-        title="LuSettings & Configuration"
+        title="Settings & Configuration"
         subtitle="System parameters, organization profile, security policies, and feature flags."
         actions={
           <Button
@@ -264,7 +264,7 @@ export default function SettingsPage() {
             icon={isEditMode ? <LuLockOpen size={14} /> : <LuLock size={14} />}
             onClick={() => setIsEditMode(!isEditMode)}
           >
-            {isEditMode ? 'Lock LuSettings' : 'Unlock to Edit'}
+            {isEditMode ? 'Lock Settings' : 'Unlock to Edit'}
           </Button>
         }
       />
@@ -274,7 +274,7 @@ export default function SettingsPage() {
         <div className="flex items-center gap-1.5 overflow-x-auto border-b border-default pb-3 scrollbar-none">
           {(
             [
-              { id: 'all', label: 'All LuSettings', icon: <LuSlidersHorizontal size={14} /> },
+              { id: 'all', label: 'All Settings', icon: <LuSlidersHorizontal size={14} /> },
               { id: 'general', label: 'Company & Fiscal', icon: <LuBuilding2 size={14} /> },
               { id: 'operations', label: 'Operations & HR', icon: <LuBanknote size={14} /> },
               { id: 'security', label: 'Security & Auth', icon: <LuShield size={14} /> },
