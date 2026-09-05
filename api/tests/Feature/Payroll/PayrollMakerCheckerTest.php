@@ -91,9 +91,9 @@ class PayrollMakerCheckerTest extends TestCase
 
     public function test_maker_who_computed_cannot_also_approve(): void
     {
-        // finance_officer holds payroll.periods.approve but NOT
-        // self_approve_override, so if they also computed the run the
-        // maker-checker guard blocks approval.
+        // Finance cannot ordinarily compute, but this protects historical or
+        // exceptional data where a checker is recorded as the run's maker.
+        // It holds payroll.periods.approve but not self_approve_override.
         $actor  = $this->userWithRole('finance_officer');
         $period = $this->draftPeriod($actor);
 
@@ -164,6 +164,47 @@ class PayrollMakerCheckerTest extends TestCase
         $this->actingAs($hr)
             ->patchJson("/api/v1/payroll-periods/{$period->hash_id}/approve")
             ->assertStatus(403);
+
+        $this->assertSame(PayrollPeriodStatus::Computed, $period->fresh()->status);
+    }
+
+    public function test_finance_can_return_a_computed_period_to_hr_for_correction(): void
+    {
+        $finance = $this->userWithRole('finance_officer');
+        $period = $this->draftPeriod($this->userWithRole('hr_officer'));
+
+        $this->actingAs($finance)
+            ->patchJson("/api/v1/payroll-periods/{$period->hash_id}/request-correction", [
+                'reason' => 'Production overtime does not match the approved DTR total.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', PayrollPeriodStatus::Draft->value)
+            ->assertJsonPath('data.correction_reason', 'Production overtime does not match the approved DTR total.')
+            ->assertJsonPath('data.correction_requester.id', $finance->hash_id);
+
+        $this->assertSame(PayrollPeriodStatus::Draft, $period->fresh()->status);
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'payroll.period.request_correction',
+            'model_type' => PayrollPeriod::class,
+            'model_id' => $period->id,
+            'user_id' => $finance->id,
+        ]);
+    }
+
+    public function test_hr_cannot_request_a_correction_and_finance_must_provide_a_reason(): void
+    {
+        $period = $this->draftPeriod($this->userWithRole('hr_officer'));
+
+        $this->actingAs($this->userWithRole('hr_officer'))
+            ->patchJson("/api/v1/payroll-periods/{$period->hash_id}/request-correction", [
+                'reason' => 'Incorrect amount',
+            ])
+            ->assertForbidden();
+
+        $this->actingAs($this->userWithRole('finance_officer'))
+            ->patchJson("/api/v1/payroll-periods/{$period->hash_id}/request-correction", [])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('reason');
 
         $this->assertSame(PayrollPeriodStatus::Computed, $period->fresh()->status);
     }

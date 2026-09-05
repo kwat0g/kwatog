@@ -22,8 +22,8 @@ use Tests\TestCase;
  * Exposes the pre-existing PayrollPeriodService::void() (OGAMI-011) over HTTP:
  * only a Finalized period can be voided, a reason is mandatory, the actor is
  * recorded, an audit row is written, and the PayrollPeriodVoided event fires.
- * SoD: finance_officer (finalizer) may void; hr_officer (compute/approve only)
- * may not.
+ * SoD: voiding is an administrator-only recovery action; Finance finalizes and
+ * disburses but cannot reverse a finalized payroll.
  */
 class PayrollPeriodVoidTest extends TestCase
 {
@@ -43,16 +43,16 @@ class PayrollPeriodVoidTest extends TestCase
         ]);
     }
 
-    public function test_finance_officer_can_void_a_finalized_period(): void
+    public function test_system_admin_can_void_a_finalized_period(): void
     {
         Event::fake([PayrollPeriodVoided::class]);
 
-        $finance = $this->userWithRole('finance_officer');
+        $admin = $this->userWithRole('system_admin');
         $period = PayrollPeriod::factory()->create([
             'status' => PayrollPeriodStatus::Finalized->value,
         ]);
 
-        $this->actingAs($finance)
+        $this->actingAs($admin)
             ->postJson("/api/v1/payroll-periods/{$period->hash_id}/void", [
                 'reason' => 'Backdated OT for E. Cruz was missing; recomputing this half.',
             ])
@@ -61,7 +61,7 @@ class PayrollPeriodVoidTest extends TestCase
 
         $fresh = $period->fresh();
         $this->assertSame(PayrollPeriodStatus::Voided, $fresh->status);
-        $this->assertSame($finance->id, $fresh->voided_by);
+        $this->assertSame($admin->id, $fresh->voided_by);
         $this->assertNotNull($fresh->voided_at);
         $this->assertStringContainsString('Backdated OT', (string) $fresh->void_reason);
 
@@ -69,7 +69,7 @@ class PayrollPeriodVoidTest extends TestCase
             'action'     => 'payroll.period.void',
             'model_type' => PayrollPeriod::class,
             'model_id'   => $period->id,
-            'user_id'    => $finance->id,
+            'user_id'    => $admin->id,
         ]);
 
         Event::assertDispatched(PayrollPeriodVoided::class);
@@ -77,18 +77,18 @@ class PayrollPeriodVoidTest extends TestCase
 
     public function test_void_requires_a_reason(): void
     {
-        $finance = $this->userWithRole('finance_officer');
+        $admin = $this->userWithRole('system_admin');
         $period = PayrollPeriod::factory()->create([
             'status' => PayrollPeriodStatus::Finalized->value,
         ]);
 
-        $this->actingAs($finance)
+        $this->actingAs($admin)
             ->postJson("/api/v1/payroll-periods/{$period->hash_id}/void", [])
             ->assertStatus(422)
             ->assertJsonValidationErrors('reason');
 
         // Also rejects a too-short reason.
-        $this->actingAs($finance)
+        $this->actingAs($admin)
             ->postJson("/api/v1/payroll-periods/{$period->hash_id}/void", ['reason' => 'oops'])
             ->assertStatus(422)
             ->assertJsonValidationErrors('reason');
@@ -98,12 +98,12 @@ class PayrollPeriodVoidTest extends TestCase
 
     public function test_rejects_void_when_status_is_draft(): void
     {
-        $finance = $this->userWithRole('finance_officer');
+        $admin = $this->userWithRole('system_admin');
         $period = PayrollPeriod::factory()->create([
             'status' => PayrollPeriodStatus::Draft->value,
         ]);
 
-        $this->actingAs($finance)
+        $this->actingAs($admin)
             ->postJson("/api/v1/payroll-periods/{$period->hash_id}/void", [
                 'reason' => 'trying to void a draft period',
             ])
@@ -115,12 +115,12 @@ class PayrollPeriodVoidTest extends TestCase
 
     public function test_rejects_void_when_status_is_disbursed(): void
     {
-        $finance = $this->userWithRole('finance_officer');
+        $admin = $this->userWithRole('system_admin');
         $period = PayrollPeriod::factory()->create([
             'status' => PayrollPeriodStatus::Disbursed->value,
         ]);
 
-        $this->actingAs($finance)
+        $this->actingAs($admin)
             ->postJson("/api/v1/payroll-periods/{$period->hash_id}/void", [
                 'reason' => 'salaries already paid out',
             ])
@@ -130,7 +130,7 @@ class PayrollPeriodVoidTest extends TestCase
     }
 
     /**
-     * SoD: hr_officer computes/approves but does NOT finalize or void. The
+     * SoD: hr_officer computes but does NOT approve, finalize, or void. The
      * seeder grants hr_officer an explicit payroll list that omits
      * payroll.periods.void, so the guard must return 403.
      */
@@ -144,6 +144,22 @@ class PayrollPeriodVoidTest extends TestCase
         $this->actingAs($hr)
             ->postJson("/api/v1/payroll-periods/{$period->hash_id}/void", [
                 'reason' => 'hr officer should not be allowed to void',
+            ])
+            ->assertStatus(403);
+
+        $this->assertSame(PayrollPeriodStatus::Finalized, $period->fresh()->status);
+    }
+
+    public function test_finance_officer_cannot_void_a_period(): void
+    {
+        $finance = $this->userWithRole('finance_officer');
+        $period = PayrollPeriod::factory()->create([
+            'status' => PayrollPeriodStatus::Finalized->value,
+        ]);
+
+        $this->actingAs($finance)
+            ->postJson("/api/v1/payroll-periods/{$period->hash_id}/void", [
+                'reason' => 'Finance may not reverse a finalized payroll.',
             ])
             ->assertStatus(403);
 

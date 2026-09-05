@@ -258,6 +258,18 @@ export default function PayrollPeriodDetailPage() {
     onError: (err: { response?: { data?: { message?: string } } }) =>
       toast.error(err.response?.data?.message ?? 'Failed to approve period.'),
   });
+  const [showCorrectionDialog, setShowCorrectionDialog] = useState(false);
+  const requestCorrectionMutation = useMutation({
+    mutationFn: (reason: string) => periodsApi.requestCorrection(id!, reason),
+    onSuccess: () => {
+      toast.success('Correction requested — HR can update and recompute this period.');
+      setShowCorrectionDialog(false);
+      qc.invalidateQueries({ queryKey: ['payroll-period', id] });
+      qc.invalidateQueries({ queryKey: ['payrolls'] });
+    },
+    onError: (err: { response?: { data?: { message?: string } } }) =>
+      toast.error(err.response?.data?.message ?? 'Failed to request a correction.'),
+  });
   const finalizeMutation = useMutation({
     mutationFn: () => periodsApi.finalize(id!),
     onSuccess: () => {
@@ -388,6 +400,7 @@ export default function PayrollPeriodDetailPage() {
   // Approve requires a completed run with rows. Previously this was gated on
   // 'draft', so an uncomputed period could be approved into an empty ₱0 payroll.
   const canApprove = can('payroll.periods.approve') && period.status === 'computed' && hasRows;
+  const canRequestCorrection = can('payroll.periods.request_correction') && period.status === 'computed';
   const canFinalize = can('payroll.periods.finalize') && period.status === 'approved';
   const canBankFile =
     can('payroll.periods.finalize') &&
@@ -569,6 +582,18 @@ export default function PayrollPeriodDetailPage() {
                 Approve
               </Button>
             )}
+            {canRequestCorrection && (
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<LuRefreshCw size={14} />}
+                onClick={() => setShowCorrectionDialog(true)}
+                disabled={requestCorrectionMutation.isPending}
+                loading={requestCorrectionMutation.isPending}
+              >
+                Request Correction
+              </Button>
+            )}
             {canFinalize && (
               <Button
                 variant="primary"
@@ -689,6 +714,15 @@ export default function PayrollPeriodDetailPage() {
       <div className="px-5 py-4 grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-5">
         {/* Main content */}
         <div>
+          {period.status === 'draft' && period.correction_reason && (
+            <div className="mb-4 flex items-start gap-2 rounded-md bg-warning-bg px-3 py-2 text-sm text-warning-fg">
+              <LuCircleAlert size={16} className="mt-0.5 shrink-0" />
+              <div>
+                <span className="font-medium">Correction requested{period.correction_requester?.name ? ` by ${period.correction_requester.name}` : ''}.</span>{' '}
+                {period.correction_reason} HR must correct and recompute the period before Finance can approve it.
+              </div>
+            </div>
+          )}
           {isProc && (
             <PayrollComputeProgressPanel
               progress={period.compute_progress}
@@ -1040,8 +1074,25 @@ export default function PayrollPeriodDetailPage() {
         pending={markDisbursedMutation.isPending || !summary}
       />
 
-      {/* H-8 — Force-unlock. Same 5-character floor VoidPeriodModal enforces,
- because this reason lands in the same audit trail. */}
+      {/* Correction reason is retained as Finance's review evidence. */}
+      <ReasonDialog
+        isOpen={showCorrectionDialog}
+        onClose={() => setShowCorrectionDialog(false)}
+        onConfirm={(reason) => requestCorrectionMutation.mutate(reason)}
+        title="Request payroll correction?"
+        description={
+          <>
+            Return <span className="font-mono">{cutoffRange(period)}</span> to HR with an actionable reason. It must be recomputed before Finance can approve it.
+          </>
+        }
+        reasonLabel="Correction required"
+        reasonPlaceholder="e.g. Overtime total for Production does not match approved DTR"
+        minLength={5}
+        confirmLabel="Request Correction"
+        variant="warning"
+        pending={requestCorrectionMutation.isPending}
+      />
+
       <ReasonDialog
         isOpen={showForceUnlockDialog}
         onClose={() => setShowForceUnlockDialog(false)}

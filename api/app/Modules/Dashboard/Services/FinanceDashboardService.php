@@ -7,8 +7,11 @@ namespace App\Modules\Dashboard\Services;
 use App\Common\Services\SettingsService;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Enums\BillStatus;
+use App\Modules\Accounting\Enums\CreditNoteStatus;
 use App\Modules\Accounting\Enums\InvoiceStatus;
+use App\Modules\Accounting\Models\AccountingPeriod;
 use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Models\CreditNote;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Services\BillService;
@@ -44,6 +47,8 @@ class FinanceDashboardService
         'accounting.invoices.view',
         'accounting.bills.view',
         'accounting.journal.view',
+        'accounting.periods.view',
+        'accounting.credit_notes.view',
         'payroll.periods.view',
         'budgeting.view',
     ];
@@ -83,6 +88,8 @@ class FinanceDashboardService
                     'ap_due_this_week'       => ['accounting.bills.view',     fn () => $this->apDueThisWeek()],
                     'recent_journal_entries' => ['accounting.journal.view',   fn () => $this->recentJournalEntries()],
                     'unposted_jes'           => ['accounting.journal.view',   fn () => $this->unpostedJes()],
+                    'current_accounting_period' => ['accounting.periods.view', fn () => $this->currentAccountingPeriod()],
+                    'pending_credit_notes'    => ['accounting.credit_notes.view', fn () => $this->pendingCreditNotes()],
                     // Payroll run counts are payroll's, not accounting's — the
                     // one panel here whose data comes from another module.
                     'payroll_pipeline'       => ['payroll.periods.view',      fn () => $this->payrollPipeline()],
@@ -159,7 +166,7 @@ class FinanceDashboardService
      * Task D5 — Payroll periods grouped by lifecycle status, scoped to the
      * last 90 days so closed-out periods from a year ago don't dilute the view.
      *
-     * @return array{draft:int, processing:int, approved:int, finalized:int, disbursed:int, total:int}
+     * @return array{draft:int, processing:int, computed:int, approved:int, finalized:int, disbursed:int, total:int}
      */
     private function payrollPipeline(): array
     {
@@ -173,7 +180,7 @@ class FinanceDashboardService
             ->pluck('c', 'status')
             ->all();
 
-        $base = ['draft' => 0, 'processing' => 0, 'approved' => 0, 'finalized' => 0, 'disbursed' => 0];
+        $base = ['draft' => 0, 'processing' => 0, 'computed' => 0, 'approved' => 0, 'finalized' => 0, 'disbursed' => 0];
         foreach ($rows as $status => $count) {
             $key = (string) $status;
             if (array_key_exists($key, $base)) $base[$key] = (int) $count;
@@ -182,6 +189,7 @@ class FinanceDashboardService
         $base['stages'] = collect([
             PayrollPeriodStatus::Draft,
             PayrollPeriodStatus::Processing,
+            PayrollPeriodStatus::Computed,
             PayrollPeriodStatus::Approved,
             PayrollPeriodStatus::Finalized,
             PayrollPeriodStatus::Disbursed,
@@ -207,6 +215,42 @@ class FinanceDashboardService
         return [
             'count'       => $count,
             'oldest_date' => $oldest ? CarbonImmutable::parse((string) $oldest)->toDateString() : null,
+        ];
+    }
+
+    /**
+     * The current calendar month is postable when no explicit period exists,
+     * matching AccountingPeriodService's implicit-open rule.  The dashboard
+     * makes this important control visible without making its setup screen a
+     * primary navigation destination.
+     *
+     * @return array{year:int,month:int,status:string,status_label:string,has_record:bool}
+     */
+    private function currentAccountingPeriod(): array
+    {
+        $today = CarbonImmutable::today();
+        $period = AccountingPeriod::query()
+            ->where('year', $today->year)
+            ->where('month', $today->month)
+            ->first();
+
+        return [
+            'year' => $today->year,
+            'month' => $today->month,
+            'status' => $period?->status->value ?? 'open',
+            'status_label' => $period?->status->label() ?? 'Open',
+            'has_record' => $period !== null,
+        ];
+    }
+
+    /** @return array{count:int,total:string} */
+    private function pendingCreditNotes(): array
+    {
+        $drafts = CreditNote::query()->where('status', CreditNoteStatus::Draft);
+
+        return [
+            'count' => (int) (clone $drafts)->count(),
+            'total' => Money::round2((string) (clone $drafts)->sum('total_amount')),
         ];
     }
 

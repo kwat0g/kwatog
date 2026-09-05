@@ -140,14 +140,8 @@ class PayrollPeriodForceUnlockTest extends TestCase
         );
     }
 
-    /**
-     * The task spec called this "payroll_officer" but the seeder's two roles
-     * holding payroll.periods.finalize today are system_admin (wildcard) and
-     * finance_officer (full payroll module). finance_officer therefore picks
-     * up payroll.periods.force_unlock automatically because it inherits every
-     * slug under module('payroll'). Lock that in here.
-     */
-    public function test_finance_officer_can_also_force_unlock(): void
+    /** Finance reviews and finalizes payroll, but recovery remains admin-only. */
+    public function test_finance_officer_cannot_force_unlock(): void
     {
         $finance = $this->userWithRole('finance_officer');
         $period = PayrollPeriod::factory()->create([
@@ -158,11 +152,10 @@ class PayrollPeriodForceUnlockTest extends TestCase
             ->postJson("/api/v1/payroll-periods/{$period->hash_id}/force-unlock", [
                 'reason' => 'host rebooted mid-batch',
             ])
-            ->assertStatus(200)
-            ->assertJsonPath('data.status', PayrollPeriodStatus::Draft->value);
+            ->assertStatus(403);
 
         $this->assertSame(
-            PayrollPeriodStatus::Draft,
+            PayrollPeriodStatus::Processing,
             $period->fresh()->status,
         );
     }

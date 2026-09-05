@@ -110,7 +110,7 @@ class PayrollPeriodService
     {
         $period = $period
             ->loadCount('payrolls')
-            ->load(['creator', 'payrolls.employee', 'bankFileRecords.generator', 'adjustments', 'disburser', 'voider', 'computer', 'approver', 'finalizer'])
+            ->load(['creator', 'payrolls.employee', 'bankFileRecords.generator', 'adjustments', 'disburser', 'voider', 'computer', 'approver', 'finalizer', 'correctionRequester'])
             ->load(['disbursementProofs' => fn ($q) => $q->withTrashed()->with('uploader')]);
         $period->summary = $this->summary($period);
 
@@ -1001,6 +1001,50 @@ class PayrollPeriodService
             ]);
 
             return $locked->fresh();
+        });
+    }
+
+    /**
+     * Finance returns a computed period to HR for correction. The payroll rows
+     * remain available for review until HR recomputes; the new Draft status
+     * prevents approval/finalization until that recomputation completes.
+     */
+    public function requestCorrection(PayrollPeriod $period, User $actor, string $reason): PayrollPeriod
+    {
+        return DB::transaction(function () use ($period, $actor, $reason): PayrollPeriod {
+            $locked = PayrollPeriod::query()->lockForUpdate()->find($period->id);
+            if (! $locked) {
+                throw new BusinessRuleException('Payroll period not found.');
+            }
+            if ($locked->status !== PayrollPeriodStatus::Computed) {
+                throw new BusinessRuleException('Only computed periods can be returned for correction.');
+            }
+
+            $previous = $locked->status->value;
+            $locked->forceFill([
+                'status'                  => PayrollPeriodStatus::Draft->value,
+                'correction_requested_by' => $actor->id,
+                'correction_requested_at' => now(),
+                'correction_reason'       => $reason,
+            ])->save();
+
+            AuditLog::create([
+                'user_id'    => $actor->id,
+                'action'     => 'payroll.period.request_correction',
+                'model_type' => PayrollPeriod::class,
+                'model_id'   => $locked->id,
+                'old_values' => ['status' => $previous],
+                'new_values' => [
+                    'status' => PayrollPeriodStatus::Draft->value,
+                    'correction_requested_by' => $actor->id,
+                    'correction_reason' => $reason,
+                ],
+                'ip_address' => request()?->ip(),
+                'user_agent' => request()?->userAgent(),
+                'created_at' => now(),
+            ]);
+
+            return $locked->fresh()->load('correctionRequester');
         });
     }
 

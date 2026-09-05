@@ -6,6 +6,7 @@ namespace App\Modules\Accounting\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\BusinessPolicyService;
+use App\Common\Services\DocumentSequenceService;
 use App\Common\Support\SearchOperator;
 use App\Common\Support\TrashedFilter;
 
@@ -17,7 +18,10 @@ use Illuminate\Support\Facades\DB;
 
 class CustomerService
 {
-    public function __construct(private readonly BusinessPolicyService $policies) {}
+    public function __construct(
+        private readonly BusinessPolicyService $policies,
+        private readonly DocumentSequenceService $sequences,
+    ) {}
 
     public function list(array $filters): LengthAwarePaginator
     {
@@ -58,8 +62,15 @@ class CustomerService
 
     public function create(array $data): Customer
     {
-        $data['payment_terms_days'] ??= $this->policies->customerPaymentTermsDays();
-        return DB::transaction(fn () => Customer::create($data));
+        return DB::transaction(function () use ($data): Customer {
+            $data['payment_terms_days'] ??= $this->policies->customerPaymentTermsDays();
+            // Customer codes are stable ERP identifiers, not a data-entry
+            // choice. Generate them in the write path so CRM and Accounting
+            // callers cannot collide or bypass the sequence.
+            $data['code'] = $this->sequences->generate('customer');
+
+            return Customer::create($data);
+        });
     }
 
     public function update(Customer $customer, array $data): Customer

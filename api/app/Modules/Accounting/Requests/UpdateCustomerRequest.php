@@ -17,7 +17,8 @@ class UpdateCustomerRequest extends FormRequest
     {
         return [
             'name'              => ['sometimes', 'string', 'max:200'],
-            'code'              => ['sometimes', 'nullable', 'string', 'max:50', 'unique:customers,code,' . $this->route('customer')?->id],
+            // The code is issued once by CustomerService and is immutable.
+            'code'              => ['prohibited'],
             'contact_person'    => ['sometimes', 'nullable', 'string', 'max:100'],
             'email'             => ['sometimes', 'nullable', 'email', 'max:200'],
             'phone'             => ['sometimes', 'nullable', 'string', 'max:20'],

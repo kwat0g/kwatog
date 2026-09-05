@@ -73,6 +73,25 @@ class AccountsReceivableHardeningTest extends TestCase
         return Account::query()->where('code', '4010')->firstOrFail()->hash_id;
     }
 
+    public function test_customer_code_is_system_generated_and_manual_code_is_rejected(): void
+    {
+        $admin = $this->admin();
+
+        $this->actingAs($admin)->postJson('/api/v1/customers', [
+            'name' => 'Manual-code Customer',
+            'code' => 'CUS-MANUAL',
+        ])->assertUnprocessable()->assertJsonValidationErrors('code');
+
+        $response = $this->actingAs($admin)->postJson('/api/v1/customers', [
+            'name' => 'Generated-code Customer',
+        ])->assertCreated();
+
+        $this->assertMatchesRegularExpression(
+            '/^CUS-'.now()->format('Y').'-\\d{4}$/',
+            (string) $response->json('data.code'),
+        );
+    }
+
     private function finalizedInvoice(
         User $by,
         Customer $customer,

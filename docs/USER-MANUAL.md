@@ -116,14 +116,18 @@ payroll date.
 
 ### 7.2 Computing & approving
 
-Click **Compute** to dispatch the queue job. Status moves to **draft**
-when done. HR officer **Approves**, Finance officer **Finalizes**
-(period locks; corrections go on the next period as adjustments).
+The HR Officer clicks **Compute** to dispatch the queue job; the status moves
+to **Computed** when done. The Finance Officer either **Approves** it or
+requests a correction with a reason. A correction returns the period to
+**Draft** for HR to correct and recompute. Finance then **Finalizes** the
+approved run, which locks it.
 
 ### 7.3 Generating bank file & payslips
 
-After finalize, click **Bank File** to download the CSV and **Payslips**
-to download the per-employee A5 PDFs (2 per A4, watermarked CONFIDENTIAL).
+After finalization, the Finance Officer downloads the **Bank File**, submits
+the payment, uploads the bank confirmation or deposit-slip PDF as
+**Disbursement Proof**, then marks the period **Disbursed**. **Payslips** are
+available as per-employee A5 PDFs (2 per A4, watermarked CONFIDENTIAL).
 
 ## 8. Procurement
 

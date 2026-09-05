@@ -12,6 +12,7 @@ use App\Modules\HR\Enums\PayType;
 use App\Modules\HR\Models\Department;
 use App\Modules\Payroll\Models\DisbursementProof;
 use App\Modules\Payroll\Models\PayrollPeriod;
+use App\Modules\Payroll\Requests\RequestPayrollCorrectionRequest;
 use App\Modules\Payroll\Requests\CreatePayrollPeriodRequest;
 use App\Modules\Payroll\Requests\RunThirteenthMonthRequest;
 use App\Modules\Payroll\Requests\VoidPayrollPeriodRequest;
@@ -168,6 +169,20 @@ class PayrollPeriodController
 
         return response()->json([
             'data' => (new PayrollPeriodResource($approved))->resolve(),
+        ]);
+    }
+
+    /** Return a computed period to HR with a required correction reason. */
+    public function requestCorrection(PayrollPeriod $period, RequestPayrollCorrectionRequest $request): JsonResponse
+    {
+        try {
+            $updated = $this->service->requestCorrection($period, $request->user(), $request->validated('reason'));
+        } catch (BusinessRuleException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'data' => (new PayrollPeriodResource($updated))->resolve(),
         ]);
     }
 

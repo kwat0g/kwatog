@@ -60,6 +60,7 @@ browser profiles or switch accounts at each handoff.
 | `impex@ogami.test` | ImpEx Officer | Shipments, import documents, delivery/fleet view |
 | `driver@ogami.test` | Driver | Driver delivery list, delivery status, delivery receipt/photo flow |
 | `finance@ogami.test` | Finance Officer | Invoices, bills, budgets, collections, payroll approval/finalization |
+| `crm@ogami.test` | Sales Officer | Customers, sales orders, and Sales/CRM records |
 | `hr@ogami.test` | HR Officer | Employees, attendance, leave, loans, payroll creation/computation |
 | `depthead@ogami.test` | Department Head | Department leave, overtime, loan, and Purchase Request approvals |
 | `maintenance@ogami.test` | Maintenance Technician | Maintenance Work Orders and condition-based maintenance |
@@ -88,15 +89,12 @@ approval screens, and `maintenance@ogami.test` for the maintenance handoff.
 
 ### Important non-admin access note
 
-The current seed intentionally gives CRM Sales Order access to the system
-administrator. `crm@ogami.test` is also seeded as `system_admin`; it is not a
-scoped CRM account. Therefore, a normal seeded account may receive a 403 when
-opening `/chains` or `/crm/sales-orders`.
-
-If the full central view is required without using an administrator during the
-presentation, prepare a dedicated read-only **Demo Presenter** role before the
-event. It should have only the read permissions needed for the walkthrough,
-including:
+`crm@ogami.test` is the scoped **Sales Officer** demo account. It can manage
+customers and sales orders but does not inherit Finance, HR, or administrative
+authority. If the full central view is required without using an administrator
+during the presentation, prepare a dedicated read-only **Demo Presenter** role
+before the event. It should have only the read permissions needed for the
+walkthrough, including:
 
 ```text
 crm.sales_orders.view
@@ -288,7 +286,7 @@ Open:
 Explain the role separation:
 
 - HR creates and computes payroll.
-- Finance approves and finalizes payroll.
+- Finance reviews the computed run, approves it or returns it to HR for correction, then finalizes and records disbursement evidence.
 - The finalization triggers the bank file, payslip, employee notification, and
   payroll-to-Accounting handoff.
 - The disbursement proof records the bank confirmation, amount, and reference.

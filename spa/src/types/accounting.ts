@@ -242,7 +242,6 @@ export interface Customer {
 
 export interface CreateCustomerData {
  name: string;
- code?: string | null;
  contact_person?: string;
  email?: string;
  phone?: string;
@@ -421,11 +420,19 @@ export interface FinanceDashboardSummary {
  // Task D5 — Finance Officer dashboard extensions. All optional so older
  // server payloads (and tests with fewer fixtures) keep type-checking.
  payroll_pipeline?: {
- draft: number; processing: number; approved: number;
+ draft: number; processing: number; computed: number; approved: number;
  finalized: number; disbursed: number; total: number;
  stages?: Array<{ value: string; label: string; count: number }>;
  };
  unposted_jes?: { count: number; oldest_date: string | null };
+ current_accounting_period?: {
+ year: number;
+ month: number;
+ status: 'open' | 'closed' | 'reopened';
+ status_label: string;
+ has_record: boolean;
+ };
+ pending_credit_notes?: { count: number; total: string };
  ap_due_this_week?: {
  count: number; total: string;
  items: Array<{ id: string; bill_number: string; vendor_name: string; due_date: string; balance: string }>;

@@ -88,6 +88,14 @@ export default function FinanceDashboardPage() {
  {/* KPI Scorecard strip */}
  <KpiStrip codes={['ar_aging_60d', 'budget_utilization']} />
 
+ {/* Finance controls formerly exposed as standalone navigation. */}
+ {(data.current_accounting_period || data.pending_credit_notes) && (
+ <PanelRow cols={2}>
+ {data.current_accounting_period && <AccountingPeriodPanel data={data.current_accounting_period} />}
+ {data.pending_credit_notes && <CreditNotesPanel data={data.pending_credit_notes} />}
+ </PanelRow>
+ )}
+
  {/* Row 2 — AR / AP aging side by side. */}
  <PanelRow>
  {arAging && <AgingPanel title="AR aging" buckets={arAging} listHref="/accounting/invoices" />}
@@ -279,6 +287,7 @@ function PayrollPipelinePanel({
  const stages: Array<{ label: string; value: number; tone: 'neutral' | 'warning' | 'success' | 'info' }> = [
  { label: 'Draft', value: pipeline.draft, tone: 'neutral' },
  { label: 'Processing', value: pipeline.processing, tone: 'warning' },
+ { label: 'Ready for review', value: pipeline.computed, tone: 'warning' },
  { label: 'Approved', value: pipeline.approved, tone: 'info' },
  { label: 'Finalized', value: pipeline.finalized, tone: 'success' },
  { label: 'Disbursed', value: pipeline.disbursed, tone: 'success' },
@@ -287,7 +296,7 @@ function PayrollPipelinePanel({
  <Panel
  title="Payroll pipeline"
  meta={<PeriodNote days={historyDays} />}
- actions={<Link className="text-xs text-link hover:underline" to="/payroll/periods">Open →</Link>}
+ actions={<Link className="text-xs text-link hover:underline" to="/payroll/periods">Open approvals →</Link>}
  >
  <div className="space-y-2">
  {stages.map((s) => (
@@ -327,6 +336,51 @@ function UnpostedJesPanel({
  <p className="text-xs text-muted mt-1">No journal-entry data available.</p>
  )}
  </div>
+ </div>
+ </Panel>
+ );
+}
+
+function AccountingPeriodPanel({
+ data,
+}: {
+ data: NonNullable<import('@/types/accounting').FinanceDashboardSummary['current_accounting_period']>;
+}) {
+ const period = new Date(data.year, data.month - 1).toLocaleString(undefined, { month: 'long', year: 'numeric' });
+ const variant = data.status === 'closed' ? 'danger' : data.status === 'reopened' ? 'warning' : 'success';
+
+ return (
+ <Panel
+ title="Current accounting period"
+ actions={<Link className="text-xs text-link hover:underline" to="/accounting/periods">Manage →</Link>}
+ >
+ <div className="flex items-center justify-between gap-3">
+ <div>
+ <p className="text-lg font-medium">{period}</p>
+ <p className="mt-1 text-xs text-muted">{data.has_record ? 'Period control is configured.' : 'Open by default; no explicit period record.'}</p>
+ </div>
+ <Chip variant={variant}>{data.status_label}</Chip>
+ </div>
+ </Panel>
+ );
+}
+
+function CreditNotesPanel({
+ data,
+}: {
+ data: NonNullable<import('@/types/accounting').FinanceDashboardSummary['pending_credit_notes']>;
+}) {
+ return (
+ <Panel
+ title="Pending credit notes"
+ actions={<Link className="text-xs text-link hover:underline" to="/accounting/credit-notes">Review →</Link>}
+ >
+ <div className="flex items-baseline justify-between gap-3">
+ <div>
+ <p className="text-2xl font-medium font-mono tabular-nums">{data.count}</p>
+ <p className="mt-1 text-xs text-muted">Draft credit notes awaiting finance review.</p>
+ </div>
+ <span className="font-mono tabular-nums font-medium">{formatPeso(data.total)}</span>
  </div>
  </Panel>
  );

@@ -17,7 +17,7 @@ use App\Modules\Payroll\Controllers\StatutoryExportController;
 use Illuminate\Support\Facades\Route;
 
 // ─── Government tables (admin-managed) ─────────────────────────
-// Mounted under /api/v1/admin/* — Finance officers and System Admins use this
+// Mounted under /api/v1/admin/* — HR officers and System Admins use this
 // regardless of whether the payroll module feature toggle is enabled.
 Route::middleware('auth:sanctum')->prefix('admin/gov-tables')->group(function () {
     Route::get('/options', [GovernmentTableController::class, 'options'])
@@ -68,6 +68,8 @@ if (class_exists(PayrollPeriodController::class)) {
             Route::get('/{period}', [PayrollPeriodController::class, 'show'])->middleware('permission:payroll.periods.view');
             Route::post('/{period}/compute', [PayrollPeriodController::class, 'compute'])->middleware('permission:payroll.periods.compute');
             Route::patch('/{period}/approve', [PayrollPeriodController::class, 'approve'])->middleware('permission:payroll.periods.approve');
+            Route::patch('/{period}/request-correction', [PayrollPeriodController::class, 'requestCorrection'])
+                ->middleware('permission:payroll.periods.request_correction');
             Route::patch('/{period}/finalize', [PayrollPeriodController::class, 'finalize'])->middleware('permission:payroll.periods.finalize');
             Route::post('/{period}/retry-gl', [PayrollPeriodController::class, 'retryGl'])->middleware('permission:accounting.journal.post');
             Route::get('/{period}/bank-file/preview', [PayrollPeriodController::class, 'bankFilePreview'])->middleware('permission:payroll.periods.finalize');
@@ -83,7 +85,8 @@ if (class_exists(PayrollPeriodController::class)) {
             Route::post('/{period}/force-unlock', [PayrollPeriodController::class, 'forceUnlock'])->middleware('permission:payroll.periods.force_unlock');
             // REC-01 — void a finalized period (reverses GL, transitions to
             // Voided). POST — irreversible-intent action with side effects
-            // (JE reversal + audit row). Finance-gated, separate from finalize.
+            // (JE reversal + audit row). System-admin recovery control, separate
+            // from Finance's normal finalize/disburse responsibility.
             Route::post('/{period}/void', [PayrollPeriodController::class, 'void'])->middleware('permission:payroll.periods.void');
         });
 

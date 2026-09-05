@@ -30,7 +30,7 @@ describe('role-aligned sidebar permissions', () => {
 
  it('shows operational HR links only to users with the matching responsibility', () => {
  const hr = {
- permissions: new Set(['attendance.edit', 'leave.approve_hr', 'payroll.periods.view', 'payroll.statutory.export']),
+ permissions: new Set(['attendance.edit', 'leave.approve_hr', 'payroll.periods.compute', 'payroll.statutory.export']),
  features: allFeatures,
  roleSlug: 'hr_officer',
  };
@@ -83,10 +83,7 @@ describe('role-aligned sidebar permissions', () => {
  expect(item('/quality/traceability').label).toBe('Lot Traceability');
  expect(item('/accounting/invoices').label).toBe('Accounts Receivable Invoices');
  expect(item('/accounting/bills').label).toBe('Accounts Payable Bills');
- expect(item('/accounting/vendors').label).toBe('Suppliers & Vendors');
- expect(item('/accounting/ar-aging').label).toBe('Accounts Receivable Aging');
- expect(item('/accounting/ap-aging').label).toBe('Accounts Payable Aging');
- expect(item('/budgeting/budget-vs-actual').label).toBe('Budget vs. Actual');
+ expect(item('/dashboard/finance').label).toBe('Finance Dashboard');
  expect(item('/hr/attendance').label).toBe('Attendance & DTR');
  expect(item('/hr/leaves').label).toBe('Leave Management');
  expect(item('/payroll/periods').label).toBe('Payroll Processing');
@@ -147,9 +144,9 @@ describe('role-aligned sidebar permissions', () => {
  expect(SECTIONS.flatMap((s) => s.items).some((entry) => entry.to === '/inventory/stock-count')).toBe(false);
  });
 
- it('exposes accounting periods to finance view holders while preserving the manage gate in the page', () => {
+ it('keeps the Finance sidebar focused on the dashboard, invoices, bills, and primary statements', () => {
  const finance = {
- permissions: new Set(['accounting.periods.view']),
+ permissions: new Set(['dashboard.accounting.view']),
  features: allFeatures,
  roleSlug: 'finance_officer',
  };
@@ -159,7 +156,16 @@ describe('role-aligned sidebar permissions', () => {
  roleSlug: 'employee',
  };
 
- expect(isNavItemVisible(item('/accounting/periods'), finance)).toBe(true);
- expect(isNavItemVisible(item('/accounting/periods'), employee)).toBe(false);
+ expect(isNavItemVisible(item('/dashboard/finance'), finance)).toBe(true);
+ expect(isNavItemVisible(item('/dashboard/finance'), employee)).toBe(false);
+
+ const financePaths = SECTIONS.find((section) => section.label === 'Finance')?.items.map((entry) => entry.to);
+ expect(financePaths).toEqual([
+ '/dashboard/finance',
+ '/accounting/invoices',
+ '/accounting/bills',
+ '/accounting/income-statement',
+ '/accounting/balance-sheet',
+ ]);
  });
 });

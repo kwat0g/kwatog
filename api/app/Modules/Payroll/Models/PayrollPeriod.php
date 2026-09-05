@@ -64,6 +64,7 @@ class PayrollPeriod extends Model
         'voided_at'           => 'datetime',
         'approved_at'         => 'datetime',
         'finalized_at'        => 'datetime',
+        'correction_requested_at' => 'datetime',
         // Was the only timestamp on this model left uncast, so it came back as
         // a raw string: the resource's optional()->toIso8601String() silently
         // yielded null and any date comparison on it blew up.
@@ -124,6 +125,11 @@ class PayrollPeriod extends Model
     public function finalizer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'finalized_by');
+    }
+
+    public function correctionRequester(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'correction_requested_by');
     }
 
     public function scopeNotFinalized(Builder $q): Builder

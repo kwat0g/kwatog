@@ -97,6 +97,8 @@ class PayrollPeriodResource extends JsonResource
             // Timestamps are ISO8601; user refs never leak the integer id.
             'approved_at'         => optional($this->approved_at)->toIso8601String(),
             'finalized_at'        => optional($this->finalized_at)->toIso8601String(),
+            'correction_requested_at' => optional($this->correction_requested_at)->toIso8601String(),
+            'correction_reason'       => $this->correction_reason,
             'computer'            => $this->whenLoaded('computer', fn () => [
                 'id'   => $this->computer?->hash_id,
                 'name' => $this->computer?->name,
@@ -108,6 +110,10 @@ class PayrollPeriodResource extends JsonResource
             'finalizer'           => $this->whenLoaded('finalizer', fn () => [
                 'id'   => $this->finalizer?->hash_id,
                 'name' => $this->finalizer?->name,
+            ]),
+            'correction_requester' => $this->whenLoaded('correctionRequester', fn () => [
+                'id'   => $this->correctionRequester?->hash_id,
+                'name' => $this->correctionRequester?->name,
             ]),
 
             // Optional summary block — attached as a dynamic attribute by

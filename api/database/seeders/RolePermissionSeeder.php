@@ -115,17 +115,16 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'payroll.periods.create',      'name' => 'Create Payroll Period'],
                 ['slug' => 'payroll.periods.compute',     'name' => 'Compute Payroll'],
                 ['slug' => 'payroll.periods.approve',     'name' => 'Approve Payroll'],
+                ['slug' => 'payroll.periods.request_correction', 'name' => 'Request Payroll Correction'],
                 ['slug' => 'payroll.periods.finalize',    'name' => 'Finalize Payroll'],
-                // REC-01 — void a finalized period (reverses GL posting, transitions
-                // to Voided). Finance-only: granted via module('payroll') to
-                // finance_officer; hr_officer's explicit payroll list omits it,
-                // preserving the compute/approve vs finalize/void SoD boundary.
+                // REC-01 — void a finalized period (reverses GL posting,
+                // transitions to Voided). This is an administrator-only recovery
+                // control; operational HR and Finance roles deliberately omit it.
                 ['slug' => 'payroll.periods.void',        'name' => 'Void Payroll Period'],
                 // REC-04 — maker-checker override. Normally the person who
                 // COMPUTED a run may not APPROVE it (second set of eyes on a
                 // ₱-material 200-employee batch). This slug bypasses that guard.
-                // Granted ONLY to system_admin (via wildcard); deliberately
-                // excepted from finance_officer's module('payroll') below.
+                // Granted ONLY to system_admin (via wildcard).
                 ['slug' => 'payroll.periods.self_approve_override', 'name' => 'Bypass Payroll Maker-Checker'],
                 // H-8 — admin escape hatch for periods stuck at Processing because
                 // the payroll job worker crashed before its finally block ran.
@@ -515,20 +514,24 @@ class RolePermissionSeeder extends Seeder
             ],
             'finance_officer' => [
                 'name' => 'Finance Officer',
-                'description' => 'Manages payroll finalization, accounting, vendor & customer ledgers.',
+                'description' => 'Reviews, approves, finalizes, and disburses payroll; manages accounting ledgers.',
                 'permissions' => array_merge(
-                    // REC-04 — finance_officer is the CHECKER (approve +
-                    // finalize + void) but is still bound by maker-checker:
-                    // except self_approve_override so even Finance cannot
-                    // approve a run it personally computed. Only system_admin
-                    // (wildcard) may bypass.
-                    $this->module('payroll', except: [
-                        'payroll.periods.self_approve_override',
-                        // HR is the maker; Finance is the checker for
-                        // payroll adjustments.
-                        'payroll.adjustments.create',
+                    // HR owns the payroll work (create, compute, correction).
+                    // Finance is the checker and payment owner: it can review a
+                    // period, either approve or return it for correction, then
+                    // finalize/disburse after HR's work has passed review.
+                    [
+                        'payroll.periods.view',
+                        'payroll.periods.approve',
+                        'payroll.periods.request_correction',
+                        'payroll.periods.finalize',
+                    ],
+                    $this->module('accounting', except: [
+                        'accounting.journal.self_post_override',
+                        // Sales/CRM owns customer master-data creation and
+                        // maintenance. Finance retains the view needed for AR.
+                        'accounting.customers.manage',
                     ]),
-                    $this->module('accounting', except: ['accounting.journal.self_post_override']),
                     $this->module('b2b'),
                     // REC-02 — finance_officer approves transfers but cannot self-approve
                     // one they requested (override withheld → system_admin only).
@@ -539,19 +542,44 @@ class RolePermissionSeeder extends Seeder
                     $this->module('asset_transfers'),
                     $this->selfService(),
                     [
-                        'admin.gov_tables.manage', 'dashboard.accounting.view',
+                        'dashboard.accounting.view',
                         'search.global', 'notifications.preferences.manage',
                         'hr.profile_updates.finance_review',
-                        'payroll.anomalies.review',
                         'alerts.view', 'alerts.dismiss',
                         'dashboard.view_bottlenecks',
                         'dashboard.chain_recovery.view', 'dashboard.chain_recovery.manage',
                         'purchasing.suppliers.performance.view',
                         'forecasting.view',
-                        'return_management.view',
                         // OGAMI-012 — finance is the CHECKER for high-value stock
                         // adjustments; warehouse_staff is the maker.
                         'inventory.adjust.approve',
+                    ],
+                ),
+            ],
+            'sales_officer' => [
+                'name' => 'Sales Officer',
+                'description' => 'Manages customer records and sales orders; does not perform Finance operations.',
+                'permissions' => array_merge(
+                    $this->selfService(),
+                    [
+                        'crm.view',
+                        // Customer master data belongs to Sales/CRM. The
+                        // underlying shared customer API retains its
+                        // accounting namespace for AR compatibility.
+                        'accounting.customers.view',
+                        'accounting.customers.manage',
+                        'crm.products.view',
+                        'crm.price_agreements.view',
+                        'crm.sales_orders.view',
+                        'crm.sales_orders.create',
+                        'crm.sales_orders.update',
+                        'crm.sales_orders.delete',
+                        'crm.sales_orders.confirm',
+                        'crm.sales_orders.cancel',
+                        'crm.complaints.manage',
+                        'inventory.view',
+                        'search.global', 'notifications.preferences.manage',
+                        'alerts.view', 'alerts.dismiss',
                     ],
                 ),
             ],

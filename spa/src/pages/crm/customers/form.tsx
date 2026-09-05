@@ -9,7 +9,6 @@ import { numberInputProps } from '@/lib/numberInput';
 // eslint-disable-next-line react-refresh/only-export-components
 export const customerSchema = z.object({
  name: z.string().min(1, 'Required').max(200),
- code: z.string().min(1, 'Required').max(50),
  contact_person: z.string().max(100).optional().or(z.literal('')),
  email: z.string().email('Invalid email').optional().or(z.literal('')),
  phone: z.string().max(20).optional().or(z.literal('')),
@@ -37,14 +36,6 @@ export function CustomerForm() {
  placeholder="Enter customer name"
  />
  </div>
- <Input
- label="Customer code"
- required
- {...register('code')}
- error={errors.code?.message as string}
- placeholder="Enter customer code"
- className="font-mono"
- />
  <Input
  label="Contact person"
  {...register('contact_person')}

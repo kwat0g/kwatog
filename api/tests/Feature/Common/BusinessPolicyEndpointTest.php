@@ -28,6 +28,7 @@ class BusinessPolicyEndpointTest extends TestCase
         $vendor = app(VendorService::class)->create(['name' => 'Policy Vendor']);
 
         $this->assertSame(45, $customer->payment_terms_days);
+        $this->assertMatchesRegularExpression('/^CUS-\d{4}-\d{4}$/', (string) $customer->code);
         $this->assertSame(60, $vendor->payment_terms_days);
 
         $this->actingAs(User::factory()->create())

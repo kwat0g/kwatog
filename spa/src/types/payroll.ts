@@ -96,9 +96,13 @@ export interface PayrollPeriod {
  /** REC-04 — maker-checker attribution: who computed / approved / finalized. */
  approved_at?: string | null;
  finalized_at?: string | null;
+ /** Finance can return a computed period to HR with this durable reason. */
+ correction_requested_at?: string | null;
+ correction_reason?: string | null;
  computer?: { id: string; name: string } | null;
  approver?: { id: string; name: string } | null;
  finalizer?: { id: string; name: string } | null;
+ correction_requester?: { id: string; name: string } | null;
  /** When the current compute run claimed this period (null when not running). */
  processing_started_at?: string | null;
  /**

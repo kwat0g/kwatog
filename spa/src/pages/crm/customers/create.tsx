@@ -24,7 +24,6 @@ export default function CrmCustomerCreatePage() {
  resolver: zodResolver(customerSchema),
  defaultValues: {
  name: '',
- code: '',
  contact_person: '',
  email: '',
  phone: '',
@@ -44,7 +43,6 @@ export default function CrmCustomerCreatePage() {
  mutationFn: (values: FormValues) => {
  const payload = {
  ...values,
- code: values.code || undefined,
  contact_person: values.contact_person || undefined,
  email: values.email || undefined,
  phone: values.phone || undefined,

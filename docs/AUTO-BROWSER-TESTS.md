@@ -54,9 +54,8 @@
 | P_SUPPLIER | portal@supp.test | supplier_portal guard | (vendor) | token |
 | P_CUSTOMER | portal@cust.test | customer_portal guard | (customer) | token |
 
-> ⚠️ Seed note: `crm@ogami.test` maps to **system_admin**, not a scoped CRM role
-> (`DemoAccountSeeder`). Use P_ADMIN for CRM authoring or fix the seed before
-> testing CRM role boundaries. There is only **one** `employee`-role user seeded;
+> `crm@ogami.test` maps to the scoped **sales_officer** role. There is only one
+> `employee`-role user seeded;
 > horizontal-leakage tests use the admin-visible payroll list to find a *second*
 > employee's record as the target.
 
@@ -114,8 +113,8 @@ CHAIN 3 — HIRE TO RETIRE
 | Role | Key responsibilities | Hard boundaries (must NOT cross) |
 |---|---|---|
 | system_admin | Everything; top/VP approver in every chain | (control — wildcard `*`) |
-| hr_officer | Employees, attendance, leave, separation, loans, payroll **create/compute**, sensitive HR | **No** payroll approve/finalize; no GL posting; no purchasing/prod/quality writes |
-| finance_officer | Payroll **approve/finalize**, accounting (COA/JE/AP/AR), budgeting, assets | **No** payroll maker-checker override; no `accounting.journal.self_post_override`; no HR CRUD; no prod/quality |
+| hr_officer | Employees, attendance, leave, separation, loans, payroll **create/compute**, statutory exports, sensitive HR | **No** payroll approve; no GL posting; no purchasing/prod/quality writes |
+| finance_officer | Payroll **approve/correction-request/finalize/disbursement evidence**, accounting (COA/JE/AP/AR), budgeting, assets | **No** payroll maker-checker override, create/compute, force-unlock, or void; no `accounting.journal.self_post_override`; no HR CRUD; no prod/quality |
 | production_manager | WO/output/OEE/schedule; machine master, MRP+quality **view-only**, routings **view-only** | No inspection/NCR authoring; no `production.routings.manage` (ppc_head authors process plans); no purchasing/accounting/HR writes |
 | ppc_head | MRP/BOM/plans/molds/routings, forecasting, WO create/confirm | No output recording; no purchasing approve; no accounting or back-office HR/payroll |
 | purchasing_officer | PR/PO create+approve+send, GRN create, shipments | **No** `purchasing.po.sod_override`; no bill pay; no prod/quality/HR |

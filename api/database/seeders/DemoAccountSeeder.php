@@ -26,7 +26,7 @@ class DemoAccountSeeder extends Seeder
         ['email' => 'ppc@ogami.test',         'name' => 'Pedro Garcia',         'role' => 'ppc_head',           'dept' => 'PPC'],
         ['email' => 'purchasing@ogami.test',  'name' => 'Elena Cruz',           'role' => 'purchasing_officer', 'dept' => 'PUR'],
         ['email' => 'employee@ogami.test',    'name' => 'Manuel Cruz',          'role' => 'employee',           'dept' => 'PROD'],
-        ['email' => 'crm@ogami.test',         'name' => 'Sara Sales',           'role' => 'system_admin',       'dept' => null],
+        ['email' => 'crm@ogami.test',         'name' => 'Sara Sales',           'role' => 'sales_officer',      'dept' => null],
         ['email' => 'warehouse@ogami.test',   'name' => 'Carlos Mendoza',       'role' => 'warehouse_staff',    'dept' => 'WH'],
         ['email' => 'qc@ogami.test',          'name' => 'Rosa Villareal',       'role' => 'qc_inspector',       'dept' => 'QC'],
         ['email' => 'maintenance@ogami.test', 'name' => 'Juan Bautista',        'role' => 'maintenance_tech',   'dept' => 'MAINT'],

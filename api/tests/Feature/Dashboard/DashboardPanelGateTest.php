@@ -10,6 +10,8 @@ use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Services\FinanceDashboardService;
 use App\Modules\Dashboard\Services\HrDashboardService;
 use App\Modules\Dashboard\Services\PlantManagerDashboardService;
+use App\Modules\Payroll\Enums\PayrollPeriodStatus;
+use App\Modules\Payroll\Models\PayrollPeriod;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -238,12 +240,16 @@ class DashboardPanelGateTest extends TestCase
 
         $this->assertArrayHasKey('ar_aging_summary', $fullData);
         $this->assertArrayHasKey('payroll_pipeline', $fullData);
+        $this->assertArrayHasKey('current_accounting_period', $fullData);
+        $this->assertArrayHasKey('pending_credit_notes', $fullData);
 
         $this->assertArrayNotHasKey('ar_aging_summary', $narrowData);
         $this->assertArrayNotHasKey('ap_aging_summary', $narrowData);
         $this->assertArrayNotHasKey('recent_journal_entries', $narrowData);
         $this->assertArrayNotHasKey('payroll_pipeline', $narrowData);
         $this->assertArrayNotHasKey('budget_vs_actual_top', $narrowData);
+        $this->assertArrayNotHasKey('current_accounting_period', $narrowData);
+        $this->assertArrayNotHasKey('pending_credit_notes', $narrowData);
 
         // The page grant still carries cash and revenue.
         $this->assertArrayHasKey('cash_balance', $narrowData);
@@ -260,6 +266,21 @@ class DashboardPanelGateTest extends TestCase
             array_keys(app(FinanceDashboardService::class)->summary($a)),
             array_keys(app(FinanceDashboardService::class)->summary($b)),
         );
+    }
+
+    /** Computed is Finance's actionable review queue, not an invisible state. */
+    public function test_finance_pipeline_includes_periods_ready_for_review(): void
+    {
+        PayrollPeriod::factory()->create([
+            'period_start' => now()->toDateString(),
+            'status' => PayrollPeriodStatus::Computed->value,
+        ]);
+
+        $data = app(FinanceDashboardService::class)
+            ->summary($this->userWithRole('finance_officer'));
+
+        $this->assertSame(1, $data['payroll_pipeline']['computed']);
+        $this->assertSame(1, $data['payroll_pipeline']['total']);
     }
 
     /** The endpoint still answers, and still refuses the unauthorized. */

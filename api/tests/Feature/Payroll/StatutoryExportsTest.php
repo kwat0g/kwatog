@@ -202,7 +202,7 @@ class StatutoryExportsTest extends TestCase
             'gross_pay' => 20000.00, 'net_pay' => 19000.00, 'error_message' => null,
         ]);
 
-        $res = $this->actingAs($this->userWithRole('finance_officer'))
+        $res = $this->actingAs($this->userWithRole('hr_officer'))
             ->get("/api/v1/payroll/statutory/sss-r3/{$period->hash_id}")
             ->assertStatus(200);
 
@@ -276,7 +276,7 @@ class StatutoryExportsTest extends TestCase
             'net_pay' => 27000.00, 'error_message' => null,
         ]);
 
-        $csv = $this->actingAs($this->userWithRole('finance_officer'))
+        $csv = $this->actingAs($this->userWithRole('hr_officer'))
             ->get('/api/v1/payroll/statutory/1601c?year=2025&month=10')
             ->assertStatus(200)->getContent();
 
@@ -288,7 +288,7 @@ class StatutoryExportsTest extends TestCase
 
     public function test_statutory_export_rejects_invalid_period_input(): void
     {
-        $response = $this->actingAs($this->userWithRole('finance_officer'))
+        $response = $this->actingAs($this->userWithRole('hr_officer'))
             ->get('/api/v1/payroll/statutory/1601c?year=2025&month=13');
 
         $response->assertStatus(422);
