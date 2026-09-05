@@ -275,6 +275,69 @@ class GlobalSearchTest extends TestCase
         $this->assertNotContains($other->po_number, $labels);
     }
 
+    /**
+     * The PO group used to re-express the module scope through
+     * DepartmentScope keyed on purchasing.pr.approve — which made a
+     * purchasing_officer (company-wide in the module list) see only POs they
+     * created. Search must match the module, so they see everything.
+     */
+    public function test_purchasing_officer_searches_every_purchase_order_like_the_module_list(): void
+    {
+        $a = PurchaseOrder::factory()->create(['po_number' => 'PO-999905-0001']);
+        $b = PurchaseOrder::factory()->create(['po_number' => 'PO-999905-0002']);
+
+        $officer = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'purchasing_officer')->value('id'),
+        ]);
+        $officer->role->permissions()->attach(
+            Permission::query()->where('slug', 'search.global')->value('id'),
+        );
+
+        $labels = $this->labelsFor(
+            $this->actingAs($officer)->getJson('/api/v1/search?q=PO-999905')->assertOk()->json('data'),
+            'purchase_order',
+        );
+
+        $this->assertEqualsCanonicalizing([$a->po_number, $b->po_number], $labels);
+    }
+
+    /**
+     * The same drift, other direction: a pr.approve holder who is NOT a
+     * department head (e.g. production_manager) is authorship-only in the
+     * module list, so linking them to a department must not widen search to
+     * that department's POs.
+     */
+    public function test_pr_approver_who_is_not_a_department_head_gets_authorship_only(): void
+    {
+        $department = Department::factory()->create();
+        $employee = Employee::factory()->create(['department_id' => $department->id]);
+
+        $role = Role::create([
+            'name'        => 'M009 PM-like '.substr(uniqid(), -5),
+            'slug'        => 'm009_pm_'.substr(uniqid(), -5),
+            'description' => 'pr approver without the department_head role',
+            'is_system'   => false,
+        ]);
+        $role->permissions()->sync(
+            Permission::query()->whereIn('slug', [
+                'search.global', 'purchasing.view', 'purchasing.pr.approve',
+            ])->pluck('id')->all(),
+        );
+        $manager = User::factory()->create(['role_id' => $role->id, 'employee_id' => $employee->id]);
+
+        $own = PurchaseOrder::factory()->create(['po_number' => 'PO-999906-0001', 'created_by' => $manager->id]);
+        PurchaseOrder::factory()->create([
+            'po_number'           => 'PO-999906-0002',
+            'purchase_request_id' => PurchaseRequest::factory()->create(['department_id' => $department->id])->id,
+        ]);
+
+        $labels = $this->labelsFor(
+            $this->actingAs($manager)->getJson('/api/v1/search?q=PO-999906')->assertOk()->json('data'),
+            'purchase_order',
+        );
+
+        $this->assertSame([$own->po_number], $labels);
+    }
     // ------------------------------------------------------------------
     // M009-F03 — archived rows are not searchable
     // ------------------------------------------------------------------

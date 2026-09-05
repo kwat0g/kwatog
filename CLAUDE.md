@@ -482,6 +482,14 @@ So when you use this convention:
 - `App\Modules\Maintenance\Services\PredictiveMaintenanceService::recordAndEvaluate()` — condition reading + breach gate + corrective MWO.
 - `App\Modules\Quality\Services\InspectionService::recordMeasurements()` — tolerance auto-eval + status transition + defect counting.
 - `App\Common\Services\NotificationService::send($recipients, string $type, array $data)` — single notification entry point. Recipients = `User|Collection|array`.
+- `App\Common\Support\ApprovalSourceScope::visibleIds()` — row visibility for approval-board cards: delegates to the owning module's own row scope.
+- `App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy::visibleTo()` — the ONE purchase-order row scope: PO list, global search and the approval board all call it.
+
+### Aggregator surfaces reuse the owning module's ROW scope — never its view permission
+- A view permission answers "may this role open the module at all"; only the module's row scope answers "which rows". `leave.view` is self-scoped and granted to EVERY role, so gating the Approval Queue on it let every employee read every employee's leave cards, dates and approver remarks (2026-09 audit — AQ-1/2/3).
+- The rule: approval board (`ApprovalSourceScope`), global search (`GlobalSearchService`) and Action Center task gates call the module's own scope code (`DepartmentScope`, `LoanAccessPolicy`, `PurchaseRequestAccessPolicy`, `PurchaseOrderAccessPolicy`). One source of truth per module, no re-expression. Re-expressions drift: search's `DepartmentScope` re-key of the PO scope UNDER-exposed purchasing_officer (company-wide in the module) and OVER-exposed pr.approve holders linked to a department.
+- Adding a card/group/source to an aggregator: find the module's list scope and call it. If the module has none (payroll periods, master data), say so explicitly at the call site.
+- Same logic one level down: a self-scoped permission reused as a GLOBAL gate is a leak; a module row scope re-derived by permission keys is a drift. Pin both directions with a visibility-matrix test (`ApprovalBoardScopeTest`, `GlobalSearchTest`, `PurchaseOrderListScopeTest`).
 
 ### Dashboards are permission-derived — never add a role-name branch
 - **Landing page:** `DashboardDispatchService::resolve()` picks the bespoke dashboard from `DashboardCatalog` (keyed by permission). When several qualify, rarest permission wins — rarity is counted live from `role_permissions`. A new role needs no code change.
@@ -500,7 +508,7 @@ read it rather than trusting a copy here. One scheduling gotcha worth knowing wi
   not a bug.
 
 ### Migration numbering
-Recent additions use 4-digit numbered (`0186_*`, `0187_*`, …). Highest as of 2026-08-27 = **0478** (`0475_harden_activity_events` … `0478_harden_ncr_capa_contracts` arrived from audit sessions and were committed in `167de85e`; the "0474" this line used to claim was already stale). Confirm the real max before using it — `ls api/database/migrations | grep -E '^04' | sort | tail -3` — rather than trusting this number, which goes out of date exactly when several sessions are landing work. The sequence is contiguous through 0478: `0472_add_link_path_to_dashboard_widgets` used to be missing from `main` because it lived on an unmerged frontend branch, and that branch has now merged. Mixed timestamp-style migrations (`2026_06_09_*`, `2026_08_16_*`, and a run of `2026_08_26_*`) coexist for older HR/Payroll changes, recent BOM-costing work, and anything that must run after a timestamp-named migration — see the dependency rule below.
+Recent additions use 4-digit numbered (`0186_*`, `0187_*`, …). Highest as of 2026-09-06 = **0481** (`0479_harden_capacity_plan_invariants`, `0480_create_supplier_item_listings_table`, `0481_action_center_drop_approvals_and_exceptions_permission` — the last from the Action Center / Approval Queue visibility audit). Confirm the real max before using it — `ls api/database/migrations | grep -E '^04' | sort | tail -3` — rather than trusting this number, which goes out of date exactly when several sessions are landing work. The sequence is contiguous through 0481: `0472_add_link_path_to_dashboard_widgets` used to be missing from `main` because it lived on an unmerged frontend branch, and that branch has now merged. Mixed timestamp-style migrations (`2026_06_09_*`, `2026_08_16_*`, and a run of `2026_08_26_*`) coexist for older HR/Payroll changes, recent BOM-costing work, and anything that must run after a timestamp-named migration — see the dependency rule below.
 
 **"highest + 1" is WRONG when your migration depends on a timestamp-named one.**
 The migrator sorts by full filename, and `'0'` < `'2'`, so **every** `0NNN_` file

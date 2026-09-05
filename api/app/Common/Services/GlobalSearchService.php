@@ -17,6 +17,7 @@ use App\Modules\HR\Models\Employee;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
 use App\Modules\Quality\Models\NonConformanceReport;
 use BackedEnum;
 use Illuminate\Database\Eloquent\Builder;
@@ -54,8 +55,10 @@ use Illuminate\Support\Facades\Schema;
  *      scope the module lists rely on (M009-F03). Eight of the eleven searched
  *      tables are soft-deletable; `DB::table()` saw all of their tombstones.
  *   2. Any group whose list service applies a row-level scope applies the SAME
- *      scope here, through the SAME shared helper — currently `DepartmentScope`
- *      for employees and purchase orders. Do not hand-roll a role check.
+ *      scope here, through the SAME shared helper — `DepartmentScope` for
+ *      employees and `PurchaseOrderAccessPolicy` for purchase orders (the
+ *      policy is the module list's own code path, not a re-expression). Do not
+ *      hand-roll a role check.
  *
  * ## Matching semantics — M009-F04
  *
@@ -148,7 +151,10 @@ class GlobalSearchService
         'ncr'            => ['quality'],
     ];
 
-    public function __construct(private readonly SettingsService $settings) {}
+    public function __construct(
+        private readonly SettingsService $settings,
+        private readonly PurchaseOrderAccessPolicy $purchaseOrderVisibility,
+    ) {}
 
     /** @return array<int, array{group:string, label:string, type:string, items:array<int, array<string,mixed>>}> */
     public function search(User $user, string $query, int $perGroup = 5): array
@@ -237,22 +243,15 @@ class GlobalSearchService
                     ->where('purchase_orders.po_number', $like, $term)
                     ->orWhere('vendors.name', $like, $term));
 
-            // The purchase-order list's row scope (PurchaseOrderService::list),
-            // re-expressed through the shared helper: PO approvers and admins see
-            // everything; a PR approver additionally sees their department's POs
-            // through the linked PR; everyone else sees only what they created.
-            // Note `created_by` MUST be qualified — `vendors` has a column of the
-            // same name (migration 0222).
-            DepartmentScope::apply(
-                $q,
-                $user,
-                viewAllPermission: 'purchasing.po.approve',
-                departmentPermission: 'purchasing.pr.approve',
-                deptColumn: 'department_id',
-                selfColumn: 'purchase_orders.created_by',
-                selfId: $user->id,
-                deptRelation: 'purchaseRequest',
-            );
+            // The purchase-order list's row scope — the SAME code path the
+            // module list runs (PurchaseOrderAccessPolicy), so search can
+            // never show a PO the list page hides. It used to be re-expressed
+            // through DepartmentScope keyed on purchasing.pr.approve, which
+            // drifted both ways: it under-exposed purchasing_officer (who is
+            // company-wide in the module) and over-exposed any pr.approve
+            // holder linked to a department (e.g. production_manager, who is
+            // authorship-only in the module).
+            $q = $this->purchaseOrderVisibility->visibleTo($q, $user);
 
             $rows = $this->rank($q, 'purchase_orders.po_number', 'vendors.name', $normalizedQuery)
                 ->limit($perGroup)->get();

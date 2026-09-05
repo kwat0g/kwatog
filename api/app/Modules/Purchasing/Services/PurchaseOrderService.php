@@ -29,6 +29,7 @@ use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\PurchaseRequestItem;
+use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
@@ -42,6 +43,7 @@ class PurchaseOrderService
         private readonly TaxPolicyService $taxPolicy,
         private readonly SettingsService $settings,
         private readonly SupplierDispatchService $supplierDispatches,
+        private readonly PurchaseOrderAccessPolicy $visibility,
     ) {}
 
     private function resolveDepartmentId(array $data): ?int
@@ -92,27 +94,11 @@ class PurchaseOrderService
 
         // Row-level filtering. Admin and Purchasing approvers see everything.
         // Department Head sees POs for their department via the linked PR.
-        // Everyone else sees only POs they created.
+        // Everyone else sees only POs they created. The rule lives in
+        // PurchaseOrderAccessPolicy so global search and the approval board
+        // can never drift from it again.
         if ($user) {
-            $roleSlug = $user->role?->slug;
-            $isAdmin = $roleSlug === 'system_admin';
-            $canApprove = $user->hasPermission('purchasing.po.approve');
-            if (! $isAdmin && ! $canApprove) {
-                $creatorId = $user->id;
-                if ($roleSlug === 'department_head') {
-                    $deptId = \App\Modules\HR\Models\Employee::query()
-                        ->whereKey($user->employee_id)
-                        ->value('department_id');
-                    $q->where(function ($qq) use ($creatorId, $deptId) {
-                        $qq->where('created_by', $creatorId);
-                        if ($deptId) {
-                            $qq->orWhereHas('purchaseRequest', fn ($pr) => $pr->where('department_id', $deptId));
-                        }
-                    });
-                } else {
-                    $q->where('created_by', $creatorId);
-                }
-            }
+            $q = $this->visibility->visibleTo($q, $user);
         }
 
         return $q->orderByDesc('date')->orderByDesc('id')

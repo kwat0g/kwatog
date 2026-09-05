@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace App\Common\Support;
 
 use App\Modules\Auth\Models\User;
-use App\Modules\HR\Models\Employee;
 use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Loans\Policies\LoanAccessPolicy;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseRequest;
+use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
 use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -25,10 +25,7 @@ use Illuminate\Database\Eloquent\Builder;
  *             (approve_hr = all, approve_dept = department + own, else own);
  *   - loan  : LoanAccessPolicy::visibleTo, unchanged;
  *   - pr    : PurchaseRequestAccessPolicy::visibleTo, unchanged;
- *   - po    : the mirror of PurchaseOrderService::list's inline scope
- *             (po.approve = all; department head = own + own department via
- *             the linked PR; else own creations) — kept here as a mirror
- *             until that scope graduates into a policy of its own;
+ *   - po    : PurchaseOrderAccessPolicy::visibleTo, unchanged;
  *   - payroll: no row scope exists in the module — holders of the read
  *             permission see every period, so the board's permission gate is
  *             already equivalent and hasScope() reports false.
@@ -91,33 +88,8 @@ final class ApprovalSourceScope
             ),
             EmployeeLoan::class => app(LoanAccessPolicy::class)->visibleTo($query, $user),
             PurchaseRequest::class => app(PurchaseRequestAccessPolicy::class)->visibleTo($query, $user),
-            PurchaseOrder::class => self::purchaseOrderScope($query, $user),
+            PurchaseOrder::class => app(PurchaseOrderAccessPolicy::class)->visibleTo($query, $user),
             default => $query,
         };
-    }
-
-    /** @param Builder<PurchaseOrder> $query */
-    private static function purchaseOrderScope(Builder $query, User $user): Builder
-    {
-        // hasPermission() short-circuits for system_admin, so the admin tier
-        // needs no role-name branch here.
-        if ($user->hasPermission('purchasing.po.approve')) {
-            return $query;
-        }
-
-        // Mirror of PurchaseOrderService::list's row filter, including its
-        // departmental tier for department heads (which is role-keyed there).
-        return $query->where(function (Builder $q) use ($user): void {
-            $q->where('created_by', $user->id);
-
-            if ($user->role?->slug === 'department_head') {
-                $departmentId = $user->employee_id
-                    ? Employee::query()->whereKey($user->employee_id)->value('department_id')
-                    : null;
-                if ($departmentId !== null) {
-                    $q->orWhereHas('purchaseRequest', fn (Builder $pr) => $pr->where('department_id', $departmentId));
-                }
-            }
-        });
     }
 }
