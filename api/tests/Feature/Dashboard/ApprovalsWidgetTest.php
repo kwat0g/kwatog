@@ -7,6 +7,8 @@ namespace Tests\Feature\Dashboard;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Models\DashboardLayout;
+use App\Modules\HR\Models\Department;
+use App\Modules\HR\Models\Employee;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use Database\Seeders\DashboardWidgetSeeder;
 use Database\Seeders\RolePermissionSeeder;
@@ -23,8 +25,9 @@ use Tests\TestCase;
  * waiting three days.
  *
  * The provider delegates to ApprovalBoardService so the tile and /approvals
- * resolve the same rows through the same delegation-aware role match; the tests
- * below pin that the tile stays SELF-scoped while doing it.
+ * resolve the same rows through the same delegation-aware role match and the
+ * same module row scope; the tests below pin that the tile stays scoped to
+ * the caller's own queue while doing it.
  */
 class ApprovalsWidgetTest extends TestCase
 {
@@ -37,12 +40,24 @@ class ApprovalsWidgetTest extends TestCase
         $this->seed(DashboardWidgetSeeder::class);
     }
 
+    /**
+     * Department the acting department head belongs to; PRs are created in it
+     * so the module row scope (which the board now reuses) admits them.
+     */
+    private ?int $departmentId = null;
+
     private function actingAsRole(string $slug): User
     {
-        $user = User::factory()->create([
+        $attributes = [
             'role_id' => Role::query()->where('slug', $slug)->value('id'),
             'email' => 'appr+'.substr(uniqid(), -8).'@t.test',
-        ]);
+        ];
+        if ($slug === 'department_head') {
+            $this->departmentId = Department::factory()->create()->id;
+            $attributes['employee_id'] = Employee::factory()
+                ->create(['department_id' => $this->departmentId])->id;
+        }
+        $user = User::factory()->create($attributes);
         $this->actingAs($user);
 
         return $user;
@@ -50,7 +65,9 @@ class ApprovalsWidgetTest extends TestCase
 
     private function pendingApproval(string $roleSlug, int $hoursAgo): PurchaseRequest
     {
-        $pr = PurchaseRequest::factory()->create();
+        $pr = PurchaseRequest::factory()->create(
+            $this->departmentId === null ? [] : ['department_id' => $this->departmentId],
+        );
 
         DB::table('approval_records')->insert([
             'approvable_type' => PurchaseRequest::class,

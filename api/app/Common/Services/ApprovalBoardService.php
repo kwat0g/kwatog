@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Common\Services;
 
 use App\Common\Models\ApprovalDelegation;
+use App\Common\Support\ApprovalSourceScope;
 use App\Common\Support\ApprovalTypeRegistry;
 use App\Modules\Auth\Models\User;
 use Illuminate\Support\Carbon;
@@ -53,7 +54,13 @@ class ApprovalBoardService
     {
         $pendingLimit = max(1, min($pendingLimit, 500));
         $historyLimit = max(1, min($historyLimit, 500));
-        $userRoleSlugs = $this->roleSlugsFor($user);
+        // Delegated slugs kept separately from the merged list: only a
+        // DELEGATED step earns the masked fallback card below. A user's own
+        // role being an out-of-scope step means the record is another
+        // department's business (the module and the approve endpoint both
+        // refuse it), so it must not appear at all — not even redacted.
+        $delegatedSlugs = ApprovalDelegation::actsForRoles($user->id, now());
+        $userRoleSlugs = $this->roleSlugsFor($user, $delegatedSlugs);
         $recentDays = app(SettingsService::class)->requiredInt('approvals.recent_history_days', 1, 3650);
         $historySince = Carbon::now()->subDays($recentDays);
 
@@ -114,6 +121,36 @@ class ApprovalBoardService
             }
         }
 
+        /*
+         * Row-level visibility per approvable class, resolved ONCE for both
+         * the open columns and the history columns below. A card may only
+         * render a record the owning module's own list endpoint would show
+         * this user (ApprovalSourceScope reuses each module's row scope
+         * verbatim). Kinds without a row scope (payroll) fall back to the
+         * classic permission gate.
+         */
+        $idsByClass = [];
+        foreach ($activeStepByApprovable as $row) {
+            $idsByClass[(string) $row->approvable_type][] = (int) $row->approvable_id;
+        }
+        foreach ($actioned as $row) {
+            $idsByClass[(string) $row->approvable_type][] = (int) $row->approvable_id;
+        }
+        $visibleByClass = [];
+        foreach ($idsByClass as $class => $ids) {
+            $meta = ApprovalTypeRegistry::forClass($class);
+            if ($meta === null) {
+                continue;
+            }
+            if (! ApprovalSourceScope::hasScope($class)) {
+                $visibleByClass[$class] = ApprovalTypeRegistry::userCanView($user, $meta)
+                    ? array_fill_keys(array_values(array_unique($ids)), true)
+                    : [];
+                continue;
+            }
+            $visibleByClass[$class] = ApprovalSourceScope::visibleIds($class, $ids, $user);
+        }
+
         // ADV4 — batch-load source rows for active steps so we can also
         // surface the requester's role on each card without N+1.
         $activePrefetch = [];
@@ -157,9 +194,14 @@ class ApprovalBoardService
 
         foreach ($activePrefetch as $entry) {
             $meta = $entry['meta'];
-            $canViewModule = ApprovalTypeRegistry::userCanView($user, $meta);
-            $isDelegatedAction = in_array($entry['row']->role_slug, $userRoleSlugs, true);
-            if (! $canViewModule && ! $isDelegatedAction) {
+            $class = (string) $entry['row']->approvable_type;
+            $inScope = isset($visibleByClass[$class][(int) $entry['row']->approvable_id]);
+            $isDelegatedStep = in_array($entry['row']->role_slug, $delegatedSlugs, true);
+            // Full card: the module would show this user the record.
+            // Masked card: a delegation put the user on this step, so they
+            // must know work waits on them — but the record is outside their
+            // module row scope, so no field of it is rendered.
+            if (! $inScope && ! $isDelegatedStep) {
                 continue;
             }
             $card = $this->cardForActive(
@@ -167,7 +209,7 @@ class ApprovalBoardService
                 $meta,
                 $entry['source'],
                 $creators,
-                redacted: ! $canViewModule,
+                redacted: ! $inScope,
             );
             if ($card === null) continue;
             if ($kindFilter !== null && $card['type'] !== $kindFilter) continue;
@@ -189,7 +231,12 @@ class ApprovalBoardService
             $seen[$key] = true;
 
             $meta = ApprovalTypeRegistry::forClass((string) $row->approvable_type);
-            if ($meta === null || ! ApprovalTypeRegistry::userCanView($user, $meta)) {
+            if ($meta === null) {
+                continue;
+            }
+            // History obeys the same row scope as the open columns — an
+            // out-of-scope record does not become readable once actioned.
+            if (! isset($visibleByClass[(string) $row->approvable_type][(int) $row->approvable_id])) {
                 continue;
             }
             $card = $this->cardForActioned($row, $meta, $actionedSources, $approvers);
@@ -226,8 +273,8 @@ class ApprovalBoardService
         ];
     }
 
-    /** @return array<int, string> */
-    private function roleSlugsFor(User $user): array
+    /** @param array<int, string> $delegatedSlugs @return array<int, string> */
+    private function roleSlugsFor(User $user, array $delegatedSlugs): array
     {
         // U2/R1: a user has a single role_id. Return its slug as a list for
         // forward compat with multi-role assignment.
@@ -235,10 +282,7 @@ class ApprovalBoardService
         $slug = $user->role?->slug;
         $slugs = $slug ? [$slug] : [];
 
-        return array_values(array_unique(array_merge(
-            $slugs,
-            ApprovalDelegation::actsForRoles($user->id, now()),
-        )));
+        return array_values(array_unique(array_merge($slugs, $delegatedSlugs)));
     }
 
     /**
@@ -246,8 +290,9 @@ class ApprovalBoardService
      * @param  array<string, mixed>  $meta     Pre-resolved type metadata.
      * @param  object  $source   Pre-fetched approvable source row.
      * @param  Collection<int, User>  $creators  Pre-loaded users keyed by id.
-     * @param  bool  $redacted  Mask module data when delegation grants action
-     *                          authority but not the module's view permission.
+     * @param  bool  $redacted  Mask module data when the record is outside the
+     *                          caller's module row scope but their role (own or
+     *                          delegated) is the pending step.
      * @return array<string, mixed>|null
      */
     private function cardForActive(object $row, array $meta, object $source, Collection $creators, bool $redacted = false): ?array

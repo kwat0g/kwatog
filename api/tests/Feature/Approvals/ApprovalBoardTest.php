@@ -8,6 +8,8 @@ use App\Common\Models\ApprovalDelegation;
 use App\Common\Services\ApprovalBoardService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\HR\Models\Department;
+use App\Modules\HR\Models\Employee;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -31,9 +33,11 @@ class ApprovalBoardTest extends TestCase
         ]);
     }
 
-    private function pendingPr(string $role): PurchaseRequest
+    private function pendingPr(string $role, ?int $departmentId = null): PurchaseRequest
     {
-        $pr = PurchaseRequest::factory()->create();
+        $pr = PurchaseRequest::factory()->create(
+            $departmentId === null ? [] : ['department_id' => $departmentId],
+        );
         DB::table('approval_records')->insert([
             'approvable_type' => PurchaseRequest::class,
             'approvable_id' => $pr->id,
@@ -83,9 +87,16 @@ class ApprovalBoardTest extends TestCase
 
     public function test_board_reports_bounded_pending_results_and_consistent_summary(): void
     {
-        $approver = $this->user('department_head');
-        $this->pendingPr('department_head');
-        $this->pendingPr('department_head');
+        // The board now reuses the module's row scope, so the approver must
+        // actually be able to see the PRs in the Purchasing module: a
+        // department head linked to the requesting department.
+        $department = Department::factory()->create();
+        $approver = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'department_head')->value('id'),
+            'employee_id' => Employee::factory()->create(['department_id' => $department->id])->id,
+        ]);
+        $this->pendingPr('department_head', $department->id);
+        $this->pendingPr('department_head', $department->id);
 
         $board = app(ApprovalBoardService::class)->board($approver, null, 1, 1);
 
