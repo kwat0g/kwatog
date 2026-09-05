@@ -51,12 +51,11 @@ describe('role-aligned sidebar permissions', () => {
  expect(paths).not.toContain('/quality/capability');
  expect(paths).not.toContain('/maintenance/downtime');
  expect(paths).not.toContain('/crm/inquiries');
- expect(paths).not.toContain('/quality/calibration');
- expect(paths).not.toContain('/accounting/portal-access');
- expect(paths).not.toContain('/hr/recruitment');
- expect(paths).not.toContain('/admin/sod');
- expect(paths).not.toContain('/inventory/scanner');
- });
+  expect(paths).not.toContain('/quality/calibration');
+  expect(paths).not.toContain('/hr/recruitment');
+  expect(paths).not.toContain('/admin/sod');
+  expect(paths).not.toContain('/inventory/scanner');
+  });
 
  it('uses labels that describe each primary destination', () => {
  expect(item('/chains').label).toBe('Business Chain Tracker');
@@ -129,7 +128,23 @@ describe('role-aligned sidebar permissions', () => {
  expect(isNavItemVisible(item('/payroll/statutory'), departmentHead)).toBe(false);
  });
 
- it('exposes the merged Warehouse Map from inventory.view (Stock Count is its toggle)', () => {
+  it('gates portal access administration on the b2b portal_access permission', () => {
+  const finance = {
+  permissions: new Set(['b2b.portal_access.view']),
+  features: allFeatures,
+  roleSlug: 'finance_officer',
+  };
+  const purchasing = {
+  permissions: new Set(['purchasing.view', 'accounting.vendors.manage']),
+  features: allFeatures,
+  roleSlug: 'purchasing_officer',
+  };
+
+  expect(isNavItemVisible(item('/accounting/portal-access'), finance)).toBe(true);
+  expect(isNavItemVisible(item('/accounting/portal-access'), purchasing)).toBe(false);
+  });
+
+  it('exposes the merged Warehouse Map from inventory.view (Stock Count is its toggle)', () => {
  // 2026-08-08: Stock Count merged into the Warehouse Map page. The sidebar
  // shows one entry for inventory.view users; the Stock Count tab inside the
  // page is gated on inventory.stock_count.view by the page itself, and the
@@ -144,7 +159,7 @@ describe('role-aligned sidebar permissions', () => {
  expect(SECTIONS.flatMap((s) => s.items).some((entry) => entry.to === '/inventory/stock-count')).toBe(false);
  });
 
- it('keeps the Finance sidebar focused on the dashboard, invoices, bills, and primary statements', () => {
+  it('keeps the Finance sidebar focused on the dashboard, invoices, bills, vendors, and primary statements', () => {
  const finance = {
  permissions: new Set(['dashboard.accounting.view']),
  features: allFeatures,
@@ -159,13 +174,14 @@ describe('role-aligned sidebar permissions', () => {
  expect(isNavItemVisible(item('/dashboard/finance'), finance)).toBe(true);
  expect(isNavItemVisible(item('/dashboard/finance'), employee)).toBe(false);
 
- const financePaths = SECTIONS.find((section) => section.label === 'Finance')?.items.map((entry) => entry.to);
- expect(financePaths).toEqual([
- '/dashboard/finance',
- '/accounting/invoices',
- '/accounting/bills',
- '/accounting/income-statement',
- '/accounting/balance-sheet',
- ]);
+  const financePaths = SECTIONS.find((section) => section.label === 'Finance')?.items.map((entry) => entry.to);
+  expect(financePaths).toEqual([
+  '/dashboard/finance',
+  '/accounting/invoices',
+  '/accounting/bills',
+  '/accounting/vendors',
+  '/accounting/income-statement',
+  '/accounting/balance-sheet',
+  ]);
  });
 });

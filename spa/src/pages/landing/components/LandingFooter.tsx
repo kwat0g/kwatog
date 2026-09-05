@@ -235,7 +235,7 @@ export function LandingFooter() {
               </li>
               <li>
                 <Link
-                  to="/portal/customer/login"
+                  to="/portal/customer"
                   className="font-mono text-[11px] uppercase tracking-[0.18em] text-text-subtle underline-offset-4 transition-colors hover:text-secondary hover:underline"
                 >
                   Customer portal →
@@ -243,7 +243,7 @@ export function LandingFooter() {
               </li>
               <li>
                 <Link
-                  to="/portal/supplier/login"
+                  to="/portal/supplier"
                   className="font-mono text-[11px] uppercase tracking-[0.18em] text-text-subtle underline-offset-4 transition-colors hover:text-secondary hover:underline"
                 >
                   Supplier portal →

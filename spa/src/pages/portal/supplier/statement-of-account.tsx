@@ -1,138 +1,123 @@
-import { PortalTable } from '@/components/portal/PortalTable';
-import { useCallback, useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { supplierPortalApi } from '@/api/b2b/supplier';
-import type { VendorStatementOfAccount } from '@/types/b2b';
-import { Panel } from '@/components/ui/Panel';
-import { SkeletonBlock } from '@/components/ui/Skeleton';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
+import { SkeletonDetail } from '@/components/ui/Skeleton';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { StatCard } from '@/components/ui/StatCard';
+import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { KpiGrid } from '@/components/dashboard/DashboardShell';
+import { formatDate } from '@/lib/formatDate';
+import { formatPeso } from '@/lib/formatNumber';
+import { cn } from '@/lib/cn';
+import type { VendorStatementOfAccount } from '@/types/b2b';
 
 const bucketColors: Record<string, string> = {
- current: 'text-success-fg',
- d1_30: 'text-warning-fg',
- d31_60: 'text-warning-fg',
- d61_90: 'text-danger-fg',
- d91_plus: 'text-danger-fg',
+  current: 'text-success-fg',
+  d1_30: 'text-warning-fg',
+  d31_60: 'text-warning-fg',
+  d61_90: 'text-danger-fg',
+  d91_plus: 'text-danger-fg',
 };
 
+type OpenBill = VendorStatementOfAccount['open_bills'][number];
+
 export default function SupplierStatementOfAccountPage() {
- const [soa, setSoa] = useState<VendorStatementOfAccount | null>(null);
- const [loading, setLoading] = useState(true);
+  const { data: soa, isLoading, isError, refetch } = useQuery({
+    queryKey: ['portal', 'supplier', 'statement-of-account'],
+    queryFn: () => supplierPortalApi.statementOfAccount(),
+  });
 
- const fetch = useCallback(async () => {
- setLoading(true);
- try {
- const data = await supplierPortalApi.statementOfAccount();
- setSoa(data);
- } finally {
- setLoading(false);
- }
- }, []);
+  const bucketLabels = new Map<string, string>(
+    (soa?.aging_bucket_options ?? []).map((option) => [option.value, option.label]),
+  );
 
- useEffect(() => { fetch(); }, [fetch]);
+  const billColumns: Column<OpenBill>[] = [
+    { key: 'bill_number', header: 'Bill #', cell: (r) => <span className="font-mono font-medium">{r.bill_number}</span> },
+    {
+      key: 'po',
+      header: 'PO',
+      cell: (r) =>
+        r.purchase_order ? <span className="font-mono text-accent">{r.purchase_order.po_number}</span> : '—',
+    },
+    { key: 'date', header: 'Date', cell: (r) => <span className="font-mono">{r.date ? formatDate(r.date) : '—'}</span> },
+    {
+      key: 'due_date',
+      header: 'Due Date',
+      cell: (r) => (
+        <span className={cn('font-mono', r.is_overdue && 'text-danger-fg')}>
+          {r.due_date ? formatDate(r.due_date) : '—'}
+        </span>
+      ),
+    },
+    { key: 'total_amount', header: 'Total', align: 'right', cell: (r) => <NumCell>{formatPeso(r.total_amount)}</NumCell> },
+    { key: 'balance', header: 'Balance', align: 'right', cell: (r) => <NumCell className="font-medium">{formatPeso(r.balance)}</NumCell> },
+    {
+      key: 'status',
+      header: 'Status',
+      cell: (r) => <Chip variant={chipVariantForStatus(r.status)}>{r.status_label ?? r.status}</Chip>,
+    },
+    {
+      key: 'aging_bucket',
+      header: 'Bucket',
+      cell: (r) => (
+        <span className={cn('text-2xs font-medium', bucketColors[r.aging_bucket] ?? 'text-muted')}>
+          {bucketLabels.get(r.aging_bucket) ?? r.aging_bucket}
+        </span>
+      ),
+    },
+  ];
 
- const bucketKeys = soa ? soa.aging_bucket_options.map((option) => option.value) : [];
- const bucketLabels = new Map<string, string>((soa?.aging_bucket_options ?? []).map((option) => [option.value, option.label]));
+  return (
+    <div>
+      <PageHeader
+        title="Statement of Account"
+        subtitle={soa ? `${soa.vendor_name ?? 'Vendor'} · As of ${formatDate(soa.as_of_date)}` : 'Your outstanding balances and aging'}
+        backTo="/portal/supplier"
+        backLabel="Portal"
+      />
 
- return (
- <div>
- <PageHeader
- title="Statement of Account"
- subtitle={soa ? `${soa.vendor_name ?? 'Vendor'} · As of ${soa.as_of_date}` : undefined}
- backTo="/portal/supplier"
- backLabel="Portal"
- />
+      <div className="px-5 py-4 space-y-4">
+        {isLoading && <SkeletonDetail />}
 
- {/* One padded body holds every state, so loading and loaded agree on width. */}
- <div className="px-5 py-4 space-y-4 max-w-5xl">
- {loading && <SkeletonBlock className="h-96 rounded-md" />}
+        {isError && (
+          <EmptyState
+            icon="alert-circle"
+            title="Could not load statement"
+            description="Failed to load the statement of account. Please try again."
+            action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
+          />
+        )}
 
- {!loading && !soa && (
- <EmptyState
- icon="alert-circle"
- title="Could not load statement"
- description="Failed to load the statement of account. Please try again."
- action={<Button variant="secondary" onClick={() => fetch()}>Retry</Button>}
- />
- )}
+        {!isLoading && !isError && !soa && (
+          <EmptyState icon="receipt" title="Statement not available" />
+        )}
 
- {!loading && soa && (
- <>
- {/* Summary row */}
- <div className="flex items-baseline gap-2">
- <span className="text-2xl font-medium font-mono tabular-nums">{soa.total_outstanding}</span>
- <span className="text-xs text-muted">Total outstanding</span>
- </div>
+        {!isLoading && !isError && soa && (
+          <>
+            <KpiGrid count={soa.aging_bucket_options.length + 1}>
+              <StatCard label="Total Outstanding" value={formatPeso(soa.total_outstanding)} />
+              {soa.aging_bucket_options.map((option) => (
+                <StatCard
+                  key={option.value}
+                  label={option.label}
+                  value={formatPeso(soa.aging_buckets[option.value])}
+                />
+              ))}
+            </KpiGrid>
 
- {/* Aging buckets */}
- <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
- {bucketKeys.map((key) => {
- const amount = soa.aging_buckets[key];
- const parsed = parseFloat(amount);
- const pct = soa.total_outstanding && parseFloat(soa.total_outstanding) > 0
- ? ((parsed / parseFloat(soa.total_outstanding)) * 100).toFixed(1)
- : '0.0';
- return (
- <Panel key={key} bodyClassName="p-3 space-y-1">
- <p className="text-2xs text-muted uppercase tracking-wider">{bucketLabels.get(key) ?? key}</p>
- <p className={`text-base font-medium font-mono tabular-nums ${bucketColors[key] ?? ''}`}>{amount}</p>
- <p className="text-2xs text-muted">{pct}% of total</p>
- </Panel>
- );
- })}
- </div>
-
- {/* Open bills table */}
- <Panel title={`Open Bills (${soa.open_bills.length})`} noPadding>
- {soa.open_bills.length === 0 ? (
- <EmptyState icon="circle-check" title="No open bills" description="All bills are paid." />
- ) : (
- <PortalTable>
-<table className={tableCls}>
- <thead>
- <tr className={theadTrCls}>
- <Th>Bill #</Th>
- <Th>PO</Th>
- <Th>Date</Th>
- <Th>Due Date</Th>
- <Th align="right">Total</Th>
- <Th align="right">Balance</Th>
- <Th align="center">Status</Th>
- <Th align="center">Bucket</Th>
- </tr>
- </thead>
- <tbody>
- {soa.open_bills.map((bill) => (
- <tr key={bill.id} className={trCls}>
- <Td className="font-medium">{bill.bill_number}</Td>
- <Td className="text-muted">{bill.purchase_order?.po_number ?? '—'}</Td>
- <Td className="text-muted">{bill.date ?? '—'}</Td>
- <Td className="text-muted">{bill.due_date ?? '—'}</Td>
- <Td align="right" mono>{bill.total_amount}</Td>
- <Td align="right" mono className="font-medium">{bill.balance}</Td>
- <Td align="center">
- <Chip variant={chipVariantForStatus(bill.status)}>{bill.status_label ?? bill.status}</Chip>
- </Td>
- <Td align="center">
- <span className={`text-2xs font-medium ${
- bucketColors[bill.aging_bucket] ?? 'text-muted'
- }`}>
- {bucketLabels.get(bill.aging_bucket) ?? bill.aging_bucket}
- </span>
- </Td>
- </tr>
- ))}
- </tbody>
- </table>
-</PortalTable>
- )}
- </Panel>
- </>
- )}
- </div>
- </div>
- );
+            <DataTable
+              tableKey="portal-supplier-open-bills"
+              columns={billColumns}
+              data={soa.open_bills}
+              emptyState={
+                <EmptyState icon="circle-check" title="No open bills" description="All bills are paid." />
+              }
+            />
+          </>
+        )}
+      </div>
+    </div>
+  );
 }

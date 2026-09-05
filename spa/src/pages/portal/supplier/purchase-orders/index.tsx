@@ -1,59 +1,106 @@
-import { PortalTable } from '@/components/portal/PortalTable';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { supplierPortalApi } from '@/api/b2b/supplier';
-import { Panel } from '@/components/ui/Panel';
-import { SkeletonBlock } from '@/components/ui/Skeleton';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
-import { formatPeso } from '@/lib/formatNumber';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
+import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
+import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { CompanyName } from '@/components/brand/CompanyName';
-import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
-import { DataTablePagination } from '@/components/ui/DataTablePagination';
-import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
+import { formatDate } from '@/lib/formatDate';
+import { formatPeso } from '@/lib/formatNumber';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import type { PortalPoSummary } from '@/types/b2b';
 
-type PurchaseOrderFilters = { page: number; per_page: number; status?: string; search?: string };
+type PurchaseOrderFilters = {
+  page: number;
+  per_page: number;
+  status?: string;
+  search?: string;
+  sort?: string;
+  dir?: 'asc' | 'desc';
+};
+
+const DEFAULT_FILTERS: PurchaseOrderFilters = { page: 1, per_page: 25 };
 
 export default function SupplierPurchaseOrdersPage() {
-  const [filters, setFilters] = useUrlFilters<PurchaseOrderFilters>({ page: 1, per_page: 25 });
-  const {
-    data,
-    isLoading,
-    isError,
-    refetch,
-  } = useQuery({
+  const navigate = useNavigate();
+  const [filters, setFilters] = useUrlFilters<PurchaseOrderFilters>(DEFAULT_FILTERS);
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['portal', 'supplier', 'pos', filters],
     queryFn: () => supplierPortalApi.listPos(filters),
     placeholderData: (prev) => prev,
   });
 
-  const pos: PortalPoSummary[] = data?.data ?? [];
-  const filterConfig: FilterConfig[] = [{
-    key: 'status',
-    label: 'Status',
-    type: 'select',
-    options: [
-      { value: '', label: 'All' },
-      { value: 'approved', label: 'Approved' },
-      { value: 'sent', label: 'Sent' },
-      { value: 'partially_received', label: 'Partially received' },
-      { value: 'received', label: 'Received' },
-      { value: 'closed', label: 'Closed' },
-    ],
-  }];
+  const columns: Column<PortalPoSummary>[] = [
+    {
+      key: 'po_number',
+      header: 'PO #',
+      sortable: true,
+      cell: (r) => <span className="font-mono font-medium text-accent">{r.po_number}</span>,
+    },
+    {
+      key: 'date',
+      header: 'Date',
+      sortable: true,
+      cell: (r) => <span className="font-mono">{r.date ? formatDate(r.date) : '—'}</span>,
+    },
+    {
+      key: 'total_amount',
+      header: 'Amount',
+      align: 'right',
+      sortable: true,
+      cell: (r) => <NumCell className="font-medium">{formatPeso(r.total_amount)}</NumCell>,
+    },
+    {
+      key: 'expected_delivery_date',
+      header: 'Expected Delivery',
+      cell: (r) => (
+        <span className="font-mono">
+          {r.expected_delivery_date ? formatDate(r.expected_delivery_date) : '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      sortable: true,
+      cell: (r) => (
+        <Chip variant={chipVariantForStatus(r.status)}>
+          {r.status_label ?? r.status.replace(/_/g, ' ')}
+        </Chip>
+      ),
+    },
+  ];
+
+  const filterConfig: FilterConfig[] = [
+    {
+      key: 'status',
+      label: 'Status',
+      type: 'select',
+      options: [
+        { value: '', label: 'All' },
+        { value: 'approved', label: 'Approved' },
+        { value: 'sent', label: 'Sent' },
+        { value: 'partially_received', label: 'Partially received' },
+        { value: 'received', label: 'Received' },
+        { value: 'closed', label: 'Closed' },
+      ],
+    },
+  ];
 
   return (
     <div>
       <PageHeader
         title="Purchase Orders"
         subtitle={
-          <>
-            Orders issued to you by <CompanyName />
-          </>
+          data ? (
+            <>{data.meta.total} orders issued to you by <CompanyName /></>
+          ) : (
+            <>Orders issued to you by <CompanyName /></>
+          )
         }
       />
 
@@ -65,81 +112,41 @@ export default function SupplierPurchaseOrdersPage() {
         searchPlaceholder="Search PO number…"
       />
 
-      {/* One padded body holds every state, so loading and loaded agree on width. */}
-      <div className="px-5 py-4 max-w-5xl">
-        {isLoading && <SkeletonBlock className="h-64 rounded-md" />}
+      {isLoading && !data && <SkeletonTable columns={5} rows={8} />}
 
-        {isError && (
-          <EmptyState
-            icon="alert-circle"
-            title="Failed to load purchase orders"
-            action={
-              <Button variant="secondary" onClick={() => refetch()}>
-                Retry
-              </Button>
+      {isError && (
+        <EmptyState
+          icon="alert-circle"
+          title="Failed to load purchase orders"
+          action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
+        />
+      )}
+
+      {data && (
+        <div className="px-5 py-4">
+          <DataTable
+            tableKey="portal-supplier-purchase-orders"
+            columns={columns}
+            data={data.data}
+            meta={data.meta}
+            onPageChange={(page) => setFilters((current) => ({ ...current, page }))}
+            onPageSizeChange={(per_page) => setFilters((current) => ({ ...current, per_page, page: 1 }))}
+            onSort={(sort, direction) =>
+              setFilters((current) => ({ ...current, sort, dir: direction, page: 1 }))
             }
-          />
-        )}
-
-        {!isLoading && !isError && (
-          <Panel noPadding>
-            {pos.length > 0 ? (
-              <PortalTable>
-<table className={tableCls}>
-                <thead>
-                  <tr className={theadTrCls}>
-                    <Th>PO #</Th>
-                    <Th>Date</Th>
-                    <Th align="right">Amount</Th>
-                    <Th>Expected Delivery</Th>
-                    <Th align="right">Status</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pos.map((po) => (
-                    <tr
-                      key={po.id}
-                      className={trCls}
-                    >
-                      <Td>
-                        <Link
-                          to={`/portal/supplier/purchase-orders/${po.id}`}
-                          className="font-mono text-accent hover:underline font-medium"
-                        >
-                          {po.po_number}
-                        </Link>
-                      </Td>
-                      <Td className="text-muted">{po.date ?? '—'}</Td>
-                      <Td align="right" mono>
-                        {formatPeso(po.total_amount)}
-                      </Td>
-                      <Td className="text-muted">{po.expected_delivery_date ?? '—'}</Td>
-                      <Td align="right" mono>
-                        <Chip variant={chipVariantForStatus(po.status)}>
-                          {po.status_label ?? po.status.replace(/_/g, ' ')}
-                        </Chip>
-                      </Td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-</PortalTable>
-            ) : (
+            currentSort={filters.sort}
+            currentDirection={filters.dir}
+            onRowClick={(r) => navigate(`/portal/supplier/purchase-orders/${r.id}`)}
+            emptyState={
               <EmptyState
                 icon="file-text"
                 title="No purchase orders"
-                description="Purchase orders from your customers will appear here."
+                description="Purchase orders from Ogami will appear here."
               />
-            )}
-          </Panel>
-        )}
-        {data && <DataTablePagination
-          meta={data.meta}
-          perPage={filters.per_page}
-          onPageChange={(page) => setFilters((current) => ({ ...current, page }))}
-          onPageSizeChange={(per_page) => setFilters((current) => ({ ...current, per_page, page: 1 }))}
-        />}
-      </div>
+            }
+          />
+        </div>
+      )}
     </div>
   );
 }

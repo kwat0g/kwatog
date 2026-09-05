@@ -113,7 +113,7 @@ async function mockCustomerSession(page: import('@playwright/test').Page, mustCh
 async function signIn(page: import('@playwright/test').Page): Promise<void> {
   await page.goto('/portal/customer/login');
   await page.getByLabel('Email').fill(CUSTOMER.email);
-  await page.getByLabel('Password').fill('CustomerPass-1!');
+  await page.getByLabel('Password', { exact: true }).fill('CustomerPass-1!');
   await page.getByRole('button', { name: 'Sign in' }).click();
 }
 
@@ -158,7 +158,7 @@ test.describe('customer portal', () => {
     });
 
     await page.goto('/portal/customer/deliveries');
-    await expect(page.getByText('2026-09-15')).toBeVisible();
+    await expect(page.getByText('Sep 15, 2026')).toBeVisible();
     await expect(page.getByText('(scheduled)')).toBeVisible();
     await expect(page.getByText('Page 1 of 2')).toBeVisible();
 

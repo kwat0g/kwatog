@@ -157,18 +157,22 @@ class GoldenPathDemoSeeder extends Seeder
     /** ADV10 — stable credentials for the two isolated B2B portal guards. */
     private function seedPortalAccounts(): void
     {
-        $vendorId = DB::table('vendors')->where('is_active', true)->orderBy('id')->value('id')
-            ?? DB::table('vendors')->orderBy('id')->value('id');
-        $customerId = DB::table('customers')->orderBy('id')->value('id');
-        if (! $vendorId || ! $customerId) {
+        $vendor = DB::table('vendors')->where('is_active', true)->orderBy('id')->first()
+            ?? DB::table('vendors')->orderBy('id')->first();
+        $customer = DB::table('customers')->orderBy('id')->first();
+        if (! $vendor || ! $customer) {
             throw new \RuntimeException('A vendor and customer are required for portal demo accounts.');
         }
 
-        $supplier = SupplierPortalUser::withTrashed()->updateOrCreate(
+        // Derive the portal display name from the linked record so the account
+        // always matches a real row in the Vendors / Customers lists. Hardcoding
+        // a name here previously produced "Taiwan Plastics Portal" attached to a
+        // vendor that does not exist.
+        $supplierUser = SupplierPortalUser::withTrashed()->updateOrCreate(
             ['email' => 'portal@supp.test'],
             [
-                'vendor_id' => $vendorId,
-                'name' => 'Taiwan Plastics Portal',
+                'vendor_id' => $vendor->id,
+                'name' => $vendor->name.' Portal',
                 'password' => Hash::make('password'),
                 'is_active' => true,
                 'must_change_password' => false,
@@ -177,12 +181,12 @@ class GoldenPathDemoSeeder extends Seeder
                 'password_changed_at' => now(),
             ],
         );
-        $supplier->restore();
-        $customer = CustomerPortalUser::withTrashed()->updateOrCreate(
+        $supplierUser->restore();
+        $customerUser = CustomerPortalUser::withTrashed()->updateOrCreate(
             ['email' => 'portal@cust.test'],
             [
-                'customer_id' => $customerId,
-                'name' => 'Toyota Purchasing Portal',
+                'customer_id' => $customer->id,
+                'name' => $customer->name.' Portal',
                 'password' => Hash::make('password'),
                 'is_active' => true,
                 'must_change_password' => false,
@@ -191,7 +195,7 @@ class GoldenPathDemoSeeder extends Seeder
                 'password_changed_at' => now(),
             ],
         );
-        $customer->restore();
+        $customerUser->restore();
 
         $this->command?->info('  Portal accounts ready (portal@supp.test / portal@cust.test).');
     }

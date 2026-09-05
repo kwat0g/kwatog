@@ -35,6 +35,7 @@ import {
   LuRoute,
   LuX,
   LuMonitor,
+  LuKeyRound,
   LuDatabase,
   LuListChecks,
   LuStore,
@@ -626,6 +627,12 @@ export const SECTIONS: NavSection[] = [
         label: 'Active Sessions',
         icon: LuMonitor,
         permission: 'admin.settings.manage',
+      },
+      {
+        to: '/accounting/portal-access',
+        label: 'Portal Access',
+        icon: LuKeyRound,
+        permission: 'b2b.portal_access.view',
       },
       {
         to: '/admin/backups',

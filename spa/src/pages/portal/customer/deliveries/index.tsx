@@ -1,110 +1,128 @@
-import { useState } from 'react';
-import { PortalTable } from '@/components/portal/PortalTable';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { customerPortalApi } from '@/api/b2b/customer';
-import { Panel } from '@/components/ui/Panel';
-import { SkeletonBlock } from '@/components/ui/Skeleton';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
+import { DataTable, type Column } from '@/components/ui/DataTable';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
+import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
-import { DataTablePagination } from '@/components/ui/DataTablePagination';
+import { formatDate } from '@/lib/formatDate';
+import { useUrlFilters } from '@/hooks/useUrlFilters';
+import type { PortalDeliverySummary } from '@/types/b2b';
+
+type DeliveryFilters = { page: number; per_page: number; status?: string };
+
+const DEFAULT_FILTERS: DeliveryFilters = { page: 1, per_page: 25 };
 
 export default function CustomerDeliveriesPage() {
-  const [page, setPage] = useState(1);
-  const {
-    data: deliveriesPage,
-    isLoading,
-    isError,
-    refetch,
-  } = useQuery({
-    queryKey: ['portal', 'customer', 'deliveries', { page }],
-    queryFn: () => customerPortalApi.listDeliveries({ page }),
+  const navigate = useNavigate();
+  const [filters, setFilters] = useUrlFilters<DeliveryFilters>(DEFAULT_FILTERS);
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['portal', 'customer', 'deliveries', filters],
+    queryFn: () => customerPortalApi.listDeliveries(filters),
     placeholderData: (prev) => prev,
   });
-  const deliveries = deliveriesPage?.data ?? [];
+
+  const columns: Column<PortalDeliverySummary>[] = [
+    {
+      key: 'delivery_number',
+      header: 'DR #',
+      cell: (r) => <span className="font-mono font-medium text-accent">{r.delivery_number}</span>,
+    },
+    {
+      key: 'sales_order',
+      header: 'Order',
+      cell: (r) =>
+        r.sales_order ? <span className="font-mono text-accent">{r.sales_order.so_number}</span> : '—',
+    },
+    {
+      key: 'date',
+      header: 'Delivery Date',
+      cell: (r) => (
+        <span className="font-mono">
+          {formatDate(r.delivered_at ?? r.scheduled_date)}
+          {!r.delivered_at && r.scheduled_date && (
+            <span className="ml-1 text-2xs text-text-subtle">(scheduled)</span>
+          )}
+        </span>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      cell: (r) => (
+        <Chip variant={chipVariantForStatus(r.status)}>
+          {r.status_label ?? r.status.replace(/_/g, ' ')}
+        </Chip>
+      ),
+    },
+  ];
+
+  const filterConfig: FilterConfig[] = [
+    {
+      key: 'status',
+      label: 'Status',
+      type: 'select',
+      options: [
+        { value: '', label: 'All' },
+        { value: 'scheduled', label: 'Scheduled' },
+        { value: 'loading', label: 'Loading' },
+        { value: 'in_transit', label: 'In transit' },
+        { value: 'delivered', label: 'Delivered' },
+        { value: 'confirmed', label: 'Confirmed' },
+        { value: 'cancelled', label: 'Cancelled' },
+      ],
+    },
+  ];
 
   return (
     <div>
-      <PageHeader title="Deliveries" subtitle="Shipments dispatched to your sites" />
+      <PageHeader
+        title="Deliveries"
+        subtitle={
+          data ? `${data.meta.total} shipments dispatched to your sites` : 'Shipments dispatched to your sites'
+        }
+      />
 
-      {/* One padded body holds every state, so loading and loaded agree on width. */}
-      <div className="px-5 py-4 max-w-5xl">
-        {isLoading && <SkeletonBlock className="h-64 rounded-md" />}
+      <FilterBar
+        filters={filterConfig}
+        values={filters}
+        onFilter={(key, value) => setFilters((current) => ({ ...current, [key]: value || undefined, page: 1 }))}
+        searchable={false}
+      />
 
-        {isError && (
-          <EmptyState
-            icon="alert-circle"
-            title="Failed to load deliveries"
-            action={
-              <Button variant="secondary" onClick={() => refetch()}>
-                Retry
-              </Button>
-            }
-          />
-        )}
+      {isLoading && !data && <SkeletonTable columns={4} rows={8} />}
 
-        {!isLoading && !isError && (
-          <Panel noPadding>
-            {deliveries.length > 0 ? (
-              <>
-              <PortalTable>
-<table className={tableCls}>
-                <thead>
-                  <tr className={theadTrCls}>
-                    <Th>DR #</Th>
-                    <Th>Delivery Date</Th>
-                    <Th align="right">Status</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {deliveries.map((d) => (
-                    <tr
-                      key={d.id}
-                      className={trCls}
-                    >
-                      <Td>
-                        <Link
-                          to={`/portal/customer/deliveries/${d.id}`}
-                          className="font-mono text-accent hover:underline font-medium"
-                        >
-                          {d.delivery_number}
-                        </Link>
-                      </Td>
-                      <Td className="text-muted">
-                        {d.delivered_at ?? d.scheduled_date ?? '—'}
-                        {!d.delivered_at && d.scheduled_date && (
-                          <span className="ml-1 text-2xs text-text-subtle">(scheduled)</span>
-                        )}
-                      </Td>
-                      <Td align="right" mono>
-                        <Chip variant={chipVariantForStatus(d.status)}>
-                          {d.status_label ?? d.status.replace(/_/g, ' ')}
-                        </Chip>
-                      </Td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-</PortalTable>
-              {deliveriesPage?.meta && (
-                <div className="px-4 pb-4">
-                  <DataTablePagination meta={deliveriesPage.meta} onPageChange={setPage} />
-                </div>
-              )}
-              </>
-            ) : (
+      {isError && (
+        <EmptyState
+          icon="alert-circle"
+          title="Failed to load deliveries"
+          action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
+        />
+      )}
+
+      {data && (
+        <div className="px-5 py-4">
+          <DataTable
+            tableKey="portal-customer-deliveries"
+            columns={columns}
+            data={data.data}
+            meta={data.meta}
+            onPageChange={(page) => setFilters((current) => ({ ...current, page }))}
+            onPageSizeChange={(per_page) => setFilters((current) => ({ ...current, per_page, page: 1 }))}
+            onRowClick={(r) => navigate(`/portal/customer/deliveries/${r.id}`)}
+            emptyState={
               <EmptyState
                 icon="truck"
                 title="No deliveries"
                 description="Your deliveries will appear here once dispatched."
               />
-            )}
-          </Panel>
-        )}
-      </div>
+            }
+          />
+        </div>
+      )}
     </div>
   );
 }
