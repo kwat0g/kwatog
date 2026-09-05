@@ -9,6 +9,11 @@ use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Models\Alert;
 use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Models\ActionCenterTask;
+use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
+use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Quality\Models\Inspection;
+use App\Modules\Quality\Models\NonConformanceReport;
+use App\Modules\SupplyChain\Models\Delivery;
 use Illuminate\Support\Facades\DB;
 
 class ActionCenterTaskService
@@ -86,27 +91,46 @@ class ActionCenterTaskService
      * deadlock or unique violation inside apply()'s transaction is a
      * QueryException, which extends RuntimeException, so the arm that carried
      * these two also put SQLSTATE, table and column names into a 422 message.
+     *
+     * Hardening 2026-09:
+     *  - the `approval:` prefix no longer exists — approvals left the queue
+     *    for the Approval Queue, so no key can be gated on the cross-cutting
+     *    approvals.board.view that every role holds;
+     *  - gates now mirror the owning module's READ routes exactly (quality
+     *    split per kind, deliveries accept the narrow deliveries slug);
+     *  - a key must also resolve to a record CURRENTLY in the queue. Before
+     *    this, any holder of a source's view permission could claim/snooze/
+     *    resolve fabricated keys — writing task rows for records that do not
+     *    exist, or hiding records they had never been shown.
      */
     private function assertAllowed(string $key, User $user): void
     {
         $permissions = match (true) {
-            str_starts_with($key, 'approval:') => ['approvals.board.view'],
             str_starts_with($key, 'alert:') => ['alerts.view'],
             str_starts_with($key, 'quality:') => $this->qualityPermissions($key),
-            str_starts_with($key, 'maintenance:') => ['maintenance.view'],
-            str_starts_with($key, 'production:') => ['production.work_orders.view'],
-            str_starts_with($key, 'supply-chain:') => ['supply_chain.view'],
+            str_starts_with($key, 'maintenance:work-order:') => ['maintenance.view'],
+            str_starts_with($key, 'production:work-order:') => ['production.work_orders.view'],
+            str_starts_with($key, 'supply-chain:delivery:') => ['supply_chain.view', 'supply_chain.deliveries.view'],
             default => [],
         };
         if ($permissions === []) {
             throw new BusinessRuleException('Unknown action-center item.');
         }
+
+        $authorized = false;
         foreach ($permissions as $permission) {
             if ($user->hasPermission($permission)) {
-                return;
+                $authorized = true;
+                break;
             }
         }
-        throw new ForbiddenActionException('You do not have access to this action-center item.');
+        if (! $authorized) {
+            throw new ForbiddenActionException('You do not have access to this action-center item.');
+        }
+
+        if (! $this->itemInQueue($key)) {
+            throw new BusinessRuleException('This item is no longer in the action queue.');
+        }
     }
 
     /** @return array<int, string> */
@@ -117,7 +141,40 @@ class ActionCenterTaskService
         }
 
         return $matches[1] === 'inspection'
-            ? ['quality.view', 'quality.inspections.view']
-            : ['quality.view', 'quality.ncr.view'];
+            ? ['quality.inspections.view']
+            : ['quality.ncr.view'];
+    }
+
+    /**
+     * Does the key point at a real record that the queue currently shows?
+     *
+     * Predicates mirror ActionCenterService's source queries so the task API
+     * can only ever touch items the caller could see in their queue right now.
+     */
+    private function itemInQueue(string $key): bool
+    {
+        $parts = explode(':', $key);
+        $decoded = app('hashids')->decode(end($parts));
+        if ($decoded === []) {
+            return false;
+        }
+        $id = (int) $decoded[0];
+
+        return match (true) {
+            str_starts_with($key, 'alert:') => Alert::query()->active()->whereKey($id)->exists(),
+            str_starts_with($key, 'quality:inspection:') => Inspection::query()
+                ->whereIn('status', ['draft', 'in_progress'])->whereKey($id)->exists(),
+            str_starts_with($key, 'quality:ncr:') => NonConformanceReport::query()
+                ->whereNotIn('status', ['closed', 'cancelled'])->whereKey($id)->exists(),
+            str_starts_with($key, 'maintenance:work-order:') => MaintenanceWorkOrder::query()
+                ->open()->whereKey($id)->exists(),
+            str_starts_with($key, 'production:work-order:') => WorkOrder::query()
+                ->whereIn('status', ['confirmed', 'in_progress'])
+                ->whereNotNull('planned_end')->where('planned_end', '<', now())
+                ->whereKey($id)->exists(),
+            str_starts_with($key, 'supply-chain:delivery:') => Delivery::query()
+                ->whereIn('status', ['loading', 'in_transit', 'delivered'])->whereKey($id)->exists(),
+            default => false,
+        };
     }
 }

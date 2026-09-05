@@ -238,6 +238,8 @@ class RolePermissionSeeder extends Seeder
                 // Series F — Task F4: supplier performance dashboard.
                 ['slug' => 'purchasing.suppliers.performance.view',     'name' => 'View Supplier Performance'],
                 ['slug' => 'purchasing.suppliers.performance.recompute', 'name' => 'Recompute Supplier Performance Snapshots'],
+                // Supplier Item Listings — supplier-submitted offers reviewed here.
+                ['slug' => 'purchasing.supplier_listings.review', 'name' => 'Review Supplier Item Listings'],
                 // Undelete tier. The /restore routes were gated on these slugs
                 // but they were never seeded, so restore was 403 for everyone
                 // except system_admin (wildcard).
@@ -415,10 +417,12 @@ class RolePermissionSeeder extends Seeder
                 // Task A2 — alert engine
                 ['slug' => 'alerts.view',                         'name' => 'View Alerts'],
                 ['slug' => 'alerts.dismiss',                      'name' => 'Dismiss Alerts'],
-                // Cross-cutting personal work queues (backend auth-only,
-                // granted to every role so guards exist for later tightening).
+                // Cross-cutting personal work queue. Granted to every role,
+                // and enforced on the action-center routes themselves (the SPA
+                // guard is UX only). The old dashboard.exceptions.view slug was
+                // dropped with the Exception Workbench fold — its surface is
+                // gone, and a permission no backend route checks is a lie.
                 ['slug' => 'dashboard.action_center.view',        'name' => 'View Personal Action Center'],
-                ['slug' => 'dashboard.exceptions.view',           'name' => 'View Exception Workbench'],
                 // Series F — Task F1 & F2: cross-module aggregator pages.
                 ['slug' => 'calendar.view',                       'name' => 'View Company Calendar'],
                 ['slug' => 'approvals.board.view',                'name' => 'View Approvals Kanban Board'],
@@ -866,7 +870,6 @@ class RolePermissionSeeder extends Seeder
                             'approvals.board.view',
                             'hr.directory.view',
                             'dashboard.action_center.view',
-                            'dashboard.exceptions.view',
                             // Self-scoped layout reset — every role (see
                             // catalog comment under 'dashboards').
                             'dashboard.layout.reset',
@@ -910,7 +913,6 @@ class RolePermissionSeeder extends Seeder
             'approvals.board.view',
             'hr.directory.view',
             'dashboard.action_center.view',
-            'dashboard.exceptions.view',
             'dashboard.layout.reset',
         ];
 

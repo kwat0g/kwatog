@@ -48,9 +48,18 @@ Route::middleware('auth:sanctum')->prefix('dashboards')->group(function () {
      * authentication.
      */
     Route::get('/badges',         [BadgeController::class, 'index']);
-    Route::get('/action-center',  [ActionCenterController::class, 'index']);
-    Route::get('/exceptions', [ActionCenterController::class, 'exceptions']);
-    Route::patch('/action-center/tasks', [ActionCenterTaskController::class, 'update']);
+    /*
+     * Action Center — cross-module operational exception queue. Unlike the
+     * self-gating badges endpoint above, these routes are gated explicitly on
+     * dashboard.action_center.view: the SPA guard is UX only, and a revoked
+     * permission must also close the API (backend enforces independently).
+     * The old GET /exceptions endpoint was removed when approvals left the
+     * queue — without the approval category it was identical to /action-center.
+     */
+    Route::get('/action-center',  [ActionCenterController::class, 'index'])
+        ->middleware('permission:dashboard.action_center.view');
+    Route::patch('/action-center/tasks', [ActionCenterTaskController::class, 'update'])
+        ->middleware('permission:dashboard.action_center.view');
     Route::get('/rollout-health', [RolloutHealthController::class, 'index'])
         ->middleware('permission:dashboard.admin.view');
 

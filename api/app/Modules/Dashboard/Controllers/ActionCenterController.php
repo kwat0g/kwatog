@@ -16,16 +16,4 @@ class ActionCenterController
     {
         return response()->json(['data' => $this->service->for($request->user())]);
     }
-
-    public function exceptions(Request $request): JsonResponse
-    {
-        $data = $this->service->for($request->user());
-        $data['items'] = array_values(array_filter(
-            $data['items'],
-            fn (array $item): bool => ! in_array($item['category'], ['approval'], true),
-        ));
-        $data['summary']['total'] = count($data['items']);
-
-        return response()->json(['data' => $data]);
-    }
 }

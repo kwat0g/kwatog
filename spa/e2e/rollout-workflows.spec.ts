@@ -106,11 +106,9 @@ test.describe('Operational rollout workflows', () => {
       summary: { total: 1, critical: 0, high: 1, overdue: 1, owned_by_me: assigned ? 1 : 0, unassigned: assigned ? 0 : 1, by_category: { quality: 1 } },
       generated_at: '2026-07-28T00:00:00Z',
     } });
-    // The standalone /exceptions page was folded into the Action Center on
-    // 2026-08-08 — same queue with approvals filtered out — and its route was
-    // deleted, so this test had been loading the SPA's not-found page and never
-    // reaching an assertion. The bulk triage it covers now lives behind
-    // ?scope=exceptions, fed by the Action Center endpoint.
+    // Bulk triage lives on the Action Center itself (2026-09: approvals left
+    // the queue for the Approval Queue, so the old ?scope=exceptions toggle
+    // lost its reason to exist and the triage bar is always on).
     await page.route('**/api/v1/dashboards/action-center', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(response()) }));
     // Captured, asserted in the body — same reason as the scanner test, one
     // degree worse: a throw here also skips `assigned = true`, so the mock keeps
@@ -123,10 +121,9 @@ test.describe('Operational rollout workflows', () => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) });
     });
 
-    await loginAs(page, 'warehouse', '/action-center?scope=exceptions');
+    await loginAs(page, 'warehouse', '/action-center');
     await page.getByLabel('Select Resolve NCR NCR-001').check();
-    await page.getByRole('button', { name: 'Claim' }).click();
-    // The folded page words the owner line "Assigned: <name>".
+    await page.getByRole('button', { name: 'Claim', exact: true }).click();
     await expect(page.getByText('Assigned: Warehouse Staff')).toBeVisible();
     // The re-rendered owner line only happens after the POST, so the capture is
     // settled: one claim, carrying the row that was checked.

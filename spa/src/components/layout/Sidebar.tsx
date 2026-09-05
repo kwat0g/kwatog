@@ -37,6 +37,7 @@ import {
   LuMonitor,
   LuDatabase,
   LuListChecks,
+  LuStore,
 } from '@/lib/icons';
 import {
   WorkflowIcon,
@@ -128,10 +129,13 @@ export const SECTIONS: NavSection[] = [
     label: 'Overview',
     items: [
       { to: '/dashboard', label: 'Dashboard', icon: LuLayoutDashboard },
-      { to: '/action-center', label: 'Action Center', icon: LuListChecks, badgeKey: 'action_center' },
-      // /exceptions removed 2026-08-08 (scope cut — folded into Action Center as
-      // the 'Exceptions' scope toggle, which filters out approvals exactly like the
-      // old ActionCenterService::exceptions endpoint. Page file kept.)
+      {
+        to: '/action-center',
+        label: 'Action Center',
+        icon: LuListChecks,
+        permission: 'dashboard.action_center.view',
+        badgeKey: 'action_center',
+      },
       { to: '/dashboard/scorecard', label: 'KPI Scorecard', icon: LuChartColumnIncreasing },
       {
         to: '/chains',
@@ -303,6 +307,13 @@ export const SECTIONS: NavSection[] = [
         feature: 'purchasing',
         permission: 'purchasing.view',
       },
+      {
+        to: '/purchasing/supplier-listings',
+        label: 'Supplier Listings',
+        icon: LuClipboardList,
+        feature: 'purchasing',
+        permission: 'purchasing.view',
+      },
     ],
   },
   {
@@ -470,6 +481,13 @@ export const SECTIONS: NavSection[] = [
         feature: 'accounting',
         permission: 'accounting.bills.view',
         badgeKey: 'overdue_bills',
+      },
+      {
+        to: '/accounting/vendors',
+        label: 'Vendors',
+        icon: LuStore,
+        feature: 'accounting',
+        permission: 'accounting.vendors.view',
       },
       {
         to: '/accounting/income-statement',

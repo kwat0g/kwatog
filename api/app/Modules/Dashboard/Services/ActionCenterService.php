@@ -5,11 +5,10 @@ declare(strict_types=1);
 namespace App\Modules\Dashboard\Services;
 
 use App\Common\Models\Alert;
-use App\Common\Services\ApprovalBoardService;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
-use App\Modules\Dashboard\Models\ActionCenterTask;
 use App\Modules\Dashboard\Enums\ActionCategory;
+use App\Modules\Dashboard\Models\ActionCenterTask;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Quality\Models\Inspection;
@@ -20,7 +19,15 @@ use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
- * A permission-aware, cross-module queue of work that needs attention.
+ * A permission-aware, cross-module queue of OPERATIONAL work that needs
+ * attention — alerts, quality, maintenance, production and deliveries.
+ *
+ * Approvals deliberately do NOT belong here (removed 2026-09): the Approval
+ * Queue (/approvals, ApprovalBoardService) is the authoritative approvals
+ * surface with its own history columns, redaction and per-type view checks.
+ * Duplicating pending approvals as action-center items also let ANY role
+ * snooze/resolve them out of everyone's queue, because approval task keys
+ * were gated only on the cross-cutting approvals.board.view permission.
  *
  * Each source is isolated so an optional module or a transient source failure
  * cannot prevent users from seeing the rest of their queue.
@@ -28,7 +35,6 @@ use Throwable;
 class ActionCenterService
 {
     public function __construct(
-        private readonly ApprovalBoardService $approvals,
         private readonly SettingsService $settings,
     ) {}
 
@@ -46,13 +52,16 @@ class ActionCenterService
     {
         $items = [];
 
-        $this->append($items, 'approvals', fn () => $this->approvalItems($user), $user, ['approvals.board.view']);
         $this->append($items, 'alerts', fn () => $this->alertItems(), $user, ['alerts.view']);
-        $this->append($items, 'inspections', fn () => $this->inspectionItems(), $user, ['quality.view', 'quality.inspections.view']);
-        $this->append($items, 'ncrs', fn () => $this->ncrItems(), $user, ['quality.view', 'quality.ncr.view']);
+        // Source gates mirror the owning module's READ routes exactly, so the
+        // queue can never surface a row the module list endpoint would refuse:
+        // quality splits inspections/NCRs like Quality/routes.php, deliveries
+        // accept the narrow deliveries slug like SupplyChain/routes.php.
+        $this->append($items, 'inspections', fn () => $this->inspectionItems(), $user, ['quality.inspections.view']);
+        $this->append($items, 'ncrs', fn () => $this->ncrItems(), $user, ['quality.ncr.view']);
         $this->append($items, 'maintenance', fn () => $this->maintenanceItems(), $user, ['maintenance.view']);
         $this->append($items, 'production', fn () => $this->productionItems(), $user, ['production.work_orders.view']);
-        $this->append($items, 'deliveries', fn () => $this->deliveryItems(), $user, ['supply_chain.view']);
+        $this->append($items, 'deliveries', fn () => $this->deliveryItems(), $user, ['supply_chain.view', 'supply_chain.deliveries.view']);
 
         $items = $this->overlayTaskState($items);
 
@@ -91,16 +100,27 @@ class ActionCenterService
         if ($items === []) {
             return [];
         }
-        $tasks = ActionCenterTask::query()->with('assignee:id,name')
+        $tasks = ActionCenterTask::query()->with(['assignee:id,name', 'updater:id,name'])
             ->whereIn('item_key', array_column($items, 'id'))->get()->keyBy('item_key');
 
         $visible = [];
         foreach ($items as $item) {
             $task = $tasks->get($item['id']);
-            if ($task?->state === 'resolved') {
-                continue;
-            }
-            if ($task?->state === 'snoozed' && $task->snoozed_until?->isFuture()) {
+            $hidden = $task !== null && (
+                $task->state === 'resolved'
+                || ($task->state === 'snoozed' && $task->snoozed_until?->isFuture())
+            );
+            /*
+             * A hide only outlives the record it hid. If the source record
+             * changed after the snooze/resolve (CAPA added to the NCR, output
+             * logged on the work order, alert re-raised), the triage decision
+             * was about a previous version of the work — so the item
+             * re-enters the queue as open instead of staying buried. Read-only
+             * by design: the stale row is simply rendered as open until
+             * somebody acts on it again.
+             */
+            $hideStale = $hidden && $this->recordChangedAfterHide($task, $item);
+            if ($hidden && ! $hideStale) {
                 continue;
             }
 
@@ -114,17 +134,48 @@ class ActionCenterService
                 $item['is_overdue'] = Carbon::parse($item['due_at'])->isPast();
             }
 
-            $item['task_state'] = $task?->state ?? 'open';
-            $item['task_state_label'] = $this->humanize((string) $item['task_state']);
-            $item['assigned_to'] = $task?->assignee ? [
-                'id' => $task->assignee->hash_id,
-                'name' => $task->assignee->name,
-            ] : null;
-            $item['snoozed_until'] = $task?->snoozed_until?->toIso8601String();
+            if ($hideStale) {
+                $item['task_state'] = 'open';
+                $item['task_state_label'] = $this->humanize('open');
+                $item['assigned_to'] = $task->assignee ? [
+                    'id' => $task->assignee->hash_id,
+                    'name' => $task->assignee->name,
+                ] : null;
+                $item['updated_by'] = null;
+                $item['snoozed_until'] = null;
+            } else {
+                $item['task_state'] = $task?->state ?? 'open';
+                $item['task_state_label'] = $this->humanize((string) $item['task_state']);
+                $item['assigned_to'] = $task?->assignee ? [
+                    'id' => $task->assignee->hash_id,
+                    'name' => $task->assignee->name,
+                ] : null;
+                // Shared queue transparency: a snooze/resolve hides the item for
+                // EVERY role, so every role must be able to see who did it.
+                $item['updated_by'] = $task?->updater ? [
+                    'id' => $task->updater->hash_id,
+                    'name' => $task->updater->name,
+                ] : null;
+                $item['snoozed_until'] = $task?->snoozed_until?->toIso8601String();
+            }
             $visible[] = $item;
         }
 
         return $visible;
+    }
+
+    /** @param array<string, mixed> $item */
+    private function recordChangedAfterHide(ActionCenterTask $task, array $item): bool
+    {
+        if (! $task->updated_at) {
+            return false;
+        }
+        $updatedAt = $item['updated_at'] ?? null;
+        if (! is_string($updatedAt) || $updatedAt === '') {
+            return false;
+        }
+
+        return Carbon::parse($updatedAt)->gt($task->updated_at);
     }
 
     /** @param array<int, array<string, mixed>> $items @param array<int, string> $permissions */
@@ -139,32 +190,6 @@ class ActionCenterService
         } catch (Throwable $e) {
             Log::warning("ActionCenterService source {$source} skipped", ['exception' => $e]);
         }
-    }
-
-    /** @return array<int, array<string, mixed>> */
-    private function approvalItems(User $user): array
-    {
-        $overdueHours = $this->settings->requiredInt('approvals.reminder_hours', 1);
-        $criticalHours = $this->settings->requiredInt('approvals.escalation_hours', $overdueHours);
-        return array_map(function (array $card) use ($overdueHours, $criticalHours): array {
-            $age = (int) $card['age_hours'];
-
-            return $this->item(
-                id: 'approval:'.$card['type'].':'.$card['id'],
-                category: 'approval',
-                kind: (string) $card['type'],
-                title: 'Approve '.$this->approvalLabel((string) $card['type']).' '.$card['number'],
-                description: (string) ($card['summary'] ?: 'Approval is waiting for your role.'),
-                reference: (string) $card['number'],
-                priority: $age >= $criticalHours ? 'critical' : ($age >= $overdueHours ? 'high' : 'medium'),
-                status: 'Waiting for you',
-                link: (string) $card['link'],
-                createdAt: (string) $card['since'],
-                dueAt: null,
-                overdue: $age >= $overdueHours,
-                owner: $card['requester']['name'] ?? null,
-            );
-        }, $this->approvals->board($user)['my_action']);
     }
 
     /** @return array<int, array<string, mixed>> */
@@ -184,6 +209,7 @@ class ActionCenterService
                 status: $alert->is_read ? 'Active' : 'New alert',
                 link: '/alerts',
                 createdAt: $alert->created_at?->toIso8601String(),
+                updatedAt: $alert->updated_at?->toIso8601String(),
                 dueAt: null,
                 overdue: $severity === 'critical' && $alert->created_at?->lt(now()->subHours(4)),
                 owner: null,
@@ -195,6 +221,7 @@ class ActionCenterService
     private function inspectionItems(): array
     {
         $slaHours = $this->actionCenterSlaHours('quality');
+
         return Inspection::query()->with(['item:id,name', 'product:id,name', 'inspector:id,name'])
             ->whereIn('status', ['draft', 'in_progress'])->oldest()->limit($this->sourceLimit())->get()
             ->map(function (Inspection $inspection) use ($slaHours): array {
@@ -211,7 +238,8 @@ class ActionCenterService
                     priority: $stage === 'incoming' || $age >= $slaHours ? 'high' : 'medium',
                     status: $this->humanize($this->enumValue($inspection->status)),
                     link: '/quality/inspections/'.$inspection->hash_id,
-                    createdAt: $inspection->created_at?->toIso8601String(), dueAt: null,
+                    createdAt: $inspection->created_at?->toIso8601String(),
+                    updatedAt: $inspection->updated_at?->toIso8601String(), dueAt: null,
                     overdue: $age >= $slaHours,
                     owner: $inspection->inspector?->name,
                 );
@@ -244,6 +272,7 @@ class ActionCenterService
                     status: $this->humanize($this->enumValue($ncr->status)),
                     link: '/quality/ncrs/'.$ncr->hash_id,
                     createdAt: $ncr->created_at?->toIso8601String(),
+                    updatedAt: $ncr->updated_at?->toIso8601String(),
                     dueAt: $ncr->created_at?->copy()->addHours($sla)->toIso8601String(),
                     overdue: $age >= $sla,
                     owner: $ncr->assignee?->name,
@@ -268,7 +297,8 @@ class ActionCenterService
                     priority: in_array($priority, ['critical', 'high', 'medium', 'low'], true) ? $priority : 'medium',
                     status: $this->humanize($this->enumValue($workOrder->status)),
                     link: '/maintenance/work-orders/'.$workOrder->hash_id,
-                    createdAt: $workOrder->created_at?->toIso8601String(), dueAt: null,
+                    createdAt: $workOrder->created_at?->toIso8601String(),
+                    updatedAt: $workOrder->updated_at?->toIso8601String(), dueAt: null,
                     overdue: $age >= ($priority === 'critical'
                         ? $this->settings->requiredInt('action_center.production.critical_sla_hours', 1)
                         : $this->settings->requiredInt('action_center.production.default_sla_hours', 1)),
@@ -290,6 +320,7 @@ class ActionCenterService
     private function productionItems(): array
     {
         $criticalHours = $this->settings->requiredInt('action_center.production.critical_sla_hours', 1);
+
         return WorkOrder::query()->with('product:id,name')->whereIn('status', ['confirmed', 'in_progress'])
             ->whereNotNull('planned_end')->where('planned_end', '<', now())->oldest('planned_end')->limit($this->sourceLimit())->get()
             ->map(function (WorkOrder $workOrder) use ($criticalHours): array {
@@ -305,6 +336,7 @@ class ActionCenterService
                     status: $this->humanize($this->enumValue($workOrder->status)),
                     link: '/production/work-orders/'.$workOrder->hash_id,
                     createdAt: $workOrder->created_at?->toIso8601String(),
+                    updatedAt: $workOrder->updated_at?->toIso8601String(),
                     dueAt: $workOrder->planned_end?->toIso8601String(), overdue: true, owner: null,
                 );
             })->all();
@@ -327,6 +359,7 @@ class ActionCenterService
                     priority: $overdue ? 'high' : 'medium', status: $this->humanize($status),
                     link: '/supply-chain/deliveries/'.$delivery->hash_id,
                     createdAt: $delivery->created_at?->toIso8601String(),
+                    updatedAt: $delivery->updated_at?->toIso8601String(),
                     dueAt: $delivery->scheduled_date?->toIso8601String(), overdue: (bool) $overdue,
                     owner: $delivery->driver?->name,
                 );
@@ -341,7 +374,7 @@ class ActionCenterService
     /** @return array<string, mixed> */
     private function item(string $id, string $category, string $kind, string $title, string $description,
         ?string $reference, string $priority, string $status, string $link, ?string $createdAt,
-        ?string $dueAt, bool $overdue, ?string $owner): array
+        ?string $updatedAt, ?string $dueAt, bool $overdue, ?string $owner): array
     {
         $created = $createdAt ? Carbon::parse($createdAt) : null;
 
@@ -350,6 +383,7 @@ class ActionCenterService
             'description' => $description, 'reference' => $reference, 'priority' => $priority,
             'priority_label' => $this->humanize($priority),
             'status_label' => $status, 'link' => $link, 'created_at' => $createdAt,
+            'updated_at' => $updatedAt,
             'due_at' => $dueAt, 'age_hours' => $created ? (int) $created->diffInHours(now(), true) : null,
             'is_overdue' => $overdue, 'owner_label' => $owner,
         ];
@@ -375,11 +409,5 @@ class ActionCenterService
     private function humanize(string $value): string
     {
         return ucfirst(str_replace('_', ' ', $value));
-    }
-
-    private function approvalLabel(string $kind): string
-    {
-        return ['pr' => 'purchase request', 'po' => 'purchase order', 'leave' => 'leave request',
-            'loan' => 'employee loan', 'payroll' => 'payroll period'][$kind] ?? $kind;
     }
 }

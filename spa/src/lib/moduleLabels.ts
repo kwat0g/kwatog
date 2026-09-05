@@ -10,10 +10,9 @@
  * titleize().
  */
 export const MODULE_LABELS: Record<string, string> = {
- dashboard: 'Dashboard',
- 'action-center': 'Action Center',
- exceptions: 'Exception Workbench',
- alerts: 'Alerts',
+  dashboard: 'Dashboard',
+  'action-center': 'Action Center',
+  alerts: 'Alerts',
  calendar: 'Calendar',
  approvals: 'Approvals',
  notifications: 'Notifications',

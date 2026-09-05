@@ -188,7 +188,9 @@ class BadgeService
             ],
 
             'action_center' => [
-                'permissions' => [],
+                // Same slug that gates the action-center routes — a role that
+                // cannot open the queue must not carry its badge either.
+                'permissions' => ['dashboard.action_center.view'],
                 'label'       => 'Action Center',
                 'description' => 'Open items needing attention',
                 'counter' => fn (): int => (int) app(ActionCenterService::class)->for($user)['summary']['total'],

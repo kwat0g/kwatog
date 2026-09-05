@@ -35,7 +35,10 @@ class ActionCenterTaskController
             'item_ids' => ['required', 'array', 'min:1', 'max:100'],
             'item_ids.*' => ['required', 'string', 'max:190'],
             'action' => ['required', 'in:claim,unclaim,acknowledge,snooze,resolve,reopen'],
-            'snoozed_until' => ['nullable', 'required_if:action,snooze', 'date', 'after:now'],
+            // Snooze hides the item for EVERY role (shared queue), so it is
+            // bounded to 30 days — an unbounded snooze was an indefinite
+            // global hide that nobody else could see or undo from the UI.
+            'snoozed_until' => ['nullable', 'required_if:action,snooze', 'date', 'after:now', 'before_or_equal:+30 days'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
 

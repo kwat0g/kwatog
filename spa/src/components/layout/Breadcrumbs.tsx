@@ -28,10 +28,9 @@ import { MODULE_LABELS } from '@/lib/moduleLabels';
 // the global breadcrumb at the supported entry surface so every ancestor is a
 // real destination instead of generating dead links such as /hr or /admin.
 const MODULE_PATHS: Record<string, string> = {
- dashboard: '/dashboard',
- 'action-center': '/action-center',
- exceptions: '/exceptions',
- alerts: '/alerts',
+  dashboard: '/dashboard',
+  'action-center': '/action-center',
+  alerts: '/alerts',
  calendar: '/calendar',
  approvals: '/approvals',
  notifications: '/notifications',
