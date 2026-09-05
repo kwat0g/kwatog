@@ -343,6 +343,44 @@ export interface DeliveryScheduleLine {
  notes?: string;
 }
 
+// ── Supplier Item Listings (supplier-submitted offers) ─────
+
+export interface PortalItemCatalogEntry {
+ id: string;
+ code: string;
+ name: string;
+ unit_of_measure: string;
+}
+
+export type PortalListingStatus = 'pending' | 'approved' | 'rejected' | 'superseded';
+
+export interface PortalSupplierListing {
+ id: string;
+ item?: { id: string; code: string; name: string; unit_of_measure: string };
+ supplier_item_code: string | null;
+ supplier_item_name: string | null;
+ price: string;
+ order_uom: string | null;
+ base_qty_per_order_unit: string | null;
+ lead_time_days: number;
+ valid_until: string | null;
+ status: PortalListingStatus;
+ rejection_reason: string | null;
+ submitted_at: string | null;
+ reviewed_at: string | null;
+}
+
+export interface PortalSupplierListingInput {
+ item_id?: string;
+ supplier_item_code?: string | null;
+ supplier_item_name?: string | null;
+ price: string;
+ order_uom?: string | null;
+ base_qty_per_order_unit?: string | null;
+ lead_time_days: number;
+ valid_until?: string | null;
+}
+
 export interface DeliverySchedule {
  id: string;
  month: string;

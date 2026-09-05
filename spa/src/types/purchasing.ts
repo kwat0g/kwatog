@@ -256,6 +256,34 @@ export interface ApprovedSupplier {
   lead_time_days: number;
   last_price: string | null;
   last_price_at: string | null;
+  supplier_item_code?: string | null;
+  supplier_item_name?: string | null;
+  order_uom?: string | null;
+  base_qty_per_order_unit?: string | null;
+  price_valid_until?: string | null;
+  supplier_managed?: boolean;
+}
+
+/* ─── Supplier Item Listings (supplier-submitted offers) ───────── */
+
+export type SupplierListingStatus = 'pending' | 'approved' | 'rejected' | 'superseded';
+
+export interface SupplierItemListing {
+  id: string;
+  item?: { id: string; code: string; name: string; unit_of_measure: string };
+  vendor?: { id: string; name: string };
+  supplier_item_code: string | null;
+  supplier_item_name: string | null;
+  price: string;
+  order_uom: string | null;
+  base_qty_per_order_unit: string | null;
+  lead_time_days: number;
+  valid_until: string | null;
+  status: SupplierListingStatus;
+  rejection_reason: string | null;
+  submitted_at: string | null;
+  reviewed_at: string | null;
+  reviewer?: { id: string; name: string } | null;
 }
 
 /* ─── ADV5 — Procurement Chain Overview ─────────────────────────── */

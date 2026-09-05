@@ -6,6 +6,7 @@ use App\Common\Controllers\BusinessPolicyController;
 use App\Modules\B2B\Controllers\CustomerAuthController;
 use App\Modules\B2B\Controllers\CustomerPortalController;
 use App\Modules\B2B\Controllers\SupplierAuthController;
+use App\Modules\B2B\Controllers\SupplierListingPortalController;
 use App\Modules\B2B\Controllers\SupplierPortalController;
 use App\Modules\B2B\Controllers\PortalAccessController;
 use Illuminate\Support\Facades\Route;
@@ -48,6 +49,11 @@ Route::prefix('b2b/supplier')->group(function () {
         Route::get('statement-of-account', [SupplierPortalController::class, 'statementOfAccount']);
         Route::get('delivery-schedules', [SupplierPortalController::class, 'deliverySchedules']);
         Route::post('delivery-schedules', [SupplierPortalController::class, 'storeDeliverySchedule']);
+        // Supplier Item Listings — supplier-submitted offers, reviewed by Purchasing.
+        Route::get('item-catalog', [SupplierListingPortalController::class, 'catalog']);
+        Route::get('item-listings', [SupplierListingPortalController::class, 'index']);
+        Route::post('item-listings', [SupplierListingPortalController::class, 'store']);
+        Route::put('item-listings/{supplierItemListing}', [SupplierListingPortalController::class, 'update']);
         // PPAP submissions (read-only, scoped to this supplier).
         Route::get('ppap-submissions', [SupplierPortalController::class, 'ppapSubmissions']);
         });

@@ -89,7 +89,12 @@ export default function ApprovedSuppliersPage() {
  const columns: Column<ApprovedSupplier>[] = [
  { key: 'item', header: 'Item', cell: (r) => <span className="font-mono">{r.item.code}</span> },
  { key: 'name', header: 'Name', cell: (r) => r.item.name },
- { key: 'vendor', header: 'Vendor', cell: (r) => r.vendor.name },
+  { key: 'vendor', header: 'Vendor', cell: (r) => r.vendor.name },
+  { key: 'supplier_code', header: 'Their part no.', cell: (r) => (
+  r.supplier_item_code
+  ? <span className="font-mono" title={r.supplier_item_name ?? undefined}>{r.supplier_item_code}</span>
+  : <span className="text-muted">—</span>
+  ) },
  { key: 'preferred', header: 'Preferred', cell: (r) => (
  <Button
  type="button"
@@ -104,7 +109,18 @@ export default function ApprovedSuppliersPage() {
  />
  ) },
  { key: 'lead', header: 'Lead time', align: 'right', cell: (r) => <NumCell>{r.lead_time_days}d</NumCell> },
- { key: 'price', header: 'Last price', align: 'right', cell: (r) => <NumCell>{r.last_price ? formatPeso(r.last_price) : '—'}</NumCell> },
+  { key: 'price', header: 'Last price', align: 'right', cell: (r) => (
+  <div>
+  <NumCell>{r.last_price ? formatPeso(r.last_price) : '—'}</NumCell>
+  {r.supplier_managed && r.price_valid_until && (
+  <div className="text-2xs text-muted">
+  valid until {r.price_valid_until}
+  {new Date(r.price_valid_until) < new Date() && <span className="text-danger-fg font-medium"> · expired</span>}
+  </div>
+  )}
+  {r.supplier_managed && !r.price_valid_until && <div className="text-2xs text-muted">supplier-listed</div>}
+  </div>
+  ) },
  { key: 'perf', header: 'Performance', cell: (r) => (
  <Link
  to={`/purchasing/suppliers/${r.vendor.id}/performance`}

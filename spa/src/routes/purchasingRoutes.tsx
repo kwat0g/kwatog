@@ -11,6 +11,7 @@ const PurchaseOrdersListPage = lazy(() => import('@/pages/purchasing/purchase-or
 const CreatePurchaseOrderPage = lazy(() => import('@/pages/purchasing/purchase-orders/create'));
 const PurchaseOrderDetailPage = lazy(() => import('@/pages/purchasing/purchase-orders/detail'));
 const ApprovedSuppliersPage = lazy(() => import('@/pages/purchasing/approved-suppliers'));
+const SupplierListingsReviewPage = lazy(() => import('@/pages/purchasing/supplier-listings'));
 
 // ADV6 — PR Templates (pages hidden 2026-08-08, scope cut — files kept)
 
@@ -82,6 +83,16 @@ export const purchasingRoutes = (
         element={
           <PermissionGuard permission="purchasing.view">
             <ApprovedSuppliersPage />
+          </PermissionGuard>
+        }
+      />
+
+      {/* Supplier Item Listings — supplier-submitted offers, reviewed by Purchasing */}
+      <Route
+        path="/purchasing/supplier-listings"
+        element={
+          <PermissionGuard permission="purchasing.view">
+            <SupplierListingsReviewPage />
           </PermissionGuard>
         }
       />

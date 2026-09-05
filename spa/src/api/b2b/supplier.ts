@@ -11,6 +11,9 @@ import type {
  SubmittedBill,
  VendorStatementOfAccount,
  DeliverySchedule,
+ PortalItemCatalogEntry,
+ PortalSupplierListing,
+ PortalSupplierListingInput,
 } from '@/types/b2b';
 import type { PaginatedResponse } from '@/types';
 import type { BusinessPolicies } from '@/api/businessPolicies';
@@ -78,7 +81,7 @@ export const supplierPortalApi = {
  },
 
  // ── Purchase Orders ────────────────────────────────
- listPos: async (params?: { status?: string; search?: string; page?: number; per_page?: number }) => {
+  listPos: async (params?: { status?: string; search?: string; page?: number; per_page?: number; sort?: string; dir?: 'asc' | 'desc' }) => {
  const { data } = await portalClient.get<PaginatedResponse<PortalPoSummary>>('/b2b/supplier/purchase-orders', { params });
  return data;
  },
@@ -185,6 +188,27 @@ export const supplierPortalApi = {
  form
  );
  return data;
+ },
+
+ // ── Item Catalog + Supplier Item Listings ─────────
+ itemCatalog: async () => {
+ const { data } = await portalClient.get<{ data: PortalItemCatalogEntry[] }>('/b2b/supplier/item-catalog');
+ return data.data;
+ },
+
+ listItemListings: async (params?: { page?: number; per_page?: number; status?: string }) => {
+ const { data } = await portalClient.get<PaginatedResponse<PortalSupplierListing>>('/b2b/supplier/item-listings', { params });
+ return data;
+ },
+
+ createItemListing: async (form: PortalSupplierListingInput) => {
+ const { data } = await portalClient.post<{ data: PortalSupplierListing }>('/b2b/supplier/item-listings', form);
+ return data.data;
+ },
+
+ updateItemListing: async (id: string, form: PortalSupplierListingInput) => {
+ const { data } = await portalClient.put<{ data: PortalSupplierListing }>(`/b2b/supplier/item-listings/${id}`, form);
+ return data.data;
  },
 
 };

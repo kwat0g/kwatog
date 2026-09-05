@@ -17,6 +17,11 @@ class SupplierPortalUser extends Authenticatable
 {
     use HasApiTokens, HasFactory, HasHashId, Notifiable, SoftDeletes;
 
+    protected static function newFactory(): \Database\Factories\SupplierPortalUserFactory
+    {
+        return \Database\Factories\SupplierPortalUserFactory::new();
+    }
+
     protected $fillable = [
         'vendor_id',
         'name',

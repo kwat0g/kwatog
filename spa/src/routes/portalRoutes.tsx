@@ -21,6 +21,7 @@ const SupplierInvoiceDetailPage = lazy(() => import('@/pages/portal/supplier/inv
 const SupplierDeliveriesPage = lazy(() => import('@/pages/portal/supplier/deliveries'));
 const SupplierStatementOfAccountPage = lazy(() => import('@/pages/portal/supplier/statement-of-account'));
 const SupplierDeliverySchedulesPage = lazy(() => import('@/pages/portal/supplier/delivery-schedules'));
+const SupplierItemListingsPage = lazy(() => import('@/pages/portal/supplier/item-listings'));
 const CustomerPortalLayout = lazy(() => import('@/layouts/CustomerPortalLayout'));
 const CustomerPortalLoginPage = lazy(() => import('@/pages/portal/customer/login'));
 const CustomerPortalDashboardPage = lazy(() => import('@/pages/portal/customer/dashboard'));
@@ -53,8 +54,9 @@ export const portalRoutes = (
  <Route path="/portal/supplier/invoices/:id" element={<SupplierInvoiceDetailPage />} />
  <Route path="/portal/supplier/deliveries" element={<SupplierDeliveriesPage />} />
  <Route path="/portal/supplier/statement-of-account" element={<SupplierStatementOfAccountPage />} />
- <Route path="/portal/supplier/delivery-schedules" element={<SupplierDeliverySchedulesPage />} />
- </Route>
+  <Route path="/portal/supplier/delivery-schedules" element={<SupplierDeliverySchedulesPage />} />
+  <Route path="/portal/supplier/item-listings" element={<SupplierItemListingsPage />} />
+  </Route>
 
  {/* ADV10 — B2B Customer Portal */}
  <Route element={<CustomerPortalLayout />}>

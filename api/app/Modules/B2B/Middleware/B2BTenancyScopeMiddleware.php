@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Modules\B2B\Middleware;
 
-use Closure;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\B2B\Models\DeliverySchedule;
@@ -13,8 +12,10 @@ use App\Modules\CRM\Models\CustomerComplaint;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Models\SupplierItemListing;
 use App\Modules\Quality\Models\PpapSubmission;
 use App\Modules\SupplyChain\Models\Delivery;
+use Closure;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 
@@ -26,7 +27,7 @@ class B2BTenancyScopeMiddleware
             $customerId = auth('customer_portal')->user()->customer_id;
 
             $scope = function (Builder $builder) use ($customerId) {
-                $builder->where($builder->getModel()->getTable() . '.customer_id', $customerId);
+                $builder->where($builder->getModel()->getTable().'.customer_id', $customerId);
             };
 
             SalesOrder::addGlobalScope('b2b_tenancy', $scope);
@@ -43,7 +44,7 @@ class B2BTenancyScopeMiddleware
             $vendorId = auth('supplier_portal')->user()->vendor_id;
 
             $scope = function (Builder $builder) use ($vendorId) {
-                $builder->where($builder->getModel()->getTable() . '.vendor_id', $vendorId);
+                $builder->where($builder->getModel()->getTable().'.vendor_id', $vendorId);
             };
 
             PurchaseOrder::addGlobalScope('b2b_tenancy', $scope);
@@ -51,6 +52,7 @@ class B2BTenancyScopeMiddleware
             DeliverySchedule::addGlobalScope('b2b_tenancy', $scope);
             GoodsReceiptNote::addGlobalScope('b2b_tenancy', $scope);
             PpapSubmission::addGlobalScope('b2b_tenancy', $scope);
+            SupplierItemListing::addGlobalScope('b2b_tenancy', $scope);
 
             PortalShippingDocument::addGlobalScope('b2b_tenancy', function (Builder $builder) use ($vendorId) {
                 $builder->whereHas('purchaseOrder', function ($q) use ($vendorId) {

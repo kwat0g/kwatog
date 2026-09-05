@@ -19,6 +19,7 @@ class SupplierPortalUserFactory extends Factory
             'name'      => fake()->name(),
             'email'     => fake()->unique()->safeEmail(),
             'password'  => bcrypt('password'),
+            'is_active' => true,
         ];
     }
 }

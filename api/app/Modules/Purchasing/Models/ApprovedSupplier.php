@@ -15,18 +15,23 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class ApprovedSupplier extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog, SoftDeletes;
+    use HasAuditLog, HasFactory, HasHashId, SoftDeletes;
 
     protected $fillable = [
         'item_id', 'vendor_id', 'is_preferred',
         'lead_time_days', 'last_price', 'last_price_at',
+        'supplier_item_code', 'supplier_item_name',
+        'order_uom', 'base_qty_per_order_unit',
+        'price_valid_until', 'supplier_listing_id',
     ];
 
     protected $casts = [
-        'is_preferred'   => 'boolean',
+        'is_preferred' => 'boolean',
         'lead_time_days' => 'integer',
-        'last_price'     => 'decimal:2',
-        'last_price_at'  => 'datetime',
+        'last_price' => 'decimal:2',
+        'last_price_at' => 'datetime',
+        'base_qty_per_order_unit' => 'decimal:4',
+        'price_valid_until' => 'date',
     ];
 
     public function item(): BelongsTo

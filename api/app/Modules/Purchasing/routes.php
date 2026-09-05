@@ -6,6 +6,7 @@ use App\Modules\Purchasing\Controllers\ApprovedSupplierController;
 use App\Modules\Purchasing\Controllers\ProcurementChainController;
 use App\Modules\Purchasing\Controllers\PurchaseOrderController;
 use App\Modules\Purchasing\Controllers\PurchaseRequestController;
+use App\Modules\Purchasing\Controllers\SupplierListingController;
 use App\Modules\Purchasing\Controllers\SupplierPerformanceController;
 use App\Modules\Purchasing\Controllers\ThreeWayMatchController;
 use Illuminate\Support\Facades\Route;
@@ -76,6 +77,11 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
     Route::put('/approved-suppliers/{approvedSupplier}', [ApprovedSupplierController::class, 'update'])->middleware('permission:purchasing.po.create');
     Route::delete('/approved-suppliers/{approvedSupplier}', [ApprovedSupplierController::class, 'destroy'])->middleware('permission:purchasing.po.create');
     Route::patch('/approved-suppliers/{approvedSupplier}/restore', [ApprovedSupplierController::class, 'restore'])->middleware('permission:purchasing.suppliers.manage');
+
+    /* ─── Supplier Item Listings (supplier-submitted offers, reviewed here) ─── */
+    Route::get('/supplier-listings', [SupplierListingController::class, 'index'])->middleware('permission:purchasing.view');
+    Route::patch('/supplier-listings/{supplierItemListing}/approve', [SupplierListingController::class, 'approve'])->middleware('permission:purchasing.supplier_listings.review');
+    Route::patch('/supplier-listings/{supplierItemListing}/reject',  [SupplierListingController::class, 'reject'])->middleware('permission:purchasing.supplier_listings.review');
 
     /* ─── 3-way match ─── */
     Route::get('/three-way-match/{bill}',   [ThreeWayMatchController::class, 'show'])->middleware('permission:accounting.bills.view');
