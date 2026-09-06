@@ -81,6 +81,10 @@ class ForecastingService
     /**
      * Compute a single forecast for ($productId, $customerId, $forecastYear, $forecastMonth)
      * using the requested method, persist it (upsert), and return the model.
+     *
+     * Manual overrides are protected: if the stored row's method is `manual`
+     * and $overwriteManual is false, the row is left untouched and null is
+     * returned so callers can report the skipped period.
      */
     public function compute(
         int $productId,
@@ -89,8 +93,9 @@ class ForecastingService
         int $forecastMonth,
         string $method,
         int $lookbackMonths = 6,
-        ?User $user = null
-    ): DemandForecast {
+        ?User $user = null,
+        bool $overwriteManual = false
+    ): ?DemandForecast {
         if (! in_array($method, [DemandForecast::METHOD_MOVING_AVG, DemandForecast::METHOD_WEIGHTED_AVG], true)) {
             throw new InvalidArgumentException('compute() only supports moving_avg or weighted_avg; use storeManual() for manual.');
         }
@@ -102,7 +107,7 @@ class ForecastingService
         [$qty, $confidence] = $this->applyMethod($series, $method);
 
         return DB::transaction(function () use (
-            $productId, $customerId, $forecastYear, $forecastMonth, $method, $qty, $confidence, $user
+            $productId, $customerId, $forecastYear, $forecastMonth, $method, $qty, $confidence, $user, $overwriteManual
         ) {
             $this->lockForecastKey($productId, $customerId, $forecastYear, $forecastMonth);
 
@@ -112,6 +117,10 @@ class ForecastingService
                 ->where('forecast_year', $forecastYear)
                 ->where('forecast_month', $forecastMonth)
                 ->first();
+
+            if ($existing !== null && $existing->method === DemandForecast::METHOD_MANUAL && ! $overwriteManual) {
+                return null;
+            }
 
             $values = [
                 'method'              => $method,
@@ -139,7 +148,8 @@ class ForecastingService
      * Recompute forecasts for the next $horizon months for all active products
      * (and by-customer if requested). Caller decides scope; caller passes an
      * optional callable invoked once per (product, customer) pair so the job
-     * can checkpoint progress.
+     * can checkpoint progress. Manual overrides are skipped (and not counted)
+     * unless $overwriteManual is true, same as compute().
      *
      * @return int Number of forecast rows written.
      */
@@ -149,7 +159,8 @@ class ForecastingService
         string $method,
         ?User $user = null,
         bool $perCustomer = false,
-        int $lookbackMonths = 6
+        int $lookbackMonths = 6,
+        bool $overwriteManual = false
     ): int {
         $written = 0;
 
@@ -171,8 +182,10 @@ class ForecastingService
             foreach ($customerIds as $cid) {
                 $cursor = $startMonth->copy();
                 for ($i = 0; $i < $horizonMonths; $i++) {
-                    $this->compute((int) $pid, $cid !== null ? (int) $cid : null, $cursor->year, $cursor->month, $method, $lookbackMonths, $user);
-                    $written++;
+                    $f = $this->compute((int) $pid, $cid !== null ? (int) $cid : null, $cursor->year, $cursor->month, $method, $lookbackMonths, $user, $overwriteManual);
+                    if ($f !== null) {
+                        $written++;
+                    }
                     $cursor->addMonthNoOverflow();
                 }
             }
