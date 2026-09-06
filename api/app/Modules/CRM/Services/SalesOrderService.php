@@ -56,9 +56,19 @@ class SalesOrderService
      *     therefore rolls back a posted JE, which makes it impossible to bill
      *     a partial delivery or raise an advance invoice.
      *
-     * Backwards and terminal transitions remain absent, and an illegal
-     * transition is a hard error (see transitionOrFail) so the owning
-     * operation rolls back rather than succeeding while the SO goes stale.
+     *   invoiced → delivered / partially_delivered
+     *     Billing is not the physical terminal state. finalize() promotes the
+     *     SO on the FIRST finalized invoice, and per-delivery draft invoices
+     *     mean a partially-billed order usually still has goods to ship. When
+     *     `invoiced` was terminal, confirming the next delivery threw inside
+     *     DeliveryService::confirm()'s transaction and rolled back the whole
+     *     confirmation — the delivery was stuck at `delivered` forever with
+     *     no path forward (CR-01 / SC-01).
+     *
+     * Backwards transitions remain absent — `cancelled` is still the only
+     * terminal state — and an illegal transition is a hard error (see
+     * transitionOrFail) so the owning operation rolls back rather than
+     * succeeding while the SO goes stale.
      *
      * `cancelled` is not a target here on purpose: no mark* helper requests
      * it. Cancellation goes through cancel(), which has its own downstream
@@ -71,7 +81,7 @@ class SalesOrderService
         'in_production'       => ['partially_delivered', 'delivered', 'invoiced'],
         'partially_delivered' => ['delivered', 'invoiced'],
         'delivered'           => ['invoiced'],
-        'invoiced'            => [],
+        'invoiced'            => ['partially_delivered', 'delivered'],
         'cancelled'           => [],
         'draft'               => [],
     ];
