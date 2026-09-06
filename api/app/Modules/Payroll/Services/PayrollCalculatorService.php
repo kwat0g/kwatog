@@ -469,9 +469,12 @@ class PayrollCalculatorService
                 $otPay = Money::add($otPay, Money::mul(Money::mul(Money::mul($otHrs, $hourlyRate), $otPremium), $rate));
             }
 
-            // Night differential: hours × hourly × 0.10 (additive premium)
+            // Night differential (AT-01): hours × hourly × dayRate × ND premium,
+            // where the ND premium is 0.10 of the APPLICABLE hourly rate. `rate`
+            // carries the day-type multiplier exactly as it does for OT above, so
+            // holiday/rest-day night shifts earn ND on the holiday-rated rate.
             if (bccomp($ndHrs, '0', 2) > 0) {
-                $ndPay = Money::add($ndPay, Money::mul(Money::mul($ndHrs, $hourlyRate), $this->nonNegativePolicy('payroll.night_differential_rate')));
+                $ndPay = Money::add($ndPay, Money::mul(Money::mul(Money::mul($ndHrs, $hourlyRate), $this->nonNegativePolicy('payroll.night_differential_rate')), $rate));
             }
 
             // Tardiness / undertime in minutes — convert to hours and deduct.
