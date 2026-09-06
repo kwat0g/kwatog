@@ -60,4 +60,11 @@ final class PurchaseOrderAccessPolicy
             }
         });
     }
+
+    public function canView(User $user, PurchaseOrder $po): bool
+    {
+        return $this->visibleTo(PurchaseOrder::query(), $user)
+            ->whereKey($po->id)
+            ->exists();
+    }
 }
