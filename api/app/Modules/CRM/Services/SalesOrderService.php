@@ -273,7 +273,18 @@ class SalesOrderService
             if ($cid) $q->where('customer_id', $cid);
         }
         if (! empty($filters['status'])) {
-            $q->where('status', $filters['status']);
+            // A single status string or an array (the delivery create form
+            // offers every deliverable status at once:
+            // status[]=confirmed&status[]=in_production&…).
+            $statuses = is_array($filters['status']) ? array_values($filters['status']) : [$filters['status']];
+            foreach ($statuses as $status) {
+                if (! is_string($status) || SalesOrderStatus::tryFrom($status) === null) {
+                    throw ValidationException::withMessages([
+                        'status' => ['The selected status is invalid.'],
+                    ]);
+                }
+            }
+            $q->whereIn('status', $statuses);
         }
         if (! empty($filters['date_from'])) {
             $q->whereDate('date', '>=', $filters['date_from']);

@@ -1,4 +1,4 @@
-/** Sprint 7 — Delivery Create Form. Outbound delivery from confirmed sales order. */
+ /** Sprint 7 — Delivery Create Form. Outbound delivery from a deliverable sales order. */
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useFieldArray } from 'react-hook-form';
@@ -48,10 +48,13 @@ export default function CreateDeliveryPage() {
  const qc = useQueryClient();
 
  // ── Fetch reference data ──
+ // Deliverable set: an SO leaves `confirmed` when its WO starts, and split
+ // deliveries park it in `partially_delivered` — so filtering on `confirmed`
+ // alone hid exactly the orders that are ready to ship (audit SC-02).
  const { data: soData, isLoading: soLoading, isError: soError } = useQuery({
  queryKey: ['crm', 'sales-orders', 'for-delivery'],
  queryFn: () =>
- salesOrdersApi.list({ status: 'confirmed', per_page: 200 }),
+ salesOrdersApi.list({ status: ['confirmed', 'in_production', 'partially_delivered'], per_page: 200 }),
  });
  const soList = soData?.data ?? [];
 
@@ -159,7 +162,7 @@ export default function CreateDeliveryPage() {
  ? 'Loading sales orders…'
  : soError
  ? 'Failed to load sales orders'
- : '— Select confirmed sales order —'}
+ : '— Select deliverable sales order —'}
  </option>
  {soList.map((so) => (
  <option key={so.id} value={so.id}>
