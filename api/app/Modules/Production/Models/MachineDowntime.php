@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Production\Models;
 
 use App\Common\Traits\HasHashId;
+use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\Production\Enums\MachineDowntimeCategory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -21,9 +22,9 @@ class MachineDowntime extends Model
     ];
 
     protected $casts = [
-        'category'         => MachineDowntimeCategory::class,
-        'start_time'       => 'datetime',
-        'end_time'         => 'datetime',
+        'category' => MachineDowntimeCategory::class,
+        'start_time' => 'datetime',
+        'end_time' => 'datetime',
         'duration_minutes' => 'integer',
     ];
 
@@ -35,5 +36,10 @@ class MachineDowntime extends Model
     public function workOrder(): BelongsTo
     {
         return $this->belongsTo(WorkOrder::class);
+    }
+
+    public function maintenanceOrder(): BelongsTo
+    {
+        return $this->belongsTo(MaintenanceWorkOrder::class, 'maintenance_order_id');
     }
 }
