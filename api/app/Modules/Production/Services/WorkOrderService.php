@@ -336,6 +336,7 @@ class WorkOrderService
             if (! in_array($mold->status, [MoldStatus::Available, MoldStatus::InUse], true)) {
                 throw new BusinessRuleException('Assigned mold is not available.');
             }
+            $this->assertMachineNotOccupied($lockedWo, $machine);
 
             $machine->update([
                 'status'                => MachineStatus::Running->value,
@@ -465,12 +466,20 @@ class WorkOrderService
             $machine = $lockedWo->machine_id
                 ? Machine::query()->lockForUpdate()->find($lockedWo->machine_id)
                 : null;
-            if ($machine) {
-                $machine->update([
-                    'status'                => MachineStatus::Running->value,
-                    'current_work_order_id' => $lockedWo->id,
-                ]);
+            $mold = $lockedWo->mold_id
+                ? Mold::query()->lockForUpdate()->find($lockedWo->mold_id)
+                : null;
+            if (! $machine || ! $mold) {
+                throw new BusinessRuleException('Cannot resume a work order without an assigned machine and mold.');
             }
+            $this->assertMachineNotOccupied($lockedWo, $machine);
+            if (! in_array($mold->status, [MoldStatus::Available, MoldStatus::InUse], true)) {
+                throw new BusinessRuleException('Assigned mold is not available to resume production.');
+            }
+            $machine->update([
+                'status'                => MachineStatus::Running->value,
+                'current_work_order_id' => $lockedWo->id,
+            ]);
             $lockedWo->update([
                 'status'       => WorkOrderStatus::InProgress->value,
                 'pause_reason' => null,
@@ -898,6 +907,32 @@ class WorkOrderService
                 "Machine is already committed to active work order {$other->wo_number}."
             );
         }
+    }
+
+    /**
+     * PR-03 — runtime occupancy gate for start()/resume(). Unlike
+     * assertMachineAvailable() (confirm()'s planned-window approximation),
+     * this reads the locked machine row itself: pausing frees the machine, so
+     * a second work order may legitimately be confirmed and started on it
+     * while the first is paused — and neither a resume of the paused work
+     * order nor a fresh start may then bind a machine that is already running
+     * a different one.
+     */
+    private function assertMachineNotOccupied(WorkOrder $wo, Machine $machine): void
+    {
+        $occupantId = $machine->current_work_order_id;
+        if ($occupantId === null || (int) $occupantId === (int) $wo->id) {
+            return;
+        }
+
+        $occupantNumber = WorkOrder::withTrashed()
+            ->whereKey((int) $occupantId)
+            ->value('wo_number');
+
+        throw new BusinessRuleException(
+            "Machine {$machine->machine_code} is currently running work order "
+            . ($occupantNumber ?? "#{$occupantId}") . '. Complete or pause that work order first.'
+        );
     }
 
     /**
