@@ -16,6 +16,8 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { returnManagementApi } from '@/api/returnManagement';
 import { creditNotesApi } from '@/api/accounting/credit-notes';
+import { ApprovalTimeline } from '@/components/chain';
+import { fromApprovalRecords } from '@/lib/approvals';
 import { LuTriangleAlert, LuFileText, LuPackageCheck, LuRefreshCw, LuCheck } from '@/lib/icons';
 import { warehouseApi } from '@/api/inventory/warehouse';
 import { usePermission } from '@/hooks/usePermission';
@@ -690,6 +692,12 @@ export default function ReturnRequestDetailPage() {
             </Panel>
           </div>
           <div className="space-y-4">
+            {rma.approval_records && rma.approval_records.length > 0 && (
+              <Panel title="Approval chain">
+                <ApprovalTimeline steps={fromApprovalRecords(rma.approval_records)} />
+              </Panel>
+            )}
+
             {/* Timeline */}
             <Panel title="Timeline">
               <div className="space-y-2 text-sm mt-2">
