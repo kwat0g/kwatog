@@ -557,6 +557,12 @@ class RolePermissionSeeder extends Seeder
                         // OGAMI-012 — finance is the CHECKER for high-value stock
                         // adjustments; warehouse_staff is the maker.
                         'inventory.adjust.approve',
+                        // Separation clearance — Finance is step 4 of the
+                        // documented workflow and signs the Finance-owned items
+                        // (cash advance / loan). Which items Finance may sign
+                        // is decided by SeparationService's per-department gate.
+                        'hr.separation.view',
+                        'hr.clearance.sign',
                     ],
                 ),
             ],
@@ -708,6 +714,11 @@ class RolePermissionSeeder extends Seeder
                         // for whom. Deliberately NOT supply_chain.view, which
                         // would also open shipments, fleet and customs docs.
                         'supply_chain.deliveries.view',
+                        // Separation clearance — Warehouse is step 2 of the
+                        // documented workflow and signs the materials-return
+                        // item; scoped by SeparationService's per-department gate.
+                        'hr.separation.view',
+                        'hr.clearance.sign',
                     ],
                 ),
             ],
@@ -738,6 +749,11 @@ class RolePermissionSeeder extends Seeder
                         // Mobile condition readings select from the machine master.
                         'mrp.machines.view',
                         'assets.view',
+                        // Separation clearance — Maintenance is step 3 of the
+                        // documented workflow and signs the pending-work item;
+                        // scoped by SeparationService's per-department gate.
+                        'hr.separation.view',
+                        'hr.clearance.sign',
                         'search.global', 'notifications.preferences.manage',
                     ],
                 ),
@@ -766,6 +782,11 @@ class RolePermissionSeeder extends Seeder
                         'purchasing.view', 'purchasing.pr.approve',
                         // First step of the return_request approval chain.
                         'return_management.view', 'return_management.approve',
+                        // Separation clearance — step 1 of the documented
+                        // workflow. Signs only items owned by their own
+                        // department; scoped by SeparationService's
+                        // per-department gate.
+                        'hr.separation.view',
                         'hr.clearance.sign',
                         'search.global', 'notifications.preferences.manage',
                     ],
