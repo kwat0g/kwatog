@@ -22,10 +22,18 @@ export const assetsApi = {
  client.delete(`/assets/${id}`),
  restore: (id: string) =>
  client.patch(`/assets/${id}/restore`),
- dispose: (id: string, data: DisposeAssetData) =>
- client.post<ApiSuccess<Asset>>(`/assets/${id}/dispose`, data).then(r => r.data.data),
- qr: (id: string) =>
- client.get<ApiSuccess<{ asset_code: string; name: string; url: string }>>(`/assets/${id}/qr`).then(r => r.data.data),
+  dispose: (id: string, data: DisposeAssetData) =>
+   client.post<ApiSuccess<Asset>>(`/assets/${id}/dispose`, data).then(r => r.data.data),
+  // AS-03 — disposal is approval-gated: dispose only opens the request;
+  // the JE posts from approve once the chain completes.
+  approveDisposal: (id: string, remarks?: string) =>
+   client.post<ApiSuccess<Asset>>(`/assets/${id}/dispose/approve`, { remarks }).then(r => r.data.data),
+  rejectDisposal: (id: string, reason: string) =>
+   client.post<ApiSuccess<Asset>>(`/assets/${id}/dispose/reject`, { reason }).then(r => r.data.data),
+  cancelDisposal: (id: string) =>
+   client.post<ApiSuccess<Asset>>(`/assets/${id}/dispose/cancel`).then(r => r.data.data),
+  qr: (id: string) =>
+   client.get<ApiSuccess<{ asset_code: string; name: string; url: string }>>(`/assets/${id}/qr`).then(r => r.data.data),
 };
 
 export const depreciationApi = {

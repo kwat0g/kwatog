@@ -28,7 +28,11 @@ use Illuminate\Database\Eloquent\Builder;
  *   - po    : PurchaseOrderAccessPolicy::visibleTo, unchanged;
  *   - payroll: no row scope exists in the module — holders of the read
  *             permission see every period, so the board's permission gate is
- *             already equivalent and hasScope() reports false.
+ *             already equivalent and hasScope() reports false;
+ *   - asset : no row scope exists in the module — AssetService::list()
+ *             shows every row to every assets.view holder, so the board's
+ *             permission gate is already equivalent and hasScope() reports
+ *             false (same shape as payroll).
  *
  * Before this existed the board gated cards on the module READ permissions
  * alone — and `leave.view` is a self-scoped permission granted to every role,

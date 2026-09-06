@@ -14,9 +14,10 @@ class WorkflowSeeder extends Seeder
         // Enforcement status (REC-03 audit). Workflows are ENFORCED only when a
         // service calls ApprovalService::submit() for that workflow_type:
         //   ENFORCED: leave_request, purchase_request, purchase_order,
-        //             return_request, company_loan/cash_advance, salary_adjustment.
+        //             return_request, company_loan/cash_advance, salary_adjustment,
+        //             asset_disposal (AS-03).
         //   RESERVED (defined, not yet wired to a submit() path — do NOT present
-        //             these as working approvals): department_transfer, asset_disposal,
+        //             these as working approvals): department_transfer,
         //             separation_clearance, maintenance_request, 8d_report,
         //             bill_payment, work_order, ncr. Wire or drop before pilot.
         $workflows = [
@@ -127,14 +128,21 @@ class WorkflowSeeder extends Seeder
                     ['order' => 1, 'role' => 'maintenance_tech', 'label' => 'Assigned by'],
                 ],
             ],
+            // AS-03 — wired via AssetService::requestDisposal(). Disposal is
+            // finance-owned: gain/loss recognition is a finance decision, and
+            // both step roles already hold the module's permissions
+            // (finance_officer via module('assets'), system_admin via the
+            // wildcard), so the chain is viable end-to-end. The former
+            // 4-step draft (department_head/production_manager first) routed
+            // steps to roles that hold no assets permissions at all.
+            // ApprovalService's self-action guard enforces maker ≠ checker;
+            // a single-holder role uses delegation to cover its own step.
             [
                 'workflow_type' => 'asset_disposal',
                 'name'          => 'Asset Disposal Approval',
                 'steps' => [
-                    ['order' => 1, 'role' => 'department_head', 'label' => 'Noted by'],
-                    ['order' => 2, 'role' => 'production_manager', 'label' => 'Checked by'],
-                    ['order' => 3, 'role' => 'finance_officer', 'label' => 'Reviewed by'],
-                    ['order' => 4, 'role' => 'system_admin', 'label' => 'Approved by'],
+                    ['order' => 1, 'role' => 'finance_officer', 'label' => 'Reviewed by'],
+                    ['order' => 2, 'role' => 'system_admin', 'label' => 'Approved by'],
                 ],
             ],
             [
@@ -176,6 +184,7 @@ class WorkflowSeeder extends Seeder
             'purchase_order',
             'salary_adjustment',
             'return_request',
+            'asset_disposal',
         ];
 
         foreach ($workflows as $w) {

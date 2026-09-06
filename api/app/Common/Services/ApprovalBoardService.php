@@ -428,7 +428,10 @@ class ApprovalBoardService
 
     private function extractAmount(object $source): ?string
     {
-        foreach (['total_amount', 'principal', 'amount'] as $col) {
+        // disposal_request_amount first: for an asset awaiting disposal
+        // approval the executed disposal_amount is still null, and once the
+        // JE has posted the proposal columns are cleared in the same save.
+        foreach (['disposal_request_amount', 'total_amount', 'principal', 'amount', 'disposal_amount'] as $col) {
             if (property_exists($source, $col) && $source->{$col} !== null) {
                 return (string) $source->{$col};
             }
@@ -444,6 +447,7 @@ class ApprovalBoardService
             'po'      => 'Purchase order — vendor #'.((string) ($source->vendor_id ?? '')),
             'loan'    => ucfirst((string) ($source->loan_type ?? 'loan')).' — '.app(CurrencyDisplayService::class)->format($source->principal ?? 0),
             'payroll' => 'Payroll period '.((string) ($source->period_start ?? '')).' to '.((string) ($source->period_end ?? '')),
+            'asset_disposal' => 'Disposal of '.((string) ($source->name ?? '')),
             default   => '',
         };
     }

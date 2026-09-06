@@ -21,7 +21,15 @@ Route::middleware(['auth:sanctum', 'feature:assets'])->prefix('assets')->group(f
     Route::patch('/{asset}/restore', [AssetController::class, 'restore'])
         ->middleware('permission:assets.delete')
         ->withTrashed();
+    // AS-03 — disposal is a two-phase action. POST /dispose only REQUESTS
+    // (opens the seeded asset_disposal approval chain); the JE posts from
+    // the approve arm once every step has approved. Approve/reject sit
+    // behind their own permission because the seeded chain routes them to
+    // finance_officer and system_admin.
     Route::post('/{asset}/dispose', [AssetController::class, 'dispose'])->middleware('permission:assets.dispose');
+    Route::post('/{asset}/dispose/approve', [AssetController::class, 'approveDisposal'])->middleware('permission:assets.dispose.approve');
+    Route::post('/{asset}/dispose/reject', [AssetController::class, 'rejectDisposal'])->middleware('permission:assets.dispose.approve');
+    Route::post('/{asset}/dispose/cancel', [AssetController::class, 'cancelDisposal'])->middleware('permission:assets.dispose');
     Route::get('/{asset}/qr', [AssetController::class, 'qrPayload'])->middleware('permission:assets.view');
 });
 

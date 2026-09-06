@@ -58,6 +58,14 @@ final class ApprovalTypeRegistry
             'link' => '/payroll/periods/',
             'permissions' => ['payroll.periods.view', 'payroll.periods.approve'],
         ],
+        'App\\Modules\\Assets\\Models\\Asset' => [
+            'kind' => 'asset_disposal',
+            'label' => 'Asset disposals',
+            'table' => 'assets',
+            'number' => 'asset_code',
+            'link' => '/assets/',
+            'permissions' => ['assets.view', 'assets.dispose.approve'],
+        ],
     ];
 
     /** @return array<string, array<string, mixed>> */

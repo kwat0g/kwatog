@@ -6,6 +6,7 @@ namespace Tests\Feature\Approvals;
 
 use App\Common\Models\ApprovalDelegation;
 use App\Common\Services\ApprovalBoardService;
+use App\Modules\Assets\Models\Asset;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
@@ -231,6 +232,44 @@ class ApprovalBoardScopeTest extends TestCase
 
         $this->assertCount(1, $this->board($hr)['awaiting_others']);
         $this->assertSame([], $this->board($employee)['awaiting_others']);
+    }
+
+    /**
+     * AS-03 — asset disposal cards. The Assets module has no row scope
+     * (AssetService::list() shows every row to every assets.view holder),
+     * so the board's permission gate is the whole visibility decision —
+     * same shape as payroll.
+     */
+    public function test_asset_disposal_cards_stay_permission_gated(): void
+    {
+        $finance = $this->user('finance_officer');
+        $admin = $this->user('system_admin');
+        $employee = $this->user('employee', $this->deptA->id);
+
+        $asset = Asset::create([
+            'asset_code' => 'AST-BRD-'.substr(uniqid(), -6),
+            'name' => 'Board visibility press',
+            'category' => 'equipment',
+            'acquisition_date' => '2026-01-15',
+            'acquisition_cost' => '12000.00',
+            'useful_life_years' => 5,
+            'salvage_value' => '0.00',
+            'status' => 'active',
+        ]);
+        $this->pendingStep(Asset::class, $asset->id, 'finance_officer');
+
+        // Step role holder gets an actionable card.
+        $financeBoard = $this->board($finance);
+        $this->assertSame([$asset->asset_code], $this->numbers($financeBoard['my_action']));
+        $this->assertSame('/assets/'.$asset->hash_id, $financeBoard['my_action'][0]['link']);
+
+        // Another permission holder sees it as awaiting their step.
+        $this->assertSame([$asset->asset_code], $this->numbers($this->board($admin)['awaiting_others']));
+
+        // No assets.view, no card — not even redacted.
+        $employeeBoard = $this->board($employee);
+        $this->assertSame([], $employeeBoard['my_action']);
+        $this->assertSame([], $employeeBoard['awaiting_others']);
     }
 
     public function test_out_of_scope_step_participant_still_gets_a_masked_card(): void

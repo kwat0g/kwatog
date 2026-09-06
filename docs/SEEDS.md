@@ -247,7 +247,7 @@ tax = fixed_tax + (rate_on_excess * (taxable - bracket_min))
 | work_order | [{order:1, role:"production_manager", label:"Approved by"}] |
 | ncr | [{order:1, role:"qc_head", label:"Reviewed by"}, {order:2, role:"qc_manager", label:"Approved by"}] |
 | maintenance_request | [{order:1, role:"maintenance_head", label:"Assigned by"}] |
-| asset_disposal | [{order:1, role:"department_head", label:"Noted by"}, {order:2, role:"manager", label:"Checked by"}, {order:3, role:"finance_officer", label:"Reviewed by"}, {order:4, role:"vice_president", label:"Approved by"}] |
+| asset_disposal | [{order:1, role:"finance_officer", label:"Reviewed by"}, {order:2, role:"system_admin", label:"Approved by"}] |
 | payroll | [{order:1, role:"hr_officer", label:"Reviewed by"}, {order:2, role:"finance_officer", label:"Confirmed by"}] |
 | separation_clearance | [{order:1, role:"department_head"}, {order:2, role:"warehouse_head"}, {order:3, role:"maintenance_head"}, {order:4, role:"finance_officer"}, {order:5, role:"hr_officer"}] |
 | 8d_report | [{order:1, role:"qc_manager", label:"Reviewed by"}, {order:2, role:"vice_president", label:"Approved by"}] |

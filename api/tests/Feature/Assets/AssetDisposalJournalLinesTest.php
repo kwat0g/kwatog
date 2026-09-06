@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Assets;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\ApprovalService;
 use App\Common\Services\SettingsService;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Models\JournalEntry;
@@ -17,6 +18,7 @@ use App\Modules\Auth\Models\User;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
+use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -39,6 +41,10 @@ use Tests\TestCase;
  * The single existing disposal test used non-zero cost, accumulated
  * depreciation and proceeds together, so all three lines happened to be
  * non-zero and the defect stayed invisible.
+ *
+ * AS-03 update: disposal is two-phase now (request → full chain approval →
+ * execute), so the disposals here run through the approval chain; the JE
+ * assertions pin that execution still journals exactly what it did before.
  */
 class AssetDisposalJournalLinesTest extends TestCase
 {
@@ -47,7 +53,12 @@ class AssetDisposalJournalLinesTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->seed([ChartOfAccountsSeeder::class, RolePermissionSeeder::class, SettingsSeeder::class]);
+        $this->seed([
+            ChartOfAccountsSeeder::class,
+            RolePermissionSeeder::class,
+            SettingsSeeder::class,
+            WorkflowSeeder::class,
+        ]);
     }
 
     private function user(): User
@@ -55,6 +66,24 @@ class AssetDisposalJournalLinesTest extends TestCase
         return User::factory()->create([
             'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
         ]);
+    }
+
+    /**
+     * Dispose via the two-phase flow: request by a finance officer, then the
+     * seeded finance_officer → system_admin chain approves to execution.
+     *
+     * @param array<string, mixed> $data
+     */
+    private function disposeViaApproval(Asset $asset, array $data): void
+    {
+        $svc = app(AssetService::class);
+        $svc->requestDisposal($asset, $data, User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'finance_officer')->value('id'),
+        ]));
+        $svc->approveDisposal($asset, User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'finance_officer')->value('id'),
+        ]));
+        $svc->approveDisposal($asset, $this->user());
     }
 
     /** @param array<string, mixed> $overrides */
@@ -129,11 +158,11 @@ class AssetDisposalJournalLinesTest extends TestCase
     {
         $asset = $this->asset(['accumulated_depreciation' => '1000.00']);
 
-        app(AssetService::class)->dispose($asset, [
+        $this->disposeViaApproval($asset, [
             'disposal_amount' => '0.00',
             'disposed_date' => '2026-06-15',
             'remarks' => 'Scrapped — beyond economical repair',
-        ], $this->user());
+        ]);
 
         $je = $this->disposalEntry($asset);
         $this->assertJournalIsWellFormed($je);
@@ -153,11 +182,11 @@ class AssetDisposalJournalLinesTest extends TestCase
     {
         $asset = $this->asset(['accumulated_depreciation' => '0.00']);
 
-        app(AssetService::class)->dispose($asset, [
+        $this->disposeViaApproval($asset, [
             'disposal_amount' => '0.00',
             'disposed_date' => '2026-06-15',
             'remarks' => 'Written off before commissioning',
-        ], $this->user());
+        ]);
 
         $je = $this->disposalEntry($asset);
         $this->assertJournalIsWellFormed($je);
@@ -172,11 +201,11 @@ class AssetDisposalJournalLinesTest extends TestCase
     {
         $asset = $this->asset(['accumulated_depreciation' => '12000.00']);
 
-        app(AssetService::class)->dispose($asset, [
+        $this->disposeViaApproval($asset, [
             'disposal_amount' => '500.00',
             'disposed_date' => '2026-06-15',
             'remarks' => 'Sold for scrap value',
-        ], $this->user());
+        ]);
 
         $je = $this->disposalEntry($asset);
         $this->assertJournalIsWellFormed($je);
@@ -199,12 +228,20 @@ class AssetDisposalJournalLinesTest extends TestCase
         // generic ledger error or silently disposing without an entry.
         $asset = $this->asset(['acquisition_cost' => '0.00', 'accumulated_depreciation' => '0.00']);
 
+        $svc = app(AssetService::class);
+        $svc->requestDisposal($asset, [
+            'disposal_amount' => '0.00',
+            'disposed_date' => '2026-06-15',
+            'remarks' => 'No monetary effect',
+        ], User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'finance_officer')->value('id'),
+        ]));
+        $svc->approveDisposal($asset, User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'finance_officer')->value('id'),
+        ]));
+
         try {
-            app(AssetService::class)->dispose($asset, [
-                'disposal_amount' => '0.00',
-                'disposed_date' => '2026-06-15',
-                'remarks' => 'No monetary effect',
-            ], $this->user());
+            $svc->approveDisposal($asset, $this->user());
             $this->fail('A disposal with no monetary effect must be refused.');
         } catch (BusinessRuleException $e) {
             $this->assertStringContainsString('no cost, proceeds or accumulated depreciation', $e->getMessage());
@@ -216,5 +253,9 @@ class AssetDisposalJournalLinesTest extends TestCase
             JournalEntry::query()->where('reference_type', Asset::class)->where('reference_id', $asset->getKey())->count(),
             'The refused disposal must not leave a journal entry behind.',
         );
+        // The refused execution rolled its approval step back, so the request
+        // stays pending and resolvable (reject or cancel) instead of closing
+        // a chain whose asset was never disposed.
+        $this->assertNotNull(app(ApprovalService::class)->nextStep($asset->fresh()));
     }
 }
