@@ -27,7 +27,8 @@ use Tests\TestCase;
  * P2.9 — FinalPayService behaviour lock-down.
  *
  * What is tested:
- *   1. Final-period salary from live payroll/DTR records
+ *   1. Final-period salary from live payroll rows, or the shared calendar-day
+ *      proration when no row is computed yet (HR-02 parity)
  *   2. Unused convertible leave value conversion (days × derived daily rate)
  *   3. Outstanding loan balance deducted from final pay
  *   4. Negative-total clamped to 0.00 via max(0, plus−less)
@@ -150,11 +151,13 @@ class FinalPayTest extends TestCase
     // 1. Pro-rated salary — monthly employee
     // ──────────────────────────────────────────────────────────────────────
 
-    public function test_final_period_salary_monthly_uses_live_dtr_day_equivalents(): void
+    public function test_final_period_salary_monthly_uses_payroll_calendar_day_proration(): void
     {
         $employee  = $this->makeEmployee(['basic_monthly_salary' => '22000.00', 'pay_type' => 'monthly']);
-        $clearance = $this->makeClearance($employee);
+        $clearance = $this->makeClearance($employee, ['separation_date' => '2026-05-20']);
         $this->seedOpenPayrollPeriod();
+        // Persisted DTR hours must NOT move the number — the fallback mirrors
+        // payroll's flat calendar-day basis (HR-02), not an attendance-day one.
         $this->seedAttendanceHours($employee, [
             '2026-05-16' => 8.0,
             '2026-05-17' => 8.0,
@@ -166,14 +169,14 @@ class FinalPayTest extends TestCase
         $breakdown = $result->final_pay_breakdown;
         $this->assertNotNull($breakdown, 'Breakdown must be set after compute()');
 
-        $this->assertSame('2500.00', $breakdown['last_salary_pro_rated'],
-            '₱22,000 / 22 × 2.5 persisted DTR day-equivalents must be paid.');
+        // Half-month basic 11000 × 5/16 calendar days = 3437.50.
+        $this->assertSame('3437.50', $breakdown['last_salary_pro_rated'],
+            '₱22,000 ÷ 2 × 5 of 16 calendar days covered by employment.');
     }
 
-    public function test_final_period_salary_semi_monthly_uses_live_dtr_day_equivalents(): void
+    public function test_final_period_salary_semi_monthly_uses_payroll_calendar_day_proration(): void
     {
-        // 7,150 per cutoff → 14,300 monthly → 650.00/day at the 22-day divisor,
-        // the same effective rate the old daily-paid fixture used.
+        // 7,150 per cutoff → 14,300 monthly equivalent.
         $employee  = $this->makeEmployee([
             'pay_type'             => 'semi_monthly',
             'semi_monthly_rate'    => '7150.00',
@@ -190,8 +193,9 @@ class FinalPayTest extends TestCase
         $result = $this->service()->compute($clearance);
 
         $breakdown = $result->final_pay_breakdown;
-        $this->assertSame('1625.00', $breakdown['last_salary_pro_rated'],
-            '₱650 × 2.5 persisted DTR day-equivalents must be paid.');
+        // Separation on the period's last day = full flat cutoff basic.
+        $this->assertSame('7150.00', $breakdown['last_salary_pro_rated'],
+            'A semi-monthly leaver employed to the cutoff end banks the flat per-cutoff rate.');
     }
 
     public function test_final_period_salary_prefers_computed_payroll_result(): void

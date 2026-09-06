@@ -15,10 +15,10 @@ use App\Modules\Accounting\Services\JournalEntryService;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Clearance;
 use App\Modules\HR\Models\Employee;
-use App\Modules\Attendance\Models\Attendance;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollPeriod;
+use App\Modules\Payroll\Support\EmployedDayFraction;
 use Carbon\CarbonInterface;
 use Closure;
 use Illuminate\Support\Facades\DB;
@@ -302,25 +302,31 @@ class FinalPayService
             return Money::clampMin(Money::sub($earnings, $deductions), Money::zero());
         }
 
-        // Otherwise calculate only from persisted DTR hours in the real
-        // payroll period. Each row contributes at most one eight-hour day;
-        // half-days contribute 0.5. No synthetic attendance is invented.
-        $dayEquivalents = '0.0000';
-        $hoursPerDay = $this->hoursPerDay();
-        $attendances = Attendance::query()
-            ->where('employee_id', $e->id)
-            ->whereBetween('date', [$period->period_start, $separationDate])
-            ->get(['regular_hours']);
-        foreach ($attendances as $attendance) {
-            $fraction = bcdiv((string) $attendance->regular_hours, $hoursPerDay, Money::INNER);
-            $fraction = bccomp($fraction, '0', Money::INNER) < 0 ? '0.0000' : $fraction;
-            $fraction = bccomp($fraction, '1', Money::INNER) > 0 ? '1.0000' : $fraction;
-            $dayEquivalents = bcadd($dayEquivalents, $fraction, Money::INNER);
+        // Otherwise compute exactly what payroll WOULD have computed for this
+        // cutoff: flat half-month basic scaled by the shared calendar-day
+        // employment fraction (HR-02). The old fallback re-derived an
+        // attendance-day formula (Σ min(hours/hours_per_day, 1) × monthly ÷
+        // work_days_per_month) that engages precisely when separation outruns
+        // payroll compute — and disagreed with payroll's calendar-day basis on
+        // the same facts (₱22,000 monthly, Mar 1–15, separation Mar 10, 8
+        // attended days: fallback ₱8,000 vs payroll-basis ₱7,332.60).
+        $monthly = $e->monthlyEquivalentSalary();
+        if ($monthly === null) {
+            throw new BusinessRuleException("Employee {$e->employee_no} has no authoritative pay rate for final-pay calculation.");
         }
 
-        $dailyRate = $this->authoritativeDailyRate($e);
+        $halfBasic = Money::div((string) $monthly, '2', 4);
+        $fraction  = EmployedDayFraction::of(
+            $period->period_start,
+            $period->period_end,
+            $e->date_hired,
+            $separationDate,
+        );
 
-        return Money::clampMin(Money::mul($dayEquivalents, $dailyRate), Money::zero());
+        return Money::clampMin(
+            Money::round2(Money::mul($halfBasic, $fraction)),
+            Money::zero(),
+        );
     }
 
     private function unusedConvertibleLeaveValue(Employee $e): string
@@ -360,11 +366,6 @@ class FinalPayService
     private function workDaysPerMonth(): string
     {
         return $this->positivePayrollSetting('payroll.work_days_per_month');
-    }
-
-    private function hoursPerDay(): string
-    {
-        return $this->positivePayrollSetting('payroll.hours_per_day');
     }
 
     private function positivePayrollSetting(string $key): string
