@@ -119,9 +119,8 @@ class LoginThresholdTwoConnectionHarnessTest extends TestCase
                     $email,
                     'definitely-wrong-password',
                     Request::create('/api/v1/b2b/'.$audience.'/login', 'POST'),
-                    $audience.'-portal',
                     $audience,
-                    $audience === 'customer' ? 'customer_portal' : null,
+                    $audience === 'customer' ? 'customer_portal' : 'supplier_portal',
                 );
                 file_put_contents($resultFile, 'unexpected-success');
             } catch (\Throwable $exception) {
