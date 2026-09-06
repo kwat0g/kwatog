@@ -35,9 +35,12 @@ use Tests\TestCase;
  *   reserved   = Σ stock_levels.reserved_quantity (all locations)
  *   in_transit = Σ (poi.quantity - poi.quantity_received) for POs in
  *                  approved / sent / partially_received
- *   net        = max(0, gross - on_hand + reserved - in_transit)
+ *   available  = max(0, on_hand - reserved + in_transit - safety_stock)
+ *   net        = max(0, gross - available)
  *
- * A PurchaseRequest (is_auto_generated=true, status=draft) is created iff net > 0.
+ * A PurchaseRequest (is_auto_generated=true, status=draft) is created iff net > 0;
+ * each PR line quantity is the net ceiled to 2dp, then rounded up to the
+ * item's minimum_order_quantity multiple when one is set (MRP-01).
  *
  * In-transit note: the service queries `purchase_order_items` / `purchase_orders`
  * directly via DB::table, so we insert raw rows rather than using factories to
@@ -597,5 +600,216 @@ class MrpNettingTest extends TestCase
         $prItem = $pr->items()->where('item_id', $this->material->id)->firstOrFail();
         // Draft PO ignored → net = 20 - 5 = 15
         $this->assertSame('15.00', $prItem->quantity, 'Draft PO must not count as in-transit; net must be full shortage');
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // MRP-01 — Safety stock is not consumable supply
+    // ════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Setup:
+     *   BOM:     2 pcs material per finished unit, 0% waste
+     *   SO line: 10 units → gross demand = 20 pcs
+     *   On-hand: 25 pcs, safety_stock = 5 → usable availability = 20
+     *
+     * Net = max(0, 20 - 20) = 0
+     *
+     * Expected: no PR. The plan consumes exactly the stock ABOVE the safety
+     * buffer — never the buffer itself.
+     */
+    public function test_demand_consuming_stock_above_safety_stock_creates_no_pr(): void
+    {
+        $this->material->update(['safety_stock' => 5]);
+        $this->createBom(qtyPerUnit: 2.0, wasteFactor: 0.0);
+        $this->setOnHand(qty: 25.0, reserved: 0.0);
+        $so = $this->createConfirmedSo(lineQty: 10);
+
+        $plan = $this->engine->runForSalesOrder($so);
+
+        $this->assertSame(0, $plan->shortages_found, 'shortages_found must be 0 when stock above safety stock covers demand');
+        $this->assertSame(0, $plan->auto_pr_count,   'auto_pr_count must be 0');
+
+        $prCount = PurchaseRequest::where('is_auto_generated', true)
+            ->where('mrp_plan_id', $plan->id)
+            ->count();
+        $this->assertSame(0, $prCount, 'No auto-generated PR must exist when usable availability covers demand');
+    }
+
+    /**
+     * Setup:
+     *   BOM:     2 pcs per unit, 0% waste
+     *   SO line: 10 units → gross = 20 pcs
+     *   On-hand: 15 pcs, safety_stock = 5 → usable availability = 10
+     *
+     * Net = max(0, 20 - 10) = 10
+     *
+     * Expected: PR for 10 — the 5 pcs of real shortfall PLUS the 5 pcs of
+     * safety stock the plan would otherwise consume, so the buffer survives
+     * the order. The diagnostic entry must expose the safety-stock floor so
+     * the gap between gross and net stays reconcilable.
+     */
+    public function test_demand_dipping_into_safety_stock_orders_shortfall_plus_restoration(): void
+    {
+        $this->material->update(['safety_stock' => 5]);
+        $this->createBom(qtyPerUnit: 2.0, wasteFactor: 0.0);
+        $this->setOnHand(qty: 15.0, reserved: 0.0);
+        $so = $this->createConfirmedSo(lineQty: 10);
+
+        $plan = $this->engine->runForSalesOrder($so);
+
+        $this->assertSame(1, $plan->shortages_found, 'shortages_found must be 1');
+
+        $prItem = PurchaseRequest::where('is_auto_generated', true)
+            ->where('mrp_plan_id', $plan->id)
+            ->firstOrFail()
+            ->items()
+            ->where('item_id', $this->material->id)
+            ->firstOrFail();
+        // net = 20 - (15 - 5) = 10
+        $this->assertSame('10.00', $prItem->quantity, 'PR qty must include the safety-stock restoration amount (10)');
+
+        $diagnostic = collect($plan->diagnostics)->firstWhere('item_id', $this->material->id);
+        $this->assertSame(5.0, (float) $diagnostic['safety_stock'], 'diagnostics must expose the safety-stock floor');
+        $this->assertSame(10.0, (float) $diagnostic['net'], 'diagnostics net must be gross minus floored availability');
+    }
+
+    /**
+     * Setup:
+     *   BOM: 2 pcs per unit, 0% waste; SO line: 10 units → gross = 20
+     *   On-hand: 10, in-transit: 5 (approved PO), safety_stock = 30
+     *   usable availability = max(0, 10 + 5 - 30) = 0
+     *
+     * Net = 20. The safety-stock floor may not push availability negative.
+     */
+    public function test_safety_stock_above_free_stock_clamps_usable_availability_to_zero(): void
+    {
+        $this->material->update(['safety_stock' => 30]);
+        $this->createBom(qtyPerUnit: 2.0, wasteFactor: 0.0);
+        $this->setOnHand(qty: 10.0, reserved: 0.0);
+        $this->createInTransitPo(ordered: 5.0, received: 0.0, poStatus: 'approved');
+        $so = $this->createConfirmedSo(lineQty: 10);
+
+        $plan = $this->engine->runForSalesOrder($so);
+
+        $prItem = PurchaseRequest::where('is_auto_generated', true)
+            ->where('mrp_plan_id', $plan->id)
+            ->firstOrFail()
+            ->items()
+            ->where('item_id', $this->material->id)
+            ->firstOrFail();
+
+        $this->assertSame('20.00', $prItem->quantity, 'net must be the full gross when safety stock exceeds free stock');
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // MRP-01 — PR quantities respect the item's minimum order quantity
+    // ════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Setup:
+     *   BOM: 2 pcs per unit, 0% waste; SO line: 10 units → gross = 20
+     *   On-hand: 13 → net = 7; minimum_order_quantity = 10
+     *
+     * Expected: PR qty = 10. A net below the supplier MOQ must round UP to
+     * the MOQ — never be emitted as an unorderable 7.
+     */
+    public function test_net_below_minimum_order_quantity_rounds_up_to_moq(): void
+    {
+        $this->material->update(['minimum_order_quantity' => 10]);
+        $this->createBom(qtyPerUnit: 2.0, wasteFactor: 0.0);
+        $this->setOnHand(qty: 13.0, reserved: 0.0);
+        $so = $this->createConfirmedSo(lineQty: 10);
+
+        $plan = $this->engine->runForSalesOrder($so);
+
+        $prItem = PurchaseRequest::where('is_auto_generated', true)
+            ->where('mrp_plan_id', $plan->id)
+            ->firstOrFail()
+            ->items()
+            ->where('item_id', $this->material->id)
+            ->firstOrFail();
+
+        $this->assertSame('10.00', $prItem->quantity, 'net 7 with MOQ 10 must order 10');
+    }
+
+    /**
+     * Setup:
+     *   BOM: 2 pcs per unit, 0% waste; SO line: 15 units → gross = 30
+     *   On-hand: 7 → net = 23; minimum_order_quantity = 10
+     *
+     * Expected: PR qty = 30 — the next MOQ multiple above 23.
+     */
+    public function test_net_above_minimum_order_quantity_rounds_up_to_next_moq_multiple(): void
+    {
+        $this->material->update(['minimum_order_quantity' => 10]);
+        $this->createBom(qtyPerUnit: 2.0, wasteFactor: 0.0);
+        $this->setOnHand(qty: 7.0, reserved: 0.0);
+        $so = $this->createConfirmedSo(lineQty: 15);
+
+        $plan = $this->engine->runForSalesOrder($so);
+
+        $prItem = PurchaseRequest::where('is_auto_generated', true)
+            ->where('mrp_plan_id', $plan->id)
+            ->firstOrFail()
+            ->items()
+            ->where('item_id', $this->material->id)
+            ->firstOrFail();
+
+        $this->assertSame('30.00', $prItem->quantity, 'net 23 with MOQ 10 must order 30');
+    }
+
+    /**
+     * MOQ is decimal(15,3) and may be fractional.
+     *
+     * Setup:
+     *   BOM: 2 pcs per unit, 0% waste; SO line: 10 units → gross = 20
+     *   On-hand: 12.7 → net = 7.3; minimum_order_quantity = 2.5
+     *
+     * Expected: PR qty = 7.50 — the next 2.5 multiple above 7.3.
+     */
+    public function test_fractional_minimum_order_quantity_rounds_to_next_multiple(): void
+    {
+        $this->material->update(['minimum_order_quantity' => 2.5]);
+        $this->createBom(qtyPerUnit: 2.0, wasteFactor: 0.0);
+        $this->setOnHand(qty: 12.7, reserved: 0.0);
+        $so = $this->createConfirmedSo(lineQty: 10);
+
+        $plan = $this->engine->runForSalesOrder($so);
+
+        $prItem = PurchaseRequest::where('is_auto_generated', true)
+            ->where('mrp_plan_id', $plan->id)
+            ->firstOrFail()
+            ->items()
+            ->where('item_id', $this->material->id)
+            ->firstOrFail();
+
+        $this->assertSame('7.50', $prItem->quantity, 'net 7.3 with MOQ 2.5 must order 7.5');
+    }
+
+    /**
+     * Setup:
+     *   BOM: 2 pcs per unit, 0% waste; SO line: 10 units → gross = 20
+     *   On-hand: 7.66 → net = 12.34; minimum_order_quantity = 0
+     *
+     * Expected: PR qty = 12.34 — with no MOQ configured the exact 2dp net is
+     * ordered, exactly as before MRP-01.
+     */
+    public function test_zero_minimum_order_quantity_keeps_exact_net(): void
+    {
+        $this->material->update(['minimum_order_quantity' => 0]);
+        $this->createBom(qtyPerUnit: 2.0, wasteFactor: 0.0);
+        $this->setOnHand(qty: 7.66, reserved: 0.0);
+        $so = $this->createConfirmedSo(lineQty: 10);
+
+        $plan = $this->engine->runForSalesOrder($so);
+
+        $prItem = PurchaseRequest::where('is_auto_generated', true)
+            ->where('mrp_plan_id', $plan->id)
+            ->firstOrFail()
+            ->items()
+            ->where('item_id', $this->material->id)
+            ->firstOrFail();
+
+        $this->assertSame('12.34', $prItem->quantity, 'net 12.34 with no MOQ must order the exact 2dp net');
     }
 }
