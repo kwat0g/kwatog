@@ -13,6 +13,7 @@ use App\Modules\HR\Models\Employee;
 use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Payroll\Models\PayrollPeriod;
+use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use Database\Seeders\DepartmentSeeder;
 use Database\Seeders\PositionSeeder;
@@ -187,6 +188,24 @@ class ApprovalBoardScopeTest extends TestCase
         $expected = [$alphaPr->pr_number, $betaPr->pr_number];
         sort($expected);
         $this->assertSame($expected, $visible);
+    }
+
+    public function test_finance_officer_sees_po_cards_waiting_on_the_finance_step(): void
+    {
+        $finance = $this->user('finance_officer');
+        $creator = $this->user('warehouse_staff');
+
+        $po = PurchaseOrder::factory()->create(['created_by' => $creator->id]);
+        $this->pendingStep(PurchaseOrder::class, $po->id, 'purchasing_officer', [
+            'action' => 'approved',
+            'acted_at' => now()->subHour(),
+            'approver_id' => $creator->id,
+        ]);
+        $this->pendingStep(PurchaseOrder::class, $po->id, 'finance_officer', ['step_order' => 2]);
+
+        $board = $this->board($finance);
+
+        $this->assertSame([$po->po_number], $this->numbers($board['my_action']));
     }
 
     public function test_history_columns_obey_the_same_row_scope(): void
