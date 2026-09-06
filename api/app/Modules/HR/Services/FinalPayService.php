@@ -16,6 +16,11 @@ use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Clearance;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Attendance\Models\Attendance;
+use App\Modules\Loans\Enums\LoanPaymentType;
+use App\Modules\Loans\Enums\LoanStatus;
+use App\Modules\Loans\Enums\LoanType;
+use App\Modules\Loans\Models\EmployeeLoan;
+use App\Modules\Loans\Services\LoanService;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollPeriod;
@@ -68,13 +73,38 @@ class FinalPayService
             $lastSalary = $this->lastSalaryProRated($employee, $lockedClearance->separation_date);
             $leaveValue = $this->unusedConvertibleLeaveValue($employee);
             $thirteenth = $this->proRatedThirteenthMonth($employee, $lockedClearance->separation_date);
-            $loanBal    = $this->loanBalances($employee);
+            // Settlements an earlier compute already recorded for THIS clearance
+            // stay deducted: that money moved from the payout into the loan
+            // ledger, so reading only live balances would under-deduct on
+            // recompute. Externally settled loans carry no clearance link and
+            // correctly fall out of the deduction.
+            $loanBal    = Money::add(
+                $this->loanBalances($employee),
+                $this->finalPaySettlements($lockedClearance->id, LoanType::CompanyLoan->value),
+            );
             $propertyL  = $this->unreturnedPropertyValue($employee);
-            $advance    = $this->openCashAdvance($employee);
+            $advance    = Money::add(
+                $this->openCashAdvance($employee),
+                $this->finalPaySettlements($lockedClearance->id, LoanType::CashAdvance->value),
+            );
 
             $plus = Money::add($lastSalary, $leaveValue, $thirteenth);
             $less = Money::add($loanBal, $propertyL, $advance);
             $net  = Money::clampMin(Money::sub($plus, $less), Money::zero());
+
+            // LN-02/LN-03 — settle the deducted loan ledger here, at the stage
+            // the separation finalize gate observes. recordPayment reconciles
+            // each loan from its immutable payment ledger, so by finalize the
+            // gate's balance check sees the settled state and the JE's
+            // "Settle outstanding loan from final pay" arm credits what this
+            // payout actually absorbed. Only what this payout can recover is
+            // settled (mirroring postJournalEntry's priority and clamp); any
+            // residue keeps the gate blocking until it is settled manually.
+            $recoverable = Money::lt($plus, $less) ? $plus : $less;
+            $loanPool    = Money::lt($loanBal, $recoverable) ? $loanBal : $recoverable;
+            $advancePool = Money::sub($recoverable, $loanPool);
+            $this->settleLoansForFinalPay($lockedClearance, LoanType::CompanyLoan, $loanPool);
+            $this->settleLoansForFinalPay($lockedClearance, LoanType::CashAdvance, $advancePool);
 
             $breakdown = [
                 'last_salary_pro_rated'           => $lastSalary,
@@ -206,8 +236,25 @@ class FinalPayService
             // persisted so the UI and the JE agree.
             $lockedClearance->load('employee');
             $liveEmployee  = $lockedClearance->employee;
-            $liveLoan      = $liveEmployee ? $this->loanBalances($liveEmployee) : Money::zero();
-            $liveAdvance   = $liveEmployee ? $this->openCashAdvance($liveEmployee) : Money::zero();
+            // Settlements THIS clearance's compute recorded stay deducted even
+            // though their loans now read zero live — the payout absorbed them,
+            // so dropping them would pay the same money out again in cash and
+            // strand the "Settle outstanding loan from final pay" JE arm.
+            // Externally settled loans (no clearance link) still fall out, so a
+            // loan settled another way between compute and finalize is never
+            // deducted twice.
+            $liveLoan      = $liveEmployee
+                ? Money::add(
+                    $this->loanBalances($liveEmployee),
+                    $this->finalPaySettlements($lockedClearance->id, LoanType::CompanyLoan->value),
+                )
+                : Money::zero();
+            $liveAdvance   = $liveEmployee
+                ? Money::add(
+                    $this->openCashAdvance($liveEmployee),
+                    $this->finalPaySettlements($lockedClearance->id, LoanType::CashAdvance->value),
+                )
+                : Money::zero();
             $liveProperty  = $liveEmployee ? $this->unreturnedPropertyValue($liveEmployee) : Money::zero();
 
             $plus = Money::round2((string) ($b['gross_plus'] ?? Money::zero()));
@@ -268,6 +315,65 @@ class FinalPayService
 
             return $posted;
         });
+    }
+
+    /* ─── Loan settlement ─── */
+
+    /**
+     * Settle the employee's deducted loans from this final pay through the
+     * loan module's own ledger mechanism (recordPayment under lock), linking
+     * each payment to the clearance so compute/finalize re-derivation can
+     * keep it deducted. Settles at most $pool, loan by loan in id order —
+     * the same lock order payroll uses. Pending loans cannot accept payments
+     * (nothing was disbursed yet); they stay on the finalize gate until
+     * cancelled or approved.
+     */
+    private function settleLoansForFinalPay(Clearance $clearance, LoanType $type, string $pool): void
+    {
+        $remaining = Money::round2($pool);
+        if (Money::lte($remaining, Money::zero())) {
+            return;
+        }
+
+        $loans = EmployeeLoan::query()
+            ->where('employee_id', $clearance->employee_id)
+            ->where('loan_type', $type->value)
+            ->where('status', LoanStatus::Active->value)
+            ->where('balance', '>', 0)
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($loans as $loan) {
+            if (Money::lte($remaining, Money::zero())) {
+                break;
+            }
+            $amount = Money::lt((string) $loan->balance, $remaining)
+                ? Money::round2((string) $loan->balance)
+                : $remaining;
+
+            app(LoanService::class)->recordPayment(
+                $loan,
+                $amount,
+                LoanPaymentType::FinalPay,
+                remarks: 'Settled from final pay — '.$clearance->clearance_no,
+                paymentDate: $clearance->separation_date->toDateString(),
+                clearanceId: $clearance->id,
+            );
+
+            $remaining = Money::sub($remaining, $amount);
+        }
+    }
+
+    /** Sum this clearance has already settled from final pay, by loan bucket. */
+    private function finalPaySettlements(int $clearanceId, string $loanType): string
+    {
+        return Money::round2((string) DB::table('loan_payments as lp')
+            ->join('employee_loans as el', 'el.id', '=', 'lp.loan_id')
+            ->where('lp.clearance_id', $clearanceId)
+            ->where('lp.payment_type', LoanPaymentType::FinalPay->value)
+            ->where('el.loan_type', $loanType)
+            ->sum('lp.amount'));
     }
 
     /* ─── Component helpers ─── */

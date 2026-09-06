@@ -311,8 +311,10 @@ class LoanService
         LoanPaymentType $type,
         ?int $payrollId = null,
         ?string $remarks = null,
+        ?string $paymentDate = null,
+        ?int $clearanceId = null,
     ): LoanPayment {
-        return DB::transaction(function () use ($loan, $amount, $type, $payrollId, $remarks) {
+        return DB::transaction(function () use ($loan, $amount, $type, $payrollId, $remarks, $paymentDate, $clearanceId) {
             // Loan payment serialization invariant: every path that changes a
             // loan row must make its decisions from the current row while
             // holding that row lock, then commit the payment detail and loan
@@ -335,8 +337,9 @@ class LoanService
             /** @var LoanPayment $payment */
             $payment = $authoritative->payments()->create([
                 'payroll_id' => $payrollId,
+                'clearance_id' => $clearanceId,
                 'amount' => $normalizedAmount,
-                'payment_date' => $now->toDateString(),
+                'payment_date' => $paymentDate ?? $now->toDateString(),
                 'payment_type' => $type->value,
                 'remarks' => $remarks,
                 'created_at' => $now,

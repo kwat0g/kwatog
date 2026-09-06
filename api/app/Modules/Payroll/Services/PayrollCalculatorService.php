@@ -847,6 +847,10 @@ class PayrollCalculatorService
             ->where('employee_id', $employee->id)
             ->where('status', LoanStatus::Active->value)
             ->where('pay_periods_remaining', '>', 0)
+            // is_final_pay_deduction reserves a loan for settlement from final
+            // pay (FinalPayService), so ordinary amortization must skip it or
+            // the same balance is collected twice during a separation window.
+            ->where('is_final_pay_deduction', false)
             // Keep the loan-row lock order stable across payroll runs and
             // manual payments/reversals. Decisions below are made only from
             // the locked, current row and all detail + aggregate writes are
