@@ -66,22 +66,22 @@ class PurchaseOrderController
 
     public function update(UpdatePurchaseOrderRequest $request, PurchaseOrder $purchaseOrder): PurchaseOrderResource
     {
-        try { $po = $this->service->update($purchaseOrder, $request->validated()); }
+        try { $po = $this->service->update($purchaseOrder, $request->validated(), $request->user()); }
         catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
         return new PurchaseOrderResource($po);
     }
 
-    public function destroy(PurchaseOrder $purchaseOrder): JsonResponse
+    public function destroy(Request $request, PurchaseOrder $purchaseOrder): JsonResponse
     {
-        try { $this->service->delete($purchaseOrder); }
+        try { $this->service->delete($purchaseOrder, $request->user()); }
         catch (BusinessRuleException $e) { return response()->json(['message' => $e->getMessage()], 422); }
         return response()->json(null, 204);
     }
 
-    public function restore(PurchaseOrder $purchaseOrder): JsonResponse
+    public function restore(Request $request, PurchaseOrder $purchaseOrder): JsonResponse
     {
         try {
-            $this->service->restore($purchaseOrder);
+            $this->service->restore($purchaseOrder, $request->user());
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
@@ -117,23 +117,23 @@ class PurchaseOrderController
         return new PurchaseOrderResource($this->service->show($po));
     }
 
-    public function send(PurchaseOrder $purchaseOrder): PurchaseOrderResource
+    public function send(Request $request, PurchaseOrder $purchaseOrder): PurchaseOrderResource
     {
-        try { $po = $this->service->markAsSent($purchaseOrder); }
+        try { $po = $this->service->markAsSent($purchaseOrder, null, $request->user()); }
         catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
         return new PurchaseOrderResource($this->service->show($po));
     }
 
     public function cancel(CancelPurchaseOrderRequest $request, PurchaseOrder $purchaseOrder): PurchaseOrderResource
     {
-        try { $po = $this->service->cancel($purchaseOrder, $request->validated()['reason']); }
+        try { $po = $this->service->cancel($purchaseOrder, $request->validated()['reason'], $request->user()); }
         catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
         return new PurchaseOrderResource($this->service->show($po));
     }
 
-    public function close(PurchaseOrder $purchaseOrder): PurchaseOrderResource
+    public function close(Request $request, PurchaseOrder $purchaseOrder): PurchaseOrderResource
     {
-        try { $po = $this->service->close($purchaseOrder); }
+        try { $po = $this->service->close($purchaseOrder, $request->user()); }
         catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
         return new PurchaseOrderResource($this->service->show($po));
     }
