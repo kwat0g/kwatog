@@ -21,6 +21,7 @@ class LeaveTypeResource extends JsonResource
             'is_convertible_on_separation' => (bool) $this->is_convertible_on_separation,
             'is_convertible_year_end'      => (bool) $this->is_convertible_year_end,
             'conversion_rate'              => (string) $this->conversion_rate,
+            'max_carryover_days'           => $this->max_carryover_days !== null ? (string) $this->max_carryover_days : null,
             'is_active'                    => (bool) $this->is_active,
             'created_at'                   => optional($this->created_at)->toIso8601String(),
             'updated_at'                   => optional($this->updated_at)->toIso8601String(),
