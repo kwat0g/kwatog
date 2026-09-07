@@ -333,8 +333,8 @@ Inspection     QC-YYYYMM-NNNN    QC-202604-0012
   2025 tables). Now bounded to `period_start … period_end + N` days
   (`payroll.payroll_date.max_days_after_period_end`, default 45).
 - **Partial employment prorates BOTH ends.** Basic pay is flat per cutoff, which is only
-  right for someone employed the whole cutoff. `employedDayFraction()` scales it by the
-  days actually covered — hire date OR separation date (`clearances.separation_date`,
+  right for someone employed the whole cutoff. `EmploymentProrationService::employedDayFraction()`
+  (Payroll, shared with HR's final pay) scales it by the days actually covered — hire date OR separation date (`clearances.separation_date`,
   earliest wins). Without the separation half a leaver banked the full half-month and
   `FinalPayService::lastSalaryProRated()` reads `payroll.basic_pay` verbatim, so it flowed
   straight into final pay (~₱6,880 on a ₱9,460 cutoff).

@@ -68,6 +68,7 @@ class PayrollCalculatorService
         private readonly ThirteenthMonthService $thirteenthMonth,
         private readonly SettingsService $settings,
         private readonly PayrollPeriodService $periods,
+        private readonly EmploymentProrationService $proration,
     ) {}
 
     /**
@@ -540,73 +541,13 @@ class PayrollCalculatorService
     /**
      * What fraction of this cutoff's calendar days was the employee employed?
      *
-     * '1.0000' for a full cutoff — the overwhelmingly common case, and the value
-     * that keeps an unchanged run byte-identical to the pre-proration behaviour.
-     *
-     * Both ends are handled:
-     *
-     *   hire date inside the cutoff        → paid from the hire date onward
-     *   separation date inside the cutoff  → paid up to the last working day
-     *
-     * The separation half matters because basic pay is now FLAT (migration 0437
-     * retired the days-worked daily type). Someone who resigns on day 3 of a
-     * 1–15 cutoff used to earn 3 × daily_rate; without this they would bank the
-     * entire half-month. FinalPayService::lastSalaryProRated() reads
-     * payroll.basic_pay verbatim when a computed row exists, so the inflated
-     * figure would flow straight into final pay — roughly ₱6,880 on a ₱9,460
-     * cutoff, per separation.
+     * Delegates to EmploymentProrationService — the ONE shared formula (HR-02).
+     * FinalPayService consumes the same service, so a leaver's final pay can
+     * never disagree with the payroll row for the same cutoff again.
      */
     private function employedDayFraction(Employee $employee, PayrollPeriod $period): string
     {
-        $periodStart = $period->period_start;
-        $periodEnd   = $period->period_end;
-
-        $from = $employee->date_hired && $employee->date_hired->gt($periodStart)
-            ? $employee->date_hired
-            : $periodStart;
-
-        $separationDate = $this->separationDate($employee);
-        $to = $separationDate && $separationDate->lt($periodEnd)
-            ? $separationDate
-            : $periodEnd;
-
-        // Employment window does not overlap the cutoff at all (hired after it
-        // ended, or separated before it began). Nothing is owed.
-        if ($to->lt($from)) {
-            return '0.0000';
-        }
-
-        $totalDays   = max(1, $periodStart->diffInDays($periodEnd, true) + 1);
-        $coveredDays = $from->diffInDays($to, true) + 1;
-
-        if ($coveredDays >= $totalDays) {
-            return '1.0000';
-        }
-
-        return bcdiv((string) $coveredDays, (string) $totalDays, 4);
-    }
-
-    /**
-     * The employee's last working day, if a separation is on record.
-     *
-     * Read from clearances.separation_date — the authoritative last day, set when
-     * the separation is initiated. Guarded so the calculator keeps working if the
-     * clearance table is absent, and takes the EARLIEST separation date on record
-     * so a re-initiated separation cannot extend paid days.
-     */
-    private function separationDate(Employee $employee): ?\Illuminate\Support\Carbon
-    {
-        if (! \Illuminate\Support\Facades\Schema::hasTable('clearances')) {
-            return null;
-        }
-
-        $date = DB::table('clearances')
-            ->where('employee_id', $employee->id)
-            ->whereNull('deleted_at')
-            ->whereNotNull('separation_date')
-            ->min('separation_date');
-
-        return $date === null ? null : \Illuminate\Support\Carbon::parse($date)->startOfDay();
+        return $this->proration->employedDayFraction($employee, $period->period_start, $period->period_end);
     }
 
     /**

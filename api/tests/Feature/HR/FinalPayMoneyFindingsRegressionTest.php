@@ -113,7 +113,7 @@ class FinalPayMoneyFindingsRegressionTest extends TestCase
         ]);
     }
 
-    /** One 8-hour worked day inside the final period → 20000/22 ≈ 909.09. */
+    /** One 8-hour worked day inside the final period (ignored by the shared calendar-day proration). */
     private function seedAttendanceDay(Employee $employee): void
     {
         DB::table('attendances')->insert([
@@ -164,12 +164,13 @@ class FinalPayMoneyFindingsRegressionTest extends TestCase
      */
     public function test_p05_01_separation_completes_when_deductions_exceed_earnings(): void
     {
-        // A leaver whose final cutoff is tiny (1 day = ₱909.09) but who owes a
+        // A leaver whose final cutoff is tiny (separation on day 1 of the
+        // cutoff: 1/16 of the flat half-month = ₱625.00) but who owes a
         // large lost-property charge (₱5,000). Net is clamped at 0.00 and the
         // JE must still balance. Property is not gated by finalize's loan
         // check, so this is the reachable path where deductions exceed earnings.
         $employee  = $this->makeEmployee(['basic_monthly_salary' => '20000.00']);
-        $clearance = $this->makeClearance($employee);
+        $clearance = $this->makeClearance($employee, ['separation_date' => '2026-05-16']);
         $this->seedOpenPayrollPeriod();
         $this->seedAttendanceDay($employee);
 

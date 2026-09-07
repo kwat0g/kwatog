@@ -15,10 +15,10 @@ use App\Modules\Accounting\Services\JournalEntryService;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Clearance;
 use App\Modules\HR\Models\Employee;
-use App\Modules\Attendance\Models\Attendance;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollPeriod;
+use App\Modules\Payroll\Services\EmploymentProrationService;
 use Carbon\CarbonInterface;
 use Closure;
 use Illuminate\Support\Facades\DB;
@@ -41,6 +41,7 @@ class FinalPayService
     public function __construct(
         private readonly JournalEntryService $journals,
         private readonly SettingsService $settings,
+        private readonly EmploymentProrationService $proration,
     ) {}
 
     public function compute(Clearance $clearance, ?User $by = null): Clearance
@@ -302,25 +303,16 @@ class FinalPayService
             return Money::clampMin(Money::sub($earnings, $deductions), Money::zero());
         }
 
-        // Otherwise calculate only from persisted DTR hours in the real
-        // payroll period. Each row contributes at most one eight-hour day;
-        // half-days contribute 0.5. No synthetic attendance is invented.
-        $dayEquivalents = '0.0000';
-        $hoursPerDay = $this->hoursPerDay();
-        $attendances = Attendance::query()
-            ->where('employee_id', $e->id)
-            ->whereBetween('date', [$period->period_start, $separationDate])
-            ->get(['regular_hours']);
-        foreach ($attendances as $attendance) {
-            $fraction = bcdiv((string) $attendance->regular_hours, $hoursPerDay, Money::INNER);
-            $fraction = bccomp($fraction, '0', Money::INNER) < 0 ? '0.0000' : $fraction;
-            $fraction = bccomp($fraction, '1', Money::INNER) > 0 ? '1.0000' : $fraction;
-            $dayEquivalents = bcadd($dayEquivalents, $fraction, Money::INNER);
-        }
+        // Otherwise mirror the payroll engine's own basic-pay figure: flat
+        // half-month scaled by the ONE shared employment-window fraction
+        // (HR-02). The former DTR-day formula was attendance-based with a
+        // different divisor, so it disagreed with the payroll row whenever
+        // the separation outran the compute run.
+        $monthly = $this->authoritativeMonthlySalary($e);
+        $halfBasic = Money::div($monthly, '2', 4);
+        $fraction = $this->proration->employedDayFraction($e, $period->period_start, $period->period_end);
 
-        $dailyRate = $this->authoritativeDailyRate($e);
-
-        return Money::clampMin(Money::mul($dayEquivalents, $dailyRate), Money::zero());
+        return Money::clampMin(Money::mul($halfBasic, $fraction), Money::zero());
     }
 
     private function unusedConvertibleLeaveValue(Employee $e): string
@@ -345,26 +337,23 @@ class FinalPayService
         // Monthly equivalent reconciles both pay types (see Employee model), so
         // a semi-monthly employee's separation pay is not computed off half a
         // month's figure.
-        $monthly = $employee->monthlyEquivalentSalary();
-        $rate = $monthly !== null
-            ? Money::div((string) $monthly, $this->workDaysPerMonth(), Money::INNER)
-            : '0.0000';
+        return Money::div($this->authoritativeMonthlySalary($employee), $this->workDaysPerMonth(), Money::INNER);
+    }
 
-        if (bccomp($rate, '0', Money::INNER) <= 0) {
+    private function authoritativeMonthlySalary(Employee $employee): string
+    {
+        $monthly = $employee->monthlyEquivalentSalary();
+
+        if ($monthly === null || Money::lte((string) $monthly, '0')) {
             throw new BusinessRuleException("Employee {$employee->employee_no} has no authoritative pay rate for final-pay calculation.");
         }
 
-        return $rate;
+        return (string) $monthly;
     }
 
     private function workDaysPerMonth(): string
     {
         return $this->positivePayrollSetting('payroll.work_days_per_month');
-    }
-
-    private function hoursPerDay(): string
-    {
-        return $this->positivePayrollSetting('payroll.hours_per_day');
     }
 
     private function positivePayrollSetting(string $key): string
