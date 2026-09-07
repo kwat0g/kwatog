@@ -60,4 +60,24 @@ final class PurchaseOrderAccessPolicy
             }
         });
     }
+
+    public function canView(User $user, PurchaseOrder $po): bool
+    {
+        if ($user->hasPermission('purchasing.po.approve')) {
+            return true;
+        }
+
+        if ((int) $po->created_by === (int) $user->id) {
+            return true;
+        }
+
+        if ($user->role?->slug !== 'department_head' || $user->employee_id === null) {
+            return false;
+        }
+
+        $departmentId = Employee::query()->whereKey($user->employee_id)->value('department_id');
+
+        return $departmentId !== null
+            && (int) $po->purchaseRequest()->value('department_id') === (int) $departmentId;
+    }
 }

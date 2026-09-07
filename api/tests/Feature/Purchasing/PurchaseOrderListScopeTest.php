@@ -11,8 +11,10 @@ use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseRequest;
+use App\Modules\Purchasing\Services\PurchaseOrderPdfService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Tests\TestCase;
 
 /**
@@ -117,5 +119,54 @@ class PurchaseOrderListScopeTest extends TestCase
         $this->poIn($department, User::factory()->create()->id);
 
         $this->assertSame([$own->po_number], $this->poNumbers($user));
+    }
+
+    public function test_department_head_cannot_show_or_pdf_a_po_outside_their_row_scope(): void
+    {
+        $headDepartment = Department::factory()->create();
+        $otherDepartment = Department::factory()->create();
+        $head = $this->userWithRole('department_head', $headDepartment);
+        $hidden = $this->poIn($otherDepartment, User::factory()->create()->id);
+
+        $this->actingAs($head, 'sanctum')
+            ->getJson('/api/v1/purchasing/purchase-orders/'.$hidden->hash_id)
+            ->assertForbidden();
+
+        $this->actingAs($head, 'sanctum')
+            ->get('/api/v1/purchasing/purchase-orders/'.$hidden->hash_id.'/pdf')
+            ->assertForbidden();
+    }
+
+    public function test_po_owner_and_global_role_can_show_and_pdf_a_po(): void
+    {
+        $role = Role::create([
+            'name' => 'PO owner '.substr(uniqid(), -5),
+            'slug' => 'po_owner_'.substr(uniqid(), -5),
+            'is_system' => false,
+        ]);
+        $role->permissions()->sync(
+            Permission::query()->whereIn('slug', ['purchasing.view'])->pluck('id')->all(),
+        );
+        $owner = User::factory()->create(['role_id' => $role->id]);
+        $global = $this->userWithRole('purchasing_officer');
+        $po = $this->poIn(null, $owner->id);
+        $pdfResponse = new StreamedResponse(static function (): void {}, 200, ['Content-Type' => 'application/pdf']);
+
+        $this->mock(PurchaseOrderPdfService::class, function ($mock) use ($pdfResponse): void {
+            $mock->shouldReceive('render')->andReturn($pdfResponse);
+        });
+
+        $this->actingAs($owner, 'sanctum')
+            ->getJson('/api/v1/purchasing/purchase-orders/'.$po->hash_id)
+            ->assertOk();
+        $this->actingAs($owner, 'sanctum')
+            ->get('/api/v1/purchasing/purchase-orders/'.$po->hash_id.'/pdf')
+            ->assertOk();
+        $this->actingAs($global, 'sanctum')
+            ->getJson('/api/v1/purchasing/purchase-orders/'.$po->hash_id)
+            ->assertOk();
+        $this->actingAs($global, 'sanctum')
+            ->get('/api/v1/purchasing/purchase-orders/'.$po->hash_id.'/pdf')
+            ->assertOk();
     }
 }
