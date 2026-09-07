@@ -374,7 +374,7 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'hr.clearance.sign',          'name' => 'Sign Clearance Item'],
                 ['slug' => 'hr.separation.finalize',     'name' => 'Finalize Separation & Final Pay'],
                 // HR-04 — correction path for mistakenly initiated separations.
-                // Also granted to hr_officer by migration 0482 on deployed
+                // Also granted to hr_officer by migration 0483 on deployed
                 // databases; the seeder's role sync detaches anything not in
                 // this catalog, so the slug must live here too.
                 ['slug' => 'hr.separation.cancel',       'name' => 'Cancel Initiated Separation'],
