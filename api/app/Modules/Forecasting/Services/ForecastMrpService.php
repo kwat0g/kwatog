@@ -49,11 +49,27 @@ class ForecastMrpService
             ->where('forecasted_quantity', '>', 0)
             ->get();
 
+        // A total row and customer rows are alternative representations of the
+        // same demand, never additive. Keep the forecast quantity as a string
+        // until the BOM boundary to avoid lossy decimal aggregation.
+        $forecastsByProduct = $forecasts->groupBy('product_id');
         $grossPerItem = [];   // item_id => float gross requirement
         $products = [];
 
-        foreach ($forecasts as $fc) {
-            $qty = (float) $fc->forecasted_quantity;
+        foreach ($forecastsByProduct as $productForecasts) {
+            $total = $productForecasts->firstWhere('customer_id', null);
+            $forecastQuantity = $total
+                ? (string) $total->forecasted_quantity
+                : $productForecasts->reduce(
+                    static fn (string $sum, DemandForecast $forecast): string => bcadd(
+                        $sum,
+                        (string) $forecast->forecasted_quantity,
+                        2,
+                    ),
+                    '0.00',
+                );
+            $fc = $total ?? $productForecasts->first();
+            $qty = (float) $forecastQuantity;
             $hasBom = false;
             try {
                 $exploded = $this->bom->explode((int) $fc->product_id, $qty);
@@ -69,7 +85,7 @@ class ForecastMrpService
             $products[] = [
                 'product_id'          => $fc->product?->hash_id,
                 'product_name'        => $fc->product?->name,
-                'forecasted_quantity' => number_format($qty, 2, '.', ''),
+                'forecasted_quantity' => bcadd($forecastQuantity, '0', 2),
                 'has_bom'             => $hasBom,
             ];
         }

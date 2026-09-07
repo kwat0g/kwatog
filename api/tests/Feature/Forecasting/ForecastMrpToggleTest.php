@@ -6,6 +6,7 @@ namespace Tests\Feature\Forecasting;
 
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\Accounting\Models\Customer;
 use App\Modules\CRM\Models\Product;
 use App\Modules\Forecasting\Models\DemandForecast;
 use App\Modules\Forecasting\Services\ForecastMrpService;
@@ -89,5 +90,58 @@ class ForecastMrpToggleTest extends TestCase
         $this->assertSame($included->hash_id, $result['products'][0]['product_id']);
         $this->assertSame('100.00', $result['products'][0]['forecasted_quantity']);
         $this->assertFalse($result['products'][0]['has_bom']);
+    }
+
+    public function test_projection_prefers_total_forecast_over_customer_rows(): void
+    {
+        $product = Product::factory()->create(['include_forecast_in_mrp' => true]);
+        $customer = Customer::factory()->create();
+
+        DemandForecast::factory()->create([
+            'product_id' => $product->id,
+            'customer_id' => null,
+            'forecast_year' => 2026,
+            'forecast_month' => 8,
+            'forecasted_quantity' => '100.00',
+        ]);
+        DemandForecast::factory()->create([
+            'product_id' => $product->id,
+            'customer_id' => $customer->id,
+            'forecast_year' => 2026,
+            'forecast_month' => 8,
+            'forecasted_quantity' => '40.00',
+        ]);
+
+        $bom = Mockery::mock(BomService::class);
+        $bom->shouldReceive('explode')->once()->with($product->id, 100.0)->andReturn(new Collection());
+
+        $result = (new ForecastMrpService($bom))->project(2026, 8);
+
+        $this->assertCount(1, $result['products']);
+        $this->assertSame('100.00', $result['products'][0]['forecasted_quantity']);
+    }
+
+    public function test_projection_sums_customer_rows_when_total_forecast_is_absent(): void
+    {
+        $product = Product::factory()->create(['include_forecast_in_mrp' => true]);
+        $customers = Customer::factory()->count(2)->create();
+
+        foreach (['0.10', '0.20'] as $index => $quantity) {
+            DemandForecast::factory()->create([
+                'product_id' => $product->id,
+                'customer_id' => $customers[$index]->id,
+                'forecast_year' => 2026,
+                'forecast_month' => 8,
+                'forecasted_quantity' => $quantity,
+            ]);
+        }
+
+        $bom = Mockery::mock(BomService::class);
+        $bom->shouldReceive('explode')->once()->with($product->id, 0.3)->andReturn(new Collection());
+
+        $result = (new ForecastMrpService($bom))->project(2026, 8);
+
+        $this->assertCount(1, $result['products']);
+        $this->assertSame('0.30', $result['products'][0]['forecasted_quantity']);
     }
 }
