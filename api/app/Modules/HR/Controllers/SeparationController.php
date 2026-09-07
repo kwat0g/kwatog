@@ -8,6 +8,7 @@ use App\Modules\HR\Models\Clearance;
 use App\Modules\HR\Enums\ClearanceStatus;
 use App\Modules\HR\Enums\SeparationReason;
 use App\Modules\HR\Models\Employee;
+use App\Modules\HR\Requests\CancelClearanceRequest;
 use App\Modules\HR\Requests\InitiateSeparationRequest;
 use App\Modules\HR\Resources\ClearanceResource;
 use App\Modules\HR\Services\FinalPayService;
@@ -90,5 +91,16 @@ class SeparationController
     {
         abort_unless($request->user()?->can('hr.separation.finalize'), 403);
         return new ClearanceResource($this->service->finalize($clearance, $request->user(), $this->finalPay));
+    }
+
+    /**
+     * PATCH /clearances/{clearance}/cancel — HR-04 correction path.
+     * Only valid before final pay is computed (enforced in the service).
+     */
+    public function cancel(CancelClearanceRequest $request, Clearance $clearance): ClearanceResource
+    {
+        return new ClearanceResource(
+            $this->service->cancel($clearance, $request->user(), $request->validated('reason'))
+        );
     }
 }

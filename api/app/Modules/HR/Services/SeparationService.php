@@ -443,4 +443,118 @@ class SeparationService
             return $this->show($lockedClearance);
         });
     }
+
+    /**
+     * HR-04 — cancel a Pending/InProgress clearance and restore the employee.
+     *
+     * Before this existed, an initiated separation could only move forward:
+     * a rescinded resignation or a mistyped separation date (a future-dated
+     * typo passes the hire-date guard) left the employee stuck in on_leave
+     * with a clearance nobody could walk back.
+     *
+     * Refused once money is in play — a clearance whose final pay has been
+     * computed has already fed payroll/accounting expectations (HR-01), so
+     * the correction for THAT state is a payroll adjustment, not a
+     * disappearing clearance.
+     */
+    public function cancel(Clearance $clearance, User $by, ?string $reason = null): Clearance
+    {
+        return DB::transaction(function () use ($clearance, $by, $reason) {
+            // Lock the authoritative row: a cancel request racing with
+            // signItem()/compute()/finalize() must resolve against the
+            // current aggregate, not a stale route-bound model.
+            $lockedClearance = Clearance::query()
+                ->lockForUpdate()
+                ->find($clearance->id);
+
+            if (! $lockedClearance) {
+                throw new BusinessRuleException('Clearance not found.');
+            }
+
+            if ($lockedClearance->status === ClearanceStatus::Cancelled) {
+                throw new BusinessRuleException('Clearance is already cancelled.');
+            }
+
+            if ($lockedClearance->status !== ClearanceStatus::Pending
+                && $lockedClearance->status !== ClearanceStatus::InProgress) {
+                throw new BusinessRuleException(
+                    'Only a pending or in-progress clearance can be cancelled; this one is '
+                    .$lockedClearance->status->value.'.'
+                );
+            }
+
+            if ($lockedClearance->final_pay_computed) {
+                throw new BusinessRuleException(
+                    'Final pay has already been computed for this clearance, so it can no longer be cancelled. '
+                    .'Correct through payroll instead.'
+                );
+            }
+
+            $employee = Employee::query()
+                ->lockForUpdate()
+                ->find($lockedClearance->employee_id);
+
+            if (! $employee) {
+                throw new BusinessRuleException('Clearance employee not found.');
+            }
+
+            $restoreTo = $this->preInitiationStatus($employee->id);
+            $this->stateMachine->transition($employee, $restoreTo);
+
+            $remarks = trim('Separation cancelled.'.($reason !== null ? ' Reason: '.trim($reason) : ''));
+            $previousRemarks = trim((string) $lockedClearance->remarks);
+            if ($previousRemarks !== '') {
+                $remarks .= ' | Previous remarks: '.$previousRemarks;
+            }
+
+            // Single save → one audit row. The audit reason is derived from
+            // the changed remarks, so the cancellation reason lands there.
+            $lockedClearance->remarks = $remarks;
+            $lockedClearance->status  = ClearanceStatus::Cancelled->value;
+            $lockedClearance->save();
+
+            // Mirror initiate()'s history row so the trail shows the reversal.
+            // from_value is the status at cancellation (on_leave after a normal
+            // initiation); to_value.status is never 'in_progress', so the
+            // pre-initiation lookup below can never mistake this row for an
+            // initiation marker.
+            EmploymentHistory::create([
+                'employee_id'    => $employee->id,
+                'change_type'    => EmploymentChangeType::Separated->value,
+                'from_value'     => ['status' => EmployeeStatus::OnLeave->value],
+                'to_value'       => [
+                    'status'           => $restoreTo->value,
+                    'clearance_status' => ClearanceStatus::Cancelled->value,
+                ],
+                'effective_date' => now()->toDateString(),
+                'remarks'        => 'Separation cancelled. Clearance '.$lockedClearance->clearance_no
+                    .($reason !== null ? '. Reason: '.trim($reason) : '.'),
+                'approved_by'    => $by->id,
+                'created_at'     => now(),
+            ]);
+
+            return $this->show($lockedClearance);
+        });
+    }
+
+    /**
+     * initiate() records the exact pre-initiation status in the Separated
+     * history row's from_value; restore from the latest such row. Clearances
+     * created outside initiate() (legacy rows, factories) have no marker and
+     * fall back to active — the only status we can assume without inventing
+     * history.
+     */
+    private function preInitiationStatus(int $employeeId): EmployeeStatus
+    {
+        $row = EmploymentHistory::query()
+            ->where('employee_id', $employeeId)
+            ->where('change_type', EmploymentChangeType::Separated->value)
+            ->whereRaw("to_value->>'status' = 'in_progress'")
+            ->orderByDesc('id')
+            ->first();
+
+        $status = is_array($row?->from_value) ? ($row->from_value['status'] ?? null) : null;
+
+        return EmployeeStatus::tryFrom((string) $status) ?? EmployeeStatus::Active;
+    }
 }

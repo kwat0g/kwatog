@@ -373,6 +373,10 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'hr.separation.initiate',     'name' => 'Initiate Employee Separation'],
                 ['slug' => 'hr.clearance.sign',          'name' => 'Sign Clearance Item'],
                 ['slug' => 'hr.separation.finalize',     'name' => 'Finalize Separation & Final Pay'],
+                // HR-04 — correction path for a Pending/InProgress clearance
+                // (rescinded resignation, mistyped separation date). Refused
+                // once final pay is computed.
+                ['slug' => 'hr.separation.cancel',       'name' => 'Cancel Employee Separation'],
             ],
             'hr_recruitment' => [
                 ['slug' => 'hr.recruitment.view',         'name' => 'View Job Postings & Applications'],
