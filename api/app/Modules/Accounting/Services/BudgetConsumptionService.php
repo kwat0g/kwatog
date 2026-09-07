@@ -280,7 +280,9 @@ final class BudgetConsumptionService
                     ->on('je.date', '<=', 'fy.end_date');
             })
             ->whereIn('fy.id', $fiscalYearIds)
-            ->where('je.status', 'posted')
+            // Reversed originals remain historical actuals; the separately
+            // posted reversal offsets them from its own date onward.
+            ->whereIn('je.status', ['posted', 'reversed'])
             ->whereNull('je.deleted_at')
             ->whereNull('jel.deleted_at')
             ->selectRaw('fy.id AS fiscal_year_id, jel.account_id, COALESCE(SUM(jel.debit), 0) - COALESCE(SUM(jel.credit), 0) AS actual')

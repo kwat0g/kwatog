@@ -79,7 +79,7 @@ class AccountService
         // Aggregate posted balances in one query.
         $balances = DB::table('journal_entry_lines')
             ->join('journal_entries', 'journal_entries.id', '=', 'journal_entry_lines.journal_entry_id')
-            ->where('journal_entries.status', 'posted')
+            ->whereIn('journal_entries.status', ['posted', 'reversed'])
             ->groupBy('journal_entry_lines.account_id')
             ->selectRaw('
                 journal_entry_lines.account_id,

@@ -11,6 +11,7 @@ use App\Modules\Accounting\Models\BudgetLineItem;
 use App\Modules\Accounting\Models\FiscalYear;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Models\JournalEntryLine;
+use App\Modules\Accounting\Services\JournalEntryService;
 use App\Modules\Accounting\Services\BudgetFiscalYearResolver;
 use App\Modules\Accounting\Services\BudgetService;
 use App\Modules\Auth\Models\User;
@@ -66,6 +67,44 @@ class BudgetConsumptionAndLifecycleTest extends TestCase
             ->checkAvailability($department->id, '61.00', $fiscalYear->id);
         $this->assertFalse($canProceed);
         $this->assertSame('overdrawn', $level);
+    }
+
+    public function test_reversed_gl_actuals_remain_historical_until_the_reversal_date(): void
+    {
+        $fiscalYear = $this->currentFiscalYear();
+        $account = $this->expenseAccount();
+        $budget = Budget::factory()->create([
+            'fiscal_year_id' => $fiscalYear->id,
+            'status' => 'active',
+            'total_allocated' => '100.00',
+        ]);
+        BudgetLineItem::create(['budget_id' => $budget->id, 'account_id' => $account->id, 'jan' => '100.00']);
+
+        $maker = User::factory()->create();
+        $poster = User::factory()->create();
+        $journals = app(JournalEntryService::class);
+        $cash = Account::create([
+            'code' => 'C-'.substr(uniqid(), -6),
+            'name' => 'Budget reversal cash',
+            'type' => 'asset',
+            'normal_balance' => 'debit',
+            'is_active' => true,
+        ]);
+        $entry = $journals->create([
+            'date' => '2026-06-15',
+            'description' => 'Budget historical reversal test',
+            'lines' => [
+                ['account_id' => $account->hash_id, 'debit' => '40.00', 'credit' => '0'],
+                ['account_id' => $cash->hash_id, 'debit' => '0', 'credit' => '40.00'],
+            ],
+        ], $maker);
+        $journals->post($entry, $poster);
+        $this->assertSame('40.00', app(\App\Modules\Accounting\Services\BudgetService::class)
+            ->overview($fiscalYear->id)['total_spent']);
+        $journals->reverse($entry, $poster, \Carbon\Carbon::parse('2026-08-10'), 'Test reversal');
+
+        $this->assertSame('0.00', app(\App\Modules\Accounting\Services\BudgetService::class)
+            ->overview($fiscalYear->id)['total_spent']);
     }
 
     public function test_budget_lifecycle_is_locked_and_maker_checker_is_enforced(): void
