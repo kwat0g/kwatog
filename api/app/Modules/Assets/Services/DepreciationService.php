@@ -185,15 +185,7 @@ class DepreciationService
     {
         return Asset::query()
             ->whereDate('acquisition_date', '<=', $periodEnd->toDateString())
-            ->where(function ($query) use ($periodStart): void {
-                $query
-                    ->where('status', '!=', AssetStatus::Disposed->value)
-                    ->orWhere(function ($disposed) use ($periodStart): void {
-                        $disposed
-                            ->where('status', AssetStatus::Disposed->value)
-                            ->whereDate('disposed_date', '>=', $periodStart->toDateString());
-                    });
-            })
+            ->where('status', '!=', AssetStatus::Disposed->value)
             ->orderBy('id')
             ->lockForUpdate()
             ->get();

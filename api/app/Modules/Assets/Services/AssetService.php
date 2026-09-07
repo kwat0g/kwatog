@@ -31,6 +31,7 @@ class AssetService
         private readonly JournalEntryService $journals,
         private readonly AccountingPeriodService $periods,
         private readonly SettingsService $settings,
+        private readonly DepreciationService $depreciation,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -202,6 +203,17 @@ class AssetService
             $reason = trim((string) ($data['remarks'] ?? $data['disposal_reason'] ?? ''));
             if ($reason === '') {
                 throw new BusinessRuleException('A disposal reason is required.');
+            }
+
+            // Disposal reverses the register's full accumulated balance. Catch
+            // up every completed month before the disposal month first, while
+            // the asset is still active, so no depreciation can be posted after
+            // the disposal JE has derecognised it. This is part of the outer
+            // transaction and rolls back with the disposal on failure.
+            $priorMonth = $disposedDate->subMonthNoOverflow()->startOfMonth();
+            if ($priorMonth->gte($acquisitionDate->startOfMonth())) {
+                $this->depreciation->runBackfillTo($priorMonth->year, $priorMonth->month, $by);
+                $locked->refresh();
             }
 
             $disposalAmount = Money::round2((string) ($data['disposal_amount'] ?? Money::zero()));
