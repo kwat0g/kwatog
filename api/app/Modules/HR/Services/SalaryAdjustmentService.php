@@ -92,8 +92,15 @@ class SalaryAdjustmentService
     }
 
     /**
-     * Apply the approved pay to the employee, effective-date it in salary history,
-     * and log the change. Idempotent: a second call after applied_at is a no-op.
+     * Apply the approved pay, effective-date it in salary history, and log the
+     * change. Idempotent: a second call after applied_at is a no-op.
+     *
+     * The history row (payroll's authoritative source) is written at approval
+     * regardless of the effective date. The LIVE employee row is updated only
+     * when the effective date has arrived; a future-dated adjustment is picked
+     * up by applyDueLiveAdjustments() (scheduled daily, and callable manually)
+     * so no cutoff computed before the effective date can pay the raise early
+     * off the live columns (HR-05).
      */
     private function apply(SalaryAdjustment $adjustment): void
     {
@@ -102,15 +109,10 @@ class SalaryAdjustmentService
         }
 
         $employee = $adjustment->employee;
-        $changes = [];
-        if ($adjustment->to_basic_monthly_salary !== null) {
-            $changes['basic_monthly_salary'] = $adjustment->to_basic_monthly_salary;
-        }
-        if ($adjustment->to_semi_monthly_rate !== null) {
-            $changes['semi_monthly_rate'] = $adjustment->to_semi_monthly_rate;
-        }
-        if (! empty($changes)) {
-            $employee->update($changes);
+        $due = $adjustment->effective_date->lte(today());
+
+        if ($due) {
+            $this->applyToLiveRow($adjustment);
         }
 
         // basic_monthly_salary is NOT NULL on this table and is what the payroll
@@ -151,5 +153,58 @@ class SalaryAdjustmentService
             'status'     => SalaryAdjustmentStatus::Approved,
             'applied_at' => now(),
         ])->save();
+    }
+
+    /**
+     * Apply the new pay to the LIVE employee row and stamp live_applied_at on
+     * the model (not persisted here — the caller saves the adjustment).
+     */
+    private function applyToLiveRow(SalaryAdjustment $adjustment): void
+    {
+        $employee = $adjustment->employee;
+
+        $changes = [];
+        if ($adjustment->to_basic_monthly_salary !== null) {
+            $changes['basic_monthly_salary'] = $adjustment->to_basic_monthly_salary;
+        }
+        if ($adjustment->to_semi_monthly_rate !== null) {
+            $changes['semi_monthly_rate'] = $adjustment->to_semi_monthly_rate;
+        }
+        if (! empty($changes)) {
+            $employee->update($changes);
+        }
+
+        if ($adjustment->live_applied_at === null) {
+            $adjustment->live_applied_at = now();
+        }
+    }
+
+    /**
+     * Deferred live-row updates (HR-05): adjustments fully approved with a
+     * future effective date whose date has since arrived. Applied in
+     * effective_date order so the latest effective change wins on the live
+     * row. Idempotent — live_applied_at is the once-only marker. Scheduled
+     * daily via hr:apply-due-salary-adjustments.
+     */
+    public function applyDueLiveAdjustments(): int
+    {
+        return DB::transaction(function (): int {
+            $due = SalaryAdjustment::query()
+                ->with('employee')
+                ->whereNotNull('applied_at')
+                ->whereNull('live_applied_at')
+                ->whereDate('effective_date', '<=', today())
+                ->orderBy('effective_date')
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($due as $adjustment) {
+                $this->applyToLiveRow($adjustment);
+                $adjustment->save();
+            }
+
+            return $due->count();
+        });
     }
 }

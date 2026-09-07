@@ -157,6 +157,15 @@ Schedule::command('hr:onboarding-reminders')
     ->withoutOverlapping(120)
     ->onOneServer();
 
+// HR-05 — deferred live salary updates. Adjustments approved with a future
+// effective date write salary history at approval but hold the live pay
+// columns back; once the date arrives this flips them. Idempotent
+// (live_applied_at is the once-only marker).
+Schedule::command('hr:apply-due-salary-adjustments')
+    ->dailyAt('00:10')
+    ->withoutOverlapping(120)
+    ->onOneServer();
+
 // Recruitment lifecycle recovery — hourly scan for applications, interviews,
 // and postings that can wait indefinitely without an operator prompt.
 Schedule::command('recruitment:check-bottlenecks')

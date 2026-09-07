@@ -501,8 +501,10 @@ class PayrollCalculatorService
      *
      * Compatibility contract: when an employee has NO employee_salary_history
      * rows, this behaves EXACTLY as the legacy implementation (uses
-     * $monthlySalary verbatim). Proration only kicks in when a salary change's
-     * effective_date falls strictly inside the period.
+     * $monthlySalary verbatim). Otherwise the effective-dated history drives
+     * the rate for every day of the period — including the days BEFORE the
+     * first row on record (HR-05: the live row may already carry a raise that
+     * has not taken effect for this period yet).
      */
     private function computeBasicPay(
         Employee $employee,
@@ -612,10 +614,15 @@ class PayrollCalculatorService
     /**
      * Resolve effective salary segments across the period.
      *
-     * Returns null when there is no mid-period salary change to honor — the
-     * caller then runs the legacy code path verbatim (the compatibility
-     * guarantee). When a change DOES land inside the period, returns an ordered
-     * list of day-spans each tagged with the monthly rate in force for that span.
+     * Returns null ONLY when the employee has no employee_salary_history rows
+     * at all — the caller then runs the legacy code path verbatim (the
+     * compatibility guarantee). Any history row, including one effective after
+     * the period, proves an adjustment exists, so the legacy live-salary path
+     * must not run: the live row may already carry the new salary (HR-05).
+     *
+     * Otherwise returns an ordered list of day-spans each tagged with the
+     * monthly rate in force for that span — a single whole-period span when no
+     * change lands strictly inside the period.
      *
      * @return array<int, array{days:int, monthly:string}>|null
      */
@@ -625,10 +632,8 @@ class PayrollCalculatorService
         string $monthlySalary,
         string $payType,
     ): ?array {
-        // Cheap existence guard first — keeps the no-history path allocation-free.
         $history = \App\Modules\HR\Models\EmployeeSalaryHistory::query()
             ->where('employee_id', $employee->id)
-            ->whereDate('effective_date', '<=', $period->period_end)
             ->orderBy('effective_date')
             ->orderBy('id')
             ->get();
@@ -637,40 +642,35 @@ class PayrollCalculatorService
             return null;
         }
 
-        // Does any change take effect strictly AFTER period_start and on/before
-        // period_end? If not, the current salary already reflects everything and
-        // we defer to the legacy path (no proration needed).
-        $changesInside = $history->first(function ($h) use ($period) {
-            $eff = \Illuminate\Support\Carbon::parse($h->effective_date);
-            return $eff->gt($period->period_start) && $eff->lte($period->period_end);
-        });
-        if ($changesInside === null) {
-            return null;
-        }
+        $periodStart = \Illuminate\Support\Carbon::parse($period->period_start)->startOfDay();
+        $periodEnd   = \Illuminate\Support\Carbon::parse($period->period_end)->startOfDay();
 
-        // Salary in force at period_start = latest history row effective on or
-        // before period_start, else the employee's current values (the row set
-        // may only describe the raise, not the starting salary).
-        $startRow = $history->last(function ($h) use ($period) {
-            return \Illuminate\Support\Carbon::parse($h->effective_date)->lte($period->period_start);
-        });
-        $curMonthly = $this->historyMonthly($startRow, $payType) ?? $monthlySalary;
-
-        // Build day-by-day cursor, switching rates as effective dates pass.
         $insideChanges = $history
-            ->filter(function ($h) use ($period) {
-                $eff = \Illuminate\Support\Carbon::parse($h->effective_date);
-                return $eff->gt($period->period_start) && $eff->lte($period->period_end);
+            ->filter(function ($h) use ($periodStart, $periodEnd) {
+                $eff = \Illuminate\Support\Carbon::parse($h->effective_date)->startOfDay();
+                return $eff->gt($periodStart) && $eff->lte($periodEnd);
             })
             ->values();
 
+        // Salary in force at period_start = latest history row effective on or
+        // before period_start. When the FIRST row on record is still ahead of
+        // period_start (hire-into-history, or an adjustment effective after
+        // this period), the pre-change rate lives on the adjustment's
+        // from-values — the live row may already carry the new salary, which
+        // would silently pay the raise early (HR-05).
+        $startRow = $history->last(function ($h) use ($periodStart) {
+            return \Illuminate\Support\Carbon::parse($h->effective_date)->startOfDay()->lte($periodStart);
+        });
+        $curMonthly = $this->historyMonthly($startRow, $payType)
+            ?? ($startRow === null ? $this->preHistoryMonthly($employee, $history->first(), $payType) : null)
+            ?? $monthlySalary;
+
+        // Build day-by-day cursor, switching rates as effective dates pass.
         $segments = [];
-        $cursor   = \Illuminate\Support\Carbon::parse($period->period_start)->startOfDay();
-        $end      = \Illuminate\Support\Carbon::parse($period->period_end)->startOfDay();
         $changeIdx = 0;
         $spanDays  = 0;
 
-        for ($day = $cursor->copy(); $day->lte($end); $day->addDay()) {
+        for ($day = $periodStart->copy(); $day->lte($periodEnd); $day->addDay()) {
             // Apply any change effective on this day before counting it.
             while ($changeIdx < $insideChanges->count()
                 && \Illuminate\Support\Carbon::parse($insideChanges[$changeIdx]->effective_date)->startOfDay()->eq($day)) {
@@ -688,6 +688,38 @@ class PayrollCalculatorService
         }
 
         return $segments;
+    }
+
+    /**
+     * Monthly-equivalent salary in force BEFORE the employee's first salary
+     * history row, from the applied adjustment that wrote it (its from-values
+     * snapshot the live salary at request time). History rows seeded without
+     * an adjustment carry no from-values; the caller falls back to the live
+     * salary there.
+     */
+    private function preHistoryMonthly(Employee $employee, object $firstRow, string $payType): ?string
+    {
+        $adjustment = \App\Modules\HR\Models\SalaryAdjustment::query()
+            ->where('employee_id', $employee->id)
+            ->whereDate('effective_date', $firstRow->effective_date)
+            ->whereNotNull('applied_at')
+            ->orderBy('id')
+            ->first();
+
+        if ($adjustment === null) {
+            return null;
+        }
+
+        if ($payType === PayType::SemiMonthly->value
+            && $adjustment->from_semi_monthly_rate !== null
+            && Money::gt((string) $adjustment->from_semi_monthly_rate, '0')) {
+            return Money::mul((string) $adjustment->from_semi_monthly_rate, '2');
+        }
+
+        return $adjustment->from_basic_monthly_salary !== null
+            && Money::gt((string) $adjustment->from_basic_monthly_salary, '0')
+            ? (string) $adjustment->from_basic_monthly_salary
+            : null;
     }
 
     /**
