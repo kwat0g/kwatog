@@ -194,11 +194,12 @@ class FinalPayTest extends TestCase
             '₱650 × 2.5 persisted DTR day-equivalents must be paid.');
     }
 
-    public function test_final_period_salary_prefers_computed_payroll_result(): void
+    #[\PHPUnit\Framework\Attributes\DataProvider('undisbursedPayrollStatuses')]
+    public function test_final_pay_refuses_a_computed_payroll_row_until_its_period_is_disbursed(string $status): void
     {
         $employee = $this->makeEmployee(['basic_monthly_salary' => '22000.00']);
         $clearance = $this->makeClearance($employee);
-        $periodId = $this->seedOpenPayrollPeriod('computed');
+        $periodId = $this->seedOpenPayrollPeriod($status);
 
         DB::table('payrolls')->insert([
             'payroll_period_id' => $periodId,
@@ -213,9 +214,20 @@ class FinalPayTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $breakdown = $this->service()->compute($clearance)->final_pay_breakdown;
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('awaiting disbursement');
 
-        $this->assertSame('6850.00', $breakdown['last_salary_pro_rated']);
+        $this->service()->compute($clearance);
+    }
+
+    /** @return array<string, array{string}> */
+    public static function undisbursedPayrollStatuses(): array
+    {
+        return [
+            'computed' => ['computed'],
+            'approved' => ['approved'],
+            'finalized' => ['finalized'],
+        ];
     }
 
     public function test_disbursed_period_is_not_paid_again_in_final_pay(): void
@@ -664,7 +676,9 @@ class FinalPayTest extends TestCase
     {
         $employee  = $this->makeEmployee(['basic_monthly_salary' => '24000.00', 'pay_type' => 'monthly']);
         $clearance = $this->makeClearance($employee);
-        $periodId = $this->seedOpenPayrollPeriod('computed');
+        // The covering payroll has already been paid; HR-01 requires final pay
+        // to wait instead of consuming an undisbursed payroll row.
+        $periodId = $this->seedOpenPayrollPeriod('disbursed');
         DB::table('payrolls')->insert([
             'payroll_period_id' => $periodId,
             'employee_id' => $employee->id,

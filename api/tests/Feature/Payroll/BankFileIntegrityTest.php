@@ -7,9 +7,13 @@ namespace Tests\Feature\Payroll;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\HR\Enums\ClearanceStatus;
+use App\Modules\HR\Enums\SeparationReason;
+use App\Modules\HR\Models\Clearance;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\Position;
+use App\Modules\HR\Services\FinalPayService;
 use App\Modules\Payroll\Enums\BankFileGenerationStatus;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollPeriod;
@@ -92,6 +96,19 @@ class BankFileIntegrityTest extends TestCase
         ]);
     }
 
+    private function clearanceFor(Employee $employee, User $actor): Clearance
+    {
+        return Clearance::create([
+            'clearance_no' => 'CLR-'.substr(uniqid(), -8),
+            'employee_id' => $employee->id,
+            'separation_date' => '2026-08-15',
+            'separation_reason' => SeparationReason::Resigned->value,
+            'clearance_items' => [],
+            'status' => ClearanceStatus::InProgress->value,
+            'initiated_by' => $actor->id,
+        ]);
+    }
+
     // ─── Nobody is silently dropped ────────────────────────────
 
     public function test_a_fully_bankable_period_generates_normally(): void
@@ -103,6 +120,42 @@ class BankFileIntegrityTest extends TestCase
 
         $this->assertSame(2, $record->record_count);
         $this->assertSame('22000.00', (string) $record->total_amount);
+    }
+
+    public function test_final_pay_first_is_refused_and_the_payroll_row_remains_in_the_bank_file(): void
+    {
+        $payroll = $this->payrollFor('10000.00');
+        $actor = $this->actor();
+        $clearance = $this->clearanceFor($payroll->employee, $actor);
+
+        try {
+            app(FinalPayService::class)->compute($clearance, $actor);
+            $this->fail('Expected final pay to wait for payroll disbursement.');
+        } catch (BusinessRuleException $exception) {
+            $this->assertStringContainsString('awaiting disbursement', $exception->getMessage());
+        }
+
+        $record = $this->svc->generate($this->period, $actor, 'generic');
+
+        $this->assertSame(1, $record->record_count);
+        $this->assertSame('10000.00', (string) $record->total_amount);
+        $this->assertFalse($clearance->fresh()->final_pay_computed);
+    }
+
+    public function test_bank_file_and_disbursement_first_leave_the_payroll_salary_out_of_final_pay(): void
+    {
+        $payroll = $this->payrollFor('10000.00');
+        $actor = $this->actor();
+        $clearance = $this->clearanceFor($payroll->employee, $actor);
+
+        $record = $this->svc->generate($this->period, $actor, 'generic');
+        $this->period->forceFill(['status' => 'disbursed', 'disbursed_at' => now()])->save();
+
+        $computed = app(FinalPayService::class)->compute($clearance, $actor);
+
+        $this->assertSame(1, $record->record_count);
+        $this->assertSame('10000.00', (string) $record->total_amount);
+        $this->assertSame('0.00', $computed->final_pay_breakdown['last_salary_pro_rated']);
     }
 
     public function test_repeating_generation_reuses_the_current_artifact_record(): void

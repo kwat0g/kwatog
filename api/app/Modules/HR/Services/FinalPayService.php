@@ -280,6 +280,7 @@ class FinalPayService
             ->whereDate('period_end', '>=', $separationDate->toDateString())
             ->where('status', '!=', PayrollPeriodStatus::Voided->value)
             ->orderByDesc('period_start')
+            ->lockForUpdate()
             ->first();
 
         // A disbursed period has already been paid and must never be included
@@ -294,12 +295,12 @@ class FinalPayService
             ->where('payroll_period_id', $period->id)
             ->where('employee_id', $e->id)
             ->whereNotNull('computed_at')
+            ->lockForUpdate()
             ->first();
         if ($payroll) {
-            $earnings = Money::add((string) $payroll->basic_pay, (string) $payroll->leave_pay);
-            $deductions = Money::add((string) $payroll->tardiness_deduction, (string) $payroll->undertime_deduction);
-
-            return Money::clampMin(Money::sub($earnings, $deductions), Money::zero());
+            throw new BusinessRuleException(
+                'Final pay cannot include the covering payroll while that period is still awaiting disbursement. Disburse the payroll period, then compute final pay.'
+            );
         }
 
         // Otherwise calculate only from persisted DTR hours in the real
