@@ -58,6 +58,20 @@ final class ApprovalTypeRegistry
             'link' => '/payroll/periods/',
             'permissions' => ['payroll.periods.view', 'payroll.periods.approve'],
         ],
+        // Return Management has NO row scope, same as payroll: every holder of
+        // `return_management.view` sees every RMA in the module's own list
+        // endpoint, so the permission gate below is already equivalent and
+        // ApprovalSourceScope::hasScope() reports false. Deliberate, not an
+        // oversight — if a department scope is ever added to the module, wire
+        // it into ApprovalSourceScope instead of re-deriving one here.
+        'App\\Modules\\ReturnManagement\\Models\\ReturnRequest' => [
+            'kind' => 'return_request',
+            'label' => 'Return requests',
+            'table' => 'return_requests',
+            'number' => 'rma_number',
+            'link' => '/return-management/',
+            'permissions' => ['return_management.view', 'return_management.approve'],
+        ],
     ];
 
     /** @return array<string, array<string, mixed>> */
