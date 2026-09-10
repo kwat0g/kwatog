@@ -15,6 +15,7 @@ use App\Modules\Loans\Enums\LoanStatus;
 use App\Modules\Loans\Enums\LoanType;
 use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Loans\Models\LoanPayment;
+use App\Modules\Payroll\Enums\ContributionAgency;
 use App\Modules\Payroll\Enums\DeductionType;
 use App\Modules\Payroll\Enums\PayrollAdjustmentStatus;
 use App\Modules\Payroll\Enums\PayrollAdjustmentType;
@@ -64,6 +65,7 @@ class PayrollCalculatorService
         private readonly PhilhealthComputationService $philhealth,
         private readonly PagibigComputationService $pagibig,
         private readonly BirTaxComputationService $bir,
+        private readonly GovernmentContributionTableService $govTables,
         private readonly DeMinimisService $deMinimis,
         private readonly ThirteenthMonthService $thirteenthMonth,
         private readonly SettingsService $settings,
@@ -118,6 +120,8 @@ class PayrollCalculatorService
                     : 'Cannot recompute: a compute run is currently in progress for this period.',
             );
         }
+
+        $this->assertGovernmentTablesEffective($period);
 
         return DB::transaction(function () use ($period, $employee, $internal, $claimToken) {
             // Lock the period claim for the whole employee transaction. If a
@@ -778,6 +782,50 @@ class PayrollCalculatorService
     /**
      * Salary basis used for monthly gov contribution calculations.
      */
+    /**
+     * Every agency must have at least one bracket effective on the period's
+     * payroll_date before any employee is computed (PY-02).
+     *
+     * The four gov services treat "no brackets found" as ₱0.00, and
+     * bracketsEffectiveOn() falls back dated rows → active set → empty
+     * collection, so a fresh install or a deactivated table used to yield a
+     * fully computable/approvable/finalizable period where nobody had
+     * SSS/PhilHealth/Pag-IBIG/BIR withheld. This guard mirrors the de minimis
+     * hard-block: same date the computations use (payroll_date), same
+     * resolution path (bracketsEffectiveOn), one refusal naming every missing
+     * agency. Second-half and 13th-month periods take no gov deductions, so
+     * they are exempt — exactly like the computation branch below.
+     */
+    private function assertGovernmentTablesEffective(PayrollPeriod $period): void
+    {
+        if (! $period->is_first_half || $period->is_thirteenth_month) {
+            return;
+        }
+
+        $missing = [];
+        foreach (ContributionAgency::cases() as $agency) {
+            if ($this->govTables->bracketsEffectiveOn($agency, $period->payroll_date)->isEmpty()) {
+                $missing[] = $agency->label();
+            }
+        }
+
+        if ($missing === []) {
+            return;
+        }
+
+        Log::error('Government contribution table(s) missing; payroll computation blocked', [
+            'period_id'    => $period->id,
+            'payroll_date' => $period->payroll_date->toDateString(),
+            'missing'      => $missing,
+        ]);
+
+        throw new BusinessRuleException(sprintf(
+            'Payroll computation is blocked because no %s contribution table is effective on %s. Add or activate bracket rows effective on or before the payroll date, then recompute.',
+            implode(', ', $missing),
+            $period->payroll_date->format('Y-m-d'),
+        ));
+    }
+
     /**
      * Taxable-excess de minimis for the employee in this period's month.
      *
