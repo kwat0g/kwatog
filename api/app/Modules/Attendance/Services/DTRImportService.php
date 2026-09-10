@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Attendance\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Modules\Attendance\Enums\DtrImportRowOutcome;
 use App\Modules\Attendance\Models\Attendance;
 use App\Modules\HR\Models\Employee;
 use Carbon\Exceptions\InvalidFormatException;
@@ -24,31 +25,32 @@ class DTRImportService
         private readonly PunchSessionizer $sessionizer = new PunchSessionizer(),
     ) {}
 
-    /** @return array{total:int, imported:int, skipped:int, errors:array<int, array{row:int, message:string}>} */
+    /** @return array{total:int, imported:int, skipped:int, skipped_manual:int, errors:array<int, array{row:int, message:string, outcome?:string, employee_no?:string, date?:string}>} */
     public function import(UploadedFile $file): array
     {
         $stream = fopen($file->getRealPath(), 'r');
         if ($stream === false) {
-            return ['total' => 0, 'imported' => 0, 'skipped' => 0, 'errors' => [['row' => 0, 'message' => 'Could not open uploaded file.']]];
+            return ['total' => 0, 'imported' => 0, 'skipped' => 0, 'skipped_manual' => 0, 'errors' => [['row' => 0, 'message' => 'Could not open uploaded file.']]];
         }
 
         $header = fgetcsv($stream);
         if (! $header) {
             fclose($stream);
-            return ['total' => 0, 'imported' => 0, 'skipped' => 0, 'errors' => [['row' => 0, 'message' => 'Empty CSV.']]];
+            return ['total' => 0, 'imported' => 0, 'skipped' => 0, 'skipped_manual' => 0, 'errors' => [['row' => 0, 'message' => 'Empty CSV.']]];
         }
         $header = array_map(fn ($h) => strtolower(trim((string) $h)), $header);
         $required = ['employee_no', 'date', 'time_in', 'time_out'];
         $missing = array_diff($required, $header);
         if ($missing) {
             fclose($stream);
-            return ['total' => 0, 'imported' => 0, 'skipped' => 0, 'errors' => [['row' => 1, 'message' => 'Missing column(s): '.implode(', ', $missing)]]];
+            return ['total' => 0, 'imported' => 0, 'skipped' => 0, 'skipped_manual' => 0, 'errors' => [['row' => 1, 'message' => 'Missing column(s): '.implode(', ', $missing)]]];
         }
         $idx = array_flip($header);
 
         $cache = []; // employee_no => employee_id
         $imported = 0;
         $skipped = 0;
+        $skippedManual = 0;
         $errors = [];
         $rowNum = 1;
         $total = 0;
@@ -100,17 +102,40 @@ class DTRImportService
                         : Carbon::parse($timeOut)->toDateTimeString();
                 }
 
-                DB::transaction(function () use ($employeeId, $date, $tIn, $tOut) {
+                $outcome = DB::transaction(function () use ($employeeId, $date, $tIn, $tOut): DtrImportRowOutcome {
                     $this->mutability->assertMutable($employeeId, $date);
                     $a = $this->openDayRecord($employeeId, $date);
+                    $guarded = $this->manualCorrectionGuard($a, $tIn, $tOut);
+                    if ($guarded !== null) {
+                        return $guarded;
+                    }
                     $a->time_in = $tIn;
                     $a->time_out = $tOut;
                     $a->is_manual_entry = false;
                     $a = $this->dtr->computeForRecord($a);
                     $a->save();
                     $this->overtime->autoDetectFromAttendance($a);
+
+                    return DtrImportRowOutcome::Imported;
                 });
-                $imported++;
+
+                if ($outcome === DtrImportRowOutcome::SkippedManual) {
+                    $skipped++;
+                    $skippedManual++;
+                    $errors[] = [
+                        'row' => $rowNum,
+                        'message' => sprintf(
+                            'Manually corrected attendance for %s on %s was left unchanged by this import. Delete or re-correct the record first if the biometric punches should replace it.',
+                            $empNo,
+                            $date,
+                        ),
+                        'outcome' => $outcome->value,
+                        'employee_no' => $empNo,
+                        'date' => $date,
+                    ];
+                } else {
+                    $imported++;
+                }
             } catch (Throwable $e) {
                 $skipped++;
                 $errors[] = ['row' => $rowNum, 'message' => $this->rowMessage($e, $rowNum)];
@@ -118,7 +143,7 @@ class DTRImportService
         }
         fclose($stream);
 
-        return ['total' => $total, 'imported' => $imported, 'skipped' => $skipped, 'errors' => $errors];
+        return ['total' => $total, 'imported' => $imported, 'skipped' => $skipped, 'skipped_manual' => $skippedManual, 'errors' => $errors];
     }
 
     /**
@@ -136,11 +161,11 @@ class DTRImportService
      *
      * The paired-CSV path uses the same mutability guard and transaction fence.
      *
-     * @return array{total:int, imported:int, skipped:int, deduped:int, flagged:int, errors:array<int, array{row:int, message:string}>}
+     * @return array{total:int, imported:int, skipped:int, skipped_manual:int, deduped:int, flagged:int, errors:array<int, array{row:int, message:string, outcome?:string, employee_no?:string, date?:string}>}
      */
     public function importRawPunches(UploadedFile $file): array
     {
-        $empty = ['total' => 0, 'imported' => 0, 'skipped' => 0, 'deduped' => 0, 'flagged' => 0, 'errors' => []];
+        $empty = ['total' => 0, 'imported' => 0, 'skipped' => 0, 'skipped_manual' => 0, 'deduped' => 0, 'flagged' => 0, 'errors' => []];
 
         $stream = fopen($file->getRealPath(), 'r');
         if ($stream === false) {
@@ -207,6 +232,7 @@ class DTRImportService
         $cache = []; // employee_no => employee_id
         $imported = 0;
         $skipped  = 0;
+        $skippedManual = 0;
         $flagged  = 0;
         foreach ($days as $day) {
             try {
@@ -225,9 +251,13 @@ class DTRImportService
                     $flagged++;
                 }
 
-                DB::transaction(function () use ($employeeId, $date, $day) {
+                $outcome = DB::transaction(function () use ($employeeId, $date, $day): DtrImportRowOutcome {
                     $this->mutability->assertMutable($employeeId, $date);
                     $a = $this->openDayRecord($employeeId, $date);
+                    $guarded = $this->manualCorrectionGuard($a, $day['time_in'], $day['time_out']);
+                    if ($guarded !== null) {
+                        return $guarded;
+                    }
                     $a->time_in  = $day['time_in'];
                     $a->time_out = $day['time_out'];
                     $a->is_manual_entry = false;
@@ -237,8 +267,27 @@ class DTRImportService
                     $a = $this->dtr->computeForRecord($a);
                     $a->save();
                     $this->overtime->autoDetectFromAttendance($a);
+
+                    return DtrImportRowOutcome::Imported;
                 });
-                $imported++;
+
+                if ($outcome === DtrImportRowOutcome::SkippedManual) {
+                    $skipped++;
+                    $skippedManual++;
+                    $errors[] = [
+                        'row' => 0,
+                        'message' => sprintf(
+                            'Manually corrected attendance for %s on %s was left unchanged by this import. Delete or re-correct the record first if the biometric punches should replace it.',
+                            $empNo,
+                            $date,
+                        ),
+                        'outcome' => $outcome->value,
+                        'employee_no' => $empNo,
+                        'date' => $date,
+                    ];
+                } else {
+                    $imported++;
+                }
             } catch (Throwable $e) {
                 $skipped++;
                 $errors[] = ['row' => 0, 'message' => $this->rowMessage($e, 0)];
@@ -249,6 +298,7 @@ class DTRImportService
             'total'    => $total,
             'imported' => $imported,
             'skipped'  => $skipped,
+            'skipped_manual' => $skippedManual,
             'deduped'  => $deduped,
             'flagged'  => $flagged,
             'errors'   => $errors,
@@ -294,6 +344,47 @@ class DTRImportService
         }
 
         return $existing ?? new Attendance(['employee_id' => $employeeId, 'date' => $date]);
+    }
+
+    /**
+     * AT-02 — a manually corrected employee-day is owned by HR, not by the
+     * biometric file.
+     *
+     * Both import paths used to resolve the existing row via openDayRecord()
+     * and then overwrite time_in/time_out and reset is_manual_entry to false,
+     * so re-dropping the same weekly file silently destroyed every correction
+     * made since the previous import (the audit log survived, the pay did not).
+     *
+     * The guard returns SkippedManual when a stored manual row would change in
+     * ANY way — a differing punch, a punch the file would remove, or a punch
+     * that only fills an empty field. That last case is deliberately refused
+     * too: deciding "fill" from "overwrite" requires trusting that HR left the
+     * field empty on purpose, and skipping is the direction that can be undone
+     * by re-applying a correction, while clobbering is not. The one exception
+     * is an exact replay: when the incoming punches already equal the stored
+     * ones there is nothing to clobber, so the row is a no-op success and the
+     * manual flag survives — idempotent re-imports keep working.
+     *
+     * Rows that are not manual keep today's behaviour: the import overwrites
+     * them in place.
+     *
+     * Called inside the caller's transaction, after openDayRecord() has taken
+     * the row lock, so the comparison cannot race a concurrent manual edit.
+     */
+    private function manualCorrectionGuard(Attendance $a, ?string $tIn, ?string $tOut): ?DtrImportRowOutcome
+    {
+        if (! $a->exists || ! $a->is_manual_entry) {
+            return null;
+        }
+
+        $storedIn  = $a->time_in?->format('Y-m-d H:i:s');
+        $storedOut = $a->time_out?->format('Y-m-d H:i:s');
+
+        if ($storedIn === $tIn && $storedOut === $tOut) {
+            return DtrImportRowOutcome::Noop;
+        }
+
+        return DtrImportRowOutcome::SkippedManual;
     }
 
     /**

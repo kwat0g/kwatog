@@ -106,6 +106,42 @@ class MaterialIssueService
                     throw new BusinessRuleException("No stock at item={$itemId} location={$locId}.");
                 }
 
+                // IN-01 — validate the linked reservation and release it
+                // BEFORE the stock movement: move() gates on
+                // available = quantity − reserved_quantity, so reserved stock
+                // is only issuable after its reservation is released (same
+                // ordering as WorkOrderService::issueReservedMaterials()).
+                $reservation = null;
+                $reservationId = $row['material_reservation_id'] ?? null;
+                if ($reservationId) {
+                    $actualId = HashIdFilter::decode($reservationId, MaterialReservation::class) ?? (int) $reservationId;
+                    $reservation = MaterialReservation::query()->lockForUpdate()->find($actualId);
+                    if (! $reservation) {
+                        throw new BusinessRuleException("Reservation {$reservationId} does not exist.");
+                    }
+                    if ($reservation->status !== ReservationStatus::Reserved) {
+                        throw new BusinessRuleException(
+                            "Reservation {$reservationId} is {$reservation->status->value}, not reserved."
+                        );
+                    }
+                    if (
+                        (int) $reservation->item_id !== $itemId
+                        || (int) $reservation->location_id !== $locId
+                        || (int) $reservation->work_order_id !== (int) ($data['work_order_id'] ?? 0)
+                    ) {
+                        throw new BusinessRuleException(
+                            "Reservation {$reservationId} does not belong to this slip line (item/location/work-order mismatch)."
+                        );
+                    }
+                    if (bccomp($qty, (string) $reservation->quantity, 3) > 0) {
+                        throw new BusinessRuleException(
+                            "Cannot issue {$qty} against reservation {$reservationId} of quantity {$reservation->quantity}."
+                        );
+                    }
+
+                    $this->movements->release($itemId, $locId, $qty);
+                }
+
                 $mvmt = $this->movements->move(new StockMovementInput(
                     type: StockMovementType::MaterialIssue,
                     itemId: $itemId,
@@ -123,13 +159,15 @@ class MaterialIssueService
                 $unitCost = (string) $mvmt->unit_cost;
                 $lineTotal = bcmul($qty, $unitCost, 4);
 
-                $reservationId = $row['material_reservation_id'] ?? null;
-                if ($reservationId) {
-                    $actualId = HashIdFilter::decode($reservationId, MaterialReservation::class) ?? (int) $reservationId;
-                    $res = MaterialReservation::query()->lockForUpdate()->find($actualId);
-                    if ($res) {
-                        $res->update(['status' => ReservationStatus::Issued, 'released_at' => now()]);
-                        $this->movements->release($itemId, $locId, $qty);
+                if ($reservation) {
+                    if (bccomp($qty, (string) $reservation->quantity, 3) === 0) {
+                        $reservation->update(['status' => ReservationStatus::Issued, 'released_at' => now()]);
+                    } else {
+                        // Partial issue: only the issued quantity was released
+                        // above, so decrementing the row keeps the sum of
+                        // Reserved reservations equal to reserved_quantity and
+                        // the remainder stays bookable instead of leaking.
+                        $reservation->update(['quantity' => bcsub((string) $reservation->quantity, $qty, 3)]);
                     }
                 }
 

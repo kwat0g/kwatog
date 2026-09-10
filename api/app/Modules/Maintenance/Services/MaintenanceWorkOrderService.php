@@ -25,6 +25,7 @@ use App\Modules\Maintenance\Models\SparePartUsage;
 use App\Modules\Maintenance\Support\MaintenanceWorkOrderStateMachine;
 use App\Modules\MRP\Enums\MachineStatus;
 use App\Modules\MRP\Enums\MoldEventType;
+use App\Modules\MRP\Enums\MoldStatus;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
 use App\Modules\MRP\Models\MoldHistory;
@@ -259,8 +260,8 @@ class MaintenanceWorkOrderService
                 $mold = Mold::query()->lockForUpdate()->find($locked->maintainable_id);
                 if ($mold) {
                     $shotsBefore = (int) $mold->current_shot_count;
-                    $mold->forceFill([
-                        'current_shot_count' => 0,
+                    $attrs = [
+                        'current_shot_count'     => 0,
                         // Lifecycle manager: stamp + accumulate maintenance cost/count.
                         'last_maintenance_at' => now()->toDateString(),
                         'maintenance_count' => (int) $mold->maintenance_count + 1,
@@ -269,7 +270,13 @@ class MaintenanceWorkOrderService
                             (string) $cost,
                             2,
                         ),
-                    ])->save();
+                    ];
+                    // Return the mold to the schedulable pool once maintenance is
+                    // done. A terminal mold (Retired) must stay retired (MT-01).
+                    if ($mold->status !== MoldStatus::Retired) {
+                        $attrs['status'] = MoldStatus::Available->value;
+                    }
+                    $mold->forceFill($attrs)->save();
                     MoldHistory::create([
                         'mold_id' => $mold->id,
                         'event_type' => MoldEventType::MaintenanceCompleted->value,

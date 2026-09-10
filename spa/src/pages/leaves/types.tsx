@@ -27,7 +27,7 @@ const schema = z.object({
  name: z.string().min(1, 'Required').max(100),
  code: z.string().min(1, 'Required').max(10).regex(/^[A-Z0-9_]+$/, 'Uppercase letters, digits, or underscores'),
  default_balance: z.coerce.number().min(0, 'Must be >= 0'),
- max_carryover_days: z.coerce.number().min(0).optional().or(z.literal('')),
+ max_carryover_days: z.coerce.number().min(0).max(366).optional().or(z.literal('')),
  is_paid: z.boolean().optional(),
  requires_document: z.boolean().optional(),
  is_convertible_on_separation: z.boolean().optional(),
@@ -39,11 +39,13 @@ type FormValues = z.infer<typeof schema>;
 
 /**
  * The optional numeric fields accept '' so the inputs can be cleared, but the
- * API takes `number | undefined`. Drop the blanks rather than posting ''.
+ * API rejects '' for numerics. conversion_rate drops to undefined (the column
+ * is NOT NULL with a DB default); max_carryover_days posts null — clearing the
+ * cap means "unlimited carryover", which is what NULL encodes.
  */
 const toPayload = (d: FormValues) => ({
  ...d,
- max_carryover_days: d.max_carryover_days === '' ? undefined : d.max_carryover_days,
+ max_carryover_days: d.max_carryover_days === '' ? null : d.max_carryover_days,
  conversion_rate: d.conversion_rate === '' ? undefined : d.conversion_rate,
 });
 

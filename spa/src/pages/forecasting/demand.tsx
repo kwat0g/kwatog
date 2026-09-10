@@ -27,6 +27,7 @@ import { usePermission } from '@/hooks/usePermission';
 import type { ForecastMethod, DemandForecast } from '@/types/forecasting';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { Checkbox } from '@/components/ui/Checkbox';
+import { LuTriangleAlert } from '@/lib/icons';
 
 const MONTH_NAMES = [
   'Jan',
@@ -145,7 +146,15 @@ export default function DemandForecastingPage() {
         lookback_months: lookback,
       }),
     onSuccess: (res) => {
-      toast.success(res.message ?? 'Forecasts recomputed.');
+      const skipped = res.skipped_manual ?? [];
+      if (skipped.length > 0) {
+        const periods = skipped.map((p) => `${MONTH_NAMES[p.month - 1]} ${p.year}`).join(', ');
+        toast(`Manual override${skipped.length > 1 ? 's' : ''} preserved for ${periods}.`, {
+          icon: <LuTriangleAlert size={16} aria-hidden="true" />,
+        });
+      } else {
+        toast.success(res.message ?? 'Forecasts recomputed.');
+      }
       qc.invalidateQueries({ queryKey: ['forecasting/list'] });
     },
   });

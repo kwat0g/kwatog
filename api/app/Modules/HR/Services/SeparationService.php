@@ -17,6 +17,7 @@ use App\Modules\HR\Enums\SeparationReason;
 use App\Modules\HR\Events\ClearanceFullySigned;
 use App\Modules\HR\Events\SeparationInitiated;
 use App\Modules\HR\Models\Clearance;
+use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\EmploymentHistory;
 use App\Modules\HR\Support\EmployeeStateMachine;
@@ -34,6 +35,8 @@ use Illuminate\Validation\ValidationException;
  *                     and flips employee.status to on_leave
  *   signItem()        marks one checklist item as cleared (with auth check)
  *   markAllSigned()   transitions to completed when every item is cleared
+ *   cancel()          reverts a pending/in-progress separation: clearance
+ *                     → cancelled, employee restored to pre-initiation status
  *   finalize()        requires final pay computed; flips employee.status to
  *                     resigned/terminated/retired and stamps employment history.
  */
@@ -301,6 +304,11 @@ class SeparationService
                 if (($item['item_key'] ?? '') === $itemKey) {
                     $found = true;
 
+                    // Per-department signing gate (HR-03). Runs before the
+                    // replay no-op so an outsider cannot even probe the state
+                    // of another department's item.
+                    $this->assertMaySignItem($item, $by);
+
                     // Replayed sign requests are safe no-ops. Preserve the
                     // original signer and timestamp instead of rewriting an
                     // already authoritative checklist decision.
@@ -309,9 +317,6 @@ class SeparationService
                         return $this->show($lockedClearance);
                     }
 
-                    // Soft auth check — user must belong to that department,
-                    // or have hr_officer / system_admin role. Officer override
-                    // is enforced at controller via permission middleware.
                     $item['status']    = 'cleared';
                     $item['signed_by'] = $by->id;
                     $item['signed_at'] = now()->toISOString();
@@ -350,6 +355,154 @@ class SeparationService
 
             return $this->show($lockedClearance);
         });
+    }
+
+    /**
+     * HR-04 — the only backwards transition out of an initiated separation.
+     * A rescinded resignation or a mistyped separation date otherwise leaves
+     * the employee stuck: initiate() refuses a second clearance and the only
+     * way out was forward through every signature to final pay.
+     */
+    public function cancel(Clearance $clearance, User $by, ?string $reason = null): Clearance
+    {
+        return DB::transaction(function () use ($clearance, $by, $reason) {
+            $lockedClearance = Clearance::query()
+                ->lockForUpdate()
+                ->find($clearance->id);
+
+            if (! $lockedClearance) {
+                throw new BusinessRuleException('Clearance not found.');
+            }
+            if ($lockedClearance->status === ClearanceStatus::Cancelled) {
+                throw new BusinessRuleException('Clearance is already cancelled.');
+            }
+            if ($lockedClearance->status !== ClearanceStatus::Pending
+                && $lockedClearance->status !== ClearanceStatus::InProgress) {
+                throw new BusinessRuleException(
+                    'Only pending or in-progress clearances can be cancelled. '
+                    .'Completed or finalized separations require a different correction.'
+                );
+            }
+            if ($lockedClearance->final_pay_computed) {
+                throw new BusinessRuleException(
+                    'Clearance can no longer be cancelled: final pay has already been computed.'
+                );
+            }
+
+            $employee = Employee::query()
+                ->lockForUpdate()
+                ->find($lockedClearance->employee_id);
+
+            if (! $employee) {
+                throw new BusinessRuleException('Clearance employee not found.');
+            }
+
+            // initiate() stamps the employee's pre-separation status onto the
+            // history row it writes. Restore exactly that value — not a hard
+            // "active" — so a suspended employee is not silently reactivated.
+            $initiation = EmploymentHistory::query()
+                ->where('employee_id', $employee->id)
+                ->where('change_type', EmploymentChangeType::Separated->value)
+                ->orderByDesc('id')
+                ->get()
+                ->first(fn (EmploymentHistory $row) => ($row->to_value['status'] ?? null) === 'in_progress');
+
+            $fromStatus = $employee->status instanceof EmployeeStatus
+                ? $employee->status->value
+                : (string) $employee->getRawOriginal('status');
+            $priorStatus = EmployeeStatus::from(
+                (string) ($initiation?->from_value['status'] ?? EmployeeStatus::Active->value)
+            );
+
+            $this->stateMachine->transition($employee, $priorStatus);
+
+            // No cancelled_by/cancelled_at columns exist on clearances; the
+            // actor lands in the audit log and the reason in remarks.
+            $note = 'Separation cancelled by '.$by->name
+                .($reason !== null && trim($reason) !== '' ? ': '.trim($reason) : '');
+            $existingRemarks = trim((string) ($lockedClearance->remarks ?? ''));
+            $lockedClearance->status  = ClearanceStatus::Cancelled->value;
+            $lockedClearance->remarks = $existingRemarks === '' ? $note : $existingRemarks."\n".$note;
+            $lockedClearance->save();
+
+            EmploymentHistory::create([
+                'employee_id'    => $employee->id,
+                'change_type'    => EmploymentChangeType::Separated->value,
+                'from_value'     => ['status' => $fromStatus],
+                'to_value'       => [
+                    'separation_date'   => optional($lockedClearance->separation_date)?->toDateString(),
+                    'separation_reason' => $lockedClearance->separation_reason instanceof SeparationReason
+                        ? $lockedClearance->separation_reason->value
+                        : (string) $lockedClearance->separation_reason,
+                    'status'            => 'cancelled',
+                ],
+                'effective_date' => now()->toDateString(),
+                'remarks'        => 'Separation cancelled. Clearance '.$lockedClearance->clearance_no.'.',
+                'approved_by'    => $by->id,
+            ]);
+
+            return $this->show($lockedClearance);
+        });
+    }
+
+    /**
+     * Per-department signing gate (HR-03). The flat hr.clearance.sign
+     * permission — checked by the route middleware — only answers whether a
+     * role signs clearance items at all; this check answers WHICH items. A
+     * signer may clear an item only when their own employee belongs to the
+     * department that owns it. hr_officer and system_admin remain fallback
+     * signers for every department so no item can become unsignable.
+     *
+     * @param  array<string, mixed>  $item
+     */
+    private function assertMaySignItem(array $item, User $by): void
+    {
+        if (in_array($by->role?->slug, ['hr_officer', 'system_admin'], true)) {
+            return;
+        }
+
+        $label = trim((string) ($item['department'] ?? ''));
+        $owner = $this->resolveChecklistDepartment($label);
+        $actorDepartmentId = $by->employee?->department_id;
+
+        if ($owner === null || $actorDepartmentId === null || (int) $owner->id !== (int) $actorDepartmentId) {
+            throw new BusinessRuleException(
+                "Clearance item '{$item['item_key']}' belongs to the {$label} department. "
+                .'Only a member of that department, an HR Officer, or a System Administrator may sign it.'
+            );
+        }
+    }
+
+    /**
+     * Resolves a checklist item's department label against the departments
+     * table. An exact (case-insensitive) code or name match wins; otherwise a
+     * UNIQUE name prefix is accepted ("Warehouse" → "Warehouse & Logistics").
+     * Ambiguous or unknown labels resolve to null, which restricts the item
+     * to the hr_officer / system_admin fallback signers.
+     */
+    public function resolveChecklistDepartment(string $label): ?Department
+    {
+        $label = trim($label);
+        if ($label === '') {
+            return null;
+        }
+
+        $escaped = str_replace(['%', '_'], ['\%', '\_'], $label);
+
+        $exact = Department::query()
+            ->where(fn ($q) => $q->where('code', 'ilike', $escaped)->orWhere('name', 'ilike', $escaped))
+            ->get();
+
+        if ($exact->count() === 1) {
+            return $exact->first();
+        }
+        if ($exact->count() > 1) {
+            return null;
+        }
+
+        $prefix = Department::query()->where('name', 'ilike', $escaped.'%')->get();
+
+        return $prefix->count() === 1 ? $prefix->first() : null;
     }
 
     public function finalize(Clearance $clearance, User $by, FinalPayService $finalPay): Clearance
