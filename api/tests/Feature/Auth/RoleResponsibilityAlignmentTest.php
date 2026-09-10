@@ -42,7 +42,10 @@ class RoleResponsibilityAlignmentTest extends TestCase
                 ['accounting.customers.view', 'accounting.customers.manage', 'crm.sales_orders.create', 'crm.sales_orders.confirm'],
                 ['accounting.invoices.create', 'accounting.bills.pay', 'payroll.periods.view', 'accounting.journal.post']],
             'Production Manager' => ['production_manager',
-                ['production.wo.record', 'production.dashboard.view', 'dashboard.plant_manager.view', 'mrp.machines.view'],
+                ['production.wo.record', 'production.dashboard.view', 'dashboard.plant_manager.view', 'mrp.machines.view',
+                    // Chain participation: step 2 of company_loan, step 1 of
+                    // salary_adjustment (2026-09-10 audit).
+                    'loans.view', 'loans.approve', 'hr.salary_adjustments.view', 'hr.salary_adjustments.act'],
                 ['dashboard.ppc.view', 'quality.inspections.manage', 'purchasing.po.approve', 'attendance.edit', 'inventory.stock_count.view']],
             'PPC Head' => ['ppc_head',
                 ['mrp.boms.manage', 'mrp.plans.run', 'forecasting.manage', 'production.wo.confirm'],

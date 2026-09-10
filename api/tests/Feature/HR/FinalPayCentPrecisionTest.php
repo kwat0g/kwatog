@@ -75,8 +75,10 @@ class FinalPayCentPrecisionTest extends TestCase
         ]);
 
         // Disbursed: the period has already paid the last salary through
-        // payroll, so final pay books 0.00 for it (an undisbursed covering
-        // period refuses the computation entirely — HR-01 guard).
+        // payroll, so final pay books 0.00 for it (HR-01 guard; the HR-02
+        // fallback only engages while the covering period is undisbursed and
+        // holds no computed row). The attendance row below is inert under the
+        // calendar-day basis — kept only as fixture realism.
         $periodId = DB::table('payroll_periods')->insertGetId([
             'period_start' => '2026-05-16',
             'period_end' => '2026-05-31',
@@ -88,15 +90,11 @@ class FinalPayCentPrecisionTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-        DB::table('payrolls')->insert([
-            'payroll_period_id' => $periodId,
+        DB::table('attendances')->insert([
             'employee_id' => $employee->id,
-            'pay_type' => 'monthly',
-            'basic_pay' => '100.11',
-            'leave_pay' => '0.01',
-            'tardiness_deduction' => '0.01',
-            'undertime_deduction' => '0.00',
-            'computed_at' => now(),
+            'date' => '2026-05-16',
+            'regular_hours' => 8.0,
+            'status' => 'present',
             'created_at' => now(),
             'updated_at' => now(),
         ]);

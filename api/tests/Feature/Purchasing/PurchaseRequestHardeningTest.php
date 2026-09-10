@@ -38,8 +38,8 @@ class PurchaseRequestHardeningTest extends TestCase
         $department = Department::factory()->create();
         $otherDepartment = Department::factory()->create();
         $head = $this->user('department_head', $department);
-        $sameDepartmentRequester = $this->user('employee', $department);
-        $otherDepartmentRequester = $this->user('employee', $otherDepartment);
+        $sameDepartmentRequester = $this->user('purchasing_officer', $department);
+        $otherDepartmentRequester = $this->user('purchasing_officer', $otherDepartment);
 
         $visible = PurchaseRequest::factory()->create([
             'requested_by' => $sameDepartmentRequester->id,
@@ -66,26 +66,35 @@ class PurchaseRequestHardeningTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_pending_count_excludes_self_submissions_and_other_departments(): void
+    public function test_pending_count_excludes_self_submissions_and_other_roles_steps(): void
     {
+        // 2026-09-10 chain: the badge counts steps the caller can act on. A
+        // finance officer sees both submitted PRs (step 1 is theirs on each)
+        // but NOT their own submission; a department head — holder of no step
+        // in the money-only chain — sees zero.
         $department = Department::factory()->create();
         $otherDepartment = Department::factory()->create();
-        $head = $this->user('department_head', $department);
-        $sameDepartmentRequester = $this->user('employee', $department);
-        $otherDepartmentRequester = $this->user('employee', $otherDepartment);
+        $finance = $this->user('finance_officer', $department);
+        $requesterOne = $this->user('purchasing_officer', $department);
+        $requesterTwo = $this->user('department_head', $otherDepartment);
         $service = app(PurchaseRequestService::class);
 
-        $sameDepartment = $service->create($this->payload(), $sameDepartmentRequester);
-        $service->submit($sameDepartment);
-        $otherDepartmentPr = $service->create($this->payload(), $otherDepartmentRequester);
-        $service->submit($otherDepartmentPr);
-        $own = $service->create($this->payload(), $head);
+        $one = $service->create($this->payload(), $requesterOne);
+        $service->submit($one);
+        $two = $service->create($this->payload(), $requesterTwo);
+        $service->submit($two);
+        $own = $service->create($this->payload(), $finance);
         $service->submit($own);
 
-        $this->actingAs($head)
+        $this->actingAs($finance)
             ->getJson('/api/v1/purchasing/purchase-requests/pending-count')
             ->assertOk()
-            ->assertJsonPath('data.count', 1);
+            ->assertJsonPath('data.count', 2);
+
+        $this->actingAs($this->user('department_head', $department))
+            ->getJson('/api/v1/purchasing/purchase-requests/pending-count')
+            ->assertOk()
+            ->assertJsonPath('data.count', 0);
     }
 
     public function test_total_estimate_and_line_total_keep_centavo_precision(): void
@@ -235,49 +244,98 @@ class PurchaseRequestHardeningTest extends TestCase
         }
     }
 
-    public function test_plant_wide_step_role_can_approve_and_open_any_department_request(): void
+    public function test_finance_can_open_and_approve_any_department_request(): void
     {
         $department = Department::factory()->create();
-        $requester = $this->user('employee', $department);
-        $head = $this->user('department_head', $department);
-        // Deliberately a different department: "Manager" is a company-level
+        $requester = $this->user('purchasing_officer', $department);
+        // Deliberately a different department: finance is a company-level
         // office, so its step must not be department-scoped.
-        $manager = $this->user('production_manager', Department::factory()->create());
+        $finance = $this->user('finance_officer', Department::factory()->create());
         $service = app(PurchaseRequestService::class);
 
         $pr = $service->create($this->payload(), $requester);
         $service->submit($pr);
-        $service->approve($pr->fresh(), $head, 'Step 1 approved');
 
-        $this->actingAs($manager)
+        $this->actingAs($finance)
             ->getJson("/api/v1/purchasing/purchase-requests/{$pr->hash_id}")
             ->assertOk();
 
-        $this->actingAs($manager)
+        $this->actingAs($finance)
             ->patchJson("/api/v1/purchasing/purchase-requests/{$pr->hash_id}/approve", [
-                'remarks' => 'Step 2 approved',
+                'remarks' => 'Finance approved',
             ])
             ->assertOk();
 
         $this->assertSame('approved', ApprovalRecord::query()
             ->where('approvable_type', $pr->getMorphClass())
             ->where('approvable_id', $pr->id)
-            ->where('step_order', 2)
+            ->where('step_order', 1)
             ->value('action'));
     }
 
-    public function test_department_head_cannot_approve_another_departments_step_one(): void
+    public function test_department_head_cannot_approve_the_finance_step(): void
     {
         $department = Department::factory()->create();
-        $requester = $this->user('employee', $department);
-        $foreignHead = $this->user('department_head', Department::factory()->create());
+        $requester = $this->user('purchasing_officer', $department);
+        $head = $this->user('department_head', $department);
         $service = app(PurchaseRequestService::class);
 
         $pr = $service->create($this->payload(), $requester);
         $service->submit($pr);
 
+        // The chain is money-only now: the department head holds no step, so
+        // ApprovalService refuses them even on their own department's request.
         $this->expectException(ForbiddenActionException::class);
-        $service->approve($pr->fresh(), $foreignHead, 'Not my department');
+        $service->approve($pr->fresh(), $head, 'Not my step');
+    }
+
+    public function test_purchasing_cannot_assign_foreign_department_on_create(): void
+    {
+        // PU-06 — purchasing (central desk) must record the REQUESTING
+        // department, not charge a foreign department's budget. Admin may
+        // assign any department; purchasing may assign any too (desk), but a
+        // department head may only create for their own.
+        $department = Department::factory()->create();
+        $head = $this->user('department_head', $department);
+        $service = app(PurchaseRequestService::class);
+
+        $this->expectException(ForbiddenActionException::class);
+        $service->create([...$this->payload(), 'department_id' => Department::factory()->create()->id], $head);
+    }
+
+    public function test_department_head_creates_for_own_department(): void
+    {
+        $department = Department::factory()->create();
+        $head = $this->user('department_head', $department);
+        $service = app(PurchaseRequestService::class);
+
+        $pr = $service->create([...$this->payload(), 'department_id' => $department->id], $head);
+
+        $this->assertSame($department->id, $pr->department_id);
+        $this->assertSame($head->id, (int) $pr->requested_by);
+    }
+
+    public function test_purchasing_desk_can_raise_for_a_chosen_department(): void
+    {
+        $department = Department::factory()->create();
+        $officer = $this->user('purchasing_officer', Department::factory()->create());
+        $service = app(PurchaseRequestService::class);
+
+        $pr = $service->create([...$this->payload(), 'department_id' => $department->id], $officer);
+
+        $this->assertSame($department->id, $pr->department_id);
+    }
+
+    public function test_auto_pr_bypasses_department_assignment_guard(): void
+    {
+        $department = Department::factory()->create();
+        $service = app(PurchaseRequestService::class);
+
+        // MRP/low-stock automation passes is_auto_generated and a department
+        // resolved from demand — no human creator to scope.
+        $pr = $service->create([...$this->payload(), 'department_id' => $department->id, 'is_auto_generated' => true], $this->user('system_admin'));
+
+        $this->assertSame($department->id, $pr->department_id);
     }
 
     /** @return array{priority:string,items:array<int,array<string,string>>} */

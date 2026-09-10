@@ -7,6 +7,7 @@ namespace App\Modules\Purchasing\Resources;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
+use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
 
 class PurchaseOrderResource extends JsonResource
 {
@@ -121,6 +122,12 @@ class PurchaseOrderResource extends JsonResource
             'created_at'             => optional($this->created_at)->toIso8601String(),
             'updated_at'             => optional($this->updated_at)->toIso8601String(),
             'deleted_at'             => optional($this->deleted_at)?->toIso8601String(),
+            // PU-13 — action decisions for detail/action responses, mirroring
+            // PurchaseRequestResource. Null on the paginated list to keep the
+            // delegation/step queries off per-row execution.
+            'actions'                => $request->route('purchaseOrder') !== null && $request->user()
+                ? app(PurchaseOrderAccessPolicy::class)->actionsFor($request->user(), $this->resource)
+                : null,
         ];
     }
 }

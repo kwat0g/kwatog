@@ -15,14 +15,14 @@ import { Panel } from '@/components/ui/Panel';
 import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { ChainHeader, ApprovalTimeline, LinkedRecords } from '@/components/chain';
+// ChainHeader stays: it still renders the downstream PR → PO → GRN → Bill chain.
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import { fromApprovalRecords } from '@/lib/approvals';
 import { buildP2pChain } from '@/lib/chains';
-import type { PurchaseRequest, PurchaseRequestStatus } from '@/types/purchasing';
-import type { ChainStep } from '@/types/chain';
+import type { PurchaseRequestStatus } from '@/types/purchasing';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 import { useOptimisticStatusAction } from '@/hooks/useOptimisticStatusAction';
@@ -223,9 +223,9 @@ export default function PurchaseRequestDetailPage() {
  {data.budget_acknowledged_at && <Chip variant="success">Finance acknowledged</Chip>}
  </div>
  )}
- <Panel title="Approval chain">
- <ChainHeader steps={buildPrChainSteps(data)} />
- </Panel>
+ {/* The approval chain renders ONCE — the sidebar ApprovalTimeline below.
+  A second horizontal stepper here duplicated it (same steps, worse labels:
+  raw lowercase role slugs), so it was removed on 2026-09-10. */}
  </div>
  <div className="px-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-6">
  <div className="col-span-2 space-y-4">
@@ -359,45 +359,7 @@ export default function PurchaseRequestDetailPage() {
   );
  }
 
- /** PR chain: Draft → Submitted → each approval step → Approved → Converted. */
- // eslint-disable-next-line react-refresh/only-export-components -- exported for pure chain-state tests
-export function buildPrChainSteps(pr: PurchaseRequest): ChainStep[] {
- const steps: ChainStep[] = [
- { key: 'draft', label: 'Draft', date: formatDate(pr.date),
- state: pr.status === 'draft' ? 'active' : 'done' },
- { key: 'submit', label: 'Submitted', date: pr.submitted_at ? formatDate(pr.submitted_at) : undefined,
- state: pr.submitted_at ? 'done' : pr.status === 'draft' ? 'pending' : 'active' },
- ];
- let rejectionSeen = false;
- const approvalRecords = [...(pr.approval_records ?? [])].sort((a, b) => a.step_order - b.step_order);
- for (const r of approvalRecords) {
-  const isRejected = r.action === 'rejected';
-  const isSkipped = r.action === 'skipped' || (rejectionSeen && r.action === 'pending');
-  const actionLabel = isRejected ? 'Rejected' : isSkipped ? 'Skipped' : r.action === 'approved' ? 'Approved' : 'Pending';
-  const remark = r.remarks?.trim();
-  const description = [
-   actionLabel,
-   r.acted_at ? formatDate(r.acted_at) : null,
-   remark ? `${isRejected ? 'Reason' : 'Remarks'}: ${remark}` : null,
-   rejectionSeen && r.action === 'pending' ? 'Not reached after an earlier rejection.' : null,
-  ].filter(Boolean).join(' · ');
-  steps.push({
-  key: `step-${r.step_order}`,
-  label: r.role_slug.replace(/_/g, ' '),
-  date: r.acted_at ? formatDate(r.acted_at) : undefined,
-  state: isRejected ? 'rejected' : isSkipped ? 'skipped' : r.action === 'approved' ? 'done' : 'active',
-  description,
-  });
-  rejectionSeen = rejectionSeen || isRejected;
- }
- steps.push({
- key: 'approved', label: 'Approved',
- date: pr.approved_at ? formatDate(pr.approved_at) : undefined,
- state: pr.status === 'approved' ? 'active' : pr.status === 'converted' ? 'done' : 'pending',
- });
- steps.push({
- key: 'converted', label: 'Converted to PO',
- state: pr.status === 'converted' ? 'done' : 'pending',
- });
- return steps;
-}
+ // The old buildPrChainSteps() horizontal stepper was removed with the
+ // duplicate chain panel (2026-09-10). The sidebar ApprovalTimeline renders
+ // the same records with richer detail (approver names, remarks, overdue) —
+ // one chain, one renderer.

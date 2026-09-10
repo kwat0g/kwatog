@@ -110,7 +110,9 @@ class ApprovalThresholdBoundaryTest extends TestCase
             ->where('workflow_type', 'purchase_request')
             ->value('steps');
 
-        $vp = collect($steps)->firstWhere('role', 'system_admin');
+        // 2026-09-10 — the VP step is the real vice_president role now, not
+        // the system_admin stand-in.
+        $vp = collect($steps)->firstWhere('role', 'vice_president');
 
         $this->assertIsString($vp['threshold'], 'a JSON number carrying centavos decodes to a float upstream of ApprovalService');
         $this->assertSame('50000.00', $vp['threshold']);

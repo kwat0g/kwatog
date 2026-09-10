@@ -181,6 +181,7 @@ final class NotificationCatalog
                 ['key' => 'chain.po_approved', 'label' => 'Purchase order approved', 'description' => 'A purchase order has been fully approved and is ready to send.'],
                 ['key' => 'auto_po_pending', 'label' => 'Auto-PO awaiting approval', 'description' => 'A critical stock level raised a purchase order automatically. It needs approval.'],
                 ['key' => 'purchasing.supplier_deterioration', 'label' => 'Supplier performance dropped', 'description' => 'A supplier’s rating fell sharply against its recent baseline.'],
+                ['key' => 'supplier_listing_submitted', 'label' => 'Supplier listing submitted', 'description' => 'A supplier submitted an item listing through the B2B portal and it needs purchasing review.'],
                 ['key' => 'return.shipped_to_vendor', 'label' => 'Returned goods shipped to vendor', 'description' => 'Supplier-returned goods were shipped back to the vendor. Purchasing should track the shipment and follow up on the credit.'],
             ]],
             ['title' => 'Chain 3 · Hire to Retire', 'hint' => 'Leave, overtime, loans, and payroll', 'types' => [

@@ -391,12 +391,10 @@ class ConsolidatePurchaseOrdersTest extends TestCase
         $requester = User::factory()->create([
             'role_id' => Role::where('slug', 'department_head')->value('id'),
         ]);
-        // One user per PR workflow step: dept head → manager → purchasing → VP.
+        // One user per PR workflow step (2026-09-10 chain): finance → VP.
         $approvers = [
-            'department_head'     => User::factory()->create(['role_id' => Role::where('slug', 'department_head')->value('id')]),
-            'production_manager'  => User::factory()->create(['role_id' => Role::where('slug', 'production_manager')->value('id')]),
-            'purchasing_officer'  => User::factory()->create(['role_id' => Role::where('slug', 'purchasing_officer')->value('id')]),
-            'system_admin'        => User::factory()->create(['role_id' => Role::where('slug', 'system_admin')->value('id')]),
+            'finance_officer' => User::factory()->create(['role_id' => Role::where('slug', 'finance_officer')->value('id')]),
+            'vice_president'  => User::factory()->create(['role_id' => Role::where('slug', 'vice_president')->value('id')]),
         ];
         $vendorA = $this->vendor();
         $item = Item::factory()->create();

@@ -85,6 +85,7 @@ const BY_TYPE: Record<string, NotificationMeta> = {
  'chain.po_approved': { icon: LuPackage, group: 'approvals', label: 'Purchasing' },
  'auto_po_pending': { icon: LuPackage, group: 'approvals', label: 'Purchasing' },
  'purchasing.supplier_deterioration': { icon: LuTrendingDown, group: 'alerts', label: 'Purchasing' },
+ 'supplier_listing_submitted': { icon: LuPackage, group: 'approvals', label: 'Purchasing' },
  'supplier.dispatch_action_required': { icon: LuTruck, group: 'alerts', label: 'Purchasing' },
  'return.shipped_to_vendor': { icon: LuTruck, group: 'system', label: 'Returns' },
 

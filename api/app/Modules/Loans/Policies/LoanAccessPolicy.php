@@ -19,9 +19,18 @@ use Illuminate\Support\Collection;
  * which employee rows that action may touch. The two checks must stay
  * separate, especially because department_head has loans.approve.
  *
- * On top of the self/department/global ladder, an approver on a plant-wide
- * chain step can see and decide the loans waiting on their step — the same
- * chain-participant branch PurchaseRequestAccessPolicy grew for M036.
+ * Ladder (2026-09-10 approval-chain audit):
+ *   - system_admin / finance_officer / hr_officer → every loan (company-wide
+ *     operators);
+ *   - department_head                             → own + their department's;
+ *   - chain participants                          → loans waiting on a
+ *     plant-wide step that names one of the caller's roles (production_manager
+ *     is step 2 of company_loan; vice_president closes cash_advance step 3 and
+ *     company_loan step 4) — the departmental step is deliberately excluded
+ *     here so a head's reach stays their own department. Without this branch
+ *     those steps stalled invisibly: the board hid the card while the badge
+ *     still counted it;
+ *   - everyone else                               → their own loans only.
  */
 final class LoanAccessPolicy
 {

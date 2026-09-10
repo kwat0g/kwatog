@@ -358,7 +358,15 @@ Inspection     QC-YYYYMM-NNNN    QC-202604-0012
 - **Loans:** Zero interest. Max 1 month salary. 1 loan + 1 CA at a time
 - **Inventory valuation:** Weighted average cost
 - **Outgoing QC:** AQL 0.65 Level II. Actual measurements for critical dimensions
-- **Approval chain:** Staff → Dept Head → Manager → Officer → VP (4 levels)
+- **Approval chain (PR):** Finance → VP (≥ ₱50,000). Creators hold the need
+  authority via the create gate (`department_head` + `purchasing_officer` only);
+  the chain is money-only. Fully-approved PRs auto-convert to one draft PO per
+  vendor (`ConsolidatePurchaseOrders`); each line needs a preferred supplier
+  AND a price or the PR falls to `manual_required`. PO chain: Purchasing →
+  Finance → VP (≥ ₱50,000 per PO). No workflow step names the creator's own
+  role, so the self-approval guard can never strand a submission. A requester
+  who IS a step role (e.g. finance raising a PR) is blocked by the
+  self-approval guard, not skipped — use admin or another holder.
 - **Mold shot count:** Auto-increment. Alert at 80% of max
 - **Weighted avg cost:** Recalculated on every purchase receipt
 - **Payroll corrections:** Never unlock finalized. Adjustment in next period
@@ -446,7 +454,10 @@ Under non-web guards (e.g. `auth:edge_device`, `auth:supplier_portal`), `Auth::i
 - `GrnStatus` = pending_qc | accepted | partial_accepted | rejected (no `draft`)
 
 ### Seeded roles (slugs)
-system_admin, hr_officer, finance_officer, production_manager, ppc_head, purchasing_officer, warehouse_staff, qc_inspector, maintenance_tech, impex_officer, department_head, employee, driver. **NO plant_manager** — use production_manager.
+system_admin, vice_president, hr_officer, finance_officer, production_manager, ppc_head, purchasing_officer, warehouse_staff, qc_inspector, maintenance_tech, impex_officer, department_head, employee, driver. **NO plant_manager** — use production_manager.
+`vice_president` (2026-09-10) is the business executive tier: it replaced
+`system_admin` as the top step in all 9 seeded workflows and in the SLA
+escalation map. system_admin is IT only — never a business-process approver.
 
 ### Routing + middleware
 - Literal route segments declared BEFORE `{model}` bindings (e.g. `/vendors/ranking` before `/vendors/{vendor}/performance`) else they get param-bound.
@@ -487,6 +498,8 @@ So when you use this convention:
 - `App\Common\Services\NotificationService::send($recipients, string $type, array $data)` — single notification entry point. Recipients = `User|Collection|array`.
 - `App\Common\Support\ApprovalSourceScope::visibleIds()` — row visibility for approval-board cards: delegates to the owning module's own row scope.
 - `App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy::visibleTo()` — the ONE purchase-order row scope: PO list, global search and the approval board all call it.
+- `App\Modules\Loans\Policies\LoanAccessPolicy::visibleTo()` — the ONE loan row scope (global operators / dept ladder + chain-participant branch).
+- `Tests\Feature\Approvals\ApprovalChainRolePermissionDriftTest` — drift guard: every seeded workflow step role must hold a permission its act route accepts, and every enforced chain must be registered in `ApprovalTypeRegistry`. Run it whenever you touch `WorkflowSeeder`, a chain's step roles, or an approve route's middleware — a chain whose step role lost its route permission stalls invisibly (the PS-01 class; it shipped in loans steps 2–4 and salary_adjustment step 2 before this test existed).
 
 ### Aggregator surfaces reuse the owning module's ROW scope — never its view permission
 - A view permission answers "may this role open the module at all"; only the module's row scope answers "which rows". `leave.view` is self-scoped and granted to EVERY role, so gating the Approval Queue on it let every employee read every employee's leave cards, dates and approver remarks (2026-09 audit — AQ-1/2/3).

@@ -556,6 +556,43 @@ class PayrollCalculatorServiceTest extends TestCase
     }
 
     /**
+     * DOLE night differential is 10% of the applicable holiday/rest-day hourly
+     * rate, not 10% of the ordinary hourly rate.
+     *
+     * This combines a regular holiday and rest day (2.60 day_type_rate) with
+     * eight night-differential hours, the production case that exposed the
+     * missing multiplier in aggregateAttendance().
+     */
+    public function test_night_diff_premium_stacks_day_type_rate_on_holiday_rest_day(): void
+    {
+        $emp = $this->makeEmployee(); // 20,000 monthly
+        $period = $this->makePeriod(false, '2026-04-16', '2026-04-30');
+
+        Attendance::create([
+            'employee_id'       => $emp->id,
+            'date'              => '2026-04-16',
+            'time_in'           => '2026-04-16 18:00:00',
+            'time_out'          => '2026-04-17 06:00:00',
+            'regular_hours'     => '8.00',
+            'overtime_hours'    => '0.00',
+            'night_diff_hours'  => '8.00',
+            'tardiness_minutes' => 0,
+            'undertime_minutes' => 0,
+            'is_rest_day'       => true,
+            'day_type_rate'     => '2.60',
+            'status'            => 'present',
+        ]);
+
+        $payroll = $this->calc->computeForEmployee($period, $emp);
+
+        // hourly = 20,000 / 22 / 8 = 113.6363...
+        // ND = 8 × hourly × 10% × 2.60 = 236.37.
+        $this->assertSame('236.37', $payroll->night_diff_pay);
+        $this->assertSame('1454.54', $payroll->holiday_pay);
+        $this->assertSame('11690.91', $payroll->gross_pay);
+    }
+
+    /**
      * applyApprovedAdjustments() behaviour — four assertions in one test:
      *
      *  A) A positive (underpayment) adjustment increases net pay.

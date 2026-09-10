@@ -102,7 +102,7 @@ class AssetDisposalJournalLinesTest extends TestCase
             'asset_code' => 'AST-DJ-'.substr(uniqid(), -6),
             'name' => 'Disposal journal asset',
             'category' => AssetCategory::Equipment->value,
-            'acquisition_date' => '2026-01-15',
+            'acquisition_date' => '2026-06-01',
             'acquisition_cost' => '12000.00',
             'useful_life_years' => 5,
             'salvage_value' => '0.00',
@@ -275,5 +275,61 @@ class AssetDisposalJournalLinesTest extends TestCase
         // stays pending and resolvable (reject or cancel) instead of closing
         // a chain whose asset was never disposed.
         $this->assertNotNull(app(ApprovalService::class)->nextStep($asset->fresh()));
+    }
+
+    public function test_disposal_catches_up_through_the_prior_month_before_reversing_accumulated_depreciation(): void
+    {
+        $asset = $this->asset([
+            'acquisition_date' => '2026-01-01',
+            'accumulated_depreciation' => '0.00',
+        ]);
+
+        app(AssetService::class)->dispose($asset, [
+            'disposal_amount' => '5000.00',
+            'disposed_date' => '2026-06-15',
+            'remarks' => 'Disposed after the final operating month',
+        ], $this->user());
+
+        $this->assertDatabaseCount('asset_depreciations', 5);
+        $this->assertDatabaseHas('asset_depreciations', [
+            'asset_id' => $asset->id,
+            'period_year' => 2026,
+            'period_month' => 5,
+            'depreciation_amount' => '200.00',
+            'accumulated_after' => '1000.00',
+        ]);
+
+        $disposed = $asset->fresh();
+        $this->assertSame('1000.00', $disposed->accumulated_depreciation);
+        $net = $this->netByCode($this->disposalEntry($asset));
+        $accumulatedCode = $this->accountCode('accounting.accounts.asset_accumulated_depreciation_code');
+        $this->assertSame('1000.00', $net[$accumulatedCode]);
+    }
+
+    public function test_disposal_month_run_excludes_the_disposed_asset(): void
+    {
+        $actor = $this->user();
+        $asset = $this->asset([
+            'acquisition_date' => '2026-01-01',
+            'accumulated_depreciation' => '0.00',
+        ]);
+
+        app(AssetService::class)->dispose($asset, [
+            'disposal_amount' => '5000.00',
+            'disposed_date' => '2026-06-15',
+            'remarks' => 'Disposed before month end',
+        ], $actor);
+
+        $result = app(\App\Modules\Assets\Services\DepreciationService::class)
+            ->runForMonth(2026, 6, $actor);
+
+        $this->assertSame(0, $result['posted_count']);
+        $this->assertNull($result['journal_entry_id']);
+        $this->assertDatabaseMissing('asset_depreciations', [
+            'asset_id' => $asset->id,
+            'period_year' => 2026,
+            'period_month' => 6,
+        ]);
+        $this->assertSame('1000.00', $asset->fresh()->accumulated_depreciation);
     }
 }

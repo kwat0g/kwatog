@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Accounting;
 
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Services\AccountService;
 use App\Modules\Accounting\Services\JournalEntryService;
 use App\Modules\Accounting\Services\Statements\BalanceSheetService;
 use App\Modules\Accounting\Services\Statements\IncomeStatementService;
@@ -85,5 +86,54 @@ class StatementServicesTest extends TestCase
         $this->assertTrue($bs['balanced'], 'Balance sheet must include current-period net income in equity');
         $this->assertSame('105000.00', $bs['total_assets']);
         $this->assertSame('105000.00', $bs['total_liabilities_equity']);
+    }
+
+    public function test_reversal_changes_statements_only_from_its_effective_date(): void
+    {
+        $roleId = Role::query()->where('slug', 'system_admin')->value('id');
+        $user = User::factory()->create(['role_id' => $roleId]);
+        $journals = app(JournalEntryService::class);
+        $cash = Account::query()->where('code', '1020')->firstOrFail();
+        $sales = Account::query()->where('code', '4010')->firstOrFail();
+
+        $sale = $journals->create([
+            'date' => '2026-06-15',
+            'description' => 'Historical reversal test',
+            'lines' => [
+                ['account_id' => $cash->hash_id, 'debit' => '100.00', 'credit' => '0'],
+                ['account_id' => $sales->hash_id, 'debit' => '0', 'credit' => '100.00'],
+            ],
+        ], $user);
+        $journals->post($sale, $user);
+        $journals->reverse($sale, $user, Carbon::parse('2026-08-10'), 'Test reversal');
+
+        $income = app(IncomeStatementService::class);
+        $trial = app(TrialBalanceService::class);
+        $balance = app(BalanceSheetService::class);
+
+        $before = $income->generate(Carbon::parse('2026-06-01'), Carbon::parse('2026-06-30'));
+        $this->assertSame('100.00', $before['revenue']['total']);
+        $this->assertSame('100.00', $before['net_income']);
+
+        $throughReversal = $income->generate(Carbon::parse('2026-06-01'), Carbon::parse('2026-08-10'));
+        $this->assertSame('0.00', $throughReversal['revenue']['total']);
+        $this->assertSame('0.00', $throughReversal['net_income']);
+
+        $after = $income->generate(Carbon::parse('2026-08-10'), Carbon::parse('2026-08-31'));
+        $this->assertSame('-100.00', $after['revenue']['total']);
+
+        $historicalTrial = $trial->generate(Carbon::parse('2026-06-01'), Carbon::parse('2026-06-30'));
+        $cashBefore = collect($historicalTrial['accounts'])->firstWhere('code', '1020');
+        $this->assertSame('100.00', $cashBefore['debit_total']);
+
+        $postReversalBalance = $balance->generate(Carbon::parse('2026-08-10'));
+        $cashAfter = collect($postReversalBalance['assets']['accounts'])->firstWhere('code', '1020');
+        $this->assertSame('0.00', $cashAfter['amount']);
+        $this->assertTrue($postReversalBalance['balanced']);
+
+        $tree = app(AccountService::class)->tree();
+        $cashNode = collect($tree)->flatMap(fn (Account $account) => $account->children)
+            ->firstWhere('code', '1020');
+        $this->assertSame('0.00', $cashNode->current_balance);
     }
 }

@@ -168,7 +168,8 @@ class PurchaseRequestTest extends TestCase
         $svc->submit($pr);
         $pr->refresh();
 
-        // A plain 'employee' role cannot act as 'department_head' (step 1).
+        // A plain 'employee' role holds no step in any chain (step 1 is now
+        // finance_officer) and lacks purchasing.pr.approve outright.
         $employee = $this->makeUserWithRole('employee');
 
         $response = $this->actingAs($employee)

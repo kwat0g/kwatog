@@ -16,7 +16,7 @@ use App\Modules\Auth\Models\User;
  */
 final class ApprovalTypeRegistry
 {
-    /** @var array<string, array{kind:string,label:string,table:string,number:string|null,link:string,permissions:array<int,string>}> */
+    /** @var array<string, array{kind:string,label:string,table:string,number:string|null,link:string,link_record?:bool,permissions:array<int,string>}> */
     private const TYPES = [
         'App\\Modules\\Leave\\Models\\LeaveRequest' => [
             'kind' => 'leave',
@@ -58,7 +58,21 @@ final class ApprovalTypeRegistry
             'link' => '/payroll/periods/',
             'permissions' => ['payroll.periods.view', 'payroll.periods.approve'],
         ],
-<<<<<<< HEAD
+        // 2026-09-10 audit — both are ENFORCED chains (services call
+        // ApprovalService::submit) but were absent here, so the board dropped
+        // their cards silently and their actors (production_manager, VP) never
+        // saw work waiting on them.
+        'App\\Modules\\HR\\Models\\SalaryAdjustment' => [
+            'kind' => 'salary_adjustment',
+            'label' => 'Salary adjustments',
+            'table' => 'salary_adjustments',
+            'number' => null,
+            // The queue is a tab on the employees page, not a per-record URL.
+            // link_record=false tells linkFor() not to append the row hash.
+            'link' => '/hr/employees',
+            'link_record' => false,
+            'permissions' => ['hr.salary_adjustments.view', 'hr.salary_adjustments.act'],
+        ],
         'App\\Modules\\Assets\\Models\\Asset' => [
             'kind' => 'asset_disposal',
             'label' => 'Asset disposals',
@@ -66,10 +80,10 @@ final class ApprovalTypeRegistry
             'number' => 'asset_code',
             'link' => '/assets/',
             'permissions' => ['assets.view', 'assets.dispose.approve'],
-=======
+        ],
         // Return Management has NO row scope, same as payroll: every holder of
-        // `return_management.view` sees every RMA in the module's own list
-        // endpoint, so the permission gate below is already equivalent and
+        // `return_management.view` sees every RMA in the module's own
+        // list endpoint, so the permission gate below is already equivalent and
         // ApprovalSourceScope::hasScope() reports false. Deliberate, not an
         // oversight — if a department scope is ever added to the module, wire
         // it into ApprovalSourceScope instead of re-deriving one here.
@@ -80,7 +94,6 @@ final class ApprovalTypeRegistry
             'number' => 'rma_number',
             'link' => '/return-management/',
             'permissions' => ['return_management.view', 'return_management.approve'],
->>>>>>> origin/main
         ],
     ];
 
@@ -137,6 +150,10 @@ final class ApprovalTypeRegistry
     {
         $meta = self::forClass($class);
 
-        return $meta === null ? '/approvals' : $meta['link'].$hashId;
+        if ($meta === null) {
+            return '/approvals';
+        }
+
+        return ($meta['link_record'] ?? true) ? $meta['link'].$hashId : (string) $meta['link'];
     }
 }
