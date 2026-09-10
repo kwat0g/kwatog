@@ -16,7 +16,8 @@ use Illuminate\Support\Facades\DB;
  * Series F — Task F2. Approvals Kanban board.
  *
  * Reads `approval_records` (polymorphic to leave_requests, purchase_requests,
- * purchase_orders, employee_loans, payroll_periods) and buckets each
+ * purchase_orders, employee_loans, payroll_periods, return_requests) and
+ * buckets each
  * approvable into one of four columns from the current user's perspective:
  *
  *   - my_action       : an approval step is pending and the user's role
@@ -428,7 +429,7 @@ class ApprovalBoardService
 
     private function extractAmount(object $source): ?string
     {
-        foreach (['total_amount', 'principal', 'amount'] as $col) {
+        foreach (['total_amount', 'principal', 'amount', 'refund_amount'] as $col) {
             if (property_exists($source, $col) && $source->{$col} !== null) {
                 return (string) $source->{$col};
             }
@@ -444,6 +445,7 @@ class ApprovalBoardService
             'po'      => 'Purchase order — vendor #'.((string) ($source->vendor_id ?? '')),
             'loan'    => ucfirst((string) ($source->loan_type ?? 'loan')).' — '.app(CurrencyDisplayService::class)->format($source->principal ?? 0),
             'payroll' => 'Payroll period '.((string) ($source->period_start ?? '')).' to '.((string) ($source->period_end ?? '')),
+            'return_request' => ucfirst(str_replace('_', ' ', (string) ($source->type ?? 'return'))).' — '.((string) ($source->rma_number ?? '')),
             default   => '',
         };
     }

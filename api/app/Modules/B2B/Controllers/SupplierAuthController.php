@@ -11,6 +11,7 @@ use App\Modules\B2B\Services\PortalPasswordResetService;
 use App\Modules\B2B\Services\PortalPasswordService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class SupplierAuthController
 {
@@ -37,7 +38,7 @@ class SupplierAuthController
 
     /**
      * POST /api/v1/b2b/supplier/login
-     * Authenticate supplier portal user and return a Sanctum API token.
+     * Authenticate supplier portal user and establish an HTTP-only session.
      */
     public function login(Request $request): JsonResponse
     {
@@ -46,21 +47,17 @@ class SupplierAuthController
             'password' => ['required', 'string'],
         ]);
 
-        $result = $this->auth->login(
+        $user = $this->auth->login(
             SupplierPortalUser::class,
             $data['email'],
             $data['password'],
             $request,
-            'supplier-portal',
             'supplier',
+            'supplier_portal',
         );
-
-        /** @var SupplierPortalUser $user */
-        $user = $result['user'];
 
         return response()->json([
             'data' => [
-                'token' => $result['token'],
                 'user'  => [
                     'id'        => $user->hash_id,
                     'name'      => $user->name,
@@ -74,13 +71,15 @@ class SupplierAuthController
 
     /**
      * POST /api/v1/b2b/supplier/logout
-     * Revoke the current API token.
+     * Invalidate the portal session.
      */
     public function logout(Request $request): JsonResponse
     {
-        /** @var \App\Modules\B2B\Models\SupplierPortalUser $user */
-        $user = $request->user('supplier_portal');
-        $user?->currentAccessToken()?->delete();
+        Auth::guard('supplier_portal')->logout();
+        if ($request->hasSession()) {
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+        }
 
         return response()->json(['message' => 'Logged out successfully.']);
     }
@@ -94,6 +93,12 @@ class SupplierAuthController
         ]);
 
         $passwords->change($request->user('supplier_portal'), $data['current_password'], $data['new_password'], $request);
+
+        Auth::guard('supplier_portal')->logout();
+        if ($request->hasSession()) {
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+        }
 
         return response()->json(['message' => 'Password updated successfully. Please sign in again.']);
     }

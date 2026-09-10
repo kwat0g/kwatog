@@ -22,7 +22,6 @@ use App\Modules\Loans\Enums\LoanType;
 use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Loans\Services\LoanService;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
-use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use Carbon\CarbonInterface;
 use Closure;
@@ -70,7 +69,7 @@ class FinalPayService
             $employee = $lockedClearance->employee;
             if (! $employee) throw new BusinessRuleException('Clearance has no employee.');
 
-            $lastSalary = $this->lastSalaryProRated($employee, $lockedClearance->separation_date);
+            $lastSalary = $this->lastSalaryProRated($lockedClearance->separation_date);
             $leaveValue = $this->unusedConvertibleLeaveValue($employee);
             $thirteenth = $this->proRatedThirteenthMonth($employee, $lockedClearance->separation_date);
             // Settlements an earlier compute already recorded for THIS clearance
@@ -216,6 +215,13 @@ class FinalPayService
                     );
                 }
 
+                // A recovered draft still posts new money — re-run the guard
+                // that compute() enforced, in case the covering period changed
+                // since the draft was created.
+                if ($existing->status === JournalEntryStatus::Draft) {
+                    $this->assertCoveringPeriodAllowsFinalPay($lockedClearance);
+                }
+
                 $posted = $existing->status === JournalEntryStatus::Draft
                     ? $this->journals->post($existing, $by)
                     : $existing->fresh(['lines.account']);
@@ -270,6 +276,8 @@ class FinalPayService
                 'final_pay_breakdown' => $b,
                 'final_pay_amount'    => $net,
             ])->save();
+
+            $this->assertCoveringPeriodAllowsFinalPay($lockedClearance);
 
             $loan = $liveLoan;
 
@@ -378,55 +386,71 @@ class FinalPayService
 
     /* ─── Component helpers ─── */
 
-    private function lastSalaryProRated(Employee $e, CarbonInterface $separationDate): string
+    private function lastSalaryProRated(CarbonInterface $separationDate): string
     {
-        $period = PayrollPeriod::query()
+        $period = $this->coveringPayrollPeriod($separationDate);
+
+        // A disbursed period has already paid these days through payroll, and a
+        // missing period has no payroll run that could pay them. Any other
+        // status will still run and pays the SAME days (basic pay is prorated
+        // to the separation date by the payroll engine), so final pay must wait
+        // for it: booking the days here too would pay the employee twice.
+        if (! $period || $period->status === PayrollPeriodStatus::Disbursed) {
+            return Money::zero();
+        }
+
+        throw new BusinessRuleException(sprintf(
+            'Payroll period %s covering the separation date has not been disbursed — disburse or void it before computing final pay.',
+            $period->label(),
+        ));
+    }
+
+    /**
+     * The non-voided regular payroll period whose window contains the
+     * separation date, if any.
+     */
+    private function coveringPayrollPeriod(CarbonInterface $separationDate, bool $lock = false): ?PayrollPeriod
+    {
+        return PayrollPeriod::query()
+            ->when($lock, fn ($query) => $query->lockForUpdate())
             ->where('is_thirteenth_month', false)
             ->whereDate('period_start', '<=', $separationDate->toDateString())
             ->whereDate('period_end', '>=', $separationDate->toDateString())
             ->where('status', '!=', PayrollPeriodStatus::Voided->value)
             ->orderByDesc('period_start')
             ->first();
+    }
 
-        // A disbursed period has already been paid and must never be included
-        // again in final pay.
-        if (! $period || $period->status === PayrollPeriodStatus::Disbursed) {
-            return Money::zero();
+    /**
+     * The compute-time guard re-run at the money moment, under a lock on the
+     * period row. The covering period's status can change between compute and
+     * posting (and a legacy breakdown may predate the guard), and the JE is
+     * what actually pays — so verify again that payroll cannot also pay these
+     * days.
+     */
+    private function assertCoveringPeriodAllowsFinalPay(Clearance $clearance): void
+    {
+        $period = $this->coveringPayrollPeriod($clearance->separation_date, lock: true);
+
+        if (! $period) {
+            return;
         }
 
-        // Prefer the authoritative result of the payroll engine when the open
-        // period has already been computed for this employee.
-        $payroll = Payroll::query()
-            ->where('payroll_period_id', $period->id)
-            ->where('employee_id', $e->id)
-            ->whereNotNull('computed_at')
-            ->first();
-        if ($payroll) {
-            $earnings = Money::add((string) $payroll->basic_pay, (string) $payroll->leave_pay);
-            $deductions = Money::add((string) $payroll->tardiness_deduction, (string) $payroll->undertime_deduction);
-
-            return Money::clampMin(Money::sub($earnings, $deductions), Money::zero());
+        if ($period->status !== PayrollPeriodStatus::Disbursed) {
+            throw new BusinessRuleException(sprintf(
+                'Payroll period %s covering the separation date has not been disbursed — disburse or void it, then recompute final pay before posting the journal entry.',
+                $period->label(),
+            ));
         }
 
-        // Otherwise calculate only from persisted DTR hours in the real
-        // payroll period. Each row contributes at most one eight-hour day;
-        // half-days contribute 0.5. No synthetic attendance is invented.
-        $dayEquivalents = '0.0000';
-        $hoursPerDay = $this->hoursPerDay();
-        $attendances = Attendance::query()
-            ->where('employee_id', $e->id)
-            ->whereBetween('date', [$period->period_start, $separationDate])
-            ->get(['regular_hours']);
-        foreach ($attendances as $attendance) {
-            $fraction = bcdiv((string) $attendance->regular_hours, $hoursPerDay, Money::INNER);
-            $fraction = bccomp($fraction, '0', Money::INNER) < 0 ? '0.0000' : $fraction;
-            $fraction = bccomp($fraction, '1', Money::INNER) > 0 ? '1.0000' : $fraction;
-            $dayEquivalents = bcadd($dayEquivalents, $fraction, Money::INNER);
+        $lastSalary = Money::round2((string) ($clearance->final_pay_breakdown['last_salary_pro_rated'] ?? Money::zero()));
+        if (Money::gt($lastSalary, Money::zero())) {
+            throw new BusinessRuleException(sprintf(
+                'Final pay already includes %s of salary that payroll period %s has disbursed — posting would pay the employee twice for the same days. Recompute final pay before posting.',
+                $lastSalary,
+                $period->label(),
+            ));
         }
-
-        $dailyRate = $this->authoritativeDailyRate($e);
-
-        return Money::clampMin(Money::mul($dayEquivalents, $dailyRate), Money::zero());
     }
 
     private function unusedConvertibleLeaveValue(Employee $e): string
@@ -466,11 +490,6 @@ class FinalPayService
     private function workDaysPerMonth(): string
     {
         return $this->positivePayrollSetting('payroll.work_days_per_month');
-    }
-
-    private function hoursPerDay(): string
-    {
-        return $this->positivePayrollSetting('payroll.hours_per_day');
     }
 
     private function positivePayrollSetting(string $key): string

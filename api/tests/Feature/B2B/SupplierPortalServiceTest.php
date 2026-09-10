@@ -1251,5 +1251,16 @@ class SupplierPortalServiceTest extends TestCase
         $this->getJson('/api/v1/b2b/supplier/purchase-orders')->assertStatus(401);
         $this->getJson('/api/v1/b2b/supplier/invoices')->assertStatus(401);
         $this->getJson('/api/v1/b2b/supplier/deliveries')->assertStatus(401);
+        $this->getJson('/api/v1/b2b/supplier/business-policies')->assertStatus(401);
+    }
+
+    public function test_business_policies_are_served_through_the_portal_guard(): void
+    {
+        $user = $this->makePortalUser();
+
+        $this->actAs($user)
+            ->getJson('/api/v1/b2b/supplier/business-policies')
+            ->assertOk()
+            ->assertJsonStructure(['data' => ['functional_currency_code', 'vat_rate', 'vat_status']]);
     }
 }

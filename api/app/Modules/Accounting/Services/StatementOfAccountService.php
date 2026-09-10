@@ -172,6 +172,31 @@ class StatementOfAccountService
             ];
         }
 
+        // --- Credit-note applications (credits applied to invoices — negative amounts).
+        // The as-of cutoff mirrors computeAging exactly (created_at <= end of the
+        // as-of day) so the closing balance equals the aging total for that date.
+        $applications = CreditNoteApplication::query()
+            ->whereHas('invoice', fn ($q) => $q->where('customer_id', $customer->id)
+                ->whereNotIn('status', [InvoiceStatus::Draft, InvoiceStatus::Cancelled])
+                ->whereDate('date', '<=', $asOfDate->toDateString())
+            )
+            ->where('created_at', '<=', $asOfDate->copy()->endOfDay())
+            ->with('creditNote:id,credit_note_number')
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get(['id', 'credit_note_id', 'amount', 'created_at']);
+
+        foreach ($applications as $application) {
+            $txns[] = [
+                'date'        => $application->created_at->toDateString(),
+                'type'        => 'credit_note',
+                'reference'   => $application->creditNote?->credit_note_number ?? ('CN-' . $application->hash_id),
+                'description' => 'Credit note applied',
+                'amount'      => Money::negate((string) $application->amount),
+                'cutoff_date' => $application->created_at,
+            ];
+        }
+
         // Sort by date then by cutoff_date timestamp for deterministic order
         usort($txns, fn (array $a, array $b): int => ($a['date'] <=> $b['date'])
             ?: ($a['cutoff_date']->timestamp <=> $b['cutoff_date']->timestamp)

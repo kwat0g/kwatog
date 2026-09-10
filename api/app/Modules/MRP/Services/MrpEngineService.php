@@ -39,7 +39,9 @@ use Illuminate\Support\Facades\Log;
  *  - Draft purchase_requests for any raw-material shortfall (one PR row
  *    consolidating all material lines for the SO; each line is one
  *    purchase_request_items row). is_auto_generated=true, priority is set
- *    to 'urgent' when order_by_date <= today, else 'normal'.
+ *    to 'urgent' when order_by_date <= today, else 'normal'. Each line
+ *    quantity is the net shortage ceiled to 2dp, then rounded up to the
+ *    item's minimum_order_quantity multiple when one is set (MRP-01).
  *  - Draft work_orders (status='planned') — one root per SO line plus one
  *    linked child per manufactured subassembly. Each WO receives only its
  *    immediate BOM components via WorkOrderService::createDraft().
@@ -50,7 +52,11 @@ use Illuminate\Support\Facades\Log;
  *   reserved   = Σ stock_levels.reserved_quantity over all locations
  *   in_transit = Σ purchase_order_items.(quantity - quantity_received) for POs in approved/sent/partial
  *   open_pr    = pending/approved PR quantity already linked to this SO
- *   net        = max(0, gross - open_pr - on_hand + reserved - in_transit)
+ *   available  = max(0, on_hand - reserved + in_transit - safety_stock)
+ *   net        = max(0, gross - open_pr - available)
+ *
+ * MRP-01: safety stock is a buffer against variability, not consumable
+ * supply — netting may only spend stock above it.
  *
  * Lead time + safety buffer:
  *   order_by_date = earliest_so_line.delivery_date - max(approved_supplier.lead_time, items.lead_time_days) - 2 days
@@ -268,6 +274,7 @@ class MrpEngineService
                     'on_hand'    => round((float) $supply['on_hand'], 3),
                     'reserved'   => round((float) $supply['reserved'], 3),
                     'in_transit' => round((float) $supply['in_transit'], 3),
+                    'safety_stock' => round((float) $supply['safety_stock'], 3),
                     'open_purchase_requests' => round($openPurchaseRequests, 3),
                     'standard_unit_cost' => (string) $item->standard_cost,
                     'gross_cost' => Money::round2(bcmul((string) $gross, (string) $item->standard_cost, 8)),
@@ -292,6 +299,7 @@ class MrpEngineService
                         'unit'     => $item->unit_of_measure,
                         'estimated_unit_price' => (string) $item->standard_cost,
                         'name'     => $item->name,
+                        'minimum_order_quantity' => (string) $item->minimum_order_quantity,
                     ];
 
                     $entry['action']   = 'pr_created';
@@ -358,10 +366,7 @@ class MrpEngineService
                         'purchase_request_id'  => $pr->id,
                         'item_id'              => $itemId,
                         'description'          => $s['name'],
-                        // Purchase-request quantities have two decimal places;
-                        // round shortages upward so precision loss cannot
-                        // under-order a fractional BOM requirement.
-                        'quantity'             => number_format(ceil(max(0.0, (float) $s['net']) * 100 - 0.000000001) / 100, 2, '.', ''),
+                        'quantity'             => $this->purchaseQuantity((float) $s['net'], (string) $s['minimum_order_quantity']),
                         'unit'                 => $s['unit'],
                         'estimated_unit_price' => Money::round2((string) $s['estimated_unit_price']),
                         'purpose'              => "MRP demand for SO {$so->so_number}",
@@ -852,8 +857,11 @@ class MrpEngineService
      * across SOs during a multi-order MRP run so one order cannot consume the
      * same stock that an earlier order already allocated.
      *
-     * @param array<int, array{on_hand:float,reserved:float,in_transit:float,available:float}> $planningSupply
-     * @return array{on_hand:float,reserved:float,in_transit:float,available:float}
+     * MRP-01 — safety stock absorbs demand variability; netting may only
+     * consume stock above it, so it floors the available quantity.
+     *
+     * @param array<int, array{on_hand:float,reserved:float,in_transit:float,safety_stock:float,available:float}> $planningSupply
+     * @return array{on_hand:float,reserved:float,in_transit:float,safety_stock:float,available:float}
      */
     private function supplyForItem(int $itemId, array &$planningSupply): array
     {
@@ -874,20 +882,23 @@ class MrpEngineService
         $onHand = (float) $levels->sum('quantity');
         $reserved = (float) $levels->sum('reserved_quantity');
         $inTransit = $this->inTransit($itemId);
+        $safetyStock = (float) (Item::query()->whereKey($itemId)->value('safety_stock') ?? 0);
 
         return $planningSupply[$itemId] = [
             'on_hand' => $onHand,
             'reserved' => $reserved,
             'in_transit' => $inTransit,
-            'available' => max(0.0, $onHand - $reserved + $inTransit),
+            'safety_stock' => $safetyStock,
+            'available' => max(0.0, $onHand - $reserved + $inTransit - $safetyStock),
         ];
     }
 
     /**
      * Allocate available stock to a manufactured subassembly and return only
-     * the quantity that still needs a child work order.
+     * the quantity that still needs a child work order. Inherits the
+     * safety-stock-floored availability from supplyForItem() (MRP-01).
      *
-     * @param array<int, array{on_hand:float,reserved:float,in_transit:float,available:float}> $planningSupply
+     * @param array<int, array{on_hand:float,reserved:float,in_transit:float,safety_stock:float,available:float}> $planningSupply
      */
     private function quantityToManufacture(int $itemId, float $grossQuantity, array &$planningSupply): float
     {
@@ -897,6 +908,30 @@ class MrpEngineService
         $planningSupply[$itemId]['available'] = $available - $consumed;
 
         return max(0.0, $grossQuantity - $consumed);
+    }
+
+    /**
+     * MRP-01 — orderable quantity for an auto-PR line: the net shortage
+     * ceiled to two decimal places (purchase-request precision), then lifted
+     * to the next multiple of the item's minimum order quantity when one is
+     * configured, so purchasing never receives a below-MOQ line. BCMath keeps
+     * the multiple exact; the bcdiv quotient truncates at scale 6, so any
+     * surviving remainder bumps the multiple count up.
+     */
+    private function purchaseQuantity(float $net, string $minimumOrderQuantity): string
+    {
+        $quantity = ceil(max(0.0, $net) * 100 - 0.000000001) / 100;
+
+        if (bccomp($minimumOrderQuantity, '0', 3) === 1) {
+            $quotient = bcdiv(number_format($quantity, 2, '.', ''), $minimumOrderQuantity, 6);
+            $multiples = (string) (int) $quotient;
+            if (bccomp(bcsub($quotient, $multiples, 6), '0', 6) === 1) {
+                $multiples = bcadd($multiples, '1', 0);
+            }
+            $quantity = (float) bcmul($multiples, $minimumOrderQuantity, 6);
+        }
+
+        return number_format($quantity, 2, '.', '');
     }
 
     /**
