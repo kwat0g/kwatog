@@ -30,7 +30,10 @@ class IncomeStatementService
             $rows = DB::table('journal_entry_lines as jel')
                 ->join('journal_entries as je', 'je.id', '=', 'jel.journal_entry_id')
                 ->join('accounts as a',         'a.id',  '=', 'jel.account_id')
-                ->where('je.status', 'posted')
+                // Reversed originals stay attributed to their own date; the
+                // mirror entry (a separate posted JE) cancels them only from
+                // the reversal date, so historical windows keep both legs.
+                ->whereIn('je.status', ['posted', 'reversed'])
                 ->whereBetween('je.date', [$from->toDateString(), $to->toDateString()])
                 ->whereIn('a.type', ['revenue', 'expense'])
                 ->groupBy('a.id', 'a.code', 'a.name', 'a.type', 'a.parent_id')

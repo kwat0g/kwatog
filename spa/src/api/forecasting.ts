@@ -35,19 +35,24 @@ export const forecastingApi = {
  .get<{ data: HistoricalDemandPoint[] }>('/forecasting/demand-forecasts/historical', { params })
  .then((r) => r.data.data),
 
- recompute: (payload: {
- product_id: string;
- customer_id?: string;
- method: 'moving_avg' | 'weighted_avg';
- horizon_months?: number;
- lookback_months?: number;
- }) =>
- client
- .post<{ data: DemandForecast[]; message: string }>(
- '/forecasting/demand-forecasts/recompute',
- payload,
- )
- .then((r) => r.data),
+  recompute: (payload: {
+  product_id: string;
+  customer_id?: string;
+  method: 'moving_avg' | 'weighted_avg';
+  horizon_months?: number;
+  lookback_months?: number;
+  overwrite_manual?: boolean;
+  }) =>
+  client
+  .post<{
+  data: DemandForecast[];
+  message: string;
+  skipped_manual: Array<{ year: number; month: number }>;
+  }>(
+  '/forecasting/demand-forecasts/recompute',
+  payload,
+  )
+  .then((r) => r.data),
 
  storeManual: (payload: {
  product_id: string;

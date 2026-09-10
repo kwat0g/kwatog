@@ -171,10 +171,10 @@ id, payroll_period_id (FK payroll_periods), file_path (string), record_count (in
 ## LOANS (2 tables)
 
 ### employee_loans
-id, loan_no (string 20), employee_id (FK employees), loan_type (string 20: company_loan/cash_advance), principal (decimal 15,2), monthly_amortization (decimal 15,2), total_paid (decimal 15,2 default 0), balance (decimal 15,2), start_date (date), end_date (date nullable), pay_periods_remaining (int), status (string 20: pending/active/paid/cancelled), is_final_pay_deduction (bool default false), created_at, updated_at
+id, loan_no (string 20), employee_id (FK employees), loan_type (string 20: company_loan/cash_advance), principal (decimal 15,2), monthly_amortization (decimal 15,2), total_paid (decimal 15,2 default 0), balance (decimal 15,2), start_date (date), end_date (date nullable), pay_periods_remaining (int), status (string 20: pending/active/paid/cancelled), is_final_pay_deduction (bool default false — reserved for final-pay settlement; payroll amortization skips it), created_at, updated_at
 
 ### loan_payments
-id, loan_id (FK employee_loans), payroll_id (FK payrolls nullable), amount (decimal 15,2), payment_date (date), remarks (string nullable), created_at
+id, loan_id (FK employee_loans), payroll_id (FK payrolls nullable), clearance_id (clearances nullable — final-pay settlements), amount (decimal 15,2), payment_date (date), payment_type (string 20: payroll_deduction/manual/final_pay), remarks (string nullable), created_at
 
 ---
 

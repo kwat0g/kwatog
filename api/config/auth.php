@@ -11,11 +11,10 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
-        // ADV10 — B2B Portal auth guards. Customer sessions use the same
-        // HTTP-only cookie contract as the internal SPA; supplier remains a
-        // token client until its own portal module is migrated.
+        // ADV10 — B2B Portal auth guards. Both portals use the same
+        // HTTP-only cookie session contract as the internal SPA.
         'supplier_portal' => [
-            'driver' => 'sanctum',
+            'driver' => 'session',
             'provider' => 'supplier_portal_users',
         ],
         'customer_portal' => [
