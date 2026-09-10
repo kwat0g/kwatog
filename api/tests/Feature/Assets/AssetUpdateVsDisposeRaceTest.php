@@ -14,6 +14,7 @@ use App\Modules\Auth\Models\User;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
+use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -22,6 +23,9 @@ use Tests\TestCase;
  * evaluates the guard on the *passed* model inside the transaction without a
  * locked re-read. A concurrent dispose commits first; the stale update then
  * mutates an asset that is already disposed — the immutability rule is bypassed.
+ *
+ * AS-03 update: disposal executes from the final approval of the seeded chain,
+ * so the race is now update-vs-approveDisposal — same guard, same pin.
  */
 class AssetUpdateVsDisposeRaceTest extends TestCase
 {
@@ -30,13 +34,18 @@ class AssetUpdateVsDisposeRaceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->seed([ChartOfAccountsSeeder::class, RolePermissionSeeder::class, SettingsSeeder::class]);
+        $this->seed([
+            ChartOfAccountsSeeder::class,
+            RolePermissionSeeder::class,
+            SettingsSeeder::class,
+            WorkflowSeeder::class,
+        ]);
     }
 
-    private function user(): User
+    private function user(string $roleSlug): User
     {
         return User::factory()->create([
-            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+            'role_id' => Role::query()->where('slug', $roleSlug)->value('id'),
         ]);
     }
 
@@ -57,22 +66,25 @@ class AssetUpdateVsDisposeRaceTest extends TestCase
 
     public function test_stale_update_cannot_mutate_just_disposed_asset(): void
     {
-        $by = $this->user();
         $asset = $this->asset();
 
         // Disposer and updater each fetched the row while it was active.
         $disposer = Asset::find($asset->id);
         $updater = Asset::find($asset->id);
 
-        // Disposer commits first — asset is now Disposed in the DB.
-        app(AssetService::class)->dispose($disposer, [
+        // Disposal commits first (request + full chain approval executes) —
+        // asset is now Disposed in the DB.
+        $svc = app(AssetService::class);
+        $svc->requestDisposal($disposer, [
             'disposal_amount' => 40000,
             'remarks' => 'Asset retired.',
-        ], $by);
+        ], $this->user('finance_officer'));
+        $svc->approveDisposal($disposer, $this->user('finance_officer'));
+        $svc->approveDisposal($disposer, $this->user('system_admin'));
 
         // Concurrent stale updater still sees `active` in memory.
         try {
-            app(AssetService::class)->update($updater, ['name' => 'Should Not Land']);
+            $svc->update($updater, ['name' => 'Should Not Land']);
             $this->fail('A stale update must not mutate a disposed asset.');
         } catch (BusinessRuleException $e) {
             $this->assertStringContainsString('immutable', strtolower($e->getMessage()));

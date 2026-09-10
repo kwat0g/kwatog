@@ -39,7 +39,9 @@ class BalanceSheetService
             $rows = DB::table('journal_entry_lines as jel')
                 ->join('journal_entries as je', 'je.id', '=', 'jel.journal_entry_id')
                 ->join('accounts as a',         'a.id',  '=', 'jel.account_id')
-                // Do not erase the original balance before the reversal date.
+                // Reversed originals stay attributed to their own date; the
+                // mirror entry (a separate posted JE) cancels them only from
+                // the reversal date, so as-of windows keep both legs.
                 ->whereIn('je.status', ['posted', 'reversed'])
                 ->whereDate('je.date', '<=', $asOf->toDateString())
                 ->whereIn('a.type', ['asset', 'liability', 'equity'])

@@ -8,8 +8,10 @@ import toast from 'react-hot-toast';
 import { assetsApi } from '@/api/assets';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { Panel } from '@/components/ui/Panel';
+import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { StatCard } from '@/components/ui/StatCard';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -32,6 +34,9 @@ export default function AssetDetailPage() {
   const [disposalReason, setDisposalReason] = useState<string>('');
   const [qrImage, setQrImage] = useState<string | null>(null);
   const [qrError, setQrError] = useState(false);
+  const [approveDisposalOpen, setApproveDisposalOpen] = useState(false);
+  const [rejectDisposalOpen, setRejectDisposalOpen] = useState(false);
+  const [cancelDisposalOpen, setCancelDisposalOpen] = useState(false);
   const disposalError = !/^\d+(\.\d{1,2})?$/.test(disposalAmount)
     ? disposalAmount === ''
       ? 'Disposal proceeds is required.'
@@ -94,11 +99,48 @@ export default function AssetDetailPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['asset', id] });
       qc.invalidateQueries({ queryKey: ['assets'] });
-      toast.success('Asset disposed and JE posted.');
+      toast.success('Disposal request submitted for approval.');
       setDisposeOpen(false);
       setDisposalReason('');
     },
-    onError: (error) => toast.error(isAxiosError(error) ? error.response?.data?.message ?? 'Failed to dispose asset.' : 'Failed to dispose asset.'),
+    onError: (error) => toast.error(isAxiosError(error) ? error.response?.data?.message ?? 'Failed to request asset disposal.' : 'Failed to request asset disposal.'),
+  });
+
+  const invalidateDisposal = () => {
+    qc.invalidateQueries({ queryKey: ['asset', id] });
+    qc.invalidateQueries({ queryKey: ['assets'] });
+  };
+  const disposalErrMsg = (error: unknown, fallback: string) =>
+    (isAxiosError(error) ? error.response?.data?.message : undefined) ?? fallback;
+
+  const approveDisposal = useMutation({
+    mutationFn: () => assetsApi.approveDisposal(id),
+    onSuccess: (asset) => {
+      invalidateDisposal();
+      toast.success(asset.status === 'disposed' ? 'Disposal approved. Journal entry posted.' : 'Disposal step approved.');
+      setApproveDisposalOpen(false);
+    },
+    onError: (error) => toast.error(disposalErrMsg(error, 'Failed to approve disposal.')),
+  });
+
+  const rejectDisposal = useMutation({
+    mutationFn: (reason: string) => assetsApi.rejectDisposal(id, reason),
+    onSuccess: () => {
+      invalidateDisposal();
+      toast.success('Disposal request rejected. The asset stays active.');
+      setRejectDisposalOpen(false);
+    },
+    onError: (error) => toast.error(disposalErrMsg(error, 'Failed to reject disposal.')),
+  });
+
+  const cancelDisposal = useMutation({
+    mutationFn: () => assetsApi.cancelDisposal(id),
+    onSuccess: () => {
+      invalidateDisposal();
+      toast.success('Disposal request cancelled.');
+      setCancelDisposalOpen(false);
+    },
+    onError: (error) => toast.error(disposalErrMsg(error, 'Failed to cancel disposal request.')),
   });
 
   if (isLoading) return <SkeletonDetail />;
@@ -141,7 +183,7 @@ export default function AssetDetailPage() {
                 <LuPencil className="h-3.5 w-3.5 mr-1" /> Edit
               </Button>
             )}
-            {data.status !== 'disposed' && can('assets.dispose') && (
+            {data.status !== 'disposed' && !data.disposal_request && can('assets.dispose') && (
               <Button variant="danger" size="xs" onClick={() => setDisposeOpen(true)}>
                 Dispose
               </Button>
@@ -149,6 +191,60 @@ export default function AssetDetailPage() {
           </div>
         }
       />
+
+      {data.disposal_request && (
+        <div className="px-5 pt-3">
+          <Panel title="Disposal pending approval">
+            <div className="space-y-2">
+              <p className="text-sm text-secondary">
+                A disposal of this asset is awaiting approval — the journal entry posts only
+                after every step approves.
+              </p>
+              <dl className="text-sm divide-y divide-subtle">
+                <Row label="Proceeds">
+                  <span className="font-mono">{formatPeso(data.disposal_request.amount ?? '0')}</span>
+                </Row>
+                {data.disposal_request.date && <Row label="Disposal date">{data.disposal_request.date}</Row>}
+                <Row label="Reason">{data.disposal_request.reason ?? '—'}</Row>
+                <Row label="Requested by">{data.disposal_request.requested_by?.name ?? '—'}</Row>
+              </dl>
+              {data.approval_records && data.approval_records.length > 0 && (
+                <ol className="space-y-1">
+                  {data.approval_records.map((step) => (
+                    <li key={step.step_order} className="flex items-center gap-2 text-xs">
+                      <Chip variant={step.action === 'approved' ? 'success' : step.action === 'pending' ? 'info' : 'neutral'}>
+                        {step.action}
+                      </Chip>
+                      <span className="font-mono text-muted">step {step.step_order}</span>
+                      <span>{step.role_slug.replace(/_/g, ' ')}</span>
+                      {step.approver && <span className="text-muted">— {step.approver.name}</span>}
+                    </li>
+                  ))}
+                </ol>
+              )}
+              {(can('assets.dispose.approve') || data.disposal_request.can_cancel) && (
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {can('assets.dispose.approve') && (
+                    <>
+                      <Button variant="secondary" size="xs" onClick={() => setRejectDisposalOpen(true)} loading={rejectDisposal.isPending}>
+                        Reject
+                      </Button>
+                      <Button variant="primary" size="xs" onClick={() => setApproveDisposalOpen(true)} loading={approveDisposal.isPending}>
+                        Approve
+                      </Button>
+                    </>
+                  )}
+                  {data.disposal_request.can_cancel && (
+                    <Button variant="ghost" size="xs" onClick={() => setCancelDisposalOpen(true)} loading={cancelDisposal.isPending}>
+                      Cancel request
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+          </Panel>
+        </div>
+      )}
 
       <div className="px-5 pt-3 pb-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
         <StatCard label="Acquisition" value={formatPeso(data.acquisition_cost)} />
@@ -262,8 +358,9 @@ export default function AssetDetailPage() {
       >
         <div className="py-3 space-y-3">
           <p className="text-sm text-secondary">
-            Disposing posts a journal entry that nets accumulated depreciation against the asset
-            cost and books gain or loss against the proceeds.
+            Submitting sends the disposal for approval. Once approved, a journal entry nets
+            accumulated depreciation against the asset cost and books gain or loss against
+            the proceeds.
           </p>
           <Input
             label="Disposal proceeds"
@@ -302,10 +399,50 @@ export default function AssetDetailPage() {
             loading={dispose.isPending}
             disabled={!!disposalError || !!disposalDateError || !!disposalReasonError}
           >
-            {dispose.isPending ? 'Disposing…' : 'Confirm dispose'}
+            {dispose.isPending ? 'Submitting…' : 'Submit for approval'}
           </Button>
         </ModalFooter>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={approveDisposalOpen}
+        onClose={() => setApproveDisposalOpen(false)}
+        onConfirm={() => approveDisposal.mutate()}
+        title="Approve disposal?"
+        description={
+          <>
+            Approving the final step posts the disposal journal entry and marks the asset
+            disposed. This cannot be undone.
+          </>
+        }
+        confirmLabel="Approve"
+        variant="primary"
+        pending={approveDisposal.isPending}
+      />
+
+      <ReasonDialog
+        isOpen={rejectDisposalOpen}
+        onClose={() => setRejectDisposalOpen(false)}
+        onConfirm={(reason) => rejectDisposal.mutate(reason)}
+        title="Reject disposal request"
+        description="The asset stays active and no journal entry is posted."
+        reasonLabel="Reason"
+        reasonPlaceholder="e.g. Proceeds far below book value"
+        confirmLabel="Reject"
+        variant="danger"
+        pending={rejectDisposal.isPending}
+      />
+
+      <ConfirmDialog
+        isOpen={cancelDisposalOpen}
+        onClose={() => setCancelDisposalOpen(false)}
+        onConfirm={() => cancelDisposal.mutate()}
+        title="Cancel disposal request?"
+        description="The pending request is withdrawn. The asset stays active and no journal entry is posted."
+        confirmLabel="Cancel request"
+        variant="warning"
+        pending={cancelDisposal.isPending}
+      />
     </div>
   );
 }

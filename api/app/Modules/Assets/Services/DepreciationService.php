@@ -8,6 +8,7 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\SettingsService;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Services\JournalEntryService;
 use App\Modules\Assets\Enums\AssetStatus;
 use App\Modules\Assets\Models\Asset;
@@ -25,6 +26,21 @@ use Illuminate\Support\Facades\DB;
  * built from those exact same rows. Period execution is serialized by the
  * locked asset set and recorded in asset_depreciation_runs so a retry cannot
  * create a second journal for an already-posted period.
+ *
+ * A posted period is repairable, not terminal: when an asset the original run
+ * could not see (a backdated acquisition) lacks rows in a posted month,
+ * `runForMonth` posts one supplemental journal covering only the missing
+ * asset-months, and `runBackfillTo()` drives that engine chronologically so
+ * `assertPriorPeriodsComplete` clears instead of trapping every later run.
+ * A charge that legitimately rounds to 0.00 while a residual remains (the
+ * declining-balance tail) is posted as a zero row so the completeness guard
+ * stays satisfiable.
+ *
+ * Assets are depreciated THROUGH their disposal month: `AssetService::dispose()`
+ * calls `catchUpThrough()` to post any missing months (including the disposal
+ * month itself) before the derecognition journal is built, and the monthly run
+ * excludes assets disposed on or before the period end so the disposal-month
+ * charge is never posted twice.
  */
 class DepreciationService
 {
@@ -43,7 +59,7 @@ class DepreciationService
         return DB::transaction(function () use ($year, $month, $by, $allowBackfill): array {
             $periodStart = CarbonImmutable::create($year, $month, 1)->startOfMonth();
             $periodEnd = $periodStart->endOfMonth();
-            $assets = $this->assetsInServiceFor($periodStart, $periodEnd);
+            $assets = $this->assetsInServiceFor($periodEnd);
 
             if (! $allowBackfill) {
                 $this->assertPriorPeriodsComplete($assets, $periodStart);
@@ -55,26 +71,34 @@ class DepreciationService
                 ->where('period_month', $month)
                 ->lockForUpdate()
                 ->get();
+            $existingByAsset = $existing->keyBy(fn (AssetDepreciation $row): int => (int) $row->asset_id);
 
             if ($run->journal_entry_id !== null) {
                 $this->assertRunRowsMatch($existing, $run);
 
-                return [
-                    'posted_count' => (int) $run->posted_count,
-                    'total_amount' => (string) $run->total_amount,
-                    'journal_entry_id' => (int) $run->journal_entry_id,
-                ];
+                $pending = $this->pendingRows($assets, $existingByAsset);
+                if ($pending === []) {
+                    return [
+                        'posted_count' => (int) $run->posted_count,
+                        'total_amount' => (string) $run->total_amount,
+                        'journal_entry_id' => (int) $run->journal_entry_id,
+                    ];
+                }
+
+                return $this->postSupplementalRows($pending, $year, $month, $periodEnd, $by);
             }
 
-            if ($existing->isNotEmpty()) {
-                return $this->reconcileLegacyPeriod($existing, $assets, $run);
-            }
+            $this->assertLegacyRowsSound($existing);
 
             $rows = [];
             $totalAmount = Money::zero();
 
             foreach ($assets as $asset) {
-                $row = $this->calculateRow($asset);
+                if ($existingByAsset->has((int) $asset->getKey())) {
+                    continue;
+                }
+
+                $row = $this->pendingRow($asset);
                 if ($row === null) {
                     continue;
                 }
@@ -92,40 +116,10 @@ class DepreciationService
                 return ['posted_count' => 0, 'total_amount' => Money::zero(), 'journal_entry_id' => null];
             }
 
-            $depExp = Account::where('code', $this->settings->requiredString('accounting.accounts.depreciation_expense_code'))->firstOrFail();
-            $accDep = Account::where('code', $this->settings->requiredString('accounting.accounts.asset_accumulated_depreciation_code'))->firstOrFail();
-            $periodLabel = sprintf('%04d-%02d', $year, $month);
-            $lines = [
-                ['account_id' => $depExp->id, 'debit' => $totalAmount, 'credit' => Money::zero(), 'description' => 'Monthly depreciation'],
-                ['account_id' => $accDep->id, 'debit' => Money::zero(), 'credit' => $totalAmount, 'description' => 'Monthly depreciation'],
-            ];
-
-            $je = $this->journals->create([
-                'date' => $periodEnd->toDateString(),
-                'description' => 'Asset depreciation — '.$periodLabel,
-                'reference_type' => 'asset_depreciation',
-                'reference_id' => null,
-                'lines' => $lines,
-            ], $by);
-            $this->journals->post($je, $by);
-
-            foreach ($rows as $row) {
-                /** @var Asset $asset */
-                $asset = $row['asset'];
-                AssetDepreciation::create([
-                    'asset_id' => $asset->id,
-                    'period_year' => $year,
-                    'period_month' => $month,
-                    'depreciation_amount' => $row['amount'],
-                    'accumulated_after' => $row['accumulated_after'],
-                    'journal_entry_id' => $je->id,
-                    'created_at' => now(),
-                ]);
-                $asset->forceFill(['accumulated_depreciation' => $row['accumulated_after']])->save();
-            }
+            $je = $this->insertRowsAndJournal($rows, $totalAmount, $year, $month, $periodEnd, $by, false);
 
             $run->forceFill([
-                'journal_entry_id' => $je->id,
+                'journal_entry_id' => $je?->id,
                 'posted_count' => count($rows),
                 'total_amount' => $totalAmount,
             ])->save();
@@ -133,7 +127,7 @@ class DepreciationService
             return [
                 'posted_count' => count($rows),
                 'total_amount' => $totalAmount,
-                'journal_entry_id' => $je->id,
+                'journal_entry_id' => $je?->id,
             ];
         });
     }
@@ -179,13 +173,45 @@ class DepreciationService
     }
 
     /**
+     * Depreciate one asset through $throughMonth (inclusive) so a disposal can
+     * derecognise a fully caught-up accumulated balance. Called by
+     * AssetService::dispose() inside its own transaction, under the asset row
+     * lock, so every supplemental journal commits or rolls back with the
+     * disposal journal. The UNIQUE (asset_id, period_year, period_month)
+     * constraint is the idempotency fence: a month that already has a posted
+     * row is reloaded, never posted twice.
+     */
+    public function catchUpThrough(Asset $asset, CarbonImmutable $throughMonth, User $by): void
+    {
+        $cursor = CarbonImmutable::parse($asset->acquisition_date->toDateString())->startOfMonth();
+        $target = $throughMonth->startOfMonth();
+
+        while ($cursor->lte($target)) {
+            $this->postMissingMonthForAsset($asset, $cursor, $by);
+            $cursor = $cursor->addMonthNoOverflow();
+        }
+    }
+
+    /**
      * @return Collection<int, Asset>
      */
-    private function assetsInServiceFor(CarbonImmutable $periodStart, CarbonImmutable $periodEnd): Collection
+    private function assetsInServiceFor(CarbonImmutable $periodEnd): Collection
     {
         return Asset::query()
             ->whereDate('acquisition_date', '<=', $periodEnd->toDateString())
-            ->where('status', '!=', AssetStatus::Disposed->value)
+            ->where(function ($query) use ($periodEnd): void {
+                $query
+                    ->where('status', '!=', AssetStatus::Disposed->value)
+                    ->orWhere(function ($disposed) use ($periodEnd): void {
+                        // Disposal-month depreciation is posted by dispose()'s
+                        // catch-up, so the monthly run skips assets disposed on
+                        // or before the period end. Assets disposed after the
+                        // period were in service for all of it (backfill).
+                        $disposed
+                            ->where('status', AssetStatus::Disposed->value)
+                            ->whereDate('disposed_date', '>', $periodEnd->toDateString());
+                    });
+            })
             ->orderBy('id')
             ->lockForUpdate()
             ->get();
@@ -215,7 +241,14 @@ class DepreciationService
                         ->where('asset_id', $asset->getKey())
                         ->where('period_year', $cursor->year)
                         ->where('period_month', $cursor->month)
-                        ->whereNotNull('journal_entry_id')
+                        ->where(function ($query): void {
+                            // A charge that legitimately rounds to 0.00 while a
+                            // residual remains carries no journal of its own;
+                            // the row itself is the completeness evidence.
+                            $query
+                                ->whereNotNull('journal_entry_id')
+                                ->orWhere('depreciation_amount', '0.00');
+                        })
                         ->exists();
                     if (! $complete) {
                         throw new BusinessRuleException(sprintf(
@@ -257,6 +290,96 @@ class DepreciationService
         ];
     }
 
+    private function postMissingMonthForAsset(Asset $asset, CarbonImmutable $periodStart, User $by): void
+    {
+        $year = $periodStart->year;
+        $month = $periodStart->month;
+
+        $row = $this->calculateRow($asset);
+
+        $existing = AssetDepreciation::query()
+            ->where('asset_id', $asset->getKey())
+            ->where('period_year', $year)
+            ->where('period_month', $month)
+            ->lockForUpdate()
+            ->first();
+
+        if ($existing !== null) {
+            if ($existing->journal_entry_id === null && $row !== null) {
+                throw new BusinessRuleException(sprintf(
+                    'Depreciation period %04d-%02d for asset %s has incomplete journal identity; repair it before disposing.',
+                    $year,
+                    $month,
+                    $asset->asset_code,
+                ));
+            }
+            if ($row !== null && Money::cmp((string) $asset->accumulated_depreciation, (string) $existing->accumulated_after) !== 0) {
+                $asset->forceFill(['accumulated_depreciation' => $existing->accumulated_after])->save();
+            }
+
+            return;
+        }
+
+        if ($row === null) {
+            return;
+        }
+
+        // Claim the ledger row before the journal: if a concurrent writer
+        // already owns the month, the UNIQUE fence rejects the claim and the
+        // winner's row is reloaded instead — no second journal is posted.
+        $inserted = AssetDepreciation::query()->insertOrIgnore([
+            'asset_id' => $asset->getKey(),
+            'period_year' => $year,
+            'period_month' => $month,
+            'depreciation_amount' => $row['amount'],
+            'accumulated_after' => $row['accumulated_after'],
+            'journal_entry_id' => null,
+            'created_at' => now(),
+        ]);
+
+        if ($inserted === 0) {
+            $winner = AssetDepreciation::query()
+                ->where('asset_id', $asset->getKey())
+                ->where('period_year', $year)
+                ->where('period_month', $month)
+                ->firstOrFail();
+            if ($winner->journal_entry_id === null) {
+                throw new BusinessRuleException(sprintf(
+                    'Depreciation period %04d-%02d for asset %s has incomplete journal identity; repair it before disposing.',
+                    $year,
+                    $month,
+                    $asset->asset_code,
+                ));
+            }
+            $asset->forceFill(['accumulated_depreciation' => $winner->accumulated_after])->save();
+
+            return;
+        }
+
+        $depExp = Account::where('code', $this->settings->requiredString('accounting.accounts.depreciation_expense_code'))->firstOrFail();
+        $accDep = Account::where('code', $this->settings->requiredString('accounting.accounts.asset_accumulated_depreciation_code'))->firstOrFail();
+        $periodLabel = sprintf('%04d-%02d', $year, $month);
+        $je = $this->journals->create([
+            'date' => $periodStart->endOfMonth()->toDateString(),
+            'description' => 'Asset depreciation — '.$periodLabel.' (disposal catch-up)',
+            'reference_type' => 'asset_depreciation',
+            'reference_id' => null,
+            'lines' => [
+                ['account_id' => $depExp->id, 'debit' => $row['amount'], 'credit' => Money::zero(), 'description' => 'Monthly depreciation'],
+                ['account_id' => $accDep->id, 'debit' => Money::zero(), 'credit' => $row['amount'], 'description' => 'Monthly depreciation'],
+            ],
+        ], $by);
+        $this->journals->post($je, $by);
+
+        AssetDepreciation::query()
+            ->where('asset_id', $asset->getKey())
+            ->where('period_year', $year)
+            ->where('period_month', $month)
+            ->update(['journal_entry_id' => $je->id]);
+
+        $asset->forceFill(['accumulated_depreciation' => $row['accumulated_after']])->save();
+    }
+
     private function assetWasInServiceFor(Asset $asset, CarbonImmutable $periodStart): bool
     {
         $periodEnd = $periodStart->endOfMonth();
@@ -288,63 +411,186 @@ class DepreciationService
     }
 
     /**
+     * Journal identity for rows that predate the run marker. A nonzero row
+     * without a journal, or nonzero rows split across journals, is corruption
+     * and must be repaired by hand; a zero row may legitimately be
+     * journal-less because a zero-value period has nothing to post.
+     *
      * @param Collection<int, AssetDepreciation> $existing
-     * @param Collection<int, Asset> $assets
-     * @return array{posted_count:int, total_amount:string, journal_entry_id:?int}
      */
-    private function reconcileLegacyPeriod(Collection $existing, Collection $assets, AssetDepreciationRun $run): array
+    private function assertLegacyRowsSound(Collection $existing): void
     {
-        $journalIds = $existing->pluck('journal_entry_id')->filter()->map(fn ($id): int => (int) $id)->unique()->values();
-        if ($existing->contains(fn (AssetDepreciation $row): bool => $row->journal_entry_id === null) || $journalIds->count() !== 1) {
+        if ($existing->isEmpty()) {
+            return;
+        }
+
+        $nonzero = $existing->filter(fn (AssetDepreciation $row): bool => ! Money::isZero((string) $row->depreciation_amount));
+
+        if ($nonzero->contains(fn (AssetDepreciation $row): bool => $row->journal_entry_id === null)
+            || $nonzero->pluck('journal_entry_id')->unique()->count() > 1) {
             throw new BusinessRuleException('Depreciation period has incomplete journal identity; repair it before rerunning.');
         }
+    }
 
-        $journalId = (int) $journalIds->first();
-        if ($run->journal_entry_id !== null && (int) $run->journal_entry_id !== $journalId) {
-            throw new BusinessRuleException('Depreciation period journal identity does not reconcile with its asset rows.');
-        }
+    /**
+     * The rows this invocation still owes for the period: assets in service
+     * that have no row yet.
+     *
+     * @param Collection<int, Asset> $assets
+     * @param Collection<int, AssetDepreciation> $existingByAsset
+     * @return array<int, array{asset:Asset, amount:string, accumulated_after:string}>
+     */
+    private function pendingRows(Collection $assets, Collection $existingByAsset): array
+    {
+        $rows = [];
 
-        $existingAssetIds = $existing->pluck('asset_id')->map(fn ($id): int => (int) $id)->all();
         foreach ($assets as $asset) {
-            if (in_array((int) $asset->getKey(), $existingAssetIds, true)) {
+            if ($existingByAsset->has((int) $asset->getKey())) {
                 continue;
             }
-            if ($this->calculateRow($asset) !== null) {
-                throw new BusinessRuleException('Depreciation period has partial asset rows; repair it before rerunning.');
+
+            $row = $this->pendingRow($asset);
+            if ($row !== null) {
+                $rows[] = $row;
             }
         }
 
-        $total = Money::zero();
-        foreach ($existing as $row) {
-            $total = Money::add($total, (string) $row->depreciation_amount);
+        return $rows;
+    }
+
+    /**
+     * @return array{asset:Asset, amount:string, accumulated_after:string}|null
+     */
+    private function pendingRow(Asset $asset): ?array
+    {
+        $row = $this->calculateRow($asset);
+        if ($row !== null) {
+            return $row;
         }
-        $run->forceFill([
-            'journal_entry_id' => $journalId,
-            'posted_count' => $existing->count(),
-            'total_amount' => $total,
-        ])->save();
+
+        // calculateRow refused because nothing remains; a monthly charge that
+        // rounds to 0.00 while a residual remains still owes a zero row, or
+        // the completeness guard would demand a month that can never be
+        // posted and every later run would refuse.
+        $monthly = (string) $asset->monthly_depreciation;
+        if (Money::gt($monthly, Money::zero())) {
+            return null;
+        }
+
+        $depreciable = Money::clampMin(
+            Money::sub((string) $asset->acquisition_cost, (string) $asset->salvage_value),
+            Money::zero(),
+        );
+        $remaining = Money::clampMin(Money::sub($depreciable, Money::round2((string) $asset->accumulated_depreciation)), Money::zero());
+        if (! Money::gt($remaining, Money::zero())) {
+            return null;
+        }
 
         return [
-            'posted_count' => $existing->count(),
-            'total_amount' => $total,
-            'journal_entry_id' => $journalId,
+            'asset' => $asset,
+            'amount' => Money::zero(),
+            'accumulated_after' => Money::round2((string) $asset->accumulated_depreciation),
         ];
     }
 
     /**
+     * Repair arm for an already-posted period: post one supplemental journal
+     * covering only the asset-months the period's original run could not see,
+     * so the original consolidated entry is never edited. The run's own
+     * summary keeps describing its own journal; the return describes what
+     * this repair posted.
+     *
+     * @param array<int, array{asset:Asset, amount:string, accumulated_after:string}> $pending
+     * @return array{posted_count:int, total_amount:string, journal_entry_id:?int}
+     */
+    private function postSupplementalRows(array $pending, int $year, int $month, CarbonImmutable $periodEnd, User $by): array
+    {
+        $totalAmount = Money::zero();
+        foreach ($pending as $row) {
+            $totalAmount = Money::add($totalAmount, $row['amount']);
+        }
+
+        $je = $this->insertRowsAndJournal($pending, $totalAmount, $year, $month, $periodEnd, $by, true);
+
+        return [
+            'posted_count' => count($pending),
+            'total_amount' => $totalAmount,
+            'journal_entry_id' => $je?->id,
+        ];
+    }
+
+    /**
+     * Insert already-computed rows with their journal (skipped when the
+     * charges total zero — a zero-value period has no journal identity) and
+     * advance each asset's register balance to its row's accumulated_after.
+     *
+     * @param array<int, array{asset:Asset, amount:string, accumulated_after:string}> $rows
+     */
+    private function insertRowsAndJournal(
+        array $rows,
+        string $totalAmount,
+        int $year,
+        int $month,
+        CarbonImmutable $periodEnd,
+        User $by,
+        bool $supplemental,
+    ): ?JournalEntry {
+        $je = null;
+
+        if (Money::gt($totalAmount, Money::zero())) {
+            $depExp = Account::where('code', $this->settings->requiredString('accounting.accounts.depreciation_expense_code'))->firstOrFail();
+            $accDep = Account::where('code', $this->settings->requiredString('accounting.accounts.asset_accumulated_depreciation_code'))->firstOrFail();
+            $periodLabel = sprintf('%04d-%02d', $year, $month);
+            $je = $this->journals->create([
+                'date' => $periodEnd->toDateString(),
+                'description' => 'Asset depreciation — '.$periodLabel.($supplemental ? ' (supplemental backfill)' : ''),
+                'reference_type' => 'asset_depreciation',
+                'reference_id' => null,
+                'lines' => [
+                    ['account_id' => $depExp->id, 'debit' => $totalAmount, 'credit' => Money::zero(), 'description' => 'Monthly depreciation'],
+                    ['account_id' => $accDep->id, 'debit' => Money::zero(), 'credit' => $totalAmount, 'description' => 'Monthly depreciation'],
+                ],
+            ], $by);
+            $this->journals->post($je, $by);
+        }
+
+        foreach ($rows as $row) {
+            AssetDepreciation::create([
+                'asset_id' => $row['asset']->id,
+                'period_year' => $year,
+                'period_month' => $month,
+                'depreciation_amount' => $row['amount'],
+                'accumulated_after' => $row['accumulated_after'],
+                'journal_entry_id' => $je?->id,
+                'created_at' => now(),
+            ]);
+            $row['asset']->forceFill(['accumulated_depreciation' => $row['accumulated_after']])->save();
+        }
+
+        return $je;
+    }
+
+    /**
+     * The run's own journal is the reconciliation anchor: rows posted by a
+     * supplemental backfill or a disposal catch-up carry a different journal
+     * and are legitimate neighbours of the run's rows for the same period,
+     * not corruption.
+     *
      * @param Collection<int, AssetDepreciation> $rows
      */
     private function assertRunRowsMatch(Collection $rows, AssetDepreciationRun $run): void
     {
-        if ($rows->isEmpty() || $rows->contains(fn (AssetDepreciation $row): bool => (int) $row->journal_entry_id !== (int) $run->journal_entry_id)) {
+        $posted = $rows->filter(fn (AssetDepreciation $row): bool => (int) $row->journal_entry_id === (int) $run->journal_entry_id);
+
+        if ($posted->isEmpty()) {
             throw new BusinessRuleException('Depreciation run identity has no matching asset rows.');
         }
 
         $total = Money::zero();
-        foreach ($rows as $row) {
+        foreach ($posted as $row) {
             $total = Money::add($total, (string) $row->depreciation_amount);
         }
-        if ($rows->count() !== (int) $run->posted_count
+        if ($posted->count() !== (int) $run->posted_count
             || Money::cmp($total, (string) $run->total_amount) !== 0) {
             throw new BusinessRuleException('Depreciation run summary does not reconcile with its asset rows.');
         }

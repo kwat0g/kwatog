@@ -45,7 +45,7 @@ class WorkOrderController
      *     summary="List work orders",
      *     description="Returns a paginated list of work orders. Filterable by status, product, and date range.",
      *     security={{"sanctum":{}}},
-     *     @OA\Parameter(name="status", in="query", required=false, @OA\Schema(type="string", enum={"draft","confirmed","in_progress","paused","completed","closed","cancelled"})),
+     *     @OA\Parameter(name="status[]", in="query", required=false, description="One or more statuses (a single status= value is also accepted)", @OA\Schema(type="array", @OA\Items(type="string", enum={"planned","confirmed","in_progress","paused","completed","closed","cancelled"}))),
      *     @OA\Parameter(name="page", in="query", required=false, @OA\Schema(type="integer")),
      *     @OA\Parameter(name="per_page", in="query", required=false, @OA\Schema(type="integer", default=15)),
      *     @OA\Response(response=200, description="Paginated work order list"),

@@ -1,3 +1,5 @@
+import type { ApprovalRecordPayload } from '@/lib/approvals';
+
 export type DispositionType = 'scrap' | 'rework' | 'restock' | 'return_to_supplier' | 'no_return';
 
 export interface DispositionPayload {
@@ -44,6 +46,9 @@ export interface ReturnRequest {
   status: string;
   status_label: string;
   is_editable: boolean;
+  pending_approval_step?: number | null;
+  has_overdue_approval?: boolean;
+  approval_records?: ApprovalRecordPayload[];
   disposition_status?: string;
   inspection_handoff?: {
     status: 'not_started' | 'generated' | 'manual_required' | 'not_required' | string;

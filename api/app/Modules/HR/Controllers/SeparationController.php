@@ -85,22 +85,21 @@ class SeparationController
     }
 
     /**
-     * PATCH /clearances/{clearance}/finalize
-     */
-    public function finalize(Request $request, Clearance $clearance): ClearanceResource
-    {
-        abort_unless($request->user()?->can('hr.separation.finalize'), 403);
-        return new ClearanceResource($this->service->finalize($clearance, $request->user(), $this->finalPay));
-    }
-
-    /**
-     * PATCH /clearances/{clearance}/cancel — HR-04 correction path.
-     * Only valid before final pay is computed (enforced in the service).
+     * PATCH /clearances/{clearance}/cancel
      */
     public function cancel(CancelClearanceRequest $request, Clearance $clearance): ClearanceResource
     {
         return new ClearanceResource(
             $this->service->cancel($clearance, $request->user(), $request->validated('reason'))
         );
+    }
+
+    /**
+     * PATCH /clearances/{clearance}/finalize
+     */
+    public function finalize(Request $request, Clearance $clearance): ClearanceResource
+    {
+        abort_unless($request->user()?->can('hr.separation.finalize'), 403);
+        return new ClearanceResource($this->service->finalize($clearance, $request->user(), $this->finalPay));
     }
 }

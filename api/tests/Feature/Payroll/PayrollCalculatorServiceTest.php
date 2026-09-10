@@ -808,4 +808,100 @@ class PayrollCalculatorServiceTest extends TestCase
             'regular holiday + rest' => [2.60, true,  '1536.39'],  // × 1.30 × 2.60 (=3.38×)
         ];
     }
+
+    /**
+     * AT-01 — ND premium must stack the DOLE day-type multiplier exactly like
+     * OT does: ND is 10% of the APPLICABLE (holiday-rated) hourly rate, not of
+     * the ordinary rate. Before the fix a rest-day/holiday night shift was paid
+     * ND on the flat 1.00 rate — systematic underpayment every such shift.
+     *
+     * hourly = 20000 / 22 / 8 ≈ 113.6363; 8 ND hours per case (22:00 → 06:00).
+     */
+    #[DataProvider('ndDayTypeProvider')]
+    public function test_night_differential_stacks_day_type_factor(float $dayTypeRate, bool $isRestDay, string $expectedNd): void
+    {
+        $emp = $this->makeEmployee(); // 20,000 monthly
+        $period = $this->makePeriod(false, '2026-04-16', '2026-04-30'); // 2nd half: no gov deductions
+
+        Attendance::create([
+            'employee_id'       => $emp->id,
+            'date'              => '2026-04-16',
+            'time_in'           => '2026-04-16 22:00:00',
+            'time_out'          => '2026-04-17 06:00:00',
+            'regular_hours'     => '8.00',
+            'overtime_hours'    => '0.00',
+            'night_diff_hours'  => '8.00',
+            'tardiness_minutes' => 0,
+            'undertime_minutes' => 0,
+            'is_rest_day'       => $isRestDay,
+            'day_type_rate'     => number_format($dayTypeRate, 2, '.', ''),
+            'status'            => 'present',
+        ]);
+
+        $payroll = $this->calc->computeForEmployee($period, $emp);
+
+        $this->assertSame($expectedNd, $payroll->night_diff_pay,
+            "ND pay for day_type_rate={$dayTypeRate} must be 10% of the day-rate-rated hourly.");
+    }
+
+    /** @return array<string, array{0: float, 1: bool, 2: string}> */
+    public static function ndDayTypeProvider(): array
+    {
+        // hourly ≈ 113.6363 (truncating bcdiv); expected = service's stepwise
+        // round2 of 8 × hourly × 0.10 × day_type_rate. The ordinary-day row
+        // pins the pre-fix behaviour, which was already correct at rate 1.00.
+        return [
+            'ordinary day (rate 1.00)' => [1.00, false, '90.91'],   // × 0.10 × 1.00
+            'rest day'                 => [1.30, true,  '118.18'],   // × 0.10 × 1.30
+            'special + rest day'       => [1.50, true,  '136.37'],   // × 0.10 × 1.50
+            'regular holiday'          => [2.00, false, '181.82'],   // × 0.10 × 2.00
+            'regular holiday + rest'   => [2.60, true,  '236.37'],   // × 0.10 × 2.60
+        ];
+    }
+
+    /**
+     * AT-01 monster — the exact DTR monster scenario (DTRComputationServiceTest:
+     * regular holiday + rest day + night shift, day_type_rate 2.60, 8.0 ND hours)
+     * pushed through the payroll calculator. Semi-monthly 8,800 per cutoff so the
+     * hourly rate is an exact 100.00 and every figure is hand-checkable.
+     *
+     *   hourly      = 8800 × 2 / 22 / 8        = 100.00
+     *   basic_pay   = flat cutoff               = 8800.00
+     *   holiday_pay = (2.60 − 1.00) × 11.5 × 100 = 1840.00
+     *   ot_pay      = 4 × 100 × 1.30 × 2.60     = 1352.00
+     *   nd_pay      = 8 × 100 × 0.10 × 2.60     =  208.00   (pre-fix: 80.00)
+     *   gross_pay   = 8800 + 1840 + 1352 + 208  = 12200.00
+     */
+    public function test_monster_regular_holiday_rest_day_night_shift_pays_nd_on_rated_rate(): void
+    {
+        $emp = $this->makeEmployee([
+            'pay_type'             => 'semi_monthly',
+            'basic_monthly_salary' => null,
+            'semi_monthly_rate'    => '8800.00',
+        ]);
+        $period = $this->makePeriod(false, '2026-04-16', '2026-04-30'); // 2nd half: no gov deductions
+
+        Attendance::create([
+            'employee_id'       => $emp->id,
+            'date'              => '2026-04-16',
+            'time_in'           => '2026-04-16 18:00:00',
+            'time_out'          => '2026-04-17 10:00:00',
+            'regular_hours'     => '11.50',
+            'overtime_hours'    => '4.00',
+            'night_diff_hours'  => '8.00',
+            'tardiness_minutes' => 0,
+            'undertime_minutes' => 0,
+            'is_rest_day'       => true,
+            'day_type_rate'     => '2.60',
+            'status'            => 'present',
+        ]);
+
+        $payroll = $this->calc->computeForEmployee($period, $emp);
+
+        $this->assertSame('8800.00', $payroll->basic_pay);
+        $this->assertSame('1840.00', $payroll->holiday_pay);
+        $this->assertSame('1352.00', $payroll->overtime_pay);
+        $this->assertSame('208.00', $payroll->night_diff_pay);
+        $this->assertSame('12200.00', $payroll->gross_pay);
+    }
 }

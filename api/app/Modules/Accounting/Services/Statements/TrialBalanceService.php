@@ -31,9 +31,9 @@ class TrialBalanceService
             $rows = DB::table('journal_entry_lines as jel')
                 ->join('journal_entries as je', 'je.id', '=', 'jel.journal_entry_id')
                 ->join('accounts as a',         'a.id',  '=', 'jel.account_id')
-                // A reversal is a new posted entry; keep the original entry
-                // in historical activity so the reversal date is the point
-                // at which the net ledger effect changes.
+                // Reversed originals stay attributed to their own date; the
+                // mirror entry (a separate posted JE) cancels them only from
+                // the reversal date, so historical windows keep both legs.
                 ->whereIn('je.status', ['posted', 'reversed'])
                 ->whereBetween('je.date', [$from->toDateString(), $to->toDateString()])
                 ->groupBy('a.id', 'a.code', 'a.name', 'a.type', 'a.normal_balance')

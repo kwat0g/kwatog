@@ -7,7 +7,7 @@ export const factoryApi = {
  // Active work orders assigned to current operator's machine
  activeOrders: (params?: { machine_id?: string }) =>
  client.get<PaginatedResponse<WorkOrder>>('/production/work-orders', {
- params: { ...params, status: 'in_progress,confirmed,paused', per_page: 50 },
+ params: { ...params, status: ['in_progress', 'confirmed', 'paused'], per_page: 50 },
  }).then(r => r.data),
 
  // Record output for a work order

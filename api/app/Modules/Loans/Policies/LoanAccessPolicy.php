@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\Modules\Loans\Policies;
 
 use App\Common\Models\ApprovalDelegation;
+use App\Common\Models\ApprovalRecord;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Loans\Models\EmployeeLoan;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 
 /**
  * Server-side row scope for every operational loan read and decision.
@@ -21,17 +23,27 @@ use Illuminate\Database\Eloquent\Builder;
  *   - system_admin / finance_officer / hr_officer → every loan (company-wide
  *     operators);
  *   - department_head                             → own + their department's;
- *   - chain participants                          → loans waiting on a step
- *     that names one of the caller's roles (production_manager is step 2 of
- *     company_loan; vice_president closes cash_advance step 3 and
- *     company_loan step 4) — without this branch those steps stalled
- *     invisibly: the board hid the card while the badge still counted it;
+ *   - chain participants                          → loans waiting on a
+ *     plant-wide step that names one of the caller's roles (production_manager
+ *     is step 2 of company_loan; vice_president closes cash_advance step 3 and
+ *     company_loan step 4) — the departmental step is deliberately excluded
+ *     here so a head's reach stays their own department. Without this branch
+ *     those steps stalled invisibly: the board hid the card while the badge
+ *     still counted it;
  *   - everyone else                               → their own loans only.
  */
 final class LoanAccessPolicy
 {
     /**
-     * @param  Builder<EmployeeLoan>  $query
+     * The one loan-chain step that is scoped to a department.
+     *
+     * Both seeded chains (company_loan, cash_advance) start at the borrower's
+     * department_head; every later step is a company-level office.
+     */
+    private const DEPARTMENTAL_STEP_ROLE = 'department_head';
+
+    /**
+     * @param Builder<EmployeeLoan> $query
      * @return Builder<EmployeeLoan>
      */
     public function visibleTo(Builder $query, ?User $user): Builder
@@ -45,33 +57,38 @@ final class LoanAccessPolicy
         }
 
         $employeeId = $user->employee_id;
-        if ($employeeId === null) {
-            // A user with no employee row has no self rows and no department,
-            // but delegation or a chain step can still name their role.
-            $stepRoles = $this->chainStepRoles($user);
+        $stepRoles = $this->plantWideStepRoles($user);
 
-            return $stepRoles === []
-                ? $query->whereRaw('1 = 0')
-                : $query->whereHas('approvalRecords', $this->pendingStepScope($stepRoles));
+        if ($employeeId === null && $stepRoles === []) {
+            return $query->whereRaw('1 = 0');
         }
 
-        if ($user->role?->slug !== 'department_head') {
-            $stepRoles = $this->chainStepRoles($user);
+        $isDepartmentHead = $user->role?->slug === self::DEPARTMENTAL_STEP_ROLE;
+        $departmentId = $isDepartmentHead ? $this->departmentId($user) : null;
 
-            return $query->where(function (Builder $scope) use ($employeeId, $stepRoles): void {
-                $scope->where('employee_loans.employee_id', $employeeId);
-                if ($stepRoles !== []) {
-                    $scope->orWhereHas('approvalRecords', $this->pendingStepScope($stepRoles));
+        return $query->where(function (Builder $scope) use ($employeeId, $isDepartmentHead, $departmentId, $stepRoles): void {
+            $scope->where(function (Builder $own) use ($employeeId, $isDepartmentHead, $departmentId): void {
+                if ($employeeId === null) {
+                    $own->whereRaw('1 = 0');
+
+                    return;
+                }
+
+                $own->where('employee_id', $employeeId);
+                if ($isDepartmentHead && $departmentId !== null) {
+                    $own->orWhereHas('employee', static fn (Builder $employee): Builder => $employee->where('department_id', $departmentId));
                 }
             });
-        }
 
-        $departmentId = $this->departmentId($user);
-
-        return $query->where(function (Builder $scope) use ($employeeId, $departmentId): void {
-            $scope->where('employee_loans.employee_id', $employeeId);
-            if ($departmentId !== null) {
-                $scope->orWhereHas('employee', static fn (Builder $employee): Builder => $employee->where('department_id', $departmentId));
+            // LN-01 — an approver on a plant-wide chain step has to be able to
+            // find the loans waiting on them. approvalRecords is already
+            // constrained to is_current and only exists once a loan is
+            // submitted, so this never exposes a co-worker's unsubmitted row.
+            // Same shape as PurchaseRequestAccessPolicy::visibleTo.
+            if ($stepRoles !== []) {
+                $scope->orWhereHas('approvalRecords', function ($records) use ($stepRoles): void {
+                    $records->whereIn('role_slug', $stepRoles);
+                });
             }
         });
     }
@@ -79,13 +96,13 @@ final class LoanAccessPolicy
     public function canView(User $user, EmployeeLoan $loan): bool
     {
         return $this->canAccessEmployee($user, (int) $loan->employee_id)
-            || $this->waitsOnCallersStep($user, $loan);
+            || $this->isChainParticipant($user, $loan);
     }
 
     public function canDecide(User $user, EmployeeLoan $loan): bool
     {
         return $this->canAccessEmployee($user, (int) $loan->employee_id)
-            || $this->waitsOnCallersStep($user, $loan);
+            || $this->isChainParticipant($user, $loan);
     }
 
     public function canViewEmployee(User $user, Employee $employee): bool
@@ -107,7 +124,7 @@ final class LoanAccessPolicy
             return true;
         }
 
-        if ($user->role?->slug !== 'department_head') {
+        if ($user->role?->slug !== self::DEPARTMENTAL_STEP_ROLE) {
             return false;
         }
 
@@ -120,64 +137,60 @@ final class LoanAccessPolicy
     }
 
     /**
-     * An approval-chain participant must be able to open the loans waiting on
-     * their step — you cannot approve what you cannot read. Role match per
-     * step is still enforced by ApprovalService::userMayActFor; this only
-     * answers row visibility, exactly like the purchase-order policy's
-     * chain-participant branch (PS-01b).
+     * You cannot approve what you cannot open: a plant-wide chain approver
+     * reads the rows its own step appears on.
      */
-    private function waitsOnCallersStep(User $user, EmployeeLoan $loan): bool
+    private function isChainParticipant(User $user, EmployeeLoan $loan): bool
     {
-        $stepRoles = $this->chainStepRoles($user);
+        $stepRoles = $this->plantWideStepRoles($user);
         if ($stepRoles === []) {
             return false;
         }
 
-        return $loan->approvalRecords()
-            ->whereIn('role_slug', $stepRoles)
-            ->where('action', 'pending')
-            ->exists();
+        return $this->currentRecords($loan)
+            ->contains(static fn (ApprovalRecord $record): bool => in_array($record->role_slug, $stepRoles, true));
     }
 
     /**
-     * @param  list<string>  $stepRoles
-     * @return callable(Builder): void
-     */
-    private function pendingStepScope(array $stepRoles): callable
-    {
-        return static function (Builder $records) use ($stepRoles): void {
-            $records->whereIn('role_slug', $stepRoles)
-                ->where('action', 'pending');
-        };
-    }
-
-    /**
-     * The caller's approval-chain roles: the role slug itself plus any active
-     * delegation, in step with ApprovalService::userMayActFor.
+     * Approval roles held directly or through an active delegation, minus the
+     * departmental one: a department head's reach is already decided by its
+     * department, and matching the department_head step here as well would
+     * hand every head every other department's submitted loans.
      *
      * @return list<string>
      */
-    private function chainStepRoles(User $user): array
+    private function plantWideStepRoles(User $user): array
     {
-        if ($user->role?->slug === null) {
-            return [];
+        $roles = [];
+        if ($user->role?->slug !== null) {
+            $roles[] = $user->role->slug;
         }
 
-        $roles = [$user->role->slug];
+        $roles = array_values(array_unique([
+            ...$roles,
+            ...ApprovalDelegation::actsForRoles($user->id, now()),
+        ]));
 
-        foreach (ApprovalDelegation::actsForRoles($user->id, now()) as $delegated) {
-            $roles[] = $delegated;
-        }
+        return array_values(array_filter(
+            $roles,
+            static fn (string $slug): bool => $slug !== self::DEPARTMENTAL_STEP_ROLE,
+        ));
+    }
 
-        return array_values(array_unique($roles));
+    /** @return Collection<int, ApprovalRecord> */
+    private function currentRecords(EmployeeLoan $loan): Collection
+    {
+        // The relation is already constrained to is_current and ordered by
+        // step_order, so a superseded attempt can never be read as live.
+        return $loan->relationLoaded('approvalRecords')
+            ? $loan->approvalRecords
+            : $loan->approvalRecords()->get();
     }
 
     private function isGlobal(User $user): bool
     {
         // These roles are the only seeded company-wide loan operators. Keep
-        // this role list explicit; loans.approve alone is not global scope —
-        // production_manager and vice_president hold it purely as chain
-        // participants and stay scoped to the rows waiting on them.
+        // this role list explicit; loans.approve alone is not global scope.
         return in_array($user->role?->slug, ['system_admin', 'finance_officer', 'hr_officer'], true);
     }
 

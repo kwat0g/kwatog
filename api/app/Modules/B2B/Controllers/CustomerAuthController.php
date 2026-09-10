@@ -48,18 +48,17 @@ class CustomerAuthController
             'password' => ['required', 'string'],
         ]);
 
-        $result = $this->auth->login(
+        $user = $this->auth->login(
             CustomerPortalUser::class,
             $data['email'],
             $data['password'],
             $request,
-            'customer-portal',
             'customer',
             'customer_portal',
         );
 
         /** @var CustomerPortalUser $user */
-        $user = $result['user']->load('customer:id,name');
+        $user = $user->load('customer:id,name');
 
         return response()->json([
             'data' => ['user' => new CustomerPortalUserResource($user)],

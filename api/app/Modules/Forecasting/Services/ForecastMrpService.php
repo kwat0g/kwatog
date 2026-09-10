@@ -8,7 +8,6 @@ use App\Modules\Forecasting\Models\DemandForecast;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\MRP\Services\BomService;
-use Illuminate\Support\Collection;
 
 /**
  * Forecast-driven MRP projection (ADV11 → MRP bridge).
@@ -39,7 +38,7 @@ class ForecastMrpService
      */
     public function project(int $year, int $month): array
     {
-        $forecasts = DemandForecast::query()
+        $forecastsByProduct = DemandForecast::query()
             ->with('product:id,name')
             ->whereHas('product', fn ($query) => $query
                 ->where('is_active', true)
@@ -47,32 +46,31 @@ class ForecastMrpService
             ->where('forecast_year', $year)
             ->where('forecast_month', $month)
             ->where('forecasted_quantity', '>', 0)
-            ->get();
+            ->get()
+            ->groupBy('product_id');
 
-        // A total row and customer rows are alternative representations of the
-        // same demand, never additive. Keep the forecast quantity as a string
-        // until the BOM boundary to avoid lossy decimal aggregation.
-        $forecastsByProduct = $forecasts->groupBy('product_id');
         $grossPerItem = [];   // item_id => float gross requirement
         $products = [];
 
-        foreach ($forecastsByProduct as $productForecasts) {
-            $total = $productForecasts->firstWhere('customer_id', null);
-            $forecastQuantity = $total
-                ? (string) $total->forecasted_quantity
-                : $productForecasts->reduce(
-                    static fn (string $sum, DemandForecast $forecast): string => bcadd(
-                        $sum,
-                        (string) $forecast->forecasted_quantity,
-                        2,
-                    ),
-                    '0.00',
-                );
-            $fc = $total ?? $productForecasts->first();
-            $qty = (float) $forecastQuantity;
+        foreach ($forecastsByProduct as $rows) {
+            // The NULL-customer row is the cross-customer total; when present it
+            // is authoritative on its own. Summing it together with the
+            // per-customer rows would double-count demand (FC-01). Only fall
+            // back to the per-customer rows when no total row exists.
+            $total = $rows->first(fn ($fc) => $fc->customer_id === null);
+            if ($total !== null) {
+                $rows = collect([$total]);
+            }
+
+            $qty = 0.0;
+            foreach ($rows as $fc) {
+                $qty += (float) $fc->forecasted_quantity;
+            }
+
+            $product = $rows->first()->product;
             $hasBom = false;
             try {
-                $exploded = $this->bom->explode((int) $fc->product_id, $qty);
+                $exploded = $this->bom->explode((int) $rows->first()->product_id, $qty);
                 $hasBom = $exploded->isNotEmpty();
                 foreach ($exploded as $row) {
                     $iid = (int) $row['item_id'];
@@ -83,9 +81,9 @@ class ForecastMrpService
             }
 
             $products[] = [
-                'product_id'          => $fc->product?->hash_id,
-                'product_name'        => $fc->product?->name,
-                'forecasted_quantity' => bcadd($forecastQuantity, '0', 2),
+                'product_id'          => $product?->hash_id,
+                'product_name'        => $product?->name,
+                'forecasted_quantity' => number_format($qty, 2, '.', ''),
                 'has_bom'             => $hasBom,
             ];
         }

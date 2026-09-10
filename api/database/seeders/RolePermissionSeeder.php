@@ -365,6 +365,14 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'assets.update',              'name' => 'Update Asset'],
                 ['slug' => 'assets.delete',              'name' => 'Delete Asset'],
                 ['slug' => 'assets.dispose',             'name' => 'Dispose Asset'],
+                // AS-03 — the seeded asset_disposal chain routes approval to
+                // finance_officer then system_admin, but the approve/reject
+                // endpoints gate on this slug, so both step roles must hold
+                // it or every submitted disposal stalls at step 1. Same
+                // defect class as M036 (purchase_request) and L-37
+                // (return_request). finance_officer receives it via
+                // module('assets'); system_admin via the wildcard.
+                ['slug' => 'assets.dispose.approve',     'name' => 'Approve / Reject Asset Disposals'],
                 ['slug' => 'assets.depreciation.view',   'name' => 'View Asset Depreciation'],
                 ['slug' => 'assets.depreciation.run',    'name' => 'Run Asset Depreciation'],
             ],
@@ -373,10 +381,11 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'hr.separation.initiate',     'name' => 'Initiate Employee Separation'],
                 ['slug' => 'hr.clearance.sign',          'name' => 'Sign Clearance Item'],
                 ['slug' => 'hr.separation.finalize',     'name' => 'Finalize Separation & Final Pay'],
-                // HR-04 — correction path for a Pending/InProgress clearance
-                // (rescinded resignation, mistyped separation date). Refused
-                // once final pay is computed.
-                ['slug' => 'hr.separation.cancel',       'name' => 'Cancel Employee Separation'],
+                // HR-04 — correction path for mistakenly initiated separations.
+                // Also granted to hr_officer by migration 0483 on deployed
+                // databases; the seeder's role sync detaches anything not in
+                // this catalog, so the slug must live here too.
+                ['slug' => 'hr.separation.cancel',       'name' => 'Cancel Initiated Separation'],
             ],
             'hr_recruitment' => [
                 ['slug' => 'hr.recruitment.view',         'name' => 'View Job Postings & Applications'],
@@ -568,6 +577,12 @@ class RolePermissionSeeder extends Seeder
                         'purchasing.view',
                         'purchasing.pr.approve',
                         'purchasing.po.approve',
+                        // Separation clearance — Finance is step 4 of the
+                        // documented workflow and signs the Finance-owned items
+                        // (cash advance / loan). Which items Finance may sign
+                        // is decided by SeparationService's per-department gate.
+                        'hr.separation.view',
+                        'hr.clearance.sign',
                     ],
                 ),
             ],
@@ -594,6 +609,11 @@ class RolePermissionSeeder extends Seeder
                         'loans.view', 'loans.approve',
                         'hr.salary_adjustments.view',
                         'hr.salary_adjustments.act',
+                        // AS-03 — final approver of the asset_disposal chain
+                        // (step 2). Without these the approve route refuses the
+                        // only role the step accepts.
+                        'assets.view',
+                        'assets.dispose.approve',
                         'accounting.view',
                         'accounting.coa.view',
                         'accounting.bills.view',
@@ -677,6 +697,15 @@ class RolePermissionSeeder extends Seeder
                         'forecasting.view',
                         // Final step of the return_request approval chain.
                         'return_management.view', 'return_management.approve',
+                        // LN-01 — production_manager is step 2 ("Manager") of the
+                        // seeded company_loan chain in WorkflowSeeder, but held no
+                        // loans slug at all, so the approve route rejected the only
+                        // role that step accepts and every submitted company loan
+                        // stalled at step 2. Same defect as M036 on
+                        // purchasing.pr.approve and L-37 on
+                        // return_management.approve. Read + approve only: raising
+                        // a loan stays HR's.
+                        'loans.view', 'loans.approve',
                         // REC-03 — production_manager is the step-1 checker on the
                         // salary_adjustment chain.
                         'hr.salary_adjustments.view',
@@ -761,6 +790,11 @@ class RolePermissionSeeder extends Seeder
                         // for whom. Deliberately NOT supply_chain.view, which
                         // would also open shipments, fleet and customs docs.
                         'supply_chain.deliveries.view',
+                        // Separation clearance — Warehouse is step 2 of the
+                        // documented workflow and signs the materials-return
+                        // item; scoped by SeparationService's per-department gate.
+                        'hr.separation.view',
+                        'hr.clearance.sign',
                     ],
                 ),
             ],
@@ -791,6 +825,11 @@ class RolePermissionSeeder extends Seeder
                         // Mobile condition readings select from the machine master.
                         'mrp.machines.view',
                         'assets.view',
+                        // Separation clearance — Maintenance is step 3 of the
+                        // documented workflow and signs the pending-work item;
+                        // scoped by SeparationService's per-department gate.
+                        'hr.separation.view',
+                        'hr.clearance.sign',
                         'search.global', 'notifications.preferences.manage',
                     ],
                 ),
@@ -825,6 +864,11 @@ class RolePermissionSeeder extends Seeder
                         'purchasing.pr.create',
                         // First step of the return_request approval chain.
                         'return_management.view', 'return_management.approve',
+                        // Separation clearance — step 1 of the documented
+                        // workflow. Signs only items owned by their own
+                        // department; scoped by SeparationService's
+                        // per-department gate.
+                        'hr.separation.view',
                         'hr.clearance.sign',
                         'search.global', 'notifications.preferences.manage',
                     ],

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Purchasing\Policies;
 
+use App\Common\Models\ApprovalDelegation;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
@@ -25,15 +26,10 @@ use Illuminate\Database\Eloquent\Builder;
  *   - system_admin / purchasing.po.approve → every PO;
  *   - department_head                      → own creations + POs whose linked
  *                                            PR belongs to their department;
- *   - chain participants                   → POs waiting on a step that names
- *                                            one of the caller's roles;
+ *   - approval-chain step roles            → own creations + POs whose current
+ *                                            approval records carry their step
+ *                                            role (the orders waiting on them);
  *   - everyone else                        → own creations only.
- *
- * The chain-participant branch (2026-09-10, PS-01b) mirrors the one
- * PurchaseRequestAccessPolicy already grew: a step-2 finance approver creates
- * no POs and holds no department, so without it the Approval Board hid every
- * card naming their step while the badge still counted them — the workflow
- * stalled invisibly (audit PS-01).
  *
  * Columns are table-qualified so this survives callers that join tables
  * carrying same-named columns (vendors.created_by — migration 0222).
@@ -56,7 +52,7 @@ final class PurchaseOrderAccessPolicy
             return $query;
         }
 
-        $stepRoles = $this->chainStepRoles($user);
+        $stepRoles = $this->approvalRoleSlugs($user);
 
         return $query->where(function (Builder $scope) use ($user, $stepRoles): void {
             $scope->where('purchase_orders.created_by', $user->id);
@@ -70,144 +66,115 @@ final class PurchaseOrderAccessPolicy
                 }
             }
 
-            // An approver on a chain step has to be able to find the POs
-            // waiting on them. approvalRecords is constrained to is_current
-            // and only exists once the PO is submitted, so this never exposes
-            // somebody else's draft.
+            // PS-01 — an approver on a plant-wide chain step has to be able to
+            // find the orders waiting on them. approvalRecords is already
+            // constrained to is_current and only exists once a PO is submitted,
+            // so this never exposes a draft. Same shape as
+            // PurchaseRequestAccessPolicy::visibleTo.
             if ($stepRoles !== []) {
-                $scope->orWhereHas('approvalRecords', function (Builder $records) use ($stepRoles): void {
-                    $records->whereIn('role_slug', $stepRoles)
-                        ->where('action', 'pending');
+                $scope->orWhereHas('approvalRecords', function ($records) use ($stepRoles): void {
+                    $records->whereIn('role_slug', $stepRoles);
                 });
             }
         });
     }
 
-    public function canView(User $user, PurchaseOrder $po): bool
+    /**
+     * Action ownership, mirroring PurchaseRequestAccessPolicy: permissions
+     * decide whether a route is available, these decide which PO rows that
+     * permission may mutate. Visibility is not enough — a department head can
+     * see their department's POs without owning them.
+     */
+    public function canManageDraft(User $user, PurchaseOrder $po): bool
     {
-        if ($user->hasPermission('purchasing.po.approve')) {
-            return true;
-        }
+        return $po->status === PurchaseOrderStatus::Draft
+            && $this->isOwner($user, $po);
+    }
 
-        if ((int) $po->created_by === (int) $user->id) {
-            return true;
-        }
+    public function canCancel(User $user, PurchaseOrder $po): bool
+    {
+        return in_array($po->status, [
+            PurchaseOrderStatus::Draft,
+            PurchaseOrderStatus::PendingApproval,
+            PurchaseOrderStatus::Approved,
+            PurchaseOrderStatus::Sent,
+            PurchaseOrderStatus::PartiallyReceived,
+        ], true) && $this->isOwner($user, $po);
+    }
 
-        if ($user->role?->slug === 'department_head' && $user->employee_id !== null) {
-            $departmentId = (int) Employee::query()->whereKey($user->employee_id)->value('department_id');
-            if ($departmentId !== null
-                && (int) $po->purchaseRequest()->value('department_id') === $departmentId) {
-                return true;
-            }
-        }
+    public function canSend(User $user, PurchaseOrder $po): bool
+    {
+        return $po->status === PurchaseOrderStatus::Approved
+            && $this->isOwner($user, $po);
+    }
 
-        // You cannot approve what you cannot open: a chain approver reads the
-        // rows its own pending step appears on.
-        $stepRoles = $this->chainStepRoles($user);
-        if ($stepRoles === []) {
+    public function canClose(User $user, PurchaseOrder $po): bool
+    {
+        return $po->status === PurchaseOrderStatus::Received
+            && $this->isOwner($user, $po);
+    }
+
+    public function canAcknowledgeBudget(User $user, PurchaseOrder $po): bool
+    {
+        if (! $user->hasPermission('budgeting.approve')) {
             return false;
         }
 
-        return $po->approvalRecords()
-            ->whereIn('role_slug', $stepRoles)
-            ->where('action', 'pending')
+        // Finance acknowledges the budget gate across departments but is not
+        // granted general purchasing row visibility by that permission.
+        return $this->rowVisible($user, $po)
+            || in_array($user->role?->slug, ['system_admin', 'finance_officer'], true);
+    }
+
+    /**
+     * The PO creator, or the company-wide tier. `purchasing.po.approve` is
+     * this module's global tier — the same office `visibleTo` grants every PO
+     * — and hasPermission() short-circuits for system_admin.
+     */
+    private function isOwner(User $user, PurchaseOrder $po): bool
+    {
+        return (int) $po->created_by === (int) $user->id
+            || $user->hasPermission('purchasing.po.approve');
+    }
+
+    /**
+     * Single-row mirror of visibleTo(), for callers that already hold the row.
+     * Reuses visibleTo() rather than re-expressing the ladder, so the two can
+     * never drift.
+     */
+    private function rowVisible(User $user, PurchaseOrder $po): bool
+    {
+        return $this->visibleTo(PurchaseOrder::query(), $user)
+            ->whereKey($po->id)
             ->exists();
     }
 
     /**
-     * PU-02 — who may edit/delete/submit a draft, cancel a live PO, or close
-     * a received one. The route permission answers "may act on POs at all";
-     * this answers "on THIS one". Mirrors the PR policy's draft management:
-     * the creator, or anyone in the approver tier (po.approve holders, who
-     * are company-wide in the module).
-     */
-    public function canManage(User $user, PurchaseOrder $po): bool
-    {
-        if ($user->hasPermission('purchasing.po.approve')) {
-            return true;
-        }
-
-        return (int) $po->created_by === (int) $user->id;
-    }
-
-    /**
-     * PU-02 — send/close/cancel are lifecycle decisions on documents someone
-     * else may have created; purchasing operators (po.send / po.create
-     * holders) act company-wide, matching how the module list treats them.
-     */
-    public function canOperate(User $user, PurchaseOrder $po): bool
-    {
-        if ($po->status === PurchaseOrderStatus::Draft) {
-            return $this->canManage($user, $po);
-        }
-
-        return $user->hasPermission('purchasing.po.approve')
-            || $user->hasPermission('purchasing.po.send')
-            || (int) $po->created_by === (int) $user->id;
-    }
-
-    /**
-     * PU-13 — the SPA renders buttons from this map instead of guessing from
-     * status + role, the same way PurchaseRequestResource already does. Row
-     * detail/action responses call it; the paginated list does not (the
-     * delegation/step queries would run once per row).
+     * Approval roles held directly or through an active delegation.
      *
-     * Approve/reject mirror ApprovalService's own guards (step-role match via
-     * chainStepRoles, self-approval via created_by) so a hidden button and a
-     * refused request can never disagree. The service re-checks under lock —
-     * this is UX truth, not the security boundary.
-     *
-     * @return array<string, bool>
-     */
-    public function actionsFor(User $user, PurchaseOrder $po): array
-    {
-        $canManage = $this->canManage($user, $po);
-        $canOperate = $this->canOperate($user, $po);
-
-        $isPendingApproval = $po->status === PurchaseOrderStatus::PendingApproval;
-        $selfBlocked = (int) $po->created_by === (int) $user->id;
-        $stepRoles = $this->chainStepRoles($user);
-        $holdsCurrentStep = $isPendingApproval && ! $selfBlocked && $stepRoles !== []
-            && $po->approvalRecords()
-                ->whereIn('role_slug', $stepRoles)
-                ->where('action', 'pending')
-                ->exists();
-
-        return [
-            'can_view'               => $this->canView($user, $po),
-            'can_update'             => $canManage && $po->status === PurchaseOrderStatus::Draft,
-            'can_delete'             => $canManage && $po->status === PurchaseOrderStatus::Draft,
-            'can_submit'             => $canManage && $po->status === PurchaseOrderStatus::Draft,
-            'can_approve'            => $isPendingApproval && $holdsCurrentStep,
-            'can_reject'             => $isPendingApproval && $holdsCurrentStep,
-            'can_send'               => $canOperate && $po->status === PurchaseOrderStatus::Approved,
-            'can_cancel'             => $canOperate
-                && ! in_array($po->status, [PurchaseOrderStatus::Cancelled, PurchaseOrderStatus::Received, PurchaseOrderStatus::Closed], true),
-            'can_close'              => $canOperate && $po->status === PurchaseOrderStatus::Received,
-            'can_print'              => $this->canView($user, $po),
-        ];
-    }
-
-    /**
-     * The caller's approval-chain roles: the role slug itself plus any active
-     * delegation. Kept in step with ApprovalService::userMayActFor so the
-     * board can never show a card the approve endpoint would refuse — or
-     * hide one it would accept.
+     * Every purchase_order step is a plant-wide office (purchasing_officer →
+     * finance_officer → system_admin), so unlike PurchaseRequestAccessPolicy
+     * there is no departmental step role to subtract.
      *
      * @return list<string>
      */
-    private function chainStepRoles(User $user): array
+    private function approvalRoleSlugs(User $user): array
     {
-        if ($user->role?->slug === null) {
-            return [];
+        $roles = [];
+        if ($user->role?->slug !== null) {
+            $roles[] = $user->role->slug;
         }
 
-        $roles = [$user->role->slug];
+        return array_values(array_unique([
+            ...$roles,
+            ...ApprovalDelegation::actsForRoles($user->id, now()),
+        ]));
+    }
 
-        foreach (\App\Common\Models\ApprovalDelegation::actsForRoles($user->id, now()) as $delegated) {
-            $roles[] = $delegated;
-        }
-
-        return array_values(array_unique($roles));
+    public function canView(User $user, PurchaseOrder $po): bool
+    {
+        return $this->visibleTo(PurchaseOrder::query(), $user)
+            ->whereKey($po->id)
+            ->exists();
     }
 }

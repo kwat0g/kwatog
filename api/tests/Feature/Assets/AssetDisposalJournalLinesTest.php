@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Assets;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\ApprovalService;
 use App\Common\Services\SettingsService;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Models\JournalEntry;
@@ -12,12 +13,15 @@ use App\Modules\Assets\Enums\AssetCategory;
 use App\Modules\Assets\Enums\AssetStatus;
 use App\Modules\Assets\Models\Asset;
 use App\Modules\Assets\Services\AssetService;
+use App\Modules\Assets\Services\DepreciationService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
+use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 /**
@@ -39,6 +43,10 @@ use Tests\TestCase;
  * The single existing disposal test used non-zero cost, accumulated
  * depreciation and proceeds together, so all three lines happened to be
  * non-zero and the defect stayed invisible.
+ *
+ * AS-03 update: disposal is two-phase now (request → full chain approval →
+ * execute), so the disposals here run through the approval chain; the JE
+ * assertions pin that execution still journals exactly what it did before.
  */
 class AssetDisposalJournalLinesTest extends TestCase
 {
@@ -47,7 +55,19 @@ class AssetDisposalJournalLinesTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->seed([ChartOfAccountsSeeder::class, RolePermissionSeeder::class, SettingsSeeder::class]);
+        $this->seed([
+            ChartOfAccountsSeeder::class,
+            RolePermissionSeeder::class,
+            SettingsSeeder::class,
+            WorkflowSeeder::class,
+        ]);
+        Carbon::setTestNow('2026-06-20 10:00:00');
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+        parent::tearDown();
     }
 
     private function user(): User
@@ -55,6 +75,24 @@ class AssetDisposalJournalLinesTest extends TestCase
         return User::factory()->create([
             'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
         ]);
+    }
+
+    /**
+     * Dispose via the two-phase flow: request by a finance officer, then the
+     * seeded finance_officer → system_admin chain approves to execution.
+     *
+     * @param array<string, mixed> $data
+     */
+    private function disposeViaApproval(Asset $asset, array $data): void
+    {
+        $svc = app(AssetService::class);
+        $svc->requestDisposal($asset, $data, User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'finance_officer')->value('id'),
+        ]));
+        $svc->approveDisposal($asset, User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'finance_officer')->value('id'),
+        ]));
+        $svc->approveDisposal($asset, $this->user());
     }
 
     /** @param array<string, mixed> $overrides */
@@ -127,13 +165,19 @@ class AssetDisposalJournalLinesTest extends TestCase
 
     public function test_zero_proceeds_scrapping_posts_a_balanced_journal(): void
     {
-        $asset = $this->asset(['accumulated_depreciation' => '1000.00']);
+        $by = $this->user();
+        $asset = $this->asset();
 
-        app(AssetService::class)->dispose($asset, [
+        // Jan–May posted through the monthly run (5 × 200 = 1,000); dispose()
+        // catches June up itself before derecognising (AS-01).
+        app(DepreciationService::class)->runBackfillTo(2026, 5, $by);
+        $this->assertSame('1000.00', (string) $asset->fresh()->accumulated_depreciation);
+
+        $this->disposeViaApproval($asset, [
             'disposal_amount' => '0.00',
             'disposed_date' => '2026-06-15',
             'remarks' => 'Scrapped — beyond economical repair',
-        ], $this->user());
+        ]);
 
         $je = $this->disposalEntry($asset);
         $this->assertJournalIsWellFormed($je);
@@ -141,8 +185,8 @@ class AssetDisposalJournalLinesTest extends TestCase
         // No proceeds line at all, and the loss absorbs the whole book value.
         $net = $this->netByCode($je);
         $this->assertArrayNotHasKey($this->accountCode('accounting.accounts.asset_cash_code'), $net);
-        $this->assertSame('1000.00', $net[$this->accountCode('accounting.accounts.asset_accumulated_depreciation_code')]);
-        $this->assertSame('11000.00', $net[$this->accountCode('accounting.accounts.asset_disposal_loss_code')]);
+        $this->assertSame('1200.00', $net[$this->accountCode('accounting.accounts.asset_accumulated_depreciation_code')]);
+        $this->assertSame('10800.00', $net[$this->accountCode('accounting.accounts.asset_disposal_loss_code')]);
         $this->assertSame('-12000.00', $net[$this->accountCode('accounting.accounts.asset_cost_code')]);
 
         $this->assertSame(AssetStatus::Disposed, $asset->fresh()->status);
@@ -151,13 +195,16 @@ class AssetDisposalJournalLinesTest extends TestCase
 
     public function test_disposing_a_never_depreciated_asset_omits_the_reversal_line(): void
     {
-        $asset = $this->asset(['accumulated_depreciation' => '0.00']);
+        // Since AS-01, dispose() depreciates through the disposal month, so a
+        // positive depreciable base always arrives caught up. A zero-base
+        // asset (salvage == cost) is the remaining never-depreciated case.
+        $asset = $this->asset(['salvage_value' => '12000.00', 'accumulated_depreciation' => '0.00']);
 
-        app(AssetService::class)->dispose($asset, [
+        $this->disposeViaApproval($asset, [
             'disposal_amount' => '0.00',
             'disposed_date' => '2026-06-15',
             'remarks' => 'Written off before commissioning',
-        ], $this->user());
+        ]);
 
         $je = $this->disposalEntry($asset);
         $this->assertJournalIsWellFormed($je);
@@ -172,11 +219,11 @@ class AssetDisposalJournalLinesTest extends TestCase
     {
         $asset = $this->asset(['accumulated_depreciation' => '12000.00']);
 
-        app(AssetService::class)->dispose($asset, [
+        $this->disposeViaApproval($asset, [
             'disposal_amount' => '500.00',
             'disposed_date' => '2026-06-15',
             'remarks' => 'Sold for scrap value',
-        ], $this->user());
+        ]);
 
         $je = $this->disposalEntry($asset);
         $this->assertJournalIsWellFormed($je);
@@ -199,12 +246,20 @@ class AssetDisposalJournalLinesTest extends TestCase
         // generic ledger error or silently disposing without an entry.
         $asset = $this->asset(['acquisition_cost' => '0.00', 'accumulated_depreciation' => '0.00']);
 
+        $svc = app(AssetService::class);
+        $svc->requestDisposal($asset, [
+            'disposal_amount' => '0.00',
+            'disposed_date' => '2026-06-15',
+            'remarks' => 'No monetary effect',
+        ], User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'finance_officer')->value('id'),
+        ]));
+        $svc->approveDisposal($asset, User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'finance_officer')->value('id'),
+        ]));
+
         try {
-            app(AssetService::class)->dispose($asset, [
-                'disposal_amount' => '0.00',
-                'disposed_date' => '2026-06-15',
-                'remarks' => 'No monetary effect',
-            ], $this->user());
+            $svc->approveDisposal($asset, $this->user());
             $this->fail('A disposal with no monetary effect must be refused.');
         } catch (BusinessRuleException $e) {
             $this->assertStringContainsString('no cost, proceeds or accumulated depreciation', $e->getMessage());
@@ -216,6 +271,10 @@ class AssetDisposalJournalLinesTest extends TestCase
             JournalEntry::query()->where('reference_type', Asset::class)->where('reference_id', $asset->getKey())->count(),
             'The refused disposal must not leave a journal entry behind.',
         );
+        // The refused execution rolled its approval step back, so the request
+        // stays pending and resolvable (reject or cancel) instead of closing
+        // a chain whose asset was never disposed.
+        $this->assertNotNull(app(ApprovalService::class)->nextStep($asset->fresh()));
     }
 
     public function test_disposal_catches_up_through_the_prior_month_before_reversing_accumulated_depreciation(): void

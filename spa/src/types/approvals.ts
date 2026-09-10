@@ -2,7 +2,7 @@
  * Series F — Task F2. Approval board types.
  */
 
-export type ApprovalKind = 'leave' | 'pr' | 'po' | 'loan' | 'payroll' | 'salary_adjustment' | 'return_request';
+export type ApprovalKind = 'leave' | 'pr' | 'po' | 'loan' | 'payroll' | 'salary_adjustment' | 'return_request' | 'asset_disposal';
 
 export interface ApprovalCardActive {
  id: string;

@@ -48,6 +48,7 @@ class ApprovalChainRolePermissionDriftTest extends TestCase
         'bill_payment' => ['accounting.bills.pay'],
         'salary_adjustment' => ['hr.salary_adjustments.act'],
         'return_request' => ['return_management.approve'],
+        'asset_disposal' => ['assets.dispose.approve'],
     ];
 
     protected function setUp(): void

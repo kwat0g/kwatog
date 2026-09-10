@@ -18,29 +18,28 @@ import type {
 import type { PaginatedResponse } from '@/types';
 import type { BusinessPolicies } from '@/api/businessPolicies';
 
-const { client: portalClient, setToken } = createPortalClient('ogami_supplier_portal_token');
+// Supplier portal authentication is the same HTTP-only cookie session used by
+// the internal SPA. There is deliberately no storage key or bearer-token
+// setter on this client.
+const { client: portalClient } = createPortalClient();
 
 type SupplierLoginResponse = {
- token: string;
- user: SupplierPortalUser;
+  user: SupplierPortalUser;
 };
 
 export const supplierPortalApi = {
- // ── Auth ──────────────────────────────────────────
- login: async (email: string, password: string) => {
- await getPortalCsrf();
- const { data } = await portalClient.post<{ data: SupplierLoginResponse }>('/b2b/supplier/login', { email, password });
- setToken(data.data.token);
- return data.data.user;
- },
+  // ── Auth ──────────────────────────────────────────
+  login: async (email: string, password: string) => {
+  await getPortalCsrf();
+  const { data } = await portalClient.post<{ data: SupplierLoginResponse }>('/b2b/supplier/login', { email, password });
+  return data.data.user;
+  },
 
- logout: async () => {
- try {
- await portalClient.post('/b2b/supplier/logout');
- } finally {
- setToken(null);
- }
- },
+  logout: async () => {
+  try {
+  await portalClient.post('/b2b/supplier/logout');
+  } finally { /* the server invalidates the HTTP-only session */ }
+  },
 
  me: async () => {
  const { data } = await portalClient.get<{ data: SupplierPortalUser }>('/b2b/supplier/me');
@@ -68,11 +67,13 @@ export const supplierPortalApi = {
   return data;
  },
 
- // Shared read-only policy values, authenticated with the portal bearer token.
- businessPolicies: async () => {
- const { data } = await portalClient.get<{ data: BusinessPolicies }>('/business-policies');
- return data.data;
- },
+  // Shared read-only policy values, authenticated with the portal session.
+  businessPolicies: async () => {
+  // Portal-scoped endpoint: the supplier session guard cannot read the
+  // internal auth:sanctum /business-policies route.
+  const { data } = await portalClient.get<{ data: BusinessPolicies }>('/b2b/supplier/business-policies');
+  return data.data;
+  },
 
  // ── Dashboard ──────────────────────────────────────
  dashboard: async () => {

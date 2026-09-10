@@ -280,8 +280,9 @@ final class BudgetConsumptionService
                     ->on('je.date', '<=', 'fy.end_date');
             })
             ->whereIn('fy.id', $fiscalYearIds)
-            // Reversed originals remain historical actuals; the separately
-            // posted reversal offsets them from its own date onward.
+            // Reversed originals keep their historical effect; the mirror
+            // entry (a separate posted JE) nets them out from the reversal
+            // date.
             ->whereIn('je.status', ['posted', 'reversed'])
             ->whereNull('je.deleted_at')
             ->whereNull('jel.deleted_at')

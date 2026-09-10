@@ -19,6 +19,16 @@ class ReturnRequestResource extends JsonResource
             'status'               => $this->status?->value,
             'status_label'         => $this->status?->label(),
             'is_editable'          => $this->is_editable,
+            // RM-01 — the pending step of the approval-records chain, so the
+            // detail page can show where the RMA waits without browsing the
+            // approval board. Null when the relation is not loaded (list) or
+            // nothing is pending (draft, fully approved, rejected, cancelled).
+            'pending_approval_step' => $this->relationLoaded('approvalRecords')
+                ? $this->approvalRecords->first(fn ($r) => $r->action === 'pending')?->step_order
+                : null,
+            'has_overdue_approval'  => $this->relationLoaded('approvalRecords')
+                ? $this->approvalRecords->contains(fn ($r) => $r->action === 'pending' && $r->is_overdue)
+                : false,
             'disposition_status'   => $this->disposition_status,
             'finance_only'         => (bool) $this->finance_only,
             'finance_only_reason'  => $this->finance_only_reason,
@@ -145,6 +155,20 @@ class ReturnRequestResource extends JsonResource
             ),
 
             'item_count'           => (int) ($this->items_count ?? $this->items?->count() ?? 0),
+
+            'approval_records'     => $this->whenLoaded('approvalRecords', fn () => $this->approvalRecords->map(fn ($r) => [
+                'step_order'    => (int) $r->step_order,
+                'role_slug'     => $r->role_slug,
+                'action'        => $r->action,
+                'remarks'       => $r->remarks,
+                'acted_at'      => optional($r->acted_at)->toIso8601String(),
+                'approver'      => $r->relationLoaded('approver') && $r->approver ? [
+                    'id'   => $r->approver->hash_id,
+                    'name' => $r->approver->name,
+                ] : null,
+                'is_overdue'    => (bool) $r->is_overdue,
+                'overdue_hours' => $r->is_overdue ? (int) $r->overdue_hours : null,
+            ])->all()),
 
             'creator'              => $this->whenLoaded('creator', fn () => $this->creator ? [
                 'id'   => $this->creator->hash_id,

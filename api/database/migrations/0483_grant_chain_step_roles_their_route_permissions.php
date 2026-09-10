@@ -26,7 +26,12 @@ use Illuminate\Support\Facades\DB;
 return new class extends Migration
 {
     private const GRANTS = [
-        'vice_president' => ['loans.view', 'loans.approve', 'hr.salary_adjustments.view', 'hr.salary_adjustments.act'],
+        'vice_president' => [
+            'loans.view', 'loans.approve',
+            'hr.salary_adjustments.view', 'hr.salary_adjustments.act',
+            // AS-03 union — VP is step 2 of the asset_disposal chain.
+            'assets.view', 'assets.dispose.approve',
+        ],
         'production_manager' => ['loans.view', 'loans.approve'],
     ];
 
