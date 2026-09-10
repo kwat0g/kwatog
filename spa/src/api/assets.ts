@@ -39,8 +39,8 @@ export const assetsApi = {
 export const depreciationApi = {
  list: (params?: { asset_id?: string; year?: number; month?: number; per_page?: number; page?: number }) =>
  client.get('/asset-depreciations', { params }).then(r => r.data),
- runMonth: (year: number, month: number) =>
- client.post('/asset-depreciations/run', { year, month }).then(r => r.data),
+ runMonth: (year: number, month: number, backfill = false) =>
+  client.post('/asset-depreciations/run', { year, month, backfill }).then(r => r.data),
 };
 
 /* ── Asset Transfers ── */

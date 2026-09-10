@@ -13,6 +13,7 @@ use App\Modules\Assets\Enums\AssetCategory;
 use App\Modules\Assets\Enums\AssetStatus;
 use App\Modules\Assets\Models\Asset;
 use App\Modules\Assets\Services\AssetService;
+use App\Modules\Assets\Services\DepreciationService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use Database\Seeders\ChartOfAccountsSeeder;
@@ -20,6 +21,7 @@ use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 /**
@@ -59,6 +61,13 @@ class AssetDisposalJournalLinesTest extends TestCase
             SettingsSeeder::class,
             WorkflowSeeder::class,
         ]);
+        Carbon::setTestNow('2026-06-20 10:00:00');
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+        parent::tearDown();
     }
 
     private function user(): User
@@ -156,7 +165,13 @@ class AssetDisposalJournalLinesTest extends TestCase
 
     public function test_zero_proceeds_scrapping_posts_a_balanced_journal(): void
     {
-        $asset = $this->asset(['accumulated_depreciation' => '1000.00']);
+        $by = $this->user();
+        $asset = $this->asset();
+
+        // Jan–May posted through the monthly run (5 × 200 = 1,000); dispose()
+        // catches June up itself before derecognising (AS-01).
+        app(DepreciationService::class)->runBackfillTo(2026, 5, $by);
+        $this->assertSame('1000.00', (string) $asset->fresh()->accumulated_depreciation);
 
         $this->disposeViaApproval($asset, [
             'disposal_amount' => '0.00',
@@ -170,8 +185,8 @@ class AssetDisposalJournalLinesTest extends TestCase
         // No proceeds line at all, and the loss absorbs the whole book value.
         $net = $this->netByCode($je);
         $this->assertArrayNotHasKey($this->accountCode('accounting.accounts.asset_cash_code'), $net);
-        $this->assertSame('1000.00', $net[$this->accountCode('accounting.accounts.asset_accumulated_depreciation_code')]);
-        $this->assertSame('11000.00', $net[$this->accountCode('accounting.accounts.asset_disposal_loss_code')]);
+        $this->assertSame('1200.00', $net[$this->accountCode('accounting.accounts.asset_accumulated_depreciation_code')]);
+        $this->assertSame('10800.00', $net[$this->accountCode('accounting.accounts.asset_disposal_loss_code')]);
         $this->assertSame('-12000.00', $net[$this->accountCode('accounting.accounts.asset_cost_code')]);
 
         $this->assertSame(AssetStatus::Disposed, $asset->fresh()->status);
@@ -180,7 +195,10 @@ class AssetDisposalJournalLinesTest extends TestCase
 
     public function test_disposing_a_never_depreciated_asset_omits_the_reversal_line(): void
     {
-        $asset = $this->asset(['accumulated_depreciation' => '0.00']);
+        // Since AS-01, dispose() depreciates through the disposal month, so a
+        // positive depreciable base always arrives caught up. A zero-base
+        // asset (salvage == cost) is the remaining never-depreciated case.
+        $asset = $this->asset(['salvage_value' => '12000.00', 'accumulated_depreciation' => '0.00']);
 
         $this->disposeViaApproval($asset, [
             'disposal_amount' => '0.00',

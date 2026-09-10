@@ -10,7 +10,8 @@ import type {
 
 export interface SalesOrderListParams extends ListParams {
  customer_id?: string;
- status?: string;
+ /** Single status or an array (serialised as status[]=…, accepted by the list endpoint). */
+ status?: string | string[];
  date_from?: string;
  date_to?: string;
 }

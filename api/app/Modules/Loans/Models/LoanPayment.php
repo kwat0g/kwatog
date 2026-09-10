@@ -15,7 +15,7 @@ class LoanPayment extends Model
     use HasFactory, HasHashId, HasAuditLog;
 
     public $timestamps = false;
-    protected $fillable = ['loan_id', 'payroll_id', 'amount', 'payment_date', 'payment_type', 'remarks', 'created_at'];
+    protected $fillable = ['loan_id', 'payroll_id', 'clearance_id', 'amount', 'payment_date', 'payment_type', 'remarks', 'created_at'];
     protected $casts = [
         'amount'       => 'decimal:2',
         'payment_date' => 'date',

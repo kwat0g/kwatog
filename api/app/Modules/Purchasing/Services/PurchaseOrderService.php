@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Purchasing\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Services\ApprovalService;
 use App\Common\Services\BusinessPolicyService;
 use App\Common\Services\DocumentSequenceService;
@@ -287,9 +288,9 @@ class PurchaseOrderService
         });
     }
 
-    public function update(PurchaseOrder $po, array $data): PurchaseOrder
+    public function update(PurchaseOrder $po, array $data, ?User $by = null): PurchaseOrder
     {
-        return DB::transaction(function () use ($po, $data) {
+        return DB::transaction(function () use ($po, $data, $by) {
             // Never trust the route-bound snapshot for the state guard. A
             // concurrent submit/approve/delete may have changed it after
             // binding; the row lock serializes this mutation with those
@@ -299,6 +300,9 @@ class PurchaseOrderService
                 ->findOrFail($po->id);
             if ($locked->status !== PurchaseOrderStatus::Draft) {
                 throw new BusinessRuleException('Only draft POs can be edited.');
+            }
+            if ($by !== null && ! $this->visibility->canManageDraft($by, $locked)) {
+                throw new ForbiddenActionException('You do not have permission to edit this purchase order.');
             }
 
             $isVatable = (bool) ($data['is_vatable'] ?? $locked->is_vatable);
@@ -379,6 +383,10 @@ class PurchaseOrderService
 
     public function acknowledgeBudget(PurchaseOrder $po, User $by): PurchaseOrder
     {
+        if (! $this->visibility->canAcknowledgeBudget($by, $po)) {
+            throw new ForbiddenActionException('You do not have permission to acknowledge this purchase order budget warning.');
+        }
+
         return $this->budget->acknowledge($po, $by);
     }
 
@@ -540,15 +548,18 @@ class PurchaseOrderService
         return $result;
     }
 
-    public function markAsSent(PurchaseOrder $po, ?string $dispatchChannel = null): PurchaseOrder
+    public function markAsSent(PurchaseOrder $po, ?string $dispatchChannel = null, ?User $by = null): PurchaseOrder
     {
-        return DB::transaction(function () use ($po, $dispatchChannel) {
+        return DB::transaction(function () use ($po, $dispatchChannel, $by) {
             // The controller's route-bound model may be stale when an approval
             // or cancellation races the send request. Re-read and lock before
             // validating the transition or publishing the GRN trigger.
             $row = PurchaseOrder::query()->lockForUpdate()->findOrFail($po->id);
             if ($row->status !== PurchaseOrderStatus::Approved) {
                 throw new BusinessRuleException('Only approved POs can be marked as sent.');
+            }
+            if ($by !== null && ! $this->visibility->canSend($by, $row)) {
+                throw new ForbiddenActionException('You do not have permission to send this purchase order.');
             }
 
             $row->forceFill([
@@ -579,9 +590,9 @@ class PurchaseOrderService
         });
     }
 
-    public function cancel(PurchaseOrder $po, string $reason): PurchaseOrder
+    public function cancel(PurchaseOrder $po, string $reason, ?User $by = null): PurchaseOrder
     {
-        $fresh = DB::transaction(function () use ($po, $reason) {
+        $fresh = DB::transaction(function () use ($po, $reason, $by) {
             // Route-bound models may be stale when receiving or closing races
             // cancellation. Re-read and lock the authoritative row before
             // evaluating guards or applying the terminal transition.
@@ -596,6 +607,9 @@ class PurchaseOrderService
             // downstream chain listener.
             if ($row->status === PurchaseOrderStatus::Cancelled) {
                 throw new BusinessRuleException('This purchase order is already cancelled.');
+            }
+            if ($by !== null && ! $this->visibility->canCancel($by, $row)) {
+                throw new ForbiddenActionException('You do not have permission to cancel this purchase order.');
             }
             if ($row->goodsReceiptNotes()->exists()) {
                 throw new BusinessRuleException('Cannot cancel a PO with GRNs.');
@@ -624,12 +638,15 @@ class PurchaseOrderService
         return $fresh;
     }
 
-    public function close(PurchaseOrder $po): PurchaseOrder
+    public function close(PurchaseOrder $po, ?User $by = null): PurchaseOrder
     {
-        return DB::transaction(function () use ($po): PurchaseOrder {
+        return DB::transaction(function () use ($po, $by): PurchaseOrder {
             $row = PurchaseOrder::query()->lockForUpdate()->findOrFail($po->id);
             if ($row->status !== PurchaseOrderStatus::Received) {
                 throw new BusinessRuleException('Only fully received POs can be closed.');
+            }
+            if ($by !== null && ! $this->visibility->canClose($by, $row)) {
+                throw new ForbiddenActionException('You do not have permission to close this purchase order.');
             }
             $row->forceFill(['status' => PurchaseOrderStatus::Closed])->save();
             $fresh = $row->fresh();
@@ -646,9 +663,9 @@ class PurchaseOrderService
             ->broadcastFor($po, $po->status?->value ?? '', $actor ?? auth()->user());
     }
 
-    public function delete(PurchaseOrder $po): void
+    public function delete(PurchaseOrder $po, ?User $by = null): void
     {
-        DB::transaction(function () use ($po) {
+        DB::transaction(function () use ($po, $by) {
             // Lock the authoritative row before the draft guard. This keeps a
             // stale delete from removing a PO after submit/approval won the
             // lifecycle race.
@@ -657,6 +674,9 @@ class PurchaseOrderService
                 ->findOrFail($po->id);
             if ($locked->status !== PurchaseOrderStatus::Draft) {
                 throw new BusinessRuleException('Only draft POs can be deleted.');
+            }
+            if ($by !== null && ! $this->visibility->canManageDraft($by, $locked)) {
+                throw new ForbiddenActionException('You do not have permission to delete this purchase order.');
             }
 
             $prId = $locked->purchase_request_id;
@@ -667,14 +687,19 @@ class PurchaseOrderService
         });
     }
 
-    public function restore(PurchaseOrder $po): PurchaseOrder
+    public function restore(PurchaseOrder $po, ?User $by = null): PurchaseOrder
     {
-        return DB::transaction(function () use ($po): PurchaseOrder {
+        return DB::transaction(function () use ($po, $by): PurchaseOrder {
             $locked = PurchaseOrder::withTrashed()
                 ->lockForUpdate()
                 ->findOrFail($po->id);
             if (! $locked->trashed()) {
                 throw new BusinessRuleException('Only deleted purchase orders can be restored.');
+            }
+            // Restore is draft management: only drafts can be deleted, so
+            // canManageDraft is the ownership gate on the trashed row.
+            if ($by !== null && ! $this->visibility->canManageDraft($by, $locked)) {
+                throw new ForbiddenActionException('You do not have permission to restore this purchase order.');
             }
 
             $locked->restore();

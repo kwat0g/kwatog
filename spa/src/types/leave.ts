@@ -26,7 +26,7 @@ export interface CreateLeaveTypeData {
  is_convertible_on_separation?: boolean;
  is_convertible_year_end?: boolean;
  conversion_rate?: number;
- max_carryover_days?: number;
+ max_carryover_days?: number | null;
  is_active?: boolean;
 }
 

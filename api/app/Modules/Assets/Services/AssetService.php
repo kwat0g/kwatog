@@ -36,6 +36,7 @@ class AssetService
         private readonly AccountingPeriodService $periods,
         private readonly SettingsService $settings,
         private readonly ApprovalService $approvals,
+        private readonly DepreciationService $depreciation,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -345,6 +346,10 @@ class AssetService
     /**
      * Dispose an asset.
      *
+     * Depreciation runs THROUGH the disposal month, so any months lacking a
+     * posted run row — including the disposal month itself — are caught up
+     * first, and the JE below reverses the fully caught-up balance.
+     *
      * Posts a JE that:
      *   DR Cash on Hand (disposal_amount)
      *   DR Accumulated Depreciation (asset.accumulated_depreciation)
@@ -388,6 +393,11 @@ class AssetService
             if ($reason === '') {
                 throw new BusinessRuleException('A disposal reason is required.');
             }
+
+            // Catch up every unposted month through the disposal month under
+            // the same lock and transaction, then build the disposal JE from
+            // the updated balance. $locked is kept current by the catch-up.
+            $this->depreciation->catchUpThrough($locked, $disposedDate, $by);
 
             $disposalAmount = Money::round2((string) ($data['disposal_amount'] ?? Money::zero()));
             $cost = Money::round2((string) $locked->acquisition_cost);
