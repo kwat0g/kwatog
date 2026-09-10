@@ -22,7 +22,9 @@ use App\Modules\Loans\Enums\LoanType;
 use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Loans\Services\LoanService;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
+use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollPeriod;
+use App\Modules\Payroll\Support\EmployedDayFraction;
 use Carbon\CarbonInterface;
 use Closure;
 use Illuminate\Support\Facades\DB;
@@ -69,7 +71,7 @@ class FinalPayService
             $employee = $lockedClearance->employee;
             if (! $employee) throw new BusinessRuleException('Clearance has no employee.');
 
-            $lastSalary = $this->lastSalaryProRated($lockedClearance->separation_date);
+            $lastSalary = $this->lastSalaryProRated($employee, $lockedClearance->separation_date);
             $leaveValue = $this->unusedConvertibleLeaveValue($employee);
             $thirteenth = $this->proRatedThirteenthMonth($employee, $lockedClearance->separation_date);
             // Settlements an earlier compute already recorded for THIS clearance
@@ -386,23 +388,55 @@ class FinalPayService
 
     /* ─── Component helpers ─── */
 
-    private function lastSalaryProRated(CarbonInterface $separationDate): string
+    private function lastSalaryProRated(Employee $e, CarbonInterface $separationDate): string
     {
         $period = $this->coveringPayrollPeriod($separationDate);
 
-        // A disbursed period has already paid these days through payroll, and a
-        // missing period has no payroll run that could pay them. Any other
-        // status will still run and pays the SAME days (basic pay is prorated
-        // to the separation date by the payroll engine), so final pay must wait
-        // for it: booking the days here too would pay the employee twice.
+        // A disbursed period has already been paid and must never be included
+        // again in final pay.
         if (! $period || $period->status === PayrollPeriodStatus::Disbursed) {
             return Money::zero();
         }
 
-        throw new BusinessRuleException(sprintf(
-            'Payroll period %s covering the separation date has not been disbursed — disburse or void it before computing final pay.',
-            $period->label(),
-        ));
+        // Prefer the authoritative result of the payroll engine when the open
+        // period has already been computed for this employee.
+        $payroll = Payroll::query()
+            ->where('payroll_period_id', $period->id)
+            ->where('employee_id', $e->id)
+            ->whereNotNull('computed_at')
+            ->first();
+        if ($payroll) {
+            $earnings = Money::add((string) $payroll->basic_pay, (string) $payroll->leave_pay);
+            $deductions = Money::add((string) $payroll->tardiness_deduction, (string) $payroll->undertime_deduction);
+
+            return Money::clampMin(Money::sub($earnings, $deductions), Money::zero());
+        }
+
+        // Otherwise compute exactly what payroll WOULD have computed for this
+        // cutoff: flat half-month basic scaled by the shared calendar-day
+        // employment fraction (HR-02). The old fallback re-derived an
+        // attendance-day formula (Σ min(hours/hours_per_day, 1) × monthly ÷
+        // work_days_per_month) that engages precisely when separation outruns
+        // payroll compute — and disagreed with payroll's calendar-day basis on
+        // the same facts (₱22,000 monthly, Mar 1–15, separation Mar 10, 8
+        // attended days: fallback ₱8,000 vs payroll-basis ₱7,332.60).
+        $monthly = $e->monthlyEquivalentSalary();
+        if ($monthly === null) {
+            throw new BusinessRuleException("Employee {$e->employee_no} has no authoritative pay rate for final-pay calculation.");
+        }
+
+        $halfBasic = Money::div((string) $monthly, '2', 4);
+        $fraction  = EmployedDayFraction::of(
+            $period->period_start,
+            $period->period_end,
+            $e->date_hired,
+            $separationDate,
+        );
+
+        return Money::clampMin(
+            Money::round2(Money::mul($halfBasic, $fraction)),
+            Money::zero(),
+        );
     }
 
     /**

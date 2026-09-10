@@ -27,7 +27,9 @@ use Tests\TestCase;
  * P2.9 — FinalPayService behaviour lock-down.
  *
  * What is tested:
- *   1. Last-salary component vs the covering payroll period (HR-01 guard)
+ *   1. Final-period salary from live payroll rows, or the shared calendar-day
+ *      proration when no row is computed yet (HR-02 parity); the covering-
+ *      period double-pay guard (HR-01) holds at JE-posting time
  *   2. Unused convertible leave value conversion (days × derived daily rate)
  *   3. Outstanding loan balance deducted from final pay
  *   4. Negative-total clamped to 0.00 via max(0, plus−less)
@@ -116,6 +118,20 @@ class FinalPayTest extends TestCase
         return app(FinalPayService::class);
     }
 
+    private function seedAttendanceHours(Employee $employee, array $hoursByDate): void
+    {
+        foreach ($hoursByDate as $date => $hours) {
+            DB::table('attendances')->insert([
+                'employee_id' => $employee->id,
+                'date' => $date,
+                'regular_hours' => $hours,
+                'status' => $hours > 0 ? 'present' : 'absent',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+    }
+
     private function seedOpenPayrollPeriod(string $status = 'draft', string $start = '2026-05-16', string $end = '2026-05-31'): int
     {
         return DB::table('payroll_periods')->insertGetId([
@@ -145,25 +161,78 @@ class FinalPayTest extends TestCase
     }
 
     // ──────────────────────────────────────────────────────────────────────
-    // 1. Last-salary component — covering-period guard (HR-01)
+    // 1. Last-salary component — covering-period guard (HR-01) + HR-02 parity
     // ──────────────────────────────────────────────────────────────────────
 
-    /**
-     * While the payroll period covering the separation date has not been
-     * disbursed, payroll can still pay those days itself (basic pay is
-     * prorated to the separation date), so compute must refuse instead of
-     * booking the same days into final pay a second time.
-     */
-    public function test_final_period_salary_is_refused_while_the_covering_period_is_undisbursed(): void
+    public function test_final_period_salary_monthly_uses_payroll_calendar_day_proration(): void
     {
         $employee  = $this->makeEmployee(['basic_monthly_salary' => '22000.00', 'pay_type' => 'monthly']);
+        $clearance = $this->makeClearance($employee, ['separation_date' => '2026-05-20']);
+        $this->seedOpenPayrollPeriod();
+        // Persisted DTR hours must NOT move the number — the fallback mirrors
+        // payroll's flat calendar-day basis (HR-02), not an attendance-day one.
+        $this->seedAttendanceHours($employee, [
+            '2026-05-16' => 8.0,
+            '2026-05-17' => 8.0,
+            '2026-05-18' => 4.0,
+        ]);
+
+        $result = $this->service()->compute($clearance);
+
+        $breakdown = $result->final_pay_breakdown;
+        $this->assertNotNull($breakdown, 'Breakdown must be set after compute()');
+
+        // Half-month basic 11000 × 5/16 calendar days = 3437.50.
+        $this->assertSame('3437.50', $breakdown['last_salary_pro_rated'],
+            '₱22,000 ÷ 2 × 5 of 16 calendar days covered by employment.');
+    }
+
+    public function test_final_period_salary_semi_monthly_uses_payroll_calendar_day_proration(): void
+    {
+        // 7,150 per cutoff → 14,300 monthly equivalent.
+        $employee  = $this->makeEmployee([
+            'pay_type'             => 'semi_monthly',
+            'semi_monthly_rate'    => '7150.00',
+            'basic_monthly_salary' => null,
+        ]);
         $clearance = $this->makeClearance($employee);
         $this->seedOpenPayrollPeriod();
+        $this->seedAttendanceHours($employee, [
+            '2026-05-16' => 8.0,
+            '2026-05-17' => 8.0,
+            '2026-05-18' => 4.0,
+        ]);
 
-        $this->expectException(BusinessRuleException::class);
-        $this->expectExceptionMessage('has not been disbursed');
+        $result = $this->service()->compute($clearance);
 
-        $this->service()->compute($clearance);
+        $breakdown = $result->final_pay_breakdown;
+        // Separation on the period's last day = full flat cutoff basic.
+        $this->assertSame('7150.00', $breakdown['last_salary_pro_rated'],
+            'A semi-monthly leaver employed to the cutoff end banks the flat per-cutoff rate.');
+    }
+
+    public function test_final_period_salary_prefers_computed_payroll_result(): void
+    {
+        $employee = $this->makeEmployee(['basic_monthly_salary' => '22000.00']);
+        $clearance = $this->makeClearance($employee);
+        $periodId = $this->seedOpenPayrollPeriod('computed');
+
+        DB::table('payrolls')->insert([
+            'payroll_period_id' => $periodId,
+            'employee_id' => $employee->id,
+            'pay_type' => 'monthly',
+            'basic_pay' => '6200.00',
+            'leave_pay' => '800.00',
+            'tardiness_deduction' => '100.00',
+            'undertime_deduction' => '50.00',
+            'computed_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $breakdown = $this->service()->compute($clearance)->final_pay_breakdown;
+
+        $this->assertSame('6850.00', $breakdown['last_salary_pro_rated']);
     }
 
     public function test_disbursed_period_is_not_paid_again_in_final_pay(): void
