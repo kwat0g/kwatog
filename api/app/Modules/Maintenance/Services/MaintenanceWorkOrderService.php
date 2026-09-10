@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Maintenance\Services;
 
+use App\Common\Services\CurrencyDisplayService;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\NotificationService;
 use App\Common\Services\OutboxService;
@@ -22,11 +23,15 @@ use App\Modules\Maintenance\Models\MaintenanceSchedule;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\Maintenance\Models\SparePartUsage;
 use App\Modules\Maintenance\Support\MaintenanceWorkOrderStateMachine;
+use App\Modules\MRP\Enums\MachineStatus;
 use App\Modules\MRP\Enums\MoldEventType;
 use App\Modules\MRP\Enums\MoldStatus;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
 use App\Modules\MRP\Models\MoldHistory;
+use App\Modules\MRP\Services\MachineService;
+use App\Modules\Production\Enums\MachineDowntimeCategory;
+use App\Modules\Production\Models\MachineDowntime;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -41,6 +46,7 @@ class MaintenanceWorkOrderService
         private readonly NotificationService $notifications,
         private readonly SettingsService $settings,
         private readonly MaintenanceWorkOrderStateMachine $stateMachine,
+        private readonly MachineService $machines,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -119,7 +125,7 @@ class MaintenanceWorkOrderService
             // Validate target
             $exists = match ($type) {
                 MaintainableType::Machine => Machine::query()->whereKey($maintainableId)->exists(),
-                MaintainableType::Mold    => Mold::query()->whereKey($maintainableId)->exists(),
+                MaintainableType::Mold => Mold::query()->whereKey($maintainableId)->exists(),
             };
             if (! $exists) {
                 throw ValidationException::withMessages([
@@ -128,17 +134,17 @@ class MaintenanceWorkOrderService
             }
 
             $wo = MaintenanceWorkOrder::create([
-                'mwo_number'        => $this->sequences->generate('maintenance_wo'),
+                'mwo_number' => $this->sequences->generate('maintenance_wo'),
                 'maintainable_type' => $type->value,
-                'maintainable_id'   => $maintainableId,
-                'schedule_id'       => $fromSchedule?->id,
-                'type'              => $fromSchedule
+                'maintainable_id' => $maintainableId,
+                'schedule_id' => $fromSchedule?->id,
+                'type' => $fromSchedule
                     ? MaintenanceWorkOrderType::Preventive->value
                     : MaintenanceWorkOrderType::from((string) ($data['type'] ?? $this->settings->get('maintenance.work_order.default_type', '')))->value,
-                'priority'          => MaintenancePriority::from((string) ($data['priority'] ?? $this->settings->get('maintenance.work_order.default_priority', '')))->value,
-                'description'       => $fromSchedule?->description ?? $data['description'],
-                'status'            => MaintenanceWorkOrderStatus::Open->value,
-                'created_by'        => $by->id,
+                'priority' => MaintenancePriority::from((string) ($data['priority'] ?? $this->settings->get('maintenance.work_order.default_priority', '')))->value,
+                'description' => $fromSchedule?->description ?? $data['description'],
+                'status' => MaintenanceWorkOrderStatus::Open->value,
+                'created_by' => $by->id,
             ]);
 
             $fresh = $this->show($wo);
@@ -174,6 +180,7 @@ class MaintenanceWorkOrderService
                 'assigned_to' => $employeeId,
             ])->save();
             $this->recordLifecycleLog($locked, 'Assigned to employee #'.$employeeId, $by);
+
             return $this->show($locked);
         });
     }
@@ -196,30 +203,42 @@ class MaintenanceWorkOrderService
             if ($locked->maintainable_type === MaintainableType::Machine) {
                 $machine = Machine::query()->lockForUpdate()->find($locked->maintainable_id);
                 if ($machine && $machine->status?->value !== 'maintenance') {
-                    $machine->forceFill(['status' => 'maintenance'])->save();
+                    $this->machines->transitionStatus(
+                        $machine,
+                        MachineStatus::Maintenance,
+                        'Maintenance work order '.$locked->mwo_number.' started',
+                    );
+                    MachineDowntime::create([
+                        'machine_id' => $machine->id,
+                        'maintenance_order_id' => $locked->id,
+                        'start_time' => now(),
+                        'category' => MachineDowntimeCategory::PlannedMaintenance->value,
+                        'description' => 'Maintenance work order '.$locked->mwo_number,
+                    ]);
                 }
             }
             if ($locked->maintainable_type === MaintainableType::Mold) {
                 $mold = Mold::query()->lockForUpdate()->find($locked->maintainable_id);
                 if ($mold) {
                     MoldHistory::create([
-                        'mold_id'             => $mold->id,
-                        'event_type'          => MoldEventType::MaintenanceStarted->value,
-                        'description'         => $locked->description,
-                        'performed_by'        => $by->name,
-                        'event_date'          => now()->toDateString(),
+                        'mold_id' => $mold->id,
+                        'event_type' => MoldEventType::MaintenanceStarted->value,
+                        'description' => $locked->description,
+                        'performed_by' => $by->name,
+                        'event_date' => now()->toDateString(),
                         'shot_count_at_event' => (int) $mold->current_shot_count,
                     ]);
                 }
             }
 
             $this->recordLifecycleLog($locked, 'Maintenance started.', $by);
+
             return $this->show($locked);
         });
     }
 
     /**
-     * @param array{remarks?: string|null, downtime_minutes?: int|null} $data
+     * @param  array{remarks?: string|null, downtime_minutes?: int|null}  $data
      */
     public function complete(MaintenanceWorkOrder $wo, array $data, User $by): MaintenanceWorkOrder
     {
@@ -230,10 +249,10 @@ class MaintenanceWorkOrderService
             $cost = (string) SparePartUsage::query()->where('work_order_id', $locked->id)->sum('total_cost');
 
             $locked->forceFill([
-                'completed_at'     => now(),
+                'completed_at' => now(),
                 'downtime_minutes' => (int) ($data['downtime_minutes'] ?? 0),
-                'cost'             => $cost,
-                'remarks'          => $data['remarks'] ?? $locked->remarks,
+                'cost' => $cost,
+                'remarks' => $data['remarks'] ?? $locked->remarks,
             ])->save();
 
             // Mold: reset shot count, log history, accumulate lifecycle counters
@@ -244,8 +263,8 @@ class MaintenanceWorkOrderService
                     $attrs = [
                         'current_shot_count'     => 0,
                         // Lifecycle manager: stamp + accumulate maintenance cost/count.
-                        'last_maintenance_at'    => now()->toDateString(),
-                        'maintenance_count'      => (int) $mold->maintenance_count + 1,
+                        'last_maintenance_at' => now()->toDateString(),
+                        'maintenance_count' => (int) $mold->maintenance_count + 1,
                         'total_maintenance_cost' => bcadd(
                             (string) $mold->total_maintenance_cost,
                             (string) $cost,
@@ -259,31 +278,39 @@ class MaintenanceWorkOrderService
                     }
                     $mold->forceFill($attrs)->save();
                     MoldHistory::create([
-                        'mold_id'             => $mold->id,
-                        'event_type'          => MoldEventType::MaintenanceCompleted->value,
-                        'description'         => $locked->description.' (shot count reset from '.$shotsBefore.')',
-                        'cost'                => $cost,
-                        'performed_by'        => $by->name,
-                        'event_date'          => now()->toDateString(),
+                        'mold_id' => $mold->id,
+                        'event_type' => MoldEventType::MaintenanceCompleted->value,
+                        'description' => $locked->description.' (shot count reset from '.$shotsBefore.')',
+                        'cost' => $cost,
+                        'performed_by' => $by->name,
+                        'event_date' => now()->toDateString(),
                         'shot_count_at_event' => 0,
                     ]);
                 }
             }
-            // Machine: restore to idle
+            // Machine: close the maintenance downtime ledger row, restore to idle
             if ($locked->maintainable_type === MaintainableType::Machine) {
+                $this->closeMachineDowntime($locked);
                 $machine = Machine::query()->lockForUpdate()->find($locked->maintainable_id);
                 if ($machine && $machine->status?->value === 'maintenance') {
-                    $machine->forceFill(['status' => 'idle'])->save();
+                    $this->machines->transitionStatus(
+                        $machine,
+                        MachineStatus::Idle,
+                        'Maintenance work order '.$locked->mwo_number.' completed',
+                    );
                 }
             }
 
             // Recompute schedule next_due_at
             if ($locked->schedule_id) {
                 $schedule = MaintenanceSchedule::find($locked->schedule_id);
-                if ($schedule) $this->schedules->recomputeNextDueAt($schedule, now());
+                if ($schedule) {
+                    $this->schedules->recomputeNextDueAt($schedule, now());
+                }
             }
 
-            $this->recordLifecycleLog($locked, 'Maintenance completed.'.($cost > 0 ? ' Spare parts cost '.app(\App\Common\Services\CurrencyDisplayService::class)->format($cost).'.' : ''), $by);
+            $this->recordLifecycleLog($locked, 'Maintenance completed.'.($cost > 0 ? ' Spare parts cost '.app(CurrencyDisplayService::class)->format($cost).'.' : ''), $by);
+
             return $this->show($locked);
         });
     }
@@ -299,14 +326,20 @@ class MaintenanceWorkOrderService
             ])->save();
             // Restore machine to idle if it was set to maintenance by us
             if ($locked->maintainable_type === MaintainableType::Machine) {
+                $this->closeMachineDowntime($locked);
                 $machine = Machine::query()->lockForUpdate()->find($locked->maintainable_id);
                 if ($machine && $machine->status?->value === 'maintenance') {
-                    $machine->forceFill(['status' => 'idle'])->save();
+                    $this->machines->transitionStatus(
+                        $machine,
+                        MachineStatus::Idle,
+                        'Maintenance work order '.$locked->mwo_number.' cancelled',
+                    );
                 }
             }
             // Cancellation does not count as maintenance performed. Leave the
             // schedule due so the next sweep can create a replacement WO.
             $this->recordLifecycleLog($locked, 'Cancelled'.($reason ? ': '.$reason : '.'), $by);
+
             return $this->show($locked);
         });
     }
@@ -316,6 +349,7 @@ class MaintenanceWorkOrderService
         return DB::transaction(function () use ($wo, $description, $by): MaintenanceLog {
             $locked = MaintenanceWorkOrder::query()->lockForUpdate()->findOrFail($wo->getKey());
             $this->stateMachine->assertInProgress($locked, 'add a log entry');
+
             return $this->recordLifecycleLog($locked, $description, $by);
         });
     }
@@ -324,9 +358,27 @@ class MaintenanceWorkOrderService
     {
         return MaintenanceLog::create([
             'work_order_id' => $wo->id,
-            'description'   => $description,
-            'logged_by'     => $by->id,
-            'created_at'    => now(),
+            'description' => $description,
+            'logged_by' => $by->id,
+            'created_at' => now(),
+        ]);
+    }
+
+    private function closeMachineDowntime(MaintenanceWorkOrder $wo): void
+    {
+        $open = MachineDowntime::query()
+            ->where('maintenance_order_id', $wo->id)
+            ->whereNull('end_time')
+            ->lockForUpdate()
+            ->first();
+        if (! $open) {
+            return;
+        }
+
+        $end = now();
+        $open->update([
+            'end_time' => $end,
+            'duration_minutes' => (int) max(0, $open->start_time->diffInMinutes($end, true)),
         ]);
     }
 }
