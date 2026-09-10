@@ -624,6 +624,15 @@ class RolePermissionSeeder extends Seeder
                         'forecasting.view',
                         // Final step of the return_request approval chain.
                         'return_management.view', 'return_management.approve',
+                        // LN-01 — production_manager is step 2 ("Manager") of the
+                        // seeded company_loan chain in WorkflowSeeder, but held no
+                        // loans slug at all, so the approve route rejected the only
+                        // role that step accepts and every submitted company loan
+                        // stalled at step 2. Same defect as M036 on
+                        // purchasing.pr.approve and L-37 on
+                        // return_management.approve. Read + approve only: raising
+                        // a loan stays HR's.
+                        'loans.view', 'loans.approve',
                         // REC-03 — production_manager is the step-1 checker on the
                         // salary_adjustment chain.
                         'hr.salary_adjustments.view',

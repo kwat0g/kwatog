@@ -167,6 +167,25 @@ class ApprovalBoardScopeTest extends TestCase
         $this->assertSame($expected, $visible);
     }
 
+    public function test_production_manager_sees_loan_cards_waiting_on_the_manager_step(): void
+    {
+        $manager = $this->user('production_manager');
+        $head = $this->user('department_head', $this->deptA->id);
+        $borrower = Employee::factory()->create(['department_id' => $this->deptA->id]);
+
+        $loan = EmployeeLoan::factory()->pending()->create(['employee_id' => $borrower->id]);
+        $this->pendingStep(EmployeeLoan::class, $loan->id, 'department_head', [
+            'action' => 'approved',
+            'acted_at' => now()->subHour(),
+            'approver_id' => $head->id,
+        ]);
+        $this->pendingStep(EmployeeLoan::class, $loan->id, 'production_manager', ['step_order' => 2]);
+
+        $board = $this->board($manager);
+
+        $this->assertSame([$loan->loan_no], $this->numbers($board['my_action']));
+    }
+
     public function test_pr_cards_follow_the_pr_policy_scope(): void
     {
         $head = $this->user('department_head', $this->deptA->id);
