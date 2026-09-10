@@ -35,6 +35,8 @@ use Illuminate\Validation\ValidationException;
  *                     and flips employee.status to on_leave
  *   signItem()        marks one checklist item as cleared (with auth check)
  *   markAllSigned()   transitions to completed when every item is cleared
+ *   cancel()          reverts a pending/in-progress separation: clearance
+ *                     → cancelled, employee restored to pre-initiation status
  *   finalize()        requires final pay computed; flips employee.status to
  *                     resigned/terminated/retired and stamps employment history.
  */
@@ -350,6 +352,94 @@ class SeparationService
                     ClearanceStatus::Completed->value,
                 );
             }
+
+            return $this->show($lockedClearance);
+        });
+    }
+
+    /**
+     * HR-04 — the only backwards transition out of an initiated separation.
+     * A rescinded resignation or a mistyped separation date otherwise leaves
+     * the employee stuck: initiate() refuses a second clearance and the only
+     * way out was forward through every signature to final pay.
+     */
+    public function cancel(Clearance $clearance, User $by, ?string $reason = null): Clearance
+    {
+        return DB::transaction(function () use ($clearance, $by, $reason) {
+            $lockedClearance = Clearance::query()
+                ->lockForUpdate()
+                ->find($clearance->id);
+
+            if (! $lockedClearance) {
+                throw new BusinessRuleException('Clearance not found.');
+            }
+            if ($lockedClearance->status === ClearanceStatus::Cancelled) {
+                throw new BusinessRuleException('Clearance is already cancelled.');
+            }
+            if ($lockedClearance->status !== ClearanceStatus::Pending
+                && $lockedClearance->status !== ClearanceStatus::InProgress) {
+                throw new BusinessRuleException(
+                    'Only pending or in-progress clearances can be cancelled. '
+                    .'Completed or finalized separations require a different correction.'
+                );
+            }
+            if ($lockedClearance->final_pay_computed) {
+                throw new BusinessRuleException(
+                    'Clearance can no longer be cancelled: final pay has already been computed.'
+                );
+            }
+
+            $employee = Employee::query()
+                ->lockForUpdate()
+                ->find($lockedClearance->employee_id);
+
+            if (! $employee) {
+                throw new BusinessRuleException('Clearance employee not found.');
+            }
+
+            // initiate() stamps the employee's pre-separation status onto the
+            // history row it writes. Restore exactly that value — not a hard
+            // "active" — so a suspended employee is not silently reactivated.
+            $initiation = EmploymentHistory::query()
+                ->where('employee_id', $employee->id)
+                ->where('change_type', EmploymentChangeType::Separated->value)
+                ->orderByDesc('id')
+                ->get()
+                ->first(fn (EmploymentHistory $row) => ($row->to_value['status'] ?? null) === 'in_progress');
+
+            $fromStatus = $employee->status instanceof EmployeeStatus
+                ? $employee->status->value
+                : (string) $employee->getRawOriginal('status');
+            $priorStatus = EmployeeStatus::from(
+                (string) ($initiation?->from_value['status'] ?? EmployeeStatus::Active->value)
+            );
+
+            $this->stateMachine->transition($employee, $priorStatus);
+
+            // No cancelled_by/cancelled_at columns exist on clearances; the
+            // actor lands in the audit log and the reason in remarks.
+            $note = 'Separation cancelled by '.$by->name
+                .($reason !== null && trim($reason) !== '' ? ': '.trim($reason) : '');
+            $existingRemarks = trim((string) ($lockedClearance->remarks ?? ''));
+            $lockedClearance->status  = ClearanceStatus::Cancelled->value;
+            $lockedClearance->remarks = $existingRemarks === '' ? $note : $existingRemarks."\n".$note;
+            $lockedClearance->save();
+
+            EmploymentHistory::create([
+                'employee_id'    => $employee->id,
+                'change_type'    => EmploymentChangeType::Separated->value,
+                'from_value'     => ['status' => $fromStatus],
+                'to_value'       => [
+                    'separation_date'   => optional($lockedClearance->separation_date)?->toDateString(),
+                    'separation_reason' => $lockedClearance->separation_reason instanceof SeparationReason
+                        ? $lockedClearance->separation_reason->value
+                        : (string) $lockedClearance->separation_reason,
+                    'status'            => 'cancelled',
+                ],
+                'effective_date' => now()->toDateString(),
+                'remarks'        => 'Separation cancelled. Clearance '.$lockedClearance->clearance_no.'.',
+                'approved_by'    => $by->id,
+            ]);
 
             return $this->show($lockedClearance);
         });
