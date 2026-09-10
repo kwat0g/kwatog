@@ -17,6 +17,7 @@ use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\EmploymentHistory;
 use App\Modules\HR\Models\Position;
+use App\Modules\Leave\Services\LeaveBalanceService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -220,24 +221,11 @@ class EmployeeService
             // leave-balance steps inside this same transaction).
             $this->onboarding->initialize($employee);
 
-            // Seed default leave balances if leave module is loaded.
+            // Seed pro-rated leave balances (insert-if-absent) if leave module
+            // is loaded. The queued InitializeLeaveBalances listener delegates
+            // to the same seeder, so a replay can never clobber used credits.
             if (Schema::hasTable('leave_types') && Schema::hasTable('employee_leave_balances')) {
-                $year = (int) now()->format('Y');
-                DB::table('leave_types')
-                    ->where('is_active', true)
-                    ->get()
-                    ->each(function ($lt) use ($employee, $year) {
-                        DB::table('employee_leave_balances')->updateOrInsert(
-                            ['employee_id' => $employee->id, 'leave_type_id' => $lt->id, 'year' => $year],
-                            [
-                                'total_credits' => $lt->default_balance,
-                                'used' => 0,
-                                'remaining' => $lt->default_balance,
-                                'created_at' => now(),
-                                'updated_at' => now(),
-                            ],
-                        );
-                    });
+                app(LeaveBalanceService::class)->seedProratedFor($employee);
             }
 
             // Recompute once at the very end so derived steps (gov ids, banking)
