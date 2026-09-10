@@ -141,15 +141,21 @@ assert "integer id 404s"               404 "$(code admin GET /hr/employees/1)"
 assert "garbage id 404s"               404 "$(code admin GET /hr/employees/xxxx)"
 
 echo; echo "== Portal isolation =="
-SUPTOK=$(curl -s -H "Accept: application/json" -H "Content-Type: application/json" \
-  -X POST "$BASE/api/v1/b2b/supplier/login" -d '{"email":"portal@supp.test","password":"password"}' \
-  | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['token'])" 2>/dev/null)
-if [ -n "${SUPTOK:-}" ]; then
-  ah(){ curl -s -o /dev/null -w '%{http_code}' -H "Accept: application/json" -H "Authorization: Bearer $SUPTOK" "$BASE$1"; }
-  assert "supplier token own POs"        200 "$(ah /api/v1/b2b/supplier/purchase-orders)"
-  assert "supplier token employee PO(deny)" 403 "$(ah /api/v1/purchasing/purchase-orders)"
-  assert "supplier token HR (deny)"      403 "$(ah /api/v1/hr/employees)"
-else echo "  SKIP portal isolation (supplier login failed)"; fi
+# The supplier portal is a cookie-session client now (no bearer token in the
+# login body), so the drill authenticates with the same stateful flow the SPA
+# uses: csrf-cookie → login with cookies + XSRF header → session cookie jar.
+SUPJAR="$JARDIR/sup.txt"; curl -s -c "$SUPJAR" -o /dev/null -H "Origin: $ORIGIN" -H "Referer: $ORIGIN/" "$BASE/sanctum/csrf-cookie"
+SUPX=$(_xsrf "$SUPJAR"); SUPCODE=$(curl -s -c "$SUPJAR" -b "$SUPJAR" -H "Origin: $ORIGIN" -H "Referer: $ORIGIN/" \
+  -H "X-XSRF-TOKEN: $SUPX" -H "Content-Type: application/json" -H "Accept: application/json" \
+  -H "X-Requested-With: XMLHttpRequest" -X POST "$BASE/api/v1/b2b/supplier/login" \
+  -d '{"email":"portal@supp.test","password":"password"}' -o "$JARDIR/sup.login.json" -w '%{http_code}')
+if [ "$SUPCODE" = 200 ]; then
+  ah(){ curl -s -o /dev/null -w '%{http_code}' -b "$SUPJAR" -H "Origin: $ORIGIN" -H "Referer: $ORIGIN/" \
+    -H "Accept: application/json" -H "X-Requested-With: XMLHttpRequest" "$BASE$1"; }
+  assert "supplier session own POs"        200 "$(ah /api/v1/b2b/supplier/purchase-orders)"
+  assert "supplier session employee PO(deny)" 401 "$(ah /api/v1/purchasing/purchase-orders)"
+  assert "supplier session HR (deny)"      401 "$(ah /api/v1/hr/employees)"
+else echo "  SKIP portal isolation (supplier login failed: $SUPCODE)"; fi
 
 echo; echo "==============================================="
 echo "  RESULT: $PASS passed, $FAIL failed"

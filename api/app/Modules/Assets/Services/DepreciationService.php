@@ -35,6 +35,12 @@ use Illuminate\Support\Facades\DB;
  * A charge that legitimately rounds to 0.00 while a residual remains (the
  * declining-balance tail) is posted as a zero row so the completeness guard
  * stays satisfiable.
+ *
+ * Assets are depreciated THROUGH their disposal month: `AssetService::dispose()`
+ * calls `catchUpThrough()` to post any missing months (including the disposal
+ * month itself) before the derecognition journal is built, and the monthly run
+ * excludes assets disposed on or before the period end so the disposal-month
+ * charge is never posted twice.
  */
 class DepreciationService
 {
@@ -53,7 +59,7 @@ class DepreciationService
         return DB::transaction(function () use ($year, $month, $by, $allowBackfill): array {
             $periodStart = CarbonImmutable::create($year, $month, 1)->startOfMonth();
             $periodEnd = $periodStart->endOfMonth();
-            $assets = $this->assetsInServiceFor($periodStart, $periodEnd);
+            $assets = $this->assetsInServiceFor($periodEnd);
 
             if (! $allowBackfill) {
                 $this->assertPriorPeriodsComplete($assets, $periodStart);
@@ -167,19 +173,43 @@ class DepreciationService
     }
 
     /**
+     * Depreciate one asset through $throughMonth (inclusive) so a disposal can
+     * derecognise a fully caught-up accumulated balance. Called by
+     * AssetService::dispose() inside its own transaction, under the asset row
+     * lock, so every supplemental journal commits or rolls back with the
+     * disposal journal. The UNIQUE (asset_id, period_year, period_month)
+     * constraint is the idempotency fence: a month that already has a posted
+     * row is reloaded, never posted twice.
+     */
+    public function catchUpThrough(Asset $asset, CarbonImmutable $throughMonth, User $by): void
+    {
+        $cursor = CarbonImmutable::parse($asset->acquisition_date->toDateString())->startOfMonth();
+        $target = $throughMonth->startOfMonth();
+
+        while ($cursor->lte($target)) {
+            $this->postMissingMonthForAsset($asset, $cursor, $by);
+            $cursor = $cursor->addMonthNoOverflow();
+        }
+    }
+
+    /**
      * @return Collection<int, Asset>
      */
-    private function assetsInServiceFor(CarbonImmutable $periodStart, CarbonImmutable $periodEnd): Collection
+    private function assetsInServiceFor(CarbonImmutable $periodEnd): Collection
     {
         return Asset::query()
             ->whereDate('acquisition_date', '<=', $periodEnd->toDateString())
-            ->where(function ($query) use ($periodStart): void {
+            ->where(function ($query) use ($periodEnd): void {
                 $query
                     ->where('status', '!=', AssetStatus::Disposed->value)
-                    ->orWhere(function ($disposed) use ($periodStart): void {
+                    ->orWhere(function ($disposed) use ($periodEnd): void {
+                        // Disposal-month depreciation is posted by dispose()'s
+                        // catch-up, so the monthly run skips assets disposed on
+                        // or before the period end. Assets disposed after the
+                        // period were in service for all of it (backfill).
                         $disposed
                             ->where('status', AssetStatus::Disposed->value)
-                            ->whereDate('disposed_date', '>=', $periodStart->toDateString());
+                            ->whereDate('disposed_date', '>', $periodEnd->toDateString());
                     });
             })
             ->orderBy('id')
@@ -258,6 +288,96 @@ class DepreciationService
             'amount' => $amount,
             'accumulated_after' => Money::add($alreadyAccumulated, $amount),
         ];
+    }
+
+    private function postMissingMonthForAsset(Asset $asset, CarbonImmutable $periodStart, User $by): void
+    {
+        $year = $periodStart->year;
+        $month = $periodStart->month;
+
+        $row = $this->calculateRow($asset);
+
+        $existing = AssetDepreciation::query()
+            ->where('asset_id', $asset->getKey())
+            ->where('period_year', $year)
+            ->where('period_month', $month)
+            ->lockForUpdate()
+            ->first();
+
+        if ($existing !== null) {
+            if ($existing->journal_entry_id === null && $row !== null) {
+                throw new BusinessRuleException(sprintf(
+                    'Depreciation period %04d-%02d for asset %s has incomplete journal identity; repair it before disposing.',
+                    $year,
+                    $month,
+                    $asset->asset_code,
+                ));
+            }
+            if ($row !== null && Money::cmp((string) $asset->accumulated_depreciation, (string) $existing->accumulated_after) !== 0) {
+                $asset->forceFill(['accumulated_depreciation' => $existing->accumulated_after])->save();
+            }
+
+            return;
+        }
+
+        if ($row === null) {
+            return;
+        }
+
+        // Claim the ledger row before the journal: if a concurrent writer
+        // already owns the month, the UNIQUE fence rejects the claim and the
+        // winner's row is reloaded instead — no second journal is posted.
+        $inserted = AssetDepreciation::query()->insertOrIgnore([
+            'asset_id' => $asset->getKey(),
+            'period_year' => $year,
+            'period_month' => $month,
+            'depreciation_amount' => $row['amount'],
+            'accumulated_after' => $row['accumulated_after'],
+            'journal_entry_id' => null,
+            'created_at' => now(),
+        ]);
+
+        if ($inserted === 0) {
+            $winner = AssetDepreciation::query()
+                ->where('asset_id', $asset->getKey())
+                ->where('period_year', $year)
+                ->where('period_month', $month)
+                ->firstOrFail();
+            if ($winner->journal_entry_id === null) {
+                throw new BusinessRuleException(sprintf(
+                    'Depreciation period %04d-%02d for asset %s has incomplete journal identity; repair it before disposing.',
+                    $year,
+                    $month,
+                    $asset->asset_code,
+                ));
+            }
+            $asset->forceFill(['accumulated_depreciation' => $winner->accumulated_after])->save();
+
+            return;
+        }
+
+        $depExp = Account::where('code', $this->settings->requiredString('accounting.accounts.depreciation_expense_code'))->firstOrFail();
+        $accDep = Account::where('code', $this->settings->requiredString('accounting.accounts.asset_accumulated_depreciation_code'))->firstOrFail();
+        $periodLabel = sprintf('%04d-%02d', $year, $month);
+        $je = $this->journals->create([
+            'date' => $periodStart->endOfMonth()->toDateString(),
+            'description' => 'Asset depreciation — '.$periodLabel.' (disposal catch-up)',
+            'reference_type' => 'asset_depreciation',
+            'reference_id' => null,
+            'lines' => [
+                ['account_id' => $depExp->id, 'debit' => $row['amount'], 'credit' => Money::zero(), 'description' => 'Monthly depreciation'],
+                ['account_id' => $accDep->id, 'debit' => Money::zero(), 'credit' => $row['amount'], 'description' => 'Monthly depreciation'],
+            ],
+        ], $by);
+        $this->journals->post($je, $by);
+
+        AssetDepreciation::query()
+            ->where('asset_id', $asset->getKey())
+            ->where('period_year', $year)
+            ->where('period_month', $month)
+            ->update(['journal_entry_id' => $je->id]);
+
+        $asset->forceFill(['accumulated_depreciation' => $row['accumulated_after']])->save();
     }
 
     private function assetWasInServiceFor(Asset $asset, CarbonImmutable $periodStart): bool

@@ -16,9 +16,15 @@ use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Clearance;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Attendance\Models\Attendance;
+use App\Modules\Loans\Enums\LoanPaymentType;
+use App\Modules\Loans\Enums\LoanStatus;
+use App\Modules\Loans\Enums\LoanType;
+use App\Modules\Loans\Models\EmployeeLoan;
+use App\Modules\Loans\Services\LoanService;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollPeriod;
+use App\Modules\Payroll\Support\EmployedDayFraction;
 use Carbon\CarbonInterface;
 use Closure;
 use Illuminate\Support\Facades\DB;
@@ -68,13 +74,38 @@ class FinalPayService
             $lastSalary = $this->lastSalaryProRated($employee, $lockedClearance->separation_date);
             $leaveValue = $this->unusedConvertibleLeaveValue($employee);
             $thirteenth = $this->proRatedThirteenthMonth($employee, $lockedClearance->separation_date);
-            $loanBal    = $this->loanBalances($employee);
+            // Settlements an earlier compute already recorded for THIS clearance
+            // stay deducted: that money moved from the payout into the loan
+            // ledger, so reading only live balances would under-deduct on
+            // recompute. Externally settled loans carry no clearance link and
+            // correctly fall out of the deduction.
+            $loanBal    = Money::add(
+                $this->loanBalances($employee),
+                $this->finalPaySettlements($lockedClearance->id, LoanType::CompanyLoan->value),
+            );
             $propertyL  = $this->unreturnedPropertyValue($employee);
-            $advance    = $this->openCashAdvance($employee);
+            $advance    = Money::add(
+                $this->openCashAdvance($employee),
+                $this->finalPaySettlements($lockedClearance->id, LoanType::CashAdvance->value),
+            );
 
             $plus = Money::add($lastSalary, $leaveValue, $thirteenth);
             $less = Money::add($loanBal, $propertyL, $advance);
             $net  = Money::clampMin(Money::sub($plus, $less), Money::zero());
+
+            // LN-02/LN-03 — settle the deducted loan ledger here, at the stage
+            // the separation finalize gate observes. recordPayment reconciles
+            // each loan from its immutable payment ledger, so by finalize the
+            // gate's balance check sees the settled state and the JE's
+            // "Settle outstanding loan from final pay" arm credits what this
+            // payout actually absorbed. Only what this payout can recover is
+            // settled (mirroring postJournalEntry's priority and clamp); any
+            // residue keeps the gate blocking until it is settled manually.
+            $recoverable = Money::lt($plus, $less) ? $plus : $less;
+            $loanPool    = Money::lt($loanBal, $recoverable) ? $loanBal : $recoverable;
+            $advancePool = Money::sub($recoverable, $loanPool);
+            $this->settleLoansForFinalPay($lockedClearance, LoanType::CompanyLoan, $loanPool);
+            $this->settleLoansForFinalPay($lockedClearance, LoanType::CashAdvance, $advancePool);
 
             $breakdown = [
                 'last_salary_pro_rated'           => $lastSalary,
@@ -186,6 +217,13 @@ class FinalPayService
                     );
                 }
 
+                // A recovered draft still posts new money — re-run the guard
+                // that compute() enforced, in case the covering period changed
+                // since the draft was created.
+                if ($existing->status === JournalEntryStatus::Draft) {
+                    $this->assertCoveringPeriodAllowsFinalPay($lockedClearance);
+                }
+
                 $posted = $existing->status === JournalEntryStatus::Draft
                     ? $this->journals->post($existing, $by)
                     : $existing->fresh(['lines.account']);
@@ -206,8 +244,25 @@ class FinalPayService
             // persisted so the UI and the JE agree.
             $lockedClearance->load('employee');
             $liveEmployee  = $lockedClearance->employee;
-            $liveLoan      = $liveEmployee ? $this->loanBalances($liveEmployee) : Money::zero();
-            $liveAdvance   = $liveEmployee ? $this->openCashAdvance($liveEmployee) : Money::zero();
+            // Settlements THIS clearance's compute recorded stay deducted even
+            // though their loans now read zero live — the payout absorbed them,
+            // so dropping them would pay the same money out again in cash and
+            // strand the "Settle outstanding loan from final pay" JE arm.
+            // Externally settled loans (no clearance link) still fall out, so a
+            // loan settled another way between compute and finalize is never
+            // deducted twice.
+            $liveLoan      = $liveEmployee
+                ? Money::add(
+                    $this->loanBalances($liveEmployee),
+                    $this->finalPaySettlements($lockedClearance->id, LoanType::CompanyLoan->value),
+                )
+                : Money::zero();
+            $liveAdvance   = $liveEmployee
+                ? Money::add(
+                    $this->openCashAdvance($liveEmployee),
+                    $this->finalPaySettlements($lockedClearance->id, LoanType::CashAdvance->value),
+                )
+                : Money::zero();
             $liveProperty  = $liveEmployee ? $this->unreturnedPropertyValue($liveEmployee) : Money::zero();
 
             $plus = Money::round2((string) ($b['gross_plus'] ?? Money::zero()));
@@ -223,6 +278,8 @@ class FinalPayService
                 'final_pay_breakdown' => $b,
                 'final_pay_amount'    => $net,
             ])->save();
+
+            $this->assertCoveringPeriodAllowsFinalPay($lockedClearance);
 
             $loan = $liveLoan;
 
@@ -270,17 +327,70 @@ class FinalPayService
         });
     }
 
+    /* ─── Loan settlement ─── */
+
+    /**
+     * Settle the employee's deducted loans from this final pay through the
+     * loan module's own ledger mechanism (recordPayment under lock), linking
+     * each payment to the clearance so compute/finalize re-derivation can
+     * keep it deducted. Settles at most $pool, loan by loan in id order —
+     * the same lock order payroll uses. Pending loans cannot accept payments
+     * (nothing was disbursed yet); they stay on the finalize gate until
+     * cancelled or approved.
+     */
+    private function settleLoansForFinalPay(Clearance $clearance, LoanType $type, string $pool): void
+    {
+        $remaining = Money::round2($pool);
+        if (Money::lte($remaining, Money::zero())) {
+            return;
+        }
+
+        $loans = EmployeeLoan::query()
+            ->where('employee_id', $clearance->employee_id)
+            ->where('loan_type', $type->value)
+            ->where('status', LoanStatus::Active->value)
+            ->where('balance', '>', 0)
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($loans as $loan) {
+            if (Money::lte($remaining, Money::zero())) {
+                break;
+            }
+            $amount = Money::lt((string) $loan->balance, $remaining)
+                ? Money::round2((string) $loan->balance)
+                : $remaining;
+
+            app(LoanService::class)->recordPayment(
+                $loan,
+                $amount,
+                LoanPaymentType::FinalPay,
+                remarks: 'Settled from final pay — '.$clearance->clearance_no,
+                paymentDate: $clearance->separation_date->toDateString(),
+                clearanceId: $clearance->id,
+            );
+
+            $remaining = Money::sub($remaining, $amount);
+        }
+    }
+
+    /** Sum this clearance has already settled from final pay, by loan bucket. */
+    private function finalPaySettlements(int $clearanceId, string $loanType): string
+    {
+        return Money::round2((string) DB::table('loan_payments as lp')
+            ->join('employee_loans as el', 'el.id', '=', 'lp.loan_id')
+            ->where('lp.clearance_id', $clearanceId)
+            ->where('lp.payment_type', LoanPaymentType::FinalPay->value)
+            ->where('el.loan_type', $loanType)
+            ->sum('lp.amount'));
+    }
+
     /* ─── Component helpers ─── */
 
     private function lastSalaryProRated(Employee $e, CarbonInterface $separationDate): string
     {
-        $period = PayrollPeriod::query()
-            ->where('is_thirteenth_month', false)
-            ->whereDate('period_start', '<=', $separationDate->toDateString())
-            ->whereDate('period_end', '>=', $separationDate->toDateString())
-            ->where('status', '!=', PayrollPeriodStatus::Voided->value)
-            ->orderByDesc('period_start')
-            ->first();
+        $period = $this->coveringPayrollPeriod($separationDate);
 
         // A disbursed period has already been paid and must never be included
         // again in final pay.
@@ -302,25 +412,79 @@ class FinalPayService
             return Money::clampMin(Money::sub($earnings, $deductions), Money::zero());
         }
 
-        // Otherwise calculate only from persisted DTR hours in the real
-        // payroll period. Each row contributes at most one eight-hour day;
-        // half-days contribute 0.5. No synthetic attendance is invented.
-        $dayEquivalents = '0.0000';
-        $hoursPerDay = $this->hoursPerDay();
-        $attendances = Attendance::query()
-            ->where('employee_id', $e->id)
-            ->whereBetween('date', [$period->period_start, $separationDate])
-            ->get(['regular_hours']);
-        foreach ($attendances as $attendance) {
-            $fraction = bcdiv((string) $attendance->regular_hours, $hoursPerDay, Money::INNER);
-            $fraction = bccomp($fraction, '0', Money::INNER) < 0 ? '0.0000' : $fraction;
-            $fraction = bccomp($fraction, '1', Money::INNER) > 0 ? '1.0000' : $fraction;
-            $dayEquivalents = bcadd($dayEquivalents, $fraction, Money::INNER);
+        // Otherwise compute exactly what payroll WOULD have computed for this
+        // cutoff: flat half-month basic scaled by the shared calendar-day
+        // employment fraction (HR-02). The old fallback re-derived an
+        // attendance-day formula (Σ min(hours/hours_per_day, 1) × monthly ÷
+        // work_days_per_month) that engages precisely when separation outruns
+        // payroll compute — and disagreed with payroll's calendar-day basis on
+        // the same facts (₱22,000 monthly, Mar 1–15, separation Mar 10, 8
+        // attended days: fallback ₱8,000 vs payroll-basis ₱7,332.60).
+        $monthly = $e->monthlyEquivalentSalary();
+        if ($monthly === null) {
+            throw new BusinessRuleException("Employee {$e->employee_no} has no authoritative pay rate for final-pay calculation.");
         }
 
-        $dailyRate = $this->authoritativeDailyRate($e);
+        $halfBasic = Money::div((string) $monthly, '2', 4);
+        $fraction  = EmployedDayFraction::of(
+            $period->period_start,
+            $period->period_end,
+            $e->date_hired,
+            $separationDate,
+        );
 
-        return Money::clampMin(Money::mul($dayEquivalents, $dailyRate), Money::zero());
+        return Money::clampMin(
+            Money::round2(Money::mul($halfBasic, $fraction)),
+            Money::zero(),
+        );
+    }
+
+    /**
+     * The non-voided regular payroll period whose window contains the
+     * separation date, if any.
+     */
+    private function coveringPayrollPeriod(CarbonInterface $separationDate, bool $lock = false): ?PayrollPeriod
+    {
+        return PayrollPeriod::query()
+            ->when($lock, fn ($query) => $query->lockForUpdate())
+            ->where('is_thirteenth_month', false)
+            ->whereDate('period_start', '<=', $separationDate->toDateString())
+            ->whereDate('period_end', '>=', $separationDate->toDateString())
+            ->where('status', '!=', PayrollPeriodStatus::Voided->value)
+            ->orderByDesc('period_start')
+            ->first();
+    }
+
+    /**
+     * The compute-time guard re-run at the money moment, under a lock on the
+     * period row. The covering period's status can change between compute and
+     * posting (and a legacy breakdown may predate the guard), and the JE is
+     * what actually pays — so verify again that payroll cannot also pay these
+     * days.
+     */
+    private function assertCoveringPeriodAllowsFinalPay(Clearance $clearance): void
+    {
+        $period = $this->coveringPayrollPeriod($clearance->separation_date, lock: true);
+
+        if (! $period) {
+            return;
+        }
+
+        if ($period->status !== PayrollPeriodStatus::Disbursed) {
+            throw new BusinessRuleException(sprintf(
+                'Payroll period %s covering the separation date has not been disbursed — disburse or void it, then recompute final pay before posting the journal entry.',
+                $period->label(),
+            ));
+        }
+
+        $lastSalary = Money::round2((string) ($clearance->final_pay_breakdown['last_salary_pro_rated'] ?? Money::zero()));
+        if (Money::gt($lastSalary, Money::zero())) {
+            throw new BusinessRuleException(sprintf(
+                'Final pay already includes %s of salary that payroll period %s has disbursed — posting would pay the employee twice for the same days. Recompute final pay before posting.',
+                $lastSalary,
+                $period->label(),
+            ));
+        }
     }
 
     private function unusedConvertibleLeaveValue(Employee $e): string
@@ -360,11 +524,6 @@ class FinalPayService
     private function workDaysPerMonth(): string
     {
         return $this->positivePayrollSetting('payroll.work_days_per_month');
-    }
-
-    private function hoursPerDay(): string
-    {
-        return $this->positivePayrollSetting('payroll.hours_per_day');
     }
 
     private function positivePayrollSetting(string $key): string

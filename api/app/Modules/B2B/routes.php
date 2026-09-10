@@ -20,15 +20,21 @@ use Illuminate\Support\Facades\Route;
 /* ─── Supplier Portal ─────────────────────────────────────────── */
 Route::prefix('b2b/supplier')->group(function () {
     // Public — throttle:auth (5/min/ip|email) protects against credential
-    // spraying. Logout shares the limiter to bound DoS on the token-revoke path.
+    // spraying. Logout shares the limiter to bound DoS on the session-revoke
+    // path.
     Route::post('login', [SupplierAuthController::class, 'login'])->middleware(['throttle:auth', 'feature:b2b_portals']);
-    Route::post('logout', [SupplierAuthController::class, 'logout'])->middleware(['throttle:auth', 'feature:b2b_portals']);
+    Route::post('logout', [SupplierAuthController::class, 'logout'])
+        ->middleware(['throttle:auth', 'auth:supplier_portal', 'portal:supplier_portal', 'feature:b2b_portals']);
     Route::post('forgot-password', [SupplierAuthController::class, 'forgotPassword'])->middleware(['throttle:auth', 'feature:b2b_portals']);
     Route::post('reset-password', [SupplierAuthController::class, 'resetPassword'])->middleware(['throttle:auth', 'feature:b2b_portals']);
 
     // Authenticated
     Route::middleware(['auth:supplier_portal', 'portal:supplier_portal', 'feature:b2b_portals', \App\Modules\B2B\Middleware\B2BTenancyScopeMiddleware::class])->group(function () {
         Route::get('me', [SupplierAuthController::class, 'me']);
+        // The supplier portal is a session guard, so the internal
+        // /business-policies endpoint (auth:sanctum) cannot serve it. Portal
+        // layout shares the same policy payload through its own guard.
+        Route::get('business-policies', BusinessPolicyController::class);
         Route::post('change-password', [SupplierAuthController::class, 'changePassword'])->middleware('throttle:sensitive');
         Route::middleware('portal.password.changed')->group(function (): void {
         Route::get('dashboard', [SupplierPortalController::class, 'dashboard']);
@@ -98,7 +104,7 @@ Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired', 'featu
 /* ─── Customer Portal ─────────────────────────────────────────── */
 Route::prefix('b2b/customer')->group(function () {
     // Public — throttle:auth (5/min/ip|email) protects against credential
-    // spraying. Logout shares the limiter to bound DoS on the token-revoke path.
+    // spraying. Logout shares the limiter to bound DoS on the session-revoke path.
     Route::post('login', [CustomerAuthController::class, 'login'])->middleware(['throttle:auth', 'feature:b2b_portals']);
     Route::post('logout', [CustomerAuthController::class, 'logout'])
         ->middleware(['throttle:auth', 'auth:customer_portal', 'portal:customer_portal', 'feature:b2b_portals']);

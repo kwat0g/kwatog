@@ -166,6 +166,17 @@ class SalesOrderStatusTransitionsTest extends TestCase
             'partially_delivered → invoiced' => [
                 SalesOrderStatus::PartiallyDelivered, 'markInvoiced', SalesOrderStatus::Invoiced,
             ],
+            // CR-01 — billing is not the physical terminal state. The first
+            // finalized invoice promotes the SO, and the remaining deliveries
+            // of a partially-billed order must still be confirmable; refusing
+            // these rolled back DeliveryService::confirm() and stuck the
+            // delivery at `delivered` forever.
+            'invoiced → delivered' => [
+                SalesOrderStatus::Invoiced, 'markDelivered', SalesOrderStatus::Delivered,
+            ],
+            'invoiced → partially_delivered' => [
+                SalesOrderStatus::Invoiced, 'markPartiallyDelivered', SalesOrderStatus::PartiallyDelivered,
+            ],
         ];
     }
 
@@ -198,10 +209,11 @@ class SalesOrderStatusTransitionsTest extends TestCase
     public static function refusedTransitionProvider(): array
     {
         return [
-            'invoiced is terminal'           => [SalesOrderStatus::Invoiced, 'markDelivered'],
             'cancelled is terminal'          => [SalesOrderStatus::Cancelled, 'markDelivered'],
             'draft must be confirmed first'  => [SalesOrderStatus::Draft, 'markDelivered'],
             'delivered cannot go back'       => [SalesOrderStatus::Delivered, 'markPartiallyDelivered'],
+            // CR-01 — `invoiced` is no longer terminal for the physical
+            // fulfilment side, but it still cannot go back to production.
             'invoiced cannot go back'        => [SalesOrderStatus::Invoiced, 'markInProduction'],
         ];
     }
@@ -294,6 +306,98 @@ class SalesOrderStatusTransitionsTest extends TestCase
             'InvoiceService::create must persist sales_order_id when passed.');
 
         $svc->finalize($invoice->fresh(), $user);
+
+        $this->assertSame(SalesOrderStatus::Invoiced->value, $so->fresh()->status->value);
+    }
+
+    /**
+     * CR-01 / SC-01 regression — the full stuck sequence.
+     *
+     * Deliver 4 of 10 → confirm (SO partially_delivered, per-delivery draft
+     * invoice auto-created) → finalize that invoice (SO invoiced) → deliver
+     * the remaining 6 → confirm. Before the fix the second confirm threw
+     * "Transition from invoiced to delivered is not allowed" inside its own
+     * transaction and rolled back the entire confirmation, stranding the
+     * delivery at `delivered` forever.
+     */
+    public function test_remaining_delivery_confirms_after_partial_billing_is_finalized(): void
+    {
+        $user = $this->makeUser();
+        [$so, $soItem] = $this->makeSoWithLine(
+            qty: '10',
+            price: '50.00',
+            status: SalesOrderStatus::InProduction,
+        );
+
+        [$first] = $this->makeDelivery($so, $soItem, qty: '4', user: $user);
+        $this->addProof($first, $user);
+        app(DeliveryService::class)->confirm($first->fresh(), $user);
+
+        $this->assertSame(SalesOrderStatus::PartiallyDelivered->value, $so->fresh()->status->value);
+
+        $firstInvoiceId = $first->fresh()->invoice_id;
+        $this->assertNotNull($firstInvoiceId, 'Confirming the first delivery must auto-create its draft invoice.');
+        app(InvoiceService::class)->finalize(Invoice::query()->find($firstInvoiceId), $user);
+
+        $this->assertSame(SalesOrderStatus::Invoiced->value, $so->fresh()->status->value,
+            'Finalizing the first delivery invoice must promote the SO to invoiced.');
+
+        [$second] = $this->makeDelivery($so, $soItem, qty: '6', user: $user);
+        $this->addProof($second, $user);
+        app(DeliveryService::class)->confirm($second->fresh(), $user);
+
+        $this->assertSame(DeliveryStatus::Confirmed->value, $second->fresh()->status->value,
+            'The remaining delivery must confirm — the invoiced SO must not roll the confirmation back.');
+        $this->assertSame(SalesOrderStatus::Delivered->value, $so->fresh()->status->value,
+            'Full coverage after invoicing must promote the SO to delivered.');
+        $this->assertSame('10.00', (string) $soItem->fresh()->quantity_delivered,
+            'Confirmed quantities must stay synced on the SO line.');
+    }
+
+    /**
+     * CR-01 regression — the partial variant: a delivery that still leaves
+     * quantity open must demote the invoiced SO back to partially_delivered
+     * instead of throwing.
+     */
+    public function test_partial_delivery_after_billing_keeps_so_partially_delivered(): void
+    {
+        $user = $this->makeUser();
+        [$so, $soItem] = $this->makeSoWithLine(
+            qty: '10',
+            price: '50.00',
+            status: SalesOrderStatus::InProduction,
+        );
+
+        [$first] = $this->makeDelivery($so, $soItem, qty: '3', user: $user);
+        $this->addProof($first, $user);
+        app(DeliveryService::class)->confirm($first->fresh(), $user);
+
+        app(InvoiceService::class)->finalize(Invoice::query()->find($first->fresh()->invoice_id), $user);
+        $this->assertSame(SalesOrderStatus::Invoiced->value, $so->fresh()->status->value);
+
+        [$second] = $this->makeDelivery($so, $soItem, qty: '3', user: $user);
+        $this->addProof($second, $user);
+        app(DeliveryService::class)->confirm($second->fresh(), $user);
+
+        $this->assertSame(DeliveryStatus::Confirmed->value, $second->fresh()->status->value);
+        $this->assertSame(SalesOrderStatus::PartiallyDelivered->value, $so->fresh()->status->value,
+            'Partial coverage after invoicing must move the SO to partially_delivered.');
+    }
+
+    /**
+     * CR-01 regression — opening `invoiced` for the physical fulfilment side
+     * must not open cancellation; cancel() keeps its own guards.
+     */
+    public function test_invoiced_so_still_refuses_cancellation(): void
+    {
+        $so = $this->makeSo(SalesOrderStatus::Invoiced);
+
+        try {
+            $this->soService->cancel($so, 'late operator request');
+            $this->fail('An invoiced sales order must still refuse cancellation.');
+        } catch (BusinessRuleException $e) {
+            $this->assertStringContainsString('cannot be cancelled', $e->getMessage());
+        }
 
         $this->assertSame(SalesOrderStatus::Invoiced->value, $so->fresh()->status->value);
     }

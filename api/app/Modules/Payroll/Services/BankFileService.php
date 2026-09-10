@@ -91,6 +91,64 @@ class BankFileService
     }
 
     /**
+     * Refuse to pay days a posted final-pay entry has already paid.
+     *
+     * FinalPayService refuses to COMPUTE final pay while a covering period is
+     * still undisbursed, so for new clearances this state is unreachable. It
+     * still catches data computed before that guard existed, where the last
+     * salary was booked into final pay while this period was still open — the
+     * file would then pay the same days a second time.
+     */
+    private function assertNotAlreadyPaidThroughFinalPay(PayrollPeriod $period): void
+    {
+        $employeeIds = Payroll::query()
+            ->where('payroll_period_id', $period->id)
+            ->whereNull('error_message')
+            ->where('net_pay', '>', 0)
+            ->pluck('employee_id');
+
+        if ($employeeIds->isEmpty()) {
+            return;
+        }
+
+        $consumed = DB::table('clearances as c')
+            ->join('journal_entries as je', 'je.id', '=', 'c.journal_entry_id')
+            ->join('employees as e', 'e.id', '=', 'c.employee_id')
+            ->whereIn('c.employee_id', $employeeIds)
+            ->whereNull('c.deleted_at')
+            ->whereNull('e.deleted_at')
+            ->where('je.status', 'posted')
+            ->whereDate('c.separation_date', '>=', $period->period_start)
+            ->whereDate('c.separation_date', '<=', $period->period_end)
+            ->get(['c.clearance_no', 'c.final_pay_breakdown', 'e.employee_no', 'e.first_name', 'e.last_name'])
+            ->filter(function (object $row): bool {
+                $breakdown = json_decode((string) $row->final_pay_breakdown, true);
+                $lastSalary = is_array($breakdown) ? (string) ($breakdown['last_salary_pro_rated'] ?? '0') : '0';
+
+                return Money::gt(Money::round2($lastSalary), Money::zero());
+            });
+
+        if ($consumed->isEmpty()) {
+            return;
+        }
+
+        $sample = $consumed->take(3)
+            ->map(fn (object $row): string => sprintf(
+                '%s %s (%s)',
+                $row->employee_no,
+                trim(($row->first_name ?? '').' '.($row->last_name ?? '')),
+                $row->clearance_no,
+            ))
+            ->implode(', ');
+
+        throw new BusinessRuleException(sprintf(
+            '%d employee(s) in this period have already been paid for these days through final pay (e.g. %s). The bank file would pay the same days again — resolve the double payment (reverse the final-pay entry or correct the payroll), then generate the file again.',
+            $consumed->count(),
+            $sample,
+        ));
+    }
+
+    /**
      * Build the CSV in memory, persist a copy to private storage, write a
      * BankFileRecord audit row, and return that record.
      */
@@ -148,6 +206,7 @@ class BankFileService
                 }
 
                 $this->assertEveryoneIsBankable($lockedPeriod);
+                $this->assertNotAlreadyPaidThroughFinalPay($lockedPeriod);
 
                 $payrolls = Payroll::query()
                     ->with('employee')
