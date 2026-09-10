@@ -39,6 +39,7 @@ use App\Modules\Production\Support\WorkOrderStateMachine;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Sprint 6 — Task 51. Work-order lifecycle service.
@@ -94,7 +95,17 @@ class WorkOrderService
         TrashedFilter::apply($q, $filters);
 
         if (! empty($filters['status'])) {
-            $q->where('status', $filters['status']);
+            // A single status string or an array (the floor PWA filters by
+            // several at once: status[]=in_progress&status[]=confirmed&…).
+            $statuses = is_array($filters['status']) ? array_values($filters['status']) : [$filters['status']];
+            foreach ($statuses as $status) {
+                if (! is_string($status) || WorkOrderStatus::tryFrom($status) === null) {
+                    throw ValidationException::withMessages([
+                        'status' => ['The selected status is invalid.'],
+                    ]);
+                }
+            }
+            $q->whereIn('status', $statuses);
         }
         if (! empty($filters['sales_order_id'])) {
             $sid = HashIdFilter::decode($filters['sales_order_id'], SalesOrder::class);
