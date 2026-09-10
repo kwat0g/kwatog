@@ -382,6 +382,7 @@ class ReturnRequestController extends Controller
             'inspections.product',
             'stockMovement.toLocation',
             'stockMovement.fromLocation',
+            'approvalRecords.approver:id,name',
             'creator:id,name',
             'approver:id,name',
             'completer:id,name',

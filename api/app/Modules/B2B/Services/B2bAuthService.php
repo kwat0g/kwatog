@@ -16,12 +16,13 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * Phase 2 Task 15 (C-4) — Unified auth service for the Supplier + Customer
- * portals. Mirrors AuthService::login lockout + audit semantics but issues a
- * A session-backed customer login or a Sanctum bearer-token supplier login.
+ * portals. Mirrors AuthService::login lockout + audit semantics and establishes
+ * an HTTP-only session on the caller's portal guard.
  *
  * One service handles both portal user types — the caller passes the model
  * class-string + an audience tag (e.g. 'supplier' / 'customer') used to namespace
- * audit/log event names ('supplier.login.success', 'customer.login.failed', ...).
+ * audit/log event names ('supplier.login.success', 'customer.login.failed', ...)
+ * and the session guard that carries the authenticated principal.
  */
 class B2bAuthService
 {
@@ -32,22 +33,20 @@ class B2bAuthService
     ) {}
 
     /**
-     * Authenticate a portal user and return the user plus an optional token.
-     * Customer sessions leave the token null; supplier bearer auth receives it.
+     * Authenticate a portal user and establish the session-backed login.
      *
      * @template TUser of \Illuminate\Database\Eloquent\Model
      * @param class-string<TUser> $modelClass
-     * @return array{token: string|null, user: TUser}
+     * @return TUser
      */
     public function login(
         string $modelClass,
         string $email,
         string $password,
         Request $request,
-        string $tokenName,
         string $audience,
-        ?string $sessionGuard = null,
-    ): array {
+        string $sessionGuard,
+    ): Model {
         // NOTE on LoginHistoryService: it strictly types the first arg as
         // ?\App\Modules\Auth\Models\User. Portal users are NOT internal users,
         // so we always pass null and namespace the actor identity into the
@@ -67,15 +66,15 @@ class B2bAuthService
             throw ValidationException::withMessages(['email' => 'Invalid credentials.']);
         }
 
-        $result = DB::transaction(function () use ($candidate, $modelClass, $password, $tokenName, $sessionGuard): array {
+        $result = DB::transaction(function () use ($candidate, $modelClass, $password): array {
             /** @var Model|null $user */
             $user = $modelClass::query()->lockForUpdate()->find($candidate->getKey());
             if (! $user) {
-                return ['status' => 'unknown', 'user' => null, 'token' => null];
+                return ['status' => 'unknown', 'user' => null];
             }
 
             if (! $user->is_active) {
-                return ['status' => 'inactive', 'user' => $user, 'token' => null];
+                return ['status' => 'inactive', 'user' => $user];
             }
 
             // A lock is a strike window, not a permanent strike counter. Once
@@ -92,7 +91,6 @@ class B2bAuthService
                 return [
                     'status' => 'locked',
                     'user' => $user,
-                    'token' => null,
                     'remaining' => (int) max(now()->diffInMinutes($user->locked_until, false), 0),
                 ];
             }
@@ -112,7 +110,6 @@ class B2bAuthService
                 return [
                     'status' => 'failed',
                     'user' => $user,
-                    'token' => null,
                     'crossed_threshold' => $crossedThreshold,
                 ];
             }
@@ -123,17 +120,7 @@ class B2bAuthService
                 'last_login_at' => now(),
             ])->save();
 
-            if ($sessionGuard === null) {
-                // One token per supplier session — revoke prior tokens while
-                // the user row is locked so concurrent logins cannot interleave
-                // revoke/create and leave two active tokens behind.
-                $user->tokens()->delete();
-                $token = $user->createToken($tokenName)->plainTextToken;
-            } else {
-                $token = null;
-            }
-
-            return ['status' => 'success', 'user' => $user, 'token' => $token];
+            return ['status' => 'success', 'user' => $user];
         });
 
         if ($result['status'] === 'unknown') {
@@ -165,15 +152,13 @@ class B2bAuthService
             throw ValidationException::withMessages(['email' => 'Invalid credentials.']);
         }
 
-        if ($sessionGuard !== null) {
-            Auth::guard($sessionGuard)->login($user);
-            $request->session()->regenerate();
-        }
+        Auth::guard($sessionGuard)->login($user);
+        $request->session()->regenerate();
 
         $this->logAuthEvent("{$audience}.login.success", $user, $request);
         $this->loginHistory->record(null, $email, $request, LoginHistoryService::STATUS_SUCCESS, $audience);
 
-        return ['token' => $result['token'], 'user' => $user];
+        return $user;
     }
 
     /**

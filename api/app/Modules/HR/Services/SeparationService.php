@@ -17,6 +17,7 @@ use App\Modules\HR\Enums\SeparationReason;
 use App\Modules\HR\Events\ClearanceFullySigned;
 use App\Modules\HR\Events\SeparationInitiated;
 use App\Modules\HR\Models\Clearance;
+use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\EmploymentHistory;
 use App\Modules\HR\Support\EmployeeStateMachine;
@@ -301,6 +302,11 @@ class SeparationService
                 if (($item['item_key'] ?? '') === $itemKey) {
                     $found = true;
 
+                    // Per-department signing gate (HR-03). Runs before the
+                    // replay no-op so an outsider cannot even probe the state
+                    // of another department's item.
+                    $this->assertMaySignItem($item, $by);
+
                     // Replayed sign requests are safe no-ops. Preserve the
                     // original signer and timestamp instead of rewriting an
                     // already authoritative checklist decision.
@@ -309,9 +315,6 @@ class SeparationService
                         return $this->show($lockedClearance);
                     }
 
-                    // Soft auth check — user must belong to that department,
-                    // or have hr_officer / system_admin role. Officer override
-                    // is enforced at controller via permission middleware.
                     $item['status']    = 'cleared';
                     $item['signed_by'] = $by->id;
                     $item['signed_at'] = now()->toISOString();
@@ -350,6 +353,66 @@ class SeparationService
 
             return $this->show($lockedClearance);
         });
+    }
+
+    /**
+     * Per-department signing gate (HR-03). The flat hr.clearance.sign
+     * permission — checked by the route middleware — only answers whether a
+     * role signs clearance items at all; this check answers WHICH items. A
+     * signer may clear an item only when their own employee belongs to the
+     * department that owns it. hr_officer and system_admin remain fallback
+     * signers for every department so no item can become unsignable.
+     *
+     * @param  array<string, mixed>  $item
+     */
+    private function assertMaySignItem(array $item, User $by): void
+    {
+        if (in_array($by->role?->slug, ['hr_officer', 'system_admin'], true)) {
+            return;
+        }
+
+        $label = trim((string) ($item['department'] ?? ''));
+        $owner = $this->resolveChecklistDepartment($label);
+        $actorDepartmentId = $by->employee?->department_id;
+
+        if ($owner === null || $actorDepartmentId === null || (int) $owner->id !== (int) $actorDepartmentId) {
+            throw new BusinessRuleException(
+                "Clearance item '{$item['item_key']}' belongs to the {$label} department. "
+                .'Only a member of that department, an HR Officer, or a System Administrator may sign it.'
+            );
+        }
+    }
+
+    /**
+     * Resolves a checklist item's department label against the departments
+     * table. An exact (case-insensitive) code or name match wins; otherwise a
+     * UNIQUE name prefix is accepted ("Warehouse" → "Warehouse & Logistics").
+     * Ambiguous or unknown labels resolve to null, which restricts the item
+     * to the hr_officer / system_admin fallback signers.
+     */
+    public function resolveChecklistDepartment(string $label): ?Department
+    {
+        $label = trim($label);
+        if ($label === '') {
+            return null;
+        }
+
+        $escaped = str_replace(['%', '_'], ['\%', '\_'], $label);
+
+        $exact = Department::query()
+            ->where(fn ($q) => $q->where('code', 'ilike', $escaped)->orWhere('name', 'ilike', $escaped))
+            ->get();
+
+        if ($exact->count() === 1) {
+            return $exact->first();
+        }
+        if ($exact->count() > 1) {
+            return null;
+        }
+
+        $prefix = Department::query()->where('name', 'ilike', $escaped.'%')->get();
+
+        return $prefix->count() === 1 ? $prefix->first() : null;
     }
 
     public function finalize(Clearance $clearance, User $by, FinalPayService $finalPay): Clearance

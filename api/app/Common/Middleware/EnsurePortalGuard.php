@@ -15,20 +15,13 @@ use Symfony\Component\HttpFoundation\Response;
  * Asserts that the user resolved under a B2B portal guard is actually the
  * portal model for that guard — never an internal {@see User}.
  *
- * Why this exists: the portal guards use the `sanctum` driver, and
- * config('sanctum.guard') is ['web'] (required so the SPA's auth:sanctum
- * resolves the session user). A side effect is that on any first-party
- * STATEFUL request that carries the SPA session cookie but NO bearer token,
- * Sanctum's guard falls back to the web session user for EVERY sanctum guard —
- * including supplier_portal / customer_portal. That let an internal session
- * satisfy auth:customer_portal, after which the portal controllers hit
- * `$user->customer` (undefined on User) and 500'd — a crash AND a cross-guard
- * authentication bleed.
- *
- * This middleware runs right after auth:<portal_guard> and rejects anything
- * whose resolved user is not the exact portal model. Legitimate portal clients
- * authenticate with a Bearer token whose tokenable IS the portal model, so they
- * pass untouched.
+ * Both portal guards are `session` drivers over their own providers, so a
+ * portal session and the internal SPA session are distinct session keys that
+ * cannot satisfy each other's guards. This middleware is the belt-and-braces
+ * layer on top of that: it runs right after auth:<portal_guard> and rejects
+ * anything whose resolved user is not the exact portal model, so a guard
+ * misconfiguration or provider swap cannot turn a portal route into a crash
+ * or a cross-guard authentication bleed.
  *
  * Usage: ->middleware('portal:customer_portal')
  */

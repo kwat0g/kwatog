@@ -133,6 +133,7 @@ class DemandForecastController extends Controller
             'method'          => ['required', 'in:moving_avg,weighted_avg'],
             'horizon_months'  => ['nullable', 'integer', "min:{$minHorizon}", "max:{$maxHorizon}"],
             'lookback_months' => ['nullable', 'integer', "min:{$minLookback}", "max:{$maxLookback}"],
+            'overwrite_manual' => ['nullable', 'boolean'],
         ]);
 
         $productId = Product::tryDecodeHash($data['product_id']);
@@ -146,8 +147,11 @@ class DemandForecastController extends Controller
         $horizon  = (int) ($data['horizon_months'] ?? $this->settings->requiredInt('forecasting.default_horizon_months', $minHorizon, $maxHorizon));
         $lookback = (int) ($data['lookback_months'] ?? $this->settings->requiredInt('forecasting.default_lookback_months', $minLookback, $maxLookback));
 
+        $overwriteManual = (bool) ($data['overwrite_manual'] ?? false);
+
         $start = Carbon::now()->startOfMonth()->addMonthNoOverflow();
         $written = [];
+        $skippedManual = [];
         for ($i = 0; $i < $horizon; $i++) {
             $cursor = $start->copy()->addMonthsNoOverflow($i);
             $f = $this->service->compute(
@@ -157,16 +161,24 @@ class DemandForecastController extends Controller
                 $cursor->month,
                 $data['method'],
                 $lookback,
-                $request->user()
+                $request->user(),
+                $overwriteManual
             );
+            if ($f === null) {
+                $skippedManual[] = ['year' => $cursor->year, 'month' => $cursor->month];
+                continue;
+            }
             $written[] = $f;
         }
 
         $models = collect($written)->map(fn ($f) => $f->load(['product', 'customer']));
 
         return response()->json([
-            'data'    => DemandForecastResource::collection($models),
-            'message' => 'Forecasts recomputed.',
+            'data'           => DemandForecastResource::collection($models),
+            'message'        => count($skippedManual) > 0
+                ? 'Forecasts recomputed. Manual overrides were preserved.'
+                : 'Forecasts recomputed.',
+            'skipped_manual' => $skippedManual,
         ]);
     }
 

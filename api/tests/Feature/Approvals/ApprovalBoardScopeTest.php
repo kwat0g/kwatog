@@ -15,6 +15,7 @@ use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseRequest;
+use App\Modules\ReturnManagement\Models\ReturnRequest;
 use Database\Seeders\DepartmentSeeder;
 use Database\Seeders\PositionSeeder;
 use Database\Seeders\RolePermissionSeeder;
@@ -168,6 +169,25 @@ class ApprovalBoardScopeTest extends TestCase
         $this->assertSame($expected, $visible);
     }
 
+    public function test_production_manager_sees_loan_cards_waiting_on_the_manager_step(): void
+    {
+        $manager = $this->user('production_manager');
+        $head = $this->user('department_head', $this->deptA->id);
+        $borrower = Employee::factory()->create(['department_id' => $this->deptA->id]);
+
+        $loan = EmployeeLoan::factory()->pending()->create(['employee_id' => $borrower->id]);
+        $this->pendingStep(EmployeeLoan::class, $loan->id, 'department_head', [
+            'action' => 'approved',
+            'acted_at' => now()->subHour(),
+            'approver_id' => $head->id,
+        ]);
+        $this->pendingStep(EmployeeLoan::class, $loan->id, 'production_manager', ['step_order' => 2]);
+
+        $board = $this->board($manager);
+
+        $this->assertSame([$loan->loan_no], $this->numbers($board['my_action']));
+    }
+
     public function test_pr_cards_follow_the_pr_policy_scope(): void
     {
         $head = $this->user('department_head', $this->deptA->id);
@@ -250,6 +270,36 @@ class ApprovalBoardScopeTest extends TestCase
 
         $this->assertCount(1, $this->board($hr)['awaiting_others']);
         $this->assertSame([], $this->board($employee)['awaiting_others']);
+    }
+
+    public function test_return_request_cards_are_permission_gated(): void
+    {
+        // Return Management has no row scope (same as payroll), so the board
+        // falls back to the registry permission gate: visible to holders of
+        // return_management.view/approve, invisible to everyone else.
+        $head = $this->user('department_head', $this->deptA->id);
+        $manager = $this->user('production_manager');
+        $employee = $this->user('employee', $this->deptA->id);
+
+        $rma = ReturnRequest::query()->create([
+            'rma_number' => 'RMA-T-'.substr(uniqid(), -5),
+            'type' => 'supplier_return',
+            'status' => 'pending_approval',
+            'created_by' => $employee->id,
+        ]);
+        $this->pendingStep(ReturnRequest::class, $rma->id, 'department_head');
+
+        $headBoard = $this->board($head);
+        $this->assertSame([$rma->rma_number], $this->numbers($headBoard['my_action']));
+        $this->assertSame([], $headBoard['awaiting_others']);
+
+        $managerBoard = $this->board($manager);
+        $this->assertSame([$rma->rma_number], $this->numbers($managerBoard['awaiting_others']));
+        $this->assertSame([], $managerBoard['my_action']);
+
+        $employeeBoard = $this->board($employee);
+        $this->assertSame([], $employeeBoard['my_action']);
+        $this->assertSame([], $employeeBoard['awaiting_others']);
     }
 
     public function test_out_of_scope_step_participant_still_gets_a_masked_card(): void

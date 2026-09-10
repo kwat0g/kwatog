@@ -128,6 +128,10 @@ class MrpDemandIntegrityTest extends TestCase
 
     public function test_fractional_shortage_rounds_purchase_quantity_up(): void
     {
+        // MRP-01: the factory-default MOQ of 1 would round a fractional net
+        // up to whole units. Pin the 2dp ceil path in isolation; MOQ rounding
+        // is pinned separately in MrpNettingTest.
+        $this->material->update(['minimum_order_quantity' => '0.000']);
         BomItem::query()->where('bom_id', Bom::query()->where('product_id', $this->product->id)->value('id'))
             ->update(['quantity_per_unit' => '0.0010']);
         $this->salesOrder(1);

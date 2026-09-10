@@ -25,6 +25,12 @@ use Illuminate\Support\Facades\DB;
  * built from those exact same rows. Period execution is serialized by the
  * locked asset set and recorded in asset_depreciation_runs so a retry cannot
  * create a second journal for an already-posted period.
+ *
+ * Assets are depreciated THROUGH their disposal month: `AssetService::dispose()`
+ * calls `catchUpThrough()` to post any missing months (including the disposal
+ * month itself) before the derecognition journal is built, and the monthly run
+ * excludes assets disposed on or before the period end so the disposal-month
+ * charge is never posted twice.
  */
 class DepreciationService
 {
@@ -43,7 +49,7 @@ class DepreciationService
         return DB::transaction(function () use ($year, $month, $by, $allowBackfill): array {
             $periodStart = CarbonImmutable::create($year, $month, 1)->startOfMonth();
             $periodEnd = $periodStart->endOfMonth();
-            $assets = $this->assetsInServiceFor($periodStart, $periodEnd);
+            $assets = $this->assetsInServiceFor($periodEnd);
 
             if (! $allowBackfill) {
                 $this->assertPriorPeriodsComplete($assets, $periodStart);
@@ -66,14 +72,23 @@ class DepreciationService
                 ];
             }
 
-            if ($existing->isNotEmpty()) {
-                return $this->reconcileLegacyPeriod($existing, $assets, $run);
-            }
+            $existingByAsset = $existing->keyBy(fn (AssetDepreciation $row): int => (int) $row->asset_id);
 
             $rows = [];
             $totalAmount = Money::zero();
 
             foreach ($assets as $asset) {
+                $posted = $existingByAsset->get((int) $asset->getKey());
+                if ($posted !== null) {
+                    if ($posted->journal_entry_id === null) {
+                        throw new BusinessRuleException('Depreciation period has incomplete journal identity; repair it before rerunning.');
+                    }
+                    // This asset's month is already posted — by an earlier
+                    // consolidated run (legacy data without a run marker) or
+                    // by a disposal catch-up journal.
+                    continue;
+                }
+
                 $row = $this->calculateRow($asset);
                 if ($row === null) {
                     continue;
@@ -179,19 +194,43 @@ class DepreciationService
     }
 
     /**
+     * Depreciate one asset through $throughMonth (inclusive) so a disposal can
+     * derecognise a fully caught-up accumulated balance. Called by
+     * AssetService::dispose() inside its own transaction, under the asset row
+     * lock, so every supplemental journal commits or rolls back with the
+     * disposal journal. The UNIQUE (asset_id, period_year, period_month)
+     * constraint is the idempotency fence: a month that already has a posted
+     * row is reloaded, never posted twice.
+     */
+    public function catchUpThrough(Asset $asset, CarbonImmutable $throughMonth, User $by): void
+    {
+        $cursor = CarbonImmutable::parse($asset->acquisition_date->toDateString())->startOfMonth();
+        $target = $throughMonth->startOfMonth();
+
+        while ($cursor->lte($target)) {
+            $this->postMissingMonthForAsset($asset, $cursor, $by);
+            $cursor = $cursor->addMonthNoOverflow();
+        }
+    }
+
+    /**
      * @return Collection<int, Asset>
      */
-    private function assetsInServiceFor(CarbonImmutable $periodStart, CarbonImmutable $periodEnd): Collection
+    private function assetsInServiceFor(CarbonImmutable $periodEnd): Collection
     {
         return Asset::query()
             ->whereDate('acquisition_date', '<=', $periodEnd->toDateString())
-            ->where(function ($query) use ($periodStart): void {
+            ->where(function ($query) use ($periodEnd): void {
                 $query
                     ->where('status', '!=', AssetStatus::Disposed->value)
-                    ->orWhere(function ($disposed) use ($periodStart): void {
+                    ->orWhere(function ($disposed) use ($periodEnd): void {
+                        // Disposal-month depreciation is posted by dispose()'s
+                        // catch-up, so the monthly run skips assets disposed on
+                        // or before the period end. Assets disposed after the
+                        // period were in service for all of it (backfill).
                         $disposed
                             ->where('status', AssetStatus::Disposed->value)
-                            ->whereDate('disposed_date', '>=', $periodStart->toDateString());
+                            ->whereDate('disposed_date', '>', $periodEnd->toDateString());
                     });
             })
             ->orderBy('id')
@@ -265,6 +304,96 @@ class DepreciationService
         ];
     }
 
+    private function postMissingMonthForAsset(Asset $asset, CarbonImmutable $periodStart, User $by): void
+    {
+        $year = $periodStart->year;
+        $month = $periodStart->month;
+
+        $row = $this->calculateRow($asset);
+
+        $existing = AssetDepreciation::query()
+            ->where('asset_id', $asset->getKey())
+            ->where('period_year', $year)
+            ->where('period_month', $month)
+            ->lockForUpdate()
+            ->first();
+
+        if ($existing !== null) {
+            if ($existing->journal_entry_id === null && $row !== null) {
+                throw new BusinessRuleException(sprintf(
+                    'Depreciation period %04d-%02d for asset %s has incomplete journal identity; repair it before disposing.',
+                    $year,
+                    $month,
+                    $asset->asset_code,
+                ));
+            }
+            if ($row !== null && Money::cmp((string) $asset->accumulated_depreciation, (string) $existing->accumulated_after) !== 0) {
+                $asset->forceFill(['accumulated_depreciation' => $existing->accumulated_after])->save();
+            }
+
+            return;
+        }
+
+        if ($row === null) {
+            return;
+        }
+
+        // Claim the ledger row before the journal: if a concurrent writer
+        // already owns the month, the UNIQUE fence rejects the claim and the
+        // winner's row is reloaded instead — no second journal is posted.
+        $inserted = AssetDepreciation::query()->insertOrIgnore([
+            'asset_id' => $asset->getKey(),
+            'period_year' => $year,
+            'period_month' => $month,
+            'depreciation_amount' => $row['amount'],
+            'accumulated_after' => $row['accumulated_after'],
+            'journal_entry_id' => null,
+            'created_at' => now(),
+        ]);
+
+        if ($inserted === 0) {
+            $winner = AssetDepreciation::query()
+                ->where('asset_id', $asset->getKey())
+                ->where('period_year', $year)
+                ->where('period_month', $month)
+                ->firstOrFail();
+            if ($winner->journal_entry_id === null) {
+                throw new BusinessRuleException(sprintf(
+                    'Depreciation period %04d-%02d for asset %s has incomplete journal identity; repair it before disposing.',
+                    $year,
+                    $month,
+                    $asset->asset_code,
+                ));
+            }
+            $asset->forceFill(['accumulated_depreciation' => $winner->accumulated_after])->save();
+
+            return;
+        }
+
+        $depExp = Account::where('code', $this->settings->requiredString('accounting.accounts.depreciation_expense_code'))->firstOrFail();
+        $accDep = Account::where('code', $this->settings->requiredString('accounting.accounts.asset_accumulated_depreciation_code'))->firstOrFail();
+        $periodLabel = sprintf('%04d-%02d', $year, $month);
+        $je = $this->journals->create([
+            'date' => $periodStart->endOfMonth()->toDateString(),
+            'description' => 'Asset depreciation — '.$periodLabel.' (disposal catch-up)',
+            'reference_type' => 'asset_depreciation',
+            'reference_id' => null,
+            'lines' => [
+                ['account_id' => $depExp->id, 'debit' => $row['amount'], 'credit' => Money::zero(), 'description' => 'Monthly depreciation'],
+                ['account_id' => $accDep->id, 'debit' => Money::zero(), 'credit' => $row['amount'], 'description' => 'Monthly depreciation'],
+            ],
+        ], $by);
+        $this->journals->post($je, $by);
+
+        AssetDepreciation::query()
+            ->where('asset_id', $asset->getKey())
+            ->where('period_year', $year)
+            ->where('period_month', $month)
+            ->update(['journal_entry_id' => $je->id]);
+
+        $asset->forceFill(['accumulated_depreciation' => $row['accumulated_after']])->save();
+    }
+
     private function assetWasInServiceFor(Asset $asset, CarbonImmutable $periodStart): bool
     {
         $periodEnd = $periodStart->endOfMonth();
@@ -296,63 +425,25 @@ class DepreciationService
     }
 
     /**
-     * @param Collection<int, AssetDepreciation> $existing
-     * @param Collection<int, Asset> $assets
-     * @return array{posted_count:int, total_amount:string, journal_entry_id:?int}
-     */
-    private function reconcileLegacyPeriod(Collection $existing, Collection $assets, AssetDepreciationRun $run): array
-    {
-        $journalIds = $existing->pluck('journal_entry_id')->filter()->map(fn ($id): int => (int) $id)->unique()->values();
-        if ($existing->contains(fn (AssetDepreciation $row): bool => $row->journal_entry_id === null) || $journalIds->count() !== 1) {
-            throw new BusinessRuleException('Depreciation period has incomplete journal identity; repair it before rerunning.');
-        }
-
-        $journalId = (int) $journalIds->first();
-        if ($run->journal_entry_id !== null && (int) $run->journal_entry_id !== $journalId) {
-            throw new BusinessRuleException('Depreciation period journal identity does not reconcile with its asset rows.');
-        }
-
-        $existingAssetIds = $existing->pluck('asset_id')->map(fn ($id): int => (int) $id)->all();
-        foreach ($assets as $asset) {
-            if (in_array((int) $asset->getKey(), $existingAssetIds, true)) {
-                continue;
-            }
-            if ($this->calculateRow($asset) !== null) {
-                throw new BusinessRuleException('Depreciation period has partial asset rows; repair it before rerunning.');
-            }
-        }
-
-        $total = Money::zero();
-        foreach ($existing as $row) {
-            $total = Money::add($total, (string) $row->depreciation_amount);
-        }
-        $run->forceFill([
-            'journal_entry_id' => $journalId,
-            'posted_count' => $existing->count(),
-            'total_amount' => $total,
-        ])->save();
-
-        return [
-            'posted_count' => $existing->count(),
-            'total_amount' => $total,
-            'journal_entry_id' => $journalId,
-        ];
-    }
-
-    /**
+     * The run's own journal is the reconciliation anchor: rows posted by a
+     * disposal catch-up carry a different journal and are legitimate
+     * neighbours of the run's rows for the same period, not corruption.
+     *
      * @param Collection<int, AssetDepreciation> $rows
      */
     private function assertRunRowsMatch(Collection $rows, AssetDepreciationRun $run): void
     {
-        if ($rows->isEmpty() || $rows->contains(fn (AssetDepreciation $row): bool => (int) $row->journal_entry_id !== (int) $run->journal_entry_id)) {
+        $posted = $rows->filter(fn (AssetDepreciation $row): bool => (int) $row->journal_entry_id === (int) $run->journal_entry_id);
+
+        if ($posted->isEmpty()) {
             throw new BusinessRuleException('Depreciation run identity has no matching asset rows.');
         }
 
         $total = Money::zero();
-        foreach ($rows as $row) {
+        foreach ($posted as $row) {
             $total = Money::add($total, (string) $row->depreciation_amount);
         }
-        if ($rows->count() !== (int) $run->posted_count
+        if ($posted->count() !== (int) $run->posted_count
             || Money::cmp($total, (string) $run->total_amount) !== 0) {
             throw new BusinessRuleException('Depreciation run summary does not reconcile with its asset rows.');
         }
