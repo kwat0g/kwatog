@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Purchasing\Policies;
 
+use App\Common\Models\ApprovalDelegation;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
@@ -25,6 +26,9 @@ use Illuminate\Database\Eloquent\Builder;
  *   - system_admin / purchasing.po.approve → every PO;
  *   - department_head                      → own creations + POs whose linked
  *                                            PR belongs to their department;
+ *   - approval-chain step roles            → own creations + POs whose current
+ *                                            approval records carry their step
+ *                                            role (the orders waiting on them);
  *   - everyone else                        → own creations only.
  *
  * Columns are table-qualified so this survives callers that join tables
@@ -48,7 +52,9 @@ final class PurchaseOrderAccessPolicy
             return $query;
         }
 
-        return $query->where(function (Builder $scope) use ($user): void {
+        $stepRoles = $this->approvalRoleSlugs($user);
+
+        return $query->where(function (Builder $scope) use ($user, $stepRoles): void {
             $scope->where('purchase_orders.created_by', $user->id);
 
             if ($user->role?->slug === 'department_head') {
@@ -58,6 +64,17 @@ final class PurchaseOrderAccessPolicy
                 if ($departmentId !== null) {
                     $scope->orWhereHas('purchaseRequest', fn (Builder $pr) => $pr->where('department_id', $departmentId));
                 }
+            }
+
+            // PS-01 — an approver on a plant-wide chain step has to be able to
+            // find the orders waiting on them. approvalRecords is already
+            // constrained to is_current and only exists once a PO is submitted,
+            // so this never exposes a draft. Same shape as
+            // PurchaseRequestAccessPolicy::visibleTo.
+            if ($stepRoles !== []) {
+                $scope->orWhereHas('approvalRecords', function ($records) use ($stepRoles): void {
+                    $records->whereIn('role_slug', $stepRoles);
+                });
             }
         });
     }
@@ -130,6 +147,28 @@ final class PurchaseOrderAccessPolicy
         return $this->visibleTo(PurchaseOrder::query(), $user)
             ->whereKey($po->id)
             ->exists();
+    }
+
+    /**
+     * Approval roles held directly or through an active delegation.
+     *
+     * Every purchase_order step is a plant-wide office (purchasing_officer →
+     * finance_officer → system_admin), so unlike PurchaseRequestAccessPolicy
+     * there is no departmental step role to subtract.
+     *
+     * @return list<string>
+     */
+    private function approvalRoleSlugs(User $user): array
+    {
+        $roles = [];
+        if ($user->role?->slug !== null) {
+            $roles[] = $user->role->slug;
+        }
+
+        return array_values(array_unique([
+            ...$roles,
+            ...ApprovalDelegation::actsForRoles($user->id, now()),
+        ]));
     }
 
     public function canView(User $user, PurchaseOrder $po): bool
