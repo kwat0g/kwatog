@@ -39,7 +39,12 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
     // Departments
     Route::prefix('departments')->group(function () {
         Route::get('/tree', [DepartmentController::class, 'tree'])->middleware('permission:hr.departments.view');
-        Route::get('/', [DepartmentController::class, 'index'])->middleware('permission:hr.departments.view');
+        // Department list doubles as PR-form lookup data (PR create page
+        // renders a department dropdown). Directory holders — e.g.
+        // department_head raising a PR for their department — may read the
+        // org-structure names without gaining the full Departments page
+        // (sidebar still gates on hr.departments.view).
+        Route::get('/', [DepartmentController::class, 'index'])->middleware('permission_any:hr.departments.view,hr.directory.view');
         Route::post('/', [DepartmentController::class, 'store'])->middleware('permission:hr.departments.manage');
         Route::get('/{department}', [DepartmentController::class, 'show'])->middleware('permission:hr.departments.view');
         Route::put('/{department}', [DepartmentController::class, 'update'])->middleware('permission:hr.departments.manage');

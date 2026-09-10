@@ -32,8 +32,13 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
     Route::patch('/item-categories/{itemCategory}/restore', [ItemCategoryController::class, 'restore'])->middleware('permission:inventory.items.manage');
 
     /* ─── Items ─── */
-    Route::get('/items/options', [ItemController::class, 'options'])->middleware('permission:inventory.view');
-    Route::get('/items', [ItemController::class, 'index'])->middleware('permission:inventory.view');
+    // Item lookups double as PR-form data (the PR create page renders an item
+    // dropdown). purchasing.pr.create holders — e.g. department_head, who does
+    // not hold full inventory.view — may read the item catalog for their PR
+    // lines without gaining the Inventory module nav (sidebar still gates on
+    // inventory.view).
+    Route::get('/items/options', [ItemController::class, 'options'])->middleware('permission_any:inventory.view,purchasing.pr.create');
+    Route::get('/items', [ItemController::class, 'index'])->middleware('permission_any:inventory.view,purchasing.pr.create');
     Route::get('/items/{item}', [ItemController::class, 'show'])->middleware('permission:inventory.view');
     Route::post('/items', [ItemController::class, 'store'])->middleware('permission:inventory.items.manage');
     Route::put('/items/{item}', [ItemController::class, 'update'])->middleware('permission:inventory.items.manage');
