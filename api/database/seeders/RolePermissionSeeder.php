@@ -557,6 +557,15 @@ class RolePermissionSeeder extends Seeder
                         // OGAMI-012 — finance is the CHECKER for high-value stock
                         // adjustments; warehouse_staff is the maker.
                         'inventory.adjust.approve',
+                        // PS-01 — finance_officer is step 2 ("Finance") of the
+                        // seeded purchase_order chain in WorkflowSeeder, but held
+                        // no purchasing.po slug at all, so the approve route
+                        // rejected the only role that step accepts and every
+                        // submitted PO stalled at step 2. Same defect as M036 on
+                        // purchasing.pr.approve and L-37 on
+                        // return_management.approve. Read + approve only: raising
+                        // a PO stays purchasing's.
+                        'purchasing.view', 'purchasing.po.approve',
                         // Separation clearance — Finance is step 4 of the
                         // documented workflow and signs the Finance-owned items
                         // (cash advance / loan). Which items Finance may sign
