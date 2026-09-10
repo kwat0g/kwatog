@@ -62,7 +62,6 @@ final class PurchaseOrderAccessPolicy
         });
     }
 
-<<<<<<< HEAD
     /**
      * Action ownership, mirroring PurchaseRequestAccessPolicy: permissions
      * decide whether a route is available, these decide which PO rows that
