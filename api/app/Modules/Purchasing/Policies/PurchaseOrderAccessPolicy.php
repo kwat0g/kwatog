@@ -62,6 +62,7 @@ final class PurchaseOrderAccessPolicy
         });
     }
 
+<<<<<<< HEAD
     /**
      * Action ownership, mirroring PurchaseRequestAccessPolicy: permissions
      * decide whether a route is available, these decide which PO rows that
@@ -126,6 +127,13 @@ final class PurchaseOrderAccessPolicy
      * never drift.
      */
     private function rowVisible(User $user, PurchaseOrder $po): bool
+    {
+        return $this->visibleTo(PurchaseOrder::query(), $user)
+            ->whereKey($po->id)
+            ->exists();
+    }
+
+    public function canView(User $user, PurchaseOrder $po): bool
     {
         return $this->visibleTo(PurchaseOrder::query(), $user)
             ->whereKey($po->id)

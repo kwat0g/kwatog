@@ -15,6 +15,7 @@ use App\Modules\Loans\Enums\LoanStatus;
 use App\Modules\Loans\Enums\LoanType;
 use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Loans\Models\LoanPayment;
+use App\Modules\Payroll\Enums\ContributionAgency;
 use App\Modules\Payroll\Enums\DeductionType;
 use App\Modules\Payroll\Enums\PayrollAdjustmentStatus;
 use App\Modules\Payroll\Enums\PayrollAdjustmentType;
@@ -64,6 +65,7 @@ class PayrollCalculatorService
         private readonly PhilhealthComputationService $philhealth,
         private readonly PagibigComputationService $pagibig,
         private readonly BirTaxComputationService $bir,
+        private readonly GovernmentContributionTableService $govTables,
         private readonly DeMinimisService $deMinimis,
         private readonly ThirteenthMonthService $thirteenthMonth,
         private readonly SettingsService $settings,
@@ -118,6 +120,8 @@ class PayrollCalculatorService
                     : 'Cannot recompute: a compute run is currently in progress for this period.',
             );
         }
+
+        $this->assertGovernmentTablesEffective($period);
 
         return DB::transaction(function () use ($period, $employee, $internal, $claimToken) {
             // Lock the period claim for the whole employee transaction. If a
@@ -469,9 +473,12 @@ class PayrollCalculatorService
                 $otPay = Money::add($otPay, Money::mul(Money::mul(Money::mul($otHrs, $hourlyRate), $otPremium), $rate));
             }
 
-            // Night differential: hours × hourly × 0.10 (additive premium)
+            // Night differential (AT-01): hours × hourly × dayRate × ND premium,
+            // where the ND premium is 0.10 of the APPLICABLE hourly rate. `rate`
+            // carries the day-type multiplier exactly as it does for OT above, so
+            // holiday/rest-day night shifts earn ND on the holiday-rated rate.
             if (bccomp($ndHrs, '0', 2) > 0) {
-                $ndPay = Money::add($ndPay, Money::mul(Money::mul($ndHrs, $hourlyRate), $this->nonNegativePolicy('payroll.night_differential_rate')));
+                $ndPay = Money::add($ndPay, Money::mul(Money::mul(Money::mul($ndHrs, $hourlyRate), $this->nonNegativePolicy('payroll.night_differential_rate')), $rate));
             }
 
             // Tardiness / undertime in minutes — convert to hours and deduct.
@@ -501,8 +508,9 @@ class PayrollCalculatorService
      *
      * Compatibility contract: when an employee has NO employee_salary_history
      * rows, this behaves EXACTLY as the legacy implementation (uses
-     * $monthlySalary verbatim). Proration only kicks in when a salary change's
-     * effective_date falls strictly inside the period.
+     * $monthlySalary verbatim). Proration also engages when a change lands
+     * strictly inside the period, or when the live salary carries a raise that
+     * is still future-dated for this period (HR-05) — see salarySegments().
      */
     private function computeBasicPay(
         Employee $employee,
@@ -510,9 +518,11 @@ class PayrollCalculatorService
         string $monthlySalary,
         string $payType,
     ): string {
-        // ─── Mid-cycle salary change proration (OGAMI-011) ───────
-        // Only engages when there is at least one salary-history row whose
-        // effective_date lands strictly inside (period_start, period_end].
+        // ─── Effective-dated salary segments (OGAMI-011, HR-05) ───
+        // Engages when a salary-history row lands strictly inside
+        // (period_start, period_end], or when one is still future-dated
+        // relative to period_end — the live columns already carry that raise,
+        // but paying it before its effective date would pay it early.
         $segments = $this->salarySegments($employee, $period, $monthlySalary, $payType);
         if ($segments !== null) {
             // Mid-cycle raise: blend the segments, then apply the same
@@ -612,10 +622,15 @@ class PayrollCalculatorService
     /**
      * Resolve effective salary segments across the period.
      *
-     * Returns null when there is no mid-period salary change to honor — the
-     * caller then runs the legacy code path verbatim (the compatibility
-     * guarantee). When a change DOES land inside the period, returns an ordered
-     * list of day-spans each tagged with the monthly rate in force for that span.
+     * Returns null when there is no salary change to honor for this period —
+     * the caller then runs the legacy code path verbatim (the compatibility
+     * guarantee). Segments engage in two cases (HR-05): a change takes effect
+     * strictly inside the period (day-spans each tagged with the monthly rate
+     * in force), or a history row is still FUTURE relative to period_end — the
+     * live columns already carry that raise (apply() mutates them at approval,
+     * not at the effective date), so paying the live salary now would pay the
+     * raise early. In the future-dated case the whole period is paid at the
+     * pre-adjustment rate.
      *
      * @return array<int, array{days:int, monthly:string}>|null
      */
@@ -625,10 +640,10 @@ class PayrollCalculatorService
         string $monthlySalary,
         string $payType,
     ): ?array {
-        // Cheap existence guard first — keeps the no-history path allocation-free.
+        // Full timeline, future rows included — they are exactly what tells us
+        // the live salary is not yet the salary in force for this period.
         $history = \App\Modules\HR\Models\EmployeeSalaryHistory::query()
             ->where('employee_id', $employee->id)
-            ->whereDate('effective_date', '<=', $period->period_end)
             ->orderBy('effective_date')
             ->orderBy('id')
             ->get();
@@ -638,23 +653,45 @@ class PayrollCalculatorService
         }
 
         // Does any change take effect strictly AFTER period_start and on/before
-        // period_end? If not, the current salary already reflects everything and
-        // we defer to the legacy path (no proration needed).
+        // period_end?
         $changesInside = $history->first(function ($h) use ($period) {
             $eff = \Illuminate\Support\Carbon::parse($h->effective_date);
             return $eff->gt($period->period_start) && $eff->lte($period->period_end);
         });
-        if ($changesInside === null) {
+
+        // Any row effective strictly AFTER period_end? The live salary carries
+        // a raise that must not be paid for this period yet.
+        $futureRow = $history->first(function ($h) use ($period) {
+            return \Illuminate\Support\Carbon::parse($h->effective_date)->gt($period->period_end);
+        });
+
+        if ($changesInside === null && $futureRow === null) {
             return null;
         }
 
         // Salary in force at period_start = latest history row effective on or
-        // before period_start, else the employee's current values (the row set
-        // may only describe the raise, not the starting salary).
+        // before period_start. For the FIRST history row there is no older row,
+        // and the live columns were overwritten at approval — the pre-effective
+        // rate is reconstructed from the adjustment that produced the row (its
+        // from_* snapshot), else the employee's current values (the row set may
+        // only describe the raise, not the starting salary).
         $startRow = $history->last(function ($h) use ($period) {
             return \Illuminate\Support\Carbon::parse($h->effective_date)->lte($period->period_start);
         });
-        $curMonthly = $this->historyMonthly($startRow, $payType) ?? $monthlySalary;
+        $curMonthly = $this->historyMonthly($startRow, $payType);
+        if ($curMonthly === null) {
+            $curMonthly = $startRow === null
+                ? ($this->preFirstHistoryMonthly($employee, $history->first(), $payType) ?? $monthlySalary)
+                : $monthlySalary;
+        }
+
+        // Pure future-dated raise: one span at the pre-effective rate.
+        if ($changesInside === null) {
+            $start = \Illuminate\Support\Carbon::parse($period->period_start)->startOfDay();
+            $end   = \Illuminate\Support\Carbon::parse($period->period_end)->startOfDay();
+            $totalDays = max(1, $start->diffInDays($end, true) + 1);
+            return [['days' => $totalDays, 'monthly' => $curMonthly]];
+        }
 
         // Build day-by-day cursor, switching rates as effective dates pass.
         $insideChanges = $history
@@ -688,6 +725,49 @@ class PayrollCalculatorService
         }
 
         return $segments;
+    }
+
+    /**
+     * Monthly-equivalent salary in force BEFORE the employee's first salary
+     * history row took effect (HR-05).
+     *
+     * apply() overwrites the live columns at approval, so for the first row
+     * the pre-effective rate is not readable off the employee. The adjustment
+     * that produced the row snapshots it in salary_adjustments.from_* (captured
+     * at request time, pre-change) — that from/to pair is the reconstruction
+     * source. Null when no applied adjustment matches the row (e.g. history
+     * seeded directly), leaving the caller's live-salary fallback.
+     */
+    private function preFirstHistoryMonthly(Employee $employee, object $firstRow, string $payType): ?string
+    {
+        $adjustment = \App\Modules\HR\Models\SalaryAdjustment::query()
+            ->where('employee_id', $employee->id)
+            ->whereDate('effective_date', $firstRow->effective_date)
+            ->whereNotNull('applied_at')
+            ->orderBy('id')
+            ->get()
+            ->first(function ($a) use ($firstRow) {
+                return ($a->to_basic_monthly_salary !== null
+                        && bccomp((string) $a->to_basic_monthly_salary, (string) $firstRow->basic_monthly_salary, 2) === 0)
+                    || ($a->to_semi_monthly_rate !== null
+                        && $firstRow->semi_monthly_rate !== null
+                        && bccomp((string) $a->to_semi_monthly_rate, (string) $firstRow->semi_monthly_rate, 2) === 0);
+            });
+
+        if ($adjustment === null) {
+            return null;
+        }
+
+        if ($payType === PayType::SemiMonthly->value
+            && $adjustment->from_semi_monthly_rate !== null
+            && Money::gt((string) $adjustment->from_semi_monthly_rate, '0')) {
+            return Money::mul((string) $adjustment->from_semi_monthly_rate, '2');
+        }
+
+        return $adjustment->from_basic_monthly_salary !== null
+            && Money::gt((string) $adjustment->from_basic_monthly_salary, '0')
+            ? (string) $adjustment->from_basic_monthly_salary
+            : null;
     }
 
     /**
@@ -775,6 +855,50 @@ class PayrollCalculatorService
     /**
      * Salary basis used for monthly gov contribution calculations.
      */
+    /**
+     * Every agency must have at least one bracket effective on the period's
+     * payroll_date before any employee is computed (PY-02).
+     *
+     * The four gov services treat "no brackets found" as ₱0.00, and
+     * bracketsEffectiveOn() falls back dated rows → active set → empty
+     * collection, so a fresh install or a deactivated table used to yield a
+     * fully computable/approvable/finalizable period where nobody had
+     * SSS/PhilHealth/Pag-IBIG/BIR withheld. This guard mirrors the de minimis
+     * hard-block: same date the computations use (payroll_date), same
+     * resolution path (bracketsEffectiveOn), one refusal naming every missing
+     * agency. Second-half and 13th-month periods take no gov deductions, so
+     * they are exempt — exactly like the computation branch below.
+     */
+    private function assertGovernmentTablesEffective(PayrollPeriod $period): void
+    {
+        if (! $period->is_first_half || $period->is_thirteenth_month) {
+            return;
+        }
+
+        $missing = [];
+        foreach (ContributionAgency::cases() as $agency) {
+            if ($this->govTables->bracketsEffectiveOn($agency, $period->payroll_date)->isEmpty()) {
+                $missing[] = $agency->label();
+            }
+        }
+
+        if ($missing === []) {
+            return;
+        }
+
+        Log::error('Government contribution table(s) missing; payroll computation blocked', [
+            'period_id'    => $period->id,
+            'payroll_date' => $period->payroll_date->toDateString(),
+            'missing'      => $missing,
+        ]);
+
+        throw new BusinessRuleException(sprintf(
+            'Payroll computation is blocked because no %s contribution table is effective on %s. Add or activate bracket rows effective on or before the payroll date, then recompute.',
+            implode(', ', $missing),
+            $period->payroll_date->format('Y-m-d'),
+        ));
+    }
+
     /**
      * Taxable-excess de minimis for the employee in this period's month.
      *

@@ -15,6 +15,7 @@ use App\Modules\Purchasing\Requests\RejectPurchaseOrderRequest;
 use App\Modules\Purchasing\Resources\PurchaseOrderResource;
 use App\Modules\Purchasing\Services\PurchaseOrderPdfService;
 use App\Modules\Purchasing\Services\PurchaseOrderService;
+use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -27,6 +28,7 @@ class PurchaseOrderController
         private readonly PurchaseOrderService $service,
         private readonly PurchaseOrderPdfService $pdf,
         private readonly SettingsService $settings,
+        private readonly PurchaseOrderAccessPolicy $access,
     ) {}
 
     public function index(Request $request): AnonymousResourceCollection
@@ -49,8 +51,9 @@ class PurchaseOrderController
         ]]);
     }
 
-    public function show(PurchaseOrder $purchaseOrder): PurchaseOrderResource
+    public function show(Request $request, PurchaseOrder $purchaseOrder): PurchaseOrderResource
     {
+        abort_unless($this->access->canView($request->user(), $purchaseOrder), 403, 'You do not have permission to view this purchase order.');
         return new PurchaseOrderResource($this->service->show($purchaseOrder));
     }
 
@@ -138,8 +141,9 @@ class PurchaseOrderController
         return new PurchaseOrderResource($this->service->show($po));
     }
 
-    public function pdf(PurchaseOrder $purchaseOrder): Response
+    public function pdf(Request $request, PurchaseOrder $purchaseOrder): Response
     {
+        abort_unless($this->access->canView($request->user(), $purchaseOrder), 403, 'You do not have permission to view this purchase order.');
         return $this->pdf->render($purchaseOrder);
     }
 }

@@ -34,6 +34,7 @@ class StoreLeaveTypeRequest extends FormRequest
             'is_convertible_on_separation' => ['boolean'],
             'is_convertible_year_end'      => ['boolean'],
             'conversion_rate'              => ['nullable', 'numeric', 'min:0', 'max:9.99'],
+            'max_carryover_days'           => ['nullable', 'numeric', 'min:0', 'max:366'],
             'is_active'                    => ['boolean'],
         ];
     }

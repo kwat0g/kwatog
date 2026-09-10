@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\ReturnManagement\Models;
 
+use App\Common\Traits\HasApprovalWorkflow;
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Accounting\Models\Customer;
@@ -29,7 +30,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class ReturnRequest extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog, SoftDeletes;
+    use HasApprovalWorkflow, HasFactory, HasHashId, HasAuditLog, SoftDeletes;
 
     protected $fillable = [
         'rma_number',

@@ -77,7 +77,24 @@ class EffectiveDatedBracketsTest extends TestCase
         // SSS flat amounts: 2024 EE 100 / ER 200; 2025 EE 150 / ER 300.
         $this->sssRow('2024-01-01', 100.00, 200.00);
         $this->sssRow('2025-01-01', 150.00, 300.00);
-        // No PhilHealth/Pag-IBIG/BIR rows seeded → those deductions resolve to 0; only SSS moves sss_ee.
+        // The compute-time guard (PY-02) refuses a first-half period unless ALL
+        // FOUR agencies have brackets effective on the payroll date, so seed
+        // minimal PhilHealth/Pag-IBIG/BIR rows; only SSS moves sss_ee below.
+        foreach ([
+            ['philhealth', 0.0225, 0.0225],
+            ['pagibig', 0.02, 0.02],
+            ['bir', 0.00, 0.00],
+        ] as [$agency, $ee, $er]) {
+            GovernmentContributionTable::create([
+                'agency'         => $agency,
+                'bracket_min'    => 0.00,
+                'bracket_max'    => 999999.99,
+                'ee_amount'      => $ee,
+                'er_amount'      => $er,
+                'effective_date' => '2024-01-01',
+                'is_active'      => true,
+            ]);
+        }
 
         $employee = \App\Modules\HR\Models\Employee::factory()->create([
             'pay_type'             => 'monthly',
