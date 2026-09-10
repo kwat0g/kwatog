@@ -20,4 +20,5 @@ Route::middleware(['auth:sanctum', 'feature:loans'])->prefix('loans')->group(fun
     Route::patch('/{loan}/approve', [LoanController::class, 'approve'])->middleware('permission:loans.approve');
     Route::patch('/{loan}/reject', [LoanController::class, 'reject'])->middleware('permission:loans.approve');
     Route::patch('/{loan}/cancel', [LoanController::class, 'cancel'])->middleware('permission:loans.write_off');
+    Route::post('/{loan}/payments', [LoanController::class, 'recordPayment'])->middleware('permission:loans.write_off');
 });

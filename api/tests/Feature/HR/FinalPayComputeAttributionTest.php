@@ -74,7 +74,10 @@ class FinalPayComputeAttributionTest extends TestCase
         ]);
     }
 
-    /** An open (non-disbursed) payroll period covering the separation date. */
+    /**
+     * A disbursed payroll period covering the separation date — the only
+     * covering-period state compute() accepts (HR-01 guard).
+     */
     private function seedOpenPayrollPeriod(): void
     {
         DB::table('payroll_periods')->insert([
@@ -83,7 +86,7 @@ class FinalPayComputeAttributionTest extends TestCase
             'payroll_date'        => '2026-06-05',
             'is_first_half'       => false,
             'is_thirteenth_month' => false,
-            'status'              => 'draft',
+            'status'              => 'disbursed',
             'created_by'          => User::query()->firstOrFail()->id,
             'created_at'          => now(),
             'updated_at'          => now(),

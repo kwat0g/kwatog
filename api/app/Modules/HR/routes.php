@@ -292,6 +292,8 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
             ->middleware('permission:hr.separation.finalize');
         Route::patch('/{clearance}/finalize', [SeparationController::class, 'finalize'])
             ->middleware('permission:hr.separation.finalize');
+        Route::patch('/{clearance}/cancel', [SeparationController::class, 'cancel'])
+            ->middleware('permission:hr.separation.cancel');
     });
 
     // Recruitment — HR-facing (authenticated)

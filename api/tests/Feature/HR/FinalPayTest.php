@@ -28,7 +28,8 @@ use Tests\TestCase;
  *
  * What is tested:
  *   1. Final-period salary from live payroll rows, or the shared calendar-day
- *      proration when no row is computed yet (HR-02 parity)
+ *      proration when no row is computed yet (HR-02 parity); the covering-
+ *      period double-pay guard (HR-01) holds at JE-posting time
  *   2. Unused convertible leave value conversion (days × derived daily rate)
  *   3. Outstanding loan balance deducted from final pay
  *   4. Negative-total clamped to 0.00 via max(0, plus−less)
@@ -117,22 +118,6 @@ class FinalPayTest extends TestCase
         return app(FinalPayService::class);
     }
 
-    private function seedOpenPayrollPeriod(string $status = 'draft'): int
-    {
-        return DB::table('payroll_periods')->insertGetId([
-            'period_start' => '2026-05-16',
-            'period_end' => '2026-05-31',
-            'payroll_date' => '2026-06-05',
-            'is_first_half' => false,
-            'is_thirteenth_month' => false,
-            'status' => $status,
-            'created_by' => User::query()->firstOrFail()->id,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-    }
-
-    /** @param array<string, float> $hoursByDate */
     private function seedAttendanceHours(Employee $employee, array $hoursByDate): void
     {
         foreach ($hoursByDate as $date => $hours) {
@@ -147,8 +132,36 @@ class FinalPayTest extends TestCase
         }
     }
 
+    private function seedOpenPayrollPeriod(string $status = 'draft', string $start = '2026-05-16', string $end = '2026-05-31'): int
+    {
+        return DB::table('payroll_periods')->insertGetId([
+            'period_start' => $start,
+            'period_end' => $end,
+            'payroll_date' => '2026-06-05',
+            'is_first_half' => false,
+            'is_thirteenth_month' => false,
+            'status' => $status,
+            'created_by' => User::query()->firstOrFail()->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    private function seedThirteenthMonthAccrual(Employee $employee, string $accruedAmount): void
+    {
+        DB::table('thirteenth_month_accruals')->insert([
+            'employee_id'        => $employee->id,
+            'year'               => 2026,
+            'total_basic_earned' => '120000.00',
+            'accrued_amount'     => $accruedAmount,
+            'is_paid'            => false,
+            'created_at'         => now(),
+            'updated_at'         => now(),
+        ]);
+    }
+
     // ──────────────────────────────────────────────────────────────────────
-    // 1. Pro-rated salary — monthly employee
+    // 1. Last-salary component — covering-period guard (HR-01) + HR-02 parity
     // ──────────────────────────────────────────────────────────────────────
 
     public function test_final_period_salary_monthly_uses_payroll_calendar_day_proration(): void
@@ -227,7 +240,6 @@ class FinalPayTest extends TestCase
         $employee = $this->makeEmployee(['basic_monthly_salary' => '22000.00']);
         $clearance = $this->makeClearance($employee);
         $this->seedOpenPayrollPeriod('disbursed');
-        $this->seedAttendanceHours($employee, ['2026-05-16' => 8.0]);
 
         $breakdown = $this->service()->compute($clearance)->final_pay_breakdown;
 
@@ -480,8 +492,7 @@ class FinalPayTest extends TestCase
     {
         $employee  = $this->makeEmployee(['basic_monthly_salary' => '40000.00', 'pay_type' => 'monthly']);
         $clearance = $this->makeClearance($employee);
-        $this->seedOpenPayrollPeriod();
-        $this->seedAttendanceHours($employee, ['2026-05-16' => 8.0]);
+        $this->seedThirteenthMonthAccrual($employee, '15000.00');
 
         $result    = $this->service()->compute($clearance);
         $breakdown = $result->final_pay_breakdown;
@@ -504,12 +515,9 @@ class FinalPayTest extends TestCase
     {
         $employee  = $this->makeEmployee(['basic_monthly_salary' => '24000.00', 'pay_type' => 'monthly']);
         $clearance = $this->makeClearance($employee);
-        $this->seedOpenPayrollPeriod();
-        $this->seedAttendanceHours($employee, [
-            '2026-05-16' => 8.0,
-            '2026-05-17' => 8.0,
-            '2026-05-18' => 8.0,
-        ]);
+        // Earnings come from the accrued 13th month: a covering payroll period
+        // that has not been disbursed refuses the computation (HR-01 guard).
+        $this->seedThirteenthMonthAccrual($employee, '6000.00');
 
         // Add a loan to exercise the loans_payable credit line
         DB::table('employee_loans')->insert([
@@ -668,7 +676,9 @@ class FinalPayTest extends TestCase
     {
         $employee  = $this->makeEmployee(['basic_monthly_salary' => '24000.00', 'pay_type' => 'monthly']);
         $clearance = $this->makeClearance($employee);
-        $periodId = $this->seedOpenPayrollPeriod('computed');
+        // Ends BEFORE the separation date: counts for the YTD rebuild but is
+        // not the covering period (which the HR-01 guard would refuse).
+        $periodId = $this->seedOpenPayrollPeriod('computed', '2026-05-01', '2026-05-15');
         DB::table('payrolls')->insert([
             'payroll_period_id' => $periodId,
             'employee_id' => $employee->id,

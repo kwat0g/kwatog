@@ -7,11 +7,13 @@ namespace App\Modules\Loans\Controllers;
 use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
 use App\Modules\HR\Models\Employee;
+use App\Modules\Loans\Enums\LoanPaymentType;
 use App\Modules\Loans\Enums\LoanType;
 use App\Modules\Loans\Enums\LoanStatus;
 use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Loans\Policies\LoanAccessPolicy;
 use App\Modules\Loans\Requests\ApproveLoanRequest;
+use App\Modules\Loans\Requests\RecordLoanPaymentRequest;
 use App\Modules\Loans\Requests\RejectLoanRequest;
 use App\Modules\Loans\Requests\StoreLoanRequest;
 use App\Modules\Loans\Resources\EmployeeLoanResource;
@@ -112,6 +114,33 @@ class LoanController
         }
 
         return new EmployeeLoanResource($loan);
+    }
+
+    /** POST /loans/{loan}/payments — manual settlement outside payroll. */
+    public function recordPayment(RecordLoanPaymentRequest $request, EmployeeLoan $loan): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless(
+            $user && $this->access->canDecide($user, $loan),
+            403,
+            'You do not have permission to settle loans within your row scope.',
+        );
+
+        try {
+            $this->service->recordPayment(
+                $loan,
+                (string) $request->validated('amount'),
+                LoanPaymentType::Manual,
+                remarks: $request->validated('remarks'),
+                paymentDate: $request->validated('payment_date'),
+            );
+        } catch (BusinessRuleException $e) {
+            abort(422, $e->getMessage());
+        }
+
+        return (new EmployeeLoanResource($this->service->show($loan->fresh())))
+            ->response()
+            ->setStatusCode(201);
     }
 
     /** GET /loans/limits/{employee}?loan_type=... — used by the create form. */

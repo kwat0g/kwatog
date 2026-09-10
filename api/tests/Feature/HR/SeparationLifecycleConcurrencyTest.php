@@ -13,6 +13,7 @@ use App\Modules\HR\Enums\EmployeeStatus;
 use App\Modules\HR\Events\ClearanceFullySigned;
 use App\Modules\HR\Listeners\DeactivateAccountOnClearanceComplete;
 use App\Modules\HR\Models\Clearance;
+use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\EmploymentHistory;
 use App\Modules\HR\Services\FinalPayService;
@@ -78,8 +79,10 @@ class SeparationLifecycleConcurrencyTest extends TestCase
         $staleFinance = $clearance->fresh();
         $service = app(SeparationService::class);
 
-        $service->signItem($staleHr, 'hr_signoff', User::factory()->create());
-        $service->signItem($staleFinance, 'finance_signoff', User::factory()->create());
+        // The per-department signing gate (HR-03) requires each signer's
+        // employee to belong to the department that owns the item.
+        $service->signItem($staleHr, 'hr_signoff', $this->departmentSigner('HR'));
+        $service->signItem($staleFinance, 'finance_signoff', $this->departmentSigner('FIN'));
 
         $fresh = $clearance->fresh();
         $items = collect($fresh->clearance_items)->keyBy('item_key');
@@ -169,5 +172,17 @@ class SeparationLifecycleConcurrencyTest extends TestCase
             ->handle(new ClearanceFullySigned($clearance->fresh()));
 
         $this->assertFalse((bool) $user->fresh()->is_active);
+    }
+
+    private function departmentSigner(string $departmentCode): User
+    {
+        $department = Department::factory()->create([
+            'code' => $departmentCode,
+            'name' => 'Dept '.$departmentCode,
+        ]);
+
+        return User::factory()->create([
+            'employee_id' => Employee::factory()->create(['department_id' => $department->id])->id,
+        ]);
     }
 }

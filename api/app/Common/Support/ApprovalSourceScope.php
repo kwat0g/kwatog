@@ -29,6 +29,10 @@ use Illuminate\Database\Eloquent\Builder;
  *   - payroll: no row scope exists in the module — holders of the read
  *             permission see every period, so the board's permission gate is
  *             already equivalent and hasScope() reports false.
+ *   - return_request: same documented decision as payroll — every holder of
+ *             `return_management.view` sees every RMA in the module's own
+ *             list endpoint, so the permission gate is equivalent and
+ *             hasScope() reports false.
  *
  * Before this existed the board gated cards on the module READ permissions
  * alone — and `leave.view` is a self-scoped permission granted to every role,

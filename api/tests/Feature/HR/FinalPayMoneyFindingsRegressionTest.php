@@ -97,33 +97,20 @@ class FinalPayMoneyFindingsRegressionTest extends TestCase
         ], $overrides));
     }
 
-    /** An open (non-disbursed) payroll period covering the separation date. */
-    private function seedOpenPayrollPeriod(): void
+    /**
+     * Positive final-pay earnings that do not need a payroll period: a covering
+     * period that has not been disbursed refuses the computation (HR-01 guard).
+     */
+    private function seedThirteenthMonthAccrual(Employee $employee, string $accruedAmount): void
     {
-        DB::table('payroll_periods')->insert([
-            'period_start'       => '2026-05-16',
-            'period_end'         => '2026-05-31',
-            'payroll_date'       => '2026-06-05',
-            'is_first_half'      => false,
-            'is_thirteenth_month'=> false,
-            'status'             => 'draft',
-            'created_by'         => User::query()->firstOrFail()->id,
+        DB::table('thirteenth_month_accruals')->insert([
+            'employee_id'        => $employee->id,
+            'year'               => 2026,
+            'total_basic_earned' => '120000.00',
+            'accrued_amount'     => $accruedAmount,
+            'is_paid'            => false,
             'created_at'         => now(),
             'updated_at'         => now(),
-        ]);
-    }
-
-    /** One 8-hour worked day inside the final period (kept for realism; the
-     *  last-salary fallback is calendar-day based and does not read it). */
-    private function seedAttendanceDay(Employee $employee): void
-    {
-        DB::table('attendances')->insert([
-            'employee_id'  => $employee->id,
-            'date'         => '2026-05-16',
-            'regular_hours'=> 8.0,
-            'status'       => 'present',
-            'created_at'   => now(),
-            'updated_at'   => now(),
         ]);
     }
 
@@ -165,15 +152,13 @@ class FinalPayMoneyFindingsRegressionTest extends TestCase
      */
     public function test_p05_01_separation_completes_when_deductions_exceed_earnings(): void
     {
-        // A leaver whose final cutoff is tiny (separation on the first day of
-        // a 16-day cutoff = ₱625.00 prorated basic) but who owes a large
-        // lost-property charge (₱5,000). Net is clamped at 0.00 and the JE
-        // must still balance. Property is not gated by finalize's loan
+        // A leaver whose final-pay earnings are tiny (₱909.09) but who owes a
+        // large lost-property charge (₱5,000). Net is clamped at 0.00 and the
+        // JE must still balance. Property is not gated by finalize's loan
         // check, so this is the reachable path where deductions exceed earnings.
         $employee  = $this->makeEmployee(['basic_monthly_salary' => '20000.00']);
-        $clearance = $this->makeClearance($employee, ['separation_date' => '2026-05-16']);
-        $this->seedOpenPayrollPeriod();
-        $this->seedAttendanceDay($employee);
+        $clearance = $this->makeClearance($employee);
+        $this->seedThirteenthMonthAccrual($employee, '909.09');
 
         DB::table('employee_property')->insert([
             'employee_id'           => $employee->id,
@@ -214,8 +199,7 @@ class FinalPayMoneyFindingsRegressionTest extends TestCase
     {
         $employee  = $this->makeEmployee(['basic_monthly_salary' => '20000.00']);
         $clearance = $this->makeClearance($employee);
-        $this->seedOpenPayrollPeriod();
-        $this->seedAttendanceDay($employee);
+        $this->seedThirteenthMonthAccrual($employee, '6000.00');
 
         $loan = $this->seedLoan($employee, '5000.00');
 
