@@ -8,6 +8,7 @@ use App\Common\Enums\AlertSeverity;
 use App\Common\Enums\AlertType;
 use App\Common\Services\ApprovalService;
 use App\Common\Services\AlertEngineService;
+use App\Common\Services\BusinessPolicyService;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
@@ -39,6 +40,7 @@ class AutoPurchaseOrderService
         private readonly AlertEngineService $alerts,
         private readonly TaxPolicyService $taxPolicy,
         private readonly SettingsService $settings,
+        private readonly BusinessPolicyService $businessPolicy,
     ) {}
 
     public function createForCriticalShortage(Item $item): ?PurchaseOrder
@@ -97,6 +99,14 @@ class AutoPurchaseOrderService
             $vat = $isVatable
                 ? Money::mul($sub, (string) $this->taxPolicy->requiredVatRate())
                 : Money::zero();
+            // PU-10 — the chip is display/filter-only (the real gate is the
+            // workflow step threshold) but must not contradict it: a sub-threshold
+            // auto-PO claimed VP approval was required while its VP step was
+            // skipped. Same computation as PurchaseOrderService::create.
+            $requiresVp = Money::gte(
+                Money::add($sub, $vat),
+                (string) $this->businessPolicy->purchaseOrderVpThreshold(),
+            );
 
             $po = PurchaseOrder::create([
                 'po_number'             => $this->sequences->generate('purchase_order'),
@@ -108,7 +118,7 @@ class AutoPurchaseOrderService
                 'vat_amount'            => $vat,
                 'total_amount'          => Money::add($sub, $vat),
                 'is_vatable'            => $isVatable,
-                'requires_vp_approval'  => true,
+                'requires_vp_approval'  => $requiresVp,
                 'created_by'            => null,
                 'remarks'               => "Auto-generated for critical stock alert on {$item->code}.",
                 'is_auto_generated'     => true,

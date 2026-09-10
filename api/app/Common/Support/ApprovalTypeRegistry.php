@@ -16,7 +16,7 @@ use App\Modules\Auth\Models\User;
  */
 final class ApprovalTypeRegistry
 {
-    /** @var array<string, array{kind:string,label:string,table:string,number:string|null,link:string,permissions:array<int,string>}> */
+    /** @var array<string, array{kind:string,label:string,table:string,number:string|null,link:string,link_record?:bool,permissions:array<int,string>}> */
     private const TYPES = [
         'App\\Modules\\Leave\\Models\\LeaveRequest' => [
             'kind' => 'leave',
@@ -57,6 +57,29 @@ final class ApprovalTypeRegistry
             'number' => null,
             'link' => '/payroll/periods/',
             'permissions' => ['payroll.periods.view', 'payroll.periods.approve'],
+        ],
+        // 2026-09-10 audit — both are ENFORCED chains (services call
+        // ApprovalService::submit) but were absent here, so the board dropped
+        // their cards silently and their actors (production_manager, VP) never
+        // saw work waiting on them.
+        'App\\Modules\\HR\\Models\\SalaryAdjustment' => [
+            'kind' => 'salary_adjustment',
+            'label' => 'Salary adjustments',
+            'table' => 'salary_adjustments',
+            'number' => null,
+            // The queue is a tab on the employees page, not a per-record URL.
+            // link_record=false tells linkFor() not to append the row hash.
+            'link' => '/hr/employees',
+            'link_record' => false,
+            'permissions' => ['hr.salary_adjustments.view', 'hr.salary_adjustments.act'],
+        ],
+        'App\\Modules\\ReturnManagement\\Models\\ReturnRequest' => [
+            'kind' => 'return_request',
+            'label' => 'Returns (RMA)',
+            'table' => 'return_requests',
+            'number' => 'rma_number',
+            'link' => '/return-management/',
+            'permissions' => ['return_management.view', 'return_management.approve'],
         ],
     ];
 
@@ -113,6 +136,10 @@ final class ApprovalTypeRegistry
     {
         $meta = self::forClass($class);
 
-        return $meta === null ? '/approvals' : $meta['link'].$hashId;
+        if ($meta === null) {
+            return '/approvals';
+        }
+
+        return ($meta['link_record'] ?? true) ? $meta['link'].$hashId : (string) $meta['link'];
     }
 }

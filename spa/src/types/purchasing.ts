@@ -204,6 +204,19 @@ export interface PurchaseOrder {
   remarks: string | null;
   quantity_received_pct: number;
   quantity_accepted_pct: number;
+  /** PU-13 — server-computed actions (detail responses only, null on lists). */
+  actions?: {
+    can_view: boolean;
+    can_update: boolean;
+    can_delete: boolean;
+    can_submit: boolean;
+    can_approve: boolean;
+    can_reject: boolean;
+    can_send: boolean;
+    can_cancel: boolean;
+    can_close: boolean;
+    can_print: boolean;
+  } | null;
   vendor: { id: string; name: string; contact_person: string | null; email: string | null } | null;
   purchase_request: { id: string; pr_number: string } | null;
   items?: PurchaseOrderItem[];

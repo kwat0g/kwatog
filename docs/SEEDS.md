@@ -239,10 +239,10 @@ tax = fixed_tax + (rate_on_excess * (taxable - bracket_min))
 | overtime_request | [{order:1, role:"department_head", label:"Approved by"}] |
 | cash_advance | [{order:1, role:"department_head", label:"Noted by"}, {order:2, role:"finance_officer", label:"Reviewed by"}, {order:3, role:"vice_president", label:"Approved by"}] |
 | company_loan | [{order:1, role:"department_head", label:"Noted by"}, {order:2, role:"manager", label:"Checked by"}, {order:3, role:"finance_officer", label:"Reviewed by"}, {order:4, role:"vice_president", label:"Approved by"}] |
-| purchase_request | [{order:1, role:"department_head", label:"Noted by"}, {order:2, role:"manager", label:"Checked by"}, {order:3, role:"purchasing_officer", label:"Reviewed by"}, {order:4, role:"vice_president", label:"Approved by"}] |
-| purchase_order | [{order:1, role:"vice_president", label:"Approved by"}] (only if total ≥ ₱50,000) |
+| purchase_request | [{order:1, role:"finance_officer", label:"Finance"}, {order:2, role:"vice_president", label:"VP", threshold:"50000.00"}] — 2026-09-10 redesign: creators are department heads + purchasing only (create gate = need authority); chain is money-only |
+| purchase_order | [{order:1, role:"purchasing_officer", label:"Purchasing"}, {order:2, role:"finance_officer", label:"Finance"}, {order:3, role:"vice_president", label:"VP", threshold:"50000.00"}] (VP step only if total ≥ ₱50,000) |
 | bill_payment | [{order:1, role:"finance_officer", label:"Prepared by"}, {order:2, role:"vice_president", label:"Approved by"}] |
-| salary_adjustment | [{order:1, role:"manager", label:"Checked by"}, {order:2, role:"vice_president", label:"Approved by"}] |
+| salary_adjustment | [{order:1, role:"manager", label:"Checked by"}, {order:2, role:"vice_president", label:"Approved by"}] — 2026-09-10 audit: step roles hold their act-route permissions (`hr.salary_adjustments.act` on production_manager + VP; loans approve/view on VP + production_manager as loan-chain participants) |
 | department_transfer | [{order:1, role:"department_head", label:"Old Dept Head"}, {order:2, role:"department_head", label:"New Dept Head"}] |
 | work_order | [{order:1, role:"production_manager", label:"Approved by"}] |
 | ncr | [{order:1, role:"qc_head", label:"Reviewed by"}, {order:2, role:"qc_manager", label:"Approved by"}] |
@@ -252,22 +252,30 @@ tax = fixed_tax + (rate_on_excess * (taxable - bracket_min))
 | separation_clearance | [{order:1, role:"department_head"}, {order:2, role:"warehouse_head"}, {order:3, role:"maintenance_head"}, {order:4, role:"finance_officer"}, {order:5, role:"hr_officer"}] |
 | 8d_report | [{order:1, role:"qc_manager", label:"Reviewed by"}, {order:2, role:"vice_president", label:"Approved by"}] |
 
-## 13. DEMO ACCOUNTS (12, password: `password`)
+## 13. DEMO ACCOUNTS (16, password: `password`)
 
 | Email | Name | Role | Department |
 |---|---|---|---|
 | admin@ogami.test | System Administrator | system_admin | — |
+| vp@ogami.test | Kenji Watanabe | vice_president | EXEC |
 | hr@ogami.test | Maria Santos | hr_officer | HR |
 | finance@ogami.test | Ana Reyes | finance_officer | FIN |
 | production@ogami.test | Ricardo Tanaka | production_manager | PROD |
 | ppc@ogami.test | Pedro Garcia | ppc_head | PPC |
 | purchasing@ogami.test | Elena Cruz | purchasing_officer | PUR |
+| buyer2@ogami.test | Marco Dela Rosa | purchasing_officer | PUR |
 | warehouse@ogami.test | Carlos Mendoza | warehouse_staff | WH |
 | qc@ogami.test | Rosa Villareal | qc_inspector | QC |
 | maintenance@ogami.test | Juan Bautista | maintenance_tech | MAINT |
 | impex@ogami.test | Lisa Yamamoto | impex_officer | IMPEX |
 | depthead@ogami.test | Roberto Santos | department_head | PROD |
 | employee@ogami.test | Manuel Cruz | employee | PROD |
+
+> 2026-09-10 approval-chain redesign: `vp@ogami.test` is the business
+> executive who signs PRs ≥ ₱50k and all PO chains; `buyer2@ogami.test` exists
+> because a purchasing-created PR/PO can never be approved by its creator
+> (self-approval guard) — Marco covers PO step 1 on Elena's documents.
+> system_admin is IT-only and sits in NO business approval chain.
 
 ## 14. DEMO PRODUCTS (8) with BOMs
 

@@ -91,7 +91,7 @@ class SalaryAdjustmentGateTest extends TestCase
         $svc = app(SalaryAdjustmentService::class);
         $hr = $this->userWithRole('hr_officer');
         $checker = $this->userWithRole('production_manager');
-        $approver = $this->userWithRole('system_admin');
+        $approver = $this->userWithRole('vice_president');
         $employee = Employee::factory()->create(['basic_monthly_salary' => '20000.00']);
 
         $adj = $svc->request($employee, [

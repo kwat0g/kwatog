@@ -405,7 +405,15 @@ class ApprovalBoardService
         foreach (ApprovalTypeRegistry::all() as $class => $meta) {
             $ids = array_values(array_unique($idsByTable[$meta['table']] ?? []));
             if ($ids === []) continue;
-            foreach (DB::table($meta['table'])->whereIn('id', $ids)->get() as $source) {
+            $query = DB::table($meta['table'])->whereIn($meta['table'].'.id', $ids);
+            // PS-07 — PO cards summarized the RAW vendor_id ("vendor #42"),
+            // both a HashID-rule violation and a useless label. Carry the
+            // vendor's name onto the source row so the summary reads a name.
+            if ($meta['table'] === 'purchase_orders') {
+                $query->leftJoin('vendors', 'vendors.id', '=', 'purchase_orders.vendor_id')
+                    ->addSelect('vendors.name as vendor_name');
+            }
+            foreach ($query->get() as $source) {
                 $sources[$class.'#'.$source->id] = $source;
             }
         }
@@ -426,6 +434,21 @@ class ApprovalBoardService
         return User::with('role:id,name,slug')->whereIn('id', $ids)->get()->keyBy('id');
     }
 
+    /**
+     * PS-07 — the board card shows a vendor NAME, not the raw vendor_id.
+     *
+     * @param object $source stdClass row from loadSourcesForRows (carries
+     *                      vendor_name via the purchase_orders join when present)
+     */
+    private function poSummary(object $source): string
+    {
+        $vendorName = property_exists($source, 'vendor_name') && $source->vendor_name !== null
+            ? (string) $source->vendor_name
+            : null;
+
+        return 'Purchase order'.($vendorName !== null ? ' — '.$vendorName : '');
+    }
+
     private function extractAmount(object $source): ?string
     {
         foreach (['total_amount', 'principal', 'amount'] as $col) {
@@ -439,11 +462,13 @@ class ApprovalBoardService
     private function summaryFor(string $kind, object $source): string
     {
         return match ($kind) {
+            'po'      => $this->poSummary($source),
             'leave'   => 'Leave request — '.((string) ($source->start_date ?? '')).' to '.((string) ($source->end_date ?? '')),
             'pr'      => 'Purchase request',
-            'po'      => 'Purchase order — vendor #'.((string) ($source->vendor_id ?? '')),
             'loan'    => ucfirst((string) ($source->loan_type ?? 'loan')).' — '.app(CurrencyDisplayService::class)->format($source->principal ?? 0),
             'payroll' => 'Payroll period '.((string) ($source->period_start ?? '')).' to '.((string) ($source->period_end ?? '')),
+            'salary_adjustment' => 'Salary adjustment — '.((string) ($source->effective_date ?? '')),
+            'return_request' => 'Return '.((string) ($source->rma_number ?? '')),
             default   => '',
         };
     }

@@ -70,7 +70,7 @@ class ApprovalDelegationTest extends TestCase
     {
         // Requester is an employee so step 1 (department_head) is not self-acted.
         $requester = $this->makeUser('employee');
-        $deptHead  = $this->makeUser('department_head');
+        $deptHead  = $this->makeUser('finance_officer');
         $delegate  = $this->makeUser('employee'); // no inherent dept_head role
 
         $pr = $this->pendingPurchaseRequest($requester);
@@ -78,13 +78,13 @@ class ApprovalDelegationTest extends TestCase
         ApprovalDelegation::create([
             'delegator_user_id' => $deptHead->id,
             'delegate_user_id'  => $delegate->id,
-            'role_slug'         => 'department_head',
+            'role_slug'         => 'finance_officer',
             'starts_at'         => now()->subDay()->toDateString(),
             'ends_at'           => now()->addDay()->toDateString(),
             'is_active'         => true,
         ]);
 
-        // Delegate (an employee) may approve the department_head step.
+        // Delegate (an employee) may approve the finance_officer step.
         app(ApprovalService::class)->approve($pr, $delegate, 'Acting for dept head');
 
         $step1 = app(ApprovalService::class)->records($pr)
@@ -103,15 +103,15 @@ class ApprovalDelegationTest extends TestCase
 
         // Window already closed yesterday.
         ApprovalDelegation::create([
-            'delegator_user_id' => $this->makeUser('department_head')->id,
+            'delegator_user_id' => $this->makeUser('finance_officer')->id,
             'delegate_user_id'  => $delegate->id,
-            'role_slug'         => 'department_head',
+            'role_slug'         => 'finance_officer',
             'starts_at'         => now()->subDays(5)->toDateString(),
             'ends_at'           => now()->subDays(2)->toDateString(),
             'is_active'         => true,
         ]);
 
-        $this->expectExceptionMessage("Only users with role 'department_head' can approve this step.");
+        $this->expectExceptionMessage("Only users with role 'finance_officer' can approve this step.");
         app(ApprovalService::class)->approve($pr, $delegate, 'Should fail');
     }
 
@@ -123,15 +123,15 @@ class ApprovalDelegationTest extends TestCase
         $pr = $this->pendingPurchaseRequest($requester);
 
         ApprovalDelegation::create([
-            'delegator_user_id' => $this->makeUser('department_head')->id,
+            'delegator_user_id' => $this->makeUser('finance_officer')->id,
             'delegate_user_id'  => $delegate->id,
-            'role_slug'         => 'department_head',
+            'role_slug'         => 'finance_officer',
             'starts_at'         => now()->subDay()->toDateString(),
             'ends_at'           => now()->addDay()->toDateString(),
             'is_active'         => false, // revoked
         ]);
 
-        $this->expectExceptionMessage("Only users with role 'department_head' can approve this step.");
+        $this->expectExceptionMessage("Only users with role 'finance_officer' can approve this step.");
         app(ApprovalService::class)->approve($pr, $delegate, 'Should fail');
     }
 
@@ -145,9 +145,9 @@ class ApprovalDelegationTest extends TestCase
         // Even with a valid delegation for the current step's role, the
         // submitter cannot act on their own record.
         ApprovalDelegation::create([
-            'delegator_user_id' => $this->makeUser('department_head')->id,
+            'delegator_user_id' => $this->makeUser('finance_officer')->id,
             'delegate_user_id'  => $delegateAndSubmitter->id,
-            'role_slug'         => 'department_head',
+            'role_slug'         => 'finance_officer',
             'starts_at'         => now()->subDay()->toDateString(),
             'ends_at'           => now()->addDay()->toDateString(),
             'is_active'         => true,
@@ -160,7 +160,7 @@ class ApprovalDelegationTest extends TestCase
     public function test_blanket_delegation_inherits_delegators_role(): void
     {
         $requester = $this->makeUser('employee');
-        $deptHead  = $this->makeUser('department_head');
+        $deptHead  = $this->makeUser('finance_officer');
         $delegate  = $this->makeUser('employee');
 
         $pr = $this->pendingPurchaseRequest($requester);
@@ -189,7 +189,7 @@ class ApprovalDelegationTest extends TestCase
 
         $response = $this->actingAs($employee, 'sanctum')->postJson('/api/v1/approval-delegations', [
             'delegate_user_id' => $delegate->hash_id,
-            'role_slug'        => 'department_head',
+            'role_slug'        => 'finance_officer',
             'starts_at'        => now()->subDay()->toDateString(),
             'ends_at'          => now()->addDay()->toDateString(),
         ]);
@@ -198,18 +198,18 @@ class ApprovalDelegationTest extends TestCase
         $this->assertDatabaseMissing('approval_delegations', [
             'delegator_user_id' => $employee->id,
             'delegate_user_id'  => $delegate->id,
-            'role_slug'         => 'department_head',
+            'role_slug'         => 'finance_officer',
         ]);
     }
 
     public function test_http_creation_allows_delegating_the_current_role(): void
     {
-        $delegator = $this->makeUser('department_head');
+        $delegator = $this->makeUser('finance_officer');
         $delegate  = $this->makeUser('employee');
 
         $response = $this->actingAs($delegator, 'sanctum')->postJson('/api/v1/approval-delegations', [
             'delegate_user_id' => $delegate->hash_id,
-            'role_slug'        => 'department_head',
+            'role_slug'        => 'finance_officer',
             'starts_at'        => now()->subDay()->toDateString(),
             'ends_at'          => now()->addDay()->toDateString(),
         ]);
@@ -218,7 +218,7 @@ class ApprovalDelegationTest extends TestCase
         $this->assertDatabaseHas('approval_delegations', [
             'delegator_user_id' => $delegator->id,
             'delegate_user_id'  => $delegate->id,
-            'role_slug'         => 'department_head',
+            'role_slug'         => 'finance_officer',
             'is_active'         => true,
         ]);
     }
@@ -232,7 +232,7 @@ class ApprovalDelegationTest extends TestCase
         $response = $this->actingAs($admin, 'sanctum')->postJson('/api/v1/approval-delegations', [
             'delegator_user_id' => $delegator->hash_id,
             'delegate_user_id'  => $delegate->hash_id,
-            'role_slug'         => 'department_head',
+            'role_slug'         => 'finance_officer',
             'starts_at'         => now()->subDay()->toDateString(),
             'ends_at'           => now()->addDay()->toDateString(),
         ]);
@@ -241,21 +241,21 @@ class ApprovalDelegationTest extends TestCase
         $this->assertDatabaseMissing('approval_delegations', [
             'delegator_user_id' => $delegator->id,
             'delegate_user_id'  => $delegate->id,
-            'role_slug'         => 'department_head',
+            'role_slug'         => 'finance_officer',
         ]);
     }
 
     public function test_exact_delegation_stops_working_after_delegator_role_changes(): void
     {
         $requester = $this->makeUser('employee');
-        $delegator = $this->makeUser('department_head');
+        $delegator = $this->makeUser('finance_officer');
         $delegate  = $this->makeUser('employee');
         $pr        = $this->pendingPurchaseRequest($requester);
 
         ApprovalDelegation::create([
             'delegator_user_id' => $delegator->id,
             'delegate_user_id'  => $delegate->id,
-            'role_slug'         => 'department_head',
+            'role_slug'         => 'finance_officer',
             'starts_at'         => now()->subDay()->toDateString(),
             'ends_at'           => now()->addDay()->toDateString(),
             'is_active'         => true,
@@ -263,7 +263,7 @@ class ApprovalDelegationTest extends TestCase
 
         $delegator->update(['role_id' => Role::where('slug', 'employee')->value('id')]);
 
-        $this->expectExceptionMessage("Only users with role 'department_head' can approve this step.");
+        $this->expectExceptionMessage("Only users with role 'finance_officer' can approve this step.");
         app(ApprovalService::class)->approve($pr, $delegate, 'Stale delegation must fail');
     }
 }

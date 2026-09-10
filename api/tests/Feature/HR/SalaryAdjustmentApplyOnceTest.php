@@ -47,7 +47,7 @@ class SalaryAdjustmentApplyOnceTest extends TestCase
         $employee = Employee::factory()->create(['basic_monthly_salary' => '30000.00']);
         $requester = $this->user('hr_officer');
         $checker = $this->user('production_manager');
-        $finalApprover = $this->user('system_admin');
+        $finalApprover = $this->user('vice_president');
 
         $svc = app(SalaryAdjustmentService::class);
         $adjustment = $svc->request($employee, [
@@ -60,7 +60,7 @@ class SalaryAdjustmentApplyOnceTest extends TestCase
         $svc->approve(SalaryAdjustment::find($adjustment->id), $checker);
         $this->assertNull($adjustment->refresh()->applied_at);
 
-        // Step 2 (system_admin) — fully approved → applied exactly once.
+        // Step 2 (vice_president) — fully approved → applied exactly once.
         $svc->approve(SalaryAdjustment::find($adjustment->id), $finalApprover);
         $this->assertNotNull($adjustment->refresh()->applied_at);
         $this->assertSame('35000.00', $employee->refresh()->basic_monthly_salary);

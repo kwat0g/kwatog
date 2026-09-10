@@ -299,11 +299,12 @@ class GoldenPathDemoSeeder extends Seeder
      * ADV6/9 — leave PR-DEMO-BUDGET mid-flight in the purchase_request
      * workflow so the approval inbox (a demo centerpiece) is never empty.
      *
-     * The PR is raised by the maintenance user (never an approver on this
-     * chain), then walked through steps 1-3 by their role holders so the
-     * system_admin VP step is the one pending when the demo logs in as
-     * admin@ogami.test and clicks Approve live. Guarded: re-runs skip when
-     * records already exist.
+     * 2026-09-10 chain redesign: the workflow is Finance → VP (≥ ₱50k). This
+     * PR totals ₱500,000, so BOTH steps are live: finance@ogami.test approves
+     * step 1 during seeding, leaving the vice_president step pending for the
+     * live demo — vp@ogami.test (the business executive) clicks Approve.
+     * system_admin no longer appears in any business chain. Guarded: re-runs
+     * skip when records already exist.
      */
     private function seedApprovalRehearsal(User $fallbackRequester): void
     {
@@ -327,8 +328,8 @@ class GoldenPathDemoSeeder extends Seeder
         $requester = User::where('email', 'maintenance@ogami.test')->first()
             ?? User::where('email', 'hr@ogami.test')->first()
             ?? $fallbackRequester;
-        // The maintenance dept raises the PR; anyone else would risk tripping
-        // the maker-checker self-approval guard on step 3 (purchasing_officer).
+        // Maintenance raises the PR — a different identity from every chain
+        // actor, so the maker-checker self-approval guard never fires.
         $budget->forceFill(['requested_by' => $requester->id])->save();
 
         $total = (string) DB::table('purchase_request_items')
@@ -338,23 +339,15 @@ class GoldenPathDemoSeeder extends Seeder
 
         app(ApprovalService::class)->submit($budget, 'purchase_request', $total);
 
-        // Walk steps 1-3 (department_head → production_manager →
-        // purchasing_officer) so the pending row is the system_admin VP step.
-        $actors = [
-            'depthead@ogami.test'    => 'department_head',
-            'production@ogami.test'  => 'production_manager',
-            'purchasing@ogami.test'  => 'purchasing_officer',
-        ];
-        $approvals = app(ApprovalService::class);
-        foreach ($actors as $email => $role) {
-            $user = User::where('email', $email)->first();
-            if (! $user || $user->role?->slug !== $role) {
-                throw new \RuntimeException("Approval rehearsal needs a {$role} actor ({$email}).");
-            }
-            $approvals->approve($budget, $user, 'Approved — demo rehearsal step.');
+        // Walk step 1 (finance_officer) so the pending row is the
+        // vice_president step (total ≥ ₱50k keeps it live).
+        $finance = User::where('email', 'finance@ogami.test')->first();
+        if (! $finance || $finance->role?->slug !== 'finance_officer') {
+            throw new \RuntimeException('Approval rehearsal needs a finance_officer actor (finance@ogami.test).');
         }
+        app(ApprovalService::class)->approve($budget, $finance, 'Approved — demo rehearsal step.');
 
-        $this->command?->info('  PR-DEMO-BUDGET is 3/4 steps approved — VP approval pending for the live demo.');
+        $this->command?->info('  PR-DEMO-BUDGET is 1/2 steps approved — VP (vp@ogami.test) approval pending for the live demo.');
     }
 
     /** ADV12b — inspected supplier RMA with exact PO/GRN/bill lineage, ready to dispose. */

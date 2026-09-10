@@ -97,10 +97,37 @@ class PurchaseRequestService
                 $data['priority'] ?? $this->settings->get('purchasing.purchase_request.default_priority', ''),
             );
 
+            // Department attribution is a validated input, not a verbatim copy
+            // (PU-06). A department head creates for their own department; a
+            // purchasing officer (central requisition desk) records the
+            // requesting department explicitly; automation runs plant-wide.
+            // Everything else falls back to the creator's own department.
+            $requestedDepartmentId = isset($data['department_id']) && $data['department_id'] !== null
+                ? (int) $data['department_id']
+                : null;
+            if ($requestedDepartmentId !== null && ! $isAuto) {
+                $creatorDepartmentId = $by->employee?->department_id !== null
+                    ? (int) $by->employee->department_id
+                    : null;
+                $isCentralDesk = $by->hasPermission('purchasing.po.create');
+                $isExecutive = $by->hasPermission('purchasing.pr.create') && $by->employee === null;
+                if ($creatorDepartmentId !== null && ! $isCentralDesk
+                    && $requestedDepartmentId !== $creatorDepartmentId) {
+                    throw new ForbiddenActionException(
+                        'You can only raise purchase requests for your own department.',
+                    );
+                }
+                if ($creatorDepartmentId === null && ! $isCentralDesk && ! $isExecutive) {
+                    throw new ForbiddenActionException(
+                        'You cannot attribute a purchase request to a department.',
+                    );
+                }
+            }
+
             $pr = PurchaseRequest::create([
                 'pr_number'            => $this->sequences->generate('pr'),
                 'requested_by'         => $by->id,
-                'department_id'        => $data['department_id'] ?? $by->employee?->department_id ?? null,
+                'department_id'        => $requestedDepartmentId ?? $by->employee?->department_id ?? null,
                 'template_id'          => $data['template_id'] ?? null,
                 'date'                 => $data['date'] ?? now()->toDateString(),
                 'reason'               => $data['reason'] ?? null,
@@ -239,9 +266,17 @@ class PurchaseRequestService
 
     /**
      * ADV6 — On submit:
-     * - Auto-approve small PRs (< ₱5,000) when requestor is a dept head or above.
-     * - Urgent PRs skip the Department Head step.
      * - Pre-fill preferred supplier from approved_suppliers during submit.
+     *
+     * 2026-09-10 — the two legacy submit-time behaviours were removed with the
+     * chain redesign that made them unreachable:
+     * - "Auto-approve small PRs when the requestor is a dept head" read
+     *   `is_department_head`, an attribute that existed on no model or table
+     *   (audit PU-03) — it never fired, and had it, the loop would have called
+     *   approve() as the submitter and tripped the self-approval guard.
+     * - "Urgent PRs skip the Department Head step" targeted a step the PR
+     *   workflow no longer contains (Finance → VP ≥ ₱50k). Urgency remains a
+     *   prioritization flag and notification trigger only.
      */
     public function submit(PurchaseRequest $pr, ?User $by = null): PurchaseRequest
     {
@@ -292,99 +327,15 @@ class PurchaseRequestService
                 $locked->forceFill(['is_urgent' => true])->save();
             }
 
-            // Urgent PRs may skip the Department Head step only under the
-            // configured value cap. The ApprovalService threshold remains an
-            // independent exact-decimal gate for the later VP step.
-            if ($isUrgent) {
-                $this->submitUrgent($locked, $total);
-            } else {
-                $this->approvals->submit($locked, 'purchase_request', $total);
-            }
+            $this->approvals->submit($locked, 'purchase_request', $total);
 
             $locked->forceFill([
                 'status'       => PurchaseRequestStatus::Pending,
                 'submitted_at' => now(),
             ])->save();
 
-            $fresh = $locked->fresh();
-
-            // ADV6 — Auto-approve small PRs (< configured threshold) when
-            // requestor is a department head.
-            $requester = $fresh->requester;
-            $isDeptHead = $requester && $requester->employee &&
-                $requester->employee->is_department_head;
-            $autoApproveThreshold = $this->moneySetting('approval.pr.dept_head_auto_approve_threshold');
-            if (Money::lt($total, $autoApproveThreshold) && $isDeptHead) {
-                // Auto-approve all pending steps in order.
-                while ($this->approvals->nextStep($fresh)) {
-                    $this->approvals->approve($fresh, $requester, 'Auto-approved: amount below configured department-head threshold.');
-                }
-                if ($this->approvals->isFullyApproved($fresh)) {
-                    $fresh->forceFill([
-                        'status'               => PurchaseRequestStatus::Approved,
-                        'approved_at'          => now(),
-                        'po_conversion_status' => PurchaseRequestConversionStatus::Pending,
-                        'po_conversion_note'  => null,
-                        'po_conversion_at'    => now(),
-                    ])->save();
-                    $fresh = $fresh->fresh();
-                    app(OutboxService::class)->recordForChain(
-                        new PurchaseRequestApproved($fresh),
-                        $fresh,
-                        'p2p',
-                        'purchase_request',
-                        PurchaseRequestStatus::Approved->value,
-                    );
-                }
-            }
-
-            return $fresh;
+            return $locked->fresh();
         });
-    }
-
-    /**
-     * Submit an urgent PR — skip the first workflow step (Department Head)
-     * so it goes directly to later approvers.
-     *
-     * OGAMI-013 — The Dept Head skip is now gated behind a value cap
-     * (the persisted purchasing.urgent_skip_limit setting). A high-value "urgent" PR can no
-     * longer bypass its department head with only a free-text reason; over the
-     * cap, the full chain applies. A '0' cap disables skipping entirely. When a
-     * skip IS performed, the urgency_reason is stamped onto the skipped record
-     * for the audit trail.
-     */
-    private function submitUrgent(PurchaseRequest $pr, string $total): void
-    {
-        $this->approvals->submit($pr, 'purchase_request', $total);
-
-        // Resolve the cap. '0' disables skipping; any positive value is the
-        // inclusive ceiling under which the Dept Head step may be skipped.
-        $limit = $this->moneySetting('purchasing.urgent_skip_limit');
-        $maySkip = Money::gt($limit, '0') && Money::lte($total, $limit);
-
-        if (! $maySkip) {
-            // Over the cap (or skipping disabled): keep the full chain. The PR
-            // is still flagged urgent for prioritization, but no step is removed.
-            return;
-        }
-
-        // Find the first pending step and skip it (Dept Head role).
-        $first = $this->approvals->currentRecords($pr)
-            ->where('action', 'pending')
-            ->orderBy('step_order')
-            ->first();
-
-        if ($first && $first->role_slug === 'department_head') {
-            $reason = trim((string) ($pr->urgency_reason ?? ''));
-            $note = 'Skipped — urgent PR escalation'
-                . ($reason !== '' ? " (reason: {$reason})" : '');
-
-            $first->update([
-                'action'   => 'skipped',
-                'remarks'  => $note,
-                'acted_at' => now(),
-            ]);
-        }
     }
 
     /**
@@ -598,18 +549,7 @@ class PurchaseRequestService
         ], true);
     }
 
-    private function moneySetting(string $key): string
-    {
-        $value = $this->settings->get($key);
-        if (! is_int($value) && ! is_string($value) && ! is_float($value)) {
-            throw new BusinessRuleException("Required setting {$key} is missing or invalid.");
-        }
-
-        $value = trim((string) $value);
-        if ($value === '' || ! preg_match('/^\d+(?:\.\d+)?$/', $value)) {
-            throw new BusinessRuleException("Required setting {$key} is missing or invalid.");
-        }
-
-        return Money::round2($value);
-    }
+    // moneySetting() was removed 2026-09-10 with its two consumers: the
+    // dept-head auto-approve (PU-03, dead attribute) and the urgent-skip
+    // (a step the PR workflow no longer contains).
 }

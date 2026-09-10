@@ -51,6 +51,21 @@ export default function PurchaseOrderDetailPage() {
  });
  const statusLabel = purchaseOrderOptions?.statuses?.find((option) => option.value === data?.status)?.label;
 
+ // PU-13 — the API computes the action map (row scope + step-role match +
+ // self-approval guard). Before the detail response arrives, or if it's an
+ // older cached shape, fall back to the old status+permission guesses so the
+ // page still renders.
+ const actions = data?.actions ?? {
+ can_view: true, can_update: false, can_delete: false,
+ can_submit: data?.status === 'draft' && can('purchasing.po.create'),
+ can_approve: data?.status === 'pending_approval' && can('purchasing.po.approve'),
+ can_reject: data?.status === 'pending_approval' && can('purchasing.po.approve'),
+ can_send: data?.status === 'approved' && can('purchasing.po.send'),
+ can_cancel: !['received', 'closed', 'cancelled'].includes(data?.status ?? '') && can('purchasing.po.create'),
+ can_close: data?.status === 'received' && can('purchasing.po.create'),
+ can_print: true,
+ };
+
  // Series C — Task C4. Real-time chain progress.
  useChainProgress('purchase_order', id, ['purchasing', 'purchase-orders', id]);
 
@@ -122,24 +137,27 @@ export default function PurchaseOrderDetailPage() {
  {data.bills.some((b) => b.has_variances && !b.three_way_overridden) ? 'Variance' : 'Matched'}
  </Chip>
  )}
- {data.status === 'draft' && can('purchasing.po.create') && (
+ {/* PU-13 — buttons come from the server-computed actions map (row scope +
+ step-role match + self-approval guard) instead of status+permission
+ guesses that could disagree with what the API would actually accept. */}
+ {actions.can_submit && (
  <Button size="sm" variant="primary" icon={<LuSend size={14} />} onClick={() => setConfirm('submit')} loading={submit.isPending}>Submit</Button>
  )}
- {data.status === 'pending_approval' && can('purchasing.po.approve') && (
- <>
+ {actions.can_reject && (
  <Button size="xs" variant="secondary" icon={<LuThumbsDown size={14} />} onClick={() => setRejectOpen(true)} loading={reject.isPending}>Reject</Button>
- <Button size="xs" variant="primary" icon={<LuThumbsUp size={14} />} onClick={() => setConfirm('approve')} loading={approve.isPending}>Approve</Button>
- </>
  )}
- {data.status === 'approved' && can('purchasing.po.send') && (
+ {actions.can_approve && (
+ <Button size="xs" variant="primary" icon={<LuThumbsUp size={14} />} onClick={() => setConfirm('approve')} loading={approve.isPending}>Approve</Button>
+ )}
+ {actions.can_send && (
  <Button size="sm" variant="primary" icon={<LuTruck size={14} />} onClick={() => setConfirm('send')} loading={send.isPending}>Mark as sent</Button>
  )}
- {data.status === 'received' && can('purchasing.po.create') && (
+ {actions.can_close && (
  <Button size="sm" variant="secondary" icon={<LuSquareCheck size={14} />} onClick={() => setConfirm('close')} loading={close.isPending}>Close</Button>
  )}
  <Button size="sm" variant="secondary" icon={<LuFileText size={14} />}
  onClick={() => void downloadAuthenticatedFile(purchaseOrdersApi.pdfUrl(id), { openInNewTab: true, errorMessage: 'Failed to generate purchase order PDF.' })}>PDF</Button>
- {!['received', 'closed', 'cancelled'].includes(data.status) && can('purchasing.po.create') && (
+ {actions.can_cancel && (
  <Button size="sm" variant="secondary" icon={<LuX size={14} />} onClick={() => setCancelOpen(true)} loading={cancel.isPending}>Cancel</Button>
  )}
  </div>

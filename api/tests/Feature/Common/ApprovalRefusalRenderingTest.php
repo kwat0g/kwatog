@@ -60,7 +60,7 @@ class ApprovalRefusalRenderingTest extends TestCase
         ]);
     }
 
-    /** A PR submitted into the workflow, so step 1 (department_head) is pending. */
+    /** A PR submitted into the workflow, so step 1 (finance_officer) is pending. */
     private function pendingPurchaseRequest(User $requester): PurchaseRequest
     {
         $svc = app(PurchaseRequestService::class);
@@ -89,7 +89,8 @@ class ApprovalRefusalRenderingTest extends TestCase
         $pr        = $this->pendingPurchaseRequest($requester);
 
         // system_admin holds every permission, so the middleware lets this
-        // through; its role slug is not the step's `department_head`.
+        // through; its role slug is not the step's `finance_officer` (the
+        // 2026-09-10 chain put finance first).
         $approver = $this->userWithRole('system_admin');
 
         $response = $this->actingAs($approver)
@@ -97,12 +98,12 @@ class ApprovalRefusalRenderingTest extends TestCase
 
         $response->assertStatus(403);
         $this->assertSame(
-            "Only users with role 'department_head' can approve this step.",
+            "Only users with role 'finance_officer' can approve this step.",
             $response->json('message'),
         );
         // Same envelope shape as the 422 arm, so a page that reads `errors`
         // finds the sentence in the same place.
-        $response->assertJsonPath('errors.error.0', "Only users with role 'department_head' can approve this step.");
+        $response->assertJsonPath('errors.error.0', "Only users with role 'finance_officer' can approve this step.");
         // `code` is omitted when the refusal declares none: the SPA's 403 branch
         // switches on it ('password_expired' redirects, 'feature_disabled'
         // suppresses the toast) and must not meet a value it has no case for.
@@ -117,10 +118,10 @@ class ApprovalRefusalRenderingTest extends TestCase
     public function test_the_segregation_of_duties_refusal_reaches_the_client_as_403_with_its_message(): void
     {
         // Right role for step 1 AND the submitter: the SoD guard runs first.
-        $deptHead = $this->userWithRole('department_head');
-        $pr       = $this->pendingPurchaseRequest($deptHead);
+        $finance = $this->userWithRole('finance_officer');
+        $pr      = $this->pendingPurchaseRequest($finance);
 
-        $response = $this->actingAs($deptHead)
+        $response = $this->actingAs($finance)
             ->patchJson("/api/v1/purchasing/purchase-requests/{$pr->hash_id}/approve");
 
         $response->assertStatus(403);
@@ -140,13 +141,15 @@ class ApprovalRefusalRenderingTest extends TestCase
      */
     public function test_a_refused_row_is_skipped_with_its_message_and_the_batch_continues(): void
     {
-        $deptHead = $this->userWithRole('department_head');
-        $other    = $this->userWithRole('purchasing_officer');
+        // Finance owns step 1 of the current chain, so it is both the refused
+        // submitter (own PR) and the eligible approver (the other PR).
+        $finance = $this->userWithRole('finance_officer');
+        $other   = $this->userWithRole('purchasing_officer');
 
-        $ownPr   = $this->pendingPurchaseRequest($deptHead); // refused: SoD
-        $otherPr = $this->pendingPurchaseRequest($other);    // approvable
+        $ownPr   = $this->pendingPurchaseRequest($finance); // refused: SoD
+        $otherPr = $this->pendingPurchaseRequest($other);   // approvable
 
-        $results = app(PurchaseRequestService::class)->bulkApprove([$ownPr->id, $otherPr->id], $deptHead);
+        $results = app(PurchaseRequestService::class)->bulkApprove([$ownPr->id, $otherPr->id], $finance);
 
         $byId = collect($results)->keyBy('id');
 

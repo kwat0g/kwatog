@@ -13,6 +13,7 @@ use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Services\PurchaseOrderPdfService;
 use Database\Seeders\RolePermissionSeeder;
+use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Tests\TestCase;
@@ -135,6 +136,111 @@ class PurchaseOrderListScopeTest extends TestCase
         $this->actingAs($head, 'sanctum')
             ->get('/api/v1/purchasing/purchase-orders/'.$hidden->hash_id.'/pdf')
             ->assertForbidden();
+    }
+
+    /**
+     * PS-01b — a chain approver with no creations and no department (finance
+     * on PO step 2) must still SEE the POs waiting on their step. Before the
+     * chain-participant branch the board badge counted their card while the
+     * list hid it — the workflow stalled invisibly.
+     */
+    public function test_chain_participant_sees_pos_waiting_on_their_step(): void
+    {
+        $this->seed(WorkflowSeeder::class);
+        $finance = $this->userWithRole('finance_officer');
+
+        $po = PurchaseOrder::factory()->create([
+            'status' => \App\Modules\Purchasing\Enums\PurchaseOrderStatus::PendingApproval->value,
+            'created_by' => User::factory()->create()->id,
+        ]);
+        \App\Common\Models\ApprovalRecord::create([
+            'approvable_type' => $po->getMorphClass(),
+            'approvable_id' => $po->id,
+            'step_order' => 2,
+            'role_slug' => 'finance_officer',
+            'action' => 'pending',
+            'is_current' => true,
+        ]);
+
+        $this->assertContains($po->po_number, $this->poNumbers($finance));
+
+        $this->actingAs($finance, 'sanctum')
+            ->getJson('/api/v1/purchasing/purchase-orders/'.$po->hash_id)
+            ->assertOk();
+    }
+
+    public function test_delegate_sees_pos_waiting_on_the_delegated_step(): void
+    {
+        // Finance holds po.approve, so it sees every PO through the top tier
+        // already. The chain-participant branch's real beneficiary is a
+        // DELEGATE: leave-cover that can open the module (purchasing.view)
+        // but holds no approver-tier permission. The delegator's pending step
+        // must surface on the delegate's list and on the approval board.
+        $this->seed(WorkflowSeeder::class);
+        $role = Role::create([
+            'name' => 'PO delegate '.substr(uniqid(), -5),
+            'slug' => 'po_delegate_'.substr(uniqid(), -5),
+            'is_system' => false,
+        ]);
+        $role->permissions()->sync(
+            Permission::query()->whereIn('slug', ['purchasing.view'])->pluck('id')->all(),
+        );
+        $delegate = User::factory()->create(['role_id' => $role->id]);
+        $delegator = $this->userWithRole('finance_officer');
+        \App\Common\Models\ApprovalDelegation::create([
+            'delegator_user_id' => $delegator->id,
+            'delegate_user_id' => $delegate->id,
+            'role_slug' => 'finance_officer',
+            'starts_at' => now()->subDay()->startOfDay(),
+            'ends_at' => now()->addDay()->startOfDay(),
+            'is_active' => true,
+        ]);
+
+        $po = PurchaseOrder::factory()->create([
+            'status' => \App\Modules\Purchasing\Enums\PurchaseOrderStatus::PendingApproval->value,
+            'created_by' => User::factory()->create()->id,
+        ]);
+        \App\Common\Models\ApprovalRecord::create([
+            'approvable_type' => $po->getMorphClass(),
+            'approvable_id' => $po->id,
+            'step_order' => 2,
+            'role_slug' => 'finance_officer',
+            'action' => 'pending',
+            'is_current' => true,
+        ]);
+
+        $this->assertContains($po->po_number, $this->poNumbers($delegate));
+    }
+
+    public function test_view_only_role_without_delegation_sees_no_chain_pos(): void
+    {
+        $this->seed(WorkflowSeeder::class);
+        // Same shape as the delegate test — purchasing.view, no approver tier —
+        // but NO delegation. The pending finance step must stay hidden.
+        $role = Role::create([
+            'name' => 'PO viewer '.substr(uniqid(), -5),
+            'slug' => 'po_viewer_'.substr(uniqid(), -5),
+            'is_system' => false,
+        ]);
+        $role->permissions()->sync(
+            Permission::query()->whereIn('slug', ['purchasing.view'])->pluck('id')->all(),
+        );
+        $plainViewer = User::factory()->create(['role_id' => $role->id]);
+
+        $po = PurchaseOrder::factory()->create([
+            'status' => \App\Modules\Purchasing\Enums\PurchaseOrderStatus::PendingApproval->value,
+            'created_by' => User::factory()->create()->id,
+        ]);
+        \App\Common\Models\ApprovalRecord::create([
+            'approvable_type' => $po->getMorphClass(),
+            'approvable_id' => $po->id,
+            'step_order' => 2,
+            'role_slug' => 'finance_officer',
+            'action' => 'pending',
+            'is_current' => true,
+        ]);
+
+        $this->assertNotContains($po->po_number, $this->poNumbers($plainViewer));
     }
 
     public function test_po_owner_and_global_role_can_show_and_pdf_a_po(): void

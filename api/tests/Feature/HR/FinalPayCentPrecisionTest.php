@@ -85,15 +85,16 @@ class FinalPayCentPrecisionTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-        DB::table('payrolls')->insert([
-            'payroll_period_id' => $periodId,
+        // 2026-09-08 (4f9086dc): a COMPUTED payroll row for the covering
+        // period blocks final pay until disbursement, so the engine-result
+        // path is no longer reachable in a fixture. Seed live DTR hours
+        // instead — the DTR path — and let the daily rate drive the amount.
+        // 2200.22 / 22 = 100.01/day exactly; one 8-hour day pays 100.01.
+        DB::table('attendances')->insert([
             'employee_id' => $employee->id,
-            'pay_type' => 'monthly',
-            'basic_pay' => '100.11',
-            'leave_pay' => '0.01',
-            'tardiness_deduction' => '0.01',
-            'undertime_deduction' => '0.00',
-            'computed_at' => now(),
+            'date' => '2026-05-16',
+            'regular_hours' => 8.0,
+            'status' => 'present',
             'created_at' => now(),
             'updated_at' => now(),
         ]);
@@ -151,15 +152,15 @@ class FinalPayCentPrecisionTest extends TestCase
         $computed = $service->compute($clearance, $user);
         $breakdown = $computed->final_pay_breakdown;
 
-        $this->assertSame('100.11', $breakdown['last_salary_pro_rated']);
+        $this->assertSame('100.01', $breakdown['last_salary_pro_rated']);
         $this->assertSame('0.00', $breakdown['unused_convertible_leave_value']);
         $this->assertSame('0.01', $breakdown['pro_rated_13th_month']);
-        $this->assertSame('100.12', $breakdown['gross_plus']);
+        $this->assertSame('100.02', $breakdown['gross_plus']);
         $this->assertSame('33.34', $breakdown['less_loan_balance']);
         $this->assertSame('0.01', $breakdown['less_advance']);
         $this->assertSame('0.01', $breakdown['less_unreturned_property_value']);
         $this->assertSame('33.36', $breakdown['gross_less']);
-        $this->assertSame('66.76', $breakdown['net']);
+        $this->assertSame('66.66', $breakdown['net']);
 
         $journal = $service->postJournalEntry($computed, $user);
         $this->assertSame(JournalEntryStatus::Posted, $journal->status);
@@ -170,8 +171,8 @@ class FinalPayCentPrecisionTest extends TestCase
             $debit = bcadd($debit, (string) $line->debit, 2);
             $credit = bcadd($credit, (string) $line->credit, 2);
         }
-        $this->assertSame('100.12', $debit);
-        $this->assertSame('100.12', $credit);
+        $this->assertSame('100.02', $debit);
+        $this->assertSame('100.02', $credit);
         $this->assertSame($debit, (string) $journal->fresh()->total_debit);
         $this->assertSame($credit, (string) $journal->fresh()->total_credit);
     }

@@ -561,6 +561,51 @@ class RolePermissionSeeder extends Seeder
                         // OGAMI-012 — finance is the CHECKER for high-value stock
                         // adjustments; warehouse_staff is the maker.
                         'inventory.adjust.approve',
+                        // 2026-09-10 — Finance is step 1 of the PR chain and step 2
+                        // of the PO chain. Without the read + approve slugs the
+                        // approve routes 403 the only role the steps accept and
+                        // every PR/PO stalls (same defect class as M036 and L-37).
+                        'purchasing.view',
+                        'purchasing.pr.approve',
+                        'purchasing.po.approve',
+                    ],
+                ),
+            ],
+            // 2026-09-10 — the executive tier, holder of the terminal 'VP' step
+            // across all seeded money workflows. Replaces the previous system_admin
+            // stand-in, which put IT inside the business approval matrix (SoD: the
+            // role that authors workflow definitions cannot also execute them).
+            // No dashboard of its own — reads what it signs.
+            'vice_president' => [
+                'name' => 'Vice President',
+                'description' => 'Executive sign-off on high-value purchases, payments, loans and asset disposals.',
+                'permissions' => array_merge(
+                    $this->selfService(),
+                    [
+                        'purchasing.view',
+                        'purchasing.pr.approve',
+                        'purchasing.po.approve',
+                        // Final approver of the cash_advance (step 3) and
+                        // company_loan (step 4) chains, and the final checker of
+                        // salary_adjustment (step 2). Without these slugs the
+                        // approve routes refused the only role the step accepts
+                        // and every chain stalled at its last step (2026-09-10
+                        // approval-chain audit).
+                        'loans.view', 'loans.approve',
+                        'hr.salary_adjustments.view',
+                        'hr.salary_adjustments.act',
+                        'accounting.view',
+                        'accounting.coa.view',
+                        'accounting.bills.view',
+                        'accounting.invoices.view',
+                        'accounting.statements.view',
+                        'budgeting.view',
+                        'budgeting.approve',
+                        'dashboard.plant_manager.view',
+                        'dashboard.view_bottlenecks',
+                        'search.global',
+                        'notifications.preferences.manage',
+                        'alerts.view', 'alerts.dismiss',
                     ],
                 ),
             ],
@@ -619,6 +664,10 @@ class RolePermissionSeeder extends Seeder
                         // on return_management.approve. Read + approve only:
                         // raising and converting a PR stays purchasing's.
                         'purchasing.view', 'purchasing.pr.approve',
+                        // Step 2 ("Manager") of the company_loan chain — same
+                        // stall class as the PR fix: the step names this role,
+                        // so it needs the route permission to act on it.
+                        'loans.view', 'loans.approve',
                         'dashboard.plant_manager.view',
                         'maintenance.view', 'assets.view',
                         'search.global', 'notifications.preferences.manage',
@@ -756,7 +805,7 @@ class RolePermissionSeeder extends Seeder
             ],
             'department_head' => [
                 'name' => 'Department Head',
-                'description' => 'Approves leaves, OT, loans, and PRs for their department.',
+                'description' => 'Owns their department\u2019s needs: raises PRs; approves leaves, OT and loans for their department.',
                 'permissions' => array_merge(
                     $this->selfService(),
                     [
@@ -768,6 +817,12 @@ class RolePermissionSeeder extends Seeder
                         // workflows; list/show remain department-scoped.
                         'loans.view', 'loans.approve',
                         'purchasing.view', 'purchasing.pr.approve',
+                        // 2026-09-10 — PR chain redesign: department heads are the
+                        // human creators of purchase requests (their department\u2019s
+                        // need authority); rank-and-file staff never touch the form.
+                        // The chain itself no longer contains a department-head step,
+                        // so this grant is creation-only.
+                        'purchasing.pr.create',
                         // First step of the return_request approval chain.
                         'return_management.view', 'return_management.approve',
                         'hr.clearance.sign',

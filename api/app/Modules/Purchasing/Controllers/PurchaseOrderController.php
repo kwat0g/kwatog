@@ -69,20 +69,25 @@ class PurchaseOrderController
 
     public function update(UpdatePurchaseOrderRequest $request, PurchaseOrder $purchaseOrder): PurchaseOrderResource
     {
+        // PU-02 — the route permission answers "may act on POs at all"; the
+        // policy answers "on THIS one". Draft edits are creator/admin only.
+        abort_unless($this->access->canManage($request->user(), $purchaseOrder), 403, 'You do not have permission to modify this purchase order.');
         try { $po = $this->service->update($purchaseOrder, $request->validated()); }
         catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
         return new PurchaseOrderResource($po);
     }
 
-    public function destroy(PurchaseOrder $purchaseOrder): JsonResponse
+    public function destroy(Request $request, PurchaseOrder $purchaseOrder): JsonResponse
     {
+        abort_unless($this->access->canManage($request->user(), $purchaseOrder), 403, 'You do not have permission to delete this purchase order.');
         try { $this->service->delete($purchaseOrder); }
         catch (BusinessRuleException $e) { return response()->json(['message' => $e->getMessage()], 422); }
         return response()->json(null, 204);
     }
 
-    public function restore(PurchaseOrder $purchaseOrder): JsonResponse
+    public function restore(Request $request, PurchaseOrder $purchaseOrder): JsonResponse
     {
+        abort_unless($this->access->canManage($request->user(), $purchaseOrder), 403, 'You do not have permission to restore this purchase order.');
         try {
             $this->service->restore($purchaseOrder);
         } catch (BusinessRuleException $e) {
@@ -91,8 +96,9 @@ class PurchaseOrderController
         return response()->json(['message' => 'Purchase order restored.']);
     }
 
-    public function submit(PurchaseOrder $purchaseOrder): PurchaseOrderResource
+    public function submit(Request $request, PurchaseOrder $purchaseOrder): PurchaseOrderResource
     {
+        abort_unless($this->access->canManage($request->user(), $purchaseOrder), 403, 'You do not have permission to submit this purchase order.');
         try { $po = $this->service->submit($purchaseOrder); }
         catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
         return new PurchaseOrderResource($this->service->show($po));
@@ -120,8 +126,11 @@ class PurchaseOrderController
         return new PurchaseOrderResource($this->service->show($po));
     }
 
-    public function send(PurchaseOrder $purchaseOrder): PurchaseOrderResource
+    // PU-02 — send/cancel/close are lifecycle decisions on documents someone
+    // else may have created, so they gate on canOperate, not canManage.
+    public function send(Request $request, PurchaseOrder $purchaseOrder): PurchaseOrderResource
     {
+        abort_unless($this->access->canOperate($request->user(), $purchaseOrder), 403, 'You do not have permission to send this purchase order.');
         try { $po = $this->service->markAsSent($purchaseOrder); }
         catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
         return new PurchaseOrderResource($this->service->show($po));
@@ -129,13 +138,15 @@ class PurchaseOrderController
 
     public function cancel(CancelPurchaseOrderRequest $request, PurchaseOrder $purchaseOrder): PurchaseOrderResource
     {
+        abort_unless($this->access->canOperate($request->user(), $purchaseOrder), 403, 'You do not have permission to cancel this purchase order.');
         try { $po = $this->service->cancel($purchaseOrder, $request->validated()['reason']); }
         catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
         return new PurchaseOrderResource($this->service->show($po));
     }
 
-    public function close(PurchaseOrder $purchaseOrder): PurchaseOrderResource
+    public function close(Request $request, PurchaseOrder $purchaseOrder): PurchaseOrderResource
     {
+        abort_unless($this->access->canOperate($request->user(), $purchaseOrder), 403, 'You do not have permission to close this purchase order.');
         try { $po = $this->service->close($purchaseOrder); }
         catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
         return new PurchaseOrderResource($this->service->show($po));

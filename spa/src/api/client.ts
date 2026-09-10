@@ -260,7 +260,15 @@ const createResponseErrorHandler = (retryClient: AxiosInstance) => async (error:
  // dropped Wi-Fi, or a proxy refusing the connection. Distinguish it from
  // a server error so the user knows to check their own connection, and
  // from OfflineBanner's queue message, which only covers mutations.
- if (!error.response && showToast) {
+ //
+ // EXCEPT: an aborted request also arrives without a response. React
+ // StrictMode double-mounts in dev, and TanStack Query cancels the first
+ // request via its AbortSignal on every mount/unmount cycle — that is the
+ // framework working, not an outage, and it fired a phantom "Could not
+ // reach the server" toast on the first visit of every list page. Axios
+ // marks cancellations with `code: 'ERR_CANCELED'` and
+ // axios.isCancel(), so both are filtered before the offline branch.
+ if (!error.response && !axios.isCancel(error) && error.code !== 'ERR_CANCELED' && showToast) {
  markReported(error);
  toast.error(
  navigator.onLine === false

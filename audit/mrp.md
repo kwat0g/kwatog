@@ -1,51 +1,108 @@
-# Audit: mrp — 2026-09-06
+# MRP / MRP II Read-Only Audit
 
-## Summary
+**Scope:** `api/app/Modules/MRP/**`; directly relevant Common/Providers and
+`api/routes/console.php`; MRP SPA APIs/routes/pages plus the production schedule
+consumer; relevant migrations, seeders, and MRP/production/inventory/CRM tests
+and dependencies.
 
-The MRP module is structurally sound and heavily hardened: rerun reconciliation of draft auto-PRs/planned WOs is real idempotency, stock rows are locked during netting, DB-level guards exist for one-active-plan-per-SO, one-active-BOM-per-product, and machine no-overlap (0479), and the whole unit's test filter passes (169 tests / 0 fail, 72s). The netting math itself is internally consistent (gross − open PRs − available, reserved correctly offsets WO-covered demand). The substantive gaps are at the edges of the domain model: safety_stock / reorder_point / minimum_order_quantity are first-class Inventory concepts that MRP netting never reads (plan output can silently consume the safety buffer), and the mold lifecycle has a broken loop — a mold auto-flipped to `maintenance` at shot limit is never returned to `available` when its maintenance work order completes. Scheduling is mostly robust (M050 invariants enforced) but has midnight-span and reorder-reflow holes. Secondary issues: piece-vs-shot counting semantics, unenforced lifetime_max_shots, raw machine/mold IDs leaking through scheduler responses, and a narrow race where MRP rerun can clobber a draft auto-PR purchasing is concurrently submitting.
+**Method:** source inspection only. No application code was modified, no
+database-mutating tests or artisan commands were run, and no commit was made.
+
+## Finding Categories
+
+The fixed categories used below are: **BOM/versioning**, **material
+planning/netting**, **capacity/scheduling**, **machine/mold lifecycle**,
+**transaction/concurrency/idempotency**, **security/auth/HashIDs/enums**, and
+**UI/UX/state/forms**.
 
 ## Findings
 
-| ID | Category | Severity | Effort | Title | Location | Evidence/Repro |
-|---|---|---|---|---|---|---|
-| MRP-01 | Gap | High | M | Netting ignores safety_stock, reorder_point and minimum_order_quantity | api/app/Modules/MRP/Services/MrpEngineService.php:858-884, 242-303 | `available = on_hand − reserved + in_transit` with no safety-stock floor; PR qty is exact net, MOQ never applied |
-| MRP-02 | Broken process | High | S | Mold stuck in `maintenance` forever after its MWO completes | api/app/Modules/Maintenance/Services/MaintenanceWorkOrderService.php:239-271; api/app/Modules/MRP/Services/MoldService.php:120-122 | MWO complete() resets shots but never flips mold status back; only `commission()` recovers (see detail) |
-| MRP-03 | Risk | Medium | S | Rerun can clobber a draft auto-PR purchasing is submitting concurrently | api/app/Modules/MRP/Services/MrpEngineService.php:316-354, 371-384 | Reused/cancelled draft PRs are never lockForUpdate'd; concurrent submit → MRP forceFills status back to draft and deletes items |
-| MRP-04 | Risk | Medium | M | "Shot" counters actually count pieces (cavity_count never applied) | api/app/Modules/Production/Services/WorkOrderOutputService.php:259; api/app/Modules/MRP/Services/CapacityPlanningService.php:619-622 | `incrementShots($mold, $good+$reject)`; 4-cavity mold burns rated shot life 4× fast |
-| MRP-05 | Gap | Medium | S | lifetime_max_shots collected and displayed but never enforced | api/app/Modules/MRP/Services/MoldService.php:112-147 | No check of `lifetime_total_shots >= lifetime_max_shots` anywhere (grep confirms zero enforcement) |
-| MRP-06 | Risk | Medium | S | Raw machine_id/mold_id leak in scheduler run response and mrp_runs.summary | api/app/Modules/MRP/Services/CapacityPlanningService.php:876-877; api/app/Modules/MRP/Resources/MrpPlanningResponseSerializer.php:110-115 | `scheduleSummary()` returns raw ints; serializer's isIdentifierKey list lacks machine_id/mold_id; SchedulerController::run returns it verbatim |
-| MRP-07 | Risk | Medium | S | Midnight-spanning jobs escape the daily-capacity budget | api/app/Modules/MRP/Services/CapacityPlanningService.php:560-578 | Day-budget check only runs when start/end same calendar date; a 4h job starting 22:00 skips it entirely |
-| MRP-08 | Risk | Medium | M | Reorder reflow ignores mold exclusivity and WO planned_end | api/app/Modules/MRP/Services/CapacityPlanningService.php:782-868 | reflowMachineTimeline repacks pending rows without moldWindowConflict or planned_end checks; confirm() then aborts whole batch |
-| MRP-09 | Stuck process | Medium | S | Machine/mold soft-delete leaves pending/confirmed schedules orphaned | api/app/Modules/MRP/Services/MachineService.php:83-86; MoldService.php:89-92 | Delete mold with confirmed schedule → confirm() throws "missing work-order resource" for entire selected batch |
-| MRP-10 | Risk | Low | S | Concurrent runs for one SO abort on unique-index instead of serializing | api/app/Modules/MRP/Services/MrpEngineService.php:100-107 + migration 2026_08_15_121000 | Two overlapping runs → loser hits mrp_plans_one_active_per_sales_order, whole SO fails as mrp_internal_error |
-| MRP-11 | Bad practice | Low | M | Float math on quantities in explosion/netting | api/app/Modules/MRP/Services/MrpEngineService.php:212; api/app/Modules/MRP/Services/BomService.php:562-578 | BomItem::effective_quantity is bcmath but grossQuantityForLine casts to float; money correctly uses bcmath |
-| MRP-12 | Bad practice | Low | S | Dead lifecycle API: resetShotCount/recordMaintenance unreachable | api/app/Modules/MRP/Services/MoldService.php:150-167, 251-270 | No route, no callers (Maintenance re-implements reset inline); costTrend endpoint route intentionally hidden |
-| MRP-13 | Risk | Low | M | Manual plant-wide MRP run executes synchronously inside HTTP request | api/app/Modules/MRP/Controllers/MrpRunController.php:43-52 | Large SO count → HTTP timeout mid-run leaves Running row (reaper mitigates, but user sees failure) |
-| MRP-14 | Bad practice | Low | S | MoldShotLimitReached re-fires on every increment while over limit | api/app/Modules/MRP/Services/MoldService.php:137-139 | Output recorded against an over-limit mold re-emits the event each time |
-| MRP-15 | Risk | Low | S | Scheduler snapshot from/to unvalidated | api/app/Modules/MRP/Controllers/SchedulerController.php:80-86 | Garbage date → Carbon::parse throws 500; unbounded window → unbounded query |
+### MRP-001
 
-### MRP-01 — Netting ignores safety_stock / reorder_point / MOQ (High, Gap)
+- **Category:** Machine/mold lifecycle
+- **Severity:** High
+- **Location:** `api/app/Modules/MRP/Services/MoldService.php:112-139`; `api/app/Modules/Production/Services/WorkOrderService.php:810-823`
+- **Roadmap status:** New current-worktree regression/gap. Not the roadmap-known F-016 policy decision.
+- **Reproduction/evidence:** Create a mold with `lifetime_max_shots = 1,000` and `max_shots_before_maintenance = 100,000`. Record output for more than 1,000 shots, or confirm a work order after `lifetime_total_shots` is already at the lifetime ceiling. `incrementShots()` only increments `lifetime_total_shots`; it checks and auto-flips status against `max_shots_before_maintenance`, not `lifetime_max_shots`. The direct assignment gate in `WorkOrderService::assertAssignmentValid()` likewise checks only the maintenance ceiling. Thus a retired-by-life mold can continue producing indefinitely after periodic maintenance resets `current_shot_count`.
+- **Impact:** The lifetime tooling limit is informational rather than enforced. Production can be scheduled against tooling that has exceeded its declared total rated life, undermining maintenance and IATF traceability.
+- **Effort:** M
+- **Cross-module note:** Production output calls `MoldService::incrementShots()` from `WorkOrderOutputService`; Maintenance resets only the cycle counter (`MaintenanceWorkOrderService.php:238-253`). The fix must preserve cycle resets while making lifetime total monotonic and blocking assignment/output at lifetime exhaustion.
 
-Item carries `safety_stock`, `safety_stock_locked`, `safety_stock_recomputed_at`, `reorder_point`, `reorder_method`, `minimum_order_quantity` (api/app/Modules/Inventory/Models/Item.php:29-42) — a fully built Inventory concept that MRP never reads. `supplyForItem()` computes `available = max(0, on_hand − reserved + in_transit)` and nets `gross − open_pr − available`, so the plan happily consumes the last kilogram of safety stock to satisfy an SO and generates no PR until stock hits zero. Safety stock exists precisely to absorb demand/supply variability; a plan that spends it produces real-world shortage risk — the stated Critical criterion — though because demand here is SO-pegged (make-to-order) the loss manifests when variability hits rather than immediately, hence High. Same gap at the output end: PR line quantity is `ceil(net)` to 2dp with no MOQ rounding, so MRP can emit orders below supplier minimum order quantities that purchasing must then manually fix. Fix: floor available by `safety_stock` in `supplyForItem()` (and `quantityToManufacture()`), and round PR quantities up to `minimum_order_quantity` multiples when set.
+### MRP-002
 
-### MRP-02 — Mold stuck in `maintenance` after MWO completion (High, Broken process)
+- **Category:** Machine/mold lifecycle
+- **Severity:** High
+- **Location:** `api/app/Modules/MRP/Requests/StoreMoldRequest.php:30-39`; `api/app/Modules/MRP/Requests/UpdateMoldRequest.php:28-40`; `api/app/Modules/MRP/Services/MoldService.php:66-86`
+- **Roadmap status:** New current-worktree invariant gap.
+- **Reproduction/evidence:** Update an existing mold so `max_shots_before_maintenance` is below its current `current_shot_count`, or so `lifetime_max_shots` is below `lifetime_total_shots`. Both update fields validate only `min:1`; neither request validates against the current row, and the service has no invariant check. A mold may therefore be saved already over a stated limit. The create and update paths also do not enforce a relationship between the cycle limit and lifetime limit.
+- **Impact:** The UI can immediately show an over-limit mold with misleading remaining-life values, and persisted master data can violate the lifecycle invariant. This compounds MRP-001 and makes operator correction dependent on later scheduling checks.
+- **Effort:** S
+- **Cross-module note:** Capacity planning filters by `max_shots_before_maintenance` only (`CapacityPlanningService.php:614-623`), while Production and Maintenance consume the same counters. Enforce the invariant in the service and request with a clear 422 error, and add database checks where compatible.
 
-The lifecycle loop: `MoldService::incrementShots()` flips status to `maintenance` at 100% of max_shots (MoldService.php:120-122) → the capacity planner only accepts molds in `available`/`in_use` (CapacityPlanningService.php:615) → Maintenance creates an MWO, and on `complete()` the mold's `current_shot_count` is reset to 0 and lifecycle counters accumulate (MaintenanceWorkOrderService.php:239-264) — but the mold's `status` is never restored. The machine branch immediately below (266-271) does exactly this (`maintenance → idle`); the mold branch has no counterpart. The only paths back to `available` are the dead `MoldService::resetShotCount()` (no route, no callers — see MRP-12) and `commission()`, which is semantically "enter service" and also re-stamps commissioned_at. So under normal use every mold that hits its shot limit leaves the schedulable pool permanently until an operator happens to re-commission it — silent capacity loss that reads as "no_mold_with_capacity" conflicts in the scheduler. Fix belongs at the Maintenance/MRP boundary: MWO-complete should transition mold `maintenance → available` (and MoldService should own that transition).
+### MRP-003
 
-## Cross-module flags
+- **Category:** Security/auth/HashIDs/enums
+- **Severity:** Medium
+- **Location:** `api/app/Modules/MRP/Services/CapacityPlanningService.php:870-882`; `spa/src/types/mrp.ts:186-197`
+- **Roadmap status:** New current-worktree contract violation.
+- **Reproduction/evidence:** An authorized `POST /api/v1/mrp/scheduler/run` returns each proposed row through `scheduleSummary()`. `machine_id` and `mold_id` are emitted as raw integer primary keys at lines 876-877, while the same response emits the schedule and work-order IDs as hash IDs. The SPA type explicitly models these two fields as `number`. The scheduler reassign request expects hash IDs (`SchedulerController.php:61-64`), so the API exposes an inconsistent identifier contract.
+- **Impact:** Integer IDs are disclosed in an API response despite the project-wide HashID rule. It also creates an unsafe client contract if the proposal is later used to drive reassign actions.
+- **Effort:** S
+- **Cross-module note:** `MachineResource`, `MoldResource`, Gantt snapshots, and broadcast events correctly use hash IDs. Normalize scheduler proposals and their TypeScript type, then pin with an API test.
 
-- **maintenance** — MRP-02: `MaintenanceWorkOrderService::complete()` must restore mold status `maintenance → available`; it also re-implements the shot-reset/counter logic inline (MaintenanceWorkOrderService.php:239-264) instead of calling `MoldService::resetShotCount()`/`recordMaintenance()`, which is why those MRP methods are dead (MRP-12).
-- **production** — MRP-04 source: `WorkOrderOutputService::record()` increments mold shots by piece total (WorkOrderOutputService.php:259); if the convention stays piece-based, field/UI labels ("shots", "cycles", MoldShotMeter "Total Cycles Executed") and max_shots data-entry guidance need correcting; if shot-based, divide by cavity_count. Also: `ProductionSchedule` model hooks silently cancel updates/deletes for started WOs (ProductionSchedule.php:65-84) — silent no-ops hide bugs; the 0479 trigger already guards this loudly at the DB layer.
-- **purchasing** — MRP-03: the PR submit flow can race MRP's draft auto-PR reconciliation; a shared lock convention on `purchase_requests` rows during status transition (or an optimistic status guard in MRP's reuse path) is needed.
-- **inventory** — none; stock-level locking during netting is correct.
+### MRP-004
 
-## What was NOT checked
+- **Category:** BOM/versioning
+- **Severity:** Medium
+- **Location:** `api/app/Modules/MRP/Services/MrpEngineService.php:220-236,476-486`; `api/app/Modules/Production/Models/WorkOrder.php:33-43,107-110`
+- **Roadmap status:** New traceability gap; distinct from the roadmap-known F-016 no-BOM policy decision.
+- **Reproduction/evidence:** Create BOM v1, confirm an SO, and allow MRP to create a planned WO. Create BOM v2 for the same product and rerun MRP. The new plan/WO is linked to the plan, but the WO stores only `material_plan_source = 'bom'`; there is no BOM ID or BOM version on `work_orders`, `work_order_materials`, or the MRP plan snapshot. The existing material rows are a quantity snapshot, but cannot identify which BOM version produced them.
+- **Impact:** Historical production and material variance review cannot reliably prove the exact approved BOM revision used to create a WO, especially after revisions and reruns.
+- **Effort:** M
+- **Cross-module note:** Production output already snapshots material lines and lot references, and CRM SOs are the demand source. Add an immutable BOM/version reference at plan/WO creation without changing the existing revision semantics.
 
-- BomCostingService beyond sampling (first 100 lines) — costing math not fully re-derived; BomComponentIntegrityService reviewed in full.
-- GanttChart rendering internals (spa/src/components/production/GanttChart.tsx) — snapshot payload contract checked, not pixel/layout behavior.
-- Production module internals beyond the MRP touchpoints (WorkOrderService::confirm reservation logic, HandleMachineBreakdown listener body).
-- Maintenance module beyond the mold-completion path.
-- Performance/lock-contention behavior of plant-wide runs at large SO counts; SPA e2e behavior; dashboard widgets that consume MRP data.
-- `docs/SCHEMA.md` MRP section was not reconciled against live schema.
+### MRP-005
 
-Test evidence: `docker compose exec -T api php artisan test --filter='MRP|Mold|Bom|Machine|Capacity|Scheduler'` → 169 passed (409 assertions), 0 failures, 72s.
+- **Category:** Machine/mold lifecycle
+- **Severity:** Medium
+- **Location:** `api/app/Modules/MRP/Requests/StoreMoldRequest.php:30-39`; `api/app/Modules/MRP/Requests/UpdateMoldRequest.php:28-40`
+- **Roadmap status:** New current-worktree validation gap.
+- **Reproduction/evidence:** Submit a mold with a product ID that resolves to an inactive product. Both requests use only `exists:products,id`; unlike `StoreBomRequest.php:33-39`, they do not require `is_active = true` and `deleted_at IS NULL`. The service creates/updates the mold without a product lifecycle check.
+- **Impact:** A mold can be assigned to an archived/inactive finished good. It may remain visible to capacity planning by product ID and create a tool/product master-data mismatch.
+- **Effort:** S
+- **Cross-module note:** Product is owned by CRM; MRP’s scheduler selects molds by `product_id`. Align mold validation with the BOM product rule, while preserving explicit historical records if the business later needs them.
+
+### MRP-006
+
+- **Category:** UI/UX/state/forms
+- **Severity:** Low
+- **Location:** `spa/src/pages/mrp/machines/edit.tsx:10-27`; `spa/src/pages/mrp/molds/edit.tsx:10-27`
+- **Roadmap status:** New current-worktree UX gap.
+- **Reproduction/evidence:** Make the machine or mold detail request fail after loading. The edit pages render a plain `Could not load ...` text block with no retry action, unlike the BOM and plan detail pages, which render `EmptyState` with `refetch()`. The pages also do not surface the error response or offer a recovery path.
+- **Impact:** Operators can reach an unrecoverable edit screen and must navigate away or refresh the browser. This is particularly harmful for lifecycle corrections after a transient API failure.
+- **Effort:** S
+- **Cross-module note:** This is frontend-only and does not alter backend authorization. Use the established detail-page error pattern and invalidate the relevant list/detail queries after a successful mutation.
+
+## Explicitly Excluded / Policy-Dependent
+
+- **F-016 no-BOM production:** Not reported as a defect. The roadmap explicitly marks the policy as decision-required: standard stock-producing WOs should require an effective BOM/material plan, with an authorized exception only for explicitly classified service/non-stock/prototype work. Current MRP correctly records a `missing_bom` warning and skips standard WO creation (`MrpEngineService.php:149-163,400-403`). No policy was invented in this audit.
+- The commented mold cost-trend route is intentionally hidden by scope documentation and has no SPA caller; it is not a finding.
+- Lack of a separate MRP scheduler page under `spa/src/pages/mrp` is intentional: the scheduler API is consumed by the guarded Production schedule page (`spa/src/pages/production/schedule.tsx`).
+- Global plant stock and approved PO in-transit netting was not called a defect. Whether in-transit supply is plant-wide or SO-pegged is a business allocation policy not established by this request; existing tests explicitly document plant-wide netting semantics.
+- No report is made about the roadmap’s already-recorded controls for active BOM uniqueness, active MRP plan uniqueness, scheduler machine overlap, output idempotency, or stale-run reaping except where the mold lifecycle gaps demonstrate residual boundaries.
+
+## Clean Checked Areas
+
+- **BOM authoring validation:** Product and item HashIDs are decoded server-side; active products/items are required; duplicate component IDs, empty BOMs, missing items, inactive/trashed components, unit mismatches, and direct self-reference are guarded (`StoreBomRequest.php:22-53`, `BomService.php:192-241`, `BomComponentIntegrityService.php:20-67`).
+- **BOM versioning mechanics:** Creating/editing a BOM creates a new version, locks the product’s prior versions, deactivates the prior active row, and preserves history (`BomService.php:75-114`). Migration `2026_08_26_000100_guard_one_active_bom_per_product.php` adds a partial unique index.
+- **Multi-level BOM explosion:** Recursive cycle detection, configurable maximum depth, subassembly production trees, and raw-material aggregation are implemented (`BomService.php:259-372,385-479`).
+- **BOM costing:** Costing uses decimal-string/BC math, rolls up nested BOM costs, records cost warnings, and refreshes stale component/routing costs (`BomCostingService.php:31-49,93-179`).
+- **Material shortage handling:** MRP records diagnostics, excludes quarantine/scrap stock, subtracts reserved stock, ignores draft/cancelled POs, calculates lead time and safety buffer, rounds PR quantities upward, and reconciles eligible draft auto-PRs on rerun (`MrpEngineService.php:238-303,309-384,858-940`).
+- **MRP run recovery:** Automatic jobs use `ShouldBeUnique` plus a plant-wide `WithoutOverlapping` fence; runs record partial/failure outcomes and stale runs are scheduled for reaping (`RunAutomaticMrpJob.php:24-74`, `console.php:39-51`, `MrpEngineService.php:623-700`).
+- **Active plan/rerun protection:** Prior active plans are locked and superseded; migration `2026_08_15_121000_guard_mrp_plan_versions.php` enforces unique SO/version and one active plan per SO. Rerun tests cover PR/WO/subassembly deduplication.
+- **Machine status transitions:** Statuses are enum-backed, transitions are allow-listed, and the row is re-read under lock before mutation (`MachineService.php:25-36,88-113`). Breakdown transitions supersede eligible future schedules (`Machine.php:77-99`).
+- **Scheduler machine capacity:** Planned work orders are locked, resources are locked in deterministic order, machine windows use overlap checks, daily capacity and due-date overrun are rejected, and migration 0479 adds a database machine-time exclusion constraint (`CapacityPlanningService.php:63-179,482-713`, migration `0479_harden_capacity_plan_invariants.php:60-68`).
+- **Scheduler confirmation:** Confirmation locks schedules/resources/WOs, validates current state and assignment, and commits WO confirmation plus schedule promotion in one transaction (`CapacityPlanningService.php:188-260`).
+- **Route guards and request authorization:** MRP routes require Sanctum and the MRP feature, and write requests have server-side permission checks. SPA routes are lazy-loaded and nested under `ModuleGuard` plus permission guards (`api/app/Modules/MRP/routes.php:18-84`, `spa/src/routes/mrpRoutes.tsx:1-59`).
+- **Frontend list/detail/form baseline:** MRP list pages have loading, error/retry, empty, data, and placeholder-data paths; forms use React Hook Form/Zod, disable pending submits, map 422 errors, show toast feedback, and invalidate queries. The edit-page retry exception is isolated to MRP machine/mold wrappers identified in MRP-006.
+- **Token discipline:** Reviewed MRP pages use semantic token classes rather than raw color literals or `dark:` variants. Numeric table values generally use the project’s mono/tabular components.

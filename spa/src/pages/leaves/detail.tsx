@@ -12,8 +12,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { ChainHeader, ApprovalTimeline } from '@/components/chain';
-import { buildLeaveChain } from '@/lib/chains';
+import { ApprovalTimeline } from '@/components/chain';
 import { fromLeaveRequest } from '@/lib/approvals';
 import { CanDo } from '@/components/guards/CanDo';
 import { useAuthStore } from '@/stores/authStore';
@@ -120,7 +119,9 @@ export default function LeaveDetailPage() {
  )}
  </>
  }
- bottom={<ChainHeader steps={buildLeaveChain(req)} className="mt-2" />}
+ // The horizontal leave chain was removed (2026-09-10): its middle steps
+ // (Department head → HR) duplicated the sidebar ApprovalTimeline below.
+ // One chain, one renderer.
  />
 
  <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 px-5 py-4">

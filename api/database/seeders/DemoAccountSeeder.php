@@ -25,6 +25,13 @@ class DemoAccountSeeder extends Seeder
         ['email' => 'production@ogami.test',  'name' => 'Ricardo Tanaka',       'role' => 'production_manager', 'dept' => 'PROD'],
         ['email' => 'ppc@ogami.test',         'name' => 'Pedro Garcia',         'role' => 'ppc_head',           'dept' => 'PPC'],
         ['email' => 'purchasing@ogami.test',  'name' => 'Elena Cruz',           'role' => 'purchasing_officer', 'dept' => 'PUR'],
+        // Second buyer — a real buying office has several. Needed for the PO
+        // self-approval guard: an auto/manual PO attributed to Elena (step 1 is
+        // purchasing_officer) must be approvable by someone else.
+        ['email' => 'buyer2@ogami.test',      'name' => 'Marco Dela Rosa',      'role' => 'purchasing_officer', 'dept' => 'PUR'],
+        // Executive tier — terminal 'VP' step on PR/PO/loan/payment workflows.
+        // Replaces the old system_admin stand-in in the approval chains.
+        ['email' => 'vp@ogami.test',          'name' => 'Kenji Watanabe',       'role' => 'vice_president',     'dept' => 'EXEC'],
         ['email' => 'employee@ogami.test',    'name' => 'Manuel Cruz',          'role' => 'employee',           'dept' => 'PROD'],
         ['email' => 'crm@ogami.test',         'name' => 'Sara Sales',           'role' => 'sales_officer',      'dept' => null],
         ['email' => 'warehouse@ogami.test',   'name' => 'Carlos Mendoza',       'role' => 'warehouse_staff',    'dept' => 'WH'],
@@ -71,10 +78,23 @@ class DemoAccountSeeder extends Seeder
         $position = Position::where('department_id', $department->id)->orderBy('id')->firstOrFail();
         [$first, $last] = explode(' ', $account['name'], 2);
 
+        // employee_no is unique. The list index is stable for a FRESH database,
+        // but inserting an account mid-list (2026-09-10: buyer2, vp) renumbers
+        // everyone after it and collides with numbers already committed on an
+        // existing deployment. A per-index probe keeps repeat seeds idempotent.
+        $employeeNo = 'DEMO-' . str_pad((string) $index, 4, '0', STR_PAD_LEFT);
+        $probe = $index;
+        while (Employee::where('employee_no', $employeeNo)
+            ->where('email', '!=', $account['email'])
+            ->exists()) {
+            $probe++;
+            $employeeNo = 'DEMO-' . str_pad((string) $probe, 4, '0', STR_PAD_LEFT);
+        }
+
         return Employee::updateOrCreate(
             ['email' => $account['email']],
             [
-                'employee_no'          => 'DEMO-' . str_pad((string) $index, 4, '0', STR_PAD_LEFT),
+                'employee_no'          => $employeeNo,
                 'first_name'           => $first,
                 'last_name'            => $last,
                 'birth_date'           => now()->subYears(30 + ($index % 12))->toDateString(),

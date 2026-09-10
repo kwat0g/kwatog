@@ -1,81 +1,270 @@
-# Audit: accounting-budgeting — 2026-09-06
+# Accounting + Budgeting Read-Only Audit
 
-## Summary
+Date: 2026-09-10
 
-Overall health is strong for a thesis-grade ERP: JE posting/reversal is lock-disciplined
-(header→lines→accounts order, lockForUpdate re-reads everywhere), maker-checker + closed-period
-guards are real and tested, money math is bcmath throughout, TINs are encrypted and masked, and
-the 34-test Feature suite covers the risky races (post race, double-finalize, period concurrency,
-ledger invariants). The worst problems: (1) **reversed journal entries are excluded from every GL
-statement and account-balance query**, so cancelling/reversing a document retroactively rewrites
-historical periods and the GL disagrees with the AR/AP aging subledgers as of past dates; (2) the
-**Statement of Account ledger omits credit-note applications**, overstating the customer's closing
-balance while the aging block on the same report nets them; (3) **bill-side budget enforcement is
-both bypassable (department_id optional, SPA never sends it) and inconsistent with the documented
-enforcement modes (hard-blocks at CRITICAL even when mode=off)**. No test run was performed (code-level
-evidence only).
+## Scope and method
+
+Inspected only the requested Accounting module, directly relevant shared code and
+provider/scheduler references, Accounting and Budgeting SPA pages/API/routes, and
+directly relevant migrations and tests. Read `CLAUDE.md`, `docs/PATTERNS.md`,
+`docs/SCHEMA.md`, `docs/DESIGN-SYSTEM.md`, `docs/SEEDS.md`, and
+`docs/SYSTEM-IMPROVEMENT-ROADMAP-2026-08-13.md` before reviewing implementation.
+No application code or tests were modified or executed. The only write from this
+audit is this report.
+
+Definitions used: **Gap/Missing** means a required control or behavior is absent;
+**Risk** means the control exists but can fail under a realistic condition;
+**Broken process** means a supported workflow cannot reach its intended result;
+**Stuck process** means an operator can be left without a usable next action;
+**Bad practice** means a standards violation that may not currently break the
+workflow.
+
+## Executive summary
+
+The canonical journal path is comparatively strong: it uses decimal-string money,
+transaction boundaries, row locks, a state machine, closed-period checks, source
+reference validation, maker-checker enforcement, and focused regression coverage.
+Budget actuals synchronization also has a durable outbox/run model and failure
+propagation.
+
+The current findings are:
+
+| ID | Category | Severity | Summary | Status |
+|---|---|---:|---|---|
+| ACC-BUD-001 | Risk | High | Budget availability is advisory/read-only and not reserved atomically | Newly discovered |
+| ACC-BUD-002 | Bad practice | Medium | Accounting status columns are not represented as enum casts in models | Newly discovered |
+| ACC-BUD-003 | Gap | Medium | Budget overview/list silently hides secondary query failures and has no stale state | Newly discovered |
+| ACC-BUD-004 | Gap | Medium | Budget create/edit is not a RHF/Zod form and lacks complete pending/server-error handling | Newly discovered |
+| ACC-BUD-005 | Risk | Medium | Budgeting UI converts exact decimal money to JavaScript numbers | Newly discovered |
+| ACC-BUD-006 | Gap | Medium | Budget-vs-actual failure and empty states leave no retry/empty recovery path | Newly discovered |
+| ACC-BUD-007 | Risk | Low | Budget mutation success invalidates detail but not the budget list | Newly discovered |
 
 ## Findings
 
-| ID | Category | Severity | Effort | Title | Location | Evidence/Repro |
-|---|---|---|---|---|---|---|
-| AB-01 | Broken process | Critical | M | Reversed JEs vanish from all GL statements for periods before the reversal date | api/app/Modules/Accounting/Services/Statements/TrialBalanceService.php:34 (also IncomeStatementService.php:33, BalanceSheetService.php:42, AccountService.php:82, BudgetConsumptionService.php:283) | Every statement query filters `je.status = 'posted'`; the reversed original is dropped and only the dated reversal remains — June revenue disappears from a July IS after an August cancel, while AR aging (cancelled_at > cutoff) still counts it |
-| AB-02 | Broken process | High | S | Statement of Account ledger omits credit-note applications | api/app/Modules/Accounting/Services/StatementOfAccountService.php:97-181 vs 217-222 | buildTransactions() emits invoices/cancellations/collections only; CreditNoteApplication rows feed computeAging() but never the running balance, so closing_balance > total_outstanding on the same report whenever a credit was applied |
-| AB-03 | Risk | Medium | S | Bill payment + bill line inputs miss the centavo contract | api/app/Modules/Accounting/Requests/StoreBillPaymentRequest.php:23, StoreBillRequest.php:35-37 | `amount`/`quantity`/`unit_price` are bare `numeric`: `1.999` silently Money::round2→2.00 on a real payment, `1e3` → BCMath ValueError 500, unbounded → decimal(15,2) overflow 500; the identical bug class is documented as FIXED in StoreCollectionRequest/StoreJournalEntryRequest comments |
-| AB-04 | Broken process | Medium | S | Bill budget check is bypassable and ignores enforcement mode | api/app/Modules/Accounting/Services/BillService.php:154-166, BudgetEnforcementService.php:93-95 | department_id is nullable in StoreBillRequest and the SPA bill form never sends it → check silently skipped; when sent, checkAvailability() returns canProceed=false at CRITICAL, blocking bills even with `budgeting.enforcement_mode=off` (PR/PO assess()/enforce() honor the mode) |
-| AB-05 | Risk | Medium | M | Budget availability check is TOCTOU — no reservation | api/app/Modules/Accounting/Services/BudgetEnforcementService.php:28-99 | checkAvailability() reads derived consumption with no lock/reservation; concurrent PR/PO creations each see the same remaining budget and both pass; consumption rows only materialize after commit |
-| AB-06 | Risk | Medium | M | Credit note header can link another party's source document (known, deferred M028-F19) | api/app/Modules/Accounting/Services/CreditNoteService.php:364-393, Resources/CreditNoteResource.php | create() decodes customer_id and invoice_id independently; customer A's note can carry customer B's invoice_number (metadata disclosure + false audit link); money cannot cross — apply() re-checks party at :243/:277; fix reverted because ReturnManagement fixtures depend on the gap |
-| AB-07 | Bad practice | Low | S | Budget sync endpoints return raw primary keys | api/app/Modules/Accounting/Controllers/BudgetController.php:404-427 | `outbox_id`, `run_id`, `id` are `(string) $model->getKey()` — raw keys in API responses, against the hash-id-only rule |
-| AB-08 | Gap | Low | S | Budget revisions/transfers cut in code but still documented as features | api/database/migrations/0456_drop_budget_revisions_table.php, 0459_drop_budget_transfers_table.php vs docs/DEFENSE-TRACEABILITY.md:84, CLAUDE.md module 17 | Tables dropped 2026-08-07 (scope cut); docs still assert `BudgetTransfer`, `BudgetRevision` exist — defense-traceability exposure |
-| AB-09 | Missing | Low | M | Balance sheet never rolls prior-year net income into retained earnings | api/app/Modules/Accounting/Services/Statements/BalanceSheetService.php:75-90 | Equity gets only current-FY net income; with any prior-year revenue/expense the equation fails and `balanced:false` is returned (consequence of the no-close-wizard scope cut, but silently unbalanced output) |
-| AB-10 | Bad practice | Low | S | SPA types declare numeric ids where API returns hash strings | spa/src/types/accounting.ts:117,259 | `BillItem.id`/`InvoiceItem.id: number` but BillItemResource/InvoiceItemResource return `$this->hash_id` (string) |
-| AB-11 | Bad practice | Low | S | Collection form skips the client-side centavo refinement | spa/src/pages/accounting/invoices/detail.tsx:38 | `z.coerce.number().positive()` round-trips the amount through a JS float; backend decimal:0,2 catches it as a mapped 422, but the form does not mirror the validated shape (tracked in StoreCollectionRequest comment) |
-| AB-12 | Risk | Low | S | Reversal date may precede the original entry date | api/app/Modules/Accounting/Requests/ReverseJournalEntryRequest.php:18-23, JournalEntryService.php:454 | `reverse_date` validated only as `date`; combined with AB-01 semantics a back-dated reversal moves money across periods (period-close guard still applies) |
+### ACC-BUD-001
 
-### AB-01 (Critical) — reversed entries are erased from history
-When any JE is reversed (manual reversal, invoice cancel, bill cancel, payment void), the original
-header flips to `reversed` and every GL aggregate — trial balance, income statement, balance sheet,
-COA current balances, and budget posted-actuals — filters `status = 'posted'`, dropping it entirely.
-The reversing entry is included only from its own date. Any report window that contains the original
-date but not the reversal date therefore shows the entry as if it never happened: revenue, AR, AP and
-expense are retroactively restated, and two consecutive monthly income statements no longer sum to the
-YTD figure. The subledgers disagree in the opposite direction: InvoiceService::aging / BillService::aging
-deliberately keep documents cancelled *after* the as-of date, so for the same historical date the AR
-aging total and the balance-sheet AR balance differ. Reversed entries must remain in period aggregates
-(include `posted`+`reversed` by date, or store an effective-end date), with the cancellation/reversal
-event reflected only from the reversal date forward.
+- **Category:** Risk
+- **Severity:** High
+- **Location:** `api/app/Modules/Accounting/Services/BudgetEnforcementService.php:28-79`
+- **Evidence/reproduction:** `checkAvailability()` reads active budgets and
+  derives available funds without locking a budget, creating a reservation, or
+  recording a spend/commit claim. `assess()` then only writes warning metadata
+  (`:106-111`) and returns. Two concurrent purchase/bill creation paths can both
+  observe the same remaining amount and both proceed, producing commitments over
+  the approved allocation. The exact-money arithmetic prevents rounding errors
+  but does not prevent the time-of-check/time-of-use race.
+- **Reproduction:** With a budget having one small remaining balance, issue two
+  concurrent spend requests whose amounts together exceed that balance. Both
+  availability checks can pass before either downstream document updates the
+  commitment source. The existing `BudgetEnforcementWiringTest` verifies serial
+  allow/block behavior, not this concurrent reservation boundary.
+- **Estimated effort:** M/L: define the authoritative commitment boundary with
+  Purchasing, lock/update it transactionally, add an idempotent source claim, and
+  add a two-connection PostgreSQL regression test.
+- **Cross-module note:** This is specifically an Accounting Budgeting ↔
+  Purchasing boundary. Do not fix it by adding a second UI-only budget state;
+  the server-side source transaction must own the reservation.
 
-### AB-02 (High) — Statement of Account double-counts applied credits
-buildTransactions() constructs the ledger from invoices, cancellations and collections only.
-CreditNoteApplication rows are read solely inside computeAging(). A customer with a ₱10k invoice and a
-₱4k applied credit note gets a statement closing balance of ₱10k next to an aging total of ₱6k on the
-same page — the document sent to the customer overstates what they owe. Adding credit applications as
-negative ledger rows (mirroring the collections block, keyed by `created_at`/applied date) closes it.
+### ACC-BUD-002
 
-### AB-04 (Medium) — bill budget enforcement semantics drift
-Two independent defects in one call site: (a) the check runs only `if (!empty($data['department_id']))`
-and the SPA bill form never sends the field, so manual bills skip enforcement entirely (PR/PO-side
-enforcement is the only real gate); (b) when a department is supplied, the raw `checkAvailability()`
-result is used, and that method returns `canProceed=false` at CRITICAL with "Finance acknowledgment
-required" — so a bill is hard-rejected at 90% consumption even when `budgeting.enforcement_mode=off`,
-contradicting the documented off/warn/block contract that the PR/PO path follows via assess()/enforce().
+- **Category:** Bad practice
+- **Severity:** Medium
+- **Location:** `api/app/Modules/Accounting/Models/Budget.php:41-44` and
+  `api/app/Modules/Accounting/Models/FiscalYear.php:30-33`
+- **Evidence/reproduction:** `Budget` has no `status` or `budget_type` enum cast,
+  and `FiscalYear` has no `status` enum cast. The services compare raw strings
+  (`BudgetService.php:22-30,360-364`; `Budget.php:114-116`) and the resource
+  reconstructs status labels with `BudgetStatus::tryFrom()`
+  (`BudgetResource.php:32-33`). This is inconsistent with the repository rule
+  that all status/type fields use enums and leaves ordinary model writes able to
+  carry strings without typed conversion.
+- **Reproduction:** Instantiate a `Budget`/`FiscalYear` from a persisted row and
+  inspect `status`; it is a string, unlike `JournalEntry::status`, which is cast
+  to `JournalEntryStatus` (`JournalEntry.php:35-41`). A raw model assignment can
+  therefore bypass the typed model contract even though database status checks
+  reject unknown values.
+- **Estimated effort:** S: add the enum casts and update comparisons/tests to use
+  enum values consistently; confirm factories and legacy `approved` handling.
+- **Cross-module note:** Budget status is consumed by Purchasing commitment
+  calculations and dashboard/report queries, so the cast change must preserve the
+  legacy `approved` compatibility path.
 
-## Cross-module flags
+### ACC-BUD-003
 
-- **return-management** — blocks AB-06: `ReturnRequestService::creditNoteFor()` forwards `$rma->customer_id`/`$rma->invoice_id` without a party cross-check, and its restock tests mint two customers per fixture; the CreditNote party-binding fix was implemented and reverted for this reason (documented in CreditNoteService).
-- **purchasing** — AB-05 spans Purchasing: enforcement call sites are PurchaseRequestService:281 / PurchaseOrderService:197,345,402; any reservation-based fix must land there too. ThreeWayMatchService is owned by Purchasing; only its contract at the Accounting boundary was verified here.
-- **dashboard** — FinanceDashboardController delegates entirely to `App\Modules\Dashboard\Services\FinanceDashboardService`; not part of this unit, its panel gating/caching was not audited.
-- **docs** — AB-08: docs/DEFENSE-TRACEABILITY.md:84 and CLAUDE.md module 17 still name BudgetTransfer/BudgetRevision; needs a doc update to match the 2026-08-07 scope cut.
-- **crm / supply-chain** — InvoiceService::finalize calls SalesOrderService::markInvoiced and consumes Delivery status; only the Accounting side of those contracts was verified.
+- **Category:** Gap
+- **Severity:** Medium
+- **Location:** `spa/src/pages/budgeting/index.tsx:30-64,68-83,191-220`
+- **Evidence/reproduction:** The page handles the overview loading/error path,
+  but `fiscalYearsQuery.error`, `budgetListQuery.error`, and
+  `budgetOptionsQuery` errors are not rendered. A failed budget list is rendered
+  as `No budgets found` at line 219, which misrepresents an API failure as an
+  empty dataset. There is also no `placeholderData`/stale indicator for the
+  budget list or overview when changing fiscal year/status.
+- **Reproduction:** Make `/budgets`, `/budgets/fiscal-years`, or
+  `/budgets/options` return 500 while the overview request succeeds. The page
+  either shows an empty budget panel or falls back to infinite thresholds rather
+  than a retryable error state. Change the fiscal year with cached data and no
+  stale/refetch indicator is exposed.
+- **Estimated effort:** S: add independent `QueryErrorState`/retry handling,
+  contextual empty state only for successful empty responses, and
+  `placeholderData` plus a subtle refetch indicator.
+- **Cross-module note:** This is a Finance operator UX issue, not an access
+  control. The same state contract should be used by Accounting report pages so
+  a missing budget does not look like a zero budget.
 
-## What was NOT checked
+### ACC-BUD-004
 
-- No tests were executed; all evidence is code reading.
-- PdfService/PdfController rendering content (invoices, bills, JEs, statement PDFs).
-- SyncBudgetActualsJob internals and the outbox dispatcher beyond the service/handoff surface (durable-handoff test exists).
-- FinanceDashboardService (Dashboard module), ChainBroadcaster internals.
-- Imports (AccountImporter/CustomerImporter/VendorImporter) and the three email listeners/Mail classes.
-- VendorService/CustomerService CRUD internals beyond resource masking and TIN encryption (both verified).
-- RolePermissionSeeder full grant matrix — only presence of the SoD/override/void/export permissions was confirmed.
-- Supplier-portal and delivery→invoice handoff call sites (cross-module entry points into BillService/InvoiceService).
-- SPA pages beyond spot checks: bills/index+create, invoices/detail, credit-notes/index, budgeting/index, journal-entries money util, periods helper; forms for vendors/customers/CoA were not opened.
+- **Category:** Gap
+- **Severity:** Medium
+- **Location:** `spa/src/pages/budgeting/create.tsx:38-55,82-117,127-155`
+- **Evidence/reproduction:** The create/edit surface uses local state and a
+  hand-written `submit()` instead of the mandated React Hook Form + Zod contract.
+  Only fiscal year loading is handled; errors from the budget, accounts,
+  departments, and options queries are silent. Server validation errors are
+  delegated to a generic `reportMutationError` and are not mapped to individual
+  fields. The submit button is disabled for missing fiscal year/name, but not
+  generally disabled by `saveMutation.isPending` (line 155), so repeated clicks
+  can issue duplicate requests. There is no form error state for failed initial
+  option loads.
+- **Reproduction:** Return a 422 with `line_items.0.account_id` or duplicate
+  account errors; verify no field-level error is attached. Double-click Create
+  during a slow response; the button's `disabled` expression does not include
+  `saveMutation.isPending`.
+- **Estimated effort:** M: migrate to the documented RHF/Zod form pattern or
+  implement equivalent exhaustive field mapping, pending disable/loading text,
+  and independent query error/retry states.
+- **Cross-module note:** The form depends on HR departments and Accounting leaf
+  accounts. Its client schema should mirror BudgetController validation without
+  reimplementing the server authorization boundary.
+
+### ACC-BUD-005
+
+- **Category:** Risk
+- **Severity:** Medium
+- **Location:** `spa/src/pages/budgeting/index.tsx:144-147`,
+  `spa/src/pages/budgeting/create.tsx:122-124`,
+  `spa/src/pages/budgeting/departments.tsx:61-65,100`,
+  `spa/src/pages/budgeting/budget-vs-actual.tsx:57-74`
+- **Evidence/reproduction:** API decimal values are strings by contract, but
+  these pages use `Number(...)` for totals, monthly amounts, chart data, and
+  percentages. For large allocations or cent-sensitive values, binary floating
+  point can produce display totals and comparisons that differ from the exact
+  server values. The backend correctly uses `Money` for decisions; the SPA
+  should not recreate financial totals with JS floats.
+- **Reproduction:** Supply values such as `0.10`, `0.20`, and large 15,2 values
+  across multiple lines/months. Compare the displayed client sum and percentage
+  with the API's exact `total_*`, `variance`, and `utilization_pct` values.
+- **Estimated effort:** M: use exact decimal/string helpers for display and
+  derive presentation percentages from server-provided values; retain numbers
+  only at chart-library boundaries after controlled formatting.
+- **Cross-module note:** Budget-vs-actual is a GL report. A client-side mismatch
+  can undermine trust in the Accounting ledger even when the posted journal and
+  server report are correct.
+
+### ACC-BUD-006
+
+- **Category:** Gap
+- **Severity:** Medium
+- **Location:** `spa/src/pages/budgeting/budget-vs-actual.tsx:61-62,104-116`
+- **Evidence/reproduction:** On report failure the page renders plain red text
+  (`Failed to load budget vs actual data.`) with no retry action. When the API
+  successfully returns zero rows, it renders the cards and empty tables without
+  the required contextual empty state. The sync status query can also fail
+  silently. This violates the five-state page contract and can strand Finance
+  users after a failed GL synchronization/report request.
+- **Reproduction:** Fail `/budgets/budget-vs-actual` and observe no retry button;
+  return `{rows: []}` and observe empty panels rather than a no-data explanation;
+  fail `/budgets/sync-actuals/status` and observe no status/error state.
+- **Estimated effort:** S: use `QueryErrorState` with retry, add an explicit
+  empty report state, and expose sync-status failure with a manual refresh path.
+- **Cross-module note:** The report reads posted GL actuals and durable sync-run
+  status. Copy should distinguish “no posted movement” from “sync/report failed.”
+
+### ACC-BUD-007
+
+- **Category:** Risk
+- **Severity:** Low
+- **Location:** `spa/src/pages/budgeting/detail.tsx:69-97`
+- **Evidence/reproduction:** Submit, approve, and close mutations invalidate only
+  `['budget', id]` at lines 72, 82, and 92. They do not invalidate `['budgets', ...]`
+  or `['budget-overview', ...]`, which are the list/summary keys used by
+  `budgeting/index.tsx:43-57`. After an action succeeds, navigating back can show
+  the previous status and totals until an unrelated refetch/stale-time event.
+- **Reproduction:** Open the overview and a budget detail in separate tabs,
+  submit/approve/close in the detail tab, then return to the overview without a
+  full reload. The list and summary cache can retain the old status/aggregate.
+- **Estimated effort:** S: invalidate the list and overview key families on each
+  successful lifecycle mutation and add a focused SPA mutation-cache test.
+- **Cross-module note:** Status changes affect budget enforcement eligibility and
+  Purchasing commitments; stale Finance UI is especially misleading around the
+  `active` boundary.
+
+## Roadmap status
+
+The roadmap was treated as authoritative for known findings; known findings are
+not relabeled as regressions:
+
+- **F-020 (open):** generic `(reference_type, reference_id)` source integrity
+  remains an Accounting structural weakness. `SourceReferenceRegistry` and
+  `JournalEntryService` provide validation for registered writers, but the
+  roadmap explicitly says this finding is open. It is a roadmap-open known item,
+  not counted above as newly discovered.
+- **F-022 (open):** immutable material-detail audit attribution remains open. It
+  is relevant to financial auditability but was not duplicated as a new finding
+  because the roadmap already owns it.
+- **F-030 (open):** deployed restore/recovery proof remains open. No local
+  Accounting source inspection can prove staging backup restore, scheduler
+  restart, Redis failover, or deployed rollback, so this is recorded as a
+  roadmap-open proof boundary, not a source regression.
+- **F-025 (verified within scope):** automated GL writers use the canonical
+  journal posting lifecycle. The reviewed `JournalEntryService` state machine,
+  period checks, locks, and `JournalLedgerInvariantTest`/mutation-contract tests
+  support the roadmap’s verified status.
+- **F-034 (verified):** the roadmap records the API route audit as complete. No
+  route reachability regression was counted from static inspection alone.
+- **Budget actuals durable handoff:** the current worktree has focused tests for
+  durable outbox requests and same-tick deduplication. No regression was raised
+  against that control.
+
+## Checked areas with no finding
+
+- Journal-entry creation and update: balanced decimal money, at least two lines,
+  debit/credit XOR validation, source-reference rejection for manual entries,
+  transaction wrapping, and closed-period checks.
+- Journal-entry posting/reversal: authoritative row locks, line/account locking,
+  lifecycle state machine, maker-checker/self-post override, reversal linkage,
+  and reversal reason attribution.
+- Journal-entry API exposure: primary IDs, line IDs, and reversal IDs are hashed;
+  decimal amounts remain strings; no raw integer primary key was found in the
+  reviewed Journal Entry resource.
+- Accounting period controls: close/reopen service and focused duplicate,
+  authorization, close-regression, and posting-concurrency tests were present.
+- Budget create/update/submit/approve/close server transactions: the service
+  locks the budget aggregate, normalizes line items, rejects duplicate accounts,
+  rejects inactive/parent/ineligible accounts, and recalculates totals.
+- Budget database invariants: unique budget/account lines, fiscal-year date
+  ordering, non-negative allocations/months, and lifecycle status checks are
+  present in the reviewed migrations.
+- Budget actuals synchronization: durable outbox/run records, same-minute
+  deduplication, bounded chunk processing, failed-job rethrow, and focused
+  handoff/job tests.
+- Budget routes and SPA lazy loading: Budgeting routes are lazy-loaded and
+  wrapped in module and permission guards; Accounting routes likewise use the
+  module/permission pattern.
+- Accounting list/report pages sampled: most reviewed report/list pages use
+  skeletons, retryable error states, contextual empty states, placeholder data,
+  semantic chips, token-based classes, and monospace/tabular financial values.
+- Sensitive Accounting master data: reviewed vendor/customer resources mask TIN
+  fields by permission; no new encryption or bearer-token issue was found in the
+  inspected Accounting surface.
+- Scheduled Accounting invocation: `budget:sync-actuals` is registered at
+  `api/routes/console.php:338-343` with overlap and one-server controls. The
+  schedule itself was not found to be a current defect.
+
+## Residual verification limits
+
+This was a source audit only. The report does not claim live route-table
+resolution, PostgreSQL concurrent behavior, browser layout behavior, deployed
+queue/scheduler recovery, or backup restoration because those would require
+execution environments and, in some cases, database-mutating tests. Those limits
+are explicitly covered by the roadmap’s open/verified status above.

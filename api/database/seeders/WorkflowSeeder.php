@@ -41,7 +41,7 @@ class WorkflowSeeder extends Seeder
                 'steps' => [
                     ['order' => 1, 'role' => 'department_head',  'label' => 'Department Head'],
                     ['order' => 2, 'role' => 'finance_officer',  'label' => 'Finance / Accounting'],
-                    ['order' => 3, 'role' => 'system_admin',     'label' => 'VP / Approver'],
+                    ['order' => 3, 'role' => 'vice_president',   'label' => 'VP / Approver'],
                 ],
             ],
             [
@@ -51,17 +51,21 @@ class WorkflowSeeder extends Seeder
                     ['order' => 1, 'role' => 'department_head',    'label' => 'Department Head'],
                     ['order' => 2, 'role' => 'production_manager', 'label' => 'Manager'],
                     ['order' => 3, 'role' => 'finance_officer',    'label' => 'Finance / Accounting'],
-                    ['order' => 4, 'role' => 'system_admin',       'label' => 'VP / Approver'],
+                    ['order' => 4, 'role' => 'vice_president',     'label' => 'VP / Approver'],
                 ],
             ],
+            // 2026-09-10 — PR chain redesign. Creators are department heads and
+            // purchasing only (the need authority is the create gate, not a
+            // workflow step), so the chain is money-only: Finance → VP ≥ ₱50k.
+            // The buyer no longer approves requisitions (SoD), and a requester
+            // can never be stranded by the self-approval guard — no step names
+            // the creator's own role anymore.
             [
                 'workflow_type' => 'purchase_request',
                 'name'          => 'Purchase Request Approval',
                 'steps' => [
-                    ['order' => 1, 'role' => 'department_head',    'label' => 'Department Head'],
-                    ['order' => 2, 'role' => 'production_manager', 'label' => 'Manager'],
-                    ['order' => 3, 'role' => 'purchasing_officer', 'label' => 'Purchasing'],
-                    ['order' => 4, 'role' => 'system_admin',       'label' => 'VP', 'threshold' => '50000.00'],
+                    ['order' => 1, 'role' => 'finance_officer',  'label' => 'Finance'],
+                    ['order' => 2, 'role' => 'vice_president',   'label' => 'VP', 'threshold' => '50000.00'],
                 ],
             ],
             [
@@ -70,7 +74,7 @@ class WorkflowSeeder extends Seeder
                 'steps' => [
                     ['order' => 1, 'role' => 'purchasing_officer', 'label' => 'Purchasing'],
                     ['order' => 2, 'role' => 'finance_officer',    'label' => 'Finance'],
-                    ['order' => 3, 'role' => 'system_admin',       'label' => 'VP', 'threshold' => '50000.00'],
+                    ['order' => 3, 'role' => 'vice_president',     'label' => 'VP', 'threshold' => '50000.00'],
                 ],
             ],
             [
@@ -86,7 +90,7 @@ class WorkflowSeeder extends Seeder
                 'name'          => 'Bill Payment Approval',
                 'steps' => [
                     ['order' => 1, 'role' => 'finance_officer', 'label' => 'Finance Officer'],
-                    ['order' => 2, 'role' => 'system_admin',    'label' => 'VP'],
+                    ['order' => 2, 'role' => 'vice_president',  'label' => 'VP'],
                 ],
             ],
             [
@@ -94,7 +98,7 @@ class WorkflowSeeder extends Seeder
                 'name'          => 'Salary Adjustment Approval',
                 'steps' => [
                     ['order' => 1, 'role' => 'production_manager', 'label' => 'Checked by'],
-                    ['order' => 2, 'role' => 'system_admin',       'label' => 'Approved by'],
+                    ['order' => 2, 'role' => 'vice_president',     'label' => 'Approved by'],
                 ],
             ],
             [
@@ -117,7 +121,7 @@ class WorkflowSeeder extends Seeder
                 'name'          => 'NCR Approval',
                 'steps' => [
                     ['order' => 1, 'role' => 'qc_inspector',  'label' => 'Reviewed by'],
-                    ['order' => 2, 'role' => 'system_admin',  'label' => 'Approved by'],
+                    ['order' => 2, 'role' => 'vice_president', 'label' => 'Approved by'],
                 ],
             ],
             [
@@ -134,7 +138,7 @@ class WorkflowSeeder extends Seeder
                     ['order' => 1, 'role' => 'department_head', 'label' => 'Noted by'],
                     ['order' => 2, 'role' => 'production_manager', 'label' => 'Checked by'],
                     ['order' => 3, 'role' => 'finance_officer', 'label' => 'Reviewed by'],
-                    ['order' => 4, 'role' => 'system_admin', 'label' => 'Approved by'],
+                    ['order' => 4, 'role' => 'vice_president', 'label' => 'Approved by'],
                 ],
             ],
             [
@@ -153,7 +157,7 @@ class WorkflowSeeder extends Seeder
                 'name'          => '8D Report Approval',
                 'steps' => [
                     ['order' => 1, 'role' => 'qc_inspector', 'label' => 'Reviewed by'],
-                    ['order' => 2, 'role' => 'system_admin', 'label' => 'Approved by'],
+                    ['order' => 2, 'role' => 'vice_president', 'label' => 'Approved by'],
                 ],
             ],
             // L-37 — Return Management approval. Dept head reviews, manager

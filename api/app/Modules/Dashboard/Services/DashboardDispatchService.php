@@ -58,7 +58,7 @@ final class DashboardDispatchService
         $catalog = DashboardCatalog::all();
         $holders = $this->holderCounts();
 
-        return array_values(array_filter(
+        $candidates = array_values(array_filter(
             array_map(function (array $d) use ($user, $holders): ?array {
                 if (! $user->hasPermission($d['permission'])) {
                     return null;
@@ -67,6 +67,16 @@ final class DashboardDispatchService
                 return $d;
             }, $catalog),
         ));
+
+        // The candidates list backs the dashboard switcher: most-specific
+        // first, ties on key. resolve() applies the same order to pick the
+        // landing page — qualifying() must agree with it, or the switcher's
+        // order would drift whenever rarity counts shift (2026-09-10: the
+        // vice_president grant moved a dashboard from 2 holders to 3 and
+        // catalog order stopped coinciding with the contract).
+        usort($candidates, fn (array $a, array $b): int => [$a['holder_count'], $a['key']] <=> [$b['holder_count'], $b['key']]);
+
+        return $candidates;
     }
 
     /**

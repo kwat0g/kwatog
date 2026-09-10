@@ -55,6 +55,7 @@
 ## 3. Procure-to-Pay chain (2 min)
 1. **Purchasing › Chain** (`/purchasing/chain`) — the overview: PRs → POs → GRN → Bills, with counts. *ADV5.*
 2. **Purchasing › Purchase Requests** — use `PR-DEMO-CONVERT` to show the approved-PR supplier-selection conversion. Use `PR-DEMO-BUDGET` to show the critical budget warning and Finance acknowledgment. *ADV6/ADV9.*
+   - Say the chain (2026-09 redesign): PR approval is **Finance → VP (≥ ₱50k)** — the buyer never approves requisitions (segregation of duties), and full approval **auto-drafts one PO per vendor** so nobody re-types lines. `vp@ogami.test` is the executive signer; `system_admin` sits in no business chain.
 3. **PO detail › Billing** — GRN received → **3-way match ✅** → Create Bill → Record Payment. *ADV5.*
 
 ## 4. Hire-to-Retire chain (2 min)

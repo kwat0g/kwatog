@@ -8,6 +8,9 @@ import { LuPlus, LuTrash2 } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { purchaseRequestsApi } from '@/api/purchasing/purchase-requests';
 import { itemsApi } from '@/api/inventory/items';
+import { departmentsApi } from '@/api/hr/departments';
+import { useAuthStore } from '@/stores/authStore';
+import { usePermission } from '@/hooks/usePermission';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Input } from '@/components/ui/Input';
@@ -43,6 +46,7 @@ const lineSchema = z.object({
 
 const schema = z.object({
   priority: z.string().min(1, 'Priority is required.'),
+  department_id: z.string().optional().or(z.literal('')),
   reason: z.string().max(1000).optional().or(z.literal('')),
   items: z.array(lineSchema).min(1, 'Add at least one line.'),
 });
@@ -58,10 +62,27 @@ export default function CreatePurchaseRequestPage() {
     queryFn: () => itemsApi.list({ per_page: 200, is_active: 'true' }),
   });
 
+  const departments = useQuery({
+    queryKey: ['hr', 'departments', { per_page: 100 }],
+    queryFn: () => departmentsApi.list({ per_page: 100 }),
+  });
+
+  // PU-06 — the department field answers "whose budget and whose need". A
+  // department head raises for their OWN department (locked); a purchasing
+  // officer at the central requisition desk records the requesting department
+  // explicitly (selectable); admin likewise. The backend re-validates the
+  // same rule in PurchaseRequestService::create — this is UX, not the gate.
+  const authUser = useAuthStore((s) => s.user);
+  const { can } = usePermission();
+  const ownDepartmentId = authUser?.employee?.department_id ?? null;
+  const isCentralDesk = can('purchasing.po.create');
+  const isDepartmentLocked = ownDepartmentId !== null && !isCentralDesk;
+
   const form = useForm<V>({
     resolver: zodResolver(schema),
     defaultValues: {
       priority: '',
+      department_id: '',
       reason: '',
       items: [
         {
@@ -103,7 +124,10 @@ export default function CreatePurchaseRequestPage() {
     if (item) {
       setValue(`items.${index}.description`, item.description || item.name);
       setValue(`items.${index}.unit`, item.unit_of_measure);
-      setValue(`items.${index}.estimated_unit_price`, item.standard_cost);
+      // items.standard_cost is decimal(15,4) — e.g. "0.5000". The schema (and the
+      // purchase_request_items column) allow at most 2 decimals, so normalize
+      // here or the auto-filled value fails its own validation.
+      setValue(`items.${index}.estimated_unit_price`, Number(item.standard_cost || 0).toFixed(2));
     } else {
       setValue(`items.${index}.unit`, '');
     }
@@ -115,6 +139,8 @@ export default function CreatePurchaseRequestPage() {
         .create({
           reason: values.reason?.trim() || undefined,
           priority: values.priority as PurchaseRequestPriority,
+          department_id:
+            (isDepartmentLocked ? ownDepartmentId : values.department_id || null) ?? undefined,
           items: values.items.map((l) => ({
             item_id: l.item_id || null,
             description: l.description.trim(),
@@ -167,7 +193,7 @@ export default function CreatePurchaseRequestPage() {
         className="max-w-5xl mx-auto px-5 py-4 space-y-4"
       >
         <Panel title="Header">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             <Select
               label="Priority"
               required
@@ -178,6 +204,25 @@ export default function CreatePurchaseRequestPage() {
               {priorities.map((priority) => (
                 <option key={priority.value} value={priority.value}>
                   {priority.label}
+                </option>
+              ))}
+            </Select>
+            <Select
+              label="Department"
+              required
+              disabled={isDepartmentLocked}
+              title={
+                isDepartmentLocked
+                  ? 'Department heads raise purchase requests for their own department'
+                  : undefined
+              }
+              {...register('department_id')}
+              error={errors.department_id?.message}
+            >
+              <option value="">— Select —</option>
+              {(departments.data?.data ?? []).map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
                 </option>
               ))}
             </Select>
@@ -380,21 +425,17 @@ export default function CreatePurchaseRequestPage() {
         description={
           pendingDraft ? (
             <>
-              The PR will enter the approval workflow immediately. Edits are not allowed once
+              The PR will enter the approval workflow immediately: Finance first, then the
+              Vice President when the total is ₱50,000 or more. Edits are not allowed once
               submitted.
-              {/* The previous copy promised that critical priority "bypasses some
-                  approval steps and notifies VP directly". Both halves were false
-                  under every configuration: submit sends no notifications at all,
-                  and the department-head skip is gated on the
-                  purchasing.urgent_skip_limit setting, which ships as 0 (skip
-                  disabled). Urgent and critical are treated identically by
-                  PurchaseRequestService::isUrgentPriority(), so the notice shows
-                  for both. */}
+              {/* The old copy promised an urgent-skip of the (then) department-head
+                  step. That step and the purchasing.urgent_skip_limit setting were
+                  removed in the 2026-09-10 chain redesign — urgency is now a
+                  priority flag and notification only, so the notice says so. */}
               {(pendingDraft.priority === 'urgent' || pendingDraft.priority === 'critical') && (
                 <span className="block mt-1 text-warning-fg">
-                  Urgent and critical requests are flagged for priority handling. The
-                  department-head step is skipped only when the total is within the configured
-                  urgent-skip limit — otherwise the full approval chain still applies.
+                  Urgent requests are flagged for priority handling and highlighted to
+                  approvers, but the approval chain is the same.
                 </span>
               )}
             </>
