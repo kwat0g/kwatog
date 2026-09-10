@@ -52,22 +52,47 @@ class SupplierPortalAuthTest extends TestCase
         RateLimiter::clear(md5('api127.0.0.1'));
     }
 
-    public function test_login_succeeds_and_returns_hashids(): void
+    /**
+     * Sanctum stateful request headers — login must run through the stateful
+     * middleware stack (StartSession) so the session guard can persist the
+     * authenticated principal, exactly like the customer portal login.
+     */
+    private function withPortalHeaders(): self
+    {
+        $csrf = 'supplier-portal-test-csrf';
+
+        return $this->withSession(['_token' => $csrf])
+            ->withHeaders([
+                'Origin' => 'http://localhost',
+                'X-CSRF-TOKEN' => $csrf,
+            ]);
+    }
+
+    private function postLogin(string $email, string $password)
+    {
+        return $this->withPortalHeaders()->postJson('/api/v1/b2b/supplier/login', [
+            'email' => $email,
+            'password' => $password,
+        ]);
+    }
+
+    public function test_login_succeeds_returns_hashids_and_no_token(): void
     {
         $password = 'SupplierPass-1!';
         $user = $this->makeUser($password);
         $this->clearAuthThrottle($user->email);
 
-        $response = $this->postJson('/api/v1/b2b/supplier/login', [
-            'email'    => $user->email,
-            'password' => $password,
-        ]);
+        $response = $this->postLogin($user->email, $password);
 
         $response->assertOk();
-        $response->assertJsonStructure(['data' => ['token', 'user' => ['id', 'name', 'email', 'vendor_id', 'must_change_password']]]);
+        $response->assertJsonStructure(['data' => ['user' => ['id', 'name', 'email', 'vendor_id', 'must_change_password']]])
+            ->assertJsonMissingPath('data.token');
 
         $payload = $response->json('data');
-        $this->assertNotEmpty($payload['token']);
+
+        // The HTTP-only session cookie replaces the bearer credential.
+        $response->assertCookieNotExpired(config('session.cookie'));
+        $this->assertSame(0, $user->tokens()->count());
 
         // user.id must be a HashID (alphanumeric string, not the raw int).
         $this->assertIsString($payload['user']['id']);
@@ -77,6 +102,27 @@ class SupplierPortalAuthTest extends TestCase
         // vendor_id likewise HashID-encoded.
         $this->assertIsString($payload['user']['vendor_id']);
         $this->assertNotSame((string) $user->vendor_id, $payload['user']['vendor_id']);
+    }
+
+    public function test_logout_invalidates_the_session(): void
+    {
+        $password = 'SupplierPass-1!';
+        $user = $this->makeUser($password);
+        $this->clearAuthThrottle($user->email);
+        $this->postLogin($user->email, $password)->assertOk();
+
+        $this->withPortalHeaders()
+            ->getJson('/api/v1/b2b/supplier/me')
+            ->assertOk();
+
+        $this->withPortalHeaders()
+            ->postJson('/api/v1/b2b/supplier/logout')
+            ->assertOk()
+            ->assertJsonPath('message', 'Logged out successfully.');
+
+        $this->withPortalHeaders()
+            ->getJson('/api/v1/b2b/supplier/me')
+            ->assertStatus(401);
     }
 
     public function test_wrong_password_increments_counter(): void
@@ -155,10 +201,7 @@ class SupplierPortalAuthTest extends TestCase
         }
         $this->assertSame(2, (int) $user->fresh()->failed_login_attempts);
 
-        $this->postJson('/api/v1/b2b/supplier/login', [
-            'email'    => $user->email,
-            'password' => $password,
-        ])->assertOk();
+        $this->postLogin($user->email, $password)->assertOk();
 
         $fresh = $user->fresh();
         $this->assertSame(0, (int) $fresh->failed_login_attempts);
@@ -176,10 +219,7 @@ class SupplierPortalAuthTest extends TestCase
 
         // Waiting out the lock must actually restore access, not merely stop
         // returning 423 while the strike counter stays at the threshold.
-        $this->postJson('/api/v1/b2b/supplier/login', [
-            'email'    => $user->email,
-            'password' => $password,
-        ])->assertOk();
+        $this->postLogin($user->email, $password)->assertOk();
 
         $fresh = $user->fresh();
         $this->assertSame(0, (int) $fresh->failed_login_attempts);
@@ -213,10 +253,7 @@ class SupplierPortalAuthTest extends TestCase
         $user = $this->makeUser($password);
         $this->clearAuthThrottle($user->email);
 
-        $this->postJson('/api/v1/b2b/supplier/login', [
-            'email'    => $user->email,
-            'password' => $password,
-        ])->assertOk();
+        $this->postLogin($user->email, $password)->assertOk();
 
         $row = AuditLog::where('action', 'supplier.login.success')
             ->where('model_type', SupplierPortalUser::class)
@@ -266,7 +303,6 @@ class SupplierPortalAuthTest extends TestCase
 
         $routes = [
             ['login', ['email' => 'supplier-feature-disabled+'.uniqid().'@example.test', 'password' => 'SupplierPass-1!']],
-            ['logout', []],
             ['forgot-password', ['email' => 'unknown-supplier-feature-disabled+'.uniqid().'@example.test']],
             ['reset-password', [
                 'token' => 'invalid-feature-disabled-token',
@@ -283,6 +319,13 @@ class SupplierPortalAuthTest extends TestCase
                     ->assertStatus(403)
                     ->assertJsonPath('code', 'feature_disabled');
             }
+
+            // Logout is an authenticated route now (session invalidation, same
+            // as the customer portal), so the auth middleware answers 401 for
+            // a guest before the feature gate is consulted.
+            $this->clearAuthThrottle('');
+            $this->postJson('/api/v1/b2b/supplier/logout')
+                ->assertStatus(401);
         } finally {
             $settings->set('modules.b2b_portals', true, 'modules');
         }
@@ -296,15 +339,17 @@ class SupplierPortalAuthTest extends TestCase
 
         try {
             $this->clearAuthThrottle($user->email);
-            $this->postJson('/api/v1/b2b/supplier/login', [
-                'email' => $user->email,
-                'password' => 'SupplierPass-1!',
-            ])->assertOk();
+            $this->postLogin($user->email, 'SupplierPass-1!')->assertOk();
 
             $this->clearAuthThrottle('');
-            $this->postJson('/api/v1/b2b/supplier/logout')
+            $this->withPortalHeaders()
+                ->postJson('/api/v1/b2b/supplier/logout')
                 ->assertOk()
                 ->assertJsonPath('message', 'Logged out successfully.');
+
+            // Logout invalidated the session (and its CSRF token); a real
+            // client fetches a fresh csrf-cookie before the next POST.
+            $this->withPortalHeaders();
 
             $unknownEmail = 'unknown-supplier-feature-enabled+'.uniqid().'@example.test';
             $this->clearAuthThrottle($unknownEmail);
