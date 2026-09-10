@@ -24,6 +24,22 @@ export interface Asset {
  disposed_date: string | null;
  disposal_amount: string | null;
  disposal_reason: string | null;
+ /** AS-03 — non-null only while a disposal request is pending approval. */
+ disposal_request: {
+  amount: string | null;
+  date: string | null;
+  reason: string | null;
+  requested_by: { id: string; name: string } | null;
+  can_cancel: boolean;
+ } | null;
+ approval_records?: Array<{
+  step_order: number;
+  role_slug: string;
+  action: string;
+  remarks: string | null;
+  acted_at: string | null;
+  approver: { id: string; name: string } | null;
+ }>;
  location: string | null;
  insurance_policy_no: string | null;
  insurance_provider: string | null;

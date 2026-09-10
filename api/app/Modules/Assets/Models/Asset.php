@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace App\Modules\Assets\Models;
 
+use App\Common\Traits\HasApprovalWorkflow;
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Common\Support\Money;
 use App\Modules\Assets\Enums\AssetCategory;
 use App\Modules\Assets\Enums\DepreciationMethod;
 use App\Modules\Assets\Enums\AssetStatus;
+use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -21,7 +23,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 /** Sprint 8 — Task 70. */
 class Asset extends Model
 {
-    use HasFactory, SoftDeletes, HasHashId, HasAuditLog;
+    use HasFactory, SoftDeletes, HasHashId, HasAuditLog, HasApprovalWorkflow;
 
     protected $table = 'assets';
 
@@ -41,6 +43,10 @@ class Asset extends Model
         'disposed_date',
         'disposal_amount',
         'disposal_reason',
+        'disposal_request_amount',
+        'disposal_request_date',
+        'disposal_request_reason',
+        'disposal_requested_by',
         'location',
         'insurance_policy_no',
         'insurance_provider',
@@ -58,6 +64,8 @@ class Asset extends Model
         'salvage_value'            => 'decimal:2',
         'accumulated_depreciation' => 'decimal:2',
         'disposal_amount'          => 'decimal:2',
+        'disposal_request_amount'  => 'decimal:2',
+        'disposal_request_date'    => 'date',
         'useful_life_years'        => 'integer',
         'insurance_expiry'         => 'date',
         'insured_value'            => 'decimal:2',
@@ -66,6 +74,20 @@ class Asset extends Model
     public function department(): BelongsTo
     {
         return $this->belongsTo(Department::class);
+    }
+
+    public function disposalRequester(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'disposal_requested_by');
+    }
+
+    /**
+     * ApprovalService hook — the disposal requester, so the self-approval
+     * guard can refuse them acting on their own disposal request.
+     */
+    public function approvalSubmitterId(): ?int
+    {
+        return $this->disposal_requested_by !== null ? (int) $this->disposal_requested_by : null;
     }
 
     public function depreciations(): HasMany

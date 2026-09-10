@@ -7,7 +7,9 @@ namespace App\Modules\Assets\Controllers;
 use App\Modules\Assets\Models\Asset;
 use App\Modules\Assets\Enums\AssetCategory;
 use App\Modules\Assets\Enums\AssetStatus;
+use App\Modules\Assets\Requests\ApproveAssetDisposalRequest;
 use App\Modules\Assets\Requests\DisposeAssetRequest;
+use App\Modules\Assets\Requests\RejectAssetDisposalRequest;
 use App\Modules\Assets\Requests\StoreAssetRequest;
 use App\Modules\Assets\Requests\UpdateAssetRequest;
 use App\Modules\Assets\Resources\AssetResource;
@@ -79,7 +81,26 @@ class AssetController
 
     public function dispose(DisposeAssetRequest $request, Asset $asset): AssetResource
     {
-        return new AssetResource($this->service->dispose($asset, $request->validated(), $request->user()));
+        return new AssetResource($this->service->requestDisposal($asset, $request->validated(), $request->user()));
+    }
+
+    public function approveDisposal(ApproveAssetDisposalRequest $request, Asset $asset): AssetResource
+    {
+        return new AssetResource(
+            $this->service->approveDisposal($asset, $request->user(), $request->input('remarks'))
+        );
+    }
+
+    public function rejectDisposal(RejectAssetDisposalRequest $request, Asset $asset): AssetResource
+    {
+        return new AssetResource(
+            $this->service->rejectDisposal($asset, $request->user(), $request->validated()['reason'])
+        );
+    }
+
+    public function cancelDisposal(Request $request, Asset $asset): AssetResource
+    {
+        return new AssetResource($this->service->cancelDisposalRequest($asset, $request->user()));
     }
 
     public function qrPayload(Asset $asset): JsonResponse

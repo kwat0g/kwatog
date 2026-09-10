@@ -365,6 +365,14 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'assets.update',              'name' => 'Update Asset'],
                 ['slug' => 'assets.delete',              'name' => 'Delete Asset'],
                 ['slug' => 'assets.dispose',             'name' => 'Dispose Asset'],
+                // AS-03 — the seeded asset_disposal chain routes approval to
+                // finance_officer then system_admin, but the approve/reject
+                // endpoints gate on this slug, so both step roles must hold
+                // it or every submitted disposal stalls at step 1. Same
+                // defect class as M036 (purchase_request) and L-37
+                // (return_request). finance_officer receives it via
+                // module('assets'); system_admin via the wildcard.
+                ['slug' => 'assets.dispose.approve',     'name' => 'Approve / Reject Asset Disposals'],
                 ['slug' => 'assets.depreciation.view',   'name' => 'View Asset Depreciation'],
                 ['slug' => 'assets.depreciation.run',    'name' => 'Run Asset Depreciation'],
             ],

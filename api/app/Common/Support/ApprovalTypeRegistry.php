@@ -58,6 +58,15 @@ final class ApprovalTypeRegistry
             'link' => '/payroll/periods/',
             'permissions' => ['payroll.periods.view', 'payroll.periods.approve'],
         ],
+<<<<<<< HEAD
+        'App\\Modules\\Assets\\Models\\Asset' => [
+            'kind' => 'asset_disposal',
+            'label' => 'Asset disposals',
+            'table' => 'assets',
+            'number' => 'asset_code',
+            'link' => '/assets/',
+            'permissions' => ['assets.view', 'assets.dispose.approve'],
+=======
         // Return Management has NO row scope, same as payroll: every holder of
         // `return_management.view` sees every RMA in the module's own list
         // endpoint, so the permission gate below is already equivalent and
@@ -71,6 +80,7 @@ final class ApprovalTypeRegistry
             'number' => 'rma_number',
             'link' => '/return-management/',
             'permissions' => ['return_management.view', 'return_management.approve'],
+>>>>>>> origin/main
         ],
     ];
 

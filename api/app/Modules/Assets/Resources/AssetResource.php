@@ -42,6 +42,30 @@ class AssetResource extends JsonResource
             'disposed_date'            => optional($this->disposed_date)?->toDateString(),
             'disposal_amount'          => $this->disposal_amount !== null ? (string) $this->disposal_amount : null,
             'disposal_reason'          => $this->disposal_reason,
+            // AS-03 — non-null only while a disposal request is pending
+            // approval; cleared on approval (execution), rejection and cancel.
+            'disposal_request'         => $this->disposal_requested_by !== null ? [
+                'amount'       => $this->disposal_request_amount !== null ? (string) $this->disposal_request_amount : null,
+                'date'         => optional($this->disposal_request_date)?->toDateString(),
+                'reason'       => $this->disposal_request_reason,
+                'requested_by' => $this->disposalRequester ? [
+                    'id'   => $this->disposalRequester->hash_id,
+                    'name' => $this->disposalRequester->name,
+                ] : null,
+                'can_cancel'   => $request->user() !== null
+                    && (int) $this->disposal_requested_by === (int) $request->user()->id,
+            ] : null,
+            'approval_records'         => $this->whenLoaded('approvalRecords', fn () => $this->approvalRecords->map(fn ($r) => [
+                'step_order' => (int) $r->step_order,
+                'role_slug'  => $r->role_slug,
+                'action'     => $r->action,
+                'remarks'    => $r->remarks,
+                'acted_at'   => optional($r->acted_at)?->toIso8601String(),
+                'approver'   => $r->relationLoaded('approver') && $r->approver ? [
+                    'id'   => $r->approver->hash_id,
+                    'name' => $r->approver->name,
+                ] : null,
+            ])->all()),
             'location'                 => $this->location,
             'insurance_policy_no'      => $this->insurance_policy_no,
             'insurance_provider'       => $this->insurance_provider,

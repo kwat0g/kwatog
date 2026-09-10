@@ -249,8 +249,11 @@ month, or via *Admin → Depreciation Runs* on demand. Idempotent.
 ### 14.3 Disposal
 
 Click **Dispose** on the asset detail page, enter the disposal amount, and
-the system posts a balanced JE that nets accumulated depreciation against
-cost and books gain/loss.
+submit. The request goes through the asset disposal approval chain
+(finance officer → system admin); once the final step approves, the system
+posts a balanced JE that nets accumulated depreciation against cost and
+books gain/loss. A rejected or cancelled request leaves the asset active
+with no journal entry.
 
 ### 14.4 QR labels
 
