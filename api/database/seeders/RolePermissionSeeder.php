@@ -498,6 +498,12 @@ class RolePermissionSeeder extends Seeder
                     $this->module('hr', except: [
                         'hr.profile_updates.self_review_override',
                         'hr.salary_adjustments.act',
+                        // Task SS2 — bank-account changes require BOTH HR and
+                        // Finance sign-off. `module('hr')` used to hand HR the
+                        // Finance leg too, so one HR officer could clear both
+                        // legs and defeat the dual-approval control. The slug
+                        // is Finance's (granted explicitly to finance_officer).
+                        'hr.profile_updates.finance_review',
                     ]),
                     $this->module('attendance'),
                     $this->module('leave'),
@@ -650,6 +656,12 @@ class RolePermissionSeeder extends Seeder
                         'crm.sales_orders.confirm',
                         'crm.sales_orders.cancel',
                         'crm.complaints.manage',
+                        // Customer returns are Sales' post-sale surface: an RMA
+                        // originates from a customer complaint, so Sales files
+                        // and tracks it. Receiving / inspection / disposition
+                        // stay with Warehouse and QC.
+                        'return_management.view',
+                        'return_management.manage',
                         'inventory.view',
                         'search.global', 'notifications.preferences.manage',
                         'alerts.view', 'alerts.dismiss',
@@ -676,14 +688,15 @@ class RolePermissionSeeder extends Seeder
                         'inventory.view',
                         // Quality: view + read sub-resources for quality dashboard / NCR/inspection pages
                         'quality.view', 'quality.inspections.view', 'quality.ncr.view',
-                        // M036 — production_manager is step 2 ("Manager") of the
-                        // seeded purchase_request chain in WorkflowSeeder, but
-                        // held no purchasing slug at all, so the approve route
-                        // rejected the only role that step accepts and every
-                        // submitted PR stalled at step 2. Same defect as L-37
-                        // on return_management.approve. Read + approve only:
-                        // raising and converting a PR stays purchasing's.
-                        'purchasing.view', 'purchasing.pr.approve',
+                        // Read-only purchasing. The 2026-09-10 PR redesign made
+                        // the chain money-only (Finance → VP) and removed the
+                        // former "Manager" step, so `purchasing.pr.approve` is no
+                        // longer this role's to hold — it is an approval outside
+                        // production's scope (and dead capacity: ApprovalService
+                        // only accepts the current step's role). `purchasing.view`
+                        // stays so the MRP plan detail can open the PRs it links
+                        // to (show is gated on `purchasing.view`).
+                        'purchasing.view',
                         // Step 2 ("Manager") of the company_loan chain — same
                         // stall class as the PR fix: the step names this role,
                         // so it needs the route permission to act on it.
@@ -738,9 +751,14 @@ class RolePermissionSeeder extends Seeder
                         'alerts.view', 'alerts.dismiss',
                         'dashboard.view_bottlenecks',
                         'dashboard.chain_recovery.view', 'dashboard.chain_recovery.manage',
-                        'return_management.view', 'return_management.manage',
-                        'return_management.receive', 'return_management.inspect',
-                        'return_management.dispose', 'return_management.complete',
+                        // RMA visibility only. Creating, receiving, inspecting,
+                        // disposing and completing returns is owned by the
+                        // returns actors (Sales for customer RMAs, Purchasing for
+                        // supplier returns, QC for inspection, Warehouse for
+                        // receiving); PPC plans, it does not run the RMA
+                        // lifecycle. `view` stays so a replacement-WO schedule
+                        // can still surface its originating return.
+                        'return_management.view',
                     ],
                 ),
             ],
@@ -839,7 +857,17 @@ class RolePermissionSeeder extends Seeder
                 'description' => 'Tracks imported shipments and customs documents.',
                 'permissions' => array_merge(
                     $this->selfService(),
-                    ['supply_chain.view', 'supply_chain.shipments.manage', 'supply_chain.deliveries.view', 'purchasing.view'],
+                    [
+                        'supply_chain.view',
+                        'supply_chain.shipments.manage',
+                        'supply_chain.deliveries.view',
+                        // Fleet is the ImpEx logistics surface (the sidebar
+                        // already shows Delivery Fleet on supply_chain.view);
+                        // this is the manage counterpart so the page's actions
+                        // are not dead for every seeded role.
+                        'supply_chain.fleet.manage',
+                        'purchasing.view',
+                    ],
                 ),
             ],
             'department_head' => [
